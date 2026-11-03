@@ -25,8 +25,14 @@ type FakeStep =
       error?: { code: number; message: string };
     }
   | { notify: string; params: unknown }
-  /** Send a server request and wait for the client's response. */
-  | { request: string; params: unknown }
+  /**
+   * Send a server request and wait for the client's response; `wait: false`
+   * leaves it outstanding for a later `awaitResponse`.
+   */
+  | { request: string; params: unknown; id?: string | number; wait?: false }
+  | { awaitResponse: true }
+  /** Survive SIGTERM, as a server that ignores it would. */
+  | { ignoreTerm: true }
   | { raw: string }
   | { sleep: number }
   | { exit: number };
@@ -349,6 +355,68 @@ const FAKE_SCENARIOS = {
     item("completed", agentMessage("m-3", "Using Czech law.")),
     completed(),
   ],
+  /**
+   * Two questions outstanding at once under the ids `7` and `"7"`; the first
+   * asks for a secret.
+   */
+  twin_id_questions: [
+    ...freshTurn(),
+    {
+      request: "item/tool/requestUserInput",
+      id: 7,
+      wait: false,
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-token",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: [
+          {
+            id: "token",
+            header: "Access token",
+            question: "Paste the registry access token.",
+            isOther: false,
+            isSecret: true,
+            options: null,
+          },
+        ],
+      },
+    },
+    {
+      request: "item/tool/requestUserInput",
+      id: "7",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-law",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: [
+          {
+            id: "law",
+            header: "Governing law",
+            question: "Which law governs the lease?",
+            isOther: false,
+            isSecret: false,
+            options: [
+              { label: "Czech", description: "Czech Civil Code" },
+              { label: "Slovak", description: "Slovak Civil Code" },
+            ],
+          },
+        ],
+      },
+    },
+    { awaitResponse: true },
+    item("completed", agentMessage("m-3", "Both answers received.")),
+    completed(),
+  ],
+  /** Never answers and outlives SIGTERM; says when it is ready to. */
+  unresponsive: [
+    { ignoreTerm: true },
+    { notify: "fake/ready", params: {} },
+    { sleep: 60_000 },
+  ],
   async_question: [
     ...freshTurn(),
     item(
@@ -652,10 +720,22 @@ const run = async (
       write({ method: step.notify, params: step.params });
     } else if ("request" in step) {
       serverRequestId += 1;
-      write({ id: serverRequestId, method: step.request, params: step.params });
+      write({
+        id: step.id ?? serverRequestId,
+        method: step.request,
+        params: step.params,
+      });
+      if (step.wait !== false && (await take(responses)) === null) {
+        return;
+      }
+    } else if ("awaitResponse" in step) {
       if ((await take(responses)) === null) {
         return;
       }
+    } else if ("ignoreTerm" in step) {
+      process.on("SIGTERM", () => {
+        log({ ignored: "SIGTERM" });
+      });
     } else if ("raw" in step) {
       process.stdout.write(`${step.raw}\n`);
     } else if ("sleep" in step) {
