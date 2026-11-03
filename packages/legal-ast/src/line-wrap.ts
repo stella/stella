@@ -1,3 +1,4 @@
+// parser-output-unchanged: Existing line-wrap behavior is unchanged; the pre-nominal title predicate is now shared with PDF ingestion.
 /**
  * Hard-wrapped source text: the one classifier, and a display fallback.
  *
@@ -106,7 +107,7 @@ const ABBREVIATION_END_RE = /(?:^|[\s(])\p{L}\p{Ll}{0,4}\.$/u;
  * A pre-nominal academic title ending a line: it always precedes a name, so
  * it never ends a sentence. Post-nominal ones ("Ph.D.") can, and are absent.
  */
-const TITLE_END_RE =
+export const PRENOMINAL_TITLE_END_RE =
   /(?:^|\s)(?:JUDr|Mgr|MgA|Ing|MUDr|MVDr|PhDr|RNDr|PaedDr|ThDr|doc|prof|Bc|Dr|Mr|Mrs|Ms)\.$/u;
 /** A letter followed by a hyphen at the line end: no space before it. */
 const HYPHEN_END_RE = /\p{L}-$/u;
@@ -319,7 +320,7 @@ const joinAt = (previous: string, next: string, width: number): LineJoin => {
     dateGoesOn ||
     isMidSentence(previous, next) ||
     (ABBREVIATION_END_RE.test(previous) && DIGIT_START_RE.test(next)) ||
-    (TITLE_END_RE.test(previous) && LETTER_START_RE.test(next));
+    (PRENOMINAL_TITLE_END_RE.test(previous) && LETTER_START_RE.test(next));
   return continues ? LINE_JOIN.SPACE : LINE_JOIN.BREAK;
 };
 

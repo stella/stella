@@ -95,6 +95,12 @@ const appSnapshot = {
     revisionCreated: true,
     syncIssues: false,
   },
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   runningSince: "2026-07-18T08:00:00Z",
   sessions: [
     {
@@ -379,4 +385,34 @@ describe("desktop bridge RPC golden fixtures", () => {
     expect(isAppSnapshot("app-snapshot")).toBe(false);
     expect(isAppSnapshot([])).toBe(false);
   });
+});
+
+test("recovery snapshots require known states and complete entries", () => {
+  const snapshot = readFixtureRecord("app-snapshot.json");
+  for (const recovery of [
+    undefined,
+    {},
+    { edits: [], unassigned: false, pending: false, access: "unknown" },
+    {
+      edits: [{ id: "edit", fileName: "Příloha.docx", status: "unknown" }],
+      unassigned: false,
+      pending: false,
+      access: "available",
+    },
+  ]) {
+    expect(isAppSnapshot({ ...snapshot, documentRecovery: recovery })).toBe(
+      false,
+    );
+  }
+  expect(
+    isAppSnapshot({
+      ...snapshot,
+      documentRecovery: {
+        edits: [{ id: "edit", fileName: "Příloha.docx", status: "pending" }],
+        unassigned: true,
+        pending: true,
+        access: "signInRequired",
+      },
+    }),
+  ).toBe(true);
 });

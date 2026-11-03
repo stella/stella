@@ -32,6 +32,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import {
   billingDraftGateRefusal,
@@ -265,9 +266,7 @@ if (!databaseUrl || !runPostgres) {
         });
         expect(otherMatter.isErr()).toBe(true);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(inArray(user.id, [userId, otherUserId]));
       }
     });
@@ -405,9 +404,7 @@ if (!databaseUrl || !runPostgres) {
           );
         }
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });
@@ -580,9 +577,7 @@ if (!databaseUrl || !runPostgres) {
           );
         }
       } finally {
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, [organizationA, organizationB]));
+        await deleteOrganizationsForTest(db, [organizationA, organizationB]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

@@ -105,10 +105,10 @@ const selectHolders = async (
         .where(eq(caseLawDecisions.id, decisionId))
         .limit(1)
     ).at(0);
-    if (
-      erased?.sourceDocumentId === undefined ||
-      erased.sourceDocumentId === null
-    ) {
+    if (erased === undefined) {
+      return [];
+    }
+    if (erased.sourceDocumentId === null) {
       return [];
     }
     const composed = JSON.stringify([

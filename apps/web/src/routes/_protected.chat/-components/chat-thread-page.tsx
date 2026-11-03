@@ -96,6 +96,7 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -567,7 +568,7 @@ export const ChatThreadPage = ({
                 workspaceId: threadRef.workspaceId,
               }
             : { scope: "global", threadId: createChatThreadId() };
-        await startNewThreadCommandHandoff({
+        const handoff = await startNewThreadCommandHandoff({
           activeOrganizationId,
           context: {
             ...chatThreadContext,
@@ -579,6 +580,10 @@ export const ChatThreadPage = ({
           queryClient,
           threadRef: newThreadRef,
         });
+        if (handoff.isErr()) {
+          notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
         leave();
         if (newThreadRef.scope === "workspace") {
           await navigate({
@@ -610,7 +615,12 @@ export const ChatThreadPage = ({
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(await buildChatRequestMessage(draft));
+      const message = await buildChatRequestMessage(draft);
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -809,7 +819,15 @@ export const ChatThreadPage = ({
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(await buildChatRequestMessage(draft));
+                        const message = await buildChatRequestMessage(draft);
+                        if (message.isErr()) {
+                          notifyUserError(
+                            message.error,
+                            t("chat.sendErrorMessageEmpty"),
+                          );
+                          return CHAT_SEND_KEPT;
+                        }
+                        await sendMessage(message.value);
                         return CHAT_SEND_SENT;
                       }),
                       "chat-thread-page.submit",

@@ -23,7 +23,7 @@ import {
   PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
-  assemblePlNcourtDecision,
+  assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision,
   encodePlNcourtCursor,
   normalizePlNcourtListingRow,
   parsePlNcourtCursor,
@@ -44,7 +44,7 @@ import type {
   PlNcourtComponent,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
@@ -67,9 +67,12 @@ import {
   setLogSinkForTesting,
 } from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);

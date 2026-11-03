@@ -2843,9 +2843,10 @@ export const buildCzNssDecision = async ({
             row,
             content: {
               ...content,
-              ...(recovered.content?.recovery === undefined
-                ? {}
-                : { recovery: recovered.content.recovery }),
+              // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+              ...(recovered.content?.recovery !== undefined
+                ? { recovery: recovered.content.recovery }
+                : {}),
             },
             detail,
             detailHtml,
