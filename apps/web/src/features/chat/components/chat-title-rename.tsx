@@ -303,7 +303,7 @@ const ChatTitleRenameSession = ({
       content={t("chat.renameThread")}
       render={
         <button
-          className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5"
+          className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-6 items-center rounded-sm px-1 py-0.5"
           onClick={startEditing}
           type="button"
         >

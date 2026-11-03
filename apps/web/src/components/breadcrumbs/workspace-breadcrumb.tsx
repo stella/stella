@@ -310,6 +310,7 @@ export const WorkspaceBreadcrumb = ({
               return (
                 <>
                   <MatterColorContextPicker
+                    className="pointer-coarse:size-6"
                     label={changeColorLabel}
                     matter={workspace}
                   >
@@ -338,6 +339,7 @@ export const WorkspaceBreadcrumb = ({
             return (
               <>
                 <MatterColorContextPicker
+                  className="pointer-coarse:size-6"
                   label={changeColorLabel}
                   matter={workspace}
                 >
@@ -354,7 +356,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5 font-semibold"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();

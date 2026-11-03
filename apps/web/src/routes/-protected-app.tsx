@@ -415,18 +415,22 @@ function ProtectedContent() {
     >
       {workspaceId && (
         <>
-          <Button
-            onClick={() => togglePin(workspaceId)}
-            size="icon-sm"
-            title={isPinned ? t("common.unpin") : t("common.pin")}
-            variant="ghost"
-          >
-            {isPinned ? (
-              <PinOffIcon className="size-4" />
-            ) : (
-              <PinIcon className="size-4" />
-            )}
-          </Button>
+          {/* A phone's bar leaves the matter's crumb too little room with
+              this beside it; the matter's menu and inspector still pin. */}
+          {!isMobile && (
+            <Button
+              onClick={() => togglePin(workspaceId)}
+              size="icon-sm"
+              title={isPinned ? t("common.unpin") : t("common.pin")}
+              variant="ghost"
+            >
+              {isPinned ? (
+                <PinOffIcon className="size-4" />
+              ) : (
+                <PinIcon className="size-4" />
+              )}
+            </Button>
+          )}
           <Button
             onClick={() => {
               openMatterInspector({
@@ -458,7 +462,7 @@ function ProtectedContent() {
         {isMobile && (
           <>
             <SidebarTrigger className="-ms-1" />
-            <Separator className="me-2 h-4" orientation="vertical" />
+            <Separator className="h-4" orientation="vertical" />
           </>
         )}
         <AppBreadcrumbs />
@@ -474,7 +478,7 @@ function ProtectedContent() {
             inspector rail's own toggle. */}
         {isMobile && (
           <>
-            <Separator className="ms-2 h-4" orientation="vertical" />
+            <Separator className="h-4" orientation="vertical" />
             <PanelTrigger
               className="-me-1"
               label={inspectorButtonTitle}
