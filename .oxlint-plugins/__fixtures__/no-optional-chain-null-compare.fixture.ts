@@ -38,6 +38,16 @@ export const _strictNotUndefinedChain = log?.closedAt !== undefined;
 // oxlint-disable-next-line typescript/prefer-optional-chain
 export const _strictNotUndefinedNarrowed = log !== undefined && log.closedAt !== undefined;
 
+// --- "Absent or unset" narrowed with `||`: prefer-optional-chain folds it ---
+// With a value that cannot be null, prefer-optional-chain asks for
+// `unset?.closedAt === undefined`, which no-optional-chain-absent-match then
+// reports: a loop. So this spelling is avoided; flip to
+// `unset?.closedAt !== undefined` with the branches swapped, or return early.
+declare const unset: { closedAt: Date | undefined } | undefined;
+// oxlint-disable-next-line typescript/prefer-optional-chain
+export const _orNarrowedUndefined = unset === undefined || unset.closedAt === undefined;
+export const _flippedUndefinedChain = unset?.closedAt !== undefined;
+
 // --- Folded absence stays clean for both rules ---
 // expect-clean: no-optional-chain-null-compare/no-optional-chain-null-compare, no-optional-chain-null-compare/no-optional-chain-absent-match
 export const _folded = (log?.closedAt ?? null) !== null;

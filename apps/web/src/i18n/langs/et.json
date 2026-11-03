@@ -1814,6 +1814,7 @@
     "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
+    "sendErrorMessageEmpty": "Selles sõnumis pole saatmiseks teksti. Kirjuta oma küsimus või lisa fail ja saada sõnum seejärel.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
     "sendErrorNotStarted": "Vestlus on veel hõivatud. Oodake veidi ja proovige uuesti.",
     "sendErrorPreparationFailed": "Sõnumit ei õnnestunud ette valmistada. Avage vestlus uuesti ja proovige veel kord.",
@@ -2605,9 +2606,16 @@
       "value": "Välja väärtus"
     },
     "datePrecision": "Kuupäeva täpsus",
+    "deleteBlockedByMattersCount": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
+    "deleteBlockedCount": "Eemaldamata kontaktid: {count}",
     "deleteContact": "Kustuta kontakt",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
+    "deleteNotFoundCount": "Leidmata kontaktid: {count}.",
+    "deleteSelected": "Kustuta {count, plural, one {# kontakt} other {# kontakti}}",
+    "deleteSelectedConfirm": "Kas kustutada {count, plural, one {see kontakt} other {need # kontakti}} jäädavalt? Seda toimingut ei saa tagasi võtta.",
+    "deleteSelectedLimit": "Valige korraga kustutamiseks kuni {limit} kontakti.",
+    "deletedCount": "Kustutati {count, plural, one {# kontakt} other {# kontakti}}",
     "editContact": "Muuda kontakti",
     "emailTypes": {
       "other": "Muu",
@@ -2738,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
+      "undoImport": "Võta import tagasi ({count})",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
       "warning": {
         "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
@@ -2767,6 +2776,7 @@
     "saved": "Kontakti andmed on salvestatud.",
     "search": "Otsi kontakte...",
     "searchCountries": "Otsi riike",
+    "selectContact": "Vali {name}",
     "title": "Kliendid",
     "type": {
       "organization": "Organisatsioon",
@@ -5349,11 +5359,16 @@
       "auditLogsActionDownload": "Laadi alla",
       "auditLogsActionExecute": "Käivita",
       "auditLogsActionUpdate": "Uuenda",
+      "auditLogsActorId": "Täitja ID",
+      "auditLogsAfter": "Pärast",
       "auditLogsAllActions": "Kõik toimingud",
+      "auditLogsAnyone": "Kõik",
+      "auditLogsBefore": "Enne",
       "auditLogsChanges": "Muudatused",
       "auditLogsDeletedResource": "kustutatud {kind}",
       "auditLogsDescription": "Kes mida selles organisatsioonis tegi ja millal.",
       "auditLogsEmpty": "Tegevusi veel pole.",
+      "auditLogsEmptyValue": "(tühi)",
       "auditLogsError": "Tegevuslogi laadimine ebaõnnestus.",
       "auditLogsExport": "Ekspordi logid",
       "auditLogsExportFailed": "Tegevuslogi eksportimine ebaõnnestus.",
@@ -5361,6 +5376,13 @@
       "auditLogsExporting": "Eksportimine...",
       "auditLogsFrom": "Alates",
       "auditLogsLoading": "Logide laadimine...",
+      "auditLogsMoreChanges": "+{count, plural, one {# veel} other {# veel}}",
+      "auditLogsNoChanges": "Väljade muudatusi ei salvestatud.",
+      "auditLogsPerformer": "Tegija",
+      "auditLogsPerformerAll": "Inimesed ja automatiseeringud",
+      "auditLogsPerformerAutomations": "Automatiseeringud",
+      "auditLogsPerformerPeople": "Inimesed",
+      "auditLogsPersonPlaceholder": "Otsi nime või e-posti järgi",
       "auditLogsResourceId": "Ressursi ID",
       "auditLogsResourceIdentifier": "Ressursi ID: {id}",
       "auditLogsResourceType": "Ressursi tüüp",
@@ -5383,8 +5405,6 @@
       "auditLogsTo": "Kuni",
       "auditLogsUnavailableResource": "{kind} (pole saadaval)",
       "auditLogsUnknownResource": "tundmatu üksus",
-      "auditLogsUserId": "Kasutaja ID",
-      "auditLogsUserIdPlaceholder": "Filtreeri kasutaja ID järgi",
       "auditResourceKinds": {
         "agent_skill": "oskus",
         "agent_skill_comment": "oskuse kommentaar",
@@ -6352,6 +6372,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "See toimik on arhiveeritud ja kirjutuskaitstud.",
     "calculations": {
       "choose": "Arvuta",
       "kinds": {
@@ -7209,6 +7230,7 @@
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"
     },
+    "unarchiveBeforeDelete": "Enne toimiku kustutamist tühistage selle arhiveerimine.",
     "unarchiveMatter": "Taasta arhiivist",
     "uploadDocuments": "Laadi dokumendid üles",
     "views": {

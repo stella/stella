@@ -1814,6 +1814,7 @@
     "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
+    "sendErrorMessageEmpty": "Šioje žinutėje nėra teksto, kurį būtų galima išsiųsti. Įrašykite klausimą arba pridėkite failą ir tada išsiųskite žinutę.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
     "sendErrorNotStarted": "Pokalbis vis dar užimtas. Šiek tiek palaukite ir bandykite dar kartą.",
     "sendErrorPreparationFailed": "Nepavyko paruošti žinutės. Iš naujo atidarykite pokalbį ir bandykite dar kartą.",
@@ -2605,9 +2606,16 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
+    "deleteBlockedByMattersCount": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
+    "deleteBlockedCount": "Nepašalinti kontaktai: {count}",
     "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
+    "deleteNotFoundCount": "Nerasti kontaktai: {count}.",
+    "deleteSelected": "Ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}",
+    "deleteSelectedConfirm": "Visam laikui ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}? Šio veiksmo anuliuoti negalima.",
+    "deleteSelectedLimit": "Vienu metu pasirinkite ištrinti ne daugiau kaip {limit} kontaktų.",
+    "deletedCount": "Ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
     "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",
@@ -2738,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
+      "undoImport": "Atšaukti importavimą ({count})",
       "validateFailed": "Nepavyko patikrinti šių kontaktų.",
       "warning": {
         "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
@@ -2767,6 +2776,7 @@
     "saved": "Kontaktiniai duomenys išsaugoti.",
     "search": "Ieškoti kontaktų...",
     "searchCountries": "Ieškoti šalių",
+    "selectContact": "Pasirinkti {name}",
     "title": "Klientai",
     "type": {
       "organization": "Organizacija",
@@ -5349,11 +5359,16 @@
       "auditLogsActionDownload": "Atsisiųsti",
       "auditLogsActionExecute": "Vykdyti",
       "auditLogsActionUpdate": "Atnaujinti",
+      "auditLogsActorId": "Vykdytojo ID",
+      "auditLogsAfter": "Po",
       "auditLogsAllActions": "Visi veiksmai",
+      "auditLogsAnyone": "Bet kas",
+      "auditLogsBefore": "Prieš",
       "auditLogsChanges": "Pakeitimai",
       "auditLogsDeletedResource": "ištrintas {kind}",
       "auditLogsDescription": "Kas ką padarė šioje organizacijoje ir kada.",
       "auditLogsEmpty": "Veiklos kol kas nėra.",
+      "auditLogsEmptyValue": "(tuščia)",
       "auditLogsError": "Nepavyko įkelti veiklos žurnalo.",
       "auditLogsExport": "Eksportuoti žurnalus",
       "auditLogsExportFailed": "Nepavyko eksportuoti veiklos žurnalo.",
@@ -5361,6 +5376,13 @@
       "auditLogsExporting": "Eksportuojama...",
       "auditLogsFrom": "Data nuo",
       "auditLogsLoading": "Įkeliami žurnalai...",
+      "auditLogsMoreChanges": "+{count, plural, one {# kitas} few {# kiti} many {# kito} other {# kitų}}",
+      "auditLogsNoChanges": "Laukų pakeitimų neužfiksuota.",
+      "auditLogsPerformer": "Atliko",
+      "auditLogsPerformerAll": "Žmonės ir automatizavimai",
+      "auditLogsPerformerAutomations": "Automatizavimai",
+      "auditLogsPerformerPeople": "Žmonės",
+      "auditLogsPersonPlaceholder": "Ieškoti pagal vardą arba el. paštą",
       "auditLogsResourceId": "Ištekliaus ID",
       "auditLogsResourceIdentifier": "Ištekliaus ID: {id}",
       "auditLogsResourceType": "Ištekliaus tipas",
@@ -5383,8 +5405,6 @@
       "auditLogsTo": "Data iki",
       "auditLogsUnavailableResource": "{kind} (nepasiekiama)",
       "auditLogsUnknownResource": "nežinomas elementas",
-      "auditLogsUserId": "Naudotojo ID",
-      "auditLogsUserIdPlaceholder": "Filtruoti pagal naudotojo ID",
       "auditResourceKinds": {
         "agent_skill": "įgūdis",
         "agent_skill_comment": "įgūdžio komentaras",
@@ -6352,6 +6372,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ši byla archyvuota ir yra tik skaitoma.",
     "calculations": {
       "choose": "Apskaičiuoti",
       "kinds": {
@@ -7209,6 +7230,7 @@
       "aiModel": "DI modelis",
       "manualInput": "Rankiniu būdu"
     },
+    "unarchiveBeforeDelete": "Prieš ištrindami šią bylą, panaikinkite jos archyvavimą.",
     "unarchiveMatter": "Išarchyvuoti",
     "uploadDocuments": "Įkelti dokumentus",
     "views": {
