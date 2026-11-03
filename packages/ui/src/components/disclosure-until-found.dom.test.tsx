@@ -5,6 +5,10 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 // libraries that read the document, and unregister when the file is done.
 // Queries come from render(), not `screen`: `screen` binds the body of
 // whichever file first imported Testing Library in this process.
+// Base UI chooses its layout effect, which sets `hidden="until-found"`, when
+// its modules first load: a no-op if there is no `document` yet. The package
+// runs each test file isolated (`bun test --isolate`), so a server-rendering
+// test that loaded Base UI earlier cannot hand this file the no-op.
 GlobalRegistrator.register();
 const { cleanup, render } = await import("@testing-library/react");
 const { Accordion, AccordionItem, AccordionPanel, AccordionTrigger } =
