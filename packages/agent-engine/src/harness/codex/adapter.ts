@@ -58,8 +58,13 @@ export type CodexHarnessAdapterOptions = {
   environment: Readonly<Record<string, string>>;
   /** Desktop version, reported to the harness as the client version. */
   clientVersion: string;
-  /** How long an interrupt or a shutdown waits before the process is killed. */
+  /**
+   * How long an interrupt or a shutdown waits before the process is killed,
+   * and how long a killed process gets before SIGKILL.
+   */
   gracePeriodMs: number;
+  /** How long any request to the harness waits for its answer. */
+  requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
 };
@@ -130,6 +135,10 @@ const connect = async ({
     startAppServer({
       launch: options.launch,
       detached: createDetached(options.onBackgroundError),
+      deadlines: {
+        requestMs: options.requestTimeoutMs,
+        terminateMs: options.gracePeriodMs,
+      },
       cwd,
       env: { ...options.environment, CODEX_HOME: options.codexHome },
       handlers,

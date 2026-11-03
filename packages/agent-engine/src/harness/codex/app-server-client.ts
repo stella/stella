@@ -1,19 +1,22 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { createLineReader } from "./json-lines";
 import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
 
 /**
  * JSON-RPC over the stdio of one `codex app-server` process: one JSON object
  * per line in each direction. The client owns the process; when it exits,
- * every pending request settles with `closed`.
+ * every pending request settles with `closed`. Every wait is bounded: a
+ * request the server does not answer in time ends the process, and a process
+ * that outlives its termination signal is killed outright.
  */
 
 /** A line longer than this is refused rather than buffered without bound. */
 const MAX_LINE_BYTES = 16 * 1024 * 1024;
 
 class AppServerRequestError extends TaggedError("AppServerRequestError")<{
-  reason: "rejected" | "closed";
+  reason: "rejected" | "closed" | "timed_out";
   code: number | null;
   message: string;
 }> {}
@@ -39,9 +42,17 @@ export type Detached = (
   context: `${string}.${string}`,
 ) => void;
 
+export type AppServerDeadlines = {
+  /** How long a request waits for its answer before the process is ended. */
+  requestMs: number;
+  /** How long the process gets to exit on SIGTERM before SIGKILL. */
+  terminateMs: number;
+};
+
 type StartAppServerOptions = {
   launch: AppServerLaunch;
   detached: Detached;
+  deadlines: AppServerDeadlines;
   cwd: string;
   env: Readonly<Record<string, string>>;
   handlers: AppServerHandlers;
@@ -59,6 +70,7 @@ export type AppServerClient = {
   exited: Promise<AppServerExit>;
   /** Ends stdin, which asks the server to flush its state and exit. */
   closeInput: () => void;
+  /** SIGTERM, then SIGKILL once the termination deadline passes. */
   kill: () => Promise<AppServerExit>;
 };
 
@@ -67,6 +79,7 @@ type Pending = (result: Result<unknown, AppServerRequestError>) => void;
 export const startAppServer = ({
   launch,
   detached,
+  deadlines,
   cwd,
   env,
   handlers,
@@ -80,7 +93,29 @@ export const startAppServer = ({
     stderr: "ignore",
   });
   const pending = new Map<CodexRequestId, Pending>();
-  const state = { nextId: 1, closed: false };
+  const state = { nextId: 1, closed: false, terminating: false };
+
+  /**
+   * The one way the process is ended: SIGTERM, then SIGKILL if it has not
+   * exited by the deadline, so no wait on its exit is unbounded.
+   */
+  const terminate = () => {
+    if (state.closed || state.terminating) {
+      return;
+    }
+    state.terminating = true;
+    child.kill("SIGTERM");
+    const escalation = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, deadlines.terminateMs);
+    detached(
+      (async () => {
+        await child.exited;
+        clearTimeout(escalation);
+      })(),
+      "codex-app-server.terminate",
+    );
+  };
 
   /**
    * Stdin is the only way to reach the server. Once an operation on it throws,
@@ -90,8 +125,8 @@ export const startAppServer = ({
    */
   const onInput = (operation: () => void) => {
     const done = Result.try(operation);
-    if (Result.isError(done) && !state.closed) {
-      child.kill();
+    if (Result.isError(done)) {
+      terminate();
     }
   };
 
@@ -151,23 +186,18 @@ export const startAppServer = ({
   };
 
   const readStdout = async () => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const bytes of child.stdout) {
-      buffer += decoder.decode(bytes, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        dispatch(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-      }
-      if (buffer.length > MAX_LINE_BYTES) {
+    const lines = createLineReader({
+      maxLineBytes: MAX_LINE_BYTES,
+      line: dispatch,
+      oversized: () => {
         handlers.violation("The harness wrote an oversized message.");
-        buffer = "";
-        child.kill();
-      }
+        terminate();
+      },
+    });
+    for await (const bytes of child.stdout) {
+      lines.push(bytes);
     }
-    dispatch(buffer + decoder.decode());
+    lines.end();
   };
 
   const exited = (async (): Promise<AppServerExit> => {
@@ -209,8 +239,26 @@ export const startAppServer = ({
       const { promise, resolve } =
         Promise.withResolvers<Result<unknown, AppServerRequestError>>();
       pending.set(id, resolve);
+      const deadline = setTimeout(() => {
+        if (!pending.delete(id)) {
+          return;
+        }
+        resolve(
+          Result.err(
+            new AppServerRequestError({
+              reason: "timed_out",
+              code: null,
+              message: `The harness did not answer ${method} in time.`,
+            }),
+          ),
+        );
+        // A server that stops answering cannot be trusted with the session.
+        terminate();
+      }, deadlines.requestMs);
       write({ id, method, params });
-      return await promise;
+      const result = await promise;
+      clearTimeout(deadline);
+      return result;
     },
     notify: (method, params) => {
       write(params === undefined ? { method } : { method, params });
@@ -230,9 +278,7 @@ export const startAppServer = ({
       }
     },
     kill: async () => {
-      if (!state.closed) {
-        child.kill();
-      }
+      terminate();
       return exited;
     },
   };

@@ -125,7 +125,9 @@ export const openThread = async (
       continuation: { type: "resumed" },
     });
   }
-  if (resumed.error.reason === "closed") {
+  // Only a refusal falls back to a new session: a closed or silent harness
+  // cannot start one either.
+  if (resumed.error.reason !== "rejected") {
     return Result.err(
       new HarnessStartError({
         reason: "harness_unavailable",
