@@ -555,6 +555,20 @@ describe("harness sidecar over stdio", () => {
     expect(sidecar.received()).toEqual([]);
   });
 
+  test("fails a run whose transcript holds a message it cannot read, without starting the harness", async () => {
+    const sidecar = spawnSidecar();
+    await hello(sidecar);
+    const runId = runStart(sidecar, "tool_calls", {
+      messages: [{ role: "user", content: [{ type: "text", content: 42 }] }],
+    });
+    expect(await sidecar.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "failed",
+    });
+    expect(sidecar.received().map(({ method }) => method)).not.toContain(
+      "turn/start",
+    );
+  });
+
   test("refuses a second start of a running run", async () => {
     const sidecar = spawnSidecar();
     await hello(sidecar);
