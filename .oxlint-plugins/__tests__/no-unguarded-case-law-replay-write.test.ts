@@ -11,23 +11,35 @@ const lint = async (source: string) =>
 const imports =
   'import { replayWrite as plan } from "@/api/lib/case-law/replay-write"; import { and } from "drizzle-orm";\n';
 
+/**
+ * Lints every case concurrently: concurrent cases of one rule share a single
+ * oxlint run, so a test costs one run instead of one per case.
+ */
+const expectLines = async (
+  cases: readonly (readonly [string, readonly number[]])[],
+): Promise<void> => {
+  expect(
+    await Promise.all(cases.map(async ([source]) => await lint(source))),
+  ).toEqual(cases.map(([, lines]) => [...lines]));
+};
+
 describe.serial(RULE, () => {
   test("a mutation without the owner's predicate is rejected", async () => {
-    expect(await lint("await tx.update(rows).set({ value });")).toEqual([1]);
-    expect(
-      await lint(
+    await expectLines([
+      ["await tx.update(rows).set({ value });", [1]],
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.update(rows).set(write.set).where(eq(rows.id,id));`,
-      ),
-    ).toEqual([3]);
-    expect(
-      await lint(
+        [3],
+      ],
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.update(rows).set(write.set).where(and(eq(rows.id,id),write.setWhere));`,
-      ),
-    ).toEqual([]);
+        [],
+      ],
+    ]);
   });
   test("the predicate must belong to the effective SET being written", async () => {
     expect(
@@ -39,31 +51,30 @@ describe.serial(RULE, () => {
     ).toEqual([3]);
   });
   test("upserts cannot override the coupled SET or predicate", async () => {
-    expect(
-      await lint(
+    await expectLines([
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,...write});`,
-      ),
-    ).toEqual([]);
-    expect(
-      await lint(
+        [],
+      ],
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,...write,setWhere:sql\`true\`});`,
-      ),
-    ).toEqual([3]);
-    expect(
-      await lint(
+        [3],
+      ],
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,...write,set:{other}});`,
-      ),
-    ).toEqual([3]);
+        [3],
+      ],
+    ]);
   });
   test("source-ordered conflict options cannot replace the plan through any later source", async () => {
-    await Promise.all(
-      [
+    await expectLines([
+      ...[
         "target:rows.id,...write,...{setWhere:sql`true`}",
         "target:rows.id,...write,...{set:{other}}",
         "target:rows.id,...write,setWhere:sql`true`",
@@ -78,63 +89,60 @@ describe.serial(RULE, () => {
         "target:rows.id,...write,...second",
         "target:rows.id,set:write.set,setWhere:write.setWhere,...{setWhere:sql`true`}",
         "target:rows.id,set:write.set,setWhere:write.setWhere,...opaque",
-      ].map(async (options) => {
-        expect(
-          await lint(
+      ].map(
+        (options) =>
+          [
             `${imports}const write = plan(rows,{value}); const second = plan(rows,{other});\nawait tx.insert(rows).values(input).onConflictDoUpdate({${options}});`,
-          ),
-        ).toEqual([3]);
-      }),
-    );
-    expect(
-      await lint(
+            [3],
+          ] as const,
+      ),
+      [
         `${imports}const write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({...{target:rows.id},...write});`,
-      ),
-    ).toEqual([]);
-    expect(
-      await lint(
+        [],
+      ],
+      [
         `${imports}const write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,set:write.set,setWhere:and(write.setWhere,eq(rows.id,id))});`,
-      ),
-    ).toEqual([]);
+        [],
+      ],
+    ]);
   });
   test("the final WHERE and SET sinks must retain the same plan", async () => {
-    await Promise.all(
-      [
+    await expectLines([
+      ...[
         ".set(write.set).where(write.setWhere).where(sql`true`)",
         ".set(write.set).where(write.setWhere).where(undefined)",
         ".set(write.set).where(write.setWhere).set({other})",
         ".set({...write.set}).where(write.setWhere)",
         ".set({...write.set,...{value:other}}).where(write.setWhere)",
         ".set(write.set).where({...write.setWhere,...opaque})",
-      ].map(async (sink) => {
-        expect(
-          await lint(
+      ].map(
+        (sink) =>
+          [
             `${imports}const write = plan(rows,{value});\nawait tx.update(rows)${sink};`,
-          ),
-        ).toEqual([3]);
-      }),
-    );
-    expect(
-      await lint(
-        `${imports}const write = plan(rows,{value});\nawait tx.update(rows).set(write.set).where(sql\`true\`).where(write.setWhere);`,
+            [3],
+          ] as const,
       ),
-    ).toEqual([]);
+      [
+        `${imports}const write = plan(rows,{value});\nawait tx.update(rows).set(write.set).where(sql\`true\`).where(write.setWhere);`,
+        [],
+      ],
+    ]);
   });
   test("a shadowed plan or an OR does not establish a changed-only write", async () => {
-    expect(
-      await lint(
+    await expectLines([
+      [
         `${
           imports
         }const write = plan(rows, { value });\nfunction bad(write) { return tx.update(rows).set(write.set).where(write.setWhere); }`,
-      ),
-    ).toEqual([3]);
-    expect(
-      await lint(
+        [3],
+      ],
+      [
         `${
           imports
         }const write = plan(rows, { value });\nawait tx.update(rows).set(write.set).where(or(write.setWhere,sql\`true\`));`,
-      ),
-    ).toEqual([3]);
+        [3],
+      ],
+    ]);
   });
   test("raw SQL writes and overwritten predicates fail the guard", async () => {
     // Independent sources lint concurrently, so the case's wall time stays
@@ -172,33 +180,34 @@ describe.serial(RULE, () => {
     ).toEqual(cases.map(([, lines]) => [...lines]));
   });
   test("a saved update builder must still carry the plan's predicate", async () => {
-    expect(
-      await lint(
+    await expectLines([
+      [
         `${imports}const write = plan(rows, { value });\nconst update = tx.update(rows);\nawait update.set(write.set).where(eq(rows.id,id));`,
-      ),
-    ).toEqual([4]);
-    expect(
-      await lint(
+        [4],
+      ],
+      [
         `${imports}const update = tx.update(rows);\nawait update.set({ value });`,
-      ),
-    ).toEqual([3]);
-    expect(
-      await lint(
+        [3],
+      ],
+      [
         `${imports}const write = plan(rows, { value });\nconst update = tx.update(rows);\nawait update.set(write.set).where(and(eq(rows.id,id),write.setWhere));`,
-      ),
-    ).toEqual([]);
+        [],
+      ],
+    ]);
   });
   test("a predicate typed as optional may only fall back to a panic", async () => {
     const guarded = `${imports}import { panic } from "better-result";\nconst write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,set:write.set,setWhere:and(write.setWhere,eq(rows.id,id)) ?? `;
-    expect(await lint(`${guarded}panic("missing")});`)).toEqual([]);
-    expect(await lint(`${guarded}sql\`true\`});`)).toEqual([4]);
+    await expectLines([
+      [`${guarded}panic("missing")});`, []],
+      [`${guarded}sql\`true\`});`, [4]],
+    ]);
   });
   test("raw templates cannot substitute for a complete owner statement", async () => {
     const rawImports =
       'import {sql} from "drizzle-orm"; import {replayWriteAssignments} from "@/api/lib/case-law/replay-write";';
     const marker = "$";
-    await Promise.all(
-      [
+    await expectLines([
+      ...[
         `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE true RETURNING ${marker}{write.setWhere}`,
         `UPDATE rows SET value=1 WHERE true RETURNING ${marker}{write.setWhere}`,
         `UPDATE rows SET value=(SELECT 1 WHERE ${marker}{write.setWhere}) WHERE true`,
@@ -206,33 +215,32 @@ describe.serial(RULE, () => {
         `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE ${marker}{write.setWhere} OR true`,
         `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE ${marker}{write.setWhere}`,
         `INSERT INTO rows(id,value) VALUES(1,1) ON CONFLICT(id) DO UPDATE SET value=1 WHERE ${marker}{write.setWhere}`,
-      ].map(async (statement) => {
-        expect(
-          await lint(
+      ].map(
+        (statement) =>
+          [
             `${imports}${rawImports}\nconst write = plan(rows,{value});\nawait tx.execute(sql\`${statement}\`);`,
-          ),
-        ).toEqual([4]);
-      }),
-    );
-    expect(
-      await lint(
-        'import {replayRawWrite} from "@/api/lib/case-law/replay-write";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"}}).execute({kind:"drizzle",connection:tx});',
+            [4],
+          ] as const,
       ),
-    ).toEqual([]);
+      [
+        'import {replayRawWrite} from "@/api/lib/case-law/replay-write";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"}}).execute({kind:"drizzle",connection:tx});',
+        [],
+      ],
+    ]);
   });
   test("complete owners cannot smuggle a raw mutation in a CTE or result query", async () => {
-    await Promise.all(
-      [
+    await expectLines([
+      ...[
         'ctes:[{name:"x",query:sql`UPDATE rows SET value=1 RETURNING id`}]',
         'result:{kind:"query",name:"x",columns:sql`id`,query:sql`UPDATE rows SET value=1`}',
-      ].map(async (extra) => {
-        expect(
-          await lint(
+      ].map(
+        (extra) =>
+          [
             `import {replayRawWrite} from "@/api/lib/case-law/replay-write"; import {sql} from "drizzle-orm";\nawait replayRawWrite({table:rows,values:{value},predicate:sql\`true\`,operation:{kind:"update"},${extra}}).execute({kind:"drizzle",connection:tx});`,
-          ),
-        ).toEqual([2]);
-      }),
-    );
+            [2],
+          ] as const,
+      ),
+    ]);
   });
   test("serialized raw updates cannot compare a different SET", async () => {
     expect(
@@ -257,8 +265,13 @@ describe.serial(RULE, () => {
         }`,
     );
     expect(mutated).not.toBe(original);
-    expect(await lint(original)).toEqual([]);
-    expect((await lint(mutated)).length).toBeGreaterThan(0);
-    expect(await lint(original)).toEqual([]);
+    const [before, broken, restored] = await Promise.all([
+      lint(original),
+      lint(mutated),
+      lint(original),
+    ]);
+    expect(before).toEqual([]);
+    expect(broken.length).toBeGreaterThan(0);
+    expect(restored).toEqual([]);
   });
 });

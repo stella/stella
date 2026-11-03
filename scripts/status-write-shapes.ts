@@ -466,12 +466,13 @@ const schemaReplayColumns = () => {
       ) {
         return;
       }
-      let tableBuilder = false;
+      const builders: Node[] = [];
       walk(node.init.callee, (part) => {
         if (part.type === "Identifier" && part.name === "pgTable") {
-          tableBuilder = true;
+          builders.push(part);
         }
       });
+      const tableBuilder = builders.length > 0;
       const fields = node.init.arguments.at(1);
       if (
         !tableBuilder ||
@@ -697,8 +698,7 @@ const replayPlansFor = (
           (field) => propertyName(field.key) === "column",
         )?.value;
         if (
-          timestamp === undefined ||
-          timestamp.length !== 2 ||
+          timestamp?.length !== 2 ||
           timestamp.some(
             (field) =>
               !["column", "value"].includes(propertyName(field.key) ?? ""),
