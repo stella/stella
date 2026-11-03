@@ -12,6 +12,7 @@ import { createHttpApp } from "@/api/http/app";
 import { setResponseHeaders } from "@/api/http/headers";
 import { routes } from "@/api/http/route";
 import type { Middleware } from "@/api/http/route";
+import { apiWebSocketHandler } from "@/api/http/websocket";
 import {
   currentQueryCount,
   currentRepeatedQueryFingerprints,
@@ -425,7 +426,11 @@ describe("db query counter HTTP header", () => {
     if (route === undefined) {
       throw new TypeError("The probe route is not mounted");
     }
-    const host = Bun.serve({ port: 0, fetch: () => new Response(null) });
+    const host = Bun.serve({
+      port: 0,
+      fetch: () => new Response(null),
+      websocket: apiWebSocketHandler,
+    });
     const request = (count: string) =>
       asTestRaw<BunRequest>(
         Object.assign(new Request(`http://localhost/queries/${count}`), {

@@ -99,6 +99,10 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for deferred document reads; no parser reads it.
+  // A read-through document fetch found the decision's source held by another
+  // owner, or lost it to one mid-fetch. The decision stays queued for them.
+  deferred_document_owned_elsewhere: "anticipated",
   // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
   document_ocr_unconfigured: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.

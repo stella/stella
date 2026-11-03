@@ -225,6 +225,7 @@ true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
   copy. "workspace" is the internal identifier for the same thing (DB schema,
   TypeScript, HTTP routes) and the product-category word ("an open-source legal
   workspace"). Where the two meet, rename at the boundary, once.
+  [test: apps/api/src/mcp/input-vocabulary.test.ts]
 
 ## Project Overview
 
@@ -251,21 +252,21 @@ week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the exis
 dated-waiver inventory and healing checks enforce its seven-day deadline.
 
 - Dead-export checks (knip) enforce the no-placeholder rule where a package is
-  enrolled; enroll new packages.
+  enrolled; enroll new packages. [check: check:knip-exports]
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
+  [review]
 
 ## Workspace Layout
 
-- `apps/*` contains runnable applications only.
-- `packages/*` contains shared or publishable packages only.
-- Every direct child of `apps/` and `packages/` must be a workspace package named
-  `@stll/<directory>`.
-- Use scoped workspace filters in commands, for example
-  `bun --filter @stll/web dev`.
+`apps/*` holds runnable applications and `packages/*` shared or publishable
+code. Commands use scoped workspace filters, for example
+`bun --filter @stll/web dev`.
+
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
+  [check: ratchet:cross-app-lib-path-copies]
 
 ## Finding Things
 
