@@ -6050,6 +6050,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
