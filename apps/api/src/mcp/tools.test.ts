@@ -2713,6 +2713,19 @@ describe("OpenAI-compatible MCP tools", () => {
       const requests: { query: string; aggs: Record<string, unknown> }[] = [];
       searchDecisionsHandlerMock.mockImplementation(
         async ({ body }: Parameters<typeof searchCorpusIndexDecisions>[0]) => {
+          // The handler reads no aggregation for a body that opts out
+          // (`search-describe-result-set.test.ts` pins that side).
+          if (body.describeResultSet === false) {
+            return {
+              facets: null,
+              hits: [],
+              nextCursor: null,
+              queryUsed: body.query,
+              warnings: [],
+              paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+              total: SEARCH_TOTAL_NOT_COUNTED,
+            };
+          }
           const read = await readCorpusSearchFacets({
             aggregate: async (request) => {
               requests.push(request);
@@ -2769,7 +2782,13 @@ describe("OpenAI-compatible MCP tools", () => {
           toolName: "search_case_law",
         });
         expect(result.isError).not.toBe(true);
-        expect(requests).toHaveLength(queries.length);
+        // One aggregation read for a single phrasing (its total is returned)
+        // or for the first phrasing when facets were asked for; none for a
+        // phrasing whose facets and total the response would drop. Before
+        // the opt-out, every phrasing read one.
+        expect(requests).toHaveLength(
+          queries.length === 1 || (facets?.length ?? 0) > 0 ? 1 : 0,
+        );
         expect(
           requests.filter(({ aggs }) =>
             Object.keys(aggs).some((name) => name !== "total"),

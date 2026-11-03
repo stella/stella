@@ -57,6 +57,7 @@
     "allow-billing-draft-grant-consent",
     "allow-billing-draft-withdraw-consent",
     "allow-billing-draft-set-preference",
-    "allow-desktop-runner-get-state"
+    "allow-desktop-runner-get-state",
+    "core:window:allow-start-dragging"
   ]
 }

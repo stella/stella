@@ -13,11 +13,12 @@ import { getByRole } from "@testing-library/dom";
 import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { caseLawCoverageAnchor } from "@/features/case-law/case-law-jurisdiction";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   COVERAGE,
