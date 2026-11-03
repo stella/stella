@@ -299,9 +299,17 @@ mod tests {
       .put(RunRecord::new(RUN.to_owned(), Decision::Accepted, 0))
       .unwrap();
     let other = "0192f3a0-6b1c-7d2e-8f30-000000000002";
-    fs::rename(record_path(&directory, RUN), record_path(&directory, other)).unwrap();
+    crate::local_store::rename_private(
+      &record_path(&directory, RUN),
+      &record_path(&directory, other),
+    )
+    .unwrap();
     assert_eq!(Journal::open(encrypted(&directory), 0).records().count(), 0);
-    fs::rename(record_path(&directory, other), record_path(&directory, RUN)).unwrap();
+    crate::local_store::rename_private(
+      &record_path(&directory, other),
+      &record_path(&directory, RUN),
+    )
+    .unwrap();
     let wrong_key = JournalBacking::Encrypted {
       directory: directory.clone(),
       key: [8; 32],

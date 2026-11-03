@@ -984,14 +984,5 @@ export const CZ_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: E_SBIRKA_ANCHORS.segmentSeparator,
-    render: {
-      section: (value) => `par_${value}`,
-      article: (value) => `cl_${value}`,
-      subsection: (value) => `odst_${value}`,
-      letter: (value) => `pism_${value}`,
-      point: (value) => `bod_${value}`,
-    },
-  },
+  anchor: E_SBIRKA_ANCHORS,
 } as const satisfies JurisdictionProfile;
