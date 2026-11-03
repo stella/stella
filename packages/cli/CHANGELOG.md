@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 6.7.1
+
+### Patch Changes
+
+- [#7606](https://github.com/stella/stella/pull/7606) [`6c907e2`](https://github.com/stella/stella/commit/6c907e206ce59165e77e0714b8302160b396d56a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the stella CLI display name and show a themed sign-in completion page with organization context. The browser shows "Signed in" only after the CLI has exchanged the code and saved the credential; otherwise it names what failed and how to retry.
+
+## 6.7.0
+
+### Minor Changes
+
+- [#7569](https://github.com/stella/stella/pull/7569) [`4e29565`](https://github.com/stella/stella/commit/4e2956596d0f3b7685341d263192cd0131dcd212) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a capability that deletes several contacts at once and reports, per contact, whether it was deleted or why it was kept.
+
 ## 6.6.3
 
 ### Patch Changes
