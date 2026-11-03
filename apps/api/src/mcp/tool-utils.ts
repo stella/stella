@@ -534,15 +534,24 @@ const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
   expected: [],
 });
 
+/**
+ * Whether a case-law search failure is its time budget running out: a
+ * cancelled statement or a public-read timeout, thrown or answered. Reads
+ * only; `caseLawSearchTimeoutResult` records and answers the same failures.
+ */
+export const isCaseLawSearchTimeout = (error: unknown): boolean => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  return (
+    getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED ||
+    resolveHandlerError(error)?.code === PUBLIC_READ_TIMEOUT_CODE ||
+    (isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  );
+};
+
 export const caseLawSearchTimeoutResult = (
   error: unknown,
 ): InternalToolErrorResult | null => {
-  const response = isRecord(error) ? error["response"] : undefined;
-  if (
-    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED &&
-    resolveHandlerError(error)?.code !== PUBLIC_READ_TIMEOUT_CODE &&
-    !(isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
-  ) {
+  if (!isCaseLawSearchTimeout(error)) {
     return null;
   }
   observeFailure(error, {
