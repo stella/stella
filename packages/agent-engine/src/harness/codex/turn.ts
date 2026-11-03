@@ -72,8 +72,12 @@ const PERMISSION_OPTIONS = [
   { id: "deny", decision: "deny" },
 ] as const satisfies readonly HarnessApprovalOption[];
 
+/** JSON-RPC ids `7` and `"7"` are different requests, so the type is kept. */
 const requestIdFor = (jsonRpcId: CodexRequestId) =>
-  `codex-request-${String(jsonRpcId)}`;
+  `codex-request-${typeof jsonRpcId}-${String(jsonRpcId)}`;
+
+/** Stands in for a secret answer anywhere outside the reply to the harness. */
+const SECRET_ANSWER = "[secret answer]";
 
 type PendingInteraction =
   | { type: "approval"; jsonRpcId: CodexRequestId }
@@ -129,11 +133,21 @@ const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
 const respondError = (reason: HarnessRespondError["reason"], message: string) =>
   Result.err(new HarnessRespondError({ reason, message }));
 
-/** The JSON-RPC result for an answer, or why the answer does not fit. */
+/**
+ * The JSON-RPC result for an answer (`reply`), and the same result as the
+ * turn's stream may show it (`shown`), or why the answer does not fit.
+ */
+type InteractionResult = { reply: unknown; shown: unknown };
+
+const sameResult = (reply: unknown): InteractionResult => ({
+  reply,
+  shown: reply,
+});
+
 const interactionResult = (
   pending: PendingInteraction,
   response: HarnessInteractionResponse,
-): Result<unknown, string> => {
+): Result<InteractionResult, string> => {
   switch (pending.type) {
     case "approval": {
       if (response.type !== "approval") {
@@ -144,7 +158,7 @@ const interactionResult = (
       );
       return option === undefined
         ? Result.err("The harness does not offer this decision.")
-        : Result.ok({ decision: option.id });
+        : Result.ok(sameResult({ decision: option.id }));
     }
     case "permissions":
       if (response.type !== "approval") {
@@ -152,9 +166,11 @@ const interactionResult = (
       }
       switch (response.decision) {
         case "approve":
-          return Result.ok({ permissions: pending.requested, scope: "turn" });
+          return Result.ok(
+            sameResult({ permissions: pending.requested, scope: "turn" }),
+          );
         case "deny":
-          return Result.ok({ permissions: {}, scope: "turn" });
+          return Result.ok(sameResult({ permissions: {}, scope: "turn" }));
         case "approve_for_session":
           return Result.err("The harness does not offer this decision.");
         default:
@@ -166,6 +182,7 @@ const interactionResult = (
         return Result.err("This request takes answers.");
       }
       const answers: [string, { answers: readonly string[] }][] = [];
+      const shown: [string, { answers: readonly string[] }][] = [];
       for (const question of pending.questions) {
         const given = response.answers[question.id] ?? [];
         if (given.length === 0) {
@@ -179,8 +196,15 @@ const interactionResult = (
           );
         }
         answers.push([question.id, { answers: given }]);
+        shown.push([
+          question.id,
+          { answers: question.secret ? given.map(() => SECRET_ANSWER) : given },
+        ]);
       }
-      return Result.ok({ answers: Object.fromEntries(answers) });
+      return Result.ok({
+        reply: { answers: Object.fromEntries(answers) },
+        shown: { answers: Object.fromEntries(shown) },
+      });
     }
     default:
       pending satisfies never;
@@ -812,13 +836,16 @@ export class CodexTurnSession {
     if (Result.isError(result)) {
       return respondError("invalid_response", result.error);
     }
-    this.client.respond(interaction.jsonRpcId, result.value);
+    this.client.respond(interaction.jsonRpcId, result.value.reply);
     this.settle(requestId);
     if (interaction.type !== "approval") {
       this.emit({
         type: "tool.completed",
         toolCall: interaction.toolCall,
-        result: { content: JSON.stringify(result.value), status: "succeeded" },
+        result: {
+          content: JSON.stringify(result.value.shown),
+          status: "succeeded",
+        },
       });
     }
     return Result.ok();
