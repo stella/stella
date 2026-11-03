@@ -9,10 +9,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });

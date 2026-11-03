@@ -10,8 +10,7 @@ import {
   markdownLines,
   readFencedBlockAt,
 } from "@stll/property-testing/commonmark-code-oracle";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 /**
  * Random chat answers for the renderer properties: the Markdown a model

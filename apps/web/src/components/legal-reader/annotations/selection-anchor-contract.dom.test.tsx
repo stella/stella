@@ -15,8 +15,7 @@ import {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 import { assertProperty } from "@stll/property-testing";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   isInnermostAnchoredBlock,
