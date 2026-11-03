@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
 
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import { inspectAppSources } from "./app-source-guard";
 
@@ -45,29 +45,20 @@ test("every registered app uses the shared bounded viewport", async () => {
       if (text === undefined) {
         throw new TypeError(`Missing app module: ${file}`);
       }
-      const module = ts.createSourceFile(
-        file,
-        text,
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      for (const statement of module.statements) {
+      for (const statement of parseSource(file, text).program.body) {
         if (
-          !ts.isImportDeclaration(statement) &&
-          !ts.isExportDeclaration(statement)
+          statement.type !== "ImportDeclaration" &&
+          statement.type !== "ExportNamedDeclaration" &&
+          statement.type !== "ExportAllDeclaration"
         ) {
           continue;
         }
-        const specifier = statement.moduleSpecifier;
-        if (
-          specifier === undefined ||
-          !ts.isStringLiteral(specifier) ||
-          !specifier.text.startsWith(".")
-        ) {
+        const specifier = statement.source?.value;
+        if (specifier === undefined || !specifier.startsWith(".")) {
           continue;
         }
         const imported = path.posix.normalize(
-          path.posix.join(path.posix.dirname(file), specifier.text),
+          path.posix.join(path.posix.dirname(file), specifier),
         );
         const target = [`${imported}.ts`, `${imported}.tsx`].find(
           (candidate) => sources[candidate] !== undefined,

@@ -15,7 +15,14 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type CallExpression,
+  type NewExpression,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
 const OWNER = "src/lib/observability/server-error-answer.ts";
@@ -107,71 +114,87 @@ type StatusSite = {
 
 const SERVER_ERROR_LITERAL = /^5\d\d$/u;
 
-const isServerErrorLiteral = (node: ts.Node): boolean =>
-  ts.isNumericLiteral(node) && SERVER_ERROR_LITERAL.test(node.text);
+const isServerErrorLiteral = (node: Node): boolean =>
+  node.type === "Literal" &&
+  typeof node.value === "number" &&
+  SERVER_ERROR_LITERAL.test(String(node.value));
 
-const containsServerErrorLiteral = (node: ts.Node): boolean =>
-  isServerErrorLiteral(node) ||
-  (ts.forEachChild(node, (child) =>
-    containsServerErrorLiteral(child) ? true : undefined,
-  ) ??
-    false);
+const containsServerErrorLiteral = (node: Node): boolean => {
+  let found = false;
+  walk(node, (child) => {
+    if (found) {
+      return "skip-children";
+    }
+    found = isServerErrorLiteral(child);
+    return undefined;
+  });
+  return found;
+};
 
-const calleeName = (expression: ts.Expression): string | undefined => {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
+const calleeName = (expression: Node): string | undefined => {
+  if (expression.type === "Identifier") {
+    return expression.name;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
+  if (
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier"
+  ) {
+    return expression.property.name;
   }
   return undefined;
 };
 
-const statusProperty = (node: ts.Node): ts.Expression | undefined => {
-  if (!ts.isObjectLiteralExpression(node)) {
+const statusProperty = (node: Node): Node | undefined => {
+  if (node.type !== "ObjectExpression") {
     return undefined;
   }
   for (const property of node.properties) {
-    if (property.name?.getText() !== "status") {
-      continue;
-    }
-    if (ts.isPropertyAssignment(property)) {
-      return property.initializer;
-    }
-    if (ts.isShorthandPropertyAssignment(property)) {
-      return property.name;
+    if (
+      property.type === "Property" &&
+      property.kind === "init" &&
+      !property.method &&
+      !property.computed &&
+      property.key.type === "Identifier" &&
+      property.key.name === "status"
+    ) {
+      return property.value;
     }
   }
   return undefined;
 };
 
 type Constructed = {
-  readonly expression: ts.Expression;
+  readonly expression: Node;
   readonly init: boolean;
 };
+
+type Construction = CallExpression | NewExpression;
 
 /**
  * The status expressions a call or construction builds an answer with; an
  * `init` one is a whole `ResponseInit`.
  */
 const constructedStatuses = (
-  node: ts.CallExpression | ts.NewExpression,
+  node: Construction,
+  source: string,
 ): Constructed[] => {
-  const name = calleeName(node.expression);
-  const args = node.arguments ?? [];
+  const name = calleeName(node.callee);
+  const args = node.arguments;
   const [first, second] = args;
   if (
     first !== undefined &&
-    ((ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
+    ((node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
       name === "status") ||
-      (ts.isNewExpression(node) && name === "HttpStatusResponse"))
+      (node.type === "NewExpression" && name === "HttpStatusResponse"))
   ) {
     return [{ expression: first, init: false }];
   }
   if (
     name === "Response" ||
-    (name === "json" && node.expression.getText() === "Response.json")
+    (name === "json" &&
+      source.slice(node.callee.start, node.callee.end) === "Response.json")
   ) {
     return second === undefined ? [] : [{ expression: second, init: true }];
   }
@@ -191,47 +214,87 @@ const constructedStatuses = (
 
 type Helper = { readonly name: string; readonly exported: boolean };
 
-const hasExportModifier = (node: ts.Node): boolean =>
-  ts.canHaveModifiers(node) &&
-  (ts.getModifiers(node) ?? []).some(
-    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-  );
+const FUNCTION_LIKE: ReadonlySet<string> = new Set([
+  "ArrowFunctionExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSCallSignatureDeclaration",
+  "TSConstructSignatureDeclaration",
+  "TSConstructorType",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "TSFunctionType",
+  "TSMethodSignature",
+]);
 
-/** The named function `identifier` is a parameter of, and its position. */
-const parameterOwner = (
-  identifier: ts.Identifier,
-): { helper: Helper; position: number } | undefined => {
-  let node = identifier.parent;
-  while (!ts.isSourceFile(node) && !ts.isFunctionLike(node)) {
-    node = node.parent;
+/** The identifier a parameter binds, through a default, rest or modifier. */
+const parameterName = (parameter: Node): string | undefined => {
+  if (parameter.type === "Identifier") {
+    return parameter.name;
   }
-  if (!ts.isFunctionLike(node)) {
+  if (parameter.type === "AssignmentPattern") {
+    return parameterName(parameter.left);
+  }
+  if (parameter.type === "RestElement") {
+    return parameterName(parameter.argument);
+  }
+  if (parameter.type === "TSParameterProperty") {
+    return parameterName(parameter.parameter);
+  }
+  return undefined;
+};
+
+const functionParameters = (node: Node): readonly Node[] =>
+  "params" in node && Array.isArray(node.params) ? node.params : [];
+
+/** The named function the identifier `name` is a parameter of, and its position. */
+const parameterOwner = (
+  identifier: Node,
+  name: string,
+  parents: ReadonlyMap<Node, Node>,
+): { helper: Helper; position: number } | undefined => {
+  let node = parents.get(identifier);
+  while (node !== undefined && !FUNCTION_LIKE.has(node.type)) {
+    node = parents.get(node);
+  }
+  if (node === undefined) {
     return undefined;
   }
-  const position = node.parameters.findIndex(
-    (parameter) =>
-      ts.isIdentifier(parameter.name) &&
-      parameter.name.text === identifier.text,
+  const position = functionParameters(node).findIndex(
+    (parameter) => parameterName(parameter) === name,
   );
   if (position === -1) {
     return undefined;
   }
-  if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
-    return {
-      helper: { name: node.name.text, exported: hasExportModifier(node) },
-      position,
-    };
-  }
-  const declaration = node.parent;
+  const parent = parents.get(node);
   if (
-    (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-    ts.isVariableDeclaration(declaration) &&
-    ts.isIdentifier(declaration.name)
+    (node.type === "FunctionDeclaration" ||
+      node.type === "TSDeclareFunction") &&
+    node.id !== null
   ) {
     return {
       helper: {
-        name: declaration.name.text,
-        exported: hasExportModifier(declaration.parent.parent),
+        name: node.id.name,
+        exported:
+          parent?.type === "ExportNamedDeclaration" ||
+          parent?.type === "ExportDefaultDeclaration",
+      },
+      position,
+    };
+  }
+  if (
+    (node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionExpression") &&
+    parent?.type === "VariableDeclarator" &&
+    parent.id.type === "Identifier"
+  ) {
+    const statement = parents.get(parent);
+    return {
+      helper: {
+        name: parent.id.name,
+        exported:
+          statement !== undefined &&
+          parents.get(statement)?.type === "ExportNamedDeclaration",
       },
       position,
     };
@@ -240,58 +303,56 @@ const parameterOwner = (
 };
 
 const findStatusSites = (file: string, source: string): StatusSite[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const lineOf = (node: ts.Node): number =>
-    sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+  const parsed = parseSource(file, source);
+  const text = (node: Node): string => source.slice(node.start, node.end);
+  const lineOf = (node: Node): number => parsed.locate(node.start).line;
 
   // Values a status may name in this file: declarations and assignments.
-  const values = new Map<string, ts.Expression[]>();
-  const calls: (ts.CallExpression | ts.NewExpression)[] = [];
-  const collect = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      const name = node.name.text;
-      values.set(name, [...(values.get(name) ?? []), node.initializer]);
+  const values = new Map<string, Node[]>();
+  const calls: Construction[] = [];
+  const parents = new Map<Node, Node>();
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
     }
     if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
-      const name = node.left.text;
+      const name = node.id.name;
+      values.set(name, [...(values.get(name) ?? []), node.init]);
+    }
+    if (
+      node.type === "AssignmentExpression" &&
+      node.operator === "=" &&
+      node.left.type === "Identifier"
+    ) {
+      const name = node.left.name;
       values.set(name, [...(values.get(name) ?? []), node.right]);
     }
-    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+    if (node.type === "CallExpression" || node.type === "NewExpression") {
       calls.push(node);
     }
-    ts.forEachChild(node, collect);
-  };
-  collect(sourceFile);
+  });
 
   const sites: StatusSite[] = [];
   // Same-file helpers that hand a parameter on as the status (or as a whole
   // `ResponseInit`, when `init`), by position.
   const helpers = new Map<string, Map<number, boolean>>();
-  const record = (expression: ts.Expression, init: boolean): void => {
-    if (init && ts.isObjectLiteralExpression(expression)) {
+  const record = (expression: Node, init: boolean): void => {
+    if (init && expression.type === "ObjectExpression") {
       const status = statusProperty(expression);
       if (status !== undefined) {
         record(status, false);
       }
       return;
     }
-    const owner = ts.isIdentifier(expression)
-      ? parameterOwner(expression)
-      : undefined;
+    const owner =
+      expression.type === "Identifier"
+        ? parameterOwner(expression, expression.name, parents)
+        : undefined;
     if (owner !== undefined) {
       const positions =
         helpers.get(owner.helper.name) ?? new Map<number, boolean>();
@@ -302,26 +363,29 @@ const findStatusSites = (file: string, source: string): StatusSite[] => {
         return;
       }
     }
-    const named = ts.isIdentifier(expression)
-      ? (values.get(expression.text) ?? [])
-      : [];
+    const named =
+      expression.type === "Identifier"
+        ? (values.get(expression.name) ?? [])
+        : [];
     const literal =
       containsServerErrorLiteral(expression) ||
       named.some(containsServerErrorLiteral);
     // A whole `ResponseInit` an expression yields is another answer's own,
     // re-framed; only one holding a literal 5xx is built here.
-    if ((init || ts.isNumericLiteral(expression)) && !literal) {
+    const numeric =
+      expression.type === "Literal" && typeof expression.value === "number";
+    if ((init || numeric) && !literal) {
       return;
     }
     sites.push({
       kind: literal ? "literal" : "computed",
-      expression: expression.getText(sourceFile),
+      expression: text(expression),
       line: lineOf(expression),
     });
   };
 
   for (const call of calls) {
-    for (const { expression, init } of constructedStatuses(call)) {
+    for (const { expression, init } of constructedStatuses(call, source)) {
       record(expression, init);
     }
   }
@@ -331,11 +395,11 @@ const findStatusSites = (file: string, source: string): StatusSite[] => {
   while (grew) {
     grew = false;
     for (const call of calls) {
-      const name = calleeName(call.expression);
+      const name = calleeName(call.callee);
       const positions = name === undefined ? undefined : helpers.get(name);
       for (const [position, init] of positions ?? []) {
-        const arg = call.arguments?.[position];
-        const key = `${call.pos}:${position}`;
+        const arg = call.arguments[position];
+        const key = `${call.start}:${position}`;
         if (arg !== undefined && !followed.has(key)) {
           followed.add(key);
           grew = true;

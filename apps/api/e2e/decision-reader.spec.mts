@@ -3,7 +3,6 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { panic } from "better-result";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript6";
 import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -12,6 +11,7 @@ import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import APP_INPUT_SCHEMAS from "../../../packages/mcp-apps/src/shared/generated/input-schemas.json" with { type: "json" };
 import type {
@@ -1725,27 +1725,29 @@ for (const host of ["Claude", "ChatGPT"] as const) {
   });
 }
 
-const manifestSource = ts.createSourceFile(
+const manifestSource = parseSource(
   "manifest.ts",
   await readFile(
     new URL("../../../packages/mcp-apps/src/manifest.ts", import.meta.url),
     "utf-8",
   ),
-  ts.ScriptTarget.Latest,
-  true,
 );
 const registeredDirectories: string[] = [];
-const visitManifest = (node: ts.Node): void => {
+walk(manifestSource.program, (node) => {
   if (
-    ts.isPropertyAssignment(node) &&
-    node.name.getText(manifestSource) === "directory" &&
-    ts.isStringLiteral(node.initializer)
+    node.type === "Property" &&
+    node.kind === "init" &&
+    !node.method &&
+    !node.shorthand &&
+    !node.computed &&
+    node.key.type === "Identifier" &&
+    node.key.name === "directory" &&
+    node.value.type === "Literal" &&
+    typeof node.value.value === "string"
   ) {
-    registeredDirectories.push(node.initializer.text);
+    registeredDirectories.push(node.value.value);
   }
-  ts.forEachChild(node, visitManifest);
-};
-visitManifest(manifestSource);
+});
 expect(registeredDirectories.length).toBeGreaterThan(0);
 
 for (const directory of registeredDirectories) {

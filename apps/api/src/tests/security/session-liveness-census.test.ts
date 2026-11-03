@@ -2,42 +2,89 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type CallExpression,
+  type ImportDeclaration,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  type Program,
+  type TemplateElement,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const OWNER = "src/lib/auth/session-liveness.ts";
 const STORE = "src/lib/auth/session-lifetime-store.ts";
 
-const propertyRoot = (node: ts.Expression): ts.Expression => {
+type SourceFile = { fileName: string; program: Program };
+
+const memberName = (node: Node) =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier"
+    ? node.property.name
+    : undefined;
+
+const propertyRoot = (node: Node): Node => {
   let current = node;
-  while (ts.isPropertyAccessExpression(current)) {
-    current = current.expression;
+  while (current.type === "MemberExpression" && !current.computed) {
+    current = current.object;
   }
   return current;
 };
 
-const importedSessionNames = (source: ts.SourceFile) => {
+/** An `identifier: value` entry; shorthand, method and computed entries are not. */
+const namedProperty = (node: Node, name: string): node is ObjectProperty =>
+  node.type === "Property" &&
+  node.kind === "init" &&
+  !node.method &&
+  !node.shorthand &&
+  !node.computed &&
+  node.key.type === "Identifier" &&
+  node.key.name === name;
+
+const stringLiteralValue = (node: Node | null | undefined) =>
+  node?.type === "Literal" && typeof node.value === "string"
+    ? node.value
+    : undefined;
+
+const importStatements = (source: SourceFile) =>
+  source.program.body.filter(
+    (statement): statement is ImportDeclaration =>
+      statement.type === "ImportDeclaration",
+  );
+
+/** Local names bound by `import { imported as local }` for one of `imported`. */
+const namedImportLocals = (
+  statement: ImportDeclaration,
+  imported: readonly string[],
+) =>
+  statement.specifiers.flatMap((specifier) => {
+    if (specifier.type !== "ImportSpecifier") {
+      return [];
+    }
+    const name =
+      specifier.imported.type === "Identifier"
+        ? specifier.imported.name
+        : specifier.imported.value;
+    return imported.includes(name) ? [specifier.local.name] : [];
+  });
+
+const importedSessionNames = (source: SourceFile) => {
   const names = new Set<string>();
-  for (const statement of source.statements) {
+  for (const statement of importStatements(source)) {
+    const specifier = statement.source.value;
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      (!statement.moduleSpecifier.text.endsWith("/db/auth-schema") &&
-        !(
-          source.fileName.startsWith("src/db/") &&
-          statement.moduleSpecifier.text === "./auth-schema"
-        ))
+      !specifier.endsWith("/db/auth-schema") &&
+      !(source.fileName.startsWith("src/db/") && specifier === "./auth-schema")
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if ((element.propertyName?.text ?? element.name.text) === "session") {
-        names.add(element.name.text);
-      }
+    for (const name of namedImportLocals(statement, ["session"])) {
+      names.add(name);
     }
   }
   if (source.fileName === STORE) {
@@ -47,192 +94,157 @@ const importedSessionNames = (source: ts.SourceFile) => {
   return names;
 };
 
-const importedSqlNames = (source: ts.SourceFile) => {
+const importedSqlNames = (source: SourceFile) => {
   const names = new Set(["sql"]);
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "drizzle-orm"
-    ) {
+  for (const statement of importStatements(source)) {
+    if (statement.source.value !== "drizzle-orm") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if ((element.propertyName?.text ?? element.name.text) === "sql") {
-        names.add(element.name.text);
-      }
+    for (const name of namedImportLocals(statement, ["sql"])) {
+      names.add(name);
     }
   }
   return names;
 };
 
-const importedComparisonNames = (source: ts.SourceFile) => {
-  const names = new Set(["gt", "gte", "lt", "lte"]);
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "drizzle-orm"
-    ) {
+const COMPARISONS = ["gt", "gte", "lt", "lte"];
+
+const importedComparisonNames = (source: SourceFile) => {
+  const names = new Set(COMPARISONS);
+  for (const statement of importStatements(source)) {
+    if (statement.source.value !== "drizzle-orm") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if (
-        ["gt", "gte", "lt", "lte"].includes(
-          element.propertyName?.text ?? element.name.text,
-        )
-      ) {
-        names.add(element.name.text);
-      }
+    for (const name of namedImportLocals(statement, COMPARISONS)) {
+      names.add(name);
     }
   }
   return names;
 };
 
-const isSessionExpiry = (node: ts.Node, names: ReadonlySet<string>) => {
-  if (!ts.isPropertyAccessExpression(node) || node.name.text !== "expiresAt") {
+const isSessionExpiry = (node: Node, names: ReadonlySet<string>) => {
+  if (memberName(node) !== "expiresAt") {
     return false;
   }
   const root = propertyRoot(node);
-  return ts.isIdentifier(root) && names.has(root.text);
+  return root.type === "Identifier" && names.has(root.name);
 };
 
-const adapterExpiryConditions = (node: ts.ObjectLiteralExpression) => {
+const adapterExpiryConditions = (node: ObjectExpression) => {
   const model = node.properties.find(
     (property) =>
-      ts.isPropertyAssignment(property) &&
-      property.name.getText() === "model" &&
-      ts.isStringLiteral(property.initializer) &&
-      property.initializer.text === "session",
+      namedProperty(property, "model") &&
+      stringLiteralValue(property.value) === "session",
   );
   if (!model) {
     return [];
   }
-  const where = node.properties.find(
-    (property) =>
-      ts.isPropertyAssignment(property) && property.name.getText() === "where",
+  const where = node.properties.find((property) =>
+    namedProperty(property, "where"),
   );
   if (
     !where ||
-    !ts.isPropertyAssignment(where) ||
-    !ts.isArrayLiteralExpression(where.initializer)
+    !namedProperty(where, "where") ||
+    where.value.type !== "ArrayExpression"
   ) {
     return [];
   }
-  return where.initializer.elements.filter(
-    (condition): condition is ts.ObjectLiteralExpression =>
-      ts.isObjectLiteralExpression(condition) &&
+  return where.value.elements.filter(
+    (condition): condition is ObjectExpression =>
+      condition?.type === "ObjectExpression" &&
       condition.properties.some(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText() === "field" &&
-          ts.isStringLiteral(property.initializer) &&
-          property.initializer.text === "expiresAt",
+          namedProperty(property, "field") &&
+          stringLiteralValue(property.value) === "expiresAt",
       ) &&
       condition.properties.some(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText() === "operator" &&
-          ts.isStringLiteral(property.initializer) &&
-          ["gt", "gte", "lt", "lte"].includes(property.initializer.text),
+          namedProperty(property, "operator") &&
+          COMPARISONS.includes(stringLiteralValue(property.value) ?? ""),
       ),
   );
 };
 
-const relationalSessionExpiryConditions = (node: ts.CallExpression) => {
+const relationalSessionExpiryConditions = (node: CallExpression) => {
+  const method = memberName(node.callee);
   if (
-    !ts.isPropertyAccessExpression(node.expression) ||
-    !["findFirst", "findMany"].includes(node.expression.name.text)
+    node.callee.type !== "MemberExpression" ||
+    method === undefined ||
+    !["findFirst", "findMany"].includes(method)
   ) {
     return false;
   }
-  const query = node.expression.expression;
+  const query = node.callee.object;
   if (
-    !ts.isPropertyAccessExpression(query) ||
-    query.name.text !== "session" ||
-    !ts.isPropertyAccessExpression(query.expression) ||
-    query.expression.name.text !== "query"
+    memberName(query) !== "session" ||
+    query.type !== "MemberExpression" ||
+    memberName(query.object) !== "query"
   ) {
     return false;
   }
+  return node.arguments.some(hasExpiryComparison);
+};
+
+/** Whether `root` holds `expiresAt: { gt | gte | lt | lte: ... }`. */
+const hasExpiryComparison = (root: Node) => {
   let found = false;
-  const inspect = (child: ts.Node) => {
+  walk(root, (child) => {
     if (
-      ts.isPropertyAssignment(child) &&
-      child.name.getText() === "expiresAt" &&
-      ts.isObjectLiteralExpression(child.initializer) &&
-      child.initializer.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          ["gt", "gte", "lt", "lte"].includes(property.name.getText()),
+      namedProperty(child, "expiresAt") &&
+      child.value.type === "ObjectExpression" &&
+      child.value.properties.some((property) =>
+        COMPARISONS.some((name) => namedProperty(property, name)),
       )
     ) {
       found = true;
     }
-    ts.forEachChild(child, inspect);
-  };
-  for (const argument of node.arguments) {
-    inspect(argument);
-  }
+  });
   return found;
 };
+
+const templateText = ({ value }: TemplateElement) => value.cooked ?? value.raw;
 
 const sessionLivenessViolations = (file: string, text: string) => {
   if (file === OWNER) {
     return [];
   }
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const source = { fileName: file, program: parseSource(file, text).program };
   const sessionNames = importedSessionNames(source);
   const sqlNames = importedSqlNames(source);
   const comparisonNames = importedComparisonNames(source);
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isObjectLiteralExpression(node)) {
+  walk(source.program, (node) => {
+    if (node.type === "ObjectExpression") {
       violations.push(
         ...adapterExpiryConditions(node).map(
           () => "session adapter expiry condition",
         ),
       );
     }
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const name = node.expression.text;
+    if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+      const name = node.callee.name;
       if (
         comparisonNames.has(name) &&
         node.arguments.some((argument) => {
           let matched = false;
-          const inspect = (child: ts.Node) => {
+          walk(argument, (child) => {
             matched ||= isSessionExpiry(child, sessionNames);
-            ts.forEachChild(child, inspect);
-          };
-          inspect(argument);
+          });
           return matched;
         })
       ) {
         violations.push(`session.${name}(expiresAt, ...)`);
       }
     }
-    if (ts.isCallExpression(node) && relationalSessionExpiryConditions(node)) {
+    if (
+      node.type === "CallExpression" &&
+      relationalSessionExpiryConditions(node)
+    ) {
       violations.push("session relational expiry condition");
     }
-    if (
-      ts.isTaggedTemplateExpression(node) &&
-      (ts.isNoSubstitutionTemplateLiteral(node.template) ||
-        ts.isTemplateExpression(node.template))
-    ) {
-      const literalSql = ts.isNoSubstitutionTemplateLiteral(node.template)
-        ? node.template.text
-        : [
-            node.template.head.text,
-            ...node.template.templateSpans.map((span) => span.literal.text),
-          ].join(" ");
+    if (node.type === "TaggedTemplateExpression") {
+      const { expressions, quasis } = node.quasi;
+      const literalSql = quasis.map(templateText).join(" ");
       if (
         /\b(?:session|auth_session)\b[\s\S]*?\bexpires_at\b\s*(?:>=|>|<=|<)/iu.test(
           literalSql,
@@ -240,30 +252,25 @@ const sessionLivenessViolations = (file: string, text: string) => {
       ) {
         violations.push("raw SQL session expiry comparison");
       }
-      if (
-        ts.isIdentifier(node.tag) &&
-        sqlNames.has(node.tag.text) &&
-        ts.isTemplateExpression(node.template)
-      ) {
-        for (const [index, span] of node.template.templateSpans.entries()) {
-          const previousLiteral =
-            index === 0
-              ? node.template.head.text
-              : (node.template.templateSpans[index - 1]?.literal.text ?? "");
+      if (node.tag.type === "Identifier" && sqlNames.has(node.tag.name)) {
+        const nodeText = text.slice(node.start, node.end);
+        for (const [index, expression] of expressions.entries()) {
+          const previous = quasis[index];
+          const next = quasis[index + 1];
+          const previousLiteral = previous ? templateText(previous) : "";
+          const nextLiteral = next ? templateText(next) : "";
           const comparisonOnLeft = /(?:>=|>|<=|<)\s*$/u.test(previousLiteral);
-          const comparisonOnRight = /^\s*(?:>=|>|<=|<)/u.test(
-            span.literal.text,
-          );
+          const comparisonOnRight = /^\s*(?:>=|>|<=|<)/u.test(nextLiteral);
           if (
-            isSessionExpiry(span.expression, sessionNames) &&
+            isSessionExpiry(expression, sessionNames) &&
             (comparisonOnLeft || comparisonOnRight) &&
             !(
               file === STORE &&
               comparisonOnRight &&
-              ((span.literal.text.includes("<=") &&
-                node.getText(source).includes("expiresIn - updateAge")) ||
-                (span.literal.text.includes("<") &&
-                  node.getText(source).includes("SESSION_ABSOLUTE_AGE_MS")))
+              ((nextLiteral.includes("<=") &&
+                nodeText.includes("expiresIn - updateAge")) ||
+                (nextLiteral.includes("<") &&
+                  nodeText.includes("SESSION_ABSOLUTE_AGE_MS")))
             )
           ) {
             violations.push("SQL session expiry comparison");
@@ -271,9 +278,7 @@ const sessionLivenessViolations = (file: string, text: string) => {
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return [...new Set(violations)];
 };
 
@@ -360,7 +365,7 @@ describe("session liveness owner", () => {
     expect(
       sessionLivenessViolations(
         "src/lib/other.ts",
-        'import { session } from "@/api/db/auth-schema"; db.select({ expiresAt: session.expiresAt }); if (row.expiresAt <= now) return null;',
+        'import { session } from "@/api/db/auth-schema"; db.select({ expiresAt: session.expiresAt }); const verify = (row: Row) => { if (row.expiresAt <= now) return null; };',
       ),
     ).toEqual([]);
     expect(
