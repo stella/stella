@@ -10,7 +10,7 @@ import {
 } from "./accordion";
 
 describe("Accordion disclosure", () => {
-  test("a closed panel stays findable by find-in-page", () => {
+  test("a closed panel renders its content on the server, plainly hidden", () => {
     const markup = renderToStaticMarkup(
       <Accordion>
         <AccordionItem value="parties">
@@ -20,6 +20,11 @@ describe("Accordion disclosure", () => {
       </Accordion>,
     );
     expect(markup).toContain('aria-expanded="false"');
+    // Base UI renders the closed panel with a plain `hidden` on the server
+    // and switches it to `hidden="until-found"` once mounted (see the DOM
+    // test), so find-in-page reaches it only after hydration.
+    expect(markup).toMatch(/ hidden=""/u);
+    expect(markup).not.toMatch(/ hidden="until-found"/u);
     expect(markup).toContain("Claimant and respondent");
   });
 
@@ -53,6 +58,20 @@ describe("Accordion disclosure", () => {
     );
   });
 
+  test("the trigger counts a number as status text", () => {
+    const markup = renderToStaticMarkup(
+      <Accordion>
+        <AccordionItem value="documents">
+          <AccordionTrigger trailing={3}>Documents</AccordionTrigger>
+          <AccordionPanel>List</AccordionPanel>
+        </AccordionItem>
+      </Accordion>,
+    );
+    expect(markup).toMatch(
+      /data-slot="accordion-trigger-trailing"[^>]*>3<\/span>/u,
+    );
+  });
+
   test("a trigger without status text adds no empty slot", () => {
     const markup = renderToStaticMarkup(
       <Accordion>
@@ -64,3 +83,16 @@ describe("Accordion disclosure", () => {
     expect(markup).not.toContain("accordion-trigger-trailing");
   });
 });
+
+// The trailing slot is text inside the trigger's button, never a control.
+const trailingControlContract = () => (
+  <Accordion>
+    <AccordionItem value="documents">
+      {/* @ts-expect-error a control inside the trigger button is unreachable */}
+      <AccordionTrigger trailing={<button type="button">Edit</button>}>
+        Documents
+      </AccordionTrigger>
+    </AccordionItem>
+  </Accordion>
+);
+void trailingControlContract;

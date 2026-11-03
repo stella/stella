@@ -1,16 +1,15 @@
 "use client";
 
-import type * as React from "react";
-
 import { Accordion as AccordionPrimitive } from "@base-ui/react/accordion";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 
 /**
- * Closed panels stay in the document as `hidden="until-found"`, so
- * find-in-page reaches their content and opens the section, as it would a
- * native `<details>`. Pass `hiddenUntilFound={false}` (here, or on one
+ * Closed panels stay in the document. Once mounted they are
+ * `hidden="until-found"`, so find-in-page reaches their content and opens
+ * the section, as it would a native `<details>`; server-rendered markup
+ * carries a plain `hidden` until hydration. Pass `hiddenUntilFound={false}` (here, or on one
  * `AccordionPanel`) to unmount closed content instead: a heavy panel that
  * should not render until asked for.
  */
@@ -81,10 +80,11 @@ const AccordionTrigger = ({
   /**
    * Status at the end of the row, before the chevron: a count, "2 unsaved",
    * a last-updated date. It is part of the trigger, so it is read with the
-   * heading; it is text, never a control (a button inside a button is
-   * unreachable).
+   * heading. It is typed as text so it can never be a control: a button
+   * inside the trigger's button is unreachable and its click would toggle
+   * the panel.
    */
-  trailing?: React.ReactNode;
+  trailing?: string | number;
 }) => (
   <AccordionPrimitive.Header className="flex">
     <AccordionPrimitive.Trigger
@@ -99,8 +99,10 @@ const AccordionTrigger = ({
     >
       {children}
       {trailing === undefined ? null : (
+        // A long status wraps within the row instead of pushing the chevron
+        // past the trigger's edge.
         <span
-          className="text-muted-foreground ms-auto shrink-0 text-xs font-normal tabular-nums"
+          className="text-muted-foreground ms-auto min-w-0 text-end text-xs font-normal tabular-nums"
           data-slot="accordion-trigger-trailing"
         >
           {trailing}

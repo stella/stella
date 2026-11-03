@@ -4,9 +4,8 @@
 # commit itself whose queue history since the previous release tag is fully
 # validated (check-release-receipt-coverage.sh), or trusted main/heavy and
 # main/pr-depth success; sparse or skipped heavy runs provide no green evidence.
-# A failed main/heavy run still counts when only its advisory marketing
-# screenshot jobs failed (release-heavy-verdict.jq decides, and a warning names
-# the run); every other failure, cancelled run or unreadable job list refuses.
+# Any other state of a required status refuses, a failed marketing screenshots
+# job included: a screenshot difference alone only warns inside that job.
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +18,6 @@ proof="${3:-}"
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
-heavy_verdict_filter="$script_dir/release-heavy-verdict.jq"
 runs_prefix="https://github.com/$repo/actions/runs/"
 # Exit 0 when the run behind status $1 belongs to workflow $2 and commit $3,
 # carries title pattern $4 and ended with conclusion $5.
@@ -30,8 +28,6 @@ status_run_matches() {
   run_id="${url#"$runs_prefix"}"
   [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || return 1
   run=$(bash "$gh_retry_script" api "repos/$repo/actions/runs/$run_id") || return 1
-  # The attempt the run is at now, for callers that bind evidence to it.
-  matched_run_attempt=$(jq -er '.run_attempt | select(type == "number" and . >= 1 and . == floor)' <<< "$run") || return 1
   jq -e --arg repo "$repo" --arg sha "$commit" --arg url "$url" --arg workflow "$workflow" --arg title "$title" --arg conclusion "$conclusion" --argjson id "$run_id" '
     .id == $id and .html_url == $url and .repository.full_name == $repo and
     .path == $workflow and .head_branch == "main" and
@@ -40,45 +36,6 @@ status_run_matches() {
     (.event == "workflow_dispatch" or .head_sha == $sha) and
     .status == "completed" and .conclusion == $conclusion
   ' <<< "$run" >/dev/null
-}
-# Prints the JSON of run $1's artifact $2 (<name>.json inside), or null.
-download_ci_record() {
-  local run_id="$1" artifact="$2" dir
-  dir=$(mktemp -d)
-  if bash "$gh_retry_script" run download "$run_id" -R "$repo" -n "$artifact" -D "$dir" >/dev/null 2>&1; then
-    jq -ce . "$dir/$artifact.json" 2>/dev/null || echo null
-  else
-    echo null
-  fi
-  rm -rf "$dir"
-}
-# Exit 0, with a warning naming the run, when main/heavy status $1 on commit $2
-# is a plain failure of a trusted, well-formed run whose only unsuccessful jobs
-# are advisory (marketing screenshots never gate a release). Any other state,
-# conclusion, unreadable job list or unclassified job stays a refusal.
-heavy_failed_only_in_advisory_jobs() {
-  local status="$1" commit="$2" url run_id jobs total record violations verdict
-  jq -e '.state == "failure" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null || return 1
-  status_run_matches "$status" ".github/workflows/main-heavy.yml" "$commit" "Main heavy suites" failure || return 1
-  url=$(jq -r '.target_url' <<< "$status")
-  run_id="${url#"$runs_prefix"}"
-  jobs=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/actions/runs/$run_id/jobs?filter=latest&per_page=100") || return 1
-  # The pages must add up to the API's own count, or a job went unread.
-  total=$(jq -ce '.[0].total_count' <<< "$jobs") || return 1
-  jobs=$(jq -c '[.[].jobs[]]' <<< "$jobs") || return 1
-  # ci-result's required-jobs record: the only evidence of why it failed.
-  # and the unmet checks it published beside it; an absent one is null.
-  record=$(download_ci_record "$run_id" ci-required-summary)
-  violations=$(download_ci_record "$run_id" ci-required-violations)
-  # The inputs travel on stdin: a large job list exceeds the argument limit.
-  verdict=$(printf '%s\n' "$jobs" "$total" "$record" "$violations" \
-    | jq -sc 'if length == 4 then {jobs: .[0], total: .[1], record: .[2], violations: .[3]} else error("verdict inputs incomplete") end' \
-    | jq -c --argjson run_id "$run_id" --argjson run_attempt "$matched_run_attempt" --arg head "$commit" -f "$heavy_verdict_filter") || return 1
-  jq -e '.advisoryOnly' <<< "$verdict" >/dev/null || {
-    echo "main/heavy failing jobs: $(jq -r '.blocking | join(", ")' <<< "$verdict")" >&2
-    return 1
-  }
-  echo "::warning::main/heavy failed only in advisory jobs ($(jq -r '.advisory | join(", ")' <<< "$verdict")) on $commit: $url" >&2
 }
 # One receipt decision per run, made before anything relies on it: the
 # receipt is read on the release commit itself, never on a reused proof, and
@@ -103,17 +60,14 @@ bash "$tree_proof_verifier" --receipt-coverage "$coverage" "$repo" "$sha" "$proo
 if [[ "$proof" != "$sha" ]]; then
   target_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")
   # The newest status of each required context that is neither missing nor
-  # success; only an advisory-only main/heavy failure is excused.
-  while IFS= read -r status; do
-    [[ -n "$status" ]] || continue
-    [[ "$(jq -r '.context' <<< "$status")" == main/heavy ]] \
-      && heavy_failed_only_in_advisory_jobs "$status" "$sha" \
-      || refuse 'RELEASE_STATUS_NOT_GREEN: target has a newer non-green status'
-  done < <(jq -c --argjson contexts "$required_contexts" '
+  # success; any one refuses.
+  non_green=$(jq -c --argjson contexts "$required_contexts" '
     [.[][]] as $all | $contexts[] | . as $context |
       ([$all[] | select(.context == $context)][0] // {state: "missing"}) as $status |
       select($status.state != "missing" and $status.state != "success") | $status
   ' <<< "$target_statuses")
+  [[ -z "$non_green" ]] \
+    || refuse 'RELEASE_STATUS_NOT_GREEN: target has a newer non-green status'
 fi
 statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$proof/statuses?per_page=100")
 # Statuses arrive newest first, so a later failure replaces an earlier success.
@@ -124,11 +78,8 @@ validate_workflow_status() {
   local context="$1" workflow="$2" title="$3" code="$4" status url run_id
   status=$(jq -ce --arg context "$context" '[.[][] | select(.context == $context)][0] // error("missing status")' <<< "$statuses") \
     || refuse "$code: $context is missing on $proof"
-  if ! jq -e '.state == "success" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null; then
-    [[ "$context" == main/heavy ]] && heavy_failed_only_in_advisory_jobs "$status" "$proof" \
-      && return 0
-    refuse "$code: trusted $context success is required"
-  fi
+  jq -e '.state == "success" and .creator.login == "github-actions[bot]" and .creator.type == "Bot"' <<< "$status" >/dev/null \
+    || refuse "$code: trusted $context success is required"
   url=$(jq -r '.target_url' <<< "$status")
   [[ "$url" == "$runs_prefix"* ]] || refuse "$code: invalid run link"
   run_id="${url#"$runs_prefix"}"

@@ -11,6 +11,7 @@
 
 import { Result } from "better-result";
 
+import { resolveDataBoxMessageMimeType } from "@stll/api-contract/data-box";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
@@ -99,6 +100,10 @@ export const resolveExtractionMimeType = ({
   const emailMimeType = resolveEmailMimeType({ fileName, mimeType });
   if (emailMimeType) {
     return emailMimeType;
+  }
+  const dataBoxMimeType = resolveDataBoxMessageMimeType({ fileName, mimeType });
+  if (dataBoxMimeType) {
+    return dataBoxMimeType;
   }
 
   const dotIndex = fileName.lastIndexOf(".");
