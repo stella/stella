@@ -10,28 +10,20 @@ transactions, or tenant-scoped persistence.
 
 ## Schema
 
-- Schema lives under `apps/api/src/db/schema/`; read the owning slice and
-  related foreign keys before editing.
-- To learn whether something is stored and where, search the generated index
-  first: `rg <word> apps/api/src/db/schema-index` gives one line per column
-  with its builder, flags, `file:line` and the first sentence of its comment.
-  A column's comment is what the index shows, so lead it with what the column
-  means.
-- For closed persisted domain values, define one named `as const` value list
-  and pass it to Drizzle with `text({ enum: VALUES })`. Add a database `CHECK`
-  when invalid values could compromise lifecycle, authorization, audit, or
-  workflow invariants; Drizzle's enum option is compile-time-only.
+Schema lives under `apps/api/src/db/schema/`; read the owning slice and related
+foreign keys before editing. To learn whether something is stored and where,
+search the generated index first: `rg <word> apps/api/src/db/schema-index` gives
+one line per column with its builder, flags, `file:line` and the first sentence
+of its comment, so lead a column's comment with what the column means.
+
 - Reserve `.$type<T>()` for branded or structured types. Use a native
-  PostgreSQL enum only when the value set is genuinely permanent.
+  PostgreSQL enum only when the value set is genuinely permanent. [review]
 - Use cascade deletes for workspace-owned dependants and restrict deletes for
   shared file references. Trace the full FK graph before multi-resource
-  deletion.
-- Timestamp columns use the `timestamptz` helper from
-  `apps/api/src/db/columns.ts`. Never introduce a naive PostgreSQL timestamp or
-  `::timestamp` cast without explicitly anchoring its time zone.
+  deletion. [review]
 - Add indexes for columns used in `WHERE`, `ORDER BY`, or `JOIN`; lead
   composite indexes with the tenant-scoping columns. Treat changes to large
-  tables as lock-sensitive.
+  tables as lock-sensitive. [review]
 
 ## Migrations
 
@@ -44,17 +36,19 @@ Never put data backfills, `CREATE [UNIQUE] INDEX CONCURRENTLY`, or
 backfills belong to `apps/api/src/db/backfill-runtime.ts` and registered online
 repairs and concurrent index builds (`ONLINE_MIGRATION_INDEXES`) in
 `apps/api/src/db/online-migrations.ts`.
+[check: scripts/check-migration-safety.ts, .github/workflows/ci.yml]
 
 - `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
   and deployment. `db:push` is a local declarative schema-diff tool; it does
   not replace committed migrations and must not be described as the deployment
-  path.
+  path. [check: .github/workflows/ci.yml]
+
 - Schema changes remain additive across a rollout: add, deploy compatible
   reads/writes, backfill in bounded batches, switch, then remove the old shape
-  in a later release.
+  in a later release. [check: scripts/check-migration-safety.ts]
 - Migrations run before new API tasks finish rolling out. Old tasks must remain
   compatible with the migrated schema, and a failed rollout must have a safe
-  forward-fix path.
+  forward-fix path. [review]
 - Keep irreversible schema operations out of the same release as risky
   application changes. Destructive and access-control SQL requires a
   statement-scoped acknowledgement enforced by
@@ -63,62 +57,50 @@ repairs and concurrent index builds (`ONLINE_MIGRATION_INDEXES`) in
   `-- stella-migration-safety: reviewed <rule-id> - <why this is safe>`.
   An acknowledgement that clears nothing is an error. Every migration sets
   `lock_timeout` and `statement_timeout` first.
+  [check: scripts/check-migration-safety.ts, scripts/check-migration-locks.ts]
 - Keep repairable work in `online-migrations.ts`. Long backfills stay outside
   schema migrations and checkpoint durably.
+  [test: apps/api/src/db/online-migrations.test.ts]
 - A migration directory's name is its identity: the migrator applies every
-  directory whose name the database has not recorded, in name order. New
-  timestamps sort after the newest migration on the base branch. Never rename
-  or delete a merged migration; add a new one instead.
+  directory whose name the database has not recorded, in name order. Never
+  rename or delete a merged migration; add a new one instead.
+  [check: scripts/check-migration-order.ts]
+- New timestamps sort after the newest migration on the base branch. [review]
+
 - Validate migration history two ways: apply every committed migration to a
   fresh database, then confirm
   `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
   repair drift by resetting a shared database.
+  [check: .github/workflows/ci.yml]
 
 ## Tenant Scope and Queries
+
+Prefer Drizzle's relational query API for ordinary relation reads, and SQL-like
+syntax where it states the invariant more directly (cross-table filters,
+aggregation, locking, unions, mutations).
 
 - Workspace data uses the authorized `scopedDb` supplied by safe handlers so
   PostgreSQL RLS and query-level scope reinforce each other. Raw/root database
   access needs a demonstrated system-level reason and a deny-by-default RLS
-  posture.
-- Ownership IDs come from server-validated context, never request bodies. Keep
-  tenant predicates in the database query even when a preceding authorization
-  check exists.
-- Prefer Drizzle's relational query API for ordinary relation reads. Use
-  SQL-like syntax for cross-table filtering, aggregation, locking, unions, or
-  mutations where it expresses the invariant more directly.
-- Every list query uses a bounded `limit` and cursor and returns the standard
-  `Page<T>` envelope from `apps/api/src/lib/pagination.ts`. Offset pagination,
-  `totalCount`, and unbounded `findMany` require explicit justification.
+  posture. [check: ratchet:direct-root-connection-imports]
 - Do not filter unindexed JSONB in request paths. Fetch through indexed tenant
   columns, then narrow structured content with a type guard rather than a cast.
-- Batch relation reads and writes. Never issue a query per item when a join,
-  relation preload, `IN` query, or bulk mutation can express the same work.
-
-## Public Corpus Boundary
-
-- Case-law and legislation corpora are read through their own public
-  connections (`apps/api/src/lib/case-law-public-read-db.ts`,
-  `legislation-public-read-db.ts`). Importing one puts the file inside the
-  public SQL boundary (`public-case-law-db-boundary`): it may name only
-  public-law relations. Put corpus reads in `apps/api/src/lib/case-law/` (or
-  the legislation owner) and call them from tenant handlers; never import the
-  connection into a module that names tenant tables.
-- A read that fails returns a typed failure (a `Result` error or a
-  `ReadOutcome`), never an empty value (`no-failure-as-empty`). The caller
-  decides how to degrade and says so in its own response type.
+  [review]
 
 ## Concurrency and Transactions
 
 - Keep transactions short; perform S3, network, conversion, and other external
-  I/O outside them.
+  I/O outside them. [review]
 - Close every read-decide-write race. Lock the decisive row with
   `SELECT ... FOR UPDATE`, or encode the expected state/version in the
-  mutation `WHERE` clause and check the affected-row count.
+  mutation `WHERE` clause and check the affected-row count. [review]
+
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert
-  checks.
+  checks. [review]
 - Preserve lock order across call sites. When multiple resources must be
   locked, define and reuse a deterministic ordering to avoid deadlocks.
+  [review]
 
 ## Verification
 

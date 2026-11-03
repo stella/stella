@@ -10,6 +10,7 @@ import { createDetached } from "@stll/errors";
 
 import type {
   HarnessAdapter,
+  HarnessInteractionResponse,
   HarnessProbe,
   HarnessStartError,
   HarnessTurn,
@@ -88,8 +89,11 @@ type HeldRun = {
   cancelled: boolean;
   /** Set by `run.interrupt` or `run.cancel` before the turn started. */
   stopRequested: boolean;
-  /** Runner request id (a UUID) to the harness's own request id. */
-  approvals: Map<string, string>;
+  /**
+   * Runner request id (a UUID) to the harness's own request id, for both
+   * approvals and blocking questions.
+   */
+  requests: Map<string, string>;
 };
 
 type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
@@ -270,7 +274,20 @@ export class SidecarHost {
         return;
       case "run.approval":
         this.withRun(message, (run) => {
-          this.approve(run, message.requestId, message.decision);
+          this.respond(run, message.requestId, (requestId) => ({
+            type: "approval",
+            requestId,
+            decision: message.decision,
+          }));
+        });
+        return;
+      case "run.answer":
+        this.withRun(message, (run) => {
+          this.respond(run, message.requestId, (requestId) => ({
+            type: "answers",
+            requestId,
+            answers: message.answers,
+          }));
         });
         return;
       case "run.interrupt":
@@ -414,7 +431,7 @@ export class SidecarHost {
       turn: null,
       cancelled: false,
       stopRequested: this.stopping,
-      approvals: new Map(),
+      requests: new Map(),
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -432,30 +449,30 @@ export class SidecarHost {
     }
   }
 
-  private approve(
+  /**
+   * Hand an approval decision or question answers to the harness. The answer
+   * itself is never logged: it may hold a secret the question asked for.
+   */
+  private respond(
     run: HeldRun,
     requestId: string,
-    decision: "approve" | "approve_for_session" | "deny",
+    response: (nativeId: string) => HarnessInteractionResponse,
   ) {
-    const native = run.approvals.get(requestId);
+    const native = run.requests.get(requestId);
     if (native === undefined || run.turn === null) {
-      this.options.log("an approval named a request the run does not hold");
+      this.options.log("a response named a request the run does not hold");
       return;
     }
     const turn = run.turn;
     const answer = async () => {
-      const answered = await turn.respond({
-        type: "approval",
-        requestId: native,
-        decision,
-      });
+      const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
         this.options.log(
-          `the harness refused an approval: ${answered.error.reason}`,
+          `the harness refused a response: ${answered.error.reason}`,
         );
       }
     };
-    this.detached(answer(), "sidecar.approval");
+    this.detached(answer(), "sidecar.respond");
   }
 
   /** Open the turn, or the reason it could not open as a failure event. */
@@ -529,11 +546,11 @@ export class SidecarHost {
     const runId = message.runId;
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
-      run.approvals.set(requestId, nativeId);
+      run.requests.set(requestId, nativeId);
       return requestId;
     };
     const runnerIdOf = (nativeId: string) => {
-      for (const [requestId, native] of run.approvals) {
+      for (const [requestId, native] of run.requests) {
         if (native === nativeId) {
           return requestId;
         }

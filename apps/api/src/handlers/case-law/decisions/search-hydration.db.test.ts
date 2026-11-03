@@ -31,7 +31,9 @@ import {
   provisionDecisionWalkQuery,
   provisionListCursorCodec,
   readCaseLawPageDecisionRows,
+  readNamedCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
+  rehydrateNamedCaseLawDecisions,
   searchCorpusIndexDecisions,
   searchPostgresDecisions,
   unresolvedCandidateDecisionRowsStatement,
@@ -1447,6 +1449,44 @@ test("a generation admits exactly what its projection state holds", async () => 
   expect([...rows.keys()]).toEqual([projectedId]);
 });
 
+test("a decision an identifier names answers from its published row, whatever the index holds", async () => {
+  const scoped = {
+    body: SEARCH_BODY,
+    caseLawDb,
+    courtWeights,
+    generation: OTHER_GENERATION,
+  };
+  const named = [projectedId, queuedId, czechId, closedId];
+
+  // The reader opens the first three, so a docket or ECLI must find them: a
+  // queued mutation or a missing state row means the index lags, not that the
+  // decision is absent. A source that may not be redistributed stays out.
+  const ranking = await rehydrateNamedCaseLawDecisions({
+    ...scoped,
+    candidates: candidatesOf(...named),
+  });
+  expect(ranking.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId, czechId].toSorted(),
+  );
+
+  const rows = await readNamedCaseLawPageDecisionRows({
+    body: scoped.body,
+    caseLawDb,
+    generation: OTHER_GENERATION,
+    ids: named,
+  });
+  expect([...rows.keys()].toSorted()).toEqual(
+    [projectedId, queuedId, czechId].toSorted(),
+  );
+
+  // The same ids as search hits still stand only on the applied copy.
+  const hits = await rehydrateCaseLawCandidates({
+    ...scoped,
+    candidates: candidatesOf(...named),
+  });
+  expect(hits.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+});
+
 test("a generation admits nothing another generation holds", async () => {
   const ranking = await rehydrateCaseLawCandidates({
     body: SEARCH_BODY,
@@ -2388,6 +2428,7 @@ test("the unresolved row statements leave provision membership to their query fo
     // The Czech decision cites § 316 of the labour code; the Slovak one cites
     // § 31 of it and § 316 of another act.
     const options = {
+      admission: "indexed" as const,
       body: {
         ...SEARCH_BODY,
         provision: { work: "262/2006 Sb.", anchor: "par_316" },
@@ -2687,6 +2728,7 @@ test("the Postgres search plan and the engine page read agree on a citation past
     const engineIds = async (provision?: typeof GAPPED_PROVISION) =>
       await caseLawDb(async (tx) => {
         const options = {
+          admission: "indexed" as const,
           body: {
             ...SEARCH_BODY,
             ...(provision === undefined ? {} : { provision }),
@@ -2720,6 +2762,7 @@ test("the provision filter reads links through an index, never by scanning them"
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const options = {
+      admission: "indexed" as const,
       body: {
         ...SEARCH_BODY,
         provision: {
@@ -2775,6 +2818,7 @@ test.each([true, false])(
     await caseLawDb(async (tx) => {
       await tx.execute(sql`SET LOCAL enable_seqscan = off`);
       const options = {
+        admission: "indexed" as const,
         body: { ...SEARCH_BODY, category: "A", hasLegalSentence },
         generation: GENERATION,
         ids: [czechId, slovakId],
@@ -2904,7 +2948,12 @@ test("canonical reads return content only for eligible rows and separate id-only
   const missingId = createSafeId<"caseLawDecision">();
   const ids = [czechId, closedId, queuedId, missingId];
   await caseLawDb(async (tx) => {
-    const options = { generation: GENERATION, ids, body: SEARCH_BODY };
+    const options = {
+      admission: "indexed" as const,
+      generation: GENERATION,
+      ids,
+      body: SEARCH_BODY,
+    };
     const partitions = [
       await candidateDecisionRowsQuery(tx, options),
       await pageDecisionRowsQuery(tx, options),
@@ -2930,6 +2979,7 @@ test("canonical reads return content only for eligible rows and separate id-only
 test("the database returns no content columns for excluded canonical ids", async () => {
   await caseLawDb(async (tx) => {
     const options = {
+      admission: "indexed" as const,
       body: SEARCH_BODY,
       generation: GENERATION,
       ids: [closedId, queuedId],

@@ -339,6 +339,13 @@ fn commands_for_a_run_reach_the_holder() {
         decision: crate::runner_protocol::ApprovalDecision::Deny,
       })
       .unwrap();
+    sidecar
+      .answer(RunAnswer {
+        run_id: run_id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+      })
+      .unwrap();
     sidecar.interrupt(&run_id).unwrap();
     sidecar.cancel(&run_id).unwrap();
     assert_eq!(
@@ -361,11 +368,80 @@ fn commands_for_a_run_reach_the_holder() {
       "run.start",
       "run.token",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "ack",
       "shutdown"
     ]
+  );
+}
+
+#[test]
+fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor() {
+  let fixture = Fixture::new();
+  let start = run_start("flood");
+  let run_id = start.run_id.clone();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    // Nothing reads this run while the holder sends more than it can queue.
+    let mut flooded = sidecar.start_run(start).unwrap();
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert_eq!(finish(&mut after).await.len(), 3);
+    let probed = tokio::time::timeout(
+      WAIT,
+      sidecar.probe(HarnessProbe {
+        request_id: REQUEST_ID.to_owned(),
+        harness: Harness::Codex,
+        executable: "/data/harness/codex/0.165.0/codex".to_owned(),
+        config_dir: "/data/harness-home/codex".to_owned(),
+      }),
+    )
+    .await
+    .expect("a probe is answered while a run's outputs wait");
+    assert!(probed.is_ok());
+    let outputs = finish(&mut flooded).await;
+    assert_eq!(outputs.len(), RUN_OUTPUT_QUEUE);
+    assert_eq!(outputs.last(), Some(&ended(RunOutcome::Failed)));
+    // The cancelled run ends in the holder and is never taken over.
+    until("the holder forgot the cancelled run", || {
+      fixture
+        .received()
+        .iter()
+        .any(|message| message["type"] == "ack" && message["runId"] == run_id)
+    })
+    .await;
+    assert_eq!(
+      sidecar.resume_run(&run_id, 0).await.err(),
+      Some(ResumeError::UnknownRun)
+    );
+    assert!(
+      sidecar
+        .held_runs()
+        .await
+        .unwrap()
+        .iter()
+        .all(|held| held.run_id != run_id)
+    );
+    sidecar.shutdown().await;
+  });
+  let received = fixture.received();
+  let cancels: Vec<&Value> = received
+    .iter()
+    .filter(|message| message["type"] == "run.cancel")
+    .collect();
+  assert_eq!(
+    cancels,
+    vec![&json!({ "type": "run.cancel", "runId": run_id })]
+  );
+  let acks: Vec<&Value> = received
+    .iter()
+    .filter(|message| message["type"] == "ack" && message["runId"] == run_id)
+    .collect();
+  // 300 events and the end the cancel produced.
+  assert_eq!(
+    acks,
+    vec![&json!({ "type": "ack", "runId": run_id, "seq": 301 })]
   );
 }
 
@@ -1142,6 +1218,11 @@ mod stand_in {
         match message["model"].as_str().unwrap_or_default() {
           "garbage" => write(held, "not json").await,
           "wait" => emit(held, &run_id, event).await,
+          "flood" => {
+            for _ in 0..300 {
+              emit(held, &run_id, event.clone()).await;
+            }
+          }
           "crash" => {
             emit(held, &run_id, event).await;
             std::process::exit(3);

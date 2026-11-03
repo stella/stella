@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorNesting } from "@stll/legal-ast/statute-anchor-scheme";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -37,7 +38,7 @@ type ProvisionReferenceChipProps = {
     | { type: "external"; href: string };
   label: string;
   /** What the cited anchor is cut on to find its provision's heading. */
-  anchorSeparator: string | null;
+  anchorNesting: StatuteAnchorNesting;
   provision: ProvisionGroup;
   versionMarker: "group" | "exception";
 };
@@ -46,7 +47,7 @@ type ProvisionReferenceChipProps = {
 export const ProvisionReferenceChip = ({
   target,
   label,
-  anchorSeparator,
+  anchorNesting,
   provision,
   versionMarker,
 }: ProvisionReferenceChipProps) => {
@@ -61,7 +62,7 @@ export const ProvisionReferenceChip = ({
     refetch,
   } = useQuery({
     ...provisionPreviewOptions({
-      anchor: provisionHeadingAnchor(provision.anchor, anchorSeparator),
+      anchor: provisionHeadingAnchor(provision.anchor, anchorNesting),
       citedAnchor: provision.anchor,
       documentId: document?.id ?? "",
     }),

@@ -90,7 +90,7 @@ export const useDictation = (onText: (text: string) => void) => {
     const result = await transcribeRecording({
       fetch,
       source: state.source,
-      uri,
+      audio: new File(uri),
     });
     if (result.isErr()) {
       setNotice("failed");

@@ -264,7 +264,7 @@ test("a reviewer reconciles conflicting records, confirms the verdict, and reloa
         (response.request().postData() ?? "").includes('"kind":"status"'),
     );
     await page
-      .getByRole("button", { name: "Confirm — ready", exact: true })
+      .getByRole("button", { name: "Confirm: ready", exact: true })
       .click();
     expect((await confirmation).ok()).toBe(true);
     // The response alone does not prove the client applied it; reload only
