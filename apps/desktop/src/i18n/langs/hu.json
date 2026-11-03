@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Mentetlen helyi szerkesztései vannak. Másolatát az Ideiglenes munkamásolatok között találja.",
     "takenOverBody": "{fileName} — Nyissa meg újra a stella-ból, hogy visszavegye a szerkesztést",
     "takenOverLocalError": "Az asztali szerkesztés másik eszközre lett áthelyezve. Ez a helyi másolat megőrzésre kerül.",
-    "takenOverTitle": "Szerkesztés másik eszközre áthelyezve"
+    "takenOverTitle": "Szerkesztés másik eszközre áthelyezve",
+    "editsSetAsideTitle": "Szerkesztések félretéve",
+    "editsSetAsideBody": "A nem mentett szerkesztések félre lettek téve. Csatlakozzon újra ugyanahhoz a fiókhoz, hogy megnyissa a helyreállítási mappát a Beállításokban."
   },
   "dialog": {
     "accountWindowTitle": "Fiók csatlakoztatása",
@@ -232,7 +234,16 @@
     "permissionDenied": "A rendszerbeállításokban ki van kapcsolva.",
     "permissionManaged": "A szervezete kezeli",
     "errorUpdateAutostart": "A stella desktop nem tudta frissíteni a bejelentkezéskori indítást.",
-    "errorPermissions": "A stella desktop nem tudta beolvasni vagy módosítani ezt az engedélyt."
+    "errorPermissions": "A stella desktop nem tudta beolvasni vagy módosítani ezt az engedélyt.",
+    "recoveryTitle": "Félretett szerkesztések",
+    "recoveryBody": "A nem mentett szerkesztések itt maradnak a fiókjához. A visszaállításukhoz nyissa meg a mappát.",
+    "recoverySignIn": "A szerkesztések az adott fiókhoz lettek félretéve. A mappa megnyitásához csatlakozzon újra ehhez a fiókhoz.",
+    "recoveryUnassigned": "Néhány szerkesztéshez nincs rögzített fiók. A kézi visszaállításhoz nyissa meg a mappájukat.",
+    "recoveryPending": "Néhány szerkesztés félretétele még folyamatban van. A befejezéshez próbálja újra.",
+    "recoveryOpenFolder": "Helyreállítási mappa megnyitása",
+    "recoveryOpenUnassigned": "Nem hozzárendelt szerkesztések megnyitása",
+    "recoveryFilePending": "Félretételre vár",
+    "recoveryError": "Nem sikerült megnyitni a helyreállítási mappát. Próbálja újra."
   },
   "clipboard": {
     "registryUnavailable": "Az Ön működési joghatóságaihoz nincs engedélyezett nyilvántartás.",

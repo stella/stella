@@ -3662,15 +3662,15 @@ const provisionOrderOf = <Position extends { id: SafeId<"caseLawDecision"> }>({
         position: positionOf(row),
         ...(probe === undefined ? {} : { probe }),
       }),
-    ...(decoded?.probe === undefined
-      ? {}
-      : {
+    ...(decoded?.probe !== undefined
+      ? {
           probe: {
             decisionId: decoded.position.id,
             after: decoded.probe,
             positionCursor: codec.encode({ position: decoded.position }),
           },
-        }),
+        }
+      : {}),
   };
 };
 

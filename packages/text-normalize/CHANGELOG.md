@@ -1,5 +1,11 @@
 # @stll/text-normalize
 
+## 0.6.0
+
+### Minor Changes
+
+- [#7366](https://github.com/stella/stella/pull/7366) [`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `findSearchMatchRanges` and `hasFoldedSearchMatch` take opt-in `matchCase`, `matchDiacritics` and `wholeWords` options. `foldSearchMatchTextWithOptions` and `foldSearchMatchTextWithOffsetsAndOptions` take `matchCase` and `matchDiacritics`. The unary fold helpers and calls without options fold and match as before.
+
 ## 0.5.2
 
 ### Patch Changes
