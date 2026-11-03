@@ -1699,6 +1699,10 @@
       "stateOffline": "Computer offline",
       "stateUnsupported": "This version is not supported"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
+      "working": "{count, plural, one {# chat is working} other {# chats are working}}"
+    },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# more} other {+# more}}",

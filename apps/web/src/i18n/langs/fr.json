@@ -1699,6 +1699,10 @@
       "stateOffline": "Ordinateur hors ligne",
       "stateUnsupported": "Cette version n’est pas prise en charge"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent}}",
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours}}"
+    },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# de plus} many {+# de plus} other {+# de plus}}",

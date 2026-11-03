@@ -1354,6 +1354,8 @@
   "chat.localRun.stateNotInstalled": "Not installed",
   "chat.localRun.stateOffline": "Computer offline",
   "chat.localRun.stateUnsupported": "This version is not supported",
+  "chat.matterRuns.needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
+  "chat.matterRuns.working": "{count, plural, one {# chat is working} other {# chats are working}}",
   "chat.maxAttachmentsReached": "Maximum {count} files per message",
   "chat.mcpReconnect.additional": "{count, plural, one {+# more} other {+# more}}",
   "chat.mcpReconnect.dismiss": "Dismiss connection notice",

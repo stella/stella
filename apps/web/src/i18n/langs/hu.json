@@ -1699,6 +1699,10 @@
       "stateOffline": "A számítógép offline",
       "stateUnsupported": "Ez a verzió nem támogatott"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+    },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# további} other {+# további}}",

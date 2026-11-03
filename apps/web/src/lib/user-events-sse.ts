@@ -10,6 +10,12 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
+/** A query the user stream refreshes, and what to trim before it does. */
+export type UserEventRefresh = {
+  queryKey: QueryKey;
+  prepare?: () => void;
+};
+
 const USER_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
 } satisfies EventSourceInit;
@@ -47,24 +53,34 @@ const reconnectDelayMs = (failures: number): number =>
  *
  * Reconnects are deliberately quiet here: an outage costs a delayed badge, not
  * lost data, and the workspace stream already reports connection failures for
- * the same session.
+ * the same session. Mount it once (`useUserEventRefreshes`): every call opens
+ * its own connection.
  */
 export const useUserEventsSSE = (
   organizationId: string,
-  onEvent: (event: UserRealtimeEvent) => {
-    queryKey: QueryKey;
-    prepare?: () => void;
-  }[],
+  {
+    onEvent,
+    onResync,
+  }: {
+    onEvent: (event: UserRealtimeEvent) => UserEventRefresh[];
+    /**
+     * Everything the stream keeps fresh. Events sent while the stream was
+     * down are lost, so every reopen after the first re-reads all of it.
+     */
+    onResync: () => UserEventRefresh[];
+  },
 ): void => {
   const queryClient = useQueryClient();
   const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
   const handleEvent = useLatestCallback(onEvent);
+  const handleResync = useLatestCallback(onResync);
 
   useExternalSyncEffect(() => {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let consecutiveFailures = 0;
     let disposed = false;
+    let hasOpened = false;
 
     const connect = () => {
       const stream = new EventSource(
@@ -75,6 +91,14 @@ export const useUserEventsSSE = (
 
       stream.addEventListener("open", () => {
         consecutiveFailures = 0;
+        // The browser's own retries and ours both land here; either way the
+        // gap may have swallowed events.
+        if (hasOpened) {
+          for (const { queryKey, prepare } of handleResync()) {
+            realtimeRefresh.refresh(queryKey, prepare);
+          }
+        }
+        hasOpened = true;
       });
       stream.addEventListener("message", (event: MessageEvent) => {
         const parsed = parseUserRealtimeEvent(jsonOrNull(String(event.data)));
@@ -107,7 +131,7 @@ export const useUserEventsSSE = (
       }
       source?.close();
     };
-  }, [handleEvent, organizationId, realtimeRefresh]);
+  }, [handleEvent, handleResync, organizationId, realtimeRefresh]);
 };
 
 const jsonOrNull = (raw: string): unknown => {

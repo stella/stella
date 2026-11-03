@@ -1699,6 +1699,10 @@
       "stateOffline": "Computer nicht verbunden",
       "stateUnsupported": "Diese Version wird nicht unterstützt"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
+      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
+    },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
