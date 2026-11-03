@@ -2793,6 +2793,28 @@
     },
     "backToList": "Atpakaļ uz saraksti",
     "createAddress": "Izveidot adresi",
+    "dataBox": {
+      "acceptedAt": "Paziņots",
+      "acceptedByFiction": "uzskatot par paziņotu",
+      "acceptedByLogin": "pieslēdzoties",
+      "channel": "Datu pastkaste",
+      "contact": "Kontakts: {name}",
+      "deliveredAt": "Piegādāts pastkastē",
+      "delivery": "Piegāde",
+      "directionUnknown": "Virziens nezināms",
+      "messageId": "Ziņas ID",
+      "moreContacts": "Ar šo datu pastkasti ir saistītas vēl citas kontaktpersonas.",
+      "openFile": "Atvērt .zfo failu",
+      "personalDelivery": "Personīgi adresātam",
+      "recipient": "Adresāts",
+      "recipientReference": "Adresāta atsauce",
+      "sealNotVerified": "Faila elektroniskais zīmogs tiek glabāts kopā ar to un netiek pārbaudīts.",
+      "senderReference": "Sūtītāja atsauce",
+      "sent": "Nosūtīta",
+      "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
+      "toHands": "Personīgi: {name}",
+      "uploaded": "Augšupielādēta datu pastkastes ziņa"
+    },
     "deliveredBy": "Piegādāja <address>{sender}</address>",
     "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
     "deliveryAuthentication": "Piegādes autentifikācija",
@@ -2963,6 +2985,7 @@
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
       "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "clauseDirectivesOverrideInvalidDetails": "Klauzulas {clauseName} aizstātais teksts laukā {slotName} satur nederīgas direktīvas. Izlabojiet šīs aizpildīšanas aizstāto tekstu un mēģiniet vēlreiz.",
+      "correspondenceSourceChanged": "Šī sarakste pa to laiku ir mainījusies. Pārlādējiet lapu un mēģiniet vēlreiz.",
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",
@@ -2988,6 +3011,8 @@
       "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
+      "organizationDataBoxLimitReached": "Šī organizācija ir sasniegusi datu pastkastu limitu. Pirms jaunas pievienošanas noņemiet vienu datu pastkasti.",
+      "organizationDataBoxesChanged": "Organizācijas datu pastkastes pa to laiku ir mainījušās. Pārlādējiet lapu un mēģiniet vēlreiz.",
       "organizationLastOwner": "Organizācijai ir jābūt īpašniekam. Vispirms nododiet īpašumtiesības.",
       "organizationMemberLimitReached": "Šī organizācija ir sasniegusi dalībnieku limitu.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
@@ -4544,6 +4569,10 @@
         "undoShortcut": "Atsaukt izcēluma vai komentāra izmaiņu",
         "visibilityRestored": "Kopīgošana atjaunota"
       },
+      "orphaned": {
+        "description": "Šī dokumenta teksts kopš to izveides ir atjaunināts: atzīmētos fragmentus tajā vairs neizdevās atrast, vai tie tagad parādās vairākās vietās. Tie tekstā netiek rādīti.",
+        "summary": "{count, plural, zero {# izcēlumi un komentāri vairs neatbilst tekstam} one {# izcēlums vai komentārs vairs neatbilst tekstam} other {# izcēlumi un komentāri vairs neatbilst tekstam}}"
+      },
       "removeHighlight": "Noņemt izcēlumu",
       "sharedBadge": "Kopīgots",
       "styleHighlight": "Izcēlums",
@@ -5493,6 +5522,12 @@
         "firm": "Biroja vadlīnijas",
         "ledes": "Elektroniskie norēķini (LEDES)",
         "title": "AI norēķinu melnraksti"
+      },
+      "dataBoxes": {
+        "description": "Ziņa, kas nosūtīta no kādas no šīm pastkastēm, tiek reģistrēta kā izejošā, bet tām nosūtītā — kā ienākošā. Katra izmaiņa no jauna nosaka jau reģistrēto ziņu virzienu lietās, kurām jums ir piekļuve.",
+        "invalid": "Datu pastkastes ID ir septiņi burti vai cipari.",
+        "remove": "Noņemt datu pastkasti {address}",
+        "title": "Organizācijas datu pastkastes"
       },
       "documentProcessing": {
         "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",

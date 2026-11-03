@@ -689,6 +689,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ["https://raw.githubusercontent.com/xnimorz/use-debounce/HEAD/llms.txt"],
   ],
   [
+    "icu-minify",
+    [
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/llms.txt",
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/packages/icu-minify/llms.txt",
+    ],
+  ],
+  [
     "use-intl",
     ["https://next-intl.dev/llms.txt", "https://next-intl.dev/docs/llms.txt"],
   ],

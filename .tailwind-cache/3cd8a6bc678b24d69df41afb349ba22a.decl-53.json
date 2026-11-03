@@ -1,1 +1,0 @@
-{"[&>span:last-child]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"group/web-summary":{"valid":false,"declarations":[],"values":{}},"p-[calc(--spacing(1)-1px)]":{"valid":true,"declarations":[["","padding","calc(var(--spacing) - 1px)"]],"values":{"calc(var(--spacing) - 1px)":{"p":["--spacing"],"f":[],"u":false}}}}

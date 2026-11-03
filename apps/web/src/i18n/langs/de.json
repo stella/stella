@@ -2793,6 +2793,28 @@
     },
     "backToList": "Zurück zur Korrespondenz",
     "createAddress": "Adresse erstellen",
+    "dataBox": {
+      "acceptedAt": "Zugegangen",
+      "acceptedByFiction": "durch Zustellungsfiktion",
+      "acceptedByLogin": "durch Anmeldung",
+      "channel": "Databox",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "In die Databox zugestellt",
+      "delivery": "Zustellung",
+      "directionUnknown": "Richtung unbekannt",
+      "messageId": "Nachrichten-ID",
+      "moreContacts": "Weitere Kontakte stimmen mit diesem Datenpostfach überein.",
+      "openFile": ".zfo-Datei öffnen",
+      "personalDelivery": "Zu eigenen Händen",
+      "recipient": "Empfänger",
+      "recipientReference": "Aktenzeichen des Empfängers",
+      "sealNotVerified": "Das elektronische Siegel der Datei wird mit ihr aufbewahrt und nicht geprüft.",
+      "senderReference": "Aktenzeichen des Absenders",
+      "sent": "Gesendet",
+      "statedInFile": "Databox-Nachricht (laut Datei)",
+      "toHands": "Zu Händen von {name}",
+      "uploaded": "Hochgeladene Databox-Nachricht"
+    },
     "deliveredBy": "Zugestellt von <address>{sender}</address>",
     "deliveredByAuthenticated": "Zugestellt von <address>{sender}</address> · authentifiziert",
     "deliveryAuthentication": "Authentifizierung der Zustellung",
@@ -2963,6 +2985,7 @@
       "clauseDirectivesInvalid": "Eine verknüpfte Klausel enthält ungültige Anweisungen. Korrigieren Sie die Klausel, bevor Sie die Vorlage ausfüllen.",
       "clauseDirectivesInvalidDetails": "Die Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Direktiven. Öffnen Sie den Klauseleditor, korrigieren Sie die angegebenen Absätze und füllen Sie die Vorlage erneut aus.",
       "clauseDirectivesOverrideInvalidDetails": "Die Überschreibung für Klausel {clauseName} im Platzhalter {slotName} enthält ungültige Anweisungen. Korrigieren Sie die Überschreibung für diesen Ausfüllvorgang und versuchen Sie es erneut.",
+      "correspondenceSourceChanged": "Diese Korrespondenz hat sich inzwischen geändert. Laden Sie die Seite neu und versuchen Sie es erneut.",
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",
@@ -2988,6 +3011,8 @@
       "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
       "mcpAuthorizationApprovalRequired": "Ein Administrator muss diesen Connector genehmigen, bevor Sie eine Verbindung herstellen können.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
+      "organizationDataBoxLimitReached": "Diese Organisation hat die Höchstzahl an Databoxen erreicht. Entfernen Sie eine Databox, bevor Sie eine weitere hinzufügen.",
+      "organizationDataBoxesChanged": "Die Databoxen der Organisation wurden zwischenzeitlich geändert. Laden Sie die Seite neu und versuchen Sie es erneut.",
       "organizationLastOwner": "Eine Organisation braucht einen Eigentümer. Übertragen Sie zuerst die Eigentümerschaft.",
       "organizationMemberLimitReached": "Diese Organisation hat ihr Mitgliederlimit erreicht.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
@@ -4544,6 +4569,10 @@
         "undoShortcut": "Änderung an Hervorhebung oder Kommentar rückgängig machen",
         "visibilityRestored": "Freigabe wiederhergestellt"
       },
+      "orphaned": {
+        "description": "Der Text dieses Dokuments wurde seit ihrer Erstellung aktualisiert: Die markierten Passagen ließen sich darin nicht wiederfinden oder kommen jetzt an mehreren Stellen vor. Sie werden im Text nicht angezeigt.",
+        "summary": "{count, plural, one {# Markierung oder Kommentar passt nicht mehr zum Text} other {# Markierungen und Kommentare passen nicht mehr zum Text}}"
+      },
       "removeHighlight": "Hervorhebung entfernen",
       "sharedBadge": "Geteilt",
       "styleHighlight": "Markierung",
@@ -5493,6 +5522,12 @@
         "firm": "Kanzleirichtlinien",
         "ledes": "Elektronische Abrechnung (LEDES)",
         "title": "KI-Abrechnungsentwürfe"
+      },
+      "dataBoxes": {
+        "description": "Eine von einer dieser Databoxen gesendete Nachricht wird als ausgehend abgelegt, eine an sie gesendete als eingehend. Jede Änderung leitet die Richtung bereits abgelegter Nachrichten in den Akten, auf die Sie zugreifen können, neu ab.",
+        "invalid": "Eine Databox-ID besteht aus sieben Buchstaben oder Ziffern.",
+        "remove": "Databox {address} entfernen",
+        "title": "Databoxen der Organisation"
       },
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
