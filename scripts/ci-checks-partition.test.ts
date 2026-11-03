@@ -339,12 +339,9 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
           return true;
         }
         const glob = new Bun.Glob(path);
-        for (const file of tracked) {
-          if (file.startsWith(`${path}/`) || glob.match(file)) {
-            return true;
-          }
-        }
-        return false;
+        return [...tracked].some(
+          (file) => file.startsWith(`${path}/`) || glob.match(file),
+        );
       });
       if (kept.length === lines.length) {
         return command;

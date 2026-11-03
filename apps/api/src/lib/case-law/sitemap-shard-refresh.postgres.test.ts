@@ -380,8 +380,12 @@ if (!databaseUrl || !runPostgresTests) {
                   new Proxy(tx, {
                     get: (target, property, receiver) =>
                       property === "execute"
-                        ? async (query: SQL) => {
+                        ? async (query: SQL | string) => {
                             const result = await target.execute(query);
+                            // The corpus schema lane try is plain text.
+                            if (typeof query === "string") {
+                              return result;
+                            }
                             const rendered = dialect.sqlToQuery(query);
                             if (
                               !state.paused &&
