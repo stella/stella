@@ -188,6 +188,7 @@ const cancelRunsOfEndedChatTurns = async ({
   for (const { runId, owner } of ended.value) {
     const cancelled = await Result.tryPromise(
       async () =>
+        // db-await-in-loop: each cancel takes its account's command lock and checks its own run, at most EXPIRY_BATCH per sweep and usually none
         await insertRunCommand(db, {
           owner,
           runId,

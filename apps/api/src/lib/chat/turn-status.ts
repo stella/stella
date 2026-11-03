@@ -28,7 +28,7 @@ export const CHAT_TURN_TIMING_ACTIVE_STATUSES = CHAT_TURN_STATUSES.filter(
  * it reads. A turn holds its run while it runs and while it waits on an
  * answer the run can still take; every other status ends the run.
  */
-export const CHAT_TURN_HOLDS_LOCAL_RUN = {
+const CHAT_TURN_HOLDS_LOCAL_RUN = {
   accepted: true,
   running: true,
   "awaiting-user": true,

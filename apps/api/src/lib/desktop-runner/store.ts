@@ -1018,7 +1018,7 @@ export type EndedChatTurnRun = {
 };
 
 /**
- * Open runs whose chat turn no longer holds them (`CHAT_TURN_HOLDS_LOCAL_RUN`)
+ * Open runs whose chat turn no longer holds them (`CHAT_TURN_RUN_ENDING_STATUSES`)
  * and that have no cancel queued: the turn was stopped, failed, superseded or
  * ended while its run still waited or worked. A turn may end on any API task,
  * or with no task alive, so the sweep finds these from the rows rather than
@@ -1241,7 +1241,7 @@ export type RunOwner = {
 
 /**
  * The chat turn a run is started for. The turn reads the run; the run lives
- * as long as the turn holds it (`CHAT_TURN_HOLDS_LOCAL_RUN`).
+ * as long as the turn holds it (`CHAT_TURN_RUN_ENDING_STATUSES`).
  */
 export type ChatRunBinding = {
   readonly threadId: SafeId<"chatThread">;
