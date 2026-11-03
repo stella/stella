@@ -312,6 +312,7 @@ export const TAGGED_FAILURE_REASON = {
   McpOrganizationAccessError: "tagged_failure",
   McpOutputContractError: "tagged_failure",
   McpProbeError: "tagged_failure",
+  McpProxyRegistrationError: "tagged_failure",
   McpTokenVerificationError: "tagged_failure",
   MemoryWriteRefusedError: "tagged_failure",
   MetadataUrlDefect: "tagged_failure",

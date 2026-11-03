@@ -12,7 +12,7 @@ import * as v from "valibot";
  */
 
 const PACKAGE_DIR = path.resolve(import.meta.dir, "..");
-const REPO_ROOT = path.resolve(PACKAGE_DIR, "../..");
+const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 const DETECTOR = path.join(
   REPO_ROOT,
   "scripts/detect-desktop-release-changes.sh",
