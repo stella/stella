@@ -38,7 +38,7 @@ const connectionOver = (client: PgliteClient): OnlineMigrationConnection => ({
 type ContactRow = { id: string; tax_id: string | null; vat_id: string | null };
 
 const MIGRATION_PATH = new URL(
-  "../../drizzle/20261102072400_contact_vat_id_check/migration.sql",
+  "../../drizzle/20261103061500_contact_vat_id_check/migration.sql",
   import.meta.url,
 );
 

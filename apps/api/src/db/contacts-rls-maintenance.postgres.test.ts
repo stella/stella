@@ -19,7 +19,7 @@ import { createUngatedTableGateForTests } from "./online-ddl";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const MIGRATION_PATH = new URL(
-  "../../drizzle/20261102072400_contact_vat_id_check/migration.sql",
+  "../../drizzle/20261103061500_contact_vat_id_check/migration.sql",
   import.meta.url,
 );
 
