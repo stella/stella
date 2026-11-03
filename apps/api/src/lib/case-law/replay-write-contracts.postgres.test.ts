@@ -59,10 +59,11 @@ const fixture = async (
     decisionId: ReturnType<typeof createSafeId<"caseLawDecision">>,
   ) => Promise<void>,
 ) => {
-  if (!databaseUrl || !enabled) {
-    return panic("Postgres fixture not enabled");
-  }
-  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+  const url =
+    databaseUrl !== undefined && databaseUrl !== "" && enabled
+      ? databaseUrl
+      : panic("Postgres fixture not enabled");
+  await withGatedTestClients(url, async ({ openClient }) => {
     const { db } = openClient({ max: 1 });
     const sourceId = createSafeId<"caseLawSource">();
     const decisionId = createSafeId<"caseLawDecision">();
