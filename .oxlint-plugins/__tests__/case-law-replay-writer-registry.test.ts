@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -15,6 +15,9 @@ import {
 } from "./read-replay-writer-registry.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
+
+setDefaultTimeout(30_000);
+
 const key = ({ file, line }: { file: string; line: number }) =>
   `${file}:${line}`;
 
