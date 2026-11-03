@@ -14,6 +14,7 @@ import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
   recordDocumentPacingOutcome,
+  resetDocumentFetchesForTesting,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type {
   DocumentReadDeferral,
@@ -136,6 +137,10 @@ const recorder = (
 };
 
 describe("deferred document read-through", () => {
+  afterEach(() => {
+    resetDocumentFetchesForTesting();
+  });
+
   test("many readers of one decision cause one fetch", async () => {
     const { deps, fetched, release } = recorder();
     const decision = pending();

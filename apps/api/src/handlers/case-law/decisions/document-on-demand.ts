@@ -110,6 +110,15 @@ const inFlight = new Map<
   Promise<BackfilledDocument | null>
 >();
 
+/**
+ * Frees every concurrency slot. A test whose fetch never settles keeps its
+ * slot for the life of the process, so each test starts from empty slots
+ * rather than from whatever the tests before it left running.
+ */
+export const resetDocumentFetchesForTesting = (): void => {
+  inFlight.clear();
+};
+
 export type DeferredDocumentState = {
   adapterKey: string;
   documentUrl: string | null;
