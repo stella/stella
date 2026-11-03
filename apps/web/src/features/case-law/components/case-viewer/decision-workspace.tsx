@@ -16,6 +16,7 @@ import {
   READER_BREADCRUMB_CLEARANCE,
   scrollReaderToBlock,
 } from "@stll/decision-reader/reader-landing";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
 import {
   readerSelectionMatches,
   visibleDecisionBlocks,
@@ -45,6 +46,7 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
@@ -448,6 +450,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
     target: annotationTarget,
+    text: decisionReaderTextPieces(decision),
   });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -941,6 +944,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         </ChromeHeaderActions>
       )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
+      <OrphanedAnnotationsNotice
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
+      />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>

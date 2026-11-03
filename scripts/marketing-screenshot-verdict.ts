@@ -4,7 +4,8 @@
 // baseline that no longer matches is a report (the product changed), never a
 // reason to fail a merge or a release: the step passes with a warning and the
 // diff images stay in the uploaded artifact. Any other failure (a functional
-// assertion, a timeout, a crashed page) keeps the check failing.
+// assertion, a timeout, a crashed page) keeps the check failing, and a failed
+// check blocks a release.
 //
 //   bun scripts/marketing-screenshot-verdict.ts <playwright-json-report> <playwright-exit-code>
 import { panic } from "better-result";
