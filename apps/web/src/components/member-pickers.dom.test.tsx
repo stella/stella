@@ -4,8 +4,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // Every surface that asks for a person saves the member chosen in its
 // MemberCombobox. The server is a stub keyed by request path: reads answer

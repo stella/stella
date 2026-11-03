@@ -12,6 +12,7 @@ import {
 } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
@@ -27,7 +28,6 @@ import {
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
 import translations from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");

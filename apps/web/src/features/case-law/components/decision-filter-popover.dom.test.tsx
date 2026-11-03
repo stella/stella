@@ -8,7 +8,8 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DecisionFilterPopover } = await import("./decision-filter-popover");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { unregisterDomEnvironment } = await import("@/test-dom-environment");
+const { unregisterDomEnvironment } =
+  await import("@stll/property-testing/dom-environment");
 
 afterEach(async () => {
   await act(async () => cleanup());

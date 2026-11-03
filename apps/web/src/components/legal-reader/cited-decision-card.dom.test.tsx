@@ -4,8 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 
