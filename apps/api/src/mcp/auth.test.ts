@@ -4,6 +4,7 @@ import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
+import type { rootDb } from "@/api/db/root";
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
@@ -18,6 +19,18 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const admissionQuery = {
+  from: () => admissionQuery,
+  leftJoin: () => admissionQuery,
+  limit: async () => [],
+};
+const admissionOptions = {
+  db: asTestRaw<Pick<typeof rootDb, "select">>({
+    select: () => admissionQuery,
+  }),
+};
 
 const sessionFrom = (payload: JWTPayload) => {
   const session = extractMcpSession(payload);
@@ -46,11 +59,13 @@ describe("extractMcpSession", () => {
       const authenticated = await authenticateAccountExportRequest(
         "oauth-token",
         {
+          admissionOptions,
           reviewAccount: { organizationId: "org_review" },
           verifyToken: async () => ({
             sub: "user_one",
             org_id: organizationId,
             client_id: "client",
+            iat: 1_700_000_000,
             scope: [
               "stella:read",
               ...Object.values(ACCOUNT_EXPORT_SCOPES),
@@ -81,6 +96,7 @@ describe("extractMcpSession", () => {
     const authenticated = await authenticateAccountExportRequest(
       "oauth-token",
       {
+        admissionOptions,
         verifyToken: async (
           _token: string | undefined,
           options?: { verifyOptions?: JWTVerifyOptions },
@@ -94,6 +110,7 @@ describe("extractMcpSession", () => {
             sub: "user_one",
             org_id: "org_one",
             client_id: "client",
+            iat: 1_700_000_000,
             scope: "stella:account_export_read",
           };
         },
@@ -175,12 +192,17 @@ describe("extractMcpSession", () => {
     expect(
       sessionFrom({
         azp: "agent-client-123",
+        iat: 1_700_000_000,
         org_id: "org_123",
         scope: "stella:read",
         sub: "user_123",
       }),
     ).toEqual({
-      credential: { clientId: "agent-client-123", type: "oauth_client" },
+      credential: {
+        clientId: "agent-client-123",
+        issuedAt: 1_700_000_000,
+        type: "oauth_client",
+      },
       organizationId: "org_123",
       scopes: ["stella:read"],
       userId: "user_123",
