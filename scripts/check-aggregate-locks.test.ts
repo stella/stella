@@ -19,6 +19,15 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
+test("local Postgres cluster lock has an infrastructure owner", () => {
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/dev-postgres-lock.ts"),
+  ).toBe(false);
+  expect(
+    aggregateLockSourceIncluded("packages/scripts/src/shared-test-postgres.ts"),
+  ).toBe(true);
+});
+
 test("the namespace ledger matches what the owner source declares", () => {
   expect(
     aggregateLockNamespacesFromSource(

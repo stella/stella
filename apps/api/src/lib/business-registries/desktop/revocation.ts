@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
@@ -50,9 +51,17 @@ export const revokeDesktopRegistryCredential = async ({
         ),
       )
       .returning({ id: apikey.id });
-    if (revoked.length === 0) {
+    const [key] = revoked;
+    if (key === undefined) {
       return;
     }
+    // Only the runners this credential opened; another credential of the
+    // account, even on the same device key, keeps its sockets.
+    await releaseRevokedRunners(tx, {
+      userId,
+      organizationId,
+      keyId: key.id,
+    });
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
