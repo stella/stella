@@ -21,6 +21,8 @@
  * `bod_`, joined by `-`), which is what the provision links store.
  */
 
+import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorLevel } from "@stll/legal-ast/statute-anchor-scheme";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import type { SectionUnit } from "@stll/legal-atlas/provision-citation-profile";
 
@@ -28,7 +30,7 @@ import type { SectionUnit } from "@stll/legal-atlas/provision-citation-profile";
 const PROVISION_KEY_SEPARATOR = "|";
 
 /** Between the levels of a stored anchor. */
-const ANCHOR_SEPARATOR = CZ_PROFILE.anchor.join;
+const ANCHOR_SEPARATOR = CZ_PROFILE.anchor.segmentSeparator;
 
 /**
  * The most bytes the `provision_keys` array of one passage may take as the
@@ -182,19 +184,18 @@ const canonicalDesignator = (value: string): string =>
  * article unit renders with `cl_` where a section renders with `par_`.
  */
 export const provisionFilterKey = (filter: ProvisionKeyFilter): string => {
-  const { render } = CZ_PROFILE.anchor;
-  const section = `${String(filter.section)}${filter.sectionSuffix ?? ""}`;
+  const segment = (level: StatuteAnchorLevel, value: string) =>
+    `${statuteAnchorKindPrefix(CZ_PROFILE.anchor, level)}${canonicalDesignator(value)}`;
   const segments = [
-    render[filter.unit](canonicalDesignator(section)),
+    segment(
+      filter.unit,
+      `${String(filter.section)}${filter.sectionSuffix ?? ""}`,
+    ),
     ...(filter.subsection === undefined
       ? []
-      : [render.subsection(canonicalDesignator(filter.subsection))]),
-    ...(filter.letter === undefined
-      ? []
-      : [render.letter(canonicalDesignator(filter.letter))]),
-    ...(filter.point === undefined
-      ? []
-      : [render.point(canonicalDesignator(filter.point))]),
+      : [segment("subsection", filter.subsection)]),
+    ...(filter.letter === undefined ? [] : [segment("letter", filter.letter)]),
+    ...(filter.point === undefined ? [] : [segment("point", filter.point)]),
   ];
   return provisionKey(filter.work, segments.join(ANCHOR_SEPARATOR));
 };

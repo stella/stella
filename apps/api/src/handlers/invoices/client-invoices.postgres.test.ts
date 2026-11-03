@@ -54,6 +54,7 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -79,6 +80,7 @@ import {
 } from "@/api/tests/helpers/handler-context";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
@@ -232,7 +234,8 @@ if (!databaseUrl || !runPostgres) {
           featureId: "time-billing" as const,
         })),
       );
-      await db.insert(contacts).values(
+      await insertOwnerContacts(
+        db,
         [clientId, otherClientId].map((id) => ({
           id,
           organizationId: orgId,
@@ -758,7 +761,12 @@ if (!databaseUrl || !runPostgres) {
       // A contact cannot disappear while its invoice remains; an organization
       // deletion removes both in one statement, regardless of cascade order.
       await expectSqlState(
-        db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx.delete(contacts).where(eq(contacts.id, scenario.clientId)),
+        ),
         "23001",
       );
       await deleteOrganizationsForTest(db, [scenario.orgId]);
@@ -769,10 +777,15 @@ if (!databaseUrl || !runPostgres) {
           .where(eq(organization.id, scenario.orgId)),
       ).toEqual([]);
       expect(
-        await db
-          .select({ id: contacts.id })
-          .from(contacts)
-          .where(eq(contacts.organizationId, scenario.orgId)),
+        await withOwnerOrganizationScope(
+          db,
+          scenario.orgId,
+          async (tx) =>
+            await tx
+              .select({ id: contacts.id })
+              .from(contacts)
+              .where(eq(contacts.organizationId, scenario.orgId)),
+        ),
       ).toEqual([]);
       expect(
         await db

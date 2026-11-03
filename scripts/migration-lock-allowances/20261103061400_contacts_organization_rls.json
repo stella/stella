@@ -1,0 +1,4 @@
+{
+  "create-policy": "The one policy admits the table owner to the contacts of the organization its transaction names; catalog-only policy creation performs no row scan, with 1s lock_timeout and 5s statement_timeout.",
+  "row-level-security": "FORCE ROW LEVEL SECURITY on contacts is a catalog flag change on a table that already enables row security; it rewrites no rows and waits at most the 1s lock_timeout."
+}
