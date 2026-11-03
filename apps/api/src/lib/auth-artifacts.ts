@@ -33,6 +33,7 @@ import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/deskt
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -356,6 +357,9 @@ const MEMBER_CREDENTIAL_REVOCATION = {
           eq(apikey.enabled, true),
         ),
       );
+    // The member's desktop keys are revoked with the rest, and with them the
+    // runner sockets they opened.
+    await releaseRevokedRunners(tx, { userId, organizationId });
   },
 } as const satisfies Record<string, RevokeMemberCredentials>;
 
@@ -432,11 +436,9 @@ type RevokeOAuthClientAuthArtifactsOptions = {
  * rows: disconnecting an OAuth app ends that app's access, not the
  * user's own web sessions.
  *
- * Access tokens are verified statelessly (JWT via JWKS), so an already
- * issued token keeps working until its expiry (15 minutes, see
- * `ACCESS_TOKEN_EXPIRES_IN`); deleting the refresh token guarantees it
- * cannot be renewed. Checking the DB on every MCP request to close that
- * window was deliberately rejected as a hot-path cost.
+ * Access tokens are verified as JWTs; the disconnect caller also records the
+ * grant revocation that the existing MCP client-registration read checks.
+ * Deleting the refresh token guarantees the grant cannot be renewed.
  */
 export const revokeOAuthClientAuthArtifacts = async (
   tx: Transaction,
@@ -514,6 +516,7 @@ export const revokeAllUserApiKeys = async (
     .update(apikey)
     .set({ enabled: false, updatedAt: new Date() })
     .where(and(eq(apikey.referenceId, userId), eq(apikey.enabled, true)));
+  await releaseRevokedRunners(tx, { userId });
 };
 
 /**

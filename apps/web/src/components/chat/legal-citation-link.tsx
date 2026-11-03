@@ -140,6 +140,7 @@ const DecisionTrayLink = ({
   return (
     <ProxyChatLink
       appearance="tray"
+      fullLabel
       href={href}
       iconSource={linkIconSource}
       newTabLabel={t("common.openInNewTab")}
@@ -179,6 +180,7 @@ const FullLabelTrayLink = ({
   return (
     <ProxyChatLink
       appearance="tray"
+      fullLabel
       href={href}
       iconSource={props.linkIconSource}
       newTabLabel={t("common.openInNewTab")}

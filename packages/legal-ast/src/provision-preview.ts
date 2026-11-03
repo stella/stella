@@ -5,13 +5,18 @@
  * it to the same document: the API narrows a stored AST down to a preview
  * payload, and the statute reader narrows the document it already holds.
  */
+import { panic } from "better-result";
+
 import {
   resolveDocumentAnchor,
   resolveDocumentHeadingAnchor,
 } from "./document-ast.js";
 import type { Block, HeadingBlock } from "./document-ast.js";
 import { anchorWithin } from "./statute-anchor-scheme.js";
-import type { StatuteBlocks } from "./statute-anchor-scheme.js";
+import type {
+  StatuteAnchorNesting,
+  StatuteBlocks,
+} from "./statute-anchor-scheme.js";
 
 const blocksOwnedByHeading = (
   blocks: readonly Block[],
@@ -116,14 +121,24 @@ export const provisionPreviewBlocks = (
 /**
  * The heading a cited subdivision belongs to: `par_90-odst_5` is filed, cited
  * and versioned under `par_90`, `s1983/a/1` under `s1983`. The separator is
- * the citing grammar's, because a section number may itself carry another
- * one (`s2000e-2/a`). The subdivision stays the highlight target.
+ * the citing country's scheme's, because a section number may itself carry
+ * another one (`s2000e-2/a`). A flat scheme files every anchor under itself.
+ * The subdivision stays the highlight target.
  */
 export const provisionHeadingAnchor = (
   anchor: string,
-  separator: string | null,
-): string =>
-  separator === null ? anchor : (anchor.split(separator)[0] ?? anchor);
+  nesting: StatuteAnchorNesting,
+): string => {
+  switch (nesting.type) {
+    case "nested":
+      return anchor.split(nesting.separator)[0] ?? anchor;
+    case "flat":
+      return anchor;
+    default:
+      nesting satisfies never;
+      return panic("Unhandled statute anchor nesting");
+  }
+};
 
 /**
  * The heading in a statute an anchor is nested under: the longest heading

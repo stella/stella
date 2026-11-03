@@ -4,6 +4,8 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 
 import type { Transaction } from "@/api/db/root";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -127,9 +129,19 @@ const withCommittedMonitoring = async (
         await tx.execute(
           sql`INSERT INTO public.organization (id, name, slug, created_at) VALUES (${ORG_A}, 'Monitoring A', ${ORG_A}, now()), (${ORG_B}, 'Monitoring B', ${ORG_B}, now())`,
         );
-        await tx.execute(
-          sql`INSERT INTO public.contacts (id, organization_id, type, display_name) VALUES (${CONTACT_A}, ${ORG_A}, 'person', 'Jan Novák'), (${CONTACT_B}, ${ORG_B}, 'person', 'Ján Novák')`,
-        );
+        for (const [organizationId, contactId, displayName] of [
+          [ORG_A, CONTACT_A, "Jan Novák"],
+          [ORG_B, CONTACT_B, "Ján Novák"],
+        ] as const) {
+          await withOwnerOrganizationScope(
+            tx,
+            brandPersistedOrganizationId(organizationId),
+            async (scoped) =>
+              await scoped.execute(
+                sql`INSERT INTO public.contacts (id, organization_id, type, display_name) VALUES (${contactId}, ${organizationId}, 'person', ${displayName})`,
+              ),
+          );
+        }
         await tx.execute(
           sql`INSERT INTO public.sanctions_sources (id, issuer, marker_url) VALUES (${SOURCE}, 'EU', 'https://example.test/list') ON CONFLICT DO NOTHING`,
         );

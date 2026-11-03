@@ -103,6 +103,7 @@
     "./mobile-client": "./src/mobile-client.ts",
     "./mobile-push": "./src/mobile-push.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
+    "./oauth-callback-error": "./src/oauth-callback-error.ts",
     "./mobile-updates": "./src/mobile-updates.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-billing-drafts": "./src/desktop-billing-drafts.ts",
