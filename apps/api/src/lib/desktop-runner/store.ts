@@ -52,10 +52,7 @@ import {
   type DesktopRunnerCommandKind,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
-import {
-  brandPersistedUserId,
-  brandPersistedWorkspaceId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * The gateway's persistence. Postgres is the truth for what a desktop holds:
@@ -1011,29 +1008,28 @@ export const expireAbandonedRuns = async (
   });
 };
 
-/** An open run whose chat turn ended without it; see below. */
-export type EndedChatTurnRun = {
-  readonly runId: string;
-  readonly owner: RunOwner;
-};
-
 /**
- * Open runs whose chat turn no longer holds them (`CHAT_TURN_RUN_ENDING_STATUSES`)
- * and that have no cancel queued: the turn was stopped, failed, superseded or
- * ended while its run still waited or worked. A turn may end on any API task,
- * or with no task alive, so the sweep finds these from the rows rather than
- * from whoever ended the turn. Once a cancel is queued the run is not read
- * again.
+ * Queue a cancel for every open run whose chat turn no longer holds it
+ * (`CHAT_TURN_RUN_ENDING_STATUSES`): the turn was stopped, failed, superseded
+ * or ended while its run still waited or worked. A turn may end on any API
+ * task, or with no task alive, so the sweep finds these from the rows rather
+ * than from whoever ended the turn. One statement queues them all; a run
+ * keeps one cancel (its key is the run), so a later sweep queues nothing more.
+ * Returns where to ring for the cancels whose computer is connected.
  */
-export const readRunsOfEndedChatTurns = async (
-  db: Pick<DesktopRunnerDb, "select">,
+export const cancelRunsOfEndedChatTurns = async (
+  db: Pick<DesktopRunnerDb, "select" | "insert">,
   { limit }: { limit: number },
-): Promise<EndedChatTurnRun[]> => {
-  const rows = await db
+): Promise<RunHolder[]> => {
+  const ended = db
     .select({
       runId: runs.runId,
-      userId: runs.userId,
-      organizationId: runs.organizationId,
+      kind: sql<"run.cancel">`'run.cancel'`.as("kind"),
+      commandKey: sql<string>`${runs.runId}`.as("command_key"),
+      payload:
+        sql<object>`jsonb_build_object('type', 'run.cancel', 'runId', ${runs.runId}::text)`.as(
+          "payload",
+        ),
     })
     .from(runs)
     .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
@@ -1041,19 +1037,40 @@ export const readRunsOfEndedChatTurns = async (
       and(
         inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
         inArray(chatTurns.status, CHAT_TURN_RUN_ENDING_STATUSES),
-        // One statement: the cancel a run already has is matched in place.
+        // A run with its cancel queued is not read again.
         sql`NOT EXISTS (SELECT 1 FROM ${desktopRunnerCommands} WHERE ${desktopRunnerCommands.runId} = ${runs.runId} AND ${desktopRunnerCommands.kind} = 'run.cancel')`,
       ),
     )
     .orderBy(asc(runs.updatedAt))
     .limit(limit);
-  return rows.map((row) => ({
-    runId: row.runId,
-    owner: {
-      userId: brandPersistedUserId(row.userId),
-      organizationId: row.organizationId,
-    },
-  }));
+  // audit: skip - runner socket bookkeeping; the chat turn that ended audits the work
+  const queued = await db
+    .insert(desktopRunnerCommands)
+    .select(ended)
+    .onConflictDoNothing()
+    .returning({ runId: desktopRunnerCommands.runId });
+  if (queued.length === 0) {
+    return [];
+  }
+  return await db
+    .select({ sessionId: runner.sessionId, instanceId: runner.instanceId })
+    .from(runs)
+    .innerJoin(
+      runner,
+      and(
+        eq(runner.userId, runs.userId),
+        eq(runner.organizationId, runs.organizationId),
+        eq(runner.desktopId, runs.desktopId),
+        eq(runner.deviceJkt, runs.deviceJkt),
+        eq(runner.connection, "connected"),
+      ),
+    )
+    .where(
+      inArray(
+        runs.runId,
+        queued.map(({ runId }) => runId),
+      ),
+    );
 };
 
 export type PendingCommand = {

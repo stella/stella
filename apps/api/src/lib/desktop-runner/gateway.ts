@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import {
   DESKTOP_RUNNER_LIMITS,
-  DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerLimits,
 } from "@stll/api-contract/desktop-runner";
 
@@ -31,13 +30,12 @@ import {
   SYSTEM_TIMERS,
 } from "@/api/lib/desktop-runner/session";
 import {
+  cancelRunsOfEndedChatTurns,
   type DesktopRunnerDb,
   expireAbandonedRuns,
   expireRunLeases,
-  insertRunCommand,
   pruneEndedRuns,
   readNewestQueuedCommands,
-  readRunsOfEndedChatTurns,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -168,45 +166,23 @@ const refusal = (status: number, message: string, code?: string) =>
  * whichever task, the run it left going is cancelled here; the cancel reaches
  * a computer that is away when it reconnects.
  */
-const cancelRunsOfEndedChatTurns = async ({
+const cancelEndedChatTurnRuns = async ({
   db,
   doorbell,
-  limits,
 }: {
   db: DesktopRunnerDb;
   doorbell: DesktopRunnerDoorbell;
-  limits: DesktopRunnerLimits;
 }) => {
-  const ended = await Result.tryPromise(
-    async () => await readRunsOfEndedChatTurns(db, { limit: EXPIRY_BATCH }),
+  const cancelled = await Result.tryPromise(
+    async () => await cancelRunsOfEndedChatTurns(db, { limit: EXPIRY_BATCH }),
   );
-  if (ended.isErr()) {
+  if (cancelled.isErr()) {
     // The next sweep finds them again.
-    observeFailure(ended.error, { sink: LEASE_SWEEP_SINK });
+    observeFailure(cancelled.error, { sink: LEASE_SWEEP_SINK });
     return;
   }
-  for (const { runId, owner } of ended.value) {
-    const cancelled = await Result.tryPromise(
-      async () =>
-        // db-await-in-loop: each cancel takes its account's command lock and checks its own run, at most EXPIRY_BATCH per sweep and usually none
-        await insertRunCommand(db, {
-          owner,
-          runId,
-          kind: DESKTOP_RUNNER_SERVER_MESSAGE.runCancel,
-          // One cancel per run, as `queue` keys it.
-          commandKey: runId,
-          payload: { type: DESKTOP_RUNNER_SERVER_MESSAGE.runCancel, runId },
-          answersRequestId: null,
-          limits,
-        }),
-    );
-    if (cancelled.isErr()) {
-      observeFailure(cancelled.error, { sink: LEASE_SWEEP_SINK });
-      continue;
-    }
-    if (cancelled.value.type === "queued" && cancelled.value.holder !== null) {
-      doorbell.ring(cancelled.value.holder);
-    }
+  for (const holder of cancelled.value) {
+    doorbell.ring(holder);
   }
 };
 
@@ -258,7 +234,7 @@ const endRuns = async ({
     // Retention catches up on the next sweep.
     observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
   }
-  await cancelRunsOfEndedChatTurns({ db, doorbell, limits });
+  await cancelEndedChatTurnRuns({ db, doorbell });
 };
 
 export type DesktopRunnerGateway = {
