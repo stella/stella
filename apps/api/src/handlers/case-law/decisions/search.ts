@@ -386,6 +386,13 @@ type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
    * search reads it once for all its phrasings and warns when it is broad).
    */
   provisionScope?: CaseLawProvisionScope;
+  /**
+   * Internal: `false` when the caller keeps only the page and drops the
+   * facets and the total (an agent search's later phrasings, the
+   * OpenAI-compatible search). The aggregations behind them scan the whole
+   * result set, so a caller that discards them should not pay for them.
+   */
+  describeResultSet?: false;
 };
 
 type PostgresSearchBody = Omit<
@@ -2793,6 +2800,15 @@ const cursorMatchesCorpusReadTarget = (
   target: string | null,
 ): boolean => cursor === null || cursor.target === target;
 
+/**
+ * Whether a page reads the facets and total: only a first page describes its
+ * result set, and only for a caller that keeps the description.
+ */
+const readsResultSetDescription = (
+  body: SearchDecisionsBody,
+  isFirstPage: boolean,
+): boolean => isFirstPage && body.describeResultSet !== false;
+
 type SearchCorpusIndexDecisionsOptions = {
   signal?: AbortSignal | undefined;
   body: SearchDecisionsBody;
@@ -3288,7 +3304,7 @@ export const searchCorpusIndexDecisions = async ({
   const pageRead = readTextPage(resolved.query, limit, null);
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
-  const facetRead = isFirstPage
+  const facetRead = readsResultSetDescription(body, isFirstPage)
     ? readCaseLawSearchFacets({
         signal,
         observer,
