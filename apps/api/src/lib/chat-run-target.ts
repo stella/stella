@@ -4,11 +4,21 @@ import * as v from "valibot";
 import {
   CHAT_CLOUD_RUN_TARGET,
   CHAT_RUN_TARGET_KIND,
+  type ChatLocalRunTarget,
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
 
 const SEPARATOR = "::";
+
+/**
+ * A thread's run target as a response field: present only for a computer,
+ * so cloud, the default, stays an absent field as it is in a send.
+ */
+export const localRunTargetField = (
+  target: ChatRunTarget,
+): { runTarget?: ChatLocalRunTarget } =>
+  target.kind === "local" ? { runTarget: target } : {};
 
 /**
  * The thread column's value for a run target: `"<harness>::<model>"` for a
