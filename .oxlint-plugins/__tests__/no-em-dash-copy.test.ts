@@ -124,6 +124,33 @@ test("allows the lone empty-cell marker", async () => {
   expect(await lint('const p = <input placeholder="—" />;')).toEqual([]);
 });
 
+test("rejects a marker binding that a later use composes with text", async () => {
+  expect(
+    await lint('const separator = "—";\nconst title = [a, b].join(separator);'),
+  ).toEqual([1]);
+  expect(
+    await lint('const separator = "—";\nconst title = a + separator + b;'),
+  ).toEqual([1]);
+  expect(
+    await lint(`const separator = "—";\nconst title = \`\${a}\${separator}\`;`),
+  ).toEqual([1]);
+});
+
+test("allows a marker binding used only as a whole value", async () => {
+  expect(
+    await lint(
+      'const EMPTY = "—";\nconst cell = (v: string | null) => v ?? EMPTY;',
+    ),
+  ).toEqual([]);
+});
+
+test("exempts console calls named by a computed string", async () => {
+  expect(await lint('console["warn"]("Draft — not sent");')).toEqual([]);
+  expect(
+    await lint('const m = "warn";\nconsole[m]("Draft — not sent");'),
+  ).toEqual([2]);
+});
+
 test("allows en dash ranges, entities outside JSX and comments", async () => {
   expect(await lint('const range = "2019–2024";')).toEqual([]);
   expect(await lint('const label = "Uloženo – právě teď";')).toEqual([]);

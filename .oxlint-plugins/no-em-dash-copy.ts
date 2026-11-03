@@ -22,8 +22,9 @@
 //   text.replace(/—/gu, "-")
 //   "2019–2024"                      (en dash range)
 //   invoice.dueDate ?? "—"           (empty-cell marker)
-// Flagged too, as a separator rather than a marker:
+// Flagged too, as a separator rather than a marker, including through a name:
 //   {" — "}   parts.join(" — ")
+//   const separator = "—"; parts.join(separator)
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
@@ -31,6 +32,8 @@ import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   filenameForContext,
   getCalleeName,
+  memberPropertyName,
+  type ScopeContext,
   TRANSPARENT_WRAPPERS,
 } from "./utils.ts";
 
@@ -70,7 +73,67 @@ const SOLE_CONTENT_ENDS: ReadonlySet<string> = new Set([
   "ExportDefaultDeclaration",
 ]);
 
-const isSoleMarkerContent = (node: ESTree.Node): boolean => {
+// A marker bound to a name is still copy when a use composes it with other
+// text: `parts.join(separator)`, `left + separator` or `${separator}`.
+const isComposingUse = (reference: ESTree.Node): boolean => {
+  let use: ESTree.Node = reference;
+  while (use.parent !== null && TRANSPARENT_WRAPPERS.has(use.parent.type)) {
+    use = use.parent;
+  }
+  const { parent } = use;
+  if (parent === null) {
+    return false;
+  }
+  if (parent.type === "TemplateLiteral" || parent.type === "BinaryExpression") {
+    return true;
+  }
+  return (
+    parent.type === "CallExpression" &&
+    parent.arguments.some((argument) => argument === use) &&
+    parent.callee.type === "MemberExpression" &&
+    memberPropertyName(parent.callee) === "join"
+  );
+};
+
+// The binding a declarator introduces, found from the declarator's scope.
+const declaredVariable = (
+  context: ScopeContext,
+  declarator: ESTree.VariableDeclarator,
+  name: string,
+) => {
+  let scope: ReturnType<ScopeContext["sourceCode"]["getScope"]> | null =
+    context.sourceCode.getScope(declarator);
+  while (scope !== null) {
+    const variable = scope.set.get(name);
+    if (variable !== undefined) {
+      return variable;
+    }
+    scope = scope.upper;
+  }
+  return null;
+};
+
+const bindingComposesMarker = (
+  context: ScopeContext,
+  declarator: ESTree.VariableDeclarator,
+): boolean => {
+  if (declarator.id.type !== "Identifier") {
+    return false;
+  }
+  const variable = declaredVariable(context, declarator, declarator.id.name);
+  return (
+    variable?.references.some(
+      (reference) =>
+        reference.identifier !== declarator.id &&
+        isComposingUse(reference.identifier),
+    ) === true
+  );
+};
+
+const isSoleMarkerContent = (
+  node: ESTree.Node,
+  context: ScopeContext,
+): boolean => {
   const raw = markerText(node);
   if (raw === null || !EMPTY_CELL_MARKER.test(raw)) {
     return false;
@@ -116,7 +179,11 @@ const isSoleMarkerContent = (node: ESTree.Node): boolean => {
       }
     } else if (parent.type !== "JSXExpressionContainer") {
       // A binding, return, property, attribute or statement holds the marker
-      // alone; any other parent composes it with more content.
+      // alone; any other parent composes it with more content. A binding is
+      // followed to its uses, since one of them may compose it.
+      if (parent.type === "VariableDeclarator") {
+        return !bindingComposesMarker(context, parent);
+      }
       return SOLE_CONTENT_ENDS.has(parent.type);
     }
     content = parent;
@@ -130,6 +197,21 @@ const FUNCTION_BOUNDARIES: ReadonlySet<string> = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
 ]);
+
+// `console.warn(...)` and `console["warn"](...)` name the same method.
+const isConsoleCallee = (callee: ESTree.Node): boolean => {
+  if (
+    callee.type === "MemberExpression" &&
+    callee.computed &&
+    callee.object.type === "Identifier" &&
+    callee.object.name === "console" &&
+    callee.property.type === "Literal" &&
+    typeof callee.property.value === "string"
+  ) {
+    return CONSOLE_METHOD.test(`console.${callee.property.value}`);
+  }
+  return CONSOLE_METHOD.test(getCalleeName(callee) ?? "");
+};
 
 // Parts that only build the argument a call receives: a template around the
 // text or a concatenation with it. Any other parent hands the text to code
@@ -153,7 +235,7 @@ const isConsoleArgument = (node: ESTree.Node): boolean => {
     if (parent.type === "CallExpression") {
       return (
         parent.arguments.some((argument) => argument === child) &&
-        CONSOLE_METHOD.test(getCalleeName(parent.callee) ?? "")
+        isConsoleCallee(parent.callee)
       );
     }
     if (
@@ -206,7 +288,7 @@ export default eslintCompatPlugin({
             // JSX attribute strings decode HTML entities like JSX text does.
             const decodesEntities = node.parent.type === "JSXAttribute";
             const raw = node.raw ?? "";
-            if (isSoleMarkerContent(node) || isConsoleArgument(node)) {
+            if (isSoleMarkerContent(node, context) || isConsoleArgument(node)) {
               return;
             }
             if (
@@ -219,7 +301,7 @@ export default eslintCompatPlugin({
           },
           TemplateElement(node) {
             const { raw } = node.value;
-            if (isSoleMarkerContent(node) || isConsoleArgument(node)) {
+            if (isSoleMarkerContent(node, context) || isConsoleArgument(node)) {
               return;
             }
             if (containsEmDash(raw) && enforces(node)) {
@@ -228,7 +310,7 @@ export default eslintCompatPlugin({
           },
           JSXText(node) {
             const raw = node.raw ?? node.value;
-            if (isSoleMarkerContent(node) || isConsoleArgument(node)) {
+            if (isSoleMarkerContent(node, context) || isConsoleArgument(node)) {
               return;
             }
             if (
