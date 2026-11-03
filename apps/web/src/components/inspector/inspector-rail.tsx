@@ -536,7 +536,10 @@ const TaskVerticalTab = ({
   ...props
 }: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
   const t = useTranslations();
-  const taskQuery = useQuery(taskDetailOptions(tab.workspaceId, tab.id));
+  const taskQuery = useQuery({
+    ...taskDetailOptions(tab.workspaceId, tab.id),
+    enabled: tab.creationStatus === "ready",
+  });
   const taskView = queryView(taskQuery);
   useQueryViewError(taskView, "TaskVerticalTab:query");
   const label =
