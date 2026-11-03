@@ -6384,6 +6384,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "See toimik on arhiveeritud ja kirjutuskaitstud.",
     "calculations": {
       "choose": "Arvuta",
       "kinds": {
@@ -7241,6 +7242,7 @@
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"
     },
+    "unarchiveBeforeDelete": "Enne toimiku kustutamist tühistage selle arhiveerimine.",
     "unarchiveMatter": "Taasta arhiivist",
     "uploadDocuments": "Laadi dokumendid üles",
     "views": {
