@@ -1272,6 +1272,16 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
       };
+    case "desktopRunnerCapacity":
+      return {
+        first: sql`hashtext('desktop-runner-capacity')`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
+      };
     case "fileComparisonCapacity":
       return {
         first: sql`${0x0f_10_cc_b2}::integer`,

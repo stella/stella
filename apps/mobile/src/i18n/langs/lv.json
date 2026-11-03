@@ -191,6 +191,7 @@
       "openFailed": "Šo dokumentu pašlaik nevar rediģēt",
       "takenOver": "Šo dokumentu tagad rediģē kāds cits. Jūsu izmaiņas kopš pēdējās saglabāšanas netika saglabātas.",
       "finishFailed": "Jūsu izmaiņas ir saglabātas, bet no tām vēl nav izveidota jauna versija. Vēlreiz pieskarieties Gatavs vai izejiet: nākamā rediģēšana turpināsies no tām.",
+      "notStored": "Pēdējās izmaiņas neizdevās saglabāt. Palieciet, lai mēģinātu vēlreiz, vai aizejiet bez tām.",
       "stay": "Palikt",
       "leave": "Iziet"
     }
