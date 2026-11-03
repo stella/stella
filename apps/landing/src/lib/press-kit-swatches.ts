@@ -20,7 +20,7 @@ export const PRESS_KIT_SWATCHES: readonly PressKitSwatch[] = [
   {
     name: "Blue Accent",
     hex: "#6B9FD0",
-    description: "Primary accent — buttons, links, focus.",
+    description: "Primary accent: buttons, links, focus.",
   },
   {
     name: "Black",

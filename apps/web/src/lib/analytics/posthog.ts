@@ -43,6 +43,7 @@ import type {
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
 import { APIError, isCancellation } from "@/lib/errors/api";
+import { isNativeFetchFailure } from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -389,6 +390,11 @@ const sanitizeExceptionEntry = (
   };
 };
 
+// The same finite dimensions the fingerprint carries, kept readable so an
+// issue's events can be filtered by them.
+const exceptionFieldsProperty = (fields: Record<string, string>) =>
+  Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
+
 type RouteTemplateHistory = Map<string, string>;
 
 type TemplateUrl = { url: string; pathname: string };
@@ -497,6 +503,7 @@ export const sanitizeExceptionEvent = (
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...exceptionFieldsProperty(fields),
       ...(properties["exception_identity_status"] === "read_failed"
         ? { exception_identity_status: "read_failed" }
         : {}),
@@ -799,6 +806,16 @@ const registerBuildProperties = () => {
   });
 };
 
+// Clients outside the API client (the auth client) reject with the native
+// fetch error. It must be classified here, before redaction blanks the message
+// that tells it apart from a TypeError of ours.
+const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+  if (APIError.is(error)) {
+    return error.transportKind;
+  }
+  return isNativeFetchFailure(error) ? "network" : undefined;
+};
+
 const captureError: Analytics["captureError"] = (
   error,
   { fingerprintKey, scope, context },
@@ -806,10 +823,11 @@ const captureError: Analytics["captureError"] = (
   // Transport failures have no HTTP response and describe client connectivity,
   // not an application exception. Keep the fixed query owner and kind only:
   // neither a resolved URL nor request/user content belongs in this signal.
-  if (APIError.is(error) && error.transportKind !== undefined) {
+  const transportKind = transportFailureKind(error);
+  if (transportKind !== undefined) {
     posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
       query_owner: fingerprintKey,
-      transport_kind: error.transportKind,
+      transport_kind: transportKind,
     });
     return;
   }

@@ -501,7 +501,7 @@ const describeEngineStatus = (
     }
     case "ready": {
       if (highlights.pairs.length === 0) {
-        return "No entities detected yet — try adding a name or company.";
+        return "No entities detected yet. Try adding a name or company.";
       }
       return highlights.pairs.length === 1
         ? "1 entity detected"

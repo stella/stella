@@ -605,6 +605,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-em-dash-copy.fixture.tsx", [
+    "no-em-dash-copy/no-em-dash-copy",
+  ]),
   fixtureRuleOverride("no-style-substring-match.fixture.ts", [
     "no-style-substring-match/no-style-substring-match",
   ]),
@@ -2079,6 +2082,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-oauth-grant-admission.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-em-dash-copy.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
@@ -3584,6 +3588,39 @@ const config = defineConfig({
       ],
       rules: {
         "no-known-value-widening/no-known-value-widening": "error",
+      },
+    },
+    {
+      // Product copy only. Tests, fixtures and generated catalogues are not
+      // copy a reader sees, and neither is text written for a model, an
+      // operator or a parser: the API's prompts, tool descriptions, agent
+      // references and ingestion, the CLI and its agent skill, court-text and
+      // registry parsers, agent input normalisation, repository scripts and
+      // the web app's dev-only diagnostics.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+        "**/fixtures/**",
+        "**/*.gen.ts",
+        "**/*.generated.ts",
+        "**/generated/**",
+        "apps/api/**",
+        "apps/web/src/routes/dev/**",
+        "apps/web/src/runtime.ts",
+        "apps/web/src/components/render-storm-canary.tsx",
+        "packages/agent-input/**",
+        "packages/api-contract/**",
+        "packages/business-registries/**",
+        "packages/cli/**",
+        "packages/decision-reader/**",
+        "packages/legal-atlas/**",
+        "packages/scripts/**",
+      ],
+      rules: {
+        "no-em-dash-copy/no-em-dash-copy": "error",
       },
     },
     {

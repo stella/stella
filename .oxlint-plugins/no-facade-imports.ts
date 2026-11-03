@@ -65,6 +65,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/lib/errors/client",
   "@/lib/errors/invoice-issue",
   "@/lib/errors/localization",
+  "@/lib/errors/native-fetch-failure",
   "@/lib/errors/provider-diagnostic",
   "@/lib/errors/provider-setup-guidance",
   "@/lib/errors/query-result",
