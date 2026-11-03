@@ -7,6 +7,7 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardActionItems,
   clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
@@ -29,10 +30,10 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  isClipboardSearchConfirm,
   NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
   refreshClipboardEditorName,
-  shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
@@ -675,9 +676,9 @@ describe("clipboard input keyboard handling", () => {
     expect(isClipboardNameInput({})).toBe(false);
   });
 
-  test("Enter in a clip name editor never triggers timeline copy", () => {
+  test("Enter in a clip name editor is not a search confirm", () => {
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: { clipboardNameInput: "" },
         isComposing: false,
         key: "Enter",
@@ -685,21 +686,29 @@ describe("clipboard input keyboard handling", () => {
     ).toBe(false);
   });
 
-  test("Enter in search copies unless an input method is composing", () => {
+  test("Enter in search only confirms, unless an input method is composing", () => {
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: {},
         isComposing: false,
         key: "Enter",
       }),
     ).toBe(true);
     expect(
-      shouldCopyFromClipboardInput({
+      isClipboardSearchConfirm({
         dataset: {},
         isComposing: true,
         key: "Enter",
       }),
     ).toBe(false);
+  });
+
+  test("only the clips scope lets search-field keys act on a clip", () => {
+    const items = [TEXT_ITEM];
+    expect(clipboardActionItems("clips", items)).toEqual(items);
+    // Registry scope hides the rail: Enter there must never copy and close
+    // on a clip, even before the registry results arrive.
+    expect(clipboardActionItems("registry", items)).toEqual([]);
   });
 
   test("ArrowRight leaves search for the groups only from the end of the text", () => {

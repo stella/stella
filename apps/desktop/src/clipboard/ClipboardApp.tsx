@@ -140,6 +140,7 @@ import {
   CLIPBOARD_ITEM_DRAG_TYPE,
   CLIPBOARD_SEARCH_OPTION_KEYS,
   CLIPBOARD_SEARCH_SCOPES,
+  clipboardActionItems,
   clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
@@ -163,10 +164,10 @@ import {
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  isClipboardSearchConfirm,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
-  shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
@@ -1984,14 +1985,17 @@ const ClipboardApp = () => {
   // demand inside the key handlers so the keystroke render itself never
   // pays for a filter; identical to the rendered list once settled.
   const resolveActionItems = () =>
-    query === filterQuery
-      ? filteredItems
-      : filterClipboardItems(
-          snapshot.items,
-          query,
-          activeGroupId,
-          searchOptions,
-        );
+    clipboardActionItems(
+      searchSource,
+      query === filterQuery
+        ? filteredItems
+        : filterClipboardItems(
+            snapshot.items,
+            query,
+            activeGroupId,
+            searchOptions,
+          ),
+    );
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
@@ -2668,13 +2672,12 @@ const ClipboardApp = () => {
         isComposing: event.isComposing,
         key: event.key,
       };
-      if (shouldCopyFromClipboardInput(inputKey)) {
-        const item = resolveActionItem();
-        if (item) {
-          event.preventDefault();
-          copyItemFromEnter(item, event.shiftKey);
-        }
-      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
+      if (isClipboardSearchConfirm(inputKey)) {
+        event.preventDefault();
+      } else if (
+        resolveActionItem() &&
+        shouldReturnToTimelineFromInput(inputKey)
+      ) {
         event.preventDefault();
         selectIndex(activeIndex);
       } else if (

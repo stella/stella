@@ -153,7 +153,12 @@ export const isClipboardNameInput = (
   dataset: Readonly<Record<string, string | undefined>>,
 ) => Object.hasOwn(dataset, "clipboardNameInput");
 
-export const shouldCopyFromClipboardInput = ({
+/**
+ * Enter in the search field confirms what was typed: it never copies a clip
+ * or closes the window. Copying is a deliberate act on a clip (Enter on a
+ * focused card, a click, or the quick-copy shortcut).
+ */
+export const isClipboardSearchConfirm = ({
   dataset,
   isComposing,
   key,
@@ -244,6 +249,23 @@ export const clipboardControlsKeyAction = ({
 
 export const CLIPBOARD_SEARCH_SCOPES = ["clips", "registry"] as const;
 export type ClipboardSearchScope = (typeof CLIPBOARD_SEARCH_SCOPES)[number];
+
+/**
+ * The clips that copy, quick-copy, delete and ArrowUp act on. Only the clips
+ * scope shows the history rail; every other scope owns the search field's
+ * keys, so a keystroke there can never act on a clip the user cannot see.
+ */
+export const clipboardActionItems = <Item>(
+  scope: ClipboardSearchScope,
+  items: readonly Item[],
+): readonly Item[] => {
+  switch (scope) {
+    case "clips":
+      return items;
+    case "registry":
+      return [];
+  }
+};
 
 /**
  * Vertical arrows step through the search scopes from wherever focus is; the
