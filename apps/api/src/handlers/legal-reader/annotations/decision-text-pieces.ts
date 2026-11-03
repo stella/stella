@@ -3,8 +3,8 @@ import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-iden
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ReaderTextPiece } from "@stll/legal-ast/reader-text-quote";
 
-import { readerTextFields } from "@/api/handlers/case-law/decisions/read-response";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
+import { readerTextFields } from "@/api/lib/case-law/reader-text-fields";
 
 /**
  * The runs of text the decision reader draws marks in, built from the same

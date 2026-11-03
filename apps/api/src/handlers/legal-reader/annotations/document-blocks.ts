@@ -175,7 +175,7 @@ const resolveStatute = async (
   if (!allowsDerivedAi(version.descriptor)) {
     return { status: "withheld" };
   }
-  const readBlocks = async () =>
+  const readStatuteBlocks = async () =>
     await readVersionBlocks({
       surface: "search",
       row: version,
@@ -185,10 +185,10 @@ const resolveStatute = async (
     });
   return {
     status: "available",
-    readBlocks,
+    readBlocks: readStatuteBlocks,
     // The statute reader draws marks in its blocks' anchored text alone.
     readTextPieces: async () =>
-      (await readBlocks()).flatMap(readerAnchorPiecesOf),
+      (await readStatuteBlocks()).flatMap(readerAnchorPiecesOf),
   };
 };
 
