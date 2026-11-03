@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -5,6 +7,14 @@ import { useTranslations } from "use-intl";
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -48,6 +58,7 @@ export const SourceChips = ({
     (state) => state.registerSources,
   );
   const t = useTranslations("chat.sourceChips");
+  const [consultedOpen, setConsultedOpen] = useState(false);
   const cited = entries.filter((entry) => entry.relation === "cited");
   const consulted = entries.filter((entry) => entry.relation === "consulted");
 
@@ -59,6 +70,9 @@ export const SourceChips = ({
     return null;
   }
 
+  // Laid out by the answer's footer row: the cited sources and the
+  // disclosure's trigger sit in that row after Copy and Retry, wrapping only
+  // when they run out of room; the disclosed sources take a full row below.
   return (
     <>
       <Separator
@@ -66,8 +80,6 @@ export const SourceChips = ({
         data-chat-answer-citations-divider
         orientation="vertical"
       />
-      {/* The sources sit in the answer footer's own row, after Copy and
-          Retry: one line that wraps only when it runs out of room. */}
       <div className="contents" data-chat-answer-citations>
         {cited.length > 0 && (
           <SourceEntryList
@@ -77,18 +89,32 @@ export const SourceChips = ({
           />
         )}
         {consulted.length > 0 && (
-          <details className="group min-w-0">
-            <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
-              {t("alsoConsulted", { count: consulted.length })}
-            </summary>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <SourceEntryList
-                entries={consulted}
-                messageId={`${messageId}-consulted`}
-                workspaceId={workspaceId}
+          <Collapsible
+            className="contents"
+            onOpenChange={setConsultedOpen}
+            open={consultedOpen}
+          >
+            <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
+              <DirectionalIcon
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  consultedOpen && "rotate-90",
+                )}
+                flip={!consultedOpen}
+                icon={ChevronRightIcon}
               />
-            </div>
-          </details>
+              {t("alsoConsulted", { count: consulted.length })}
+            </CollapsibleTrigger>
+            <CollapsiblePanel className="w-full">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <SourceEntryList
+                  entries={consulted}
+                  messageId={`${messageId}-consulted`}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            </CollapsiblePanel>
+          </Collapsible>
         )}
       </div>
     </>
