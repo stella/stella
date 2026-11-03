@@ -546,7 +546,7 @@ export const installPgliteCorrespondenceSources = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261101224334_data_box_sources",
+      "20261102071300_data_box_sources",
       "migration.sql",
     ),
   ).filter((statement) =>
@@ -560,7 +560,7 @@ export const installPgliteCorrespondenceSources = async (
   const maintenance = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261101224534_correspondence_source_maintenance",
+      "20261102071500_correspondence_source_maintenance",
       "migration.sql",
     ),
   );
