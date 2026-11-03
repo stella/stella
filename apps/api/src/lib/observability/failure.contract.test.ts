@@ -1401,23 +1401,14 @@ describe("observeFailure channels", () => {
 
     const [line] = metricLines;
     expect(JSON.parse(line ?? "{}")).toMatchObject({
-      _aws: {
-        CloudWatchMetrics: [
-          {
-            Namespace: "Stella/Api",
-            Dimensions: [["sink", "reason"], []],
-            Metrics: [{ Name: "RequestTransientFailures", Unit: "Count" }],
-          },
-        ],
-      },
       sink: "contract.sink",
       reason: "network_reset",
       "service.version": APP_VERSION,
       RequestTransientFailures: 1,
     });
+    expect(JSON.parse(line ?? "{}")).not.toHaveProperty("_aws");
     expect(Object.keys(JSON.parse(line ?? "{}")).toSorted()).toEqual([
       "RequestTransientFailures",
-      "_aws",
       "reason",
       "service.version",
       "sink",

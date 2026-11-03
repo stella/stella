@@ -3,8 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
 import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
-import { parseUkFclDecision } from "./uk-fcl";
+import { parseUkFclDecision as uncheckedParseUkFclDecision } from "./uk-fcl";
+
+const parseUkFclDecision = guardParser(uncheckedParseUkFclDecision);
 
 const xml = await readFile(
   new URL("__fixtures__/uk-fcl.xml", import.meta.url),
@@ -263,4 +266,21 @@ test("retention refuses unhandled published siblings outside the body", () => {
       message: "Unmapped LegalDocML judgment text",
     });
   }
+});
+
+describe("LegalDocML tribunal decision", () => {
+  // A tribunal decision is `<judgment name="decision">`, dated by the work's
+  // `decision` date rather than a `judgment` one.
+  test("[2026] UKUT 79 (IAC) is read with its decision date", async () => {
+    const tribunal = await readFile(
+      new URL("__fixtures__/uk-fcl-ukut-iac-2026-79.xml", import.meta.url),
+      "utf-8",
+    );
+    const result = parse(tribunal).unwrap();
+    expect(result.caseNumber).toBe("[2026] UKUT 79 (IAC)");
+    expect(result.court).toBe("UKUT-IAC");
+    expect(result.decisionType).toBe("decision");
+    expect(result.decisionDate).toBe("2025-09-11");
+    expect(result.documentAst.blocks.length).toBeGreaterThan(200);
+  });
 });

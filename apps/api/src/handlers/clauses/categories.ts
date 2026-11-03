@@ -8,10 +8,7 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   isTreeParentGuardError,
   lockTree,
@@ -28,13 +25,13 @@ import type {
 // ── Schemas ─────────────────────────────────────────
 
 export const createCategoryBodySchema = v.object({
-  name: defaultVarcharSchema,
+  name: displayNameSchema(),
   description: v.optional(v.pipe(v.string(), v.maxLength(2000))),
   parentId: v.optional(resourceIdSchema("clauseCategory")),
 });
 
 export const updateCategoryBodySchema = v.object({
-  name: v.optional(defaultVarcharSchema),
+  name: v.optional(displayNameSchema()),
   description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
   parentId: v.optional(v.nullable(resourceIdSchema("clauseCategory"))),
   sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),

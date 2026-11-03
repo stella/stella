@@ -26,6 +26,7 @@ import {
   NEARLY_COMPLETE,
   NEVER_MEASURED,
 } from "./coverage-page.fixture";
+import type { CaseLawCoverageSource } from "./coverage.logic";
 
 const rootRoute = createRootRoute();
 
@@ -176,6 +177,44 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toMatch(/>100%</u);
   });
 
+  test("a count past the total never reads complete while reconciliation finds decisions missing", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  completeness: {
+                    state: "measured",
+                    stored: 1040,
+                    reported: 1000,
+                    storedAsOf: "2026-09-17T00:00:00.000Z",
+                    reportedAsOf: "2026-09-01T00:00:00.000Z",
+                    reportedBy: "publisher",
+                  },
+                  knownGaps: {
+                    type: "reconciled",
+                    summary: { missing: 30, shortSlices: 1, unlistedSlices: 0 },
+                    years: [
+                      { year: 2013, type: "gaps", missing: 30, shortSlices: 1 },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain('aria-valuetext="97%"');
+    expect(markup).not.toContain('aria-valuetext="100%"');
+  });
+
   test("a source nobody has measured is stated, not folded into the ratio", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
@@ -237,6 +276,35 @@ describe("the coverage page states what it counts", () => {
       `>${messages.caseLaw.coverage.healthCurrent}<`,
     );
     expect(markup).toContain("1 source needs attention");
+  });
+
+  // A fixed release's currency is the day it was taken, stated in the
+  // reader's locale beside the status, never a recent run.
+  test("a snapshot source states its status with the day it was taken", () => {
+    const snapshot: CaseLawCoverageSource = {
+      ...NEARLY_COMPLETE,
+      adapterKey: "pl-nsa",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
+    };
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [{ ...CZECHIA, sources: [snapshot] }],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.coverage.healthSnapshot);
+    expect(markup).not.toContain("source needs attention");
+    expect(markup).not.toContain("All sources up to date");
+    expect(markup).toContain('dateTime="2025-03-06"');
+    expect(markup).toContain("Mar 6, 2025");
+    // A live source states no such day.
+    expect(render(<CaseLawCoveragePage coverage={COVERAGE} />)).not.toContain(
+      "<time",
+    );
   });
 
   test("each country is a section a link from elsewhere can land on", () => {

@@ -128,6 +128,8 @@ let combinations: Context["values"][] = [
   {
     "inputs.pr_depth_only": false,
     "steps.changed-files.outputs.postgres_suites_required": "false",
+    // "false" runs the schema import selection, a Bun consumer.
+    "steps.changed-files.outputs.database_migrations_required": "false",
     "vars.CI_POSTGRES_PR_SELECTION": "off",
   },
 ];

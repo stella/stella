@@ -9,6 +9,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import {
   hasBlockInlines,
   parseDocumentAst,
+  plainTextOf,
 } from "@stll/legal-ast/document-ast";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -16,6 +17,7 @@ import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import {
+  annotationsDrawnIn,
   annotationTextAnchors,
   renderLinkAnnotations,
 } from "./annotation-anchors";
@@ -29,17 +31,12 @@ import {
   courtHeadnoteOrigin,
   decisionCaption,
   decisionDisplayReference,
-  decisionTopMatter,
-  editorialSupplementBlocks,
   footnoteParts,
   resolveDecisionLinkOverlaps,
-  topMatterBlocks,
   wrappedParagraphRuns,
 } from "./decision-text.logic";
 import type {
-  DecisionTopMatter,
   FootnoteParts,
-  TopMatterSource,
   WrappedParagraphRuns,
 } from "./decision-text.logic";
 import {
@@ -64,6 +61,16 @@ import type { DecisionReaderAdapters } from "./reader-adapters";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
 import type { ReaderSearchMatchRange } from "./reader-search";
+import {
+  decisionTopMatter,
+  editorialSupplementBlocks,
+  supplementBlockAnchorId,
+  topMatterBlocks,
+} from "./reader-text-pieces.logic";
+import type {
+  DecisionTopMatter,
+  TopMatterSource,
+} from "./reader-text-pieces.logic";
 import type {
   CitationAnchorSource,
   CitedProvisionTarget,
@@ -119,9 +126,6 @@ const NO_ACTIVE_MATCH = -1;
 const NO_SEARCH_RANGES: Record<string, ReaderSearchMatchRange[]> = {};
 
 const DECISION_REFERENCE_ID = "decision-reference";
-
-const supplementBlockAnchorId = (pieceId: string, start: number): string =>
-  `${pieceId}:${String(start)}`;
 
 /** The host a reader recognises, rather than a permalink nobody reads. */
 const attributionLabel = (href: string): string =>
@@ -251,6 +255,7 @@ const EditorialSupplementBody = ({
         annotationAnchors.filter(
           (annotation) => annotation.blockAnchorId === blockAnchorId,
         ),
+        block.text,
         block.start,
       );
       const content = (
@@ -494,6 +499,44 @@ export type DecisionTextAnchorPlacements = {
   provisionsByAnchorId: Map<string, ReactNode>;
 };
 
+/**
+ * The marks each block draws, by block id, with the block's text. Only the
+ * marks whose words are at their offsets in that text: the link overlays
+ * repeat these, so none may name other words.
+ */
+const annotationsDrawnByBlock = (
+  annotations: readonly AnnotationAnchorSource[],
+  blocks: readonly Block[],
+) => {
+  const blockByAnchor = new Map(
+    blocks.map((block) => [block.anchorId, block] as const),
+  );
+  const annotationsByAnchor = new Map<string, AnnotationAnchorSource[]>();
+  for (const annotation of annotations) {
+    const list = annotationsByAnchor.get(annotation.blockAnchorId);
+    if (list === undefined) {
+      annotationsByAnchor.set(annotation.blockAnchorId, [annotation]);
+      continue;
+    }
+    list.push(annotation);
+  }
+  const annotationsByBlock = new Map<string, AnnotationAnchorSource[]>();
+  const blockTextById = new Map<string, string>();
+  for (const [anchorId, anchorAnnotations] of annotationsByAnchor) {
+    const block = blockByAnchor.get(anchorId);
+    if (block === undefined || !hasBlockInlines(block)) {
+      continue;
+    }
+    const text = plainTextOf(block.inlines);
+    blockTextById.set(block.id, text);
+    annotationsByBlock.set(
+      block.id,
+      annotationsDrawnIn(anchorAnnotations, text),
+    );
+  }
+  return { annotationsByBlock, blockTextById };
+};
+
 const buildAnchorsByPieceId = ({
   adapters,
   annotations,
@@ -540,22 +583,10 @@ const buildAnchorsByPieceId = ({
     }
     spans.push(citation);
   }
-  const blockIdByAnchor = new Map(
-    blocks.map((block) => [block.anchorId, block.id] as const),
+  const { annotationsByBlock, blockTextById } = annotationsDrawnByBlock(
+    annotations,
+    blocks,
   );
-  const annotationsByBlock = new Map<string, AnnotationAnchorSource[]>();
-  for (const annotation of annotations) {
-    const blockId = blockIdByAnchor.get(annotation.blockAnchorId);
-    if (blockId === undefined) {
-      continue;
-    }
-    const list = annotationsByBlock.get(blockId);
-    if (list === undefined) {
-      annotationsByBlock.set(blockId, [annotation]);
-      continue;
-    }
-    list.push(annotation);
-  }
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
   const blockIds = new Set([
     ...Object.keys(citationSpans),
@@ -573,7 +604,12 @@ const buildAnchorsByPieceId = ({
     // Plain inline markup keeps the paragraph's own wrapping and
     // justification, and overlapping marks are split into runs so no word is
     // printed twice. The toolbar handles clicks on the mark by id.
-    anchors.push(...annotationTextAnchors(blockAnnotations ?? []));
+    anchors.push(
+      ...annotationTextAnchors(
+        blockAnnotations ?? [],
+        blockTextById.get(blockId) ?? "",
+      ),
+    );
     for (const span of citationSpans[blockId] ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
         blockAnnotations ?? [],
@@ -582,7 +618,7 @@ const buildAnchorsByPieceId = ({
       anchors.push({
         end: span.end,
         key: `decision:${span.source.id}`,
-        render: (children, { isRangeStart }): ReactElement => {
+        render: (children): ReactElement => {
           const marked = renderLinkAnnotations({
             annotations: linkAnnotations,
             children,
@@ -596,7 +632,6 @@ const buildAnchorsByPieceId = ({
             treatment: span.source.treatment,
             blockId,
             children: marked,
-            showBadge: isRangeStart,
           });
         },
         start: span.start,

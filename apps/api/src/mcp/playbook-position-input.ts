@@ -31,7 +31,7 @@ import type {
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { gradedPositionHasContent } from "@/api/lib/workflow/playbook-positions-validation";
-import { uuidInputSchema } from "@/api/mcp/tool-utils";
+import { uuidInputSchema } from "@/api/mcp/input-schemas";
 
 /** Answer types an AI ask can extract that need no further configuration. */
 export const PLAYBOOK_ANSWER_TYPES = ["text", "date", "int"] as const;
@@ -486,7 +486,7 @@ const toGradedPosition = ({
     // Server-owned: the deterministic check and the ask are not in the input.
     // The stored ask carries its `derived` question, which `deriveAutoAsks`
     // reuses while the rules hash still matches.
-    ...(stored?.check === undefined ? {} : { check: stored.check }),
+    ...(stored?.check !== undefined ? { check: stored.check } : {}),
     ask: stored?.ask ?? { mode: "auto" },
     ...(purpose === undefined ? {} : { purpose }),
     ...(guidance === undefined ? {} : { guidance }),

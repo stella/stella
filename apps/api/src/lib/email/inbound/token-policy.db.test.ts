@@ -8,6 +8,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   getTestDb,
   releaseTestDb,
@@ -199,8 +200,8 @@ afterAll(async () => {
     await db
       .delete(workspaces)
       .where(eq(workspaces.organizationId, organizationB));
-    await db.delete(organization).where(eq(organization.id, organizationA));
-    await db.delete(organization).where(eq(organization.id, organizationB));
+    await deleteOrganizationsForTest(db, [organizationA]);
+    await deleteOrganizationsForTest(db, [organizationB]);
   } finally {
     await releaseTestDb();
   }

@@ -41,11 +41,12 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
+import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -95,6 +96,7 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -279,6 +281,9 @@ export const ChatThreadPage = ({
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -302,8 +307,16 @@ export const ChatThreadPage = ({
     threadRef,
     workspaceId,
   });
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage,
+    ensureAIAvailable,
+    holdQueueForMessageEdit,
+    messages,
+    startUserMessageEdit,
+    threadRef,
+  });
 
-  const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
+  const sentMessageHistory = getUserMessageHistory(messages);
 
   // Suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   const {
@@ -366,7 +379,7 @@ export const ChatThreadPage = ({
   };
   const controller = useChatEditor({
     followupAnalytics: { surface: "chat-thread" },
-    sentMessageHistoryHtml,
+    sentMessageHistory,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -555,7 +568,7 @@ export const ChatThreadPage = ({
                 workspaceId: threadRef.workspaceId,
               }
             : { scope: "global", threadId: createChatThreadId() };
-        await startNewThreadCommandHandoff({
+        const handoff = await startNewThreadCommandHandoff({
           activeOrganizationId,
           context: {
             ...chatThreadContext,
@@ -567,6 +580,10 @@ export const ChatThreadPage = ({
           queryClient,
           threadRef: newThreadRef,
         });
+        if (handoff.isErr()) {
+          notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
         leave();
         if (newThreadRef.scope === "workspace") {
           await navigate({
@@ -598,7 +615,12 @@ export const ChatThreadPage = ({
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
         return CHAT_SEND_KEPT;
       }
-      await sendMessage(await buildChatRequestMessage(draft));
+      const message = await buildChatRequestMessage(draft);
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -726,6 +748,7 @@ export const ChatThreadPage = ({
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
                         threadRef={threadRef}
+                        userMessageEdit={userMessageEdit}
                         workspaceId={workspaceId}
                       />
                       <ChatThreadRecap
@@ -791,7 +814,15 @@ export const ChatThreadPage = ({
                         if (!(await ensureAIAvailable())) {
                           return CHAT_SEND_KEPT;
                         }
-                        await sendMessage(await buildChatRequestMessage(draft));
+                        const message = await buildChatRequestMessage(draft);
+                        if (message.isErr()) {
+                          notifyUserError(
+                            message.error,
+                            t("chat.sendErrorMessageEmpty"),
+                          );
+                          return CHAT_SEND_KEPT;
+                        }
+                        await sendMessage(message.value);
                         return CHAT_SEND_SENT;
                       }),
                       "chat-thread-page.submit",

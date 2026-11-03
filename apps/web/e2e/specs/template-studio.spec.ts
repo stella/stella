@@ -4,6 +4,11 @@ import path from "node:path";
 
 import { apiDelete, apiUploadTemplate } from "../helpers/api";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -41,11 +46,13 @@ test.describe("Template Studio", () => {
         name: templateName,
         exact: true,
       });
-      await expect(template).toBeVisible({ timeout: 45_000 });
+      await expect(template).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+      });
       await template.click();
       const editor = page.getByTestId("folio-editor");
       await expect(editor.locator("[data-page-number]").first()).toBeVisible({
-        timeout: 45_000,
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
       });
       await expect(
         page
@@ -130,7 +137,9 @@ test.describe("Template Studio", () => {
         exact: true,
         name: templateName,
       });
-      await expect(templateButton).toBeVisible({ timeout: 30_000 });
+      await expect(templateButton).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
       const historyLengthBeforeOpen = await page.evaluate(
         () => window.history.length,
       );
@@ -145,12 +154,14 @@ test.describe("Template Studio", () => {
       const fixtureText = page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
       });
-      await expect(fixtureText).toBeVisible({ timeout: 45_000 });
+      await expect(fixtureText).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+      });
       await fixtureText.click();
       await page.keyboard.insertText(editToken);
       await expect(
         page.locator(".layout-run-text", { hasText: editToken.trim() }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const documentEditor = page.getByRole("textbox", {
         name: "Document content",
@@ -196,7 +207,7 @@ test.describe("Template Studio", () => {
 
       await expect(
         page.locator(".layout-run-text", { hasText: editToken.trim() }),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
       await expect(documentEditor).toContainText(conditionName);
     } finally {
       if (templateId !== null) {

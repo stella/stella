@@ -23,6 +23,7 @@ const db = {
 const claim = {
   id: "export",
   userId: toSafeId<"user">("queue-account"),
+  subject: { kind: "account" },
   token: "attempt-token",
   objectKey: "account-exports/attempt.zip",
   leaseExpiresAt: new Date(
@@ -38,6 +39,7 @@ const fixture = () => {
     claim: async () => claim,
     build: async ({ objectKey }) => {
       built.push(objectKey);
+      return { kind: "account" } as const;
     },
     complete: async () => true,
     fail: async () => true,

@@ -12,12 +12,12 @@ import {
   type ContactImportLabeledField,
   type ContactImportTargetField,
 } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
-
 import {
   contactCustomFieldSchema,
   contactMetadataSchema,
-} from "@/api/db/schema-validators";
+} from "@stll/api-contract/contact-write";
+import { assertProperty } from "@stll/property-testing";
+
 import {
   assertContactImportHeaderAliases,
   contactImportSkipReason,

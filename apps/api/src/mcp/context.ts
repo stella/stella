@@ -200,7 +200,10 @@ export type McpRequestContext = {
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
-      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+      scope: Omit<
+        Parameters<typeof readCaseLawProvisionScope>[1],
+        "idSetMax" | "linkScanMax"
+      >,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
     /** Whether any recorded link names the provision's act. */
     readProvisionWorkLinked?: (
@@ -390,9 +393,9 @@ export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
       type: "user",
     },
     trigger: currentExecution?.trigger ?? { type: "direct" },
-    ...(currentExecution?.runId === undefined
-      ? {}
-      : { runId: currentExecution.runId }),
+    ...(currentExecution?.runId !== undefined
+      ? { runId: currentExecution.runId }
+      : {}),
     approval: {
       status: "approved",
       userId: context.userId,

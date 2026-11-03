@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import type { ScopedResponse } from "@stll/api-client";
 
 import { toAPIError } from "@/lib/errors/api";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { isAuthClientErrorCode, toAuthClientError } from "@/lib/errors/auth";
 
 type AuthErrorValue = {
   code?: string | undefined;
@@ -18,15 +18,13 @@ type UserVisibleReporter = (
   routeTemplate: string | undefined,
 ) => void;
 
-// These codes have an explicit inline outcome in the web client. Every other
-// server-declared auth code is unexpected and must not disappear into the
-// SDK's console-only error handling.
+// These codes have an explicit inline outcome in the web client, as does every
+// code with a message of its own. Any other server-declared auth code is
+// unexpected and must not disappear into the SDK's console-only error handling.
 const HANDLED_AUTH_CLIENT_CODES: ReadonlySet<string> = new Set([
-  "DISPOSABLE_EMAIL_NOT_ALLOWED",
   "INVALID_BACKUP_CODE",
   "INVALID_CODE",
   "INVALID_OTP",
-  "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
 ]);
 
 export const SOCIAL_LINK_HINT_PATH = "/social-link-hint";
@@ -41,6 +39,7 @@ export const reportUnhandledAuthClientError = (
 ): void => {
   if (
     error.code === undefined ||
+    isAuthClientErrorCode(error.code) ||
     HANDLED_AUTH_CLIENT_CODES.has(error.code) ||
     isSocialLinkHintRequest(requestUrl)
   ) {

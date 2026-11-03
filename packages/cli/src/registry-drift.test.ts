@@ -8,6 +8,7 @@ import {
   removedCommandError,
   shouldReportRegistryDrift,
 } from "./registry-drift.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const delta = (over: Partial<RegistryDelta> = {}): RegistryDelta => ({
   added: [],
@@ -101,7 +102,7 @@ describe("removedCommandError", () => {
       delta: delta({ removed: ["list_matters"] }),
     });
     expect(message).toBe(
-      "this CLI is too old for this server; run npm i -g @stll/cli@latest\n",
+      `${commandUnavailableMessage({ type: "unknown-to-server", command: "matter list" })}\n`,
     );
   });
 
@@ -111,7 +112,7 @@ describe("removedCommandError", () => {
       baked: generatedRouteMap,
       delta: delta({ removed: ["read_capability"] }),
     });
-    expect(message).toContain("this CLI is too old");
+    expect(message).toContain("unknown");
   });
 
   for (const access of ["read", "write"] as const) {
@@ -137,7 +138,7 @@ describe("removedCommandError", () => {
           baked,
           delta: delta({ removed: [removed] }),
         }),
-      ).toContain("this CLI is too old");
+      ).toContain("unknown");
       expect(
         removedCommandError({
           argv: ["operation"],
@@ -159,12 +160,22 @@ describe("removedCommandError", () => {
         baked: generatedRouteMap,
         delta: delta({ removed: ["save_clause"], changed: ["list_matters"] }),
       }),
-    ).toContain("this CLI is too old");
+    ).toBeUndefined();
     expect(
       removedCommandError({
         argv: ["matter"],
         baked: generatedRouteMap,
         delta: delta({ removed: ["list_matters"] }),
+      }),
+    ).toBeUndefined();
+  });
+
+  test("a validated live schema change does not imply protocol incompatibility", () => {
+    expect(
+      removedCommandError({
+        argv: ["matter", "list"],
+        baked: generatedRouteMap,
+        delta: delta({ changed: ["list_matters"] }),
       }),
     ).toBeUndefined();
   });
@@ -178,4 +189,16 @@ describe("removedCommandError", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+test("inherited object properties never resolve as retired command bindings", () => {
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    expect(
+      removedCommandError({
+        argv: [name],
+        baked: generatedRouteMap,
+        delta: { added: [], changed: [], removed: ["list_matters"] },
+      }),
+    ).toBeUndefined();
+  }
 });

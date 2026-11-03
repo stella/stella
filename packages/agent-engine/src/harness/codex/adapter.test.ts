@@ -13,7 +13,14 @@ import {
   translateThreadEvents,
 } from "@tanstack/ai-codex";
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -23,6 +30,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
+
+import { createDetached } from "@stll/errors";
 
 import {
   FAKE_MCP_CALL,
@@ -40,6 +50,14 @@ import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
+import { startAppServer } from "./app-server-client";
+import {
+  CODEX_ITEM_TYPES,
+  CODEX_NOTIFICATIONS,
+  CODEX_SERVER_REQUESTS,
+  InitializeResponseSchema,
+} from "./protocol";
+import { CODEX_APPROVAL_OPTIONS } from "./turn";
 
 const FAKE_SERVER = path.join(
   import.meta.dir,
@@ -882,5 +900,175 @@ describe("Codex items as chat parts", () => {
           part.type === "tool-result" && part.toolCallId === "call-failed",
       ),
     ).toMatchObject({ state: "error" });
+  });
+});
+
+/**
+ * Checks against a real `codex` CLI when one is installed. Nothing here
+ * signs in or sends a prompt: the handshake is `initialize` only, and the
+ * protocol schema comes from `codex app-server generate-json-schema`, which
+ * runs offline. Without a CLI the suite is skipped; the fake-server suites
+ * above always run.
+ */
+
+const codex = Bun.which("codex");
+
+/** Client methods the adapter calls. */
+const CLIENT_METHODS = [
+  "initialize",
+  "account/read",
+  "model/list",
+  "thread/start",
+  "thread/resume",
+  "thread/unarchive",
+  "turn/start",
+  "turn/interrupt",
+] as const;
+
+const OneOfMethods = v.object({
+  oneOf: v.array(
+    v.object({
+      properties: v.object({
+        method: v.object({ enum: v.tuple([v.string()]) }),
+      }),
+    }),
+  ),
+});
+
+const DecisionSchema = v.object({
+  definitions: v.record(
+    v.string(),
+    v.object({
+      oneOf: v.optional(
+        v.array(v.object({ enum: v.optional(v.array(v.string())) })),
+      ),
+    }),
+  ),
+});
+
+const ThreadItemTypes = v.object({
+  definitions: v.object({
+    ThreadItem: v.object({
+      oneOf: v.array(
+        v.object({
+          properties: v.object({
+            type: v.object({ enum: v.tuple([v.string()]) }),
+          }),
+        }),
+      ),
+    }),
+  }),
+});
+
+const readJson = async (directory: string, file: string): Promise<unknown> =>
+  Bun.file(path.join(directory, file)).json();
+
+const methodsIn = async (directory: string, file: string) =>
+  v
+    .parse(OneOfMethods, await readJson(directory, file))
+    .oneOf.map(({ properties }) => properties.method.enum[0]);
+
+const decisionsIn = async (directory: string, file: string, name: string) =>
+  (
+    v.parse(DecisionSchema, await readJson(directory, file)).definitions[name]
+      ?.oneOf ?? []
+  ).flatMap(({ enum: values }) => values ?? []);
+
+describe.skipIf(codex === null)("the installed codex CLI", () => {
+  // Made only when the suite runs: a skipped describe still collects.
+  let root = "";
+  beforeAll(() => {
+    root = mkdtempSync(path.join(tmpdir(), "stella-real-codex-"));
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  test("completes the initialize handshake with a stella-owned home", async () => {
+    const codexHome = path.join(root, "home");
+    const cliErrors: unknown[] = [];
+    mkdirSync(codexHome);
+    const client = startAppServer({
+      launch: { executable: codex ?? "", args: ["app-server"] },
+      detached: createDetached((error) => {
+        cliErrors.push(error);
+      }),
+      cwd: root,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        HOME: process.env["HOME"] ?? "",
+        CODEX_HOME: codexHome,
+      },
+      handlers: {
+        notification: () => undefined,
+        request: () => undefined,
+        violation: () => undefined,
+        exit: () => undefined,
+      },
+    });
+    const initialized = await client.request("initialize", {
+      clientInfo: { name: "stella", title: "stella", version: "0.0.0" },
+      capabilities: { experimentalApi: true, requestAttestation: false },
+    });
+    await client.kill();
+    expect(cliErrors).toEqual([]);
+    if (Result.isError(initialized)) {
+      throw initialized.error;
+    }
+    const parsed = v.parse(InitializeResponseSchema, initialized.value);
+    expect(parsed.codexHome).toContain("home");
+    expect(parsed.userAgent).toMatch(/^stella\/\d+\.\d+\.\d+/u);
+  });
+
+  test("the protocol still has every method, item kind and decision the adapter relies on", async () => {
+    const out = path.join(root, "schema");
+    const generated = Bun.spawnSync([
+      codex ?? "",
+      "app-server",
+      "generate-json-schema",
+      "--out",
+      out,
+    ]);
+    expect(generated.exitCode).toBe(0);
+
+    const serverRequests = await methodsIn(out, "ServerRequest.json");
+    expect(new Set(serverRequests)).toEqual(
+      new Set(Object.keys(CODEX_SERVER_REQUESTS)),
+    );
+
+    const notifications = new Set(
+      await methodsIn(out, "ServerNotification.json"),
+    );
+    for (const method of Object.keys(CODEX_NOTIFICATIONS)) {
+      expect(notifications.has(method)).toBe(true);
+    }
+
+    const clientMethods = new Set(await methodsIn(out, "ClientRequest.json"));
+    for (const method of CLIENT_METHODS) {
+      expect(clientMethods.has(method)).toBe(true);
+    }
+
+    const itemTypes = v
+      .parse(
+        ThreadItemTypes,
+        await readJson(out, "codex_app_server_protocol.v2.schemas.json"),
+      )
+      .definitions.ThreadItem.oneOf.map(
+        ({ properties }) => properties.type.enum[0],
+      );
+    expect(new Set(itemTypes)).toEqual(new Set(CODEX_ITEM_TYPES));
+
+    const commandDecisions = await decisionsIn(
+      out,
+      "CommandExecutionRequestApprovalResponse.json",
+      "CommandExecutionApprovalDecision",
+    );
+    const fileDecisions = await decisionsIn(
+      out,
+      "FileChangeRequestApprovalResponse.json",
+      "FileChangeApprovalDecision",
+    );
+    for (const { id } of CODEX_APPROVAL_OPTIONS) {
+      expect(commandDecisions).toContain(id);
+      expect(fileDecisions).toContain(id);
+    }
   });
 });

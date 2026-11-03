@@ -112,8 +112,8 @@ describe("corpus reader schema at persistence boundaries", () => {
     }
   });
 
-  test("refuses head matter after body with a typed structural rejection", () => {
-    const report = spyOn(logger, "error");
+  test("stores head matter after body and reports the typed degradation", () => {
+    const report = spyOn(logger, "warn");
     try {
       const ast = decisionAst();
       const late = ast.blocks.at(1) ?? expect.unreachable();
@@ -124,21 +124,58 @@ describe("corpus reader schema at persistence boundaries", () => {
           { ...late, role: "apparatus" },
         ],
       };
-      expect(
-        prepareCorpusAst({
-          ast: invalid,
-          fallbackText: "Decision text.",
+      const prepared = prepareCorpusAst({
+        ast: invalid,
+        fallbackText: "Decision text.",
+        source: "synthetic",
+        parserVersion: 1,
+      }).unwrap();
+      expect(prepared.type).toBe("readable");
+      if (prepared.ast === null || !("blocks" in prepared.ast)) {
+        expect.unreachable("Late head matter remains a readable document");
+      }
+      expect(prepared.ast.blocks.map(({ id }) => id)).toEqual(["p1", "p2"]);
+      const storedLate = prepared.ast.blocks.at(1);
+      expect(storedLate?.type).toBe("paragraph");
+      if (storedLate?.type !== "paragraph") {
+        expect.unreachable("Late fixture remains a paragraph");
+      }
+      expect(storedLate.role).toBe("apparatus");
+      expect(report).toHaveBeenLastCalledWith(
+        "case_law.ingestion.ast_head_matter_order",
+        expect.objectContaining({
           source: "synthetic",
           parserVersion: 1,
-        }).unwrap(),
-      ).toEqual({ type: "text-only", ast: EMPTY_AST });
-      expect(report).toHaveBeenLastCalledWith(
-        "case_law.ingestion.ast_schema_rejected",
-        expect.objectContaining({
-          "error.type": "IngestedAstRejectedError",
-          checks: ["Head matter must precede the decision body"],
+          lateBlockCount: 1,
         }),
       );
+    } finally {
+      report.mockRestore();
+    }
+  });
+
+  test("stores late head matter unchanged, so its extra fields survive", () => {
+    const report = spyOn(logger, "warn");
+    try {
+      const ast = decisionAst();
+      const late = ast.blocks.at(1) ?? expect.unreachable();
+      const stored = {
+        ...ast,
+        parserExtra: { kept: true },
+        blocks: [
+          ast.blocks.at(0) ?? expect.unreachable(),
+          { ...late, role: "apparatus" },
+        ],
+      };
+      const keysBefore = JSON.stringify(stored);
+      const prepared = prepareCorpusAst({
+        ast: stored,
+        fallbackText: "Decision text.",
+        source: "synthetic",
+      }).unwrap();
+      // The very object the parser produced, not a rebuilt copy.
+      expect(Object.is(prepared.ast, stored)).toBe(true);
+      expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
     } finally {
       report.mockRestore();
     }

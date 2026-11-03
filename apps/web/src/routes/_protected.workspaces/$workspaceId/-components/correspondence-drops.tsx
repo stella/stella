@@ -11,13 +11,13 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { CorrespondenceDrop } from "@stll/api-contract/correspondence";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionPanel,
-  AccordionTrigger,
-} from "@stll/ui/accordion";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { ChevronDownIcon } from "@stll/ui/icons";
 import {
   Table,
   TableBody,
@@ -52,16 +52,26 @@ export const CorrespondenceDrops = ({
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
   return (
-    <Accordion onValueChange={(value) => setExpanded(value.length > 0)}>
-      <AccordionItem value="drops">
-        <AccordionTrigger className="min-h-11">
+    // One disclosure, so a Collapsible. The table mounts only once opened:
+    // it pages its own query, which a closed panel must not start.
+    <Collapsible onOpenChange={setExpanded} open={expanded}>
+      <CollapsibleTrigger
+        render={<Button className="w-full" variant="plain" />}
+      >
+        <span className="flex min-h-11 w-full items-center justify-between gap-4 py-4 text-sm font-medium">
           {t("correspondence.drops.title")}
-        </AccordionTrigger>
-        <AccordionPanel>
+          <ChevronDownIcon
+            aria-hidden
+            className="size-4 shrink-0 opacity-80 transition-transform duration-200 ease-in-out in-data-panel-open:rotate-180"
+          />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <div className="pb-4 text-sm">
           {expanded && <CorrespondenceDropsTable workspaceId={workspaceId} />}
-        </AccordionPanel>
-      </AccordionItem>
-    </Accordion>
+        </div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 };
 

@@ -46,6 +46,31 @@ describe("assistant message actions", () => {
     ).toEqual([false, false, true, false]);
   });
 
+  test("hold retry back while the answer waits on the user", () => {
+    const pendingApproval = {
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: "{}",
+      id: "call-1",
+      input: {},
+      name: "save_document",
+      state: "approval-requested",
+      type: "tool-call",
+    } satisfies PersistedChatMessage["parts"][number];
+    const canRetry = (parts: PersistedChatMessage["parts"]) =>
+      canRetryAssistantMessage({
+        error: undefined,
+        isGenerating: false,
+        messageId: "a1",
+        messages: [
+          message("u1", "user"),
+          { ...message("a1", "assistant"), parts },
+        ],
+      });
+
+    expect(canRetry([])).toBe(true);
+    expect(canRetry([pendingApproval])).toBe(false);
+  });
+
   test("offer a fork on every answer but a running latest one", () => {
     expect(
       ["a1", "a2"].flatMap((messageId) =>

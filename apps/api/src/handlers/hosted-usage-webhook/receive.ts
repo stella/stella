@@ -29,8 +29,11 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
+
 import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { captureError } from "@/api/lib/analytics/capture";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getHostedUsageProviderApiVersion,
   getHostedUsageProviderKind,
@@ -56,6 +59,7 @@ import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/w
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -78,6 +82,31 @@ const respond = (statusCode: number, message: string): Response =>
     status: statusCode,
     headers: { "content-type": "application/json" },
   });
+
+const WEBHOOK_FAILED = failureSink({
+  event: "usage_provider.webhook.failed",
+  expected: [],
+});
+
+/** A 5xx the provider retries, built from what failed. */
+const respondFailure = (
+  cause: unknown,
+  statusCode: 500 | 503,
+  message: string,
+  eventId?: string,
+): Response =>
+  observedResponse(
+    {
+      sink: WEBHOOK_FAILED,
+      cause,
+      ctx: {
+        source: "usage_provider.webhook",
+        ...(eventId === undefined ? {} : { eventId }),
+      },
+    },
+    JSON.stringify({ message }),
+    { status: statusCode, headers: { "content-type": "application/json" } },
+  );
 
 class HostedProviderContractMismatch extends TaggedError(
   "HostedProviderContractMismatch",
@@ -104,7 +133,18 @@ export const receiveHostedUsageWebhook = async (
     // Hosted usage management is not configured on this deployment. We must
     // not 404 — that would tell a probing attacker the route
     // exists; 503 reads as "deliberately unavailable here."
-    return respond(503, "Hosted usage management not configured");
+    return respondFailure(
+      classifyFailure(
+        new HandlerError({
+          status: 503,
+          code: "hosted_usage_not_configured",
+          message: "Hosted usage management is not configured",
+        }),
+        "hosted_usage_not_configured",
+      ),
+      503,
+      "Hosted usage management not configured",
+    );
   }
 
   const rawBody = ctx.body;
@@ -224,11 +264,16 @@ export const receiveHostedUsageWebhook = async (
       payload,
       rawBody,
     });
-    if (recorded === UNKNOWN_EVENT_RECORD.retry) {
+    if (typeof recorded === "object") {
       // Nothing committed: the record's insert and result update share one
       // transaction, and the insert is keyed on the event id, so the
       // provider's retry of this 500 records it once.
-      return respond(500, "Event record failed");
+      return respondFailure(
+        recorded.retry,
+        500,
+        "Event record failed",
+        eventId,
+      );
     }
     return respond(200, "Event type ignored");
   }
@@ -290,20 +335,12 @@ export const receiveHostedUsageWebhook = async (
     // NOT committed either. The provider will retry on our 500 and the
     // next attempt finds a clean table and tries again — that's
     // the whole point of doing dedupe + dispatch in one tx.
-    // Failure visibility comes from captureError and the provider's
-    // webhook delivery dashboard; we deliberately do
+    // Failure visibility comes from the answer's own record and the
+    // provider's webhook delivery dashboard; we deliberately do
     // NOT persist a failure row, because that would re-introduce
     // the "dedupe committed without dispatch" hole this refactor
     // closed.
-    captureError(
-      error,
-      handlerErrorContext("usageWebhook.dispatch", {
-        source: "usage_provider.webhook.dispatch",
-        eventId,
-        eventType: envelope.type,
-      }),
-    );
-    return respond(500, "Dispatch failed");
+    return respondFailure(error, 500, "Dispatch failed", eventId);
   }
 
   if (outcome.kind === "duplicate") {
@@ -337,12 +374,15 @@ const UNKNOWN_EVENT_RECORD = {
   written: "written",
   /** Postgres refused the data itself, which a redelivery carries unchanged. */
   rejected: "rejected",
-  /** Anything else: the provider redelivers and the write runs again. */
-  retry: "retry",
 } as const;
 
+/**
+ * Written or rejected, or anything else with its cause: the provider
+ * redelivers and the write runs again.
+ */
 type UnknownEventRecord =
-  (typeof UNKNOWN_EVENT_RECORD)[keyof typeof UNKNOWN_EVENT_RECORD];
+  | (typeof UNKNOWN_EVENT_RECORD)[keyof typeof UNKNOWN_EVENT_RECORD]
+  | { readonly retry: unknown };
 
 const unknownEventRecordRejected = failureSink({
   event: "usage_provider.webhook.unknown_event_persist",
@@ -397,15 +437,7 @@ const persistUnknownEventType = async ({
       });
       return UNKNOWN_EVENT_RECORD.rejected;
     }
-    captureError(
-      error,
-      handlerErrorContext("hostedusagewebhook.persistUnknownEventType", {
-        source: "usage_provider.webhook.unknown_event_persist",
-        eventId,
-        eventType,
-      }),
-    );
-    return UNKNOWN_EVENT_RECORD.retry;
+    return { retry: error };
   }
 };
 

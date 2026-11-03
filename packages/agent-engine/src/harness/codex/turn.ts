@@ -831,10 +831,16 @@ export class CodexTurnSession {
     }
     this.interrupting = true;
     await settlesWithin(this.started.promise, this.gracePeriodMs);
-    await client.request("turn/interrupt", {
+    const requested = await client.request("turn/interrupt", {
       threadId: this.threadId,
       turnId: this.turnId,
     });
+    if (Result.isError(requested)) {
+      // A refused interrupt is never confirmed either; ending the turn here
+      // lets the cleanup that follows the terminal event kill the harness.
+      this.emit({ type: "turn.interrupted" });
+      return;
+    }
     if (!(await settlesWithin(this.terminal.promise, this.gracePeriodMs))) {
       // The harness did not confirm; the shutdown that follows kills it.
       this.emit({ type: "turn.interrupted" });

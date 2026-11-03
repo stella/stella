@@ -45,6 +45,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -235,9 +236,7 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(inArray(organization.id, [organizationId]));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   // The user outlives its organization; later suites in a shared batch
   // must not see it.
   await testDb.delete(user).where(inArray(user.id, [userId]));
