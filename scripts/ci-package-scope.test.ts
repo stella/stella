@@ -437,7 +437,7 @@ test("the exact README change derives its genuine readers without package jobs",
       .map((reader) => reader.file),
   ).toEqual([
     ".github/workflows/ci.yml:ci-checks-policy:Documentation source policy rule",
-    ".github/workflows/ci.yml:ci-checks-policy:Instruction references",
+    ".github/workflows/ci.yml:ci-checks-policy:Instruction policy",
   ]);
 }, 25_000);
 

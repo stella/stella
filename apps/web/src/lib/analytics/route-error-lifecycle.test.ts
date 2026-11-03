@@ -74,6 +74,46 @@ describe("route error lifecycle diagnostics", () => {
     });
   });
 
+  test.each([
+    {
+      error: new TypeError(
+        "Failed to fetch dynamically imported module: https://app.test/assets/route-error-lifecycle-loaded.js",
+      ),
+      reported: false,
+    },
+    {
+      error: new TypeError("Importing a module script failed."),
+      reported: false,
+    },
+    { error: new RangeError("Unrelated load failure"), reported: true },
+  ])(
+    "reports a diagnostics load failure unless preload recovery owns it ($error.message)",
+    async ({ error, reported }) => {
+      const { analytics, errors, events } = setup();
+      const controller = createRouteErrorLifecycleController(
+        analytics,
+        async () => {
+          throw error;
+        },
+      );
+      controller.caught(ROUTE_TEMPLATE);
+
+      await controller.retryStarted(FIRST_REFERENCE, "retry-route");
+
+      expect(errors).toEqual(
+        reported
+          ? [
+              {
+                context: { operation: "route-error.load", type: "detached" },
+                error,
+              },
+            ]
+          : [],
+      );
+      expect(events).toEqual([]);
+    },
+  );
+
   test("reads the errored route or attempted leaf at catch time", () => {
     expect(
       resolveCaughtRouteTemplate([

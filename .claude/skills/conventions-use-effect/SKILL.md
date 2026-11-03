@@ -21,14 +21,15 @@ Background: React's own guide,
 Before reaching for any effect, walk this list top to bottom and stop at the
 first match:
 
-1. **Can it be derived during render?** Then derive it. (Rule 1)
-2. **Is it data fetching?** Use TanStack Query. (Rule 2)
+1. **Can it be derived during render?** Then derive it. (Rule 1) [review]
+2. **Is it data fetching?** Use TanStack Query. (Rule 2) [review]
 3. **Does it happen in response to a user action?** Do it in the event handler. (Rule 3)
+   [review]
 4. **Does it reset state when an id/prop changes?** Remount with `key`. (Rule 5)
-5. **Is it genuine external-system synchronization?** Use `useMountEffect`
-   or `useExternalSyncEffect`. (Rule 4)
+   [review]
 
-If none match, you almost certainly do not need an effect.
+If none match and it is not genuine external-system synchronization (Rule 4),
+you almost certainly do not need an effect.
 
 ## Rule 1 — derive state, do not sync it
 

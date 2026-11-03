@@ -1,0 +1,61 @@
+{
+  "package": "@stll/start-runtime",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/runtime.d.ts",
+      "exports": [
+        {
+          "name": "ServerModuleGraphVerification",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "StartRuntimeError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "createStartRuntime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "serveStartRuntime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "verifyServerModuleGraph",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./local-module-loader": {
+      "type": "module",
+      "file": "./src/local-module-loader.d.ts",
+      "exports": [
+        {
+          "name": "LocalModuleLoadError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "isWithinRoot",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "loadLocalModule",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/local-module-loader.d.ts": "import path from \"node:path\";\ndeclare const LocalModuleLoadError_base: import(\"better-result\").TaggedErrorClass<\"LocalModuleLoadError\">;\nexport declare class LocalModuleLoadError extends LocalModuleLoadError_base<{\n    code: \"invalid-path\" | \"resolution-failed\" | \"module-failed\";\n    message: string;\n    cause?: unknown;\n}> {\n}\ntype LoadLocalModuleOptions = {\n    root: string;\n    modulePath: string;\n};\ntype PathContainmentOptions = {\n    pathApi: Pick<typeof path, \"isAbsolute\" | \"relative\" | \"resolve\" | \"sep\">;\n    root: string;\n    target: string;\n};\nexport declare const isWithinRoot: ({ pathApi, root, target, }: PathContainmentOptions) => boolean;\nexport declare const loadLocalModule: ({ root, modulePath, }: LoadLocalModuleOptions) => Promise<import(\"better-result\").Err<never, LocalModuleLoadError> | import(\"better-result\").Ok<unknown, LocalModuleLoadError>>;\nexport {};\n",
+    "./src/runtime.d.ts": "type StartFetchHandler = {\n    fetch: (request: Request) => Response | Promise<Response>;\n};\ndeclare const StartRuntimeError_base: import(\"better-result\").TaggedErrorClass<\"StartRuntimeError\">;\nexport declare class StartRuntimeError extends StartRuntimeError_base<{\n    code: \"empty-server-directory\" | \"invalid-directory\" | \"invalid-handler\" | \"server-module-resolution\";\n    failures?: readonly string[] | undefined;\n    message: string;\n}> {\n}\ntype CreateStartRuntimeOptions = {\n    clientDirectoryUrl: URL;\n    handler: unknown;\n    healthPath?: string | undefined;\n    immutableAssetPrefix?: string | undefined;\n    responseHeaders?: HeadersInit | undefined;\n};\nexport declare const createStartRuntime: ({ clientDirectoryUrl, handler, healthPath, immutableAssetPrefix, responseHeaders, }: CreateStartRuntimeOptions) => StartFetchHandler;\nexport type ServerModuleGraphVerification = {\n    loadedModuleCount: number;\n    toleratedFailures: readonly string[];\n};\ntype VerifyServerModuleGraphOptions = {\n    serverDirectoryUrl: URL;\n};\nexport declare const verifyServerModuleGraph: ({ serverDirectoryUrl, }: VerifyServerModuleGraphOptions) => Promise<ServerModuleGraphVerification>;\ntype ServeStartRuntimeOptions = {\n    fetch: StartFetchHandler[\"fetch\"];\n    hostname: string;\n    idleTimeout?: number | undefined;\n    port: number;\n};\nexport declare const serveStartRuntime: ({ fetch, hostname, idleTimeout, port, }: ServeStartRuntimeOptions) => Bun.Server<undefined>;\nexport {};\n"
+  }
+}

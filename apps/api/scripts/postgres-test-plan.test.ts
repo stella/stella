@@ -3,6 +3,8 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
+  anyBootsPgliteTestDatabase,
+  bootsPgliteTestDatabase,
   clusterExclusivePostgresTests,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   findSharedTableDdlViolations,
@@ -153,6 +155,33 @@ describe("PostgreSQL shared-table DDL isolation", () => {
       ["src/first.postgres.test.ts", "src/last.postgres.test.ts"],
       [isolated],
     ]);
+  });
+});
+
+describe("PostgreSQL suites on the PGlite test database", () => {
+  test.each([
+    'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+    'import { getTestDb } from "@/api/tests/security/test-utils";',
+    'import { createTestPglite } from "@/api/tests/pglite-test-db";',
+  ])("boots PGlite: %s", (source) => {
+    expect(bootsPgliteTestDatabase(source)).toBe(true);
+  });
+
+  test("a suite on PostgreSQL alone does not boot PGlite", () => {
+    expect(
+      bootsPgliteTestDatabase('import { getDb } from "@/api/db/root";'),
+    ).toBe(false);
+  });
+
+  // The runner boots these from one snapshot; this suite is the one whose
+  // in-process schema build outlasted its setup hook on a loaded runner.
+  test("detects the invoice export suite", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    expect(
+      await anyBootsPgliteTestDatabase(apiRoot, [
+        "src/handlers/invoices/pdf/export.integration.test.ts",
+      ]),
+    ).toBe(true);
   });
 });
 
