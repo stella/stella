@@ -160,6 +160,8 @@ export const FAILURE_TAGS = [
   "DeferredDocumentOwnershipLostError",
   "DeliverabilityEventError",
   "DerivativeAdmissionError",
+  "DesktopRunnerCommandInvalid",
+  "DesktopRunnerUnavailable",
   "DetachedFunctionOperandError",
   "DevContentEncryptionKeyError",
   "DevHostProbeError",

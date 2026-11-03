@@ -171,6 +171,8 @@ export const TAGGED_FAILURE_REASON = {
   DeferredDocumentOwnershipLostError: "tagged_failure",
   DeliverabilityEventError: "tagged_failure",
   DerivativeAdmissionError: "tagged_failure",
+  DesktopRunnerCommandInvalid: "tagged_failure",
+  DesktopRunnerUnavailable: "tagged_failure",
   DevContentEncryptionKeyError: "tagged_failure",
   DevHostProbeError: "tagged_failure",
   DetachedFunctionOperandError: "tagged_failure",
