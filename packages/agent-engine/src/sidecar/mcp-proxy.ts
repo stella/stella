@@ -98,7 +98,7 @@ const BEARER = /^Bearer (\S+)$/u;
 
 const presentsSecret = (request: Request, held: HeldRun) => {
   const match = BEARER.exec(request.headers.get("authorization") ?? "");
-  if (match?.[1] === undefined) {
+  if (match === null || match[1] === undefined) {
     return false;
   }
   const presented = Buffer.from(match[1]);
