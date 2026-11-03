@@ -43,14 +43,14 @@ const FORWARDED_RESPONSE_HEADERS = [
   "mcp-session-id",
 ] as const;
 
-export class McpProxyRegistrationError extends TaggedError(
+class McpProxyRegistrationError extends TaggedError(
   "McpProxyRegistrationError",
 )<{
   reason: "foreign_upstream" | "duplicate_run";
   message: string;
 }> {}
 
-export type McpProxyRun = {
+type McpProxyRun = {
   runId: string;
   serverName: string;
   /** The stella MCP URL the API handed the run. */

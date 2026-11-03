@@ -329,8 +329,7 @@ const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 );
 const lineTypeSchema = v.object({ type: v.string() });
 
-export const utf8Length = (line: string) =>
-  new TextEncoder().encode(line).byteLength;
+const utf8Length = (line: string) => new TextEncoder().encode(line).byteLength;
 
 /**
  * Read one line the host wrote. An unknown type is its own rejection,
