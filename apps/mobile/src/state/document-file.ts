@@ -7,7 +7,7 @@ import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { entityPath } from "@/state/matter-entities";
 
-const DOCX_MIME_TYPE =
+export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME_TYPE = "application/pdf";
 
@@ -27,6 +27,8 @@ export const viewerFor = (mimeType: string): DocumentViewer => {
 
 const versionFileSchema = v.object({
   fieldId: v.pipe(v.string(), v.minLength(1)),
+  /** The document's file column, which an edit names. */
+  propertyId: v.pipe(v.string(), v.minLength(1)),
   fileName: v.string(),
   mimeType: v.string(),
 });
@@ -94,6 +96,8 @@ export type DocumentFileError = ApiError | NoFileError;
 
 /** A short-lived, audited link to one document's file, and where it opens. */
 export type DocumentFile = {
+  /** The document's file column, which an edit names. */
+  readonly propertyId: string;
   readonly fileName: string;
   readonly mimeType: string;
   readonly url: string;
@@ -106,7 +110,9 @@ export type DocumentFile = {
  */
 const documentFileOf = (
   delivered: v.InferOutput<typeof fileUrlSchema>,
+  propertyId: string,
 ): DocumentFile => ({
+  propertyId,
   fileName: delivered.fileName,
   mimeType: delivered.mimeType,
   url: delivered.presignedUrl,
@@ -162,14 +168,14 @@ export const readDocumentFile = async ({
       });
     const display = await read("display");
     if (Result.isOk(display)) {
-      return Result.ok(documentFileOf(display.value));
+      return Result.ok(documentFileOf(display.value, file.propertyId));
     }
     if (!fallsBackToDownload(display.error)) {
       return Result.err(display.error);
     }
     const stored = yield* Result.await(read("download"));
     const original: DocumentFile = {
-      ...documentFileOf(stored),
+      ...documentFileOf(stored, file.propertyId),
       viewer: "quick-look",
     };
     return Result.ok(original);

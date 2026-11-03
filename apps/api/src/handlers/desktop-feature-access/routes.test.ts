@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -12,6 +12,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteEntry } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
@@ -20,7 +21,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopFeatureAccessReadEndpoint } from "./read";
 import { desktopFeatureAccessRoute } from "./routes";
@@ -52,24 +52,7 @@ const readAs = async ({
   timeBilling = TIME_BILLING.enrolled,
 }: ReadAsOptions) => {
   const accountOrganizationId = toSafeId<"organization">(organizationId);
-  const { scopedDb } = createScopedDbMock(
-    {},
-    {
-      featureAccess: {
-        identity: caller,
-        enrolments:
-          timeBilling === TIME_BILLING.enrolled
-            ? [
-                {
-                  featureId: "time-billing",
-                  organizationId: accountOrganizationId,
-                  userId: USER_ID,
-                },
-              ]
-            : [],
-      },
-    },
-  );
+
   const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
     authorizeAccount: async (request) =>
@@ -87,7 +70,19 @@ const readAs = async ({
         userId: toSafeId<"user">(USER_ID),
         keyId: "key_test",
         memberRole: sessionMemberRole("member"),
-        scopedDb,
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId,
+          userId: "user_test",
+          identity: caller,
+          enrolments:
+            timeBilling === TIME_BILLING.enrolled
+              ? [{ featureId: "time-billing", organizationId, userId: USER_ID }]
+              : [],
+        }),
+        scopedDb: async () =>
+          panic(
+            "Feature access must reuse authorized identity without querying scopedDb",
+          ),
       }),
   });
   await using server = serve(
@@ -136,6 +131,20 @@ test("a granted member enrolled in time billing sees the feature enabled", async
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
+      "desktop-dictation": { status: "hidden" },
+      "local-agents": { status: "hidden" },
+    },
+  });
+});
+
+test("a granted member sees the feature enabled without reading identity again", async () => {
+  const body = await readAs({
+    caller: { email: GRANTED_EMAIL, emailVerified: true },
+  });
+  expect(body).toStrictEqual({
+    features: {
+      "activity-timeline": { status: "enabled" },
+      "desktop-dictation": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -149,6 +158,7 @@ test("a granted member without time billing sees the activity timeline hidden", 
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "hidden" },
+      "desktop-dictation": { status: "hidden" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -173,6 +183,7 @@ test("callers outside the grant see the feature hidden", async () => {
     expect(await readAs({ caller })).toStrictEqual({
       features: {
         "activity-timeline": { status: "hidden" },
+        "desktop-dictation": { status: "hidden" },
         "local-agents": { status: "hidden" },
       },
     });

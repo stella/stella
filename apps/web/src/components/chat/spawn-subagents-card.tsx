@@ -137,7 +137,9 @@ const SpawnSubagentsSubtaskList = ({
         const result = results?.find((entry) => entry.index === index);
         return (
           <li key={key}>
-            <Accordion>
+            {/* Each result streams rendered Markdown; it mounts only when its
+                row is opened, not for every collapsed row of the card. */}
+            <Accordion hiddenUntilFound={false}>
               <AccordionItem value="result">
                 <AccordionTrigger>
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
@@ -191,7 +193,7 @@ const SpawnSubagentsSubtaskList = ({
                         {maskSubagentIdentifiers(result.error)}
                       </p>
                     )}
-                    <Accordion>
+                    <Accordion hiddenUntilFound={false}>
                       <AccordionItem value="prompt">
                         <AccordionTrigger>
                           {t("chat.toolCall.input")}

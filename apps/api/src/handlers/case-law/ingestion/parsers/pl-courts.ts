@@ -1,6 +1,16 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
+// parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-sn] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-kio] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-ncourt] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
+// parser-output-unchanged: [pl-uokik] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: [cz-nss] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
+// parser-output-unchanged: [cz-uohs] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 // parser-output-unchanged: the `superscripts` input is opt-in; callers that do not opt in retain their previous `<sup>` reading.
 // parser-output-unchanged: [pl-sn] the reader's HTML is generated from single-spaced PDF lines and holds no ordered list, so collapsing markup whitespace and numbering list items leave it as it was; every captured Supreme Court PDF parses to an identical AST.
@@ -20,17 +30,20 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
-  Element,
+  cloneNode,
+  createElement,
+  type Element,
   hasChildren,
   isComment,
   isTag,
   isText,
-} from "domhandler";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -96,6 +109,8 @@ type ParsePlDecisionInput = {
    * the unwrapped reading their stored documents were made with.
    */
   superscripts?: boolean | undefined;
+  /** IDs of footnotes actually parsed from this document; all other links keep URL sanitization. */
+  footnoteIds?: readonly string[] | undefined;
   /**
    * Whose markup conventions the HTML follows. Omitted, the HTML is read as
    * any publisher's.
@@ -113,6 +128,8 @@ type ParsePlDecisionInput = {
  */
 export const PL_DECISION_MARKUP = {
   COMMON_COURT: "common-court",
+  /** A word-processor export where one `<br>` wraps a line and two end a paragraph. */
+  PRINTED_LINES: "printed-lines",
 } as const;
 
 type PlDecisionMarkup =
@@ -190,6 +207,7 @@ type ParserState = {
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
   listItemBoundaries: WeakMap<Element, boolean>;
+  footnoteHrefs: ReadonlySet<string>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -238,9 +256,11 @@ type CreateStateOptions = {
   markup: PlDecisionMarkup | undefined;
   caseNumber: string;
   fallbackDecisionTitle: string | undefined;
+  footnoteIds: readonly string[] | undefined;
 };
 
 const createState = ({
+  footnoteIds,
   superscripts,
   markup,
   caseNumber,
@@ -258,6 +278,7 @@ const createState = ({
   fallbackDecisionTitle,
   normalizedCaseNumber: caseNumber.replace(/\s+/gu, " ").trim(),
   panelNames: [],
+  footnoteHrefs: new Set(footnoteIds?.map((noteId) => `#${noteId}`)),
   superscripts,
   markup,
   pendingMarker: undefined,
@@ -405,7 +426,8 @@ const walkInlines = (
       readMarkupInlines(
         state,
         walkInlinesShared($, el, {
-          sanitizeHref: sanitizeUrl,
+          sanitizeHref: (href) =>
+            state.footnoteHrefs.has(href) ? href : sanitizeUrl(href),
           anonymized: false,
           superscripts: state.superscripts,
         }),
@@ -808,7 +830,12 @@ const parseParagraphElement = (
   node: cheerio.Cheerio<AnyNode>,
   marker?: string,
 ): boolean => {
-  const inlines = walkInlines($, node, state);
+  const paragraphNode =
+    state.markup === PL_DECISION_MARKUP.PRINTED_LINES ? node.clone() : node;
+  if (state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    paragraphNode.find("br").replaceWith(" ");
+  }
+  const inlines = walkInlines($, paragraphNode, state);
   const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
 
   if (!plainText) {
@@ -995,7 +1022,7 @@ const parseListItemContent = ({
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = new Element(
+      const segment = createElement(
         item.name,
         item.attribs,
         children.slice(start, end),
@@ -1017,7 +1044,11 @@ const parseListItemContent = ({
       continue;
     }
     if (marker !== undefined && child.tagName.toLowerCase() === "p") {
-      if (parseParagraphElement($, state, $(child), marker)) {
+      const parsed =
+        state.markup === PL_DECISION_MARKUP.PRINTED_LINES
+          ? parsePrintedLineChildren($, state, $(child), marker)
+          : parseParagraphElement($, state, $(child), marker);
+      if (parsed) {
         marker = undefined;
       }
       continue;
@@ -1063,6 +1094,11 @@ const parseNode = (
 
   // isTag() also matches <script>/<style>; never emit their raw text.
   if (isExcludedHtmlTag(tag)) {
+    return;
+  }
+
+  if (tag === "p" && state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    parsePrintedLineChildren($, state, $node);
     return;
   }
 
@@ -1120,6 +1156,158 @@ const parseNode = (
   if (tag === "dd" || tag === "dl") {
     flushPendingMarker(state);
   }
+};
+
+/**
+ * A word-processor export whose body is text separated by `<br>` elements.
+ * One break is a printed line wrap; an empty line is the paragraph boundary.
+ */
+const parsePrintedLineChildren = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  root: cheerio.Cheerio<AnyNode>,
+  marker?: string,
+): boolean => {
+  let pendingMarker = marker;
+  let parsed = false;
+  const flush = (run: AnyNode[]): void => {
+    if (run.length === 0) {
+      return;
+    }
+    const wrapper = $("<span></span>").append($(run).clone());
+    wrapper.find("br").replaceWith(" ");
+    // Reparse to coalesce text nodes inserted for adjacent breaks, then apply
+    // the export's rendered-whitespace rules without consuming `&nbsp;`.
+    const normalizedWrapper = $("<span></span>").html(wrapper.html() ?? "");
+    normalizedWrapper
+      .find("*")
+      .addBack()
+      .contents()
+      .each((_, node) => {
+        if (isText(node)) {
+          node.data = node.data.replace(/[\t\n\f\r ]+/gu, " ");
+        }
+      });
+    if (parseParagraphElement($, state, normalizedWrapper, pendingMarker)) {
+      parsed = true;
+      pendingMarker = undefined;
+    }
+  };
+
+  const contents = root.contents().toArray();
+  if (contents.some((node) => commonCourtBlock($, node) !== undefined)) {
+    let inlineRun: AnyNode[] = [];
+    const flushInlineRun = (): void => {
+      if (inlineRun.length === 0) {
+        return;
+      }
+      const wrapper = $("<span></span>").append($(inlineRun).clone());
+      inlineRun = [];
+      if (parsePrintedLineChildren($, state, wrapper, pendingMarker)) {
+        parsed = true;
+        pendingMarker = undefined;
+      }
+    };
+    for (const node of contents) {
+      if (commonCourtBlock($, node) === undefined) {
+        inlineRun.push(node);
+        continue;
+      }
+      flushInlineRun();
+      parseNode($, state, node);
+    }
+    flushInlineRun();
+    return parsed;
+  }
+
+  // Flatten only rendered content so whitespace-only text between breaks does
+  // not hide a blank line, including when the breaks sit inside inline tags.
+  const tokens: AnyNode[] = [];
+  const collectTokens = (nodes: AnyNode[]): void => {
+    for (const node of nodes) {
+      if (isText(node)) {
+        if (!/^[\t\n\f\r ]*$/u.test(node.data)) {
+          tokens.push(node);
+        }
+        continue;
+      }
+      if (!isTag(node)) {
+        continue;
+      }
+      if (node.tagName.toLowerCase() === "br" || node.children.length === 0) {
+        tokens.push(node);
+        continue;
+      }
+      collectTokens(node.children);
+    }
+  };
+  collectTokens(contents);
+
+  const separators = new Set<AnyNode>();
+  const omittedBreaks = new Set<AnyNode>();
+  const isBreak = (node: AnyNode | undefined): node is Element =>
+    node !== undefined && isTag(node) && node.tagName.toLowerCase() === "br";
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (!isBreak(token)) {
+      continue;
+    }
+    let end = index + 1;
+    while (isBreak(tokens[end])) {
+      end += 1;
+    }
+    if (end - index < 2) {
+      continue;
+    }
+    separators.add(token);
+    for (let omitted = index + 1; omitted < end; omitted += 1) {
+      const omittedBreak = tokens[omitted];
+      if (omittedBreak !== undefined) {
+        omittedBreaks.add(omittedBreak);
+      }
+    }
+    index = end - 1;
+  }
+
+  // Split recursively so an inline wrapper crossing the blank line is cloned
+  // onto both paragraphs rather than flattened or discarded.
+  const splitNodes = (nodes: AnyNode[]): AnyNode[][] => {
+    const parts: AnyNode[][] = [[]];
+    for (const node of nodes) {
+      if (separators.has(node)) {
+        parts.push([]);
+        continue;
+      }
+      if (omittedBreaks.has(node)) {
+        continue;
+      }
+      if (!isTag(node) || node.children.length === 0) {
+        parts.at(-1)?.push(cloneNode(node, true));
+        continue;
+      }
+      const childParts = splitNodes(node.children);
+      for (const [index, children] of childParts.entries()) {
+        if (index > 0) {
+          parts.push([]);
+        }
+        if (children.length === 0) {
+          continue;
+        }
+        const wrapper = cloneNode(node, false);
+        wrapper.children = children;
+        for (const child of children) {
+          child.parent = wrapper;
+        }
+        parts.at(-1)?.push(wrapper);
+      }
+    }
+    return parts;
+  };
+
+  for (const run of splitNodes(contents)) {
+    flush(run);
+  }
+  return parsed;
 };
 
 /** A marker no paragraph took, kept as a paragraph of its own. */
@@ -1212,10 +1400,51 @@ function parseChildren(
     parseCommonCourtChildren($, state, root);
     return;
   }
+  if (state.markup === PL_DECISION_MARKUP.PRINTED_LINES) {
+    parsePrintedLineChildren($, state, root);
+    return;
+  }
   root.contents().each((_, node) => {
     parseNode($, state, node);
   });
 }
+
+const RECITAL_CONTINUATION_RE =
+  /^(?:sprawy\s+z|przeciwko|przy\s+udziale|o\s+|na\s+skutek)\b/iu;
+
+/** Join a common-court recital that the editor laid out over several lines. */
+const joinOpeningRecitalLines = (state: ParserState): void => {
+  const joined: Block[] = [];
+  for (const block of state.blocks) {
+    const previous = joined.at(-1);
+    if (
+      state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
+      previous?.type === "paragraph" &&
+      block.type === "paragraph" &&
+      previous.role === "intro" &&
+      block.role === "intro" &&
+      /[,]$/u.test(previous.plainText) &&
+      RECITAL_CONTINUATION_RE.test(block.plainText)
+    ) {
+      appendTextInline(previous.inlines, " ");
+      previous.inlines.push(...block.inlines);
+      previous.plainText = `${previous.plainText} ${block.plainText}`;
+      continue;
+    }
+    joined.push(block);
+  }
+  state.blocks = joined;
+};
+
+const renumberBlocks = (state: ParserState): void => {
+  for (const [index, block] of state.blocks.entries()) {
+    const order = index + 1;
+    block.id = `b${order}`;
+    block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
+  }
+  state.blockIndex = state.blocks.length;
+  state.blockIdCounter = state.blocks.length;
+};
 
 const plainTextParagraphsToInlines = (text: string): Inline[] => {
   const lines = text.split("\n");
@@ -1337,8 +1566,9 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState({
+    footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
     markup: input.markup,
     caseNumber: input.caseNumber,
@@ -1376,6 +1606,8 @@ export const parsePlDecisionContent = (
     parsePlainText(state, normalizedContent);
   }
 
+  joinOpeningRecitalLines(state);
+
   if (!state.sawDecisionTitle && state.fallbackDecisionTitle !== undefined) {
     const title = state.fallbackDecisionTitle;
     pushHeading(state, 1, title, "decision-title", textInline(title));
@@ -1389,14 +1621,10 @@ export const parsePlDecisionContent = (
     if (title === POLISH_DECISION_TITLE_MAP.uzasadnienie) {
       state.section = "reasoning";
     }
-    for (const [index, block] of state.blocks.entries()) {
-      const order = index + 1;
-      block.id = `b${order}`;
-      block.anchorId = `${BLOCK_ANCHOR_PREFIX[block.type]}-${order}`;
-    }
-    state.blockIndex = state.blocks.length;
-    state.blockIdCounter = state.blocks.length;
   }
+
+  // Joining a source line removes a block even when the title was explicit.
+  renumberBlocks(state);
 
   let sawTerminalSignature = false;
   for (const block of state.blocks.toReversed()) {
@@ -1411,7 +1639,9 @@ export const parsePlDecisionContent = (
       CLERK_MARK_RE.test(block.plainText) ||
       (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
     ) {
-      block.role = "apparatus";
+      // The clerk's mark is printed after the decision: a publisher note,
+      // never head matter, which only precedes the body.
+      block.role = "publisher-note";
       continue;
     }
     break;

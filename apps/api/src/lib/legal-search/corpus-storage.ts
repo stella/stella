@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   type DocumentAst,
+  headMatterOrderDegradations,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
@@ -176,11 +177,16 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
-  const degradations = persistedAstDegradations(value);
+  const degradations = [
+    ...persistedAstDegradations(value),
+    ...(parsed.output !== null && "blocks" in parsed.output
+      ? headMatterOrderDegradations(parsed.output.blocks)
+      : []),
+  ];
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({
-        message: "Stored document AST carries undeclared vocabulary",
+        message: "Stored document AST was degraded on read",
         degradations,
       }),
       handlerErrorContext("legalsearch.parsePersistedCorpusAst", {

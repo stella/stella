@@ -108,6 +108,8 @@ const createClaimComment = createSafeHandler(
       organizationId: session.activeOrganizationId,
       placement: { type: "verification-claim", claimId, runId, workspaceId },
       recordAuditEvent,
+      // The span is the claim's own, the same on every retry.
+      replayIdentity: "spans",
       safeDb,
       userId: user.id,
     });

@@ -1,9 +1,49 @@
 import { describe, expect, test } from "bun:test";
 
-import { runEuEcjRefetch } from "@/api/scripts/eu-ecj-refetch";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import {
+  acquireFormexBatch,
+  runEuEcjRefetch,
+} from "@/api/scripts/eu-ecj-refetch";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 describe("EU refresh command boundaries", () => {
+  test("releases the maintenance lane when source lease acquisition rejects", async () => {
+    const acquisitionError = new Error("lease database unavailable");
+    let releases = 0;
+    const acquisition = acquireFormexBatch({
+      enterLane: async () => ({
+        ingestionDb: "ingestion-db",
+        release: async () => {
+          releases++;
+        },
+      }),
+      acquireSourceLease: async () => {
+        throw acquisitionError;
+      },
+    });
+
+    expect(await rejectionOf(acquisition)).toBe(acquisitionError);
+    expect(releases).toBe(1);
+  });
+
+  test("releases the maintenance lane once for a held source lease", async () => {
+    let releases = 0;
+    const batch = await acquireFormexBatch({
+      enterLane: async () => ({
+        ingestionDb: "ingestion-db",
+        release: async () => {
+          releases++;
+        },
+      }),
+      acquireSourceLease: async () => null,
+    });
+
+    expect(batch).toBeNull();
+    expect(releases).toBe(1);
+  });
+
   // The image runner forwards this exit code unchanged; that forwarding is
   // covered in apps/legal-atlas-runner's own tests.
   test("returns exit 1 for a resumable publisher refusal", async () => {

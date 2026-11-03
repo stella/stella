@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -27,6 +28,11 @@ import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
+import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
+import {
+  ActivitySettingsPane,
+  ActivitySettingsSkeleton,
+} from "../activity/ActivitySettings";
 import {
   isSupportedLanguage,
   setPreferredLanguage,
@@ -40,7 +46,9 @@ import type {
   AppSnapshot,
   DesktopNotificationPreferences,
   DesktopUpdateSnapshot,
+  DocumentRecoverySnapshot,
   LinkedAccountSnapshot,
+  RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
 import {
@@ -53,6 +61,7 @@ import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import { commandErrorMessage } from "./command-error";
+import { DictationSetting } from "./DictationSetting";
 import { PermissionsSection } from "./PermissionsSection";
 import { ShortcutSetting } from "./ShortcutSetting";
 
@@ -75,7 +84,12 @@ const DEFAULT_UPDATE_SNAPSHOT = {
   updateReady: false,
 } satisfies DesktopUpdateSnapshot;
 
-const PREFERENCES_TABS = ["general", "notifications", "about"] as const;
+const PREFERENCES_TABS = [
+  "general",
+  "activity",
+  "notifications",
+  "about",
+] as const;
 
 type PreferencesTab = (typeof PREFERENCES_TABS)[number];
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
@@ -207,6 +221,102 @@ const PanelGroup = ({
     </div>
   </section>
 );
+
+const DocumentRecovery = ({
+  recovery,
+  onRefresh,
+}: {
+  recovery: DocumentRecoverySnapshot;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations("settings");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const act = async (target: RecoveryTarget | "retry") => {
+    setBusy(true);
+    const result = await Result.tryPromise(async () =>
+      target === "retry"
+        ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
+        : invoke("open_recovery_folder", { target }),
+    );
+    setError(result.isErr() ? t("recoveryError") : null);
+    setBusy(false);
+  };
+  if (
+    !recovery.edits.length &&
+    !recovery.unassigned &&
+    !recovery.pending &&
+    recovery.access === "available"
+  ) {
+    return null;
+  }
+  return (
+    <PanelGroup title={t("recoveryTitle")}>
+      <div className="space-y-3 px-4 py-3 text-sm">
+        {recovery.edits.length ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryBody")}</p>
+            <ul className="space-y-1">
+              {recovery.edits.map((edit) => (
+                <li key={edit.id} className="wrap-break-word">
+                  <BidiText>{edit.fileName}</BidiText>
+                  {edit.status === "pending"
+                    ? ` (${t("recoveryFilePending")})`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("account");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenFolder")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.access === "signInRequired" ? (
+          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+        ) : null}
+        {recovery.unassigned ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("unassigned");
+              }}
+              variant="outline"
+            >
+              {t("recoveryOpenUnassigned")}
+            </Button>
+          </>
+        ) : null}
+        {recovery.pending ? (
+          <>
+            <p className="text-muted-foreground">{t("recoveryPending")}</p>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                void act("retry");
+              }}
+              variant="outline"
+            >
+              {t("tryAgain")}
+            </Button>
+          </>
+        ) : null}
+        {error ? (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </PanelGroup>
+  );
+};
 
 type TelemetryPreferenceState =
   | { status: "loading" }
@@ -422,6 +532,9 @@ const GeneralPane = ({
       <PanelGroup>
         <ShortcutSetting />
       </PanelGroup>
+      <DictationSetting
+        renderGroup={(content) => <PanelGroup>{content}</PanelGroup>}
+      />
       <AgentSubscriptionsSection
         renderGroup={(content) => (
           <PanelGroup title={tSubscriptions("title")}>{content}</PanelGroup>
@@ -624,8 +737,60 @@ const AboutPane = ({
   );
 };
 
+type ActivityAvailability = "loading" | "enabled" | "disabled";
+
+/**
+ * Whether the account has the activity feature, which decides the Activity
+ * tab. Reads the feature decision only and again on every activity change,
+ * which the native side also emits when the decision changes.
+ */
+const useActivityAvailability = () => {
+  const [availability, setAvailability] =
+    useState<ActivityAvailability>("loading");
+
+  useEffect(() => {
+    let disposed = false;
+    let request = 0;
+    const read = () => {
+      request += 1;
+      const current = request;
+      invoke<boolean>("is_activity_enabled")
+        .then((enabled) => {
+          if (!disposed && current === request) {
+            setAvailability(enabled ? "enabled" : "disabled");
+          }
+          return undefined;
+        })
+        .catch(() => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+            window: DESKTOP_TELEMETRY_WINDOWS.main,
+          });
+          if (!disposed && current === request) {
+            setAvailability("disabled");
+          }
+        });
+    };
+    read();
+    const stopListening = subscribeDesktopEvent({
+      event: ACTIVITY_CHANGED_EVENT,
+      handler: read,
+      onError: reportSubscriptionFailure,
+      onSubscribed: read,
+    });
+    return () => {
+      disposed = true;
+      stopListening();
+    };
+  }, []);
+
+  return availability;
+};
+
 const App = () => {
   const t = useTranslations("settings");
+  const tActivity = useTranslations("activity");
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
@@ -643,7 +808,17 @@ const App = () => {
   });
   const accountRefresh = useRef<() => void>(() => undefined);
   const accountGeneration = useRef(0);
+  const snapshotGeneration = useRef(0);
+  const snapshotRefresh = useRef<() => void>(() => undefined);
   const [activeTab, setActiveTab] = useState<PreferencesTab>(getInitialTab);
+  const activityAvailability = useActivityAvailability();
+  // A requested Activity tab stays shown while availability loads, so opening
+  // it does not flash General first; it falls back only once activity is off.
+  const showActivityTab =
+    activityAvailability === "enabled" ||
+    (activityAvailability === "loading" && activeTab === "activity");
+  const shownTab =
+    activeTab === "activity" && !showActivityTab ? "general" : activeTab;
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -701,19 +876,32 @@ const App = () => {
 
     const syncState = async () => {
       const revision = snapshotRevision.current;
+      const request = ++snapshotGeneration.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
+        if (!isAppSnapshot(nextState)) {
+          setError(t("errorReadState"));
+          return;
+        }
         confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed || revision !== snapshotRevision.current) {
+        if (
+          disposed ||
+          revision !== snapshotRevision.current ||
+          request !== snapshotGeneration.current
+        ) {
           return;
         }
 
@@ -721,10 +909,14 @@ const App = () => {
       }
     };
 
+    snapshotRefresh.current = () => {
+      void syncState();
+    };
     void syncState();
 
     return () => {
       disposed = true;
+      snapshotGeneration.current += 1;
       stopListening();
     };
   }, [t]);
@@ -733,6 +925,12 @@ const App = () => {
     let disposed = false;
     const refresh = () => {
       const request = ++accountGeneration.current;
+      snapshotGeneration.current += 1;
+      snapshotRevision.current += 1;
+      latestEdit.current += 1;
+      confirmedSnapshot.current = null;
+      setState(null);
+      snapshotRefresh.current();
       void invoke<
         Exclude<DesktopAccountState, { status: "loading" | "unavailable" }>
       >("account_get_state")
@@ -910,13 +1108,18 @@ const App = () => {
               setActiveTab(nextTab);
             }
           }}
-          value={activeTab}
+          value={shownTab}
         >
           <div className="px-1">
             <TabsList variant="underline">
               <TabsTab className="h-8 px-2 text-sm" value="general">
                 {t("general")}
               </TabsTab>
+              {showActivityTab ? (
+                <TabsTab className="h-8 px-2 text-sm" value="activity">
+                  {tActivity("title")}
+                </TabsTab>
+              ) : null}
               <TabsTab className="h-8 px-2 text-sm" value="notifications">
                 {t("notifications")}
               </TabsTab>
@@ -971,9 +1174,29 @@ const App = () => {
                       void handleLanguageChange(nextLanguage);
                     }}
                   />
+                  {state ? (
+                    <DocumentRecovery
+                      recovery={state.documentRecovery}
+                      onRefresh={() => snapshotRefresh.current()}
+                    />
+                  ) : null}
                 </div>
               </ScrollArea>
             </TabsPanel>
+            {showActivityTab ? (
+              <TabsPanel className="h-full min-h-0" value="activity">
+                <ScrollArea className="h-full">
+                  <div className="p-4">
+                    {/* Activity reads nothing until its access is confirmed. */}
+                    {activityAvailability === "enabled" ? (
+                      <ActivitySettingsPane />
+                    ) : (
+                      <ActivitySettingsSkeleton />
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsPanel>
+            ) : null}
             <TabsPanel className="h-full min-h-0" value="notifications">
               <ScrollArea className="h-full">
                 <div className="space-y-4 p-4">

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
@@ -903,7 +903,8 @@ describe("save_playbook position input mirrors positionSchema", () => {
 
 describe("save_playbook position merge, over the input class", () => {
   test("positions a call does not name come back as the same objects", () => {
-    fc.assert(
+    assertProperty(
+      "positions a call does not name come back as the same objects",
       fc.property(
         storedArbitrary,
         fc.nat(),
@@ -928,12 +929,13 @@ describe("save_playbook position merge, over the input class", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("the merged playbook never holds two positions with one issue or one sourceId", () => {
-    fc.assert(
+    assertProperty(
+      "the merged playbook never holds two positions with one issue or one sourceId",
       fc.property(
         storedArbitrary,
         fc.array(fc.tuple(fc.nat(), fc.boolean(), fc.boolean()), {
@@ -960,12 +962,13 @@ describe("save_playbook position merge, over the input class", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("reading a position through the chat projection and saving it unchanged is a fixed point", () => {
-    fc.assert(
+    assertProperty(
+      "reading a position through the chat projection and saving it unchanged is a fixed point",
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
         const refRegistry = createChatRefRegistry();
@@ -979,7 +982,7 @@ describe("save_playbook position merge, over the input class", () => {
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -996,7 +999,8 @@ describe("save_playbook position merge, over the input class", () => {
       { requiredKeys: [] },
     );
 
-    fc.assert(
+    assertProperty(
+      "whatever the merge writes passes the shared position checks, and every other entry is refused by path",
       fc.property(
         storedArbitrary,
         fc.array(fc.tuple(fc.nat(), fc.boolean(), tiersArbitrary), {
@@ -1034,12 +1038,13 @@ describe("save_playbook position merge, over the input class", () => {
           expect(written.length + refused.length).toBe(positions.length);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a replace that leaves out enabled keeps the stored value", () => {
-    fc.assert(
+    assertProperty(
+      "a replace that leaves out enabled keeps the stored value",
       fc.property(storedArbitrary, fc.nat(), (stored, pick) => {
         const index = pick % stored.length;
         const refRegistry = createChatRefRegistry();
@@ -1057,7 +1062,7 @@ describe("save_playbook position merge, over the input class", () => {
         expect(result.issues).toEqual([]);
         expect(result.items).toEqual(stored);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

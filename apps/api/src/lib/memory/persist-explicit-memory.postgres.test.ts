@@ -31,6 +31,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -265,9 +266,7 @@ if (!databaseUrl || !runPostgresTests) {
           if (persistence) {
             await Promise.allSettled([persistence]);
           }
-          await deletionDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(deletionDb, [organizationId]);
           await deletionDb.delete(user).where(eq(user.id, userId));
         }
       });

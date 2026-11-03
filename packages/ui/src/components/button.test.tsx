@@ -74,6 +74,21 @@ describe("Button implicit tooltip", () => {
     ).toBe(false);
   });
 
+  test("a touch button retains its label and native disabled state", () => {
+    for (const name of ACCESSIBLE_NAMES) {
+      const markup = renderToStaticMarkup(
+        <Button {...name} disabled size="touch">
+          Reasoning
+        </Button>,
+      );
+      expect(markup).toContain("Reasoning");
+      expect(markup).toContain("min-h-[44px]");
+      expect(markup).toContain("min-w-[44px]");
+      expect(isNativelyDisabled(markup)).toBe(true);
+      expect(hasTooltip(markup)).toBe(false);
+    }
+  });
+
   test.each(SIZES)("%s: an explicit tooltip renders", (size) => {
     expect(
       hasTooltip(
@@ -330,3 +345,19 @@ describe("Button press feedback", () => {
     ).not.toContain(PRESS);
   });
 });
+
+test.each(SIZES)(
+  "wrapping %s buttons override fixed height at every size breakpoint",
+  (size) => {
+    const markup = renderToStaticMarkup(
+      <Button layout="wrap" size={size} tooltip={false}>
+        A label that can span several lines
+      </Button>,
+    );
+    expect(markup).toContain("h-auto");
+    expect(markup).toContain("sm:h-auto");
+    expect(markup).toContain("whitespace-normal");
+    expect(markup).toContain("py-2");
+    expect(markup).not.toMatch(/(?:\s|")(?:sm:)?h-\d/u);
+  },
+);

@@ -109,17 +109,21 @@ const sectionType = (
   if (hasRole("signature")) {
     return "footer";
   }
-  // Whatever trails the ruling is the document's tail: footnotes, the
-  // language-of-the-case line, and nothing a reader navigates to.
-  if (previous === "ruling") {
+  // A court that rules before it reasons (Austria, Hungary) prints its
+  // reasons after the ruling, and its paragraphs say so.
+  const reasons = hasRole("argumentation");
+  // Otherwise whatever trails the ruling is the document's tail: footnotes,
+  // the language-of-the-case line, and nothing a reader navigates to.
+  if (previous === "ruling" && !reasons) {
     return "footer";
   }
   if (index === 0 || hasRole("intro")) {
     return "header";
   }
-  return blocks.some(
-    (block) => block.type === "paragraph" && block.number !== undefined,
-  )
+  return reasons ||
+    blocks.some(
+      (block) => block.type === "paragraph" && block.number !== undefined,
+    )
     ? "argumentation"
     : "unknown";
 };

@@ -224,19 +224,6 @@ test("pool fields extend one existing record without declaring new metrics or di
   emitEventLoopDelayMetric({ maxMs: 12, p99Ms: 10, rootPool: report });
   expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
     {
-      _aws: {
-        Timestamp: expect.any(Number),
-        CloudWatchMetrics: [
-          {
-            Namespace: "Stella/Api",
-            Dimensions: [[]],
-            Metrics: [
-              { Name: "EventLoopDelayMax", Unit: "Milliseconds" },
-              { Name: "EventLoopDelayP99", Unit: "Milliseconds" },
-            ],
-          },
-        ],
-      },
       rootPool: report,
       EventLoopDelayMax: 12,
       EventLoopDelayP99: 10,

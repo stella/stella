@@ -36,12 +36,14 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { registryEntryNames } from "./db-registry-entries";
 
 type Identifier = Extract<Node, { type: "Identifier" }>;
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
+const REGISTRY_DIRECTORY = `${API}lib/db/aggregate-lock-entries`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
 const DECLARE = "declareAggregateMutation";
 const BASELINE = BASELINE_PATHS.aggregateMutations;
@@ -178,44 +180,14 @@ const validateDeclaration = ({
   }
 };
 
-const readAggregateRegistry = (load: SourceLoader) => {
-  const registry = new Set<string>();
-  const registryContent = load(REGISTRY);
-  if (registryContent !== undefined) {
-    const registrySource = parse({ file: REGISTRY, source: registryContent });
-    const collectRegistry = (node: Node) => {
-      if (
-        node.type === "VariableDeclarator" &&
-        node.id.type === "Identifier" &&
-        node.id.name === "AGGREGATE_LOCKS" &&
-        node.init !== null
-      ) {
-        const initializer =
-          node.init.type === "TSAsExpression"
-            ? node.init.expression
-            : node.init;
-        if (!(initializer.type === "ObjectExpression")) {
-          panic("Aggregate registry requires a literal object");
-        }
-        for (const property of initializer.properties) {
-          if (!isPropertyAssignment(property)) {
-            panic("Aggregate registry cannot use computed spreads");
-          }
-          registry.add(
-            isStringLiteral(property.key)
-              ? property.key.value
-              : nodeText(property.key, registrySource),
-          );
-        }
-      }
-      visitChildren(node, collectRegistry);
-    };
-    collectRegistry(registrySource.program);
-  }
-  return registry;
+type CreateSourceAccessOptions = {
+  sourceLoader: SourceLoader;
+  files: readonly string[];
 };
-
-const createSourceAccess = (sourceLoader: SourceLoader) => {
+const createSourceAccess = ({
+  sourceLoader,
+  files,
+}: CreateSourceAccessOptions) => {
   const contents = new Map<string, string | undefined>();
   const load: SourceLoader = (file) => {
     if (contents.has(file)) {
@@ -261,7 +233,20 @@ const createSourceAccess = (sourceLoader: SourceLoader) => {
       ? path.posix.join(directory, target)
       : undefined;
   };
-  const registry = readAggregateRegistry(load);
+  const registry = new Set(
+    registryEntryNames(
+      REGISTRY_DIRECTORY,
+      files
+        .filter((file) => path.posix.dirname(file) === REGISTRY_DIRECTORY)
+        .map((file) => path.posix.basename(file)),
+    ),
+  );
+  for (const name of registry) {
+    const file = `${REGISTRY_DIRECTORY}/${name}.ts`;
+    if (load(file) === undefined) {
+      panic(`Missing aggregate registry entry: ${file}`);
+    }
+  }
   return { load, resolveSourceModule, registry };
 };
 
@@ -1757,7 +1742,7 @@ export const verifyAggregateDeclarations = ({
   files: readonly string[];
   load: SourceLoader;
 }): number => {
-  const access = createSourceAccess(load);
+  const access = createSourceAccess({ sourceLoader: load, files });
   let verified = 0;
   for (const file of files) {
     if (file !== OWNER && access.load(file)?.includes(DECLARE) === true) {
@@ -1850,7 +1835,11 @@ const aggregateMutationComparisonCommit = () => {
   const resolved = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
+    {
+      maxBuffer: 2 ** 30,
+      cwd: ROOT,
+      encoding: "utf-8",
+    },
   );
   if (resolved.status !== 0) {
     panic(`Aggregate mutation comparison ref is unavailable: ${requested}`);
@@ -1861,7 +1850,11 @@ const aggregateMutationComparisonCommit = () => {
   const base = spawnSync(
     "git",
     ["merge-base", "HEAD", resolved.stdout.trim()],
-    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
+    {
+      maxBuffer: 2 ** 30,
+      cwd: ROOT,
+      encoding: "utf-8",
+    },
   );
   if (base.status !== 0) {
     panic(

@@ -230,7 +230,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -284,7 +284,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -1596,7 +1596,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -1611,13 +1611,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -3130,7 +3140,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3158,7 +3168,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3183,7 +3193,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3212,7 +3222,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3232,8 +3242,15 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -3302,7 +3319,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -3314,7 +3331,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": [
@@ -3425,7 +3442,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -3438,10 +3455,541 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name prefix"
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Middle name"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name suffix"
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "work",
+                      "personal",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^[\\\\w+-]+(?:\\\\.[\\\\w+-]+)*@[\\\\da-zA-Z]+(?:[.-][\\\\da-zA-Z]+)*\\\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "address",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Email addresses"
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mobile",
+                      "office",
+                      "home",
+                      "fax",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Phone numbers"
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "type",
+                  "line1",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Postal addresses"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "data_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "is_primary"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 20
+                },
+                "custom_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Data boxes and custom fields"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tags"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display color"
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registration number"
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tax identifier"
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT identifier"
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT payer"
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bank accounts"
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Billing address"
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hourly rate in minor currency units"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Currency code"
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Payment term in days"
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Invoice language"
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Originating attorney user ID"
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Responsible attorney user ID"
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to update; omit to create"
+          "description": "Update ID; omit to create"
         },
         "type": {
           "enum": [
@@ -3449,13 +3997,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "organization"
           ],
           "type": "string",
-          "description": "Contact kind; required when creating"
+          "description": "Create kind"
         },
         "display_name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Defaults to person or organization name"
         },
         "first_name": {
           "anyOf": [
@@ -3467,7 +4015,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "First name; pass null to clear"
+          "description": "Given name"
         },
         "last_name": {
           "anyOf": [
@@ -3479,7 +4027,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last name; pass null to clear"
+          "description": "Family name"
         },
         "organization_name": {
           "anyOf": [
@@ -3491,7 +4039,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Organization name; pass null to clear"
+          "description": "Organization"
         },
         "notes": {
           "anyOf": [
@@ -3502,7 +4050,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Free-text notes; pass null to clear"
+          "description": "Notes"
         },
         "date_of_birth": {
           "anyOf": [
@@ -3592,7 +4140,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+          "description": "Birth year, month or date"
         },
         "nationality_codes": {
           "type": "array",
@@ -3609,7 +4157,31 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             }
           },
           "maxItems": 250,
-          "description": "Nationality countries; pass [] to clear"
+          "description": "Countries; [] clears"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Source key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Source ID"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Create only; unique source/id."
         }
       }
     }
@@ -4077,7 +4649,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -4149,7 +4721,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -4159,7 +4731,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [
@@ -4180,10 +4752,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -4344,7 +4917,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -5048,7 +5621,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -5820,47 +6393,47 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -5874,13 +6447,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -5891,11 +6464,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -5909,7 +6482,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -5924,42 +6497,50 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -5970,7 +6551,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -6022,7 +6603,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -6086,7 +6667,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -6096,7 +6677,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -6149,6 +6730,53 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             }
           ],
           "description": "IANA zone; null follows the primary practice jurisdiction"
+        }
+      }
+    }
+  },
+  {
+    "name": "create_organization",
+    "scope": "stella:organization_create",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Create organization changes state or starts stateful work.",
+      "destructiveHint": "Create organization is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Create organization is confined to the private workspace or a bounded computation."
+    },
+    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
+    "annotations": {
+      "title": "Create organization",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Name of the new organization."
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z0-9\\\\x2d]+$",
+          "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
+          "x-stella-agent-input": {
+            "kind": "slug"
+          }
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
         }
       }
     }
@@ -6891,7 +7519,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -6945,7 +7573,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -8257,7 +8885,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -8272,13 +8900,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -9791,7 +10429,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -9819,7 +10457,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -9844,7 +10482,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -9873,7 +10511,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -9893,8 +10531,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -9963,7 +10608,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -9975,7 +10620,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": [
@@ -10086,7 +10731,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -10099,10 +10744,541 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name prefix"
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Middle name"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name suffix"
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "work",
+                      "personal",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^[\\\\w+-]+(?:\\\\.[\\\\w+-]+)*@[\\\\da-zA-Z]+(?:[.-][\\\\da-zA-Z]+)*\\\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "address",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Email addresses"
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mobile",
+                      "office",
+                      "home",
+                      "fax",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Phone numbers"
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "type",
+                  "line1",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Postal addresses"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "data_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "is_primary"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 20
+                },
+                "custom_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Data boxes and custom fields"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tags"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display color"
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registration number"
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tax identifier"
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT identifier"
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT payer"
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bank accounts"
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Billing address"
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hourly rate in minor currency units"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Currency code"
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Payment term in days"
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Invoice language"
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Originating attorney user ID"
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Responsible attorney user ID"
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to update; omit to create"
+          "description": "Update ID; omit to create"
         },
         "type": {
           "enum": [
@@ -10110,13 +11286,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "organization"
           ],
           "type": "string",
-          "description": "Contact kind; required when creating"
+          "description": "Create kind"
         },
         "display_name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Defaults to person or organization name"
         },
         "first_name": {
           "anyOf": [
@@ -10128,7 +11304,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "First name; pass null to clear"
+          "description": "Given name"
         },
         "last_name": {
           "anyOf": [
@@ -10140,7 +11316,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last name; pass null to clear"
+          "description": "Family name"
         },
         "organization_name": {
           "anyOf": [
@@ -10152,7 +11328,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Organization name; pass null to clear"
+          "description": "Organization"
         },
         "notes": {
           "anyOf": [
@@ -10163,7 +11339,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Free-text notes; pass null to clear"
+          "description": "Notes"
         },
         "date_of_birth": {
           "anyOf": [
@@ -10253,7 +11429,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+          "description": "Birth year, month or date"
         },
         "nationality_codes": {
           "type": "array",
@@ -10270,7 +11446,31 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             }
           },
           "maxItems": 250,
-          "description": "Nationality countries; pass [] to clear"
+          "description": "Countries; [] clears"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Source key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Source ID"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Create only; unique source/id."
         }
       }
     }
@@ -10738,7 +11938,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -10810,7 +12010,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -10820,7 +12020,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [
@@ -10841,10 +12041,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -11005,7 +12206,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -11709,7 +12910,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -12481,47 +13682,47 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -12535,13 +13736,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -12552,11 +13753,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -12570,7 +13771,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -12585,42 +13786,50 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -12631,7 +13840,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -12683,7 +13892,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -12747,7 +13956,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -12757,7 +13966,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -13901,7 +15110,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -13929,7 +15138,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -13954,7 +15163,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -13983,7 +15192,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -14003,8 +15212,15 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -14328,7 +15544,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -14382,7 +15598,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",
@@ -15384,7 +16600,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -15399,13 +16615,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -15797,7 +17023,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -15867,7 +17093,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -16157,47 +17383,47 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -16211,13 +17437,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -16228,11 +17454,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -16371,7 +17597,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total."
         },
         "limit": {
           "type": "integer",
@@ -16425,7 +17651,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total."
+          "description": "Only decisions citing this provision, as a lawyer writes it: \\"§ 316 odst. 2 ZP\\", \\"§ 52 písm. g) zákoníku práce\\", \\"čl. 10 Listiny\\", \\"Article 6(1)(a) GDPR\\". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total."
         },
         "has_legal_sentence": {
           "type": "boolean",

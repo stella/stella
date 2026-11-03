@@ -11,6 +11,7 @@ import {
   READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
 import { mapWithConcurrency } from "@stll/concurrency";
+import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 
 import type {
   CreateAnnotationInput,
@@ -45,6 +46,10 @@ const annotationStyleSchema = v.picklist(READER_ANNOTATION_STYLES);
 const annotationVisibilitySchema = v.picklist(READER_ANNOTATION_VISIBILITIES);
 const annotationTargetTypeSchema = v.picklist(READER_DOCUMENT_TARGET_TYPES);
 const uuidSchema = v.pipe(v.string(), v.uuid());
+const quoteContextSchema = v.pipe(
+  v.string(),
+  v.maxLength(READER_TEXT_QUOTE_CONTEXT_LENGTH),
+);
 const spanSchema = v.object({
   blockAnchorId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -53,6 +58,10 @@ const spanSchema = v.object({
     v.minLength(1),
     v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH),
   ),
+  // A tab's marks stored before the context was kept read as having none,
+  // which agrees with any surroundings: they stay the reader's own words.
+  quotePrefix: v.optional(quoteContextSchema, ""),
+  quoteSuffix: v.optional(quoteContextSchema, ""),
   startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 const spansSchema = v.pipe(
@@ -467,6 +476,8 @@ export const guestAnnotationRows = ({
         kind: item.input.kind,
         mine: true,
         quote: span.quote,
+        quotePrefix: span.quotePrefix,
+        quoteSuffix: span.quoteSuffix,
         startOffset: span.startOffset,
         style: item.input.kind === "highlight" ? item.input.style : null,
         updatedAt: item.createdAt,

@@ -14,7 +14,6 @@ import { drizzle } from "drizzle-orm/pglite";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
@@ -35,6 +34,7 @@ import {
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
+  PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -53,6 +53,7 @@ import {
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -66,7 +67,10 @@ import {
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
 // adapter and the real pipeline: the ruling's payload lands in an in-process
@@ -92,9 +96,7 @@ const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
   });
 
 const scopedDb: ScopedDb = async (callback) =>
-  // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await createIngestionRoleScopedDb(db)(callback);
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -809,6 +811,151 @@ test("reasons a correction moves to another docket leave their former ruling for
   );
 });
 
+test("reasons an erasure removes while a correction moves them end the step, and the next observation places them from the start", async () => {
+  const fixture = await newSource();
+  const OTHER_DOCKET = "IV Ka 96/18";
+  await ingestDecision(fixture, decisionOf(RULING));
+  await ingestDecision(
+    fixture,
+    decisionOf(
+      saosRow({
+        id: 339_003,
+        judgmentType: "SENTENCE",
+        judgmentDate: "2018-03-22",
+        caseNumber: OTHER_DOCKET,
+        body: RULING_TEXT,
+      }),
+    ),
+  );
+  await ingestSupplement(fixture, supplementOf(REASONS));
+  const former = await decisionBy(fixture.sourceId, "339002");
+  expect((await supplementRow(fixture.sourceId, "339001")).decisionId).toBe(
+    former.id,
+  );
+  const corrected = supplementOf(
+    saosRow({
+      id: 339_001,
+      judgmentType: "REASONS",
+      judgmentDate: "2018-04-19",
+      caseNumber: OTHER_DOCKET,
+      body: REASONS_TEXT,
+    }),
+  );
+
+  // The step asks for an observation order right before it writes the
+  // former ruling again. An erasure commits there: the delete erasure.ts
+  // runs for the supplements its decision holds.
+  let removals = 0;
+  const removed = (
+    await processSupplement({
+      supplement: corrected,
+      sourceId: fixture.sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      nextObservationOrder: async () => {
+        if (removals === 0) {
+          removals += 1;
+          await db
+            .delete(caseLawDecisionSupplements)
+            .where(eq(caseLawDecisionSupplements.decisionId, former.id));
+        }
+        return await fixture.nextObservationOrder();
+      },
+      reparseStoredRaw,
+      readStoredRaw,
+    })
+  ).unwrap();
+
+  // Terminal at once: no retry that would hold the source's cursor, and
+  // nothing placed again.
+  expect(removals).toBe(1);
+  expect(removed).toEqual({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    disposition: { type: "removed", formerJudgmentId: former.id },
+  });
+  const rows = async () =>
+    await db
+      .select({ id: caseLawDecisionSupplements.sourceDocumentId })
+      .from(caseLawDecisionSupplements)
+      .where(eq(caseLawDecisionSupplements.sourceId, fixture.sourceId));
+  expect(await rows()).toEqual([]);
+  expect((await decisionBy(fixture.sourceId, "339002")).fulltext).not.toContain(
+    REASONS_TEXT,
+  );
+
+  // The publisher's next observation is new work, placed from the start.
+  const placed = await ingestSupplement(fixture, corrected);
+  const judgment = await decisionBy(fixture.sourceId, "339003");
+  expect(placed).toEqual({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    disposition: { type: "merged", judgmentId: judgment.id },
+  });
+});
+
+test("reasons a concurrent placement moves while a correction moves them wait for the next observation", async () => {
+  const fixture = await newSource();
+  const OTHER_DOCKET = "IV Ka 96/18";
+  await ingestDecision(fixture, decisionOf(RULING));
+  await ingestDecision(
+    fixture,
+    decisionOf(
+      saosRow({
+        id: 339_003,
+        judgmentType: "SENTENCE",
+        judgmentDate: "2018-03-22",
+        caseNumber: OTHER_DOCKET,
+        body: RULING_TEXT,
+      }),
+    ),
+  );
+  await ingestSupplement(fixture, supplementOf(REASONS));
+  const former = await decisionBy(fixture.sourceId, "339002");
+  const other = await decisionBy(fixture.sourceId, "339003");
+  const corrected = supplementOf(
+    saosRow({
+      id: 339_001,
+      judgmentType: "REASONS",
+      judgmentDate: "2018-04-19",
+      caseNumber: OTHER_DOCKET,
+      body: REASONS_TEXT,
+    }),
+  );
+
+  // A concurrent placement commits where the erasure did above: the row
+  // still exists, under another ruling.
+  let moves = 0;
+  const waited = (
+    await processSupplement({
+      supplement: corrected,
+      sourceId: fixture.sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      nextObservationOrder: async () => {
+        if (moves === 0) {
+          moves += 1;
+          await db
+            .update(caseLawDecisionSupplements)
+            .set({ decisionId: other.id })
+            .where(eq(caseLawDecisionSupplements.decisionId, former.id));
+        }
+        return await fixture.nextObservationOrder();
+      },
+      reparseStoredRaw,
+      readStoredRaw,
+    })
+  ).unwrap();
+
+  // Not placed over the concurrent placement, and not ended: it waits.
+  expect(moves).toBe(1);
+  expect(waited).toEqual({
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+  });
+  expect((await supplementRow(fixture.sourceId, "339001")).decisionId).toBe(
+    other.id,
+  );
+});
+
 test("a ruling a correction dates after its reasons drops them and parks them again", async () => {
   const fixture = await newSource();
   await ingestDecision(fixture, decisionOf(RULING));
@@ -909,6 +1056,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
       Result.ok({
         decisions: [decisionOf(RULING)],
         supplements: [supplementOf(REASONS)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: null,
       }),
     );

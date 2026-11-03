@@ -9,7 +9,7 @@ use crate::{
     BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
-  local_window::ActivityCaller,
+  local_window::{ActivityAccountFeature, ActivityCaller, LocalCaller},
   time_entry_submit::{
     self, ConfirmedBatch, ConfirmedTimeEntry, CreatedEntry, Matter, MatterCandidate,
   },
@@ -88,8 +88,8 @@ fn validate_confirmation(
   Ok(())
 }
 
-fn require_account(
-  caller: &ActivityCaller,
+pub(crate) fn require_account<F: ActivityAccountFeature>(
+  caller: &LocalCaller<F>,
   gates: &FeatureGates,
   account: &LinkedAccount,
 ) -> Result<(), String> {
@@ -106,8 +106,8 @@ fn require_account(
   Ok(())
 }
 
-async fn linked_account(
-  caller: &ActivityCaller,
+pub(crate) async fn linked_account<F: ActivityAccountFeature>(
+  caller: &LocalCaller<F>,
   gates: &FeatureGates,
   state: &AccountState,
 ) -> Result<AccountRequest, String> {
@@ -275,6 +275,7 @@ mod tests {
           duration_minutes: 6,
           narrative: "Reviewed agreement".into(),
           billable: false,
+          classification: None,
         })
         .collect(),
     };
