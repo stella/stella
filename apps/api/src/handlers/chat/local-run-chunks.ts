@@ -535,13 +535,13 @@ async function* readRunChunks({
           item.message,
         );
         if (!parsed.success) {
-          return panic("A stored desktop runner message no longer validates");
+          panic("A stored desktop runner message no longer validates");
         }
         const message = parsed.output;
         switch (message.type) {
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
             if (!isPublicStreamChunk(message.chunk)) {
-              return panic("A stored desktop runner chunk no longer folds");
+              panic("A stored desktop runner chunk no longer folds");
             }
             const chunk = asChatChunk(message.chunk, rewrite);
             if (chunk.type === EventType.RUN_STARTED) {
@@ -602,14 +602,12 @@ async function* readRunChunks({
             }
             return;
           }
+          // The gateway stores only sequenced messages for a run.
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.hello:
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.harnessStatus:
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runAccepted:
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runRejected:
-            return panic(`A run stored an unsequenced ${message.type}`);
-          default:
-            message satisfies never;
-            return panic("Unknown stored desktop runner message");
+            panic(`A run stored an unsequenced ${message.type}`);
         }
       }
       if (page.value.nextAfterSeq !== null) {
@@ -636,7 +634,7 @@ async function* readRunChunks({
           continue;
         default:
           step satisfies never;
-          return panic("Unknown caught-up step");
+          panic("Unknown caught-up step");
       }
     }
   } finally {
@@ -770,7 +768,7 @@ async function* startLocalRun({
       return;
     default:
       outcome satisfies never;
-      return panic("Unknown local run start outcome");
+      panic("Unknown local run start outcome");
   }
 }
 
