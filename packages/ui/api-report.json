@@ -6353,6 +6353,11 @@
           "space": "type"
         },
         {
+          "name": "ContextMenuActionItems",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "ContextMenuProps",
           "kind": "type",
           "space": "type"
@@ -6957,6 +6962,37 @@
           "name": "statuteIdentityLabels",
           "kind": "variable",
           "space": "value"
+        }
+      ]
+    },
+    "./entity-actions": {
+      "type": "module",
+      "file": "./src/components/entity-actions.d.ts",
+      "exports": [
+        {
+          "name": "EntityAction",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityActions",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "EntityActionsButton",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "EntityActionsButtonProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EntityActionsProps",
+          "kind": "type",
+          "space": "type"
         }
       ]
     },
@@ -10069,6 +10105,42 @@
         }
       ]
     },
+    "./native-context-menu": {
+      "type": "module",
+      "file": "./src/lib/native-context-menu.d.ts",
+      "exports": [
+        {
+          "name": "NativeContextMenuReason",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isEditableContextMenuTarget",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isLinkContextMenuTarget",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isSelectedTextContextMenuTarget",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "nativeContextMenuReason",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "nativeTextContextMenuReason",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./number-input": {
       "type": "module",
       "file": "./src/components/number-input.d.ts",
@@ -11944,7 +12016,7 @@
     "./src/components/command.d.ts": "import type * as React from \"react\";\nimport { Autocomplete as AutocompletePrimitive } from \"@base-ui/react/autocomplete\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type VariantProps } from \"class-variance-authority\";\nimport type { ControlSize } from \"../lib/control-size\";\nimport { DialogPopup } from \"./dialog\";\ntype CommandProps<ItemValue> = Omit<AutocompletePrimitive.Root.Props<ItemValue>, \"items\"> & {\n    items?: readonly ItemValue[] | undefined;\n};\ndeclare const Command: <ItemValue>({ autoHighlight, keepHighlight, open, ...props }: CommandProps<ItemValue>) => React.JSX.Element;\ndeclare const CommandDialog: <Payload>(props: DialogPrimitive.Root.Props<Payload>) => React.JSX.Element;\ndeclare const CommandDialogTrigger: (props: DialogPrimitive.Trigger.Props) => React.JSX.Element;\ndeclare const CommandDialogPopup: ({ className, showCloseButton, ...props }: React.ComponentProps<typeof DialogPopup>) => React.JSX.Element;\ntype CommandInputProps = Omit<AutocompletePrimitive.Input.Props, \"size\"> & {\n    size?: ControlSize | number;\n    wrapperClassName?: string;\n    ref?: React.Ref<HTMLInputElement>;\n};\ndeclare const CommandInput: ({ className, size, wrapperClassName, dir, onChange, ...props }: CommandInputProps) => React.JSX.Element;\ndeclare const CommandPanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const CommandEmpty: ({ className, ...props }: AutocompletePrimitive.Empty.Props) => React.JSX.Element;\ndeclare const CommandList: ({ className, ...props }: AutocompletePrimitive.List.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n}) => React.JSX.Element;\ndeclare const CommandGroup: ({ className, ...props }: AutocompletePrimitive.Group.Props) => React.JSX.Element;\ndeclare const CommandGroupLabel: ({ className, ...props }: AutocompletePrimitive.GroupLabel.Props) => React.JSX.Element;\ndeclare const CommandCollection: (props: AutocompletePrimitive.Collection.Props) => React.JSX.Element;\ndeclare const commandItemVariants: (props?: ({\n    size?: \"row\" | \"default\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const CommandItem: ({ className, size, ...props }: AutocompletePrimitive.Item.Props & {\n    ref?: React.Ref<HTMLDivElement>;\n    size?: VariantProps<typeof commandItemVariants>[\"size\"];\n}) => React.JSX.Element;\ndeclare const CommandSeparator: ({ className, ...props }: AutocompletePrimitive.Separator.Props) => React.JSX.Element;\ndeclare const CommandShortcut: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const CommandFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport { Command, CommandCollection, CommandDialog, CommandDialogPopup, CommandDialogTrigger, CommandEmpty, CommandFooter, CommandGroup, CommandGroupLabel, CommandInput, CommandItem, CommandList, CommandPanel, CommandSeparator, CommandShortcut, };\n",
     "./src/components/composer-tokens.d.ts": "export declare const COMPOSER_CONTROL_BUTTON_SIZE: \"icon-sm\";\nexport declare const COMPOSER_BOX_CLASS = \"bg-background rounded-2xl border\";\nexport declare const COMPOSER_BOX_FOCUS_CLASS = \"focus-within:border-ring\";\nexport declare const COMPOSER_BOX_ANONYMIZED_CLASS = \"ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1\";\nexport declare const COMPOSER_COMPACT_ROW_CLASS = \"min-h-11 items-end gap-1 px-1.5 py-px\";\nexport declare const COMPOSER_COMPACT_TEXT_CELL_CLASS = \"relative min-w-0 py-[11px]\";\nexport declare const COMPOSER_TEXT_CLASS = \"text-sm leading-5\";\nexport declare const COMPOSER_LARGE_TEXT_WELL_CLASS = \"ps-3 pe-3 pt-2 pb-1\";\nexport declare const COMPOSER_LARGE_EDITOR_CLASS = \"min-h-15\";\nexport declare const COMPOSER_PLACEHOLDER_CLASS = \"text-foreground-placeholder pointer-events-none absolute truncate text-sm\";\nexport declare const COMPOSER_LARGE_ACTION_ROW_CLASS = \"flex items-center justify-end gap-0.5 px-1.5 pb-1.5\";\nexport declare const COMPOSER_LEADING_GROUP_CLASS = \"flex min-w-0 items-center gap-0.5\";\nexport declare const COMPOSER_SEND_BUTTON_CLASS = \"bg-foreground text-background hover:bg-foreground/90 size-7 shrink-0 rounded-full\";\nexport declare const COMPOSER_PICKER_TRIGGER_CLASS = \"text-muted-foreground hover:text-foreground hover:bg-accent inline-flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs\";\n",
     "./src/components/composer.d.ts": "import type { ReactNode } from \"react\";\nexport { COMPOSER_CONTROL_BUTTON_SIZE, COMPOSER_BOX_CLASS, COMPOSER_BOX_FOCUS_CLASS, COMPOSER_BOX_ANONYMIZED_CLASS, COMPOSER_COMPACT_ROW_CLASS, COMPOSER_COMPACT_TEXT_CELL_CLASS, COMPOSER_TEXT_CLASS, COMPOSER_LARGE_TEXT_WELL_CLASS, COMPOSER_LARGE_EDITOR_CLASS, COMPOSER_PLACEHOLDER_CLASS, COMPOSER_LARGE_ACTION_ROW_CLASS, COMPOSER_LEADING_GROUP_CLASS, COMPOSER_SEND_BUTTON_CLASS, COMPOSER_PICKER_TRIGGER_CLASS, } from \"./composer-tokens\";\ntype ComposerStatusRowProps = {\n    start?: ReactNode | undefined;\n    end?: ReactNode | undefined;\n    center?: ReactNode | undefined;\n    className?: string | undefined;\n};\nexport declare const ComposerStatusRow: ({ start, end, center, className, }: ComposerStatusRowProps) => import(\"react\").JSX.Element | null;\nexport type ComposerPickerOption<Value extends string> = {\n    label: string;\n    value: Value;\n};\ntype ComposerPickerProps<Value extends string> = {\n    ariaLabel: string;\n    icon: ReactNode;\n    onChange: (value: Value) => void;\n    options: readonly ComposerPickerOption<Value>[];\n    value: Value;\n};\nexport declare const ComposerPicker: <Value extends string>({ ariaLabel, icon, onChange, options, value, }: ComposerPickerProps<Value>) => import(\"react\").JSX.Element;\n",
-    "./src/components/context-menu.d.ts": "import type { ReactNode } from \"react\";\nexport type ContextMenuAction = {\n    label: string;\n    icon?: ReactNode;\n    onClick?: () => void;\n    variant?: \"default\" | \"destructive\";\n    disabled?: boolean;\n    checked?: boolean;\n    submenu?: readonly ContextMenuAction[];\n    separatorBefore?: boolean;\n    closeOnClick?: boolean;\n};\nexport type ContextMenuProps = {\n    actions: readonly ContextMenuAction[];\n    children: ReactNode;\n};\nexport declare const ContextMenu: ({ actions, children, }: ContextMenuProps) => ReactNode;\n",
+    "./src/components/context-menu.d.ts": "import type { ReactNode } from \"react\";\nexport type ContextMenuAction = {\n    label: string;\n    icon?: ReactNode;\n    onClick?: () => void;\n    variant?: \"default\" | \"destructive\";\n    disabled?: boolean;\n    checked?: boolean;\n    submenu?: readonly ContextMenuAction[];\n    separatorBefore?: boolean;\n    closeOnClick?: boolean;\n};\nexport type ContextMenuProps = {\n    actions: readonly ContextMenuAction[];\n    children: ReactNode;\n};\nexport declare const ContextMenu: ({ actions, children, }: ContextMenuProps) => ReactNode;\nexport declare const ContextMenuActionItems: ({ actions, }: {\n    actions: readonly ContextMenuAction[];\n}) => import(\"react\").JSX.Element;\n",
     "./src/components/copy-button.d.ts": "import type { ComponentProps } from \"react\";\nimport { CopyToClipboardIcon } from \"../icons\";\nimport { Button } from \"./button\";\nexport declare const COPIED_RESET_MS = 1500;\ntype CopyButtonProps = Omit<ComponentProps<typeof Button>, \"children\" | \"onClick\"> & {\n    onCopy: () => Promise<boolean>;\n    label: string;\n    copiedLabel: string;\n    iconOnly?: boolean;\n    iconClassName?: string;\n    labelClassName?: string;\n};\nexport declare const useCopyConfirmation: (onCopy: () => Promise<boolean>) => {\n    copied: boolean;\n    copy: () => Promise<void>;\n};\nexport declare const CopyButton: ({ onCopy, label, copiedLabel, iconOnly, iconClassName, labelClassName, className, ...buttonProps }: CopyButtonProps) => import(\"react\").JSX.Element;\nexport declare const useCopiedFeedback: () => {\n    copied: boolean;\n    confirm: () => void;\n    reset: () => void;\n};\ntype CopyFeedbackProps = {\n    icon?: typeof CopyToClipboardIcon | undefined;\n    labelClassName?: string | undefined;\n    copied: boolean;\n    copiedLabel: string;\n    iconOnly?: boolean | undefined;\n    iconClassName?: string | undefined;\n    label: string;\n};\nexport declare const CopyFeedback: ({ icon: Icon, labelClassName, copied, copiedLabel, iconOnly, iconClassName, label, }: CopyFeedbackProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/court-badge.d.ts": "export type CourtBadgeWeight = \"solid\" | \"tinted\" | \"outline\" | \"dashed\";\nexport type CourtBadgeSize = \"default\" | \"inline\";\ntype CourtBadgeProps = {\n    abbreviation: string;\n    weight: CourtBadgeWeight;\n    size?: CourtBadgeSize | undefined;\n    className?: string;\n};\nexport declare const CourtBadge: ({ abbreviation, className, size, weight, }: CourtBadgeProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/court-filter.d.ts": "type CourtOption = {\n    value: string;\n    label?: string;\n    badgeText?: string;\n};\ntype CourtFilterGroup = {\n    value: string;\n    label: string | null;\n    courts: readonly CourtOption[];\n};\ntype CourtFilterBaseProps = {\n    groups: readonly CourtFilterGroup[];\n    label: string;\n};\ntype SingleCourtFilterProps = CourtFilterBaseProps & {\n    selected: string | undefined;\n    onChange: (value: string | undefined) => void;\n    collapsedGroups: readonly string[];\n    visibleRowLimit: number;\n    showAllLabel: string;\n};\ntype MultipleCourtFilterProps = CourtFilterBaseProps & {\n    selected: readonly string[];\n    onChange: (values: string[]) => void;\n    maxSelections: number;\n    selectionHint: string;\n    searchLabel: string;\n    clearLabel: string;\n    emptyLabel: string;\n    matchText: (value: string) => string;\n};\nexport declare const toggleCourtSelection: (selected: readonly string[], values: readonly string[]) => string[];\nexport declare const MultipleCourtFilter: (options: MultipleCourtFilterProps) => import(\"react\").JSX.Element;\nexport declare const SingleCourtFilter: (props: SingleCourtFilterProps) => import(\"react\").JSX.Element;\nexport {};\n",
@@ -11959,6 +12031,7 @@
     "./src/components/directional-icon.d.ts": "import type { LucideIcon } from \"../icons\";\ntype DirectionalIconProps = {\n    icon: LucideIcon;\n    className?: string;\n    flip?: boolean;\n};\nexport declare const DirectionalIcon: ({ icon: Icon, className, flip, }: DirectionalIconProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/document-identity-badge.logic.d.ts": "export declare const COURT_TIER_WEIGHT: {\n    readonly constitutional: \"solid\";\n    readonly supreme: \"tinted\";\n    readonly regional: \"outline\";\n    readonly other: \"dashed\";\n};\nexport type DocumentIdentity = {\n    kind: \"statute\";\n    number: string | null;\n    year: string | null;\n} | {\n    kind: \"decision\";\n    courtAbbreviation: string | null | undefined;\n    courtTier?: keyof typeof COURT_TIER_WEIGHT | undefined;\n} | {\n    kind: \"caseNumber\";\n    caseNumber: string | null | undefined;\n} | {\n    kind: \"unknown\";\n};\nexport type IdentityLabels = {\n    short: string;\n    long: string;\n};\nexport declare const statuteIdentityLabels: ({ number, year, }: Extract<DocumentIdentity, {\n    kind: \"statute\";\n}>) => IdentityLabels | null;\nexport declare const caseNumberIdentityLabels: ({ caseNumber, }: Extract<DocumentIdentity, {\n    kind: \"caseNumber\";\n}>) => IdentityLabels | null;\n",
     "./src/components/document-identity-badge.d.ts": "import type { CourtBadgeSize } from \"./court-badge\";\nimport type { DocumentIdentity } from \"./document-identity-badge.logic\";\nexport declare const DocumentIdentityBadge: ({ identity, size, title, }: DocumentIdentityBadgeProps) => import(\"react\").JSX.Element;\ntype DocumentIdentityBadgeProps = {\n    identity: DocumentIdentity;\n    size?: CourtBadgeSize | undefined;\n    title?: string | undefined;\n};\nexport {};\n",
+    "./src/components/entity-actions.d.ts": "import type { ReactNode, Ref } from \"react\";\nimport type { ContextMenuAction } from \"./context-menu\";\nexport type EntityAction = ContextMenuAction;\nexport type EntityActionsProps = {\n    actions: readonly EntityAction[];\n    children: ReactNode;\n    heading?: ReactNode;\n    label: string;\n};\nexport declare const EntityActions: ({ actions, children, heading, label, }: EntityActionsProps) => import(\"react\").JSX.Element;\nexport type EntityActionsButtonProps = {\n    align?: \"center\" | \"end\" | \"start\";\n    ref?: Ref<HTMLButtonElement>;\n    side?: \"bottom\" | \"left\" | \"right\" | \"top\";\n};\nexport declare const EntityActionsButton: ({ align, ref, side, }: EntityActionsButtonProps) => import(\"react\").JSX.Element | null;\n",
     "./src/components/field.d.ts": "import { Field as FieldPrimitive } from \"@base-ui/react/field\";\ndeclare const Field: ({ className, ...props }: FieldPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const FieldLabel: ({ className, ...props }: FieldPrimitive.Label.Props) => import(\"react\").JSX.Element;\ndeclare const FieldItem: ({ className, ...props }: FieldPrimitive.Item.Props) => import(\"react\").JSX.Element;\ndeclare const FieldDescription: ({ className, ...props }: FieldPrimitive.Description.Props) => import(\"react\").JSX.Element;\ndeclare const FieldError: ({ className, ...props }: FieldPrimitive.Error.Props) => import(\"react\").JSX.Element;\ndeclare const FieldControl: import(\"react\").ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").FieldControlProps, \"ref\"> & import(\"react\").RefAttributes<HTMLElement>>;\ndeclare const FieldValidity: import(\"react\").FC<import(\"@base-ui/react\").FieldValidityProps>;\nexport { Field, FieldLabel, FieldDescription, FieldError, FieldControl, FieldItem, FieldValidity, };\n",
     "./src/components/file-input.d.ts": "type FileInputProps = {\n    accept?: string | undefined;\n    \"aria-labelledby\"?: string | undefined;\n    className?: string | undefined;\n    disabled?: boolean | undefined;\n    file: File | null;\n    onFileChange: (file: File) => void;\n    chooseLabel: string;\n    emptyLabel: string;\n};\ndeclare const FileInput: ({ accept, \"aria-labelledby\": labelledBy, className, disabled, file, onFileChange, chooseLabel, emptyLabel, }: FileInputProps) => import(\"react\").JSX.Element;\nexport { FileInput, type FileInputProps };\n",
     "./src/components/form.d.ts": "import { Form as FormPrimitive } from \"@base-ui/react/form\";\nimport { type VariantProps } from \"class-variance-authority\";\ndeclare const formVariants: (props?: ({\n    density?: \"default\" | \"compact\" | \"snug\" | null | undefined;\n    layout?: \"inline\" | \"stack\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ntype FormErrors = NonNullable<FormPrimitive.Props[\"errors\"]>;\ntype FormProps = FormPrimitive.Props & VariantProps<typeof formVariants> & {\n    dirty?: boolean;\n    onDiscard?: (() => void) | undefined;\n};\ndeclare const Form: ({ className, density, layout, dirty, onDiscard, children, ...props }: FormProps) => import(\"react\").JSX.Element;\nexport { Form, formVariants };\nexport type { FormErrors, FormProps };\n",
@@ -12076,6 +12149,7 @@
     "./src/lib/initials.d.ts": "export declare const getInitials: (name: string | null) => string;\n",
     "./src/lib/inline-reorder.d.ts": "type InlineDropEdge = \"top\" | \"right\" | \"bottom\" | \"left\";\nexport type InlineDirection = \"ltr\" | \"rtl\";\nexport type InlineDropPosition = \"before\" | \"after\";\nexport declare const toInlineDropPosition: (edge: InlineDropEdge | null, direction: InlineDirection) => InlineDropPosition | null;\ntype ReorderInlineIdsParams = {\n    ids: readonly string[];\n    draggedId: string;\n    targetId: string;\n    position: InlineDropPosition;\n};\nexport declare const reorderInlineIds: ({ ids, draggedId, targetId, position, }: ReorderInlineIdsParams) => string[] | null;\nexport {};\n",
     "./src/lib/matter-colors.d.ts": "import type { CSSProperties } from \"react\";\nexport declare const MATTER_SWATCHES: readonly [\n    \"--option-blue\",\n    \"--option-emerald\",\n    \"--option-amber\",\n    \"--option-violet\",\n    \"--option-red\",\n    \"--option-cyan\",\n    \"--option-orange\",\n    \"--option-teal\"\n];\nexport declare const getMatterSwatch: (id: string) => \"--option-blue\" | \"--option-emerald\" | \"--option-amber\" | \"--option-violet\" | \"--option-red\" | \"--option-cyan\" | \"--option-orange\" | \"--option-teal\";\nexport declare const getMatterColor: (id: string) => string;\nexport declare const getMatterPickerColor: (id: string, color: string | null) => string;\nexport declare const toStoredMatterColor: (color: string) => string;\nexport declare const resolveMatterColor: (id: string, color: string | null) => string;\nexport declare const MATTER_TINT_GROUND: {\n    readonly chrome: \"var(--untinted-sidebar)\";\n    readonly content: \"var(--untinted-background)\";\n};\ntype MatterTintGround = (typeof MATTER_TINT_GROUND)[keyof typeof MATTER_TINT_GROUND];\nexport declare const matterTint: (color: string | null, ground: MatterTintGround) => string;\nexport type MatterChromeStyle = CSSProperties & {\n    \"--matter-background-tint\": string;\n    \"--matter-sidebar-tint\": string;\n};\nexport declare const matterChromeStyle: (color: string | null) => MatterChromeStyle;\nexport {};\n",
+    "./src/lib/native-context-menu.d.ts": "export type NativeContextMenuReason = \"editable\" | \"link\" | \"selection\" | \"shift\";\ntype ContextMenuEventLike = {\n    readonly shiftKey: boolean;\n    readonly target: EventTarget | null;\n};\nexport declare const isEditableContextMenuTarget: (element: Element) => boolean;\nexport declare const isLinkContextMenuTarget: (element: Element) => boolean;\nexport declare const isSelectedTextContextMenuTarget: (element: Element) => boolean;\nexport declare const nativeContextMenuReason: (event: ContextMenuEventLike) => NativeContextMenuReason | null;\nexport declare const nativeTextContextMenuReason: (event: Pick<ContextMenuEventLike, \"target\">) => Extract<NativeContextMenuReason, \"editable\" | \"selection\"> | null;\nexport {};\n",
     "./src/lib/option-color.d.ts": "export type OptionColor = \"red\" | \"orange\" | \"amber\" | \"yellow\" | \"lime\" | \"green\" | \"emerald\" | \"teal\" | \"cyan\" | \"sky\" | \"blue\" | \"indigo\" | \"violet\" | \"purple\" | \"fuchsia\" | \"gray\" | (string & Record<never, never>);\nexport type ColorVariants = {\n    background: string;\n    foreground: string;\n    color: string;\n};\nexport declare const emptyColor: ColorVariants;\nexport declare const resolveOptionColor: (color: OptionColor) => ColorVariants;\nexport declare const optionColors: readonly OptionColor[];\n",
     "./src/lib/overlay-layer.d.ts": "export declare const BOARD_DRAG_OVERLAY_Z_INDEX = 75;\nexport declare const SHELL_CHROME_LAYER_CLASS_NAME = \"z-30\";\nexport declare const OVERLAY_LAYER_CLASS_NAMES: {\n    readonly chrome: \"z-[80]\";\n    readonly \"chrome-raised\": \"z-[81]\";\n    readonly default: \"z-[85]\";\n    readonly search: \"z-[86]\";\n    readonly popup: \"z-[100]\";\n    readonly \"search-child\": \"z-[100]\";\n};\nexport type OverlayLayer = keyof typeof OVERLAY_LAYER_CLASS_NAMES;\nexport declare const OVERLAY_COLLISION_PADDING = 8;\n",
     "./src/lib/panel-inset.d.ts": "export declare const DOCUMENT_PANEL_BOTTOM_INSET = \"--document-panel-bottom-inset\";\nexport declare const DOCUMENT_PANEL_SAFE_BOTTOM = \"max(env(safe-area-inset-bottom, 0px), var(--document-panel-bottom-inset, 0px))\";\nexport declare const publishDocumentPanelInset: (element: HTMLDivElement | null) => (() => void) | undefined;\n",
