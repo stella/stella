@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.6.2
+
+### Patch Changes
+
+- [#7147](https://github.com/stella/stella/pull/7147) [`6437ee1`](https://github.com/stella/stella/commit/6437ee114994c67fdc87348c0ac16d21daee6df4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow matter-list requests to filter matters by active or archived status.
+
 ## 6.6.1
 
 ### Patch Changes
