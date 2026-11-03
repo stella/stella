@@ -258,6 +258,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/business-registries/src/cpf/index.ts",
     "packages/business-registries/src/cpf/validation.ts",
     "packages/db-load-gate/src/*",
+    "packages/decision-reader/src/reader-text-pieces.logic.ts",
     "packages/infosoud/src/*",
     "packages/template-packs/src/*",
     "apps/api/package.json",

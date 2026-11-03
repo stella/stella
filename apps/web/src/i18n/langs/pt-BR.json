@@ -4569,6 +4569,10 @@
         "undoShortcut": "Desfazer alteração de destaque ou comentário",
         "visibilityRestored": "Compartilhamento restaurado"
       },
+      "orphaned": {
+        "description": "O texto deste documento foi atualizado desde que foram criados: os trechos marcados não puderam ser encontrados nele novamente ou agora aparecem em mais de um lugar. Eles não são exibidos no texto.",
+        "summary": "{count, plural, one {# destaque ou comentário não corresponde mais ao texto} other {# destaques e comentários não correspondem mais ao texto} many {# destaques e comentários não correspondem mais ao texto}}"
+      },
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
       "styleHighlight": "Destaque",
