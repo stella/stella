@@ -600,7 +600,7 @@ test("a preserved registry applies to tests in the deployed workspace", () => {
   expect(records).toContainEqual(
     expect.objectContaining({
       type: "failed",
-      id: `${FIXTURE}::${FAILING.at(0)}`,
+      id: `${FIXTURE}::outer > inner > throws`,
     }),
   );
 });

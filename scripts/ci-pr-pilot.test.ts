@@ -273,9 +273,14 @@ const partSelected = (
   if (host === undefined) {
     return evaluate(workflow.jobs[name]?.if ?? "true", context);
   }
+  // The host job checked out and installed before its parts run.
   const installed = {
     ...context,
-    values: { ...context.values, "steps.install.outcome": "success" },
+    values: {
+      ...context.values,
+      "steps.checkout.outcome": "success",
+      "steps.install.outcome": "success",
+    },
   };
   const hosts = [host, "ci-quick-checks"];
   const selectedHost = hosts.find(

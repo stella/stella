@@ -563,7 +563,7 @@ const conditionProofValue = (
 
 type ConditionProofOptions = {
   source: string;
-  status: Context["status"];
+  status: NonNullable<Context["status"]>;
   phase: string;
   stableStepIds: ReadonlySet<string>;
 };
@@ -627,9 +627,7 @@ const conditionProof = ({
     }),
   };
   const terms = parseExpression(source, semantics).terms;
-  return hasStatusCheckFunction(source) || status?.success === true
-    ? terms
-    : [];
+  return hasStatusCheckFunction(source) || status.success === true ? terms : [];
 };
 
 const STEP_STATUSES = [
