@@ -60,9 +60,9 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject, ReadyHarness,
-  RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnsupportedHarness,
+  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject,
+  LimitedHarness, ReadyHarness, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -468,6 +468,13 @@ pub(crate) fn harness_report(
       HarnessReport::NeedsLogin(SignedOutHarness {
         id: harness,
         version: version.clone(),
+      })
+    }
+    ProbeOutcome::LimitUntil { version, resets_at } => {
+      HarnessReport::LimitUntil(LimitedHarness {
+        id: harness,
+        version: version.clone(),
+        resets_at: resets_at.clone(),
       })
     }
     // The runner report carries the refused version only.

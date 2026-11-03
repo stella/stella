@@ -15,6 +15,10 @@ import type {
   HarnessTurn,
 } from "../harness/adapter";
 import {
+  claudeCodeLaunch,
+  createClaudeCodeHarnessAdapter,
+} from "../harness/claude-code/adapter";
+import {
   codexAppServerLaunch,
   createCodexHarnessAdapter,
 } from "../harness/codex/adapter";
@@ -106,7 +110,14 @@ const ADAPTERS = {
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
     }),
-  "claude-code": null,
+  "claude-code": (launch: HarnessLaunch, options: AdapterOptions) =>
+    createClaudeCodeHarnessAdapter({
+      launch: claudeCodeLaunch(launch.executable),
+      claudeConfigDir: launch.configDir,
+      environment: options.environment,
+      gracePeriodMs: HARNESS_GRACE_MS,
+      onBackgroundError: options.onBackgroundError,
+    }),
   opencode: null,
 } as const satisfies Record<
   AgentHarness,
@@ -184,6 +195,13 @@ const probeOutcome = ({
   }
   if (probe.auth.type === "signed_out") {
     return { type: "needs_login", version: probe.version };
+  }
+  if (probe.usageLimit !== null) {
+    return {
+      type: "limit_until",
+      version: probe.version,
+      resetsAt: probe.usageLimit.resetsAt,
+    };
   }
   return {
     type: "ready",
