@@ -342,9 +342,12 @@ export const ChatTabPanel = ({
 
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
+        const message = await buildChatRequestMessage({ files, html: prompt });
+        if (message.isErr()) {
+          notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
+        await sendMessage(message.value);
         return CHAT_SEND_SENT;
       } catch (submitError) {
         // Reported here, so the composer only takes the draft back.
@@ -610,7 +613,7 @@ export const ChatTabPanel = ({
               threadId: newThreadId,
               workspaceId: tabWorkspaceId,
             };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
@@ -621,6 +624,10 @@ export const ChatTabPanel = ({
         queryClient,
         threadRef: newThreadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       leave();
       resetChatTabId(tab.id, newThreadId);
       return CHAT_SEND_SENT;
@@ -775,7 +782,15 @@ export const ChatTabPanel = ({
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }
-                      await sendMessage(await buildChatRequestMessage(draft));
+                      const message = await buildChatRequestMessage(draft);
+                      if (message.isErr()) {
+                        notifyUserError(
+                          message.error,
+                          t("chat.sendErrorMessageEmpty"),
+                        );
+                        return CHAT_SEND_KEPT;
+                      }
+                      await sendMessage(message.value);
                       return CHAT_SEND_SENT;
                     }),
                     "chat-tab-panel.submit",

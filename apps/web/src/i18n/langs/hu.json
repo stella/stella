@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "MI",
+    "auditArchiveDescription": "A szervezet törlésével a tevékenységnaplója is törlődik. Először exportálja a tevékenységnaplót, és töltse le az archívumot; egy óráig érhető el.",
+    "auditArchiveDownloadFirst": "A szervezet törlése előtt töltse le a tevékenységnapló archívumát.",
+    "auditArchiveFailed": "A tevékenységnapló archívumát nem sikerült előkészíteni.",
+    "auditArchiveOutdated": "Az archívum elkészülte óta új bejegyzések kerültek a tevékenységnaplóba. Exportálja újra, mielőtt törli a szervezetet.",
+    "auditArchiveReady": "A tevékenységnapló archívuma elkészült. Most már törölheti a szervezetet.",
+    "auditArchiveRequest": "Tevékenységnapló exportálása",
+    "auditArchiveRequestNew": "Tevékenységnapló újbóli exportálása",
+    "auditArchiveWorking": "A tevékenységnapló archívumának előkészítése…",
     "billingProfiles": "Számlázási profilok",
     "deleteDescription": "Véglegesen törli ezt a szervezetet és az adatait. Ez a művelet nem vonható vissza.",
     "deleteOrganization": "Szervezet törlése",
+    "deleteRefusedAuditArchive": "A szervezet törlése előtt exportálja annak tevékenységnaplóját.",
     "deleteRefusedSubscription": "Ennek a szervezetnek megújuló előfizetése van. Először mondja le a Csomag és használat oldalon, majd törölje a szervezetet.",
     "deleteTypeToConfirm": "A megerősítéshez írja be: {name}.",
     "firmSetup": "Iroda beállításai",
@@ -820,12 +829,14 @@
       "effectiveFrom": "Érvényes (kezdet)",
       "effectiveRateRequired": "Ehhez az ügyhöz, személyhez és dátumhoz nincs érvényes óradíj. Adjon hozzá óradíjat, vagy rögzítse az időt nem számlázhatóként.",
       "effectiveTo": "Érvényes (vég)",
+      "firstTableIsDefault": "Az ügy első díjtáblázata az alapértelmezett.",
       "hourlyRate": "Óradíj",
       "logNonBillable": "Rögzítés nem számlázhatóként",
       "noRateEntries": "Még nincsenek díjtételek",
       "noRateFound": "Nincs beállított díjszabás",
       "noRateTables": "Még nincsenek díjtáblázatok",
       "ongoing": "Folyamatban",
+      "onlyDefaultApplies": "Csak az ügy alapértelmezett díjtáblázatának díjai érvényesek.",
       "override": "Felülírás",
       "perHour": "/óra",
       "rateCount": "{count, plural, one {# díjtétel} other {# díjtétel}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
-    "addCustomMcp": "MCP-szerver hozzáadása",
+    "addCustomMcp": "Integráció hozzáadása",
     "addCustomSkill": "Készség hozzáadása",
     "by": "Készítette: {author}",
     "configuration": "Konfiguráció",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Hitelesítés",
     "empty": "Nincs az aktuális szűrőnek megfelelő bejegyzés.",
     "filter": {
-      "mcps": "MCP-szerverek",
+      "mcps": "Integrációk",
       "nativeTools": "Beépített eszközök",
       "skills": "Készségek"
     },
@@ -1803,6 +1814,7 @@
     "sendErrorContinuationRejected": "A csevegést nem sikerült folytatni. Az újrakezdéshez küldjön új üzenetet.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
+    "sendErrorMessageEmpty": "Az üzenet nem tartalmaz elküldhető szöveget. Írja be a kérdését, vagy csatoljon egy fájlt, majd küldje el.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
     "sendErrorNotStarted": "A beszélgetés még foglalt. Várjon egy kicsit, és próbálja újra.",
     "sendErrorPreparationFailed": "Nem sikerült előkészíteni az üzenetet. Nyissa meg újra a csevegést, és próbálja újra.",
@@ -2489,7 +2501,7 @@
     "scopeChat": "Csevegések és üzenetek olvasása és kezelése",
     "scopeContactsWrite": "Kapcsolatok létrehozása, szerkesztése és törlése a teljes szervezetben",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
-    "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
+    "scopeExternalMcps": "A csatlakoztatott integrációk használata",
     "scopeFeedback": "Termékvisszajelzés küldése a stella karbantartóinak",
     "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",
     "scopeLawRead": "Nyilvános jogszabályok és ítélkezési gyakorlat olvasása",
@@ -2515,7 +2527,7 @@
     "summaryChat": "csevegések",
     "summaryContactsWrite": "kapcsolatok",
     "summaryDocumentsWrite": "dokumentumok",
-    "summaryExternalMcps": "csatlakoztatott külső eszközök",
+    "summaryExternalMcps": "csatlakoztatott integrációk",
     "summaryKnowledgeWrite": "záradékok és playbookok",
     "summaryLawRead": "nyilvános jogszabályok és ítélkezési gyakorlat",
     "summaryLineChange": "<group>Létrehozás és szerkesztés:</group> {items}",
@@ -2544,8 +2556,8 @@
     "attorneys": {
       "none": "Nem hozzárendelt",
       "originating": "Elsődleges kapcsolattartó",
-      "responsible": "Felelős ügyvéd",
-      "title": "Ügyvédek"
+      "responsible": "Felelős személy",
+      "title": "Kapcsolatfelelősök"
     },
     "billing": {
       "addBankAccount": "Bankszámla hozzáadása",
@@ -2599,9 +2611,16 @@
       "value": "Mező értéke"
     },
     "datePrecision": "Dátum pontossága",
+    "deleteBlockedByMattersCount": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
+    "deleteBlockedCount": "El nem távolított névjegyek: {count}",
     "deleteContact": "Kapcsolat törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
+    "deleteNotFoundCount": "Nem található névjegyek: {count}.",
+    "deleteSelected": "{count, plural, one {# névjegy törlése} other {# névjegy törlése}}",
+    "deleteSelectedConfirm": "Véglegesen töröl {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+    "deleteSelectedLimit": "Egyszerre legfeljebb {limit} törlendő névjegyet válasszon ki.",
+    "deletedCount": "{count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
     "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {
       "other": "Egyéb",
@@ -2732,6 +2751,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
+      "undoImport": "Importálás visszavonása ({count})",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
@@ -2761,6 +2781,7 @@
     "saved": "A kapcsolati adatok mentve.",
     "search": "Kapcsolatok keresése...",
     "searchCountries": "Országok keresése",
+    "selectContact": "{name} kijelölése",
     "title": "Ügyfelek",
     "type": {
       "organization": "Szervezet",
@@ -3387,7 +3408,7 @@
     "doubleClickFooter": "Kattintson duplán élőláb hozzáadásához",
     "doubleClickHeader": "Kattintson duplán élőfej hozzáadásához",
     "downloadCheckpoint": "Ellenőrzőpont letöltése",
-    "editAuthRequired": "Frissítse a Stellát, és a dokumentum szerkesztése előtt jelentkezzen be újra.",
+    "editAuthRequired": "Frissítse a stellát, és a dokumentum szerkesztése előtt jelentkezzen be újra.",
     "editDownloadFailed": "Nem sikerült letölteni a dokumentumot szerkesztésre.",
     "editLink": "Hivatkozás szerkesztése",
     "editOpenFailed": "Nem sikerült megnyitni a dokumentumot szerkesztésre.",
@@ -3460,7 +3481,7 @@
     "redoShortcut": "Mégis (Ctrl+Y)",
     "rejectChange": "Módosítás elutasítása",
     "removeLink": "Hivatkozás eltávolítása",
-    "renderErrorDescription": "Hiba történt az összetevő megjelenítése közben. Próbálja újra, vagy forduljon az ügyfélszolgálathoz, ha a probléma továbbra is fennáll.",
+    "renderErrorDescription": "Nem sikerült megjeleníteni a dokumentum ezen részét. Töltse be újra az oldalt, és ha a hiba ismét előfordul, jelezze nekünk.",
     "saveCheckpointFailedDescription": "A DOCX helyben létrejött, de a stella nem tudta feltölteni a mentési pontot. Hagyja nyitva a szerkesztőt, és próbálja újra a mentést.",
     "saveCheckpointFailedTitle": "A mentés feltöltése sikertelen",
     "saveEditorUnavailableDescription": "A szerkesztő még nem áll készen. Várja meg, amíg a dokumentum betöltődik, majd próbálja újra a mentést.",
@@ -4161,7 +4182,7 @@
     "mcp": {
       "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",
-      "addServerCardTitle": "Új MCP-szerver hozzáadása",
+      "addServerCardTitle": "Új integráció hozzáadása",
       "auth": {
         "bearer": "Bearer-token",
         "none": "Nincs hitelesítés",
@@ -4458,7 +4479,7 @@
       },
       "commandConflict": "Már létezik készség ezzel a / paranccsal",
       "commandHelp": "A készség futtatásához írja be a parancsot a csevegésbe.",
-      "commandLabel": "Perjeles parancs (nem kötelező)",
+      "commandLabel": "Csevegési parancs (nem kötelező)",
       "commandPlaceholder": "pl. összefoglalás",
       "errors": {
         "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon"
@@ -4605,7 +4626,7 @@
     "chat": "Csevegés",
     "contacts": "Kapcsolatok",
     "inbox": "Beérkezett",
-    "knowledge": "Tudásbázis",
+    "knowledge": "Analitika",
     "myTodos": "Feladataim",
     "pinned": "Rögzített",
     "recentMatters": "Legutóbbi ügyek",
@@ -5343,11 +5364,16 @@
       "auditLogsActionDownload": "Letöltés",
       "auditLogsActionExecute": "Futtatás",
       "auditLogsActionUpdate": "Frissítés",
+      "auditLogsActorId": "Végrehajtó azonosítója",
+      "auditLogsAfter": "Utána",
       "auditLogsAllActions": "Minden művelet",
+      "auditLogsAnyone": "Bárki",
+      "auditLogsBefore": "Előtte",
       "auditLogsChanges": "Változtatások",
       "auditLogsDeletedResource": "törölt {kind}",
       "auditLogsDescription": "Ki mit csinált ebben a szervezetben, és mikor.",
       "auditLogsEmpty": "Még nincs tevékenység.",
+      "auditLogsEmptyValue": "(üres)",
       "auditLogsError": "Nem sikerült betölteni a tevékenységnaplót.",
       "auditLogsExport": "Naplók exportálása",
       "auditLogsExportFailed": "Nem sikerült exportálni a tevékenységnaplót.",
@@ -5355,6 +5381,13 @@
       "auditLogsExporting": "Exportálás...",
       "auditLogsFrom": "Kezdő dátum",
       "auditLogsLoading": "Naplók betöltése...",
+      "auditLogsMoreChanges": "+{count, plural, one {# további} other {# további}}",
+      "auditLogsNoChanges": "Nincs rögzített mezőváltozás.",
+      "auditLogsPerformer": "Végrehajtó",
+      "auditLogsPerformerAll": "Személyek és automatizálások",
+      "auditLogsPerformerAutomations": "Automatizálások",
+      "auditLogsPerformerPeople": "Személyek",
+      "auditLogsPersonPlaceholder": "Keresés név vagy e-mail alapján",
       "auditLogsResourceId": "Erőforrás-azonosító",
       "auditLogsResourceIdentifier": "Erőforrás-azonosító: {id}",
       "auditLogsResourceType": "Erőforrás típusa",
@@ -5377,8 +5410,6 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUnavailableResource": "{kind} (nem érhető el)",
       "auditLogsUnknownResource": "ismeretlen elem",
-      "auditLogsUserId": "Felhasználói azonosító",
-      "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
       "auditResourceKinds": {
         "agent_skill": "készség",
         "agent_skill_comment": "készség megjegyzése",
@@ -5853,7 +5884,7 @@
     "notFound": "A feladat nem található",
     "openWorkflowRun": "Munkafolyamat futtatásának megnyitása",
     "overdue": "Lejárt",
-    "owner": "Felelős",
+    "owner": "Kezeli",
     "priority": "Prioritás",
     "priorityValues": {
       "high": "Magas",
@@ -6346,6 +6377,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ez az ügy archivált és csak olvasható.",
     "calculations": {
       "choose": "Számítás",
       "kinds": {
@@ -6433,7 +6465,8 @@
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
       "selectAValue": "Válasszon értéket",
-      "selectValues": "Válasszon értékeket"
+      "selectValues": "Válasszon értékeket",
+      "wholeNumberOnly": "Adjon meg egy egész számot"
     },
     "files": {
       "addFilePropertyToUpload": "Adjon hozzá fájltulajdonságot a fájlok feltöltéséhez",
@@ -6727,7 +6760,7 @@
     "matterInfo": "Ügy adatai",
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
     "members": {
-      "addMember": "Tag hozzáadása",
+      "addMember": "Hozzáadás az ügyhöz",
       "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
       "alreadyMember": "A felhasználó már tag",
       "alreadyOnMatter": "Már tagja ennek az ügynek",
@@ -6922,7 +6955,7 @@
       },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
-      "evidence": "Bizonyíték",
+      "evidence": "Indoklás",
       "incorrectPassword": "Hibás jelszó. Kérjük, próbálja újra.",
       "nextPage": "Következő oldal",
       "pageEditor": {
@@ -7202,6 +7235,7 @@
       "aiModel": "AI modell",
       "manualInput": "Kézzel"
     },
+    "unarchiveBeforeDelete": "Az ügy törlése előtt szüntesse meg az archiválását.",
     "unarchiveMatter": "Visszaállítás",
     "uploadDocuments": "Dokumentumok feltöltése",
     "views": {

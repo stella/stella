@@ -359,7 +359,8 @@ const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
 const runOfMark = (mark: LineMark, run: PlSnRun | undefined): PlSnRun => {
   const style = {
     bold: run?.bold ?? false,
-    ...(run?.italic === undefined ? {} : { italic: run.italic }),
+    // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+    ...(run?.italic !== undefined ? { italic: run.italic } : {}),
   };
   switch (mark.type) {
     case "superscript":

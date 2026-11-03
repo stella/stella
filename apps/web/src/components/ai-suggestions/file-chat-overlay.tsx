@@ -1655,7 +1655,12 @@ const FileChatOverlayInner = ({
       // minimised it earlier — they're sending a new prompt
       // and want to see the response stream in.
       setPanelOpen(true);
-      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      const message = await buildChatRequestMessage({ files, html: prompt });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -2262,7 +2267,7 @@ const FileChatOverlayInner = ({
             threadId: createChatThreadId(),
             workspaceId,
           };
-    await startNewThreadCommandHandoff({
+    const handoff = await startNewThreadCommandHandoff({
       activeOrganizationId,
       context: {
         ...chatThreadContext,
@@ -2273,6 +2278,10 @@ const FileChatOverlayInner = ({
       queryClient,
       threadRef: newThreadRef,
     });
+    if (handoff.isErr()) {
+      notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     await commitNewThread(newThreadRef.threadId, pendingReview);
     return CHAT_SEND_SENT;
   };
@@ -2699,7 +2708,15 @@ const FileChatOverlayInner = ({
                     ) {
                       return CHAT_SEND_KEPT;
                     }
-                    await sendMessage(await buildChatRequestMessage(draft));
+                    const message = await buildChatRequestMessage(draft);
+                    if (message.isErr()) {
+                      notifyUserError(
+                        message.error,
+                        t("chat.sendErrorMessageEmpty"),
+                      );
+                      return CHAT_SEND_KEPT;
+                    }
+                    await sendMessage(message.value);
                     return CHAT_SEND_SENT;
                   }),
                   "file-chat-overlay.submit",
