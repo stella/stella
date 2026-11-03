@@ -1,0 +1,812 @@
+{
+  "release": null,
+  "sourceCommit": "e004b36fa8453c874b25345212788c2089caf5cc",
+  "newestMigration": "20261103120000_chat_local_run_target",
+  "shape": "TODO: what this stored shape adds or drops",
+  "actors": {
+    "organizationId": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+    "userId": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4"
+  },
+  "threadId": "01a1a13c-b6ac-751a-beca-072410177c72",
+  "pendingToolCallId": "call-lease",
+  "rows": {
+    "chat_threads": [
+      {
+        "id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "title": "Scripted side answer",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "chat_model": null,
+        "created_at": "2026-11-03T12:47:53.183+01:00",
+        "recap_text": null,
+        "updated_at": "2026-11-03T12:47:55.533+01:00",
+        "active_skill": null,
+        "title_source": "ai",
+        "workspace_id": null,
+        "rollback_token": null,
+        "chat_run_target": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "compaction_epoch": 4,
+        "parent_thread_id": null,
+        "recap_message_id": null,
+        "context_matter_ids": [],
+        "data_workspace_ids": [],
+        "recap_generated_at": null,
+        "used_anonymization": false,
+        "web_search_enabled": false,
+        "compaction_attempts": 0,
+        "subject_decision_id": null,
+        "recap_prompt_version": null,
+        "chat_reasoning_effort": null,
+        "forked_from_message_id": null,
+        "compaction_attempted_at": null,
+        "compaction_scheduled_at": null
+      }
+    ],
+    "chat_messages": [
+      {
+        "id": "01a1a13c-b6ad-7050-8f71-9bcb1565f666",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "What is this matter about?"
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.199+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-b7cc-77ac-8787-9a3d98cec1c4",
+        "role": "assistant",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "The matter concerns a commercial lease."
+            }
+          ],
+          "version": 3,
+          "metadata": {
+            "usage": {
+              "totalTokens": 2,
+              "promptTokens": 1,
+              "completionTokens": 1
+            },
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "completed"
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.475+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-b932-702b-9f8f-2303d98048ff",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "Which templates do we have?"
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.841+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-b9eb-7637-b557-d86c2c0ca134",
+        "role": "assistant",
+        "content": {
+          "data": [
+            {
+              "id": "call-templates",
+              "name": "list_templates",
+              "type": "tool-call",
+              "input": {
+                "value": {},
+                "status": "parsed"
+              },
+              "state": "complete",
+              "output": {
+                "value": {
+                  "templates": [
+                    {
+                      "id": "01a1a13c-b5ba-745b-a4bc-509a67755bc7",
+                      "name": "Tmpl A",
+                      "tags": null,
+                      "whenToUse": null,
+                      "fieldCount": 0,
+                      "whenNotToUse": null
+                    }
+                  ]
+                }
+              },
+              "metadata": {
+                "stellaStepId": "call-templates",
+                "stellaToolExecutor": "server"
+              }
+            },
+            {
+              "type": "tool-result",
+              "state": "complete",
+              "toolCallId": "call-templates"
+            },
+            {
+              "type": "text",
+              "content": "There are no templates yet."
+            }
+          ],
+          "version": 3,
+          "metadata": {
+            "usage": {
+              "totalTokens": 2,
+              "promptTokens": 1,
+              "completionTokens": 1
+            },
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "completed"
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.02+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-ba6b-702a-876b-a9d5e8b657c9",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "Delete the old draft."
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.149+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bb13-74fe-8ade-d1d7dfd8dd24",
+        "role": "assistant",
+        "content": {
+          "data": [
+            {
+              "id": "call-draft",
+              "name": "mcp__external__delete",
+              "type": "tool-call",
+              "input": {
+                "value": {
+                  "name": "draft"
+                },
+                "status": "parsed"
+              },
+              "state": "complete",
+              "output": {
+                "value": {
+                  "deleted": "draft"
+                }
+              },
+              "approval": {
+                "id": "approval_call-draft",
+                "approved": true,
+                "needsApproval": true
+              },
+              "metadata": {
+                "stellaStepId": "call-draft",
+                "stellaToolExecutor": "server"
+              }
+            },
+            {
+              "type": "tool-result",
+              "state": "complete",
+              "toolCallId": "call-draft"
+            },
+            {
+              "type": "text",
+              "content": "The old draft is deleted."
+            }
+          ],
+          "version": 3,
+          "metadata": {
+            "usage": {
+              "totalTokens": 4,
+              "promptTokens": 2,
+              "completionTokens": 2
+            },
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "completed"
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.324+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bc75-7087-9f87-64cb3039adbe",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "Delete the memo."
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.663+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bd0f-751f-b9eb-a0a586a81e62",
+        "role": "assistant",
+        "content": {
+          "data": [
+            {
+              "id": "call-memo",
+              "name": "mcp__external__delete",
+              "type": "tool-call",
+              "input": {
+                "value": {
+                  "name": "memo"
+                },
+                "status": "parsed"
+              },
+              "state": "error",
+              "output": {
+                "value": {
+                  "error": "User declined tool execution"
+                }
+              },
+              "approval": {
+                "id": "approval_call-memo",
+                "approved": false,
+                "needsApproval": true
+              },
+              "metadata": {
+                "stellaStepId": "call-memo",
+                "stellaToolExecutor": "server"
+              }
+            },
+            {
+              "type": "tool-result",
+              "error": "User declined tool execution",
+              "state": "error",
+              "outcome": "denied",
+              "toolCallId": "call-memo"
+            },
+            {
+              "type": "text",
+              "content": "I kept the memo."
+            }
+          ],
+          "version": 3,
+          "metadata": {
+            "usage": {
+              "totalTokens": 4,
+              "promptTokens": 2,
+              "completionTokens": 2
+            },
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "completed"
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.817+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-be51-755e-96e9-2b8faee30f7b",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "Summarize the lease."
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.139+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bee5-72f8-9d11-8c955ac6356b",
+        "role": "assistant",
+        "content": {
+          "data": [],
+          "version": 3,
+          "metadata": {
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "failed",
+              "error": "unknown"
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.26+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bf38-71f4-acf8-cc755665ac69",
+        "role": "user",
+        "content": {
+          "data": [
+            {
+              "type": "text",
+              "content": "Delete the lease."
+            }
+          ],
+          "version": 3
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.372+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      },
+      {
+        "id": "01a1a13c-bfcd-767a-bfc5-371cff18cf45",
+        "role": "assistant",
+        "content": {
+          "data": [
+            {
+              "id": "call-lease",
+              "name": "mcp__external__delete",
+              "type": "tool-call",
+              "input": {
+                "value": {
+                  "name": "lease"
+                },
+                "status": "parsed"
+              },
+              "state": "approval-requested",
+              "approval": {
+                "id": "approval_call-lease",
+                "needsApproval": true
+              },
+              "metadata": {
+                "stellaStepId": "call-lease",
+                "stellaToolExecutor": "server"
+              }
+            },
+            {
+              "id": "call-deferred-templates",
+              "name": "list_templates",
+              "type": "tool-call",
+              "input": {
+                "value": {},
+                "status": "parsed"
+              },
+              "state": "input-complete",
+              "metadata": {
+                "stellaStepId": "call-lease",
+                "stellaToolExecutor": "server"
+              }
+            }
+          ],
+          "version": 3,
+          "metadata": {
+            "usage": {
+              "totalTokens": 2,
+              "promptTokens": 1,
+              "completionTokens": 1
+            },
+            "turnModel": {
+              "model": "gpt-5.4-mini",
+              "provider": "openai"
+            },
+            "refContext": {
+              "refs": [],
+              "version": 2,
+              "entities": [],
+              "workspaceScope": [],
+              "unresolvedInputs": []
+            },
+            "refEncoding": "persisted-resource-refs-v2",
+            "turnOutcome": {
+              "type": "awaiting-user",
+              "interaction": {
+                "type": "approval",
+                "toolCallId": "call-lease"
+              }
+            },
+            "resumeSnapshot": {
+              "resumeState": {
+                "runId": "run-01a1a13c-bf38-71f3-b07a-fc4739b76480",
+                "threadId": "01a1a13c-b6ac-751a-beca-072410177c72"
+              },
+              "pendingInterrupts": [
+                {
+                  "id": "approval_call-lease",
+                  "reason": "tool_call",
+                  "message": "Approval required to run mcp__external__delete",
+                  "metadata": {
+                    "kind": "approval",
+                    "input": {
+                      "name": "lease"
+                    },
+                    "toolName": "mcp__external__delete",
+                    "tanstack:interruptBinding": {
+                      "v": 1,
+                      "kind": "tool-approval",
+                      "toolName": "mcp__external__delete",
+                      "generation": 0,
+                      "toolCallId": "call-lease",
+                      "interruptId": "approval_call-lease",
+                      "originalArgs": {
+                        "name": "lease"
+                      },
+                      "inputSchemaHash": "sha256:683d9429c1da897d8ebe18c7b70131ca0cedecbb26b499a5ccb82d2d01b08428",
+                      "interruptedRunId": "run-01a1a13c-bf38-71f3-b07a-fc4739b76480",
+                      "approvalSchemaHash": "sha256:22f76d9a1c618a3cfaa891208a14f6e5e6ab1be4ff1c38cc8a8cd1e8fd0c0e4e",
+                      "responseSchemaHash": "sha256:ffc21793d9e22678a177d3ad9e30c00c0330603b8e422b01dffa72054f8c18f4"
+                    }
+                  },
+                  "toolCallId": "call-lease",
+                  "responseSchema": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": [
+                          "approved"
+                        ],
+                        "properties": {
+                          "approved": {
+                            "const": true
+                          },
+                          "editedArgs": {
+                            "type": "object",
+                            "required": [
+                              "name"
+                            ],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "note": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "required": [
+                          "approved"
+                        ],
+                        "properties": {
+                          "approved": {
+                            "const": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "revision": 0,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.527+01:00",
+        "workspace_id": null,
+        "memory_extraction_eligible": false
+      }
+    ],
+    "chat_turns": [
+      {
+        "id": "01a1a13c-b6ef-7174-8236-eed64af7c8cb",
+        "run_id": "run-01a1a13c-b6ad-704f-b393-c819bdf0334a",
+        "status": "completed",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.199+01:00",
+        "settled_at": "2026-11-03T12:47:53.475+01:00",
+        "updated_at": "2026-11-03T12:47:53.488+01:00",
+        "execution_id": null,
+        "failure_code": null,
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-b6ad-7050-8f71-9bcb1565f666",
+        "interaction_type": null,
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": null,
+        "timing_message_id": "01a1a13c-b7cc-77ac-8787-9a3d98cec1c4",
+        "active_duration_ms": 276,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-b7cc-77ac-8787-9a3d98cec1c4",
+        "interaction_tool_call_id": null
+      },
+      {
+        "id": "01a1a13c-b971-75eb-8e61-c0d0984ed623",
+        "run_id": "run-01a1a13c-b932-702a-885b-550518d21e28",
+        "status": "completed",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.841+01:00",
+        "settled_at": "2026-11-03T12:47:54.02+01:00",
+        "updated_at": "2026-11-03T12:47:54.03+01:00",
+        "execution_id": null,
+        "failure_code": null,
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-b932-702b-9f8f-2303d98048ff",
+        "interaction_type": null,
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": null,
+        "timing_message_id": "01a1a13c-b9eb-7637-b557-d86c2c0ca134",
+        "active_duration_ms": 179,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-b9eb-7637-b557-d86c2c0ca134",
+        "interaction_tool_call_id": null
+      },
+      {
+        "id": "01a1a13c-baa5-75f0-a574-9c789d54addd",
+        "run_id": "run-01a1a13c-bb97-77cb-bfd4-ca6069b97c5a",
+        "status": "completed",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.149+01:00",
+        "settled_at": "2026-11-03T12:47:54.544+01:00",
+        "updated_at": "2026-11-03T12:47:54.558+01:00",
+        "execution_id": null,
+        "failure_code": null,
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-ba6b-702a-876b-a9d5e8b657c9",
+        "interaction_type": null,
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": null,
+        "timing_message_id": "01a1a13c-bb13-74fe-8ade-d1d7dfd8dd24",
+        "active_duration_ms": 276,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-bb13-74fe-8ade-d1d7dfd8dd24",
+        "interaction_tool_call_id": null
+      },
+      {
+        "id": "01a1a13c-bca7-7023-bc1b-331ba6d0b49d",
+        "run_id": "run-01a1a13c-bd7d-76f4-a20b-ba1e0203e04a",
+        "status": "completed",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.663+01:00",
+        "settled_at": "2026-11-03T12:47:55.021+01:00",
+        "updated_at": "2026-11-03T12:47:55.035+01:00",
+        "execution_id": null,
+        "failure_code": null,
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-bc75-7087-9f87-64cb3039adbe",
+        "interaction_type": null,
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": null,
+        "timing_message_id": "01a1a13c-bd0f-751f-b9eb-a0a586a81e62",
+        "active_duration_ms": 249,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-bd0f-751f-b9eb-a0a586a81e62",
+        "interaction_tool_call_id": null
+      },
+      {
+        "id": "01a1a13c-be83-767f-be0e-76ef79733745",
+        "run_id": "run-01a1a13c-be51-755d-8001-5f1ad529357d",
+        "status": "failed",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.139+01:00",
+        "settled_at": "2026-11-03T12:47:55.26+01:00",
+        "updated_at": "2026-11-03T12:47:55.265+01:00",
+        "execution_id": null,
+        "failure_code": "provider-error",
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-be51-755e-96e9-2b8faee30f7b",
+        "interaction_type": null,
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": true,
+        "timing_message_id": "01a1a13c-bee5-72f8-9d11-8c955ac6356b",
+        "active_duration_ms": 121,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-bee5-72f8-9d11-8c955ac6356b",
+        "interaction_tool_call_id": null
+      },
+      {
+        "id": "01a1a13c-bf6c-71a4-a7c7-1d86ea002127",
+        "run_id": "run-01a1a13c-bf38-71f3-b07a-fc4739b76480",
+        "status": "awaiting-user",
+        "user_id": "uAIUpjWGyaI4857Tl9sgdiSzNJhUDEG4",
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.372+01:00",
+        "settled_at": null,
+        "updated_at": "2026-11-03T12:47:55.535+01:00",
+        "execution_id": null,
+        "failure_code": null,
+        "workspace_id": null,
+        "organization_id": "qDo8a4ivDTJFCEsBO3fkgo0tDPFWK5GA",
+        "user_message_id": "01a1a13c-bf38-71f4-acf8-cc755665ac69",
+        "interaction_type": "approval",
+        "lease_expires_at": null,
+        "active_started_at": null,
+        "failure_retryable": null,
+        "timing_message_id": "01a1a13c-bfcd-767a-bfc5-371cff18cf45",
+        "active_duration_ms": 155,
+        "cancel_requested_at": null,
+        "cancellation_reason": null,
+        "interruption_reason": null,
+        "assistant_message_id": "01a1a13c-bfcd-767a-bfc5-371cff18cf45",
+        "interaction_tool_call_id": "call-lease"
+      }
+    ],
+    "chat_thread_names": [
+      {
+        "kind": "ledger-start",
+        "name": "",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:53.475+01:00"
+      },
+      {
+        "kind": "tool-call-id",
+        "name": "call-deferred-templates",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.527+01:00"
+      },
+      {
+        "kind": "tool-call-id",
+        "name": "call-draft",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.324+01:00"
+      },
+      {
+        "kind": "tool-call-id",
+        "name": "call-lease",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:55.527+01:00"
+      },
+      {
+        "kind": "tool-call-id",
+        "name": "call-memo",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.817+01:00"
+      },
+      {
+        "kind": "tool-call-id",
+        "name": "call-templates",
+        "target": null,
+        "thread_id": "01a1a13c-b6ac-751a-beca-072410177c72",
+        "created_at": "2026-11-03T12:47:54.02+01:00"
+      }
+    ]
+  }
+}

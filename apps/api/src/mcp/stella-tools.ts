@@ -2635,6 +2635,21 @@ const readCaseLawQueryPages = (
 };
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
 
+/**
+ * What a phrasing reads about its result set. The response carries the first
+ * phrasing's facets, and a total only for a single phrasing: every other
+ * phrasing's aggregations would be read over its whole result set and
+ * dropped, so they are not asked for.
+ */
+const phrasingResultSet = <Facet>(
+  index: number,
+  queryCount: number,
+  facets: Facet[],
+): { facets: Facet[]; describeResultSet?: false } =>
+  index === 0 && (queryCount === 1 || facets.length > 0)
+    ? { facets }
+    : { facets: index === 0 ? facets : [], describeResultSet: false };
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2735,7 +2750,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
-      facets: index === 0 ? parsed.output.facets : [],
+      ...phrasingResultSet(index, queries.length, parsed.output.facets),
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,

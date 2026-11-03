@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 
 class TestResizeObserver {
@@ -42,7 +44,7 @@ const { HorizontalScroller, scrollState, wheelDeltaPixels } =
   await import("./horizontal-scroller");
 
 afterEach(cleanup);
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 test("reports logical start, middle, end, no overflow, and RTL", () => {
   expect(scrollState(0, 300, 100, "ltr")).toEqual({
