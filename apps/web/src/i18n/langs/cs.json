@@ -2805,6 +2805,28 @@
     },
     "backToList": "Zpět na korespondenci",
     "createAddress": "Vytvořit adresu",
+    "dataBox": {
+      "acceptedAt": "Doručeno",
+      "acceptedByFiction": "fikcí",
+      "acceptedByLogin": "přihlášením",
+      "channel": "Datová schránka",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Dodáno do schránky",
+      "delivery": "Doručení",
+      "directionUnknown": "Směr neznámý",
+      "messageId": "ID zprávy",
+      "moreContacts": "Této datové schránce odpovídají další kontakty.",
+      "openFile": "Otevřít soubor .zfo",
+      "personalDelivery": "Do vlastních rukou",
+      "recipient": "Adresát",
+      "recipientReference": "Č. j. / sp. zn. adresáta",
+      "sealNotVerified": "Elektronická pečeť souboru se uchovává spolu s ním a neověřuje se.",
+      "senderReference": "Č. j. / sp. zn. odesílatele",
+      "sent": "Odeslaná",
+      "statedInFile": "Datová zpráva (dle údajů v souboru)",
+      "toHands": "K rukám: {name}",
+      "uploaded": "Nahraná datová zpráva"
+    },
     "deliveredBy": "Doručil <address>{sender}</address>",
     "deliveredByAuthenticated": "Doručil <address>{sender}</address> · ověřeno",
     "deliveryAuthentication": "Ověření doručení",
@@ -2975,6 +2997,7 @@
       "clauseDirectivesInvalid": "Propojené ustanovení obsahuje neplatné direktivy. Před vyplněním vzoru ustanovení opravte.",
       "clauseDirectivesInvalidDetails": "Ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Otevřete editor ustanovení, opravte uvedené odstavce a znovu vyplňte vzor.",
       "clauseDirectivesOverrideInvalidDetails": "Přepsané ustanovení {clauseName} na pozici {slotName} obsahuje neplatné direktivy. Před dalším vyplněním opravte přepsané znění v tomto vyplnění.",
+      "correspondenceSourceChanged": "Tato korespondence se mezitím změnila. Načtěte stránku znovu a akci zopakujte.",
       "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nejsou povoleny. Použijte trvalou e-mailovou adresu.",
@@ -3000,6 +3023,8 @@
       "matterContactCapacityReached": "Tento spis dosáhl limitu kontaktů. Před přidáním dalšího kontaktu odeberte jedno propojení s kontaktem.",
       "mcpAuthorizationApprovalRequired": "Než se budete moci připojit, správce musí tento konektor schválit.",
       "notOrganizationMember": "Nejste členem této organizace.",
+      "organizationDataBoxLimitReached": "Tato organizace dosáhla limitu datových schránek. Než přidáte další, jednu odeberte.",
+      "organizationDataBoxesChanged": "Datové schránky organizace se mezitím změnily. Načtěte stránku znovu a akci zopakujte.",
       "organizationLastOwner": "Organizace musí mít vlastníka. Nejprve převeďte vlastnictví.",
       "organizationMemberLimitReached": "Tato organizace dosáhla limitu členů.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
@@ -4556,6 +4581,10 @@
         "undoShortcut": "Vrátit změnu zvýraznění nebo komentáře",
         "visibilityRestored": "Sdílení obnoveno"
       },
+      "orphaned": {
+        "description": "Text tohoto dokumentu se od jejich vytvoření změnil: označené pasáže se v něm už nepodařilo najít, nebo se v něm nyní vyskytují na více místech. V textu se proto nezobrazují.",
+        "summary": "{count, plural, one {# zvýraznění nebo komentář už neodpovídá textu} few {# zvýraznění nebo komentáře už neodpovídají textu} many {# zvýraznění nebo komentáře už neodpovídá textu} other {# zvýraznění a komentářů už neodpovídá textu}}"
+      },
       "removeHighlight": "Odebrat zvýraznění",
       "sharedBadge": "Sdíleno",
       "styleHighlight": "Zvýraznění",
@@ -5505,6 +5534,12 @@
         "firm": "Pravidla kanceláře",
         "ledes": "Elektronická fakturace (LEDES)",
         "title": "AI návrhy výkazů práce"
+      },
+      "dataBoxes": {
+        "description": "Datová zpráva odeslaná z některé z těchto schránek se založí jako odchozí, zpráva do nich jako příchozí. Každá změna znovu odvodí směr zpráv již založených ve spisech, ke kterým máte přístup.",
+        "invalid": "ID datové schránky má sedm písmen nebo číslic.",
+        "remove": "Odebrat datovou schránku {address}",
+        "title": "Datové schránky organizace"
       },
       "documentProcessing": {
         "description": "Automaticky rozpoznávejte text v naskenovaných PDF, aby v nich šlo vyhledávat.",

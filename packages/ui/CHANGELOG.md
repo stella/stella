@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.65.1
+
+### Patch Changes
+
+- [#7424](https://github.com/stella/stella/pull/7424) [`e4bc679`](https://github.com/stella/stella/commit/e4bc6799a53b00d27ab230163c5a10b9a68236e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A bare `CollapsibleTrigger` (plain text, no `render`) now gets the 44px touch target under a coarse pointer, the same hit area `Button` adds.
+
 ## 0.65.0
 
 ### Minor Changes

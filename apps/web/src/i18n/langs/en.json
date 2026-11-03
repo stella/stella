@@ -2805,6 +2805,28 @@
     },
     "backToList": "Back to correspondence",
     "createAddress": "Create address",
+    "dataBox": {
+      "acceptedAt": "Accepted on",
+      "acceptedByFiction": "by deemed delivery",
+      "acceptedByLogin": "by login",
+      "channel": "Data box",
+      "contact": "Contact: {name}",
+      "deliveredAt": "Delivered to the box",
+      "delivery": "Delivery terms",
+      "directionUnknown": "Direction unknown",
+      "messageId": "Message ID",
+      "moreContacts": "More contacts match this data box.",
+      "openFile": "Open .zfo file",
+      "personalDelivery": "To the addressee in person",
+      "recipient": "Recipient",
+      "recipientReference": "Recipient’s reference",
+      "sealNotVerified": "The file’s electronic seal is kept with it and not verified.",
+      "senderReference": "Sender’s reference",
+      "sent": "Outgoing",
+      "statedInFile": "Data-box message (as stated in the file)",
+      "toHands": "To the attention of {name}",
+      "uploaded": "Uploaded data-box message"
+    },
     "deliveredBy": "Delivered by <address>{sender}</address>",
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated",
     "deliveryAuthentication": "Delivery authentication",
@@ -2975,6 +2997,7 @@
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
+      "correspondenceSourceChanged": "This correspondence changed in the meantime. Reload the page and try again.",
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.",
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.",
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",
@@ -3000,6 +3023,8 @@
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
       "notOrganizationMember": "You are not a member of this organization.",
+      "organizationDataBoxLimitReached": "This organization has reached its data box limit. Remove a data box before adding another.",
+      "organizationDataBoxesChanged": "The organization's data boxes changed in the meantime. Reload the page and try again.",
       "organizationLastOwner": "An organization needs an owner. Transfer ownership first.",
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
@@ -4556,6 +4581,10 @@
         "undoShortcut": "Undo highlight or comment change",
         "visibilityRestored": "Sharing restored"
       },
+      "orphaned": {
+        "description": "The text of this document was updated since these were made: their passages could no longer be found in it, or now appear in more than one place. They are not shown in the text.",
+        "summary": "{count, plural, one {# highlight or comment no longer matches the text} other {# highlights and comments no longer match the text}}"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
@@ -5505,6 +5534,12 @@
         "firm": "Firm guidelines",
         "ledes": "Electronic billing (LEDES)",
         "title": "AI billing drafts"
+      },
+      "dataBoxes": {
+        "description": "A data-box message sent from one of these boxes is filed as outgoing, one sent to them as incoming. Each change re-derives the direction of messages already filed in the matters you can access.",
+        "invalid": "A data box ID has seven letters or digits.",
+        "remove": "Remove data box {address}",
+        "title": "Organization data boxes"
       },
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",

@@ -13,6 +13,7 @@ import {
   readerSelectionMatches,
 } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 import { assertProperty } from "@stll/property-testing";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -254,6 +255,11 @@ test("a selection past a cited case number keeps the decision's offsets", () => 
       blockAnchorId: "p-7",
       endOffset: citing.length,
       quote: citing.slice(from),
+      quotePrefix: citing.slice(
+        Math.max(0, from - READER_TEXT_QUOTE_CONTEXT_LENGTH),
+        from,
+      ),
+      quoteSuffix: "",
       startOffset: from,
     },
   ]);

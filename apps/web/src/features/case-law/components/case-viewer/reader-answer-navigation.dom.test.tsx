@@ -71,6 +71,7 @@ const ReopenHarness = () => {
   const [revision, setRevision] = useState(0);
   const anchors = annotationTextAnchors(
     readerAnswerAnchors([answer], "Reopen passage answer"),
+    answer.anchor.spans[0].quote,
   );
   return (
     <IntlProvider locale="en" messages={messages}>

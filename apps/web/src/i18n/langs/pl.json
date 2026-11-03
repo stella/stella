@@ -2805,6 +2805,28 @@
     },
     "backToList": "Wróć do korespondencji",
     "createAddress": "Utwórz adres",
+    "dataBox": {
+      "acceptedAt": "Doręczono",
+      "acceptedByFiction": "w drodze fikcji doręczenia",
+      "acceptedByLogin": "przez zalogowanie",
+      "channel": "Skrzynka danych",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Dostarczono do skrzynki",
+      "delivery": "Doręczenie",
+      "directionUnknown": "Kierunek nieznany",
+      "messageId": "Identyfikator wiadomości",
+      "moreContacts": "Więcej kontaktów pasuje do tej skrzynki danych.",
+      "openFile": "Otwórz plik .zfo",
+      "personalDelivery": "Do rąk własnych",
+      "recipient": "Adresat",
+      "recipientReference": "Sygnatura adresata",
+      "sealNotVerified": "Elektroniczna pieczęć pliku jest przechowywana wraz z nim i nie jest weryfikowana.",
+      "senderReference": "Sygnatura nadawcy",
+      "sent": "Wysłana",
+      "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
+      "toHands": "Do rąk: {name}",
+      "uploaded": "Przesłana wiadomość ze skrzynki danych"
+    },
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
     "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
@@ -2975,6 +2997,7 @@
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
+      "correspondenceSourceChanged": "Ta korespondencja zmieniła się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
@@ -3000,6 +3023,8 @@
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
+      "organizationDataBoxLimitReached": "Ta organizacja osiągnęła limit skrzynek danych. Usuń jedną, zanim dodasz kolejną.",
+      "organizationDataBoxesChanged": "Skrzynki danych organizacji zmieniły się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "organizationLastOwner": "Organizacja musi mieć właściciela. Najpierw przekaż własność.",
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -4556,6 +4581,10 @@
         "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
         "visibilityRestored": "Przywrócono udostępnianie"
       },
+      "orphaned": {
+        "description": "Tekst tego dokumentu zmienił się od ich utworzenia: nie udało się ponownie odnaleźć w nim oznaczonych fragmentów albo występują one teraz w kilku miejscach. Nie są one wyświetlane w tekście.",
+        "summary": "{count, plural, one {# zaznaczenie lub komentarz nie pasuje już do tekstu} few {# zaznaczenia lub komentarze nie pasują już do tekstu} many {# zaznaczeń lub komentarzy nie pasuje już do tekstu} other {# zaznaczenia lub komentarza nie pasuje już do tekstu}}"
+      },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
       "styleHighlight": "Wyróżnienie",
@@ -5505,6 +5534,12 @@
         "firm": "Wytyczne kancelarii",
         "ledes": "Fakturowanie elektroniczne (LEDES)",
         "title": "Projekty rozliczeń z AI"
+      },
+      "dataBoxes": {
+        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
+        "remove": "Usuń skrzynkę danych {address}",
+        "title": "Skrzynki danych organizacji"
       },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
