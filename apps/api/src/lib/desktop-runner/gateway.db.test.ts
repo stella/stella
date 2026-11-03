@@ -1849,13 +1849,31 @@ describe("chat turns on a computer", () => {
   const runBell = createLocalRunBell();
   const CHAT_MODEL = MODEL;
   let chatInstance: Instance;
+  /**
+   * One computer serves the tests that keep it connected: every socket
+   * upgrade verifies the account's key, which is rate limited per key.
+   */
+  const computer: { desktopId: string; desktop: FakeDesktop | null } = {
+    desktopId: Bun.randomUUIDv7(),
+    desktop: null,
+  };
+  const shared = () => ({
+    desktopId: computer.desktopId,
+    desktop: computer.desktop ?? panic("the shared computer is not connected"),
+  });
 
   beforeAll(async () => {
-    // Every test here pairs a new computer with the same account.
+    // The account already holds the runners the earlier tests paired.
     chatInstance = await startInstance("api-chat", sharedDoorbell, {
       runBell,
       limits: { maxRunnersPerAccount: 1000 },
     });
+    computer.desktop = await openDesktop(chatInstance, computer.desktopId);
+    await computer.desktop.hello();
+  });
+
+  afterAll(async () => {
+    await computer.desktop?.close();
   });
 
   const newThread = async () => {
@@ -2048,9 +2066,7 @@ describe("chat turns on a computer", () => {
 
   test("a turn streams what the harness produced and starts the run for the thread", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const turn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
         {
@@ -2103,14 +2119,11 @@ describe("chat turns on a computer", () => {
     const callIds = new Set(toolCallIdsOf(chunks));
     expect(callIds.size).toBe(1);
     expect(callIds.has("item_1")).toBe(false);
-    await desktop.close();
   });
 
   test("the thread's next turn on the same computer resumes the harness session", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const local = createLocalChatRun(
       contextFor(chatThreadId),
       startPlan(desktopId),
@@ -2157,14 +2170,11 @@ describe("chat turns on a computer", () => {
     );
     await secondRun.finish("completed", "codex-session-1");
     expect((await secondTurn.done).at(-1)?.type).toBe(EventType.RUN_FINISHED);
-    await desktop.close();
   });
 
   test("an approval pauses the turn, and its answer continues the same run", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const requestId = Bun.randomUUIDv7();
     const pausedTurn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
@@ -2270,15 +2280,12 @@ describe("chat turns on a computer", () => {
     });
     // The approved call keeps the id the paused turn stored.
     expect(toolCallIdsOf(resumed)).toEqual([...new Set(toolCallIdsOf(paused))]);
-    await desktop.close();
   });
 
   test("an answer from another thread does not reach the run", async () => {
     const chatThreadId = await newThread();
     const otherThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const requestId = Bun.randomUUIDv7();
     const pausedTurn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
@@ -2332,16 +2339,86 @@ describe("chat turns on a computer", () => {
       code: AI_FAILURE_CODES.local_runner_unavailable,
     });
     expect(
-      desktop.received.filter(({ type }) => type === "run.approval"),
+      desktop.received.filter(
+        (message) =>
+          message.type === "run.approval" && message.runId === start.runId,
+      ),
     ).toEqual([]);
-    await desktop.close();
+  });
+
+  test("a blocking harness question ends the turn and the run's wait, so the next message answers it", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-question",
+          messages: [{ role: "user", content: "Draft the reply" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "question.requested",
+        request: {
+          requestId: Bun.randomUUIDv7(),
+          toolCall: { id: "item_q", name: "request_user_input", input: {} },
+          questions: [
+            {
+              id: "tone",
+              header: "Tone",
+              prompt: "Formal or friendly?",
+              options: [
+                { label: "Formal", description: "For the court" },
+                { label: "Friendly", description: "For the client" },
+              ],
+              allowsFreeText: false,
+              secret: false,
+            },
+          ],
+          answerWith: "response",
+        },
+      },
+    ]);
+    const run = desktopRun(desktop, start.runId);
+    // Up to the pause; the mapper's end-of-stream error is not part of it.
+    await run.events(
+      sent.filter(
+        (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_ERROR,
+      ),
+    );
+    const chunks = await turn.done;
+    const result = chunks.find(
+      (chunk) => chunk.type === EventType.TOOL_CALL_RESULT,
+    );
+    expect(
+      result?.type === EventType.TOOL_CALL_RESULT &&
+        typeof result.content === "string"
+        ? JSON.parse(result.content)
+        : null,
+    ).toMatchObject({ status: "awaiting_reply", questions: [{ id: "tone" }] });
+    // The turn ends instead of waiting on an answer the run cannot receive.
+    expect(chunks.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED });
+    expect(
+      chunks.some(
+        (chunk) =>
+          chunk.type === EventType.RUN_FINISHED &&
+          chunk.outcome?.type === "interrupt",
+      ),
+    ).toBe(false);
+    expect(
+      (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
+    ).toBe(start.runId);
   });
 
   test("stopping the turn interrupts the run on the computer", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const stop = new AbortController();
     const turn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
@@ -2365,14 +2442,11 @@ describe("chat turns on a computer", () => {
     expect(
       (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
     ).toBe(start.runId);
-    await desktop.close();
   });
 
   test("a run that reached its usage limit fails the turn with that reason", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const turn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
         {
@@ -2409,14 +2483,11 @@ describe("chat turns on a computer", () => {
     expect(
       last?.type === EventType.RUN_ERROR ? classifyRunErrorChunk(last) : null,
     ).toBe("local_runner_limit_reached");
-    await desktop.close();
   });
 
   test("a computer that refuses the run fails the turn with the reason it gave", async () => {
     const chatThreadId = await newThread();
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const turn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
         {
@@ -2438,7 +2509,6 @@ describe("chat turns on a computer", () => {
       type: EventType.RUN_ERROR,
       code: AI_FAILURE_CODES.local_runner_needs_login,
     });
-    await desktop.close();
   });
 
   test("the composer's computer list reads the same however much the computers ran", async () => {
@@ -2449,9 +2519,7 @@ describe("chat turns on a computer", () => {
       now,
       timing: TIMING,
     });
-    const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
-    await desktop.hello();
+    const { desktopId, desktop } = shared();
     const fixture = { control: counted, owner };
     const small = await chatLocalRunnersScalingScenario.measure(fixture);
     for (let index = 0; index < 20; index += 1) {
@@ -2464,7 +2532,6 @@ describe("chat turns on a computer", () => {
     const large = await chatLocalRunnersScalingScenario.measure(fixture);
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);
-    await desktop.close();
   });
 
   test("a computer that goes away mid-turn keeps the turn waiting until it returns", async () => {
