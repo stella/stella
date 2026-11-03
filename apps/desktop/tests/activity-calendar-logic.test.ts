@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as fc from "fast-check";
 
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import {
@@ -18,6 +20,9 @@ import {
   shortSegmentThresholdMs,
   titleRows,
   TOPIC_BRIDGE_GAP_MS,
+  undraftedParts,
+  wallClockTime,
+  withMovedEdge,
 } from "../src/activity/activity-calendar-logic";
 import { timedSegments } from "../src/activity/activity-logic";
 import type { ActivitySegment } from "../src/activity/activity-types";
@@ -28,6 +33,11 @@ const DAY_START = Date.UTC(2026, 9, 9, 8, 0);
 const at = (minute: number) =>
   new Date(DAY_START + minute * MINUTE).toISOString();
 const ms = (minute: number) => DAY_START + minute * MINUTE;
+const instantPairs = (ranges: readonly { start: string; end: string }[]) =>
+  ranges.map(({ start, end }) => [
+    Temporal.Instant.from(start).epochMilliseconds,
+    Temporal.Instant.from(end).epochMilliseconds,
+  ]);
 
 const matter = (id: string, name: string) =>
   ({
@@ -502,7 +512,10 @@ describe("calendar hours", () => {
     ).toEqual({ startHour: 6, endHour: 20 });
     expect(
       calendarHours({ ...options, instants: [Date.UTC(2026, 9, 9, 19, 0)] }),
-    ).toEqual({ startHour: 8, endHour: 19 });
+    ).toEqual({
+      startHour: 8,
+      endHour: 19,
+    });
   });
 
   test("instants on neighbouring days stretch the view to that edge", () => {
@@ -581,46 +594,161 @@ describe("suggestions", () => {
     ]);
   });
 
-  test("a selected range keeps only its undrafted time and starts with the matter that took most of it", () => {
+  test("a selected range is the entry to the minute, whether or not activity was recorded in it", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 8, matterId: "lease" }),
+      segment({ from: 20, to: 40 }),
+    ]);
+    // 08:03 to 08:15: twelve minutes, five of them recorded.
+    const manual = manualSuggestion({
+      drafted: [],
+      id: "manual:picked",
+      range: { startMs: ms(3), endMs: ms(15) },
+      segments,
+    });
+    expect(manual).toMatchObject({
+      durationMs: 12 * MINUTE,
+      endMs: ms(15),
+      id: "manual:picked",
+      matter: { id: "lease" },
+      roundedTenths: 2,
+      startMs: ms(3),
+      type: "manual",
+    });
+    expect(instantPairs(manual.ranges)).toEqual([[ms(3), ms(15)]]);
+    // The recorded part is the evidence, never more than the range holds.
+    expect(
+      manual.segments.map(({ startMs, endMs }) => [startMs, endMs]),
+    ).toEqual([[ms(3), ms(8)]]);
+    // Ten minutes bill as two tenths, yet the entry still covers ten minutes.
+    const tenMinutes = manualSuggestion({
+      drafted: [],
+      id: "manual:ten",
+      range: { startMs: ms(5), endMs: ms(15) },
+      segments,
+    });
+    expect(tenMinutes.durationMs).toBe(10 * MINUTE);
+    expect(tenMinutes.roundedTenths).toBe(2);
+    expect(instantPairs(tenMinutes.ranges)).toEqual([[ms(5), ms(15)]]);
+
+    const unrecorded = manualSuggestion({
+      drafted: [],
+      id: "manual:call",
+      range: { startMs: ms(200), endMs: ms(215) },
+      segments,
+    });
+    expect(unrecorded).toMatchObject({
+      durationMs: 15 * MINUTE,
+      matter: null,
+      roundedTenths: 3,
+      segments: [],
+      startMs: ms(200),
+      endMs: ms(215),
+    });
+    expect(instantPairs(unrecorded.ranges)).toEqual([[ms(200), ms(215)]]);
+  });
+
+  test("a selected range leaves out drafted time and starts with the matter that took most of the rest", () => {
+    const drafted = [{ start: at(40), end: at(50), entryId: "entry-1" }];
     const { segments } = day(
       [
         segment({ from: 0, to: 20, matterId: "services" }),
         segment({ from: 20, to: 50, matterId: "lease" }),
         segment({ from: 50, to: 70 }),
       ],
-      [{ start: at(40), end: at(50), entryId: "entry-1" }],
+      drafted,
     );
-    const manual = manualSuggestion(segments, {
-      startMs: ms(10),
-      endMs: ms(60),
+    const manual = manualSuggestion({
+      drafted,
+      id: "manual:around",
+      range: { startMs: ms(10), endMs: ms(60) },
+      segments,
     });
-    expect(manual.type).toBe("manual");
     expect(manual.matter?.id).toBe("lease");
     expect(manual.durationMs).toBe(40 * MINUTE);
     expect(manual.roundedTenths).toBe(7);
-    expect(
-      manual.ranges.map(({ start, end }) => [
-        Temporal.Instant.from(start).epochMilliseconds,
-        Temporal.Instant.from(end).epochMilliseconds,
-      ]),
-    ).toEqual([
-      [ms(10), ms(20)],
-      [ms(20), ms(40)],
+    expect(instantPairs(manual.ranges)).toEqual([
+      [ms(10), ms(40)],
       [ms(50), ms(60)],
     ]);
-    const empty = manualSuggestion(segments, {
-      startMs: ms(200),
-      endMs: ms(215),
+    // The card and the selection keep the range as the user set it.
+    expect([manual.startMs, manual.endMs]).toEqual([ms(10), ms(60)]);
+
+    const covered = manualSuggestion({
+      drafted,
+      id: "manual:covered",
+      range: { startMs: ms(42), endMs: ms(48) },
+      segments,
     });
-    expect(empty).toMatchObject({
+    expect(covered).toMatchObject({
       durationMs: 0,
-      matter: null,
       ranges: [],
       roundedTenths: 0,
-      startMs: ms(200),
-      endMs: ms(215),
     });
   });
+
+  test("a backwards range claims no time", () => {
+    const manual = manualSuggestion({
+      drafted: [],
+      id: "manual:backwards",
+      range: { startMs: ms(30), endMs: ms(20) },
+      segments: day([segment({ from: 0, to: 60 })]).segments,
+    });
+    expect(manual).toMatchObject({
+      durationMs: 0,
+      endMs: ms(30),
+      ranges: [],
+      roundedTenths: 0,
+      segments: [],
+      startMs: ms(30),
+    });
+  });
+
+  test(
+    "undrafted parts cover the range exactly where nothing is drafted",
+    () => {
+      const span = fc
+        .tuple(
+          fc.integer({ min: 0, max: 120 }),
+          fc.integer({ min: 0, max: 60 }),
+        )
+        .map(([from, length]) => ({
+          startMs: ms(from),
+          endMs: ms(from + length),
+        }));
+      assertProperty(
+        "undrafted parts cover the range exactly where nothing is drafted",
+        fc.property(
+          span,
+          fc.array(span, { maxLength: 6 }),
+          (range, drafted) => {
+            const parts = undraftedParts(range, drafted);
+            const isDrafted = (minuteMs: number) =>
+              drafted.some(
+                ({ startMs, endMs }) => startMs <= minuteMs && minuteMs < endMs,
+              );
+            for (const [index, part] of parts.entries()) {
+              expect(part.endMs).toBeGreaterThan(part.startMs);
+              const next = parts.at(index + 1);
+              if (next !== undefined) {
+                // Parts are ordered and a drafted stretch separates them.
+                expect(next.startMs).toBeGreaterThan(part.endMs);
+              }
+            }
+            for (let minuteMs = ms(0); minuteMs < ms(180); minuteMs += MINUTE) {
+              const inRange =
+                range.startMs <= minuteMs && minuteMs < range.endMs;
+              const inPart = parts.some(
+                ({ startMs, endMs }) => startMs <= minuteMs && minuteMs < endMs,
+              );
+              expect(inPart).toBe(inRange && !isDrafted(minuteMs));
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(5000),
+  );
 
   test("triage moves to the next suggestion and wraps to the day's first", () => {
     const suggestions = matchedSuggestions(fixture().groups, new Set());
@@ -676,5 +804,118 @@ describe("suggestion evidence", () => {
       "Lease draft",
       "Land registry",
     ]);
+  });
+});
+
+describe("a selected range set to the minute", () => {
+  const timeZone = "Europe/Prague";
+  const date = "2026-10-09";
+  const wall = (time: string) =>
+    Temporal.PlainDate.from(date).toZonedDateTime({
+      plainTime: Temporal.PlainTime.from(time),
+      timeZone,
+    }).epochMilliseconds;
+  const range = { startMs: wall("10:00"), endMs: wall("10:30") };
+
+  test("a new end sets the entry's length to the minute", () => {
+    const moved = withMovedEdge({
+      date,
+      edge: "end",
+      range: { startMs: wall("10:03"), endMs: wall("10:30") },
+      time: { hour: 10, minute: 15 },
+      timeZone,
+    });
+    expect(moved).toEqual({ startMs: wall("10:03"), endMs: wall("10:15") });
+    const entry = manualSuggestion({
+      drafted: [],
+      id: "manual:edited",
+      range: moved,
+      segments: [],
+    });
+    expect(entry.durationMs).toBe(12 * MINUTE);
+    expect(entry.roundedTenths * 6).toBe(12);
+  });
+
+  test("a new start moves the range and keeps its length", () => {
+    expect(
+      withMovedEdge({
+        date,
+        edge: "start",
+        range,
+        time: { hour: 10, minute: 3 },
+        timeZone,
+      }),
+    ).toEqual({ startMs: wall("10:03"), endMs: wall("10:33") });
+    // Late in the day the length gives way to the day's end.
+    expect(
+      withMovedEdge({
+        date,
+        edge: "start",
+        range,
+        time: { hour: 23, minute: 50 },
+        timeZone,
+      }),
+    ).toEqual({
+      startMs: wall("23:50"),
+      endMs: Temporal.PlainDate.from("2026-10-10").toZonedDateTime({ timeZone })
+        .epochMilliseconds,
+    });
+  });
+
+  test("an end at midnight is the day's end, and an end before the start stays as set", () => {
+    const midnight = withMovedEdge({
+      date,
+      edge: "end",
+      range,
+      time: { hour: 0, minute: 0 },
+      timeZone,
+    });
+    expect(midnight.endMs - midnight.startMs).toBe(14 * 60 * MINUTE);
+    expect(wallClockTime(midnight.endMs, timeZone)).toBe("00:00");
+    const backwards = withMovedEdge({
+      date,
+      edge: "end",
+      range,
+      time: { hour: 9, minute: 45 },
+      timeZone,
+    });
+    expect(backwards).toEqual({ startMs: wall("10:00"), endMs: wall("09:45") });
+  });
+
+  test("every minute of a daylight-saving day reads back as set, and a skipped one resolves forward", () => {
+    // Prague skips 02:00 to 03:00 on this day.
+    const springDate = "2026-03-29";
+    const springDay = Temporal.PlainDate.from(springDate);
+    const dayStart = springDay.toZonedDateTime({ timeZone }).epochMilliseconds;
+    const springRange = { startMs: dayStart, endMs: dayStart + 30 * MINUTE };
+    let skipped = 0;
+    for (let minuteOfDay = 1; minuteOfDay < 24 * 60; minuteOfDay += 1) {
+      const time = {
+        hour: Math.floor(minuteOfDay / 60),
+        minute: minuteOfDay % 60,
+      };
+      const set = Temporal.PlainTime.from(time).toString({
+        smallestUnit: "minute",
+      });
+      const { endMs } = withMovedEdge({
+        date: springDate,
+        edge: "end",
+        range: springRange,
+        time,
+        timeZone,
+      });
+      const read = wallClockTime(endMs, timeZone);
+      if (time.hour === 2) {
+        skipped += 1;
+        expect(read).toBe(
+          Temporal.PlainTime.from({ hour: 3, minute: time.minute }).toString({
+            smallestUnit: "minute",
+          }),
+        );
+        continue;
+      }
+      expect(read).toBe(set);
+    }
+    expect(skipped).toBe(60);
   });
 });

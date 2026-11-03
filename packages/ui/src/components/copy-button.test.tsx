@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import {
@@ -19,7 +20,7 @@ afterEach(() => {
   cleanup();
   restoreRealTimers();
 });
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 const copy = async () => await Promise.resolve(true);
 

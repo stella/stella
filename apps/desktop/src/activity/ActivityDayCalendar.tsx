@@ -52,7 +52,11 @@ import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
-import type { DraftAssistView, SuggestionEdit } from "./ActivitySuggestionCard";
+import type {
+  DraftAssistView,
+  SuggestionEdit,
+  SuggestionTimes,
+} from "./ActivitySuggestionCard";
 import {
   cardDraftEntry,
   cardDraftFrom,
@@ -89,11 +93,14 @@ export type ActivityReviewStatus = Submission["type"];
 type DraftedEntries = ActivityDaySnapshot["draftedEntries"];
 
 /** Which suggestion's card is open: a matched group, or a range the user
- * selected in the Activity column. */
+ * selected in the Time entries column. A range keeps the id it opened with
+ * while the user moves it, so the card keeps what was typed into it. */
 type OpenCard =
   | { type: "closed" }
   | { id: string; type: "suggestion" }
-  | { range: DayCalendarRange; type: "range" };
+  | { id: string; range: DayCalendarRange; type: "range" };
+
+type RangeCard = Extract<OpenCard, { type: "range" }>;
 
 /** View preferences that outlive one day: the grid. */
 export type ActivityCalendarPreferences = {
@@ -322,6 +329,13 @@ export const ActivityDayCalendar = ({
     captureDetails: snapshot.captureDetails,
   });
 
+  const rangeSuggestion = ({ id, range }: RangeCard) =>
+    manualSuggestion({
+      drafted: draftedEntries,
+      id,
+      range,
+      segments: day.segments,
+    });
   const openSuggestion = (() => {
     switch (openCard.type) {
       case "closed":
@@ -329,7 +343,7 @@ export const ActivityDayCalendar = ({
       case "suggestion":
         return suggestions.find(({ id }) => id === openCard.id) ?? null;
       case "range":
-        return manualSuggestion(day.segments, openCard.range);
+        return rangeSuggestion(openCard);
       default:
         openCard satisfies never;
         return panic("Unhandled activity card");
@@ -453,6 +467,12 @@ export const ActivityDayCalendar = ({
       <ActivitySuggestionCard
         key={openSuggestion.id}
         suggestion={openSuggestion}
+        times={cardTimes({
+          date: snapshot.date,
+          openCard,
+          setOpenCard,
+          timeZone,
+        })}
         edit={narratives.editFor(openSuggestion)}
         candidates={matters}
         editable={editable}
@@ -542,16 +562,16 @@ export const ActivityDayCalendar = ({
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
+            // A range set on its card stays in view wherever it is moved.
+            ...rangeEdges(openCard),
           ],
         })}
         locale={locale}
         nowMs={nowMs}
         onSelectRange={(columnId, range) => {
           if (columnId === ENTRIES_COLUMN_ID) {
-            open(
-              { range, type: "range" },
-              manualSuggestion(day.segments, range),
-            );
+            const selected = rangeCard(range);
+            open(selected, rangeSuggestion(selected));
           }
         }}
         selection={
@@ -572,6 +592,43 @@ export const ActivityDayCalendar = ({
     </div>
   );
 };
+
+/** The card for a range selected on the grid, named by the range it opened
+ * with. */
+const rangeCard = (range: DayCalendarRange): RangeCard => ({
+  id: `manual:${String(range.startMs)}:${String(range.endMs)}`,
+  range,
+  type: "range",
+});
+
+const rangeEdges = (openCard: OpenCard) =>
+  openCard.type === "range"
+    ? [openCard.range.startMs, openCard.range.endMs]
+    : [];
+
+/** A selected range is set on its card; a matched suggestion's time is what
+ * was recorded. */
+const cardTimes = ({
+  date,
+  openCard,
+  setOpenCard,
+  timeZone,
+}: {
+  date: string;
+  openCard: OpenCard;
+  setOpenCard: (card: OpenCard) => void;
+  timeZone: string;
+}): SuggestionTimes =>
+  openCard.type === "range"
+    ? {
+        date,
+        onRangeChange: (range) =>
+          setOpenCard({ id: openCard.id, range, type: "range" }),
+        range: openCard.range,
+        timeZone,
+        type: "selected",
+      }
+    : { type: "recorded" };
 
 type CalendarColumnsOptions = {
   segments: readonly MatchedSegment[];

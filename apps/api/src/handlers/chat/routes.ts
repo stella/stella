@@ -8,6 +8,7 @@ import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
@@ -59,6 +60,7 @@ export const chatRoute = routes(
     "/threads": { GET: getThreads },
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
+    "/local-runners": { GET: getLocalRunners },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },

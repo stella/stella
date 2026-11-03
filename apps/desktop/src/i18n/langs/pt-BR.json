@@ -501,6 +501,10 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
+    "entryStart": "Início",
+    "entryEnd": "Fim",
+    "rangeEndBeforeStart": "Defina um horário de término depois do início.",
+    "rangeDraftedLeftOut": "{duration}, sem contar o tempo já em rascunho",
     "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Lançamentos de horas para preparar um lançamento de qualquer intervalo.",
     "aiDraftWrite": "Redigir com stella AI",
     "aiDraftAgain": "Redigir de novo",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "O ChatGPT está conectado",
     "callbackConnectedBody": "Você pode fechar esta guia e voltar para o stella.",
     "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
-    "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo."
+    "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Use sua assinatura do Claude para os agentes locais no stella. O uso é descontado do seu plano do Claude, separado da sua assinatura do stella.",
+      "notInstalled": "O Claude Code ainda não está instalado neste computador.",
+      "signIn": "Entrar com o Claude",
+      "openSignInPage": "Abrir a página de login",
+      "signedIn": "Conectado ao Claude",
+      "signedInAs": "Conectado ao Claude · {email}",
+      "signOut": "Sair",
+      "apiKey": "O Claude Code está conectado com uma chave de API, que o stella não usa. Saia e depois entre com sua assinatura do Claude.",
+      "failure": {
+        "notCompleted": "O login não foi concluído. Tente de novo.",
+        "timedOut": "O login demorou demais. Tente de novo.",
+        "unavailable": "Não foi possível iniciar o Claude Code neste computador. Tente de novo."
+      }
+    }
   }
 }

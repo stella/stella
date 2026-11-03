@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Editor as TipTapEditor } from "@tiptap/core";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const { Editor, Node } = await import("@tiptap/core");
