@@ -764,7 +764,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {
@@ -934,6 +934,20 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
     .map(withoutStepId)
+    // The generated-files contract owns this derived-output inventory. Keep
+    // partition migration checks focused on the guard around that inventory.
+    .map((step) =>
+      step.name === "MCP app derived outputs guard" &&
+      typeof step["run"] === "string"
+        ? {
+            ...step,
+            run: step["run"].replace(
+              /outputs=\(\n[\s\S]*?\n\s*\)/u,
+              "outputs=(\n    <generated-output-inventory>\n  )",
+            ),
+          }
+        : step,
+    )
     .map((step) =>
       typeof step["run"] === "string"
         ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }
@@ -1174,6 +1188,26 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Bridge-version guard" &&
+    fields.if?.includes("github.event_name == 'pull_request'") &&
+    (!v.is(v.record(v.string(), v.unknown()), fields.env) ||
+      fields.env["BRIDGE_BASE_SHA"] === undefined)
+  ) {
+    const env = v.is(v.record(v.string(), v.unknown()), fields.env)
+      ? fields.env
+      : {};
+    // The event gate moved to the root-check plan, which selects the guard
+    // only for pull requests and merge groups.
+    const { if: _eventGate, ...unconditional } = step;
+    return {
+      ...unconditional,
+      env: {
+        ...env,
+        BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+      },
+    };
+  }
   if (step.name === "MCP app derived outputs guard") {
     let run = v.parse(v.string(), fields.run);
     if (run.includes("bun scripts/check-mcp-app-outputs.ts\n")) {

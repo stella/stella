@@ -30,6 +30,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -219,12 +220,8 @@ if (!databaseUrl || !runPostgresTests) {
         ).toHaveLength(1);
       } finally {
         recording.restore();
-        await db
-          .delete(organization)
-          .where(eq(organization.id, exhaustedFixture.organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, eligibleFixture.organizationId));
+        await deleteOrganizationsForTest(db, [exhaustedFixture.organizationId]);
+        await deleteOrganizationsForTest(db, [eligibleFixture.organizationId]);
       }
     });
   });
@@ -398,12 +395,8 @@ if (!databaseUrl || !runPostgresTests) {
             `Permanent extraction failure ${DOCUMENT_PROCESSING_MAX_ATTEMPTS}`,
           );
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, fixture.organizationId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, healthyFixture.organizationId));
+          await deleteOrganizationsForTest(db, [fixture.organizationId]);
+          await deleteOrganizationsForTest(db, [healthyFixture.organizationId]);
         }
       });
     },
@@ -482,9 +475,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(stored?.attemptCount).toBe(run.attemptCount);
           expect(stored?.status).toBe(run.status);
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, fixture.organizationId));
+          await deleteOrganizationsForTest(db, [fixture.organizationId]);
         }
       });
     },

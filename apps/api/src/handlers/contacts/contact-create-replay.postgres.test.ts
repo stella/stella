@@ -6,6 +6,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -14,6 +15,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createContact from "./create";
 import type { CreateContactBody } from "./create";
@@ -98,15 +100,19 @@ describe.skipIf(!enabled)("contact create replay (postgres)", () => {
         const replayBody: unknown = await replay.json();
         expect(replayBody).toMatchObject({ id: first.id });
 
-        const rows = await db
-          .select({ total: count() })
-          .from(contacts)
-          .where(eq(contacts.organizationId, organizationId));
+        // The owner reads contacts inside their organization only.
+        const rows = await withOwnerOrganizationScope(
+          db,
+          organizationId,
+          async (tx) =>
+            await tx
+              .select({ total: count() })
+              .from(contacts)
+              .where(eq(contacts.organizationId, organizationId)),
+        );
         expect(rows.at(0)?.total).toBe(1);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(eq(user.id, userId));
       }
     });

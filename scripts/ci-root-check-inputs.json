@@ -765,6 +765,7 @@
     "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
+    "Published package API reports": ["**"],
     "Resolve static check receipts": ["**"],
     "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
@@ -801,7 +802,7 @@
     "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
-    "Instruction references": ["**"],
+    "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],

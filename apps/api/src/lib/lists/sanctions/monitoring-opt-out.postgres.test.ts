@@ -26,9 +26,11 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import { commitSanctionsMonitoringBatch } from "./monitoring-diff";
@@ -65,15 +67,20 @@ if (!runPostgresTests || databaseUrl === undefined) {
       try {
         const contact =
           (
-            await admin
-              .insert(contacts)
-              .values({
-                organizationId,
-                type: "person",
-                displayName: "Synthetic Person",
-                sanctionsMonitoringMode: "excluded",
-              })
-              .returning()
+            await withOwnerOrganizationScope(
+              admin,
+              organizationId,
+              async (tx) =>
+                await tx
+                  .insert(contacts)
+                  .values({
+                    organizationId,
+                    type: "person",
+                    displayName: "Synthetic Person",
+                    sanctionsMonitoringMode: "excluded",
+                  })
+                  .returning(),
+            )
           ).at(0) ?? panic("Contact fixture missing");
         await admin.insert(organizationSettings).values({
           id: createSafeId<"organizationSettings">(),
@@ -114,10 +121,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await enableSanctionsMonitoring(tx, options);
           });
         const census = async () => ({
-          contacts: await admin
-            .select()
-            .from(contacts)
-            .where(eq(contacts.organizationId, organizationId)),
+          contacts: await withOwnerOrganizationScope(
+            admin,
+            organizationId,
+            async (tx) =>
+              await tx
+                .select()
+                .from(contacts)
+                .where(eq(contacts.organizationId, organizationId)),
+          ),
           settings: await admin
             .select()
             .from(organizationSettings)
@@ -154,9 +166,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
         await mutate(false);
         expect(await census()).toEqual(after);
       } finally {
-        await admin
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(admin, [organizationId]);
       }
     });
   }, 60_000);
@@ -385,9 +395,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               (transaction) => transaction !== undefined,
             ),
           );
-          await admin
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(admin, [organizationId]);
         }
       }
     });
@@ -444,14 +452,19 @@ if (!runPostgresTests || databaseUrl === undefined) {
           });
           const contact =
             (
-              await admin
-                .insert(contacts)
-                .values({
-                  organizationId,
-                  type: "person",
-                  displayName: "Synthetic Person",
-                })
-                .returning()
+              await withOwnerOrganizationScope(
+                admin,
+                organizationId,
+                async (tx) =>
+                  await tx
+                    .insert(contacts)
+                    .values({
+                      organizationId,
+                      type: "person",
+                      displayName: "Synthetic Person",
+                    })
+                    .returning(),
+              )
             ).at(0) ?? panic("Contact missing");
           const fingerprint = monitoringFingerprint(contact);
           const match = {
@@ -728,10 +741,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
           if (operation === "contact-exclude") {
             expect(
               (
-                await admin
-                  .select()
-                  .from(contacts)
-                  .where(eq(contacts.id, contact.id))
+                await withOwnerOrganizationScope(
+                  admin,
+                  organizationId,
+                  async (tx) =>
+                    await tx
+                      .select()
+                      .from(contacts)
+                      .where(eq(contacts.id, contact.id)),
+                )
               ).at(0)?.sanctionsMonitoringMode,
             ).toBe("excluded");
           } else {
@@ -747,9 +765,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             ).toBe("disabled");
           }
         } finally {
-          await admin
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(admin, [organizationId]);
           // Fixture cleanup uses the owner; ingestion deliberately has no DELETE grant.
           await admin.transaction(async (tx) => {
             await tx

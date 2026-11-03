@@ -121,6 +121,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "autofix.yml:regenerate-derived-files#Prune stale baseline entries":
     operational("Rewrites baselines on the fix branch; no verdict."),
+  "autofix.yml:regenerate-derived-files#Raise stale bridge version":
+    operational("Bumps the bridge version on the fix branch; CI enforces it."),
   "autofix.yml:regenerate-derived-files#Restrict autofix changes": diffComplete(
     "Limits the fix to the paths the change touched.",
   ),
@@ -230,6 +232,9 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#Select measured ratchet base from the target branch":
     operational("Selects the base tree the ratchet measures."),
   "ci.yml:ci-checks-policy#Run policy checks": operational(CHECK_POOL),
+  "ci.yml:ci-checks-policy#Published package API reports": fullTree(
+    "Regenerates every published package's report; the base supplies the previous reports and the changesets since.",
+  ),
   "ci.yml:ci-checks-policy#Ratchet guard": fullTree(
     "Measures both full trees; the base only supplies the comparison.",
   ),
@@ -251,8 +256,8 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-policy#Custom lint rule coverage": fullTree(
     "Checks every custom rule; the base is not read.",
   ),
-  "ci.yml:ci-checks-policy#Instruction references": fullTree(
-    "Checks every instruction reference in the tree.",
+  "ci.yml:ci-checks-policy#Instruction policy": fullTree(
+    "Checks every instruction reference and enforcement tag in the tree.",
   ),
   "ci.yml:ci-checks-rest#Run repository checks": operational(CHECK_POOL),
   "ci.yml:ci-checks-rest#Prepare route network manifest":

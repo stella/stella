@@ -222,6 +222,10 @@ const renderReader = async () => {
             endOffset: CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
             id: "topic-over-citation",
             kind: "highlight",
+            quote: CITING_PARAGRAPH.slice(
+              CITING_PARAGRAPH.indexOf("zn."),
+              CITING_PARAGRAPH.indexOf(CITED_CASE) + 5,
+            ),
             startOffset: CITING_PARAGRAPH.indexOf("zn."),
             style: "underline",
           },
