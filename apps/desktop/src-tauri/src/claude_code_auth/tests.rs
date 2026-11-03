@@ -21,12 +21,17 @@ use crate::harness_archive::tests::TempDir;
 const SIGN_IN_PAGE: &str = "https://claude.ai/oauth/authorize?code=true&state=fixture";
 
 /// Records every call, keeps the login's environment, and signs in when the
-/// test drops an `approve` marker or fails on a `decline` one.
+/// test drops an `approve` marker or fails on a `decline` one. A status read
+/// hangs while a `status-stall` marker exists.
 const STAND_IN_CLI: &str = r#"#!/bin/sh
 dir="$CLAUDE_CONFIG_DIR"
 echo "$*" >> "$dir/calls"
 case "$1 $2" in
   "auth status")
+    if [ -f "$dir/status-stall" ]; then
+      echo $$ > "$dir/status-pid"
+      while [ -f "$dir/status-stall" ]; do sleep 0.05; done
+    fi
     if [ -f "$dir/report" ]; then cat "$dir/report"; exit 0; fi
     if [ -f "$dir/signed-in" ]; then
       printf '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"person@example.com","subscriptionType":"max"}\n'
@@ -89,7 +94,12 @@ impl Fixture {
 
   /// Whether the last sign-in's CLI process still exists, reaped or not.
   fn login_running(&self) -> bool {
-    let pid = std::fs::read_to_string(self.home().join("login-pid"))
+    self.running("login-pid")
+  }
+
+  /// Whether the CLI process whose id is in `pid_file` still exists.
+  fn running(&self, pid_file: &str) -> bool {
+    let pid = std::fs::read_to_string(self.home().join(pid_file))
       .unwrap()
       .trim()
       .parse()
@@ -357,6 +367,60 @@ fn cancelling_stops_the_cli_before_it_signs_in() {
 }
 
 #[test]
+fn cancelling_during_the_status_read_after_the_login_stops_that_read() {
+  run(|| async {
+    let (fixture, auth) = fixture(Duration::from_secs(60));
+    auth.start();
+    page_shown(&auth).await;
+    fixture.mark("status-stall");
+    fixture.mark("approve");
+    for _ in 0..200 {
+      if fixture.exists("status-pid") {
+        break;
+      }
+      tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+      fixture.running("status-pid"),
+      "the status read never started"
+    );
+    auth.cancel();
+    tokio::time::timeout(Duration::from_secs(5), auth.settled())
+      .await
+      .expect("the cancelled sign-in kept the sign-in busy");
+    assert!(
+      !fixture.running("status-pid"),
+      "the cancelled status read kept running"
+    );
+    std::fs::remove_file(fixture.home().join("status-stall")).unwrap();
+    assert!(signed_in(&auth.status().await));
+  });
+}
+
+#[test]
+fn a_sign_out_waiting_while_a_sign_in_starts_is_refused() {
+  run(|| async {
+    let (fixture, auth) = fixture(Duration::from_secs(60));
+    fixture.mark("signed-in");
+    let busy = auth.0.changing.lock().await;
+    let mut sign_out = std::pin::pin!(auth.sign_out());
+    // One poll queues the sign-out behind the busy lock.
+    tokio::select! {
+      biased;
+      _ = &mut sign_out => panic!("the sign-out ran past the busy lock"),
+      () = std::future::ready(()) => {}
+    }
+    auth.start();
+    drop(busy);
+    assert_eq!(sign_out.await, Err(SignOutError::SigningIn));
+    assert_eq!(fixture.calls("auth logout"), 0);
+    auth.cancel();
+    auth.settled().await;
+    assert!(signed_in(&auth.status().await));
+  });
+}
+
+#[test]
 fn a_declined_sign_in_fails_until_the_next_one_starts() {
   run(|| async {
     let (fixture, auth) = fixture(Duration::from_secs(60));
@@ -443,6 +507,22 @@ fn a_page_on_another_host_is_never_opened() {
       "only the start and the end were shown; no page was recorded"
     );
     assert!(fixture.opened.lock().unwrap().is_empty());
+  });
+}
+
+#[test]
+fn a_sign_in_page_after_a_long_preamble_is_still_found() {
+  run(|| async {
+    let mut output = "progress line\n".repeat(10_000);
+    output.push_str("visit: ");
+    output.push_str(SIGN_IN_PAGE);
+    output.push('\n');
+    let found = Mutex::new(Vec::new());
+    cli::watch_for_sign_in_page(Some(output.as_bytes()), |url| {
+      found.lock().unwrap().push(url);
+    })
+    .await;
+    assert_eq!(*found.lock().unwrap(), [SIGN_IN_PAGE]);
   });
 }
 

@@ -21,60 +21,6 @@ import {
 import type { ClaudeCodeStatus } from "./claude-code-status";
 import { ClaudeCodeCard } from "./ClaudeCodeCard";
 
-const readChatGptStatus = async () =>
-  invoke<unknown>("chatgpt_auth_get_status");
-const readClaudeCodeStatus = async () =>
-  invoke<unknown>("claude_code_auth_get_status");
-
-/**
- * A native status, read when its change event is live and again on every
- * change. `null` while unread, refused (the local agents feature is off) or
- * malformed.
- */
-const useNativeStatus = <T,>({
-  read,
-  event,
-  isStatus,
-}: {
-  read: () => Promise<unknown>;
-  event: string;
-  isStatus: (value: unknown) => value is T;
-}) => {
-  const [status, setStatus] = useState<T | null>(null);
-  useEffect(() => {
-    let disposed = false;
-    let latest = 0;
-    const refresh = async () => {
-      latest += 1;
-      const current = latest;
-      const result = await Result.tryPromise(read);
-      if (disposed || current !== latest) {
-        return;
-      }
-      setStatus(
-        Result.isOk(result) && isStatus(result.value) ? result.value : null,
-      );
-    };
-    const stop = subscribeDesktopEvent<unknown>({
-      event,
-      handler: () => {
-        void refresh();
-      },
-      onError: () => {
-        setStatus(null);
-      },
-      onSubscribed: () => {
-        void refresh();
-      },
-    });
-    return () => {
-      disposed = true;
-      stop();
-    };
-  }, [read, event, isStatus]);
-  return [status, setStatus] as const;
-};
-
 /**
  * AI subscriptions the local agents can use. It renders nothing unless the
  * local agents feature is on: the status commands refuse otherwise.
@@ -84,12 +30,12 @@ export const AgentSubscriptionsSection = ({
 }: {
   renderGroup: (content: React.JSX.Element) => React.JSX.Element;
 }) => {
-  const [chatGpt, setChatGpt] = useNativeStatus<ChatGptStatus>({
+  const [chatGpt, refreshChatGpt] = useNativeStatus<ChatGptStatus>({
     read: readChatGptStatus,
     event: CHATGPT_AUTH_CHANGED_EVENT,
     isStatus: isChatGptStatus,
   });
-  const [claudeCode, setClaudeCode] = useNativeStatus<ClaudeCodeStatus>({
+  const [claudeCode, refreshClaudeCode] = useNativeStatus<ClaudeCodeStatus>({
     read: readClaudeCodeStatus,
     event: CLAUDE_CODE_AUTH_CHANGED_EVENT,
     isStatus: isClaudeCodeStatus,
@@ -175,12 +121,10 @@ export const AgentSubscriptionsSection = ({
               account: account ?? null,
               newAccount,
             }),
-          ).then((started) => {
+          ).then(() => {
             starting.current = false;
             // Shown at once, without waiting for the change event.
-            if (isChatGptStatus(started)) {
-              setChatGpt(started);
-            }
+            refreshChatGpt();
             return undefined;
           });
         }}
@@ -207,12 +151,10 @@ export const AgentSubscriptionsSection = ({
           startingClaudeCode.current = true;
           void runClaudeCode(async () =>
             invoke<unknown>("claude_code_auth_start"),
-          ).then((started) => {
+          ).then(() => {
             startingClaudeCode.current = false;
             // Shown at once, without waiting for the change event.
-            if (isClaudeCodeStatus(started)) {
-              setClaudeCode(started);
-            }
+            refreshClaudeCode();
             return undefined;
           });
         }}
@@ -230,4 +172,69 @@ export const AgentSubscriptionsSection = ({
       {claudeCodeCard}
     </>,
   );
+};
+
+const readChatGptStatus = async () =>
+  invoke<unknown>("chatgpt_auth_get_status");
+const readClaudeCodeStatus = async () =>
+  invoke<unknown>("claude_code_auth_get_status");
+
+/**
+ * A native status, read when its change event is live, again on every
+ * change and whenever `refresh` is called. `null` while unread, refused
+ * (the local agents feature is off) or malformed.
+ */
+const useNativeStatus = <T,>({
+  read,
+  event,
+  isStatus,
+}: {
+  read: () => Promise<unknown>;
+  event: string;
+  isStatus: (value: unknown) => value is T;
+}) => {
+  const [status, setStatus] = useState<T | null>(null);
+  // The mounted effect's ordered read; a no-op outside it.
+  const refreshLive = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    let disposed = false;
+    let latest = 0;
+    const refresh = async () => {
+      latest += 1;
+      const current = latest;
+      const result = await Result.tryPromise(read);
+      if (disposed || current !== latest) {
+        return;
+      }
+      setStatus(
+        Result.isOk(result) && isStatus(result.value) ? result.value : null,
+      );
+    };
+    refreshLive.current = () => {
+      void refresh();
+    };
+    const stop = subscribeDesktopEvent<unknown>({
+      event,
+      handler: () => {
+        void refresh();
+      },
+      onError: () => {
+        setStatus(null);
+      },
+      onSubscribed: () => {
+        void refresh();
+      },
+    });
+    return () => {
+      disposed = true;
+      refreshLive.current = () => undefined;
+      stop();
+    };
+  }, [read, event, isStatus]);
+  // Reads again in order with the change events, so an older answer never
+  // replaces a newer one.
+  const refresh = () => {
+    refreshLive.current();
+  };
+  return [status, refresh] as const;
 };

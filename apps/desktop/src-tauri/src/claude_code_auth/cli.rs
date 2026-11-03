@@ -13,6 +13,7 @@
 
 use std::{
   ffi::{OsStr, OsString},
+  future::Future,
   path::PathBuf,
   process::{ExitStatus, Stdio},
   time::Duration,
@@ -122,15 +123,28 @@ pub(super) enum RunError {
   /// The CLI did not start.
   Spawn,
   TimedOut,
+  /// The caller stopped waiting for it.
+  Stopped,
   /// It printed more than a status report can be.
   Oversize,
 }
 
+/// Kills the CLI and waits until it is gone. Dropping the child would kill
+/// it too, but without waiting for it to exit.
+pub(super) async fn reap(child: &mut tokio::process::Child) {
+  if let Err(error) = child.kill().await {
+    tracing::warn!(kind = ?error.kind(), "managed Claude Code was not stopped");
+  }
+}
+
 /// Runs a short command to its end: its exit status and what it printed on
-/// standard output. Standard error is drained unread.
+/// standard output. Standard error is drained unread. A command that times
+/// out or is stopped through `stop` is killed and reaped before this
+/// returns, so it never outlives the caller's wait.
 pub(super) async fn run(
   mut command: tokio::process::Command,
   timeout: Duration,
+  stop: impl Future<Output = ()>,
 ) -> Result<(ExitStatus, Vec<u8>), RunError> {
   let mut child = spawn(&mut command).await.map_err(|error| {
     tracing::warn!(kind = ?error.kind(), "managed Claude Code did not start");
@@ -138,14 +152,25 @@ pub(super) async fn run(
   })?;
   let stdout = child.stdout.take();
   let stderr = child.stderr.take();
-  tokio::time::timeout(timeout, async {
-    let (output, (), status) =
-      tokio::join!(read_capped(stdout), drain(stderr), child.wait());
-    let status = status.map_err(|_wait| RunError::Spawn)?;
-    Ok((status, output?))
-  })
-  .await
-  .map_err(|_elapsed| RunError::TimedOut)?
+  let ended = {
+    let finished = tokio::time::timeout(timeout, async {
+      let (output, (), status) =
+        tokio::join!(read_capped(stdout), drain(stderr), child.wait());
+      let status = status.map_err(|_wait| RunError::Spawn)?;
+      Ok((status, output?))
+    });
+    tokio::select! {
+      finished = finished => finished.map_err(|_elapsed| RunError::TimedOut),
+      () = stop => Err(RunError::Stopped),
+    }
+  };
+  match ended {
+    Ok(finished) => finished,
+    Err(error) => {
+      reap(&mut child).await;
+      Err(error)
+    }
+  }
 }
 
 async fn read_capped(
@@ -175,8 +200,9 @@ pub(super) async fn drain(stream: Option<impl AsyncRead + Unpin>) {
 }
 
 /// Reads a stream to its end, calling `found` once with the first sign-in
-/// page it names. At most [`MAX_OUTPUT_BYTES`] are kept; the rest is
-/// drained so the CLI never blocks on a full pipe.
+/// page it names. Only the last [`MAX_OUTPUT_BYTES`] are kept, so a page
+/// printed after a long preamble is still found, and the stream is read to
+/// its end so the CLI never blocks on a full pipe.
 pub(super) async fn watch_for_sign_in_page(
   stream: Option<impl AsyncRead + Unpin>,
   found: impl Fn(String),
@@ -192,11 +218,13 @@ pub(super) async fn watch_for_sign_in_page(
       Ok(0) | Err(_) => break,
       Ok(read) => read,
     };
-    if reported || seen.len() >= MAX_OUTPUT_BYTES {
+    if reported {
       continue;
     }
-    let room = MAX_OUTPUT_BYTES - seen.len();
-    seen.extend_from_slice(&chunk[..read.min(room)]);
+    seen.extend_from_slice(&chunk[..read]);
+    if let Some(excess) = seen.len().checked_sub(MAX_OUTPUT_BYTES) {
+      seen.drain(..excess);
+    }
     let text = String::from_utf8_lossy(&seen);
     // Only a link followed by whitespace is complete; the rest may still
     // be arriving.

@@ -20,6 +20,7 @@ mod cli;
 mod tests;
 
 use std::{
+  future::Future,
   sync::{
     Arc, Mutex,
     atomic::{AtomicU64, Ordering},
@@ -150,13 +151,8 @@ enum Wait {
   Cancelled,
 }
 
-/// Kills the CLI and waits until it is gone. Dropping the child would kill
-/// it too, but without waiting for it to exit.
-async fn reap(child: &mut tokio::process::Child) {
-  if let Err(error) = child.kill().await {
-    tracing::warn!(kind = ?error.kind(), "managed Claude Code sign-in was not stopped");
-  }
-}
+/// The caller stopped waiting for a status read.
+struct Stopped;
 
 impl ClaudeCodeAuth {
   pub(crate) fn new(config: ClaudeCodeAuthConfig, hooks: ClaudeCodeAuthHooks) -> Self {
@@ -179,7 +175,11 @@ impl ClaudeCodeAuth {
     let read = match (self.0.hooks.launch)() {
       Err(LaunchError::NotInstalled) => return ClaudeCodeStatus::NotInstalled,
       Err(LaunchError::Unavailable) => None,
-      Ok(launch) => self.read_sign_in(&launch).await,
+      Ok(launch) => self
+        .read_sign_in(&launch, std::future::pending())
+        .await
+        .ok()
+        .flatten(),
     };
     // A sign-in that started while the CLI answered is what the user sees.
     if let Some(signing_in) = self.signing_in() {
@@ -199,6 +199,16 @@ impl ClaudeCodeAuth {
     }
   }
 
+  /// The number of sign-ins started so far, or `None` while one is in
+  /// progress. A change between two reads means a sign-in started between
+  /// them.
+  fn idle_generation(&self) -> Option<u64> {
+    let attempt = self.0.attempt.lock().ok()?;
+    attempt
+      .is_none()
+      .then(|| self.0.next_attempt.load(Ordering::Relaxed))
+  }
+
   fn signing_in(&self) -> Option<ClaudeCodeStatus> {
     let attempt = self.0.attempt.lock().ok()?;
     attempt.as_ref().map(|attempt| ClaudeCodeStatus::SigningIn {
@@ -206,22 +216,28 @@ impl ClaudeCodeAuth {
     })
   }
 
-  async fn read_sign_in(&self, launch: &ClaudeCodeLaunch) -> Option<SignIn> {
+  /// The sign-in the CLI reports, `None` when it could not be read. A read
+  /// stopped through `stop` has its CLI killed and reaped.
+  async fn read_sign_in(
+    &self,
+    launch: &ClaudeCodeLaunch,
+    stop: impl Future<Output = ()>,
+  ) -> Result<Option<SignIn>, Stopped> {
     let command = cli::command(launch, &cli::STATUS_ARGS);
-    let (_status, stdout) = cli::run(command, self.0.config.command_timeout)
-      .await
-      .inspect_err(|error| {
+    match cli::run(command, self.0.config.command_timeout, stop).await {
+      Ok((_status, stdout)) => Ok(cli::parse_status(&stdout)),
+      Err(cli::RunError::Stopped) => Err(Stopped),
+      Err(error) => {
         tracing::warn!(?error, "Claude Code sign-in status was not read");
-      })
-      .ok()?;
-    cli::parse_status(&stdout)
+        Ok(None)
+      }
+    }
   }
 
   /// Starts the CLI's browser sign-in. While one is in progress another
   /// start does nothing, so a repeated click cannot start a second CLI;
   /// cancel it first to start over.
   pub(crate) fn start(&self) {
-    let id = self.0.next_attempt.fetch_add(1, Ordering::Relaxed);
     let (cancel, cancelled) = oneshot::channel();
     let Ok(mut attempt) = self.0.attempt.lock() else {
       return;
@@ -229,6 +245,8 @@ impl ClaudeCodeAuth {
     if attempt.is_some() {
       return;
     }
+    // Taken under the attempt lock, so `idle_generation` sees every start.
+    let id = self.0.next_attempt.fetch_add(1, Ordering::Relaxed);
     *attempt = Some(Attempt {
       id,
       sign_in_page: None,
@@ -329,11 +347,11 @@ impl ClaudeCodeAuth {
         return AttemptEnd::Settled(Err(ClaudeCodeFailure::Unavailable));
       }
       Wait::TimedOut => {
-        reap(&mut child).await;
+        cli::reap(&mut child).await;
         return AttemptEnd::Settled(Err(ClaudeCodeFailure::TimedOut));
       }
       Wait::Cancelled => {
-        reap(&mut child).await;
+        cli::reap(&mut child).await;
         return AttemptEnd::Cancelled;
       }
     };
@@ -341,15 +359,21 @@ impl ClaudeCodeAuth {
       tracing::info!(status = ?status.code(), "Claude Code sign-in ended without signing in");
       return AttemptEnd::Settled(Err(ClaudeCodeFailure::NotCompleted));
     }
-    AttemptEnd::Settled(match self.read_sign_in(&launch).await {
-      Some(SignIn::Subscription { .. }) => Ok(()),
-      Some(SignIn::None | SignIn::ApiKey) => Err(ClaudeCodeFailure::NotCompleted),
-      None => Err(ClaudeCodeFailure::Unavailable),
+    // A cancel during this read stops its CLI too, so the attempt lets go
+    // of the sign-in at once.
+    let stop = async {
+      let _ = (&mut cancelled).await;
+    };
+    AttemptEnd::Settled(match self.read_sign_in(&launch, stop).await {
+      Err(Stopped) => return AttemptEnd::Cancelled,
+      Ok(Some(SignIn::Subscription { .. })) => Ok(()),
+      Ok(Some(SignIn::None | SignIn::ApiKey)) => Err(ClaudeCodeFailure::NotCompleted),
+      Ok(None) => Err(ClaudeCodeFailure::Unavailable),
     })
   }
 
   /// Waits until no sign-in or sign-out is running.
-  #[cfg(test)]
+  #[cfg(all(test, unix))]
   async fn settled(&self) {
     drop(self.0.changing.lock().await);
   }
@@ -392,16 +416,26 @@ impl ClaudeCodeAuth {
   /// Signs the CLI out of its Stella-owned configuration directory. The
   /// user's own Claude Code sign-in is a different directory and stays.
   pub(crate) async fn sign_out(&self) -> Result<(), SignOutError> {
-    if self.signing_in().is_some() {
+    let Some(generation) = self.idle_generation() else {
       return Err(SignOutError::SigningIn);
-    }
+    };
     let launch = (self.0.hooks.launch)().map_err(|error| match error {
       LaunchError::NotInstalled => SignOutError::NotInstalled,
       LaunchError::Unavailable => SignOutError::Failed,
     })?;
     let _changing = self.0.changing.lock().await;
+    // A sign-in that started while this waited may already have signed in;
+    // signing out now would undo it.
+    if self.idle_generation() != Some(generation) {
+      return Err(SignOutError::SigningIn);
+    }
     let command = cli::command(&launch, &cli::LOGOUT_ARGS);
-    let result = cli::run(command, self.0.config.command_timeout).await;
+    let result = cli::run(
+      command,
+      self.0.config.command_timeout,
+      std::future::pending(),
+    )
+    .await;
     let signed_out = match result {
       Ok((status, _)) if status.success() => Ok(()),
       Ok((status, _)) => {

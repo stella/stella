@@ -53,14 +53,16 @@ pub async fn claude_code_auth_get_status(
   Ok(auth(&app, &gates)?.status().await)
 }
 
+/// Windows read the new status through the change event or a status read
+/// issued after this returns, so an older answer never replaces it. Async
+/// so the sign-in task is spawned on the runtime.
 #[tauri::command]
 pub async fn claude_code_auth_start(
   app: AppHandle,
   gates: State<'_, FeatureGates>,
-) -> Result<ClaudeCodeStatus, ClaudeCodeCommandError> {
-  let auth = auth(&app, &gates)?;
-  auth.start();
-  Ok(auth.status().await)
+) -> Result<(), ClaudeCodeCommandError> {
+  auth(&app, &gates)?.start();
+  Ok(())
 }
 
 #[tauri::command]
