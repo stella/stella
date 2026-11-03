@@ -180,7 +180,9 @@ const cliLogin = async (browser: Browser) => {
         redirectUri: "http://127.0.0.1:43123/callback",
         waitForCallback: async () =>
           delivered ?? { kind: "error", error: "no_callback" },
-        finish: () => Promise.resolve(),
+        finish: async () => {
+          // The test browser reads no finish page.
+        },
         close: () => {},
       }),
     },
