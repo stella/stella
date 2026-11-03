@@ -76,11 +76,11 @@ export const createTestState = <Config extends object>({
   const captureConfig = (key: PropertyKey) => {
     const descriptor = Object.getOwnPropertyDescriptor(config, key);
     const restoreAccessor = (() => {
-      if (descriptor?.get === undefined || descriptor.set === undefined) {
-        return undefined;
+      if (descriptor?.get !== undefined && descriptor.set !== undefined) {
+        const value: unknown = descriptor.get.call(config);
+        return () => descriptor.set?.call(config, value);
       }
-      const value: unknown = descriptor.get.call(config);
-      return () => descriptor.set?.call(config, value);
+      return undefined;
     })();
     capture(typeof key === "symbol" ? key : `config:${String(key)}`, () => {
       const restored =

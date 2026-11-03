@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Máte neuložené lokálne úpravy. Svoju kópiu nájdete v Dočasných pracovných kópiách.",
     "takenOverBody": "{fileName} — Znova otvorte zo stella tu, aby ste si prevzali úpravy späť",
     "takenOverLocalError": "Úpravy na desktope presunuté na iné zariadenie. Táto lokálna kópia je zachovaná.",
-    "takenOverTitle": "Úpravy presunuté na iné zariadenie"
+    "takenOverTitle": "Úpravy presunuté na iné zariadenie",
+    "editsSetAsideTitle": "Úpravy odložené",
+    "editsSetAsideBody": "Neuložené úpravy boli odložené. Znova sa pripojte k tomu istému účtu a otvorte priečinok na obnovenie v Nastaveniach."
   },
   "dialog": {
     "accountWindowTitle": "Pripojiť účet",
@@ -232,7 +234,16 @@
     "permissionDenied": "Vypnuté v nastaveniach systému.",
     "permissionManaged": "Spravuje vaša organizácia",
     "errorUpdateAutostart": "Aplikácii stella desktop sa nepodarilo zmeniť spúšťanie pri prihlásení.",
-    "errorPermissions": "stella desktop nemohol prečítať alebo zmeniť toto povolenie."
+    "errorPermissions": "stella desktop nemohol prečítať alebo zmeniť toto povolenie.",
+    "recoveryTitle": "Odložené úpravy",
+    "recoveryBody": "Neuložené úpravy sa tu uchovávajú pre váš účet. Otvorte priečinok a obnovte ich.",
+    "recoverySignIn": "Úpravy boli odložené pre daný účet. Znova sa k nemu pripojte a otvorte jeho priečinok.",
+    "recoveryUnassigned": "Pri niektorých úpravách nie je zaznamenaný účet. Otvorte ich priečinok a obnovte ich manuálne.",
+    "recoveryPending": "Niektoré úpravy sa stále odkladajú. Dokončite to opakovaným pokusom.",
+    "recoveryOpenFolder": "Otvoriť priečinok na obnovenie",
+    "recoveryOpenUnassigned": "Otvoriť nepriradené úpravy",
+    "recoveryFilePending": "Čaká sa na odloženie",
+    "recoveryError": "Priečinok na obnovenie sa nepodarilo otvoriť. Skúste to znova."
   },
   "clipboard": {
     "registryUnavailable": "Pre vaše jurisdikcie nie sú povolené žiadne registre.",

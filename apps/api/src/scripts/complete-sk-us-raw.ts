@@ -127,10 +127,10 @@ await runScriptWithErrorOutput(async () => {
       ),
     );
     const row = rows.at(0);
-    if (
-      row?.source_raw_s3_key === undefined ||
-      row.source_raw_s3_key === null
-    ) {
+    if (row === undefined) {
+      return "raw_unavailable";
+    }
+    if (row.source_raw_s3_key === null) {
       return "raw_unavailable";
     }
     const oldKey = row.source_raw_s3_key;

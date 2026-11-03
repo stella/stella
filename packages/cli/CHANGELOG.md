@@ -1,5 +1,29 @@
 # @stll/cli
 
+## 6.7.1
+
+### Patch Changes
+
+- [#7606](https://github.com/stella/stella/pull/7606) [`6c907e2`](https://github.com/stella/stella/commit/6c907e206ce59165e77e0714b8302160b396d56a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the stella CLI display name and show a themed sign-in completion page with organization context. The browser shows "Signed in" only after the CLI has exchanged the code and saved the credential; otherwise it names what failed and how to retry.
+
+## 6.7.0
+
+### Minor Changes
+
+- [#7569](https://github.com/stella/stella/pull/7569) [`4e29565`](https://github.com/stella/stella/commit/4e2956596d0f3b7685341d263192cd0131dcd212) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a capability that deletes several contacts at once and reports, per contact, whether it was deleted or why it was kept.
+
+## 6.6.3
+
+### Patch Changes
+
+- [#7618](https://github.com/stella/stella/pull/7618) [`e9788a3`](https://github.com/stella/stella/commit/e9788a3d95a36f9867195899b98a8760a3733683) Thanks [@jan-kubica](https://github.com/jan-kubica)! - audit-logs.list accepts a performer filter: people for entries members and their agents performed, automations for entries background services wrote.
+
+## 6.6.2
+
+### Patch Changes
+
+- [#7147](https://github.com/stella/stella/pull/7147) [`6437ee1`](https://github.com/stella/stella/commit/6437ee114994c67fdc87348c0ac16d21daee6df4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow matter-list requests to filter matters by active or archived status.
+
 ## 6.6.1
 
 ### Patch Changes

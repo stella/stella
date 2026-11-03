@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/organization-settings/correspondence/data-boxes",
+    "Organization data-box settings support matter correspondence on every deployment",
+  ],
+  [
     "/v1/organizations",
     "Authenticated account holders can create organizations on every deployment",
   ],
@@ -99,6 +103,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
+  ],
+  [
+    "/v1/contacts",
+    "The organization address book and its contact routes are available on every deployment",
   ],
   [
     "/v1/search-history",

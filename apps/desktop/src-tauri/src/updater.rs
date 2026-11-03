@@ -267,17 +267,28 @@ fn signed_version(trusted_comment: &str) -> Option<&str> {
     .find_map(|field| field.strip_prefix("version:"))
 }
 
+/// An update package whose signature this module checked; only
+/// `verify_update_package` constructs one, so nothing unverified installs.
+pub struct VerifiedUpdatePackage(Vec<u8>);
+
+impl VerifiedUpdatePackage {
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.0
+  }
+}
+
 fn verify_update_package(
-  package: &[u8],
+  package: Vec<u8>,
   signature: &str,
   announced_version: &str,
-) -> Result<(), String> {
+) -> Result<VerifiedUpdatePackage, String> {
   verify_signed_package(
     &updater_public_key()?,
-    package,
+    &package,
     signature,
     announced_version,
-  )
+  )?;
+  Ok(VerifiedUpdatePackage(package))
 }
 
 /// Verifies `package` against `public_key` and requires the signature's
@@ -319,7 +330,7 @@ fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
 
 async fn download_update_package(
   update: &tauri_plugin_updater::Update,
-) -> Result<Vec<u8>, String> {
+) -> Result<VerifiedUpdatePackage, String> {
   let mut headers = update.headers.clone();
   if !headers.contains_key(ACCEPT) {
     headers.insert(ACCEPT, HeaderValue::from_static("application/octet-stream"));
@@ -356,8 +367,7 @@ async fn download_update_package(
     checked_update_size(package.len(), chunk.len())?;
     package.extend_from_slice(&chunk);
   }
-  verify_update_package(&package, &update.signature, &update.version)?;
-  Ok(package)
+  verify_update_package(package, &update.signature, &update.version)
 }
 
 fn notify(handle: &AppHandle, title: &str, body: &str) {

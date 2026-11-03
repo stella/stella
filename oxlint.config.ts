@@ -53,7 +53,7 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
-// Defaults every lint to the committed, read-only Tailwind cache.
+// Defaults every lint to the generated, read-only Tailwind cache.
 import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
@@ -4642,6 +4642,8 @@ const config = defineConfig({
         "one-statement-time-per-row-write/one-statement-time-per-row-write":
           "error",
         "no-optional-chain-null-compare/no-optional-chain-null-compare":
+          "error",
+        "no-optional-chain-null-compare/no-optional-chain-absent-match":
           "error",
       },
     },

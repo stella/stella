@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 /** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
-import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
@@ -385,7 +384,9 @@ type RecordUploadedMailOptions = {
 };
 
 /**
- * Hand an email document to the job that files it as matter correspondence.
+ * Hand every projected file generation to correspondence reconciliation.
+ * The worker files email/data-box messages and retires stale correspondence
+ * when the current file belongs to another channel.
  *
  * Every transport that stores a file version reaches this run, so uploads
  * from the web, desktop, CLI, MCP and folder imports are covered without
@@ -398,14 +399,11 @@ const recordUploadedMail = async ({
   enqueueUploadedMail,
   run,
 }: RecordUploadedMailOptions): Promise<void> => {
-  if (!isEmailMimeType(source.extractionMimeType)) {
-    return;
-  }
   const handedOff = await Result.tryPromise({
     try: async () =>
       await enqueueUploadedMail({
         file: {
-          sourceFileId: source.fileId,
+          sourceFileId: run.sourceFileId,
           storageMimeType: source.storageMimeType,
           mimeType: source.extractionMimeType,
         },
