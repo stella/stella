@@ -3,12 +3,10 @@ import {
   afterAll,
   afterEach,
   beforeAll,
-  beforeEach,
   describe,
   expect,
   mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
@@ -55,6 +53,7 @@ import type {
 } from "@/api/tests/helpers/oauth-grant";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const routeServer = serveRoutesForTest(meRoute);
@@ -75,24 +74,22 @@ beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
 });
 
-beforeEach(() => {
-  const jwksUrl = getAuthEndpointUrl("jwks");
-  spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? new Request(input, init)
-            : new Request(String(input), init);
-        if (request.url === jwksUrl) {
-          return await getAuth().handler(request);
-        }
-        return await passThroughFetch(input, init);
-      },
-      { preconnect: passThroughFetch.preconnect },
-    ),
-  );
-});
+// The resource server verifies access JWTs against the provider's own JWKS.
+createTestFetch().set(
+  Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      if (request.url === getAuthEndpointUrl("jwks")) {
+        return await getAuth().handler(request);
+      }
+      return await passThroughFetch(input, init);
+    },
+    { preconnect: passThroughFetch.preconnect },
+  ),
+);
 
 afterAll(async () => {
   await releaseAgentAuthTestDb();
