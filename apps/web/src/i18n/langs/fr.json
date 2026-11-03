@@ -2606,9 +2606,16 @@
       "value": "Valeur du champ"
     },
     "datePrecision": "Précision de la date",
+    "deleteBlockedByMattersCount": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
+    "deleteBlockedCount": "Contacts non supprimés : {count}",
     "deleteContact": "Supprimer le contact",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
+    "deleteNotFoundCount": "Contacts introuvables : {count}.",
+    "deleteSelected": "Supprimer {count, plural, one {# contact} many {# contacts} other {# contacts}}",
+    "deleteSelectedConfirm": "Supprimer définitivement {count, plural, one {ce contact} many {ces # contacts} other {ces # contacts}} ? Cette action est irréversible.",
+    "deleteSelectedLimit": "Sélectionnez au maximum {limit} contacts à supprimer à la fois.",
+    "deletedCount": "{count, plural, one {# contact supprimé} many {# contacts supprimés} other {# contacts supprimés}}",
     "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
@@ -2739,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
+      "undoImport": "Annuler l’importation ({count})",
       "validateFailed": "Impossible de vérifier ces contacts.",
       "warning": {
         "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",
@@ -2768,6 +2776,7 @@
     "saved": "Les coordonnées du contact ont été enregistrées.",
     "search": "Rechercher des contacts...",
     "searchCountries": "Rechercher des pays",
+    "selectContact": "Sélectionner {name}",
     "title": "Clients",
     "type": {
       "organization": "Organisation",
@@ -5354,11 +5363,16 @@
       "auditLogsActionDownload": "Télécharger",
       "auditLogsActionExecute": "Exécuter",
       "auditLogsActionUpdate": "Mettre à jour",
+      "auditLogsActorId": "Identifiant de l’acteur",
+      "auditLogsAfter": "Après",
       "auditLogsAllActions": "Toutes les actions",
+      "auditLogsAnyone": "Tout le monde",
+      "auditLogsBefore": "Avant",
       "auditLogsChanges": "Modifications",
       "auditLogsDeletedResource": "{kind} supprimé",
       "auditLogsDescription": "Qui a fait quoi dans cette organisation, et quand.",
       "auditLogsEmpty": "Aucune activité pour l'instant.",
+      "auditLogsEmptyValue": "(vide)",
       "auditLogsError": "Impossible de charger le journal d'activité.",
       "auditLogsExport": "Exporter les journaux",
       "auditLogsExportFailed": "Impossible d'exporter le journal d'activité.",
@@ -5366,6 +5380,13 @@
       "auditLogsExporting": "Exportation...",
       "auditLogsFrom": "Date de début",
       "auditLogsLoading": "Chargement des journaux...",
+      "auditLogsMoreChanges": "+{count, plural, one {# autre} other {# autres} many {# autres}}",
+      "auditLogsNoChanges": "Aucune modification de champ enregistrée.",
+      "auditLogsPerformer": "Effectué par",
+      "auditLogsPerformerAll": "Personnes et automatisations",
+      "auditLogsPerformerAutomations": "Automatisations",
+      "auditLogsPerformerPeople": "Personnes",
+      "auditLogsPersonPlaceholder": "Rechercher par nom ou e-mail",
       "auditLogsResourceId": "ID de ressource",
       "auditLogsResourceIdentifier": "ID de la ressource : {id}",
       "auditLogsResourceType": "Type de ressource",
@@ -5388,8 +5409,6 @@
       "auditLogsTo": "Date de fin",
       "auditLogsUnavailableResource": "{kind} (indisponible)",
       "auditLogsUnknownResource": "élément inconnu",
-      "auditLogsUserId": "ID utilisateur",
-      "auditLogsUserIdPlaceholder": "Filtrer par ID utilisateur",
       "auditResourceKinds": {
         "agent_skill": "compétence",
         "agent_skill_comment": "commentaire sur la compétence",
@@ -6357,6 +6376,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ce dossier est archivé et en lecture seule.",
     "calculations": {
       "choose": "Calculer",
       "kinds": {
@@ -7214,6 +7234,7 @@
       "aiModel": "Modèle IA",
       "manualInput": "Manuellement"
     },
+    "unarchiveBeforeDelete": "Désarchivez ce dossier avant de le supprimer.",
     "unarchiveMatter": "Désarchiver",
     "uploadDocuments": "Importer des documents",
     "views": {

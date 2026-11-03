@@ -2606,9 +2606,16 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
+    "deleteBlockedByMattersCount": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
+    "deleteBlockedCount": "Contactos no eliminados: {count}",
     "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
+    "deleteNotFoundCount": "Contactos no encontrados: {count}.",
+    "deleteSelected": "Eliminar {count, plural, one {# contacto} many {# contactos} other {# contactos}}",
+    "deleteSelectedConfirm": "¿Eliminar permanentemente {count, plural, one {este contacto} many {estos # contactos} other {estos # contactos}}? Esta acción no se puede deshacer.",
+    "deleteSelectedLimit": "Selecciona como máximo {limit} contactos para eliminarlos a la vez.",
+    "deletedCount": "Se eliminaron {count, plural, one {# contacto} many {# contactos} other {# contactos}}",
     "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
@@ -2739,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileño (dígito verificador)",
       "taxIdSchemeNone": "Sin validación de la identificación fiscal",
       "title": "Importar contactos",
+      "undoImport": "Deshacer importación ({count})",
       "validateFailed": "No se han podido comprobar estos contactos.",
       "warning": {
         "ignored_populated_column": "La columna «{column}» contiene datos, pero se ignora.",
@@ -2768,6 +2776,7 @@
     "saved": "Se guardaron los datos del contacto.",
     "search": "Buscar contactos...",
     "searchCountries": "Buscar países",
+    "selectContact": "Seleccionar {name}",
     "title": "Clientes",
     "type": {
       "organization": "Organización",
@@ -5354,11 +5363,16 @@
       "auditLogsActionDownload": "Descargar",
       "auditLogsActionExecute": "Ejecutar",
       "auditLogsActionUpdate": "Actualizar",
+      "auditLogsActorId": "ID del actor",
+      "auditLogsAfter": "Después",
       "auditLogsAllActions": "Todas las acciones",
+      "auditLogsAnyone": "Cualquiera",
+      "auditLogsBefore": "Antes",
       "auditLogsChanges": "Cambios",
       "auditLogsDeletedResource": "{kind} eliminado",
       "auditLogsDescription": "Quién hizo qué en esta organización y cuándo.",
       "auditLogsEmpty": "Aún no hay actividad.",
+      "auditLogsEmptyValue": "(vacío)",
       "auditLogsError": "No se pudo cargar el registro de actividad.",
       "auditLogsExport": "Exportar registros",
       "auditLogsExportFailed": "No se pudo exportar el registro de actividad.",
@@ -5366,6 +5380,13 @@
       "auditLogsExporting": "Exportando...",
       "auditLogsFrom": "Desde",
       "auditLogsLoading": "Cargando registros...",
+      "auditLogsMoreChanges": "+{count, plural, one {# más} other {# más} many {# más}}",
+      "auditLogsNoChanges": "No se registraron cambios en los campos.",
+      "auditLogsPerformer": "Realizado por",
+      "auditLogsPerformerAll": "Personas y automatizaciones",
+      "auditLogsPerformerAutomations": "Automatizaciones",
+      "auditLogsPerformerPeople": "Personas",
+      "auditLogsPersonPlaceholder": "Buscar por nombre o correo electrónico",
       "auditLogsResourceId": "ID de recurso",
       "auditLogsResourceIdentifier": "ID del recurso: {id}",
       "auditLogsResourceType": "Tipo de recurso",
@@ -5388,8 +5409,6 @@
       "auditLogsTo": "Hasta",
       "auditLogsUnavailableResource": "{kind} (no disponible)",
       "auditLogsUnknownResource": "elemento desconocido",
-      "auditLogsUserId": "ID de usuario",
-      "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
       "auditResourceKinds": {
         "agent_skill": "habilidad",
         "agent_skill_comment": "comentario de habilidad",
@@ -6357,6 +6376,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Este asunto está archivado y es de solo lectura.",
     "calculations": {
       "choose": "Calcular",
       "kinds": {
@@ -7214,6 +7234,7 @@
       "aiModel": "Modelo de IA",
       "manualInput": "Manualmente"
     },
+    "unarchiveBeforeDelete": "Desarchiva este asunto antes de eliminarlo.",
     "unarchiveMatter": "Desarchivar",
     "uploadDocuments": "Subir documentos",
     "views": {

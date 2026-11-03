@@ -2606,9 +2606,16 @@
       "value": "Hodnota pole"
     },
     "datePrecision": "Přesnost data",
+    "deleteBlockedByMattersCount": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
+    "deleteBlockedCount": "Neodebrané kontakty: {count}",
     "deleteContact": "Smazat kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
+    "deleteNotFoundCount": "Nenalezené kontakty: {count}.",
+    "deleteSelected": "Smazat {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktů}}",
+    "deleteSelectedConfirm": "Trvale smazat {count, plural, one {tento kontakt} few {tyto # kontakty} many {# kontaktu} other {těchto # kontaktů}}? Tuto akci nelze vrátit zpět.",
+    "deleteSelectedLimit": "Vyberte nejvýše {limit} kontaktů, které chcete smazat najednou.",
+    "deletedCount": "Smazáno {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktů}}",
     "editContact": "Upravit kontakt",
     "emailTypes": {
       "other": "Jiný",
@@ -2739,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazilské CPF/CNPJ (kontrolní součet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
+      "undoImport": "Vrátit import ({count})",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
       "warning": {
         "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
@@ -2768,6 +2776,7 @@
     "saved": "Údaje kontaktu byly uloženy.",
     "search": "Hledat v kontaktech...",
     "searchCountries": "Hledat země",
+    "selectContact": "Vybrat {name}",
     "title": "Klienti",
     "type": {
       "organization": "Organizace",
@@ -5354,11 +5363,16 @@
       "auditLogsActionDownload": "Stažení",
       "auditLogsActionExecute": "Spuštění",
       "auditLogsActionUpdate": "Úprava",
+      "auditLogsActorId": "ID aktéra",
+      "auditLogsAfter": "Po",
       "auditLogsAllActions": "Všechny akce",
+      "auditLogsAnyone": "Kdokoli",
+      "auditLogsBefore": "Před",
       "auditLogsChanges": "Změny",
       "auditLogsDeletedResource": "smazaná položka: {kind}",
       "auditLogsDescription": "Kdo co v této organizaci udělal a kdy.",
       "auditLogsEmpty": "Zatím žádná aktivita.",
+      "auditLogsEmptyValue": "(prázdné)",
       "auditLogsError": "Záznam aktivit se nepodařilo načíst.",
       "auditLogsExport": "Uložit záznamy",
       "auditLogsExportFailed": "Záznam aktivit se nepodařilo uložit.",
@@ -5366,6 +5380,13 @@
       "auditLogsExporting": "Ukládá se...",
       "auditLogsFrom": "Datum od",
       "auditLogsLoading": "Načítání protokolů...",
+      "auditLogsMoreChanges": "+{count, plural, one {# další} few {# další} many {# další} other {# dalších}}",
+      "auditLogsNoChanges": "Nebyly zaznamenány žádné změny polí.",
+      "auditLogsPerformer": "Původce aktivity",
+      "auditLogsPerformerAll": "Lidé i automatizace",
+      "auditLogsPerformerAutomations": "Automatizace",
+      "auditLogsPerformerPeople": "Lidé",
+      "auditLogsPersonPlaceholder": "Hledat podle jména nebo e-mailu",
       "auditLogsResourceId": "ID prostředku",
       "auditLogsResourceIdentifier": "ID prostředku: {id}",
       "auditLogsResourceType": "Typ prostředku",
@@ -5388,8 +5409,6 @@
       "auditLogsTo": "Datum do",
       "auditLogsUnavailableResource": "{kind} (není k dispozici)",
       "auditLogsUnknownResource": "neznámá položka",
-      "auditLogsUserId": "ID uživatele",
-      "auditLogsUserIdPlaceholder": "Filtrovat podle ID uživatele",
       "auditResourceKinds": {
         "agent_skill": "dovednost",
         "agent_skill_comment": "komentář k dovednosti",
@@ -6357,6 +6376,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Tento spis je archivovaný a lze jej pouze číst.",
     "calculations": {
       "choose": "Vypočítat",
       "kinds": {
@@ -7214,6 +7234,7 @@
       "aiModel": "AI model",
       "manualInput": "Ručně"
     },
+    "unarchiveBeforeDelete": "Před odstraněním tohoto spisu zrušte jeho archivaci.",
     "unarchiveMatter": "Obnovit z archivu",
     "uploadDocuments": "Nahrát dokumenty",
     "views": {

@@ -6482,7 +6482,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -6497,7 +6497,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -6518,6 +6518,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -6543,7 +6551,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -13763,7 +13771,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -13778,7 +13786,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -13799,6 +13807,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -13824,7 +13840,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }

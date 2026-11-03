@@ -181,7 +181,7 @@ export const normalizeNumber = (
       return separator;
     }
     const mark =
-      options?.locale === undefined ? null : localeDecimalMark(options.locale);
+      options?.locale !== undefined ? localeDecimalMark(options.locale) : null;
     if (mark === null) {
       return AMBIGUOUS;
     }
