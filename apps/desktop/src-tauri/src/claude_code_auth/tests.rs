@@ -35,6 +35,7 @@ case "$1 $2" in
     printf '{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty"}\n'
     exit 1 ;;
   "auth login")
+    echo $$ > "$dir/login-pid"
     env > "$dir/login-env"
     if [ -f "$dir/login-output" ]; then
       cat "$dir/login-output"
@@ -84,6 +85,17 @@ impl Fixture {
       .lines()
       .filter(|line| *line == call)
       .count()
+  }
+
+  /// Whether the last sign-in's CLI process still exists, reaped or not.
+  fn login_running(&self) -> bool {
+    let pid = std::fs::read_to_string(self.home().join("login-pid"))
+      .unwrap()
+      .trim()
+      .parse()
+      .unwrap();
+    rustix::process::test_kill_process(rustix::process::Pid::from_raw(pid).unwrap())
+      .is_ok()
   }
 
   fn login_environment(&self) -> HashMap<String, String> {
@@ -313,9 +325,14 @@ fn a_second_start_while_signing_in_starts_no_second_cli() {
     auth.start();
     page_shown(&auth).await;
     auth.start();
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert_eq!(
+      auth.status().await,
+      ClaudeCodeStatus::SigningIn { sign_in_page: true },
+      "the running sign-in was kept"
+    );
+    fixture.mark("approve");
+    until(&auth, signed_in).await;
     assert_eq!(fixture.calls("auth login"), 1);
-    auth.cancel();
   });
 }
 
@@ -325,19 +342,16 @@ fn cancelling_stops_the_cli_before_it_signs_in() {
     let (fixture, auth) = fixture(Duration::from_secs(60));
     auth.start();
     page_shown(&auth).await;
+    assert!(fixture.login_running());
     auth.cancel();
-    assert_eq!(auth.status().await, ClaudeCodeStatus::SignedOut);
     assert_eq!(
       auth.open_sign_in_page(),
       Err(OpenPageError::NoPage),
       "a cancelled sign-in's page is forgotten"
     );
-    fixture.mark("approve");
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(
-      !fixture.exists("signed-in"),
-      "the cancelled CLI kept running"
-    );
+    auth.settled().await;
+    assert!(!fixture.login_running(), "the cancelled CLI kept running");
+    assert!(!fixture.exists("signed-in"));
     assert_eq!(auth.status().await, ClaudeCodeStatus::SignedOut);
   });
 }
@@ -371,8 +385,9 @@ fn a_declined_sign_in_fails_until_the_next_one_starts() {
 #[test]
 fn a_sign_in_that_takes_too_long_is_stopped() {
   run(|| async {
-    let (fixture, auth) = fixture(Duration::from_millis(500));
+    let (fixture, auth) = fixture(Duration::from_secs(3));
     auth.start();
+    page_shown(&auth).await;
     assert_eq!(
       until(&auth, |status| matches!(
         status,
@@ -383,12 +398,7 @@ fn a_sign_in_that_takes_too_long_is_stopped() {
         reason: ClaudeCodeFailure::TimedOut
       }
     );
-    fixture.mark("approve");
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(
-      !fixture.exists("signed-in"),
-      "the timed-out CLI kept running"
-    );
+    assert!(!fixture.login_running(), "the timed-out CLI kept running");
   });
 }
 
@@ -420,17 +430,19 @@ fn a_page_on_another_host_is_never_opened() {
       "login-output",
       "Visit: https://claude.ai.attacker.example/oauth/authorize?state=x\n",
     );
+    // The CLI prints the page, then ends, so all of its output is read.
+    fixture.mark("decline");
     auth.start();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    until(&auth, |status| {
+      matches!(status, ClaudeCodeStatus::Failed { .. })
+    })
+    .await;
     assert_eq!(
-      auth.status().await,
-      ClaudeCodeStatus::SigningIn {
-        sign_in_page: false
-      }
+      fixture.changes.load(Ordering::SeqCst),
+      2,
+      "only the start and the end were shown; no page was recorded"
     );
-    assert_eq!(auth.open_sign_in_page(), Err(OpenPageError::NoPage));
     assert!(fixture.opened.lock().unwrap().is_empty());
-    auth.cancel();
   });
 }
 

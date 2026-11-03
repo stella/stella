@@ -143,6 +143,21 @@ enum AttemptEnd {
   Cancelled,
 }
 
+/// How waiting for the sign-in CLI ended.
+enum Wait {
+  Exited(std::io::Result<std::process::ExitStatus>),
+  TimedOut,
+  Cancelled,
+}
+
+/// Kills the CLI and waits until it is gone. Dropping the child would kill
+/// it too, but without waiting for it to exit.
+async fn reap(child: &mut tokio::process::Child) {
+  if let Err(error) = child.kill().await {
+    tracing::warn!(kind = ?error.kind(), "managed Claude Code sign-in was not stopped");
+  }
+}
+
 impl ClaudeCodeAuth {
   pub(crate) fn new(config: ClaudeCodeAuthConfig, hooks: ClaudeCodeAuthHooks) -> Self {
     Self(Arc::new(Inner {
@@ -226,10 +241,7 @@ impl ClaudeCodeAuth {
     (self.0.hooks.changed)();
     let auth = self.clone();
     tokio::spawn(async move {
-      let end = tokio::select! {
-        result = auth.run_attempt(id) => AttemptEnd::Settled(result),
-        _ = cancelled => AttemptEnd::Cancelled,
-      };
+      let end = auth.run_attempt(id, cancelled).await;
       auth.finish_attempt(id, end);
     });
   }
@@ -267,43 +279,79 @@ impl ClaudeCodeAuth {
     (self.0.hooks.changed)();
   }
 
-  async fn run_attempt(&self, id: u64) -> Result<(), ClaudeCodeFailure> {
-    let launch =
-      (self.0.hooks.launch)().map_err(|_unavailable| ClaudeCodeFailure::Unavailable)?;
-    let _changing = self.0.changing.lock().await;
+  /// Runs one sign-in to its end. A cancelled or timed-out CLI is killed
+  /// and reaped before the attempt lets go of the sign-in, so the next
+  /// sign-in or sign-out never runs beside it.
+  async fn run_attempt(
+    &self,
+    id: u64,
+    mut cancelled: oneshot::Receiver<()>,
+  ) -> AttemptEnd {
+    let Ok(launch) = (self.0.hooks.launch)() else {
+      return AttemptEnd::Settled(Err(ClaudeCodeFailure::Unavailable));
+    };
+    let _changing = tokio::select! {
+      changing = self.0.changing.lock() => changing,
+      _ = &mut cancelled => return AttemptEnd::Cancelled,
+    };
     let mut command = cli::command(&launch, &cli::LOGIN_ARGS);
     // Kept open for the whole attempt: the CLI may wait on it.
     command.stdin(std::process::Stdio::piped());
-    let mut child = cli::spawn(&mut command).await.map_err(|error| {
-      tracing::warn!(kind = ?error.kind(), "managed Claude Code sign-in did not start");
-      ClaudeCodeFailure::Unavailable
-    })?;
+    let mut child = match cli::spawn(&mut command).await {
+      Ok(child) => child,
+      Err(error) => {
+        tracing::warn!(kind = ?error.kind(), "managed Claude Code sign-in did not start");
+        return AttemptEnd::Settled(Err(ClaudeCodeFailure::Unavailable));
+      }
+    };
     let _stdin = child.stdin.take();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let found = |url: String| self.record_sign_in_page(id, url);
-    let ended = tokio::time::timeout(self.0.config.sign_in_timeout, async {
+    let exited = async {
       let ((), (), status) = tokio::join!(
         cli::watch_for_sign_in_page(stdout, found),
         cli::watch_for_sign_in_page(stderr, found),
         child.wait(),
       );
       status
-    })
-    .await;
-    // Dropping the child on any early return kills the CLI.
-    let status = ended
-      .map_err(|_elapsed| ClaudeCodeFailure::TimedOut)?
-      .map_err(|_wait| ClaudeCodeFailure::Unavailable)?;
+    };
+    let wait = tokio::select! {
+      ended = tokio::time::timeout(self.0.config.sign_in_timeout, exited) => {
+        ended.map_or(Wait::TimedOut, Wait::Exited)
+      }
+      _ = &mut cancelled => Wait::Cancelled,
+    };
+    let status = match wait {
+      Wait::Exited(Ok(status)) => status,
+      Wait::Exited(Err(error)) => {
+        tracing::warn!(kind = ?error.kind(), "managed Claude Code sign-in was lost");
+        return AttemptEnd::Settled(Err(ClaudeCodeFailure::Unavailable));
+      }
+      Wait::TimedOut => {
+        reap(&mut child).await;
+        return AttemptEnd::Settled(Err(ClaudeCodeFailure::TimedOut));
+      }
+      Wait::Cancelled => {
+        reap(&mut child).await;
+        return AttemptEnd::Cancelled;
+      }
+    };
     if !status.success() {
       tracing::info!(status = ?status.code(), "Claude Code sign-in ended without signing in");
-      return Err(ClaudeCodeFailure::NotCompleted);
+      return AttemptEnd::Settled(Err(ClaudeCodeFailure::NotCompleted));
     }
-    match self.read_sign_in(&launch).await {
+    AttemptEnd::Settled(match self.read_sign_in(&launch).await {
       Some(SignIn::Subscription { .. }) => Ok(()),
       Some(SignIn::None | SignIn::ApiKey) => Err(ClaudeCodeFailure::NotCompleted),
       None => Err(ClaudeCodeFailure::Unavailable),
-    }
+    })
+  }
+
+  /// Waits until no sign-in or sign-out is running.
+  #[cfg(test)]
+  async fn settled(&self) {
+    drop(self.0.changing.lock().await);
   }
 
   fn record_sign_in_page(&self, id: u64, url: String) {
