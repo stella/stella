@@ -96,6 +96,7 @@
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/db-load-gate": "workspace:*",
+        "@stll/decision-reader": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -928,7 +929,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.6.1",
+      "version": "6.7.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1239,6 +1240,7 @@
         "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "icu-minify": "catalog:",
         "postcss": "catalog:",
         "tailwindcss": "catalog:",
       },
@@ -1609,7 +1611,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.65.0",
+      "version": "0.65.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1884,6 +1886,7 @@
     "eslint": "10.12.0",
     "fast-check": "^4.10.2",
     "franc": "6.2.0",
+    "icu-minify": "4.14.9",
     "jszip": "3.10.2",
     "lucide-react": "1.61.0",
     "lucide-react-native": "1.41.0",

@@ -486,7 +486,7 @@ const toGradedPosition = ({
     // Server-owned: the deterministic check and the ask are not in the input.
     // The stored ask carries its `derived` question, which `deriveAutoAsks`
     // reuses while the rules hash still matches.
-    ...(stored?.check === undefined ? {} : { check: stored.check }),
+    ...(stored?.check !== undefined ? { check: stored.check } : {}),
     ask: stored?.ask ?? { mode: "auto" },
     ...(purpose === undefined ? {} : { purpose }),
     ...(guidance === undefined ? {} : { guidance }),

@@ -17,6 +17,7 @@ import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
@@ -66,6 +67,7 @@ const measuredApiScenarios = [
   desktopRunnerUpgradeScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
