@@ -23,6 +23,60 @@ const d = \`flex \${other} rounded-[.5em]\`;`,
   ).toEqual([1, 2, 3, 4]);
 });
 
+test("rejects numeric radius dimensions without a unit allowlist", async () => {
+  const units = [
+    "px",
+    "rem",
+    "em",
+    "pt",
+    "cm",
+    "mm",
+    "Q",
+    "in",
+    "pc",
+    "ch",
+    "ex",
+    "cap",
+    "ic",
+    "lh",
+    "rlh",
+    "rcap",
+    "rch",
+    "rex",
+    "ric",
+    "vw",
+    "vh",
+    "vi",
+    "vb",
+    "vmin",
+    "vmax",
+    "svh",
+    "lvw",
+    "dvb",
+    "cqw",
+    "cqh",
+    "cqi",
+    "cqb",
+    "cqmin",
+    "cqmax",
+    "futureunit",
+  ];
+  const dimensions = units.flatMap((unit) =>
+    ["7", "0.6", ".5", "+1.25", "1e2", "1E-2"].map(
+      (number) => `${number}${unit.toUpperCase()}`,
+    ),
+  );
+  const source = dimensions
+    .map(
+      (dimension, index) =>
+        `const radius${index} = ${JSON.stringify(`[&>span]:rounded-ss-[${dimension}]`)};`,
+    )
+    .join("\n");
+  expect(await lintSingleRule("radius-scale", source)).toEqual(
+    dimensions.map((_, index) => index + 1),
+  );
+});
+
 test("accepts named steps and token-derived values", async () => {
   expect(
     await lintSingleRule(
