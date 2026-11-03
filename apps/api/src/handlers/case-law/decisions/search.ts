@@ -181,7 +181,7 @@ import {
   caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   caseLawCorpusServingGeneration,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   type CorpusAggregateCacheOutcome,
@@ -1581,9 +1581,11 @@ const withoutProvision = ({
  * Which published rows a read admits.
  *
  * `indexed`: the ids came from the serving index, and the page shows text
- * read from that copy, so only a decision the serving generation holds
- * current may stand for a hit. The projection state rejects a pending row,
- * so a stale physical copy cannot serve outdated snippets.
+ * read from that copy, so only a decision the serving generation holds a
+ * copy of may stand for a hit. A queued upsert keeps the applied copy
+ * standing (its snippet may be one parse old); a queued erasure, a copy in
+ * an index the decision's country no longer routes to, or no copy at all
+ * does not.
  *
  * `published`: the database named the ids itself (a docket or an ECLI), and
  * the page shows no index text for them. Every published row answers, as on
@@ -1601,7 +1603,7 @@ const caseLawNonProvisionRowFilters = (
   const filters: SQL[] = [redistributableCaseLawSource];
   switch (admission) {
     case "indexed":
-      filters.push(currentCaseLawCorpusProjection(generation));
+      filters.push(servedCaseLawCorpusProjection(generation));
       break;
     case "published":
       break;
