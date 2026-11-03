@@ -1436,12 +1436,9 @@ describe("what one run may store", () => {
       "queued",
     ]);
     // A retry of the queued command stays a duplicate once the run is full.
-    const queued = inputs.find(
-      (_, index) => outcomes[index]?.type === "queued",
-    );
-    if (queued === undefined) {
-      return panic("one command is queued");
-    }
+    const queued =
+      inputs.find((_, index) => outcomes[index]?.type === "queued") ??
+      panic("one command is queued");
     expect((await cappedControl.sendInput(queued)).unwrap()).toEqual({
       type: "duplicate",
     });
