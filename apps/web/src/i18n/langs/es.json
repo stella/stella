@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "IA",
+    "auditArchiveDescription": "Al eliminar la organización también se elimina su registro de actividad. Exporta primero el registro de actividad y descarga el archivo; estará disponible para ti durante una hora.",
+    "auditArchiveDownloadFirst": "Descarga el archivo del registro de actividad antes de eliminar la organización.",
+    "auditArchiveFailed": "No se pudo preparar el archivo del registro de actividad.",
+    "auditArchiveOutdated": "El registro de actividad tiene entradas nuevas desde este archivo. Vuelve a exportarlo antes de eliminar la organización.",
+    "auditArchiveReady": "El archivo del registro de actividad está listo. Ya puedes eliminar la organización.",
+    "auditArchiveRequest": "Exportar registro de actividad",
+    "auditArchiveRequestNew": "Volver a exportar el registro de actividad",
+    "auditArchiveWorking": "Preparando el archivo del registro de actividad…",
     "billingProfiles": "Perfiles de facturación",
     "deleteDescription": "Elimina permanentemente esta organización y sus datos. Esta acción no se puede deshacer.",
     "deleteOrganization": "Eliminar organización",
+    "deleteRefusedAuditArchive": "Exporta el registro de actividad de la organización antes de eliminarla.",
     "deleteRefusedSubscription": "Esta organización tiene una suscripción que se renueva. Cancélala primero en Plan y uso y, después, elimina la organización.",
     "deleteTypeToConfirm": "Escribe {name} para confirmar.",
     "firmSetup": "Configuración del despacho",
@@ -160,7 +169,7 @@
     "oneTimeCodeExpired": "Tu código de un solo uso ha caducado. Solicita un código nuevo.",
     "openInProvider": "Abrir {provider}",
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
-    "organizationNamePlaceholder": "Mi Organización",
+    "organizationNamePlaceholder": "Mi organización",
     "password": "Contraseña",
     "professionalUse": {
       "title": "Confirme el uso profesional"
@@ -820,12 +829,14 @@
       "effectiveFrom": "Vigente desde",
       "effectiveRateRequired": "No hay una tarifa vigente para este asunto, esta persona y esta fecha. Añada una tarifa o registre el tiempo como no facturable.",
       "effectiveTo": "Vigente hasta",
+      "firstTableIsDefault": "La primera tabla de tarifas del asunto es la predeterminada.",
       "hourlyRate": "Tarifa por hora",
       "logNonBillable": "Registrar como no facturable",
       "noRateEntries": "Aún no hay entradas de tarifa",
       "noRateFound": "Sin tarifa configurada",
       "noRateTables": "Aún no hay tablas de tarifas",
       "ongoing": "En curso",
+      "onlyDefaultApplies": "Solo se aplican las tarifas de la tabla predeterminada del asunto.",
       "override": "Excepción",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# tarifa} other {# tarifas} many {# tarifas}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Añadir personalizado",
-    "addCustomMcp": "Añadir servidor MCP",
+    "addCustomMcp": "Añadir integración",
     "addCustomSkill": "Añadir habilidad",
     "by": "Por {author}",
     "configuration": "Configuración",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Autenticación",
     "empty": "Ninguna entrada coincide con el filtro actual.",
     "filter": {
-      "mcps": "Servidores MCP",
+      "mcps": "Integraciones",
       "nativeTools": "Herramientas integradas",
       "skills": "Habilidades"
     },
@@ -1815,6 +1826,7 @@
     "sendErrorContinuationRejected": "No se pudo continuar el chat. Envía un nuevo mensaje para empezar de nuevo.",
     "sendErrorEmptyCompletion": "La IA devolvió una respuesta vacía. Inténtalo de nuevo o reformula tu mensaje.",
     "sendErrorLoopDetected": "La respuesta de IA se repitió demasiadas veces. Inténtalo de nuevo con una solicitud más concreta.",
+    "sendErrorMessageEmpty": "Este mensaje no tiene texto para enviar. Escribe tu pregunta o adjunta un archivo y luego envíalo.",
     "sendErrorModelUnavailable": "El modelo de IA configurado ya no está disponible. Pídele al administrador del espacio de trabajo que actualice el modelo en la configuración de la organización.",
     "sendErrorNotStarted": "La conversación sigue ocupada. Espere un momento e inténtelo de nuevo.",
     "sendErrorPreparationFailed": "No se pudo preparar el mensaje. Vuelva a abrir el chat e inténtelo de nuevo.",
@@ -2496,7 +2508,7 @@
     "scopeChat": "Leer y gestionar sus chats y mensajes",
     "scopeContactsWrite": "Crear, editar y eliminar contactos en toda su organización",
     "scopeDocumentsWrite": "Crear, editar y eliminar sus documentos",
-    "scopeExternalMcps": "Usar tus herramientas externas conectadas",
+    "scopeExternalMcps": "Usar tus integraciones conectadas",
     "scopeFeedback": "Enviar comentarios sobre el producto a los responsables de stella",
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
     "scopeLawRead": "Leer legislación pública y jurisprudencia",
@@ -2522,7 +2534,7 @@
     "summaryChat": "conversaciones",
     "summaryContactsWrite": "contactos",
     "summaryDocumentsWrite": "documentos",
-    "summaryExternalMcps": "herramientas externas conectadas",
+    "summaryExternalMcps": "integraciones conectadas",
     "summaryKnowledgeWrite": "cláusulas y playbooks",
     "summaryLawRead": "legislación pública y jurisprudencia",
     "summaryLineChange": "<group>Crear y editar:</group> {items}",
@@ -2551,8 +2563,8 @@
     "attorneys": {
       "none": "No asignado",
       "originating": "Contacto principal",
-      "responsible": "Abogado responsable",
-      "title": "Abogados"
+      "responsible": "Persona responsable",
+      "title": "Responsables de la relación"
     },
     "billing": {
       "addBankAccount": "Añadir cuenta bancaria",
@@ -2606,9 +2618,16 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
+    "deleteBlockedByMattersCount": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
+    "deleteBlockedCount": "Contactos no eliminados: {count}",
     "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
+    "deleteNotFoundCount": "Contactos no encontrados: {count}.",
+    "deleteSelected": "Eliminar {count, plural, one {# contacto} many {# contactos} other {# contactos}}",
+    "deleteSelectedConfirm": "¿Eliminar permanentemente {count, plural, one {este contacto} many {estos # contactos} other {estos # contactos}}? Esta acción no se puede deshacer.",
+    "deleteSelectedLimit": "Selecciona como máximo {limit} contactos para eliminarlos a la vez.",
+    "deletedCount": "Se eliminaron {count, plural, one {# contacto} many {# contactos} other {# contactos}}",
     "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
@@ -2739,6 +2758,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileño (dígito verificador)",
       "taxIdSchemeNone": "Sin validación de la identificación fiscal",
       "title": "Importar contactos",
+      "undoImport": "Deshacer importación ({count})",
       "validateFailed": "No se han podido comprobar estos contactos.",
       "warning": {
         "ignored_populated_column": "La columna «{column}» contiene datos, pero se ignora.",
@@ -2768,6 +2788,7 @@
     "saved": "Se guardaron los datos del contacto.",
     "search": "Buscar contactos...",
     "searchCountries": "Buscar países",
+    "selectContact": "Seleccionar {name}",
     "title": "Clientes",
     "type": {
       "organization": "Organización",
@@ -3467,7 +3488,7 @@
     "redoShortcut": "Rehacer (Ctrl+Y)",
     "rejectChange": "Rechazar cambio",
     "removeLink": "Eliminar enlace",
-    "renderErrorDescription": "Se produjo un error al renderizar este componente. Inténtalo de nuevo o contacta con soporte si el problema persiste.",
+    "renderErrorDescription": "No se pudo mostrar esta parte del documento. Recarga la página y, si vuelve a ocurrir, avísanos.",
     "saveCheckpointFailedDescription": "El DOCX se creó localmente, pero stella no pudo subir el punto de control. Mantén el editor abierto e intenta guardar de nuevo.",
     "saveCheckpointFailedTitle": "No se pudo subir el guardado",
     "saveEditorUnavailableDescription": "El editor aún no está listo. Espera a que el documento termine de cargarse y vuelve a intentar guardar.",
@@ -4168,7 +4189,7 @@
     "mcp": {
       "addAndConnect": "Añadir y conectar",
       "addServer": "Añadir servidor",
-      "addServerCardTitle": "Añadir nuevo servidor MCP",
+      "addServerCardTitle": "Añadir nueva integración",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Sin autenticación",
@@ -4431,7 +4452,7 @@
         "title": "Plantillas"
       },
       "tools": {
-        "description": "Conecte stella con registros públicos y otras fuentes",
+        "description": "Habilidades, integraciones y herramientas siempre disponibles que la IA puede usar en el chat",
         "title": "Herramientas"
       },
       "workflows": {
@@ -4465,7 +4486,7 @@
       },
       "commandConflict": "Ya existe una habilidad con este comando /",
       "commandHelp": "Escríbelo en el chat para ejecutar esta habilidad.",
-      "commandLabel": "Comando con barra (opcional)",
+      "commandLabel": "Comando del chat (opcional)",
       "commandPlaceholder": "p. ej. resumir",
       "errors": {
         "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos"
@@ -4612,7 +4633,7 @@
     "chat": "Chat",
     "contacts": "Contactos",
     "inbox": "Bandeja de entrada",
-    "knowledge": "Conocimiento",
+    "knowledge": "Inteligencia",
     "myTodos": "Mis tareas",
     "pinned": "Fijados",
     "recentMatters": "Asuntos recientes",
@@ -5350,11 +5371,16 @@
       "auditLogsActionDownload": "Descargar",
       "auditLogsActionExecute": "Ejecutar",
       "auditLogsActionUpdate": "Actualizar",
+      "auditLogsActorId": "ID del actor",
+      "auditLogsAfter": "Después",
       "auditLogsAllActions": "Todas las acciones",
+      "auditLogsAnyone": "Cualquiera",
+      "auditLogsBefore": "Antes",
       "auditLogsChanges": "Cambios",
       "auditLogsDeletedResource": "{kind} eliminado",
       "auditLogsDescription": "Quién hizo qué en esta organización y cuándo.",
       "auditLogsEmpty": "Aún no hay actividad.",
+      "auditLogsEmptyValue": "(vacío)",
       "auditLogsError": "No se pudo cargar el registro de actividad.",
       "auditLogsExport": "Exportar registros",
       "auditLogsExportFailed": "No se pudo exportar el registro de actividad.",
@@ -5362,6 +5388,13 @@
       "auditLogsExporting": "Exportando...",
       "auditLogsFrom": "Desde",
       "auditLogsLoading": "Cargando registros...",
+      "auditLogsMoreChanges": "+{count, plural, one {# más} other {# más} many {# más}}",
+      "auditLogsNoChanges": "No se registraron cambios en los campos.",
+      "auditLogsPerformer": "Realizado por",
+      "auditLogsPerformerAll": "Personas y automatizaciones",
+      "auditLogsPerformerAutomations": "Automatizaciones",
+      "auditLogsPerformerPeople": "Personas",
+      "auditLogsPersonPlaceholder": "Buscar por nombre o correo electrónico",
       "auditLogsResourceId": "ID de recurso",
       "auditLogsResourceIdentifier": "ID del recurso: {id}",
       "auditLogsResourceType": "Tipo de recurso",
@@ -5384,8 +5417,6 @@
       "auditLogsTo": "Hasta",
       "auditLogsUnavailableResource": "{kind} (no disponible)",
       "auditLogsUnknownResource": "elemento desconocido",
-      "auditLogsUserId": "ID de usuario",
-      "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
       "auditResourceKinds": {
         "agent_skill": "habilidad",
         "agent_skill_comment": "comentario de habilidad",
@@ -6353,6 +6384,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Este asunto está archivado y es de solo lectura.",
     "calculations": {
       "choose": "Calcular",
       "kinds": {
@@ -6440,7 +6472,8 @@
       "errored": "Error",
       "formatNotSupported": "Formato no compatible",
       "selectAValue": "Seleccione un valor",
-      "selectValues": "Seleccione valores"
+      "selectValues": "Seleccione valores",
+      "wholeNumberOnly": "Introduzca un número entero"
     },
     "files": {
       "addFilePropertyToUpload": "Añada una propiedad de archivo para subir archivos",
@@ -6734,7 +6767,7 @@
     "matterInfo": "Información del asunto",
     "mattersCount": "{count, plural, one {# asunto} other {# asuntos} many {# asuntos}}",
     "members": {
-      "addMember": "Añadir miembro",
+      "addMember": "Añadir al asunto",
       "addMemberDescription": "Añadir un miembro del equipo a este asunto",
       "alreadyMember": "El usuario ya es miembro",
       "alreadyOnMatter": "Ya está en este asunto",
@@ -6929,7 +6962,7 @@
       },
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
-      "evidence": "Prueba documental",
+      "evidence": "Justificación",
       "incorrectPassword": "Contraseña incorrecta. Inténtelo de nuevo.",
       "nextPage": "Página siguiente",
       "pageEditor": {
@@ -7209,6 +7242,7 @@
       "aiModel": "Modelo de IA",
       "manualInput": "Manualmente"
     },
+    "unarchiveBeforeDelete": "Desarchiva este asunto antes de eliminarlo.",
     "unarchiveMatter": "Desarchivar",
     "uploadDocuments": "Subir documentos",
     "views": {

@@ -1,5 +1,11 @@
 # @stll/auth-model
 
+## 0.6.0
+
+### Minor Changes
+
+- Export the opaque organization slug pattern next to its generator.
+
 ## 0.5.0
 
 ### Minor Changes

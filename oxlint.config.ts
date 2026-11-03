@@ -219,6 +219,18 @@ const fixtureRuleOverrides = [
       "typescript/unbound-method": "off",
     },
   } as const satisfies OxlintOverride,
+  {
+    // The fixture's subject is un-awaited promise chains and the helper's
+    // promise-returning work functions, which the type-aware promise rules
+    // would report as well.
+    files: [
+      ".oxlint-plugins/__fixtures__/no-floating-promise-chain.fixture.ts",
+    ],
+    rules: {
+      "typescript/no-floating-promises": "off",
+      "typescript/promise-function-async": "off",
+    },
+  } as const satisfies OxlintOverride,
   fixtureRuleOverride("require-json-import-attribute.fixture.ts", [
     "require-json-import-attribute/require-json-import-attribute",
   ]),
@@ -985,6 +997,17 @@ const apiPortableSafeIdBrandingImport = {
   importNames: ["toSafeId"],
   message:
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
+};
+
+// Un-awaited API work starts through `detached(() => work, "feature.action")`
+// in the capture module, which runs it outside the caller's query counter. A
+// local `createDetached` copy would take started promises and charge them to
+// whichever request or job happened to start them.
+const apiDetachedFactoryImport = {
+  name: "@stll/errors",
+  importNames: ["createDetached"],
+  message:
+    "Start detached work with `detached(() => work, \"feature.action\")` from '@/api/lib/analytics/capture'; pass `onRejection` for site-specific failure handling.",
 };
 
 // The model factory builds every provider text adapter and holds its stream
@@ -2100,6 +2123,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-options-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
+    "./.oxlint-plugins/parser-fixture-reader-guard.ts",
     "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
     "./.oxlint-plugins/no-dropped-fake-timers.ts",
@@ -2167,6 +2191,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/no-known-value-widening.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
+    "./.oxlint-plugins/no-floating-promise-chain.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-owner.ts",
     "./.oxlint-plugins/mcp-authorized-context-owner.ts",
@@ -3460,6 +3485,28 @@ const config = defineConfig({
       },
     },
     {
+      // The fourth part of the detached-promise guard: a bare
+      // `work().catch(report);` statement starts work inside the caller's
+      // async context, so its statements land in the caller's query counter
+      // at a time the caller does not control. API work that is not awaited
+      // starts through `detached(() => work, "feature.action")`, which runs
+      // it outside every counter. CLI scripts own their process and no
+      // counter, so their top-level `main().catch(...)` stays.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-floating-promise-chain.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.{test,spec}.ts",
+        "apps/api/src/**/tests/**",
+        "apps/api/src/**/__tests__/**",
+        "apps/api/src/scripts/**",
+      ],
+      rules: {
+        "no-floating-promise-chain/no-floating-promise-chain": "error",
+      },
+    },
+    {
       // Swallowing a rejection in a test is how a test asserts that nothing
       // downstream depends on it. Mirror the detached-promise exclusion.
       files: [
@@ -4593,6 +4640,8 @@ const config = defineConfig({
           "error",
         "no-optional-chain-null-compare/no-optional-chain-null-compare":
           "error",
+        "no-optional-chain-null-compare/no-optional-chain-absent-match":
+          "error",
       },
     },
     {
@@ -5382,6 +5431,7 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-parsed-input-state-backfill.ts",
               "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
@@ -5967,6 +6017,30 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The shared detached helper's owner builds it from the factory.
+      files: ["apps/api/src/lib/analytics/capture.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noFastXmlParserImport,
+              noCheerioImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
+              apiValibotJsonSchemaImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -6034,6 +6108,7 @@ const config = defineConfig({
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -6057,6 +6132,7 @@ const config = defineConfig({
               ...noReactEmailImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
             ],
           },
@@ -6084,6 +6160,7 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
             ],
           },
         ],
@@ -6486,6 +6563,16 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        "apps/api/**/*.test.ts",
+        "apps/api/src/tests/helpers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/parser-fixture-reader-guard.fixture.ts",
+      ],
+      rules: {
+        "parser-fixture-reader-guard/parser-fixture-reader-guard": "error",
+      },
+    },
+    {
       // Throw assertions must name the error they expect. Scoped to test
       // files (and the module-named fixture, which is not one) because
       // `expect(...).toThrow()` only appears there.
@@ -6622,6 +6709,7 @@ const config = defineConfig({
                   "Handlers must receive SafeId from request authorization (authorizeWorkspace, authenticateSession) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
@@ -6751,6 +6839,7 @@ const config = defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              apiDetachedFactoryImport,
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",

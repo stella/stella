@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Vymazaním organizácie sa vymaže aj jej záznam všetkých aktivít. Najprv záznam aktivít exportujte a stiahnite archív; bude vám k dispozícii jednu hodinu.",
+    "auditArchiveDownloadFirst": "Pred vymazaním organizácie si stiahnite archív záznamu aktivít.",
+    "auditArchiveFailed": "Archív záznamu aktivít sa nepodarilo pripraviť.",
+    "auditArchiveOutdated": "Od vytvorenia tohto archívu pribudli v zázname aktivít nové položky. Pred vymazaním organizácie ho exportujte znova.",
+    "auditArchiveReady": "Archív záznamu aktivít je pripravený. Teraz môžete organizáciu vymazať.",
+    "auditArchiveRequest": "Exportovať záznam aktivít",
+    "auditArchiveRequestNew": "Znova exportovať záznam aktivít",
+    "auditArchiveWorking": "Pripravuje sa archív záznamu aktivít…",
     "billingProfiles": "Fakturačné profily",
     "deleteDescription": "Natrvalo vymažete túto organizáciu a jej údaje. Túto akciu nemožno vrátiť späť.",
     "deleteOrganization": "Vymazať organizáciu",
+    "deleteRefusedAuditArchive": "Pred vymazaním organizácie exportujte jej záznam aktivít.",
     "deleteRefusedSubscription": "Táto organizácia má predplatné, ktoré sa obnovuje. Najprv ho zrušte v sekcii Tarifa a využitie, potom organizáciu vymažte.",
     "deleteTypeToConfirm": "Na potvrdenie zadajte {name}.",
     "firmSetup": "Nastavenie kancelárie",
@@ -820,12 +829,14 @@
       "effectiveFrom": "Platná od",
       "effectiveRateRequired": "Pre tento spis, osobu a dátum nie je nastavená platná sadzba. Pridajte sadzbu alebo zaznamenajte čas ako nefakturovateľný.",
       "effectiveTo": "Platná do",
+      "firstTableIsDefault": "Prvá tabuľka sadzieb v spise je predvolená.",
       "hourlyRate": "Hodinová sadzba",
       "logNonBillable": "Zaznamenať ako nefakturovateľný",
       "noRateEntries": "Zatiaľ žiadne sadzby",
       "noRateFound": "Sadzba nie je nakonfigurovaná",
       "noRateTables": "Zatiaľ žiadne tabuľky sadzieb",
       "ongoing": "Priebežná",
+      "onlyDefaultApplies": "Sadzby sa uplatnia len z predvolenej tabuľky spisu.",
       "override": "Prepísať",
       "perHour": "/hod",
       "rateCount": "{count, plural, one {# sadzba} few {# sadzby} other {# sadzieb} many {# sadzby}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",
-    "addCustomMcp": "Pridať MCP server",
+    "addCustomMcp": "Pridať integráciu",
     "addCustomSkill": "Pridať zručnosť",
     "by": "Od {author}",
     "configuration": "Konfigurácia",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Autentifikácia",
     "empty": "Žiadne položky nezodpovedajú aktuálnemu filtru.",
     "filter": {
-      "mcps": "MCP servery",
+      "mcps": "Integrácie",
       "nativeTools": "Vstavané nástroje",
       "skills": "Zručnosti"
     },
@@ -1815,6 +1826,7 @@
     "sendErrorContinuationRejected": "V chate sa nepodarilo pokračovať. Začnite znova odoslaním novej správy.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
+    "sendErrorMessageEmpty": "Správa neobsahuje žiadny text na odoslanie. Napíšte otázku alebo priložte súbor a potom ju odošlite.",
     "sendErrorModelUnavailable": "Nastavený AI model už nie je dostupný. Požiadajte správcu pracovného priestoru, aby model aktualizoval v nastaveniach organizácie.",
     "sendErrorNotStarted": "Konverzácia je stále zaneprázdnená. Chvíľu počkajte a skúste to znova.",
     "sendErrorPreparationFailed": "Správu sa nepodarilo pripraviť. Znova otvorte chat a skúste to znova.",
@@ -1831,8 +1843,8 @@
     "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
-        "private": "Vaše AI zručnosti",
-        "team": "Tímové AI zručnosti"
+        "private": "Vaše zručnosti",
+        "team": "Tímové zručnosti"
       }
     },
     "sourceChips": {
@@ -2496,7 +2508,7 @@
     "scopeChat": "Čítať a spravovať vaše chaty a správy",
     "scopeContactsWrite": "Vytvárať, upravovať a odstraňovať kontakty v celej vašej organizácii",
     "scopeDocumentsWrite": "Vytvoriť, upraviť a vymazať vaše dokumenty",
-    "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
+    "scopeExternalMcps": "Použitie vašich pripojených integrácií",
     "scopeFeedback": "Odoslať spätnú väzbu k produktu správcom stelly",
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
@@ -2606,9 +2618,16 @@
       "value": "Hodnota poľa"
     },
     "datePrecision": "Presnosť dátumu",
+    "deleteBlockedByMattersCount": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
+    "deleteBlockedCount": "Neodstránené kontakty: {count}",
     "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
+    "deleteNotFoundCount": "Nenájdené kontakty: {count}.",
+    "deleteSelected": "Odstrániť {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktov}}",
+    "deleteSelectedConfirm": "Natrvalo odstrániť {count, plural, one {tento kontakt} few {tieto # kontakty} many {# kontaktu} other {týchto # kontaktov}}? Túto akciu nemožno vrátiť späť.",
+    "deleteSelectedLimit": "Vyberte najviac {limit} kontaktov, ktoré chcete odstrániť naraz.",
+    "deletedCount": "Odstránené: {count, plural, one {# kontakt} few {# kontakty} many {# kontaktu} other {# kontaktov}}",
     "editContact": "Upraviť kontakt",
     "emailTypes": {
       "other": "Iný",
@@ -2739,6 +2758,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
+      "undoImport": "Vrátiť import ({count})",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
@@ -2768,6 +2788,7 @@
     "saved": "Údaje kontaktu boli uložené.",
     "search": "Hľadať v kontaktoch...",
     "searchCountries": "Hľadať krajiny",
+    "selectContact": "Vybrať {name}",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",
@@ -3394,7 +3415,7 @@
     "doubleClickFooter": "Dvojklikom pridáte pätu",
     "doubleClickHeader": "Dvojklikom pridáte hlavičku",
     "downloadCheckpoint": "Stiahnuť kontrolnú kópiu",
-    "editAuthRequired": "Pred úpravou dokumentu obnovte Stellu a znova sa prihláste.",
+    "editAuthRequired": "Pred úpravou dokumentu obnovte stellu a znova sa prihláste.",
     "editDownloadFailed": "Dokument sa nepodarilo stiahnuť na úpravy.",
     "editLink": "Upraviť odkaz",
     "editOpenFailed": "Dokument sa nepodarilo otvoriť na úpravy.",
@@ -3467,8 +3488,8 @@
     "redoShortcut": "Znovu (Ctrl+Y)",
     "rejectChange": "Odmietnuť zmenu",
     "removeLink": "Odstrániť odkaz",
-    "renderErrorDescription": "Pri vykresľovaní tejto komponenty došlo k chybe. Skúste to znova alebo kontaktujte podporu, ak problém pretrváva.",
-    "saveCheckpointFailedDescription": "DOCX bol vytvorený lokálne, ale Stelle sa nepodarilo nahrať kontrolný bod. Nechajte editor otvorený a skúste uložiť znova.",
+    "renderErrorDescription": "Túto časť dokumentu sa nepodarilo zobraziť. Načítajte stránku znova a ak sa to bude opakovať, dajte nám vedieť.",
+    "saveCheckpointFailedDescription": "DOCX bol vytvorený lokálne, ale stelle sa nepodarilo nahrať kontrolný bod. Nechajte editor otvorený a skúste uložiť znova.",
     "saveCheckpointFailedTitle": "Uloženie sa nepodarilo nahrať",
     "saveEditorUnavailableDescription": "Editor ešte nie je pripravený. Počkajte, kým sa dokument načíta, a skúste uložiť znova.",
     "saveEditorUnavailableTitle": "Editor nie je pripravený",
@@ -4168,7 +4189,7 @@
     "mcp": {
       "addAndConnect": "Pridať a pripojiť",
       "addServer": "Pridať server",
-      "addServerCardTitle": "Pridať nový MCP server",
+      "addServerCardTitle": "Pridať novú integráciu",
       "auth": {
         "bearer": "Bearer token",
         "none": "Bez prihlásenia",
@@ -4431,7 +4452,7 @@
         "title": "Vzory"
       },
       "tools": {
-        "description": "Pripojte stella k verejným registrom a ďalším zdrojom",
+        "description": "Zručnosti, integrácie a vždy dostupné nástroje, ktoré AI môže použiť v chate",
         "title": "Nástroje"
       },
       "workflows": {
@@ -4465,7 +4486,7 @@
       },
       "commandConflict": "Zručnosť s týmto / príkazom už existuje",
       "commandHelp": "Napíšte tento príkaz do chatu a spustite zručnosť.",
-      "commandLabel": "Lomkový príkaz (voliteľné)",
+      "commandLabel": "Príkaz v chate (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "errors": {
         "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky"
@@ -4612,7 +4633,7 @@
     "chat": "Chat",
     "contacts": "Kontakty",
     "inbox": "Doručené",
-    "knowledge": "Znalosti",
+    "knowledge": "Analytika",
     "myTodos": "Moje úlohy",
     "pinned": "Pripnuté",
     "recentMatters": "Nedávne spisy",
@@ -5350,11 +5371,16 @@
       "auditLogsActionDownload": "Stiahnuť",
       "auditLogsActionExecute": "Spustiť",
       "auditLogsActionUpdate": "Aktualizovať",
+      "auditLogsActorId": "ID aktéra",
+      "auditLogsAfter": "Po",
       "auditLogsAllActions": "Všetky akcie",
+      "auditLogsAnyone": "Ktokoľvek",
+      "auditLogsBefore": "Pred",
       "auditLogsChanges": "Zmeny",
       "auditLogsDeletedResource": "odstránená položka: {kind}",
       "auditLogsDescription": "Kto čo v tejto organizácii urobil a kedy.",
       "auditLogsEmpty": "Zatiaľ žiadna aktivita.",
+      "auditLogsEmptyValue": "(prázdne)",
       "auditLogsError": "Záznam aktivít sa nepodarilo načítať.",
       "auditLogsExport": "Exportovať záznamy",
       "auditLogsExportFailed": "Záznam aktivít sa nepodarilo exportovať.",
@@ -5362,6 +5388,13 @@
       "auditLogsExporting": "Exportuje sa...",
       "auditLogsFrom": "Dátum od",
       "auditLogsLoading": "Načítavanie záznamov...",
+      "auditLogsMoreChanges": "+{count, plural, one {# ďalšia} few {# ďalšie} many {# ďalšej} other {# ďalších}}",
+      "auditLogsNoChanges": "Neboli zaznamenané žiadne zmeny polí.",
+      "auditLogsPerformer": "Pôvodca aktivity",
+      "auditLogsPerformerAll": "Ľudia aj automatizácie",
+      "auditLogsPerformerAutomations": "Automatizácie",
+      "auditLogsPerformerPeople": "Ľudia",
+      "auditLogsPersonPlaceholder": "Hľadať podľa mena alebo e-mailu",
       "auditLogsResourceId": "ID prostriedku",
       "auditLogsResourceIdentifier": "ID prostriedku: {id}",
       "auditLogsResourceType": "Typ prostriedku",
@@ -5384,8 +5417,6 @@
       "auditLogsTo": "Dátum do",
       "auditLogsUnavailableResource": "{kind} (nie je k dispozícii)",
       "auditLogsUnknownResource": "neznáma položka",
-      "auditLogsUserId": "ID používateľa",
-      "auditLogsUserIdPlaceholder": "Filtrovať podľa ID používateľa",
       "auditResourceKinds": {
         "agent_skill": "zručnosť",
         "agent_skill_comment": "komentár k zručnosti",
@@ -6353,6 +6384,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Tento spis je archivovaný a je iba na čítanie.",
     "calculations": {
       "choose": "Vypočítať",
       "kinds": {
@@ -6440,7 +6472,8 @@
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
       "selectAValue": "Vyberte hodnotu",
-      "selectValues": "Vyberte hodnoty"
+      "selectValues": "Vyberte hodnoty",
+      "wholeNumberOnly": "Zadajte celé číslo"
     },
     "files": {
       "addFilePropertyToUpload": "Pridajte vlastnosť typu súbor na nahrávanie súborov",
@@ -6929,7 +6962,7 @@
       },
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily dokumentu",
-      "evidence": "Príloha",
+      "evidence": "Odôvodnenie",
       "incorrectPassword": "Nesprávne heslo. Skúste znova.",
       "nextPage": "Nasledujúca strana",
       "pageEditor": {
@@ -7209,6 +7242,7 @@
       "aiModel": "AI model",
       "manualInput": "Ručne"
     },
+    "unarchiveBeforeDelete": "Pred odstránením tohto spisu zrušte jeho archiváciu.",
     "unarchiveMatter": "Obnoviť",
     "uploadDocuments": "Nahrať dokumenty",
     "views": {

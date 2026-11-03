@@ -136,6 +136,7 @@ test("sidebar context menus delete only the row that was right-clicked", async (
                 lastActivityAt: new Date("2026-07-01T12:00:00.000Z"),
                 name: "Northwind matter",
                 reference: null,
+                status: "active",
               }}
             />
           </SidebarProvider>

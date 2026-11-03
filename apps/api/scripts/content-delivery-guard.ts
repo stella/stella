@@ -1,9 +1,24 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+import {
+  type BindingProperty,
+  type ExportAllDeclaration,
+  type ExportNamedDeclaration,
+  type Expression,
+  type ImportDeclaration,
+  type ImportExpression,
+  type ModuleExportName,
+  type Node,
+  type ObjectProperty,
+  type ParsedSource,
+  parseSource,
+  type Program,
+  type VariableDeclarator,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import {
   discoverSafeHandlers,
@@ -25,26 +40,137 @@ const isDeliveryOwner = (file: string) =>
   /(?:^|\/)lib\/(?:s3|s3-presign|secure-document-response|audited-download)(?:\.ts)?$/u.test(
     file,
   );
-const propertyName = (node: ts.Node | undefined) =>
-  node && (ts.isIdentifier(node) || ts.isStringLiteralLike(node))
-    ? node.text
-    : undefined;
-const scope = (node: ts.Node): ts.Node => {
-  if (ts.isSourceFile(node) || ts.isBlock(node) || ts.isFunctionLike(node)) {
-    return node;
-  }
-  return scope(node.parent);
+
+type SourceFile = {
+  fileName: string;
+  program: Program;
+  locate: ParsedSource["locate"];
 };
-const bindingScope = (node: ts.Node) =>
-  scope(ts.isFunctionDeclaration(node) ? node.parent : node);
-const encloses = (outer: ts.Node, inner: ts.Node) =>
-  outer.getSourceFile() === inner.getSourceFile() &&
-  outer.pos <= inner.pos &&
-  outer.end >= inner.end;
-const runtime = (node: ts.Node) =>
-  !ts.isTypeNode(node) &&
-  !ts.isInterfaceDeclaration(node) &&
-  !ts.isTypeAliasDeclaration(node);
+
+type BindingKind =
+  | "variable"
+  | "function"
+  | "class"
+  | "parameter"
+  | "element"
+  | "import"
+  | "namespace";
+
+/**
+ * A declared name: a variable (or catch variable), function, class,
+ * parameter, destructured element or import. Elements point at the binding
+ * whose value they destructure.
+ */
+class Binding {
+  readonly kind: BindingKind;
+  /** The syntax that declares it; its range scopes the name. */
+  readonly node: Node;
+  readonly name: Node | undefined;
+  /** A variable's value or a parameter's default. */
+  readonly initializer: Expression | undefined;
+  readonly owner: Binding | undefined;
+  readonly declaration: ImportDeclaration | undefined;
+  /** The exported name an `import { name }` reads. */
+  readonly importedName: string | undefined;
+  constructor(options: {
+    kind: BindingKind;
+    node: Node;
+    name?: Node | undefined;
+    initializer?: Expression | null | undefined;
+    owner?: Binding | undefined;
+    declaration?: ImportDeclaration | undefined;
+    importedName?: string | undefined;
+  }) {
+    this.kind = options.kind;
+    this.node = options.node;
+    this.name = options.name?.type === "Identifier" ? options.name : undefined;
+    this.initializer = options.initializer ?? undefined;
+    this.owner = options.owner;
+    this.declaration = options.declaration;
+    this.importedName = options.importedName;
+  }
+}
+type Traced = Node | Binding;
+
+const isStringLike = (node: Traced | null | undefined) =>
+  node !== null &&
+  node !== undefined &&
+  !(node instanceof Binding) &&
+  ((node.type === "Literal" && typeof node.value === "string") ||
+    (node.type === "TemplateLiteral" && node.expressions.length === 0));
+const propertyName = (node: Traced | null | undefined) => {
+  if (!node || node instanceof Binding) {
+    return undefined;
+  }
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+const moduleExportName = (node: ModuleExportName) =>
+  node.type === "Literal" ? node.value : node.name;
+/** A `name: value` entry or a method, not a shorthand or accessor entry. */
+const isPropertyAssignment = (
+  node: Traced | undefined,
+): node is ObjectProperty =>
+  node !== undefined &&
+  !(node instanceof Binding) &&
+  node.type === "Property" &&
+  node.kind === "init" &&
+  !node.method &&
+  !node.shorthand;
+const keyName = (property: ObjectProperty | BindingProperty) =>
+  property.computed ? undefined : propertyName(property.key);
+const isFunctionValue = (node: Expression | undefined) =>
+  node?.type === "ArrowFunctionExpression" ||
+  node?.type === "FunctionExpression";
+const isFunctionLike = (node: Node) =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "TSDeclareFunction" ||
+  node.type === "TSEmptyBodyFunctionExpression";
+const isScope = (node: Node) =>
+  node.type === "Program" ||
+  node.type === "BlockStatement" ||
+  node.type === "StaticBlock" ||
+  isFunctionLike(node);
+// TypeScript syntax that still runs; every other `TS…` node is a type.
+const RUNTIME_TYPESCRIPT = new Set([
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TSNonNullExpression",
+  "TSTypeAssertion",
+  "TSEnumDeclaration",
+  "TSEnumBody",
+  "TSEnumMember",
+  "TSModuleDeclaration",
+  "TSModuleBlock",
+  "TSImportEqualsDeclaration",
+  "TSExternalModuleReference",
+  "TSQualifiedName",
+  "TSExportAssignment",
+  "TSNamespaceExportDeclaration",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "TSParameterProperty",
+  "TSAbstractMethodDefinition",
+  "TSAbstractPropertyDefinition",
+  "TSAbstractAccessorProperty",
+  "TSIndexSignature",
+]);
+const isPatternPart = (node: Node, parent: Node | undefined) =>
+  node.type === "ObjectPattern" ||
+  node.type === "ArrayPattern" ||
+  node.type === "AssignmentPattern" ||
+  node.type === "RestElement" ||
+  (node.type === "Property" && parent?.type === "ObjectPattern");
 
 type AnalyzeContentDeliveryOptions = {
   files: readonly string[];
@@ -57,9 +183,237 @@ class ContentDeliveryInspector {
   constructor(options: AnalyzeContentDeliveryOptions) {
     this.options = options;
   }
-  private readonly modules = new Map<string, ts.SourceFile>();
-  private readonly bindings = new Map<ts.SourceFile, Map<string, ts.Node[]>>();
+  private readonly modules = new Map<string, SourceFile>();
+  private readonly bindings = new Map<SourceFile, Map<string, Binding[]>>();
+  // oxc nodes carry no parent or file links.
+  private readonly parents = new Map<Node, Node>();
+  private readonly files = new Map<Node, SourceFile>();
+  private readonly bindingOf = new Map<Node, Binding>();
   private readonly errors = new Set<string>();
+  private readonly fileOf = (node: Traced) =>
+    this.files.get(node instanceof Binding ? node.node : node) ??
+    panic("Content delivery guard reached a node outside its loaded files");
+  /** Class heritage is a type position, as are type nodes and declarations. */
+  private readonly runtime = (node: Node) => {
+    const parent = this.parents.get(node);
+    if (
+      (parent?.type === "ClassDeclaration" ||
+        parent?.type === "ClassExpression") &&
+      parent.superClass === node
+    ) {
+      return false;
+    }
+    return !node.type.startsWith("TS") || RUNTIME_TYPESCRIPT.has(node.type);
+  };
+  private readonly lineOf = (node: Node) =>
+    this.fileOf(node).locate(node.start).line;
+  private readonly scope = (node: Node): Node => {
+    let current: Node | undefined = node;
+    while (current && !isScope(current)) {
+      current = this.parents.get(current);
+    }
+    return current ?? panic("Content delivery guard lost a node's scope");
+  };
+  // A binding's scope never changes; lookups compare it for every candidate.
+  private readonly bindingScopes = new Map<Binding, Node>();
+  private readonly bindingScope = (binding: Binding) => {
+    let found = this.bindingScopes.get(binding);
+    if (found === undefined) {
+      found = this.scope(
+        binding.kind === "function"
+          ? (this.parents.get(binding.node) ?? binding.node)
+          : binding.node,
+      );
+      this.bindingScopes.set(binding, found);
+    }
+    return found;
+  };
+  // Each node's direct children in source order, recorded while loading.
+  private readonly childNodes = new Map<Node, Node[]>();
+  private readonly children = (node: Node): readonly Node[] =>
+    this.childNodes.get(node) ?? [];
+  // Resolution reads the file system; one import resolves once per source.
+  private readonly resolutions = new Map<string, string | undefined>();
+  private readonly resolveImport = (specifier: string, from: string) => {
+    const key = `${from}\0${specifier}`;
+    if (this.resolutions.has(key)) {
+      return this.resolutions.get(key);
+    }
+    const resolved = this.options.resolveImport(specifier, from);
+    this.resolutions.set(key, resolved);
+    return resolved;
+  };
+  private readonly encloses = (outer: Node, inner: Node) =>
+    this.fileOf(outer) === this.fileOf(inner) &&
+    outer.start <= inner.start &&
+    outer.end >= inner.end;
+  /** The binding a destructuring pattern takes its value from. */
+  private readonly patternOwner = (pattern: Node) => {
+    const parent = this.parents.get(pattern);
+    // A defaulted pattern (`{ a } = {}`) is declared by its default.
+    const holder = parent?.type === "AssignmentPattern" ? parent : pattern;
+    // A declarator, a property or a rest element holds a pattern it does
+    // not declare on its own.
+    return (
+      this.bindingOf.get(holder) ??
+      this.bindingOf.get(this.parents.get(holder) ?? holder)
+    );
+  };
+  /** Whether a pattern declares names rather than assigns existing ones. */
+  private readonly declaresNames = (pattern: Node) => {
+    let node = pattern;
+    let parent = this.parents.get(node);
+    while (parent && isPatternPart(parent, this.parents.get(parent))) {
+      node = parent;
+      parent = this.parents.get(node);
+    }
+    return (
+      (parent?.type === "VariableDeclarator" && parent.id === node) ||
+      (parent?.type === "CatchClause" && parent.param === node) ||
+      parent?.type === "TSParameterProperty" ||
+      (parent !== undefined &&
+        isFunctionLike(parent) &&
+        "params" in parent &&
+        parent.params.some((param) => param === node))
+    );
+  };
+  private readonly declare = (
+    names: Map<string, Binding[]>,
+    binding: Binding,
+  ) => {
+    this.bindingOf.set(binding.node, binding);
+    if (binding.name?.type === "Identifier") {
+      const entries = names.get(binding.name.name) ?? [];
+      entries.push(binding);
+      names.set(binding.name.name, entries);
+    }
+  };
+  private readonly indexBinding = (
+    names: Map<string, Binding[]>,
+    node: Node,
+    parent: Node | undefined,
+  ) => {
+    if (node.type === "VariableDeclarator") {
+      this.declare(
+        names,
+        new Binding({
+          kind: "variable",
+          node,
+          name: node.id,
+          initializer: node.init,
+        }),
+      );
+      return;
+    }
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "TSDeclareFunction"
+    ) {
+      this.declare(
+        names,
+        new Binding({ kind: "function", node, name: node.id ?? undefined }),
+      );
+      return;
+    }
+    if (node.type === "ClassDeclaration") {
+      this.declare(
+        names,
+        new Binding({ kind: "class", node, name: node.id ?? undefined }),
+      );
+      return;
+    }
+    if (
+      parent?.type === "ImportDeclaration" &&
+      (node.type === "ImportSpecifier" ||
+        node.type === "ImportDefaultSpecifier" ||
+        node.type === "ImportNamespaceSpecifier")
+    ) {
+      const { local: importedBinding } = node;
+      this.declare(
+        names,
+        new Binding({
+          kind:
+            node.type === "ImportNamespaceSpecifier" ? "namespace" : "import",
+          node,
+          name: importedBinding,
+          declaration: parent,
+          importedName:
+            node.type === "ImportSpecifier"
+              ? moduleExportName(node.imported)
+              : undefined,
+        }),
+      );
+      return;
+    }
+    if (parent?.type === "CatchClause" && parent.param === node) {
+      // A catch variable declares a name without a value.
+      this.declare(names, new Binding({ kind: "variable", node, name: node }));
+      return;
+    }
+    const binding =
+      this.parameterBinding(node, parent) ?? this.elementBinding(node, parent);
+    if (binding !== undefined) {
+      this.declare(names, binding);
+    }
+  };
+  /** A function parameter, its default value included. */
+  private readonly parameterBinding = (
+    node: Node,
+    parent: Node | undefined,
+  ): Binding | undefined => {
+    const isParameter =
+      node.type === "TSParameterProperty" ||
+      (parent !== undefined &&
+        parent.type !== "TSParameterProperty" &&
+        isFunctionLike(parent) &&
+        "params" in parent &&
+        parent.params.some((param) => param === node));
+    if (!isParameter) {
+      return undefined;
+    }
+    const pattern = node.type === "TSParameterProperty" ? node.parameter : node;
+    let name: Node | undefined = pattern;
+    let initializer: Expression | undefined;
+    if (pattern.type === "AssignmentPattern") {
+      name = pattern.left;
+      initializer = pattern.right;
+    } else if (pattern.type === "RestElement") {
+      name = pattern.argument;
+    }
+    return new Binding({ kind: "parameter", node, name, initializer });
+  };
+  /** An entry of a pattern that declares names, tied to the value it reads. */
+  private readonly elementBinding = (
+    node: Node,
+    parent: Node | undefined,
+  ): Binding | undefined => {
+    if (parent === undefined) {
+      return undefined;
+    }
+    const isElement =
+      (parent.type === "ObjectPattern" &&
+        (node.type === "Property" || node.type === "RestElement")) ||
+      parent.type === "ArrayPattern";
+    if (!isElement || !this.declaresNames(parent)) {
+      return undefined;
+    }
+    let target: Node = node;
+    if (node.type === "Property") {
+      target = node.value;
+    }
+    let name: Node | undefined = target;
+    if (target.type === "AssignmentPattern") {
+      name = target.left;
+    } else if (target.type === "RestElement") {
+      name = target.argument;
+    }
+    return new Binding({
+      kind: "element",
+      node,
+      name,
+      owner: this.patternOwner(parent),
+    });
+  };
   private readonly load = (file: string) => {
     const cached = this.modules.get(file);
     if (cached) {
@@ -70,58 +424,54 @@ class ContentDeliveryInspector {
       this.errors.add(`Cannot inspect ${file}`);
       return undefined;
     }
-    const parsed = ts.createSourceFile(
-      file,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-    );
+    const { locate, program } = parseSource(file, source);
+    const parsed: SourceFile = { fileName: file, locate, program };
     this.modules.set(file, parsed);
-    const names = new Map<string, ts.Node[]>();
+    walk(parsed.program, (node, ancestors) => {
+      const parent = ancestors.at(-1);
+      if (parent) {
+        this.parents.set(node, parent);
+        const siblings = this.childNodes.get(parent);
+        if (siblings === undefined) {
+          this.childNodes.set(parent, [node]);
+        } else {
+          siblings.push(node);
+        }
+      }
+      this.files.set(node, parsed);
+    });
+    const names = new Map<string, Binding[]>();
     this.bindings.set(parsed, names);
-    const index = (node: ts.Node) => {
-      if (!runtime(node)) {
-        return;
+    walk(parsed.program, (node, ancestors) => {
+      if (!this.runtime(node)) {
+        return "skip-children";
       }
-      if (
-        (ts.isVariableDeclaration(node) ||
-          ts.isFunctionDeclaration(node) ||
-          ts.isClassDeclaration(node) ||
-          ts.isParameter(node) ||
-          ts.isBindingElement(node) ||
-          ts.isImportSpecifier(node) ||
-          ts.isImportClause(node) ||
-          ts.isNamespaceImport(node)) &&
-        node.name &&
-        ts.isIdentifier(node.name)
-      ) {
-        const entries = names.get(node.name.text) ?? [];
-        entries.push(node);
-        names.set(node.name.text, entries);
-      }
-      ts.forEachChild(node, index);
-    };
-    index(parsed);
+      this.indexBinding(names, node, ancestors.at(-1));
+      return undefined;
+    });
     return parsed;
   };
-  private readonly lookup = (reference: ts.Identifier) => {
+  private readonly lookup = (reference: Node & { name: string }) => {
     const availableBindings =
-      this.bindings.get(reference.getSourceFile())?.get(reference.text) ?? [];
-    return availableBindings
-      .filter((candidate) => encloses(bindingScope(candidate), reference))
-      .toSorted(
-        (a, b) =>
-          bindingScope(a).end -
-          bindingScope(a).pos -
-          (bindingScope(b).end - bindingScope(b).pos),
-      )
-      .at(0);
+      this.bindings.get(this.fileOf(reference))?.get(reference.name) ?? [];
+    // The enclosing binding with the narrowest scope; the first on a tie.
+    let nearest: Binding | undefined;
+    let nearestWidth = Number.POSITIVE_INFINITY;
+    for (const candidate of availableBindings) {
+      const scope = this.bindingScope(candidate);
+      const width = scope.end - scope.start;
+      if (width < nearestWidth && this.encloses(scope, reference)) {
+        nearest = candidate;
+        nearestWidth = width;
+      }
+    }
+    return nearest;
   };
   private readonly importFile = (specifier: string, from: string) => {
     if (/\.(?:json|ttf|otf|woff2?|png|svg|docx)$/u.test(specifier)) {
       return undefined;
     }
-    const resolved = this.options.resolveImport(specifier, from);
+    const resolved = this.resolveImport(specifier, from);
     if (
       !resolved &&
       (specifier.startsWith(".") || specifier.startsWith("@/"))
@@ -132,19 +482,19 @@ class ContentDeliveryInspector {
   };
   private readonly exportsSeen = new Set<string>();
   private readonly resolveReexport = (
-    statement: ts.ExportDeclaration,
-    file: ts.SourceFile,
+    statement: ExportNamedDeclaration | ExportAllDeclaration,
+    file: SourceFile,
     name: string,
-  ): ts.Node | undefined => {
-    const target =
-      statement.moduleSpecifier &&
-      ts.isStringLiteralLike(statement.moduleSpecifier)
-        ? this.importFile(statement.moduleSpecifier.text, file.fileName)
-        : file;
+  ): Traced | undefined => {
+    const target = statement.source
+      ? this.importFile(statement.source.value, file.fileName)
+      : file;
     if (!target) {
-      if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
-        const entry = statement.exportClause.elements.find(
-          (item) => item.name.text === name && !item.isTypeOnly,
+      if (statement.type === "ExportNamedDeclaration") {
+        const entry = statement.specifiers.find(
+          (item) =>
+            moduleExportName(item.exported) === name &&
+            item.exportKind !== "type",
         );
         if (entry) {
           return entry;
@@ -152,66 +502,78 @@ class ContentDeliveryInspector {
       }
       return undefined;
     }
-    if (!statement.exportClause) {
-      const found = this.exported(target, name);
-      if (found) {
-        return found;
-      }
-    } else if (ts.isNamedExports(statement.exportClause)) {
-      const entry = statement.exportClause.elements.find(
-        (item) => item.name.text === name && !item.isTypeOnly,
-      );
-      if (!entry) {
-        return undefined;
-      }
-      const original = entry.propertyName?.text ?? entry.name.text;
-      return target === file
-        ? this.bindings.get(file)?.get(original)?.at(0)
-        : this.exported(target, original);
+    if (statement.type === "ExportAllDeclaration") {
+      // `export * as name` re-exports a namespace, not a definition.
+      return statement.exported === null
+        ? this.exported(target, name)
+        : undefined;
     }
-    return undefined;
+    const entry = statement.specifiers.find(
+      (item) =>
+        moduleExportName(item.exported) === name && item.exportKind !== "type",
+    );
+    if (!entry) {
+      return undefined;
+    }
+    const { local: exportedBinding } = entry;
+    const original = moduleExportName(exportedBinding);
+    return target === file
+      ? this.bindings.get(file)?.get(original)?.at(0)
+      : this.exported(target, original);
   };
   private readonly exported = (
-    file: ts.SourceFile,
+    file: SourceFile,
     name: string,
-  ): ts.Node | undefined => {
+  ): Traced | undefined => {
     const key = `${file.fileName}#${name}`;
     if (this.exportsSeen.has(key)) {
       return undefined;
     }
     this.exportsSeen.add(key);
-    for (const statement of file.statements) {
-      if (name === "default" && ts.isExportAssignment(statement)) {
-        return statement.expression;
+    for (const statement of file.program.body) {
+      if (statement.type === "TSExportAssignment") {
+        if (name === "default") {
+          return statement.expression;
+        }
+        continue;
       }
-      if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
-        const found = this.resolveReexport(statement, file, name);
-        if (found) {
-          return found;
+      if (statement.type === "ExportDefaultDeclaration") {
+        if (
+          name === "default" &&
+          statement.declaration.type !== "TSInterfaceDeclaration"
+        ) {
+          return statement.declaration;
         }
         continue;
       }
       if (
-        !ts.canHaveModifiers(statement) ||
-        !ts
-          .getModifiers(statement)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+        statement.type === "ExportAllDeclaration" ||
+        (statement.type === "ExportNamedDeclaration" &&
+          statement.declaration === null)
       ) {
+        if (statement.exportKind !== "type") {
+          const found = this.resolveReexport(statement, file, name);
+          if (found) {
+            return found;
+          }
+        }
         continue;
       }
-      const isDefault = ts
-        .getModifiers(statement)
-        ?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword);
-      if (
-        (ts.isFunctionDeclaration(statement) ||
-          ts.isClassDeclaration(statement)) &&
-        (isDefault ? name === "default" : statement.name?.text === name)
-      ) {
-        return statement;
+      if (statement.type !== "ExportNamedDeclaration") {
+        continue;
       }
-      if (ts.isVariableStatement(statement)) {
-        const found = statement.declarationList.declarations.find(
-          (item) => propertyName(item.name) === name,
+      const { declaration } = statement;
+      if (
+        (declaration?.type === "FunctionDeclaration" ||
+          declaration?.type === "TSDeclareFunction" ||
+          declaration?.type === "ClassDeclaration") &&
+        declaration.id?.name === name
+      ) {
+        return declaration;
+      }
+      if (declaration?.type === "VariableDeclaration") {
+        const found = declaration.declarations.find(
+          (item) => propertyName(item.id) === name,
         );
         if (found) {
           return found;
@@ -221,9 +583,9 @@ class ContentDeliveryInspector {
           ?.get(name)
           ?.find(
             (item) =>
-              ts.isBindingElement(item) &&
-              statement.pos <= item.pos &&
-              statement.end >= item.end,
+              item.kind === "element" &&
+              statement.start <= item.node.start &&
+              statement.end >= item.node.end,
           );
         if (binding) {
           return binding;
@@ -240,45 +602,55 @@ class ContentDeliveryInspector {
     declared: boolean;
   }[] = [];
   private readonly value = (
-    node: ts.Node | undefined,
-    resolvedNodes = new Set<ts.Node>(),
-  ): ts.Node | undefined => {
+    node: Traced | null | undefined,
+    resolvedNodes = new Set<Traced>(),
+  ): Traced | undefined => {
     if (!node || resolvedNodes.has(node)) {
       return undefined;
     }
     resolvedNodes.add(node);
-    if (ts.isIdentifier(node)) {
+    if (node instanceof Binding) {
+      return node.kind === "variable"
+        ? this.value(node.initializer, resolvedNodes)
+        : node;
+    }
+    if (node.type === "Identifier") {
       return this.value(this.lookup(node), resolvedNodes);
     }
-    if (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node)) {
-      return this.value(node.initializer, resolvedNodes);
+    if (isPropertyAssignment(node)) {
+      return this.value(node.value, resolvedNodes);
     }
     if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isAwaitExpression(node)
+      node.type === "ParenthesizedExpression" ||
+      node.type === "TSAsExpression" ||
+      node.type === "TSSatisfiesExpression"
     ) {
       return this.value(node.expression, resolvedNodes);
     }
+    if (node.type === "AwaitExpression") {
+      return this.value(node.argument, resolvedNodes);
+    }
     return node;
   };
-  private readonly field = (node: ts.Node | undefined, name: string) => {
+  private readonly field = (node: Traced | null | undefined, name: string) => {
     const object = this.value(node);
-    if (!object || !ts.isObjectLiteralExpression(object)) {
+    if (
+      !object ||
+      object instanceof Binding ||
+      object.type !== "ObjectExpression"
+    ) {
       return undefined;
     }
     return this.value(
       object.properties.find(
-        (item) =>
-          ts.isPropertyAssignment(item) && propertyName(item.name) === name,
+        (item) => isPropertyAssignment(item) && keyName(item) === name,
       ),
     );
   };
 
   private terminals = new Set<string>();
-  private visited = new Set<ts.Node>();
-  private readonly traceExport = (target: ts.SourceFile, name: string) => {
+  private visited = new Set<Traced>();
+  private readonly traceExport = (target: SourceFile, name: string) => {
     if (TERMINAL.test(name) && isDeliveryOwner(target.fileName)) {
       this.terminals.add(name);
       return;
@@ -291,112 +663,80 @@ class ContentDeliveryInspector {
     }
     this.trace(definition, true);
   };
-  private readonly traceImport = (definition: ts.Node, member?: string) => {
-    let current = definition;
-    while (!ts.isImportDeclaration(current) && !ts.isSourceFile(current)) {
-      current = current.parent;
-    }
-    if (
-      !ts.isImportDeclaration(current) ||
-      !ts.isStringLiteralLike(current.moduleSpecifier)
-    ) {
+  private readonly traceImport = (definition: Binding, member?: string) => {
+    const current = definition.declaration;
+    if (!current) {
       return;
     }
     if (
-      current.attributes?.elements.some(
+      current.attributes.some(
         (attribute) =>
-          propertyName(attribute.name) === "type" &&
-          ts.isStringLiteralLike(attribute.value) &&
-          (attribute.value.text === "text" || attribute.value.text === "file"),
+          propertyName(attribute.key) === "type" &&
+          (attribute.value.value === "text" ||
+            attribute.value.value === "file"),
       )
     ) {
       return;
     }
-    const name =
-      member ??
-      (ts.isImportSpecifier(definition)
-        ? (definition.propertyName?.text ?? definition.name.text)
-        : "default");
-    const resolved = this.options.resolveImport(
-      current.moduleSpecifier.text,
-      current.getSourceFile().fileName,
-    );
+    const name = member ?? definition.importedName ?? "default";
+    const from = this.fileOf(current).fileName;
+    const resolved = this.resolveImport(current.source.value, from);
     if (resolved && TERMINAL.test(name) && isDeliveryOwner(resolved)) {
       this.terminals.add(name);
       return;
     }
-    const target = this.importFile(
-      current.moduleSpecifier.text,
-      current.getSourceFile().fileName,
-    );
+    const target = this.importFile(current.source.value, from);
     if (target) {
       this.traceExport(target, name);
     }
   };
-  private readonly shouldDefer = (current: ts.Node, referenced: boolean) => {
-    if (
-      !referenced &&
-      (ts.isFunctionDeclaration(current) ||
-        (ts.isVariableDeclaration(current) &&
-          current.initializer &&
-          (ts.isArrowFunction(current.initializer) ||
-            ts.isFunctionExpression(current.initializer))))
-    ) {
-      return true;
-    }
-    return false;
-  };
-  private readonly traceNamespaceAccess = (current: ts.Node) => {
-    if (ts.isNamespaceImport(current)) {
-      const declaration = current.parent.parent;
-      if (
-        ts.isImportDeclaration(declaration) &&
-        ts.isStringLiteralLike(declaration.moduleSpecifier)
-      ) {
-        const specifier = declaration.moduleSpecifier.text;
-        if (
-          this.options.resolveImport(
-            specifier,
-            declaration.getSourceFile().fileName,
-          )
-        ) {
+  private readonly shouldDefer = (current: Binding, referenced: boolean) =>
+    !referenced &&
+    (current.kind === "function" ||
+      (current.kind === "variable" && isFunctionValue(current.initializer)));
+  private readonly traceNamespaceAccess = (current: Traced) => {
+    if (current instanceof Binding) {
+      const declaration = current.declaration;
+      if (current.kind === "namespace" && declaration) {
+        const specifier = declaration.source.value;
+        const from = this.fileOf(declaration).fileName;
+        if (this.resolveImport(specifier, from)) {
           this.errors.add(
-            `Unresolved namespace member ${current.name.text} in ${declaration.getSourceFile().fileName}`,
+            `Unresolved namespace member ${propertyName(current.name) ?? ""} in ${from}`,
           );
         } else {
-          this.importFile(specifier, declaration.getSourceFile().fileName);
+          this.importFile(specifier, from);
         }
+        return true;
       }
+      return false;
+    }
+    if (
+      current.type !== "MemberExpression" ||
+      current.object.type !== "Identifier"
+    ) {
+      return false;
+    }
+    let member: string | undefined;
+    if (!current.computed && current.property.type === "Identifier") {
+      member = current.property.name;
+    } else if (current.computed && isStringLike(current.property)) {
+      member = propertyName(current.property);
+    }
+    if (member === undefined) {
+      return false;
+    }
+    const definition = this.lookup(current.object);
+    if (definition?.kind === "namespace") {
+      this.traceImport(definition, member);
       return true;
-    }
-    if (
-      ts.isPropertyAccessExpression(current) &&
-      ts.isIdentifier(current.expression)
-    ) {
-      const definition = this.lookup(current.expression);
-      if (definition && ts.isNamespaceImport(definition)) {
-        this.traceImport(definition, current.name.text);
-        return true;
-      }
-    }
-    if (
-      ts.isElementAccessExpression(current) &&
-      ts.isIdentifier(current.expression) &&
-      ts.isStringLiteralLike(current.argumentExpression)
-    ) {
-      const definition = this.lookup(current.expression);
-      if (definition && ts.isNamespaceImport(definition)) {
-        this.traceImport(definition, current.argumentExpression.text);
-        return true;
-      }
     }
     return false;
   };
-  private readonly detectOwner = (current: ts.Node) => {
+  private readonly detectOwner = (current: Binding) => {
     if (
-      (ts.isVariableDeclaration(current) ||
-        ts.isFunctionDeclaration(current)) &&
-      isDeliveryOwner(current.getSourceFile().fileName)
+      (current.kind === "variable" || current.kind === "function") &&
+      isDeliveryOwner(this.fileOf(current).fileName)
     ) {
       const name = propertyName(current.name);
       if (name && TERMINAL.test(name)) {
@@ -406,328 +746,365 @@ class ContentDeliveryInspector {
     }
     return false;
   };
-  private readonly trace = (current: ts.Node, referenced = false) => {
-    if (this.visited.has(current) || !runtime(current)) {
-      return;
-    }
-    if (this.shouldDefer(current, referenced)) {
+  private readonly traceBinding = (current: Binding, referenced: boolean) => {
+    if (this.visited.has(current) || this.shouldDefer(current, referenced)) {
       return;
     }
     this.visited.add(current);
     if (this.detectOwner(current)) {
       return;
     }
+    switch (current.kind) {
+      case "import":
+        this.traceImport(current);
+        return;
+      case "parameter":
+        if (current.initializer) {
+          this.trace(current.initializer);
+        }
+        return;
+      case "namespace":
+        this.traceNamespaceAccess(current);
+        return;
+      case "variable":
+        if (
+          current.initializer &&
+          (referenced || !isFunctionValue(current.initializer))
+        ) {
+          this.trace(current.initializer);
+        }
+        return;
+      case "element":
+        if (current.owner) {
+          this.trace(current.owner, true);
+        }
+        return;
+      case "function":
+      case "class":
+        for (const child of this.children(current.node)) {
+          this.trace(child);
+        }
+    }
+  };
+  private readonly trace = (input: Traced, referenced = false) => {
+    const current =
+      input instanceof Binding ? input : (this.bindingOf.get(input) ?? input);
+    if (current instanceof Binding) {
+      this.traceBinding(current, referenced);
+      return;
+    }
+    if (this.visited.has(current) || !this.runtime(current)) {
+      return;
+    }
+    this.visited.add(current);
     this.detectDisposition(current);
     this.detectStoreSigner(current);
-    if (
-      ts.isCallExpression(current) &&
-      current.expression.kind === ts.SyntaxKind.ImportKeyword
-    ) {
+    if (current.type === "ImportExpression") {
       this.traceDynamicImport(current);
-      return;
-    }
-    if (ts.isImportSpecifier(current) || ts.isImportClause(current)) {
-      this.traceImport(current);
-      return;
-    }
-    if (ts.isParameter(current)) {
-      if (current.initializer) {
-        this.trace(current.initializer);
-      }
       return;
     }
     if (this.traceNamespaceAccess(current)) {
       return;
     }
-    if (ts.isIdentifier(current)) {
-      const parent = current.parent;
+    if (current.type === "Identifier") {
+      const parent = this.parents.get(current);
       if (
-        (ts.isPropertyAccessExpression(parent) && parent.name === current) ||
-        ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent)) &&
-          parent.name === current)
+        (parent?.type === "MemberExpression" &&
+          !parent.computed &&
+          parent.property === current) ||
+        (parent?.type === "Property" &&
+          parent.kind === "init" &&
+          !parent.computed &&
+          parent.key === current) ||
+        (parent?.type === "MethodDefinition" &&
+          (parent.kind === "method" || parent.kind === "constructor") &&
+          !parent.computed &&
+          parent.key === current)
       ) {
         return;
       }
       const definition = this.lookup(current);
-      if (definition && definition !== parent) {
+      if (definition && definition.name !== current) {
         this.trace(definition, true);
       }
       return;
     }
-    if (ts.isVariableDeclaration(current)) {
-      if (
-        current.initializer &&
-        (referenced ||
-          (!ts.isArrowFunction(current.initializer) &&
-            !ts.isFunctionExpression(current.initializer)))
-      ) {
-        this.trace(current.initializer);
-      }
-      return;
+    for (const child of this.children(current)) {
+      this.trace(child);
     }
-    if (ts.isBindingElement(current)) {
-      this.trace(current.parent.parent, true);
-      return;
-    }
-    ts.forEachChild(current, (child) => this.trace(child));
   };
 
   /** Whether `identifier` names a binding a delivery owner module provides. */
-  private readonly boundToOwner = (identifier: ts.Identifier): boolean => {
+  private readonly boundToOwner = (
+    identifier: Node & { name: string },
+  ): boolean => {
     const definition = this.lookup(identifier);
     if (!definition) {
       return false;
     }
-    if (isDeliveryOwner(definition.getSourceFile().fileName)) {
+    if (isDeliveryOwner(this.fileOf(definition).fileName)) {
       return true;
     }
-    if (ts.isVariableDeclaration(definition)) {
+    if (definition.kind === "variable") {
       return (
         definition.initializer !== undefined &&
         this.isOwnerStore(definition.initializer)
       );
     }
-    let current: ts.Node = definition;
-    while (!ts.isImportDeclaration(current) && !ts.isSourceFile(current)) {
-      current = current.parent;
-    }
-    if (
-      !ts.isImportDeclaration(current) ||
-      !ts.isStringLiteralLike(current.moduleSpecifier)
-    ) {
+    const current = definition.declaration;
+    if (!current) {
       return false;
     }
-    const resolved = this.options.resolveImport(
-      current.moduleSpecifier.text,
-      current.getSourceFile().fileName,
+    const resolved = this.resolveImport(
+      current.source.value,
+      this.fileOf(current).fileName,
     );
     return resolved !== undefined && isDeliveryOwner(resolved);
   };
   /** An object store a delivery owner hands out: `getS3()`, `store.client()`, or a binding to one. */
-  private readonly isOwnerStore = (expression: ts.Expression): boolean => {
-    if (ts.isIdentifier(expression)) {
+  private readonly isOwnerStore = (expression: Node): boolean => {
+    if (expression.type === "Identifier") {
       return this.boundToOwner(expression);
     }
-    if (ts.isCallExpression(expression)) {
+    if (expression.type === "CallExpression") {
+      return this.isOwnerStore(expression.callee);
+    }
+    if (expression.type === "MemberExpression" && !expression.computed) {
+      return this.isOwnerStore(expression.object);
+    }
+    if (expression.type === "ParenthesizedExpression") {
       return this.isOwnerStore(expression.expression);
     }
-    if (ts.isPropertyAccessExpression(expression)) {
-      return this.isOwnerStore(expression.expression);
-    }
-    if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAwaitExpression(expression)
-    ) {
-      return this.isOwnerStore(expression.expression);
+    if (expression.type === "AwaitExpression") {
+      return this.isOwnerStore(expression.argument);
     }
     return false;
   };
   // Presigning on a store from the S3 owner (`getS3().presign(key)`) grants
   // the same stored bytes as `presignDownloadUrl`.
-  private readonly detectStoreSigner = (current: ts.Node) => {
+  private readonly detectStoreSigner = (current: Node) => {
     if (
-      ts.isCallExpression(current) &&
-      ts.isPropertyAccessExpression(current.expression) &&
-      current.expression.name.text === "presign" &&
-      this.isOwnerStore(current.expression.expression)
+      current.type === "CallExpression" &&
+      current.callee.type === "MemberExpression" &&
+      !current.callee.computed &&
+      current.callee.property.type === "Identifier" &&
+      current.callee.property.name === "presign" &&
+      this.isOwnerStore(current.callee.object)
     ) {
       this.terminals.add("presign");
     }
   };
 
-  private readonly detectDisposition = (current: ts.Node) => {
-    const headerName = (key: ts.Node | undefined) =>
+  private readonly detectDisposition = (current: Node) => {
+    const headerName = (key: Node | undefined) =>
       propertyName(this.value(key))?.toLowerCase() === "content-disposition";
+    if (isPropertyAssignment(current) && headerName(current.key)) {
+      this.terminals.add("Content-Disposition");
+    }
     if (
-      ts.isPropertyAssignment(current) &&
-      headerName(
-        ts.isComputedPropertyName(current.name)
-          ? current.name.expression
-          : current.name,
-      )
+      current.type === "AssignmentExpression" &&
+      current.operator === "=" &&
+      current.left.type === "MemberExpression" &&
+      current.left.computed &&
+      headerName(current.left.property)
     ) {
       this.terminals.add("Content-Disposition");
     }
     if (
-      ts.isBinaryExpression(current) &&
-      current.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isElementAccessExpression(current.left) &&
-      headerName(current.left.argumentExpression)
-    ) {
-      this.terminals.add("Content-Disposition");
-    }
-    if (
-      ts.isCallExpression(current) &&
-      ts.isPropertyAccessExpression(current.expression) &&
-      ["set", "append"].includes(current.expression.name.text) &&
+      current.type === "CallExpression" &&
+      current.callee.type === "MemberExpression" &&
+      !current.callee.computed &&
+      current.callee.property.type === "Identifier" &&
+      ["set", "append"].includes(current.callee.property.name) &&
       headerName(current.arguments.at(0))
     ) {
       this.terminals.add("Content-Disposition");
     }
     if (
-      ts.isNewExpression(current) &&
-      ts.isIdentifier(current.expression) &&
-      current.expression.text === "Headers"
+      current.type === "NewExpression" &&
+      current.callee.type === "Identifier" &&
+      current.callee.name === "Headers"
     ) {
-      const inspectHeader = (child: ts.Node) => {
-        if (ts.isStringLiteralLike(child) && headerName(child)) {
+      walk(current, (child) => {
+        if (isStringLike(child) && headerName(child)) {
           this.terminals.add("Content-Disposition");
         }
-        ts.forEachChild(child, inspectHeader);
-      };
-      ts.forEachChild(current, inspectHeader);
+      });
     }
   };
-  private readonly traceDynamicImport = (current: ts.CallExpression) => {
-    const specifier = current.arguments.at(0);
-    if (!specifier || !ts.isStringLiteralLike(specifier)) {
+  /** Exports a dynamically imported namespace bound to a variable reaches. */
+  private readonly traceDynamicBinding = (
+    file: SourceFile,
+    target: SourceFile,
+    parent: VariableDeclarator,
+  ) => {
+    const declaration =
+      this.bindingOf.get(parent) ??
+      panic("Content delivery guard lost a variable binding");
+    if (parent.id.type === "ObjectPattern") {
+      for (const element of parent.id.properties) {
+        const name = element.type === "Property" ? keyName(element) : undefined;
+        if (!name) {
+          this.errors.add(
+            `Unresolved dynamic namespace binding in ${target.fileName}`,
+          );
+        } else {
+          this.traceExport(target, name);
+        }
+      }
+      return;
+    }
+    walk(file.program, (reference) => {
+      if (!this.runtime(reference)) {
+        return "skip-children";
+      }
+      if (
+        reference.type !== "Identifier" ||
+        reference === declaration.name ||
+        this.lookup(reference) !== declaration
+      ) {
+        return undefined;
+      }
+      const referenceParent = this.parents.get(reference);
+      if (
+        referenceParent?.type === "MemberExpression" &&
+        referenceParent.object === reference &&
+        !referenceParent.computed &&
+        referenceParent.property.type === "Identifier"
+      ) {
+        this.traceExport(target, referenceParent.property.name);
+      } else if (
+        referenceParent?.type === "MemberExpression" &&
+        referenceParent.object === reference &&
+        referenceParent.computed &&
+        isStringLike(referenceParent.property)
+      ) {
+        this.traceExport(target, propertyName(referenceParent.property) ?? "");
+      } else {
+        this.errors.add(
+          `Unresolved dynamic namespace use in ${target.fileName}`,
+        );
+      }
+      return "skip-children";
+    });
+  };
+  private readonly traceDynamicImport = (current: ImportExpression) => {
+    const file = this.fileOf(current);
+    const specifier = isStringLike(current.source)
+      ? propertyName(current.source)
+      : undefined;
+    if (specifier === undefined) {
       this.errors.add(
-        `Unresolved dynamic import at ${current.getSourceFile().fileName}:${current.getSourceFile().getLineAndCharacterOfPosition(current.getStart()).line + 1}`,
+        `Unresolved dynamic import at ${file.fileName}:${this.lineOf(current)}`,
       );
       return;
     }
-    const target = this.importFile(
-      specifier.text,
-      current.getSourceFile().fileName,
-    );
+    const target = this.importFile(specifier, file.fileName);
     if (!target) {
       return;
     }
-    let use: ts.Node = current;
+    let use: Node = current;
+    let parent = this.parents.get(use);
     while (
-      ts.isAwaitExpression(use.parent) ||
-      ts.isParenthesizedExpression(use.parent)
+      parent?.type === "AwaitExpression" ||
+      parent?.type === "ParenthesizedExpression"
     ) {
-      use = use.parent;
+      use = parent;
+      parent = this.parents.get(use);
     }
-    if (ts.isPropertyAccessExpression(use.parent)) {
-      this.traceExport(target, use.parent.name.text);
+    if (
+      parent?.type === "MemberExpression" &&
+      !parent.computed &&
+      parent.property.type === "Identifier"
+    ) {
+      this.traceExport(target, parent.property.name);
       return;
     }
-    if (ts.isVariableDeclaration(use.parent)) {
-      const declaration = use.parent;
-      if (ts.isObjectBindingPattern(declaration.name)) {
-        for (const element of declaration.name.elements) {
-          const name = propertyName(element.propertyName ?? element.name);
-          if (!name || element.dotDotDotToken) {
-            this.errors.add(
-              `Unresolved dynamic namespace binding in ${target.fileName}`,
-            );
-          } else {
-            this.traceExport(target, name);
-          }
-        }
-        return;
-      }
-      const inspectUse = (reference: ts.Node) => {
-        if (!runtime(reference)) {
-          return;
-        }
-        if (
-          ts.isIdentifier(reference) &&
-          reference !== declaration.name &&
-          this.lookup(reference) === declaration
-        ) {
-          const parent = reference.parent;
-          if (
-            ts.isPropertyAccessExpression(parent) &&
-            parent.expression === reference
-          ) {
-            this.traceExport(target, parent.name.text);
-          } else if (
-            ts.isElementAccessExpression(parent) &&
-            parent.expression === reference &&
-            ts.isStringLiteralLike(parent.argumentExpression)
-          ) {
-            this.traceExport(target, parent.argumentExpression.text);
-          } else {
-            this.errors.add(
-              `Unresolved dynamic namespace use in ${target.fileName}`,
-            );
-          }
-          return;
-        }
-        ts.forEachChild(reference, inspectUse);
-      };
-      inspectUse(declaration.getSourceFile());
+    if (parent?.type === "VariableDeclarator" && parent.init === use) {
+      this.traceDynamicBinding(file, target, parent);
       return;
     }
     // A reached module namespace can be injected or dispatched; all of its
     // runtime exports are possible callees, but its unused imports are not.
-    for (const statement of target.statements) {
-      if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
-        if (
-          statement.exportClause &&
-          ts.isNamedExports(statement.exportClause)
-        ) {
-          for (const entry of statement.exportClause.elements) {
-            if (!entry.isTypeOnly) {
-              this.traceExport(target, entry.name.text);
-            }
+    for (const statement of target.program.body) {
+      if (
+        statement.type === "ExportNamedDeclaration" &&
+        statement.declaration === null &&
+        statement.exportKind !== "type"
+      ) {
+        for (const entry of statement.specifiers) {
+          if (entry.exportKind !== "type") {
+            this.traceExport(target, moduleExportName(entry.exported));
           }
-        } else {
-          this.errors.add(
-            `Unresolved dynamic namespace re-export in ${target.fileName}`,
-          );
         }
-      }
-      if (ts.isExportAssignment(statement)) {
-        this.trace(statement.expression, true);
       }
       if (
-        !ts.canHaveModifiers(statement) ||
-        !ts
-          .getModifiers(statement)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+        statement.type === "ExportAllDeclaration" &&
+        statement.exportKind !== "type"
       ) {
-        continue;
+        this.errors.add(
+          `Unresolved dynamic namespace re-export in ${target.fileName}`,
+        );
       }
-      if (ts.isVariableStatement(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
-          this.trace(declaration, true);
+      if (
+        statement.type === "TSExportAssignment" ||
+        statement.type === "ExportDefaultDeclaration"
+      ) {
+        this.trace(
+          statement.type === "TSExportAssignment"
+            ? statement.expression
+            : statement.declaration,
+          true,
+        );
+      }
+      if (
+        statement.type === "ExportNamedDeclaration" &&
+        statement.declaration !== null
+      ) {
+        if (statement.declaration.type === "VariableDeclaration") {
+          for (const declaration of statement.declaration.declarations) {
+            this.trace(declaration, true);
+          }
+        } else {
+          this.trace(statement.declaration, true);
         }
-      } else {
-        this.trace(statement, true);
       }
     }
     return;
   };
 
-  private readonly checkFactoryAliases = (node: ts.Node) => {
-    const file = node.getSourceFile().fileName;
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const definition = this.value(node.expression);
+  private readonly checkFactoryAliases = (node: Node) => {
+    const file = this.fileOf(node).fileName;
+    if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+      const definition = this.value(node.callee);
       if (
-        definition &&
-        ts.isImportSpecifier(definition) &&
-        FACTORY.test(definition.propertyName?.text ?? definition.name.text) &&
-        !FACTORY.test(node.expression.text)
+        definition instanceof Binding &&
+        definition.kind === "import" &&
+        definition.importedName !== undefined &&
+        FACTORY.test(definition.importedName) &&
+        !FACTORY.test(node.callee.name)
       ) {
         this.errors.add(`Aliased safe factory cannot be enumerated in ${file}`);
       }
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      FACTORY.test(node.expression.name.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      FACTORY.test(node.callee.property.name)
     ) {
       this.errors.add(`Namespace safe factory cannot be enumerated in ${file}`);
     }
   };
-  private readonly isDeclared = (
-    first: ts.Node | undefined,
-    subject: boolean,
-  ) => {
+  private readonly isDeclared = (first: Node | undefined, subject: boolean) => {
     const config =
-      subject && first && ts.isObjectLiteralExpression(first)
+      subject && first?.type === "ObjectExpression"
         ? first.properties.find(
-            (item) =>
-              ts.isPropertyAssignment(item) &&
-              propertyName(item.name) === "config",
+            (item) => isPropertyAssignment(item) && keyName(item) === "config",
           )
         : first;
-    const configValue =
-      config && ts.isPropertyAssignment(config) ? config.initializer : config;
+    const configValue = isPropertyAssignment(config) ? config.value : config;
     const delivery = this.field(configValue, "contentDelivery");
     const type = propertyName(this.field(delivery, "type"));
     const reason = propertyName(this.field(delivery, "reason"));
@@ -736,33 +1113,25 @@ class ContentDeliveryInspector {
       ((type === "public" || type === "none") && !!reason?.trim())
     );
   };
-  private readonly inspectFactory = (node: ts.Node) => {
-    const file = node.getSourceFile().fileName;
-
-    if (!runtime(node)) {
-      return;
-    }
+  private readonly inspectFactory = (node: Node) => {
+    const file = this.fileOf(node).fileName;
     this.checkFactoryAliases(node);
     if (
-      !ts.isCallExpression(node) ||
-      !ts.isIdentifier(node.expression) ||
-      !FACTORY.test(node.expression.text)
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      !FACTORY.test(node.callee.name)
     ) {
-      ts.forEachChild(node, this.inspectFactory);
       return;
     }
     const first = node.arguments.at(0);
-    const subject = node.expression.text.includes("Subject");
+    const subject = node.callee.name.includes("Subject");
     const declared = this.isDeclared(first, subject);
     this.terminals = new Set<string>();
-    this.visited = new Set<ts.Node>();
-    if (subject && first && ts.isObjectLiteralExpression(first)) {
+    this.visited = new Set<Traced>();
+    if (subject && first?.type === "ObjectExpression") {
       for (const item of first.properties) {
-        if (
-          ts.isPropertyAssignment(item) &&
-          propertyName(item.name) !== "config"
-        ) {
-          this.trace(item.initializer);
+        if (isPropertyAssignment(item) && keyName(item) !== "config") {
+          this.trace(item.value);
         }
       }
     } else {
@@ -774,30 +1143,37 @@ class ContentDeliveryInspector {
       }
     }
     let binding = "inline";
-    if (ts.isVariableDeclaration(node.parent)) {
-      binding = propertyName(node.parent.name) ?? "inline";
-    } else if (ts.isExportAssignment(node.parent)) {
+    const parent = this.parents.get(node);
+    if (parent?.type === "VariableDeclarator") {
+      binding = propertyName(parent.id) ?? "inline";
+    } else if (
+      parent?.type === "ExportDefaultDeclaration" ||
+      parent?.type === "TSExportAssignment"
+    ) {
       binding = "default";
     }
     if (this.terminals.size > 0) {
       this.candidates.push({
         file,
         binding,
-        line:
-          node.getSourceFile().getLineAndCharacterOfPosition(node.getStart())
-            .line + 1,
+        line: this.lineOf(node),
         terminals: [...this.terminals].toSorted(),
         declared,
       });
     }
-    ts.forEachChild(node, this.inspectFactory);
   };
 
   analyze = () => {
     for (const file of this.options.files) {
       const source = this.load(file);
       if (source) {
-        this.inspectFactory(source);
+        walk(source.program, (node) => {
+          if (!this.runtime(node)) {
+            return "skip-children";
+          }
+          this.inspectFactory(node);
+          return undefined;
+        });
       }
     }
     return { candidates: this.candidates, errors: [...this.errors].toSorted() };
