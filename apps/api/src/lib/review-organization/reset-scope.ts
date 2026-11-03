@@ -32,6 +32,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   member: "Membership: the review account stays in its organization.",
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
+  account_exports:
+    "Account-owned export ledger: an organization audit archive belongs to the requesting account and keeps no reference to the organization.",
   organization_settings: "Organization settings, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
@@ -69,6 +71,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
   service_oauth_clients: "OAuth data: never touched by the reset.",
+  oauth_grant_revocations: "OAuth data: never touched by the reset.",
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",

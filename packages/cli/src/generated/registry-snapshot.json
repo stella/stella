@@ -7273,7 +7273,7 @@
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7296,7 +7296,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7316,7 +7316,7 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7340,7 +7340,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7355,8 +7355,15 @@
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -10934,7 +10941,7 @@
       "itemsKey": "annotations"
     },
     "name": "list_reader_annotations",
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "inputSchema": {
       "type": "object",
       "required": ["target_type", "target_id"],
@@ -12592,7 +12599,7 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Requires audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -12601,7 +12608,7 @@
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -12622,6 +12629,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": ["people", "automations"],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -12647,7 +12659,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     },

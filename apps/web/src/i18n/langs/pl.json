@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Usunięcie organizacji usuwa również jej rejestr aktywności. Najpierw wyeksportuj rejestr aktywności i pobierz archiwum; będzie dostępne przez godzinę.",
+    "auditArchiveDownloadFirst": "Przed usunięciem organizacji pobierz archiwum rejestru aktywności.",
+    "auditArchiveFailed": "Nie udało się przygotować archiwum rejestru aktywności.",
+    "auditArchiveOutdated": "Od utworzenia tego archiwum w rejestrze aktywności pojawiły się nowe wpisy. Wyeksportuj go ponownie przed usunięciem organizacji.",
+    "auditArchiveReady": "Archiwum rejestru aktywności jest gotowe. Możesz teraz usunąć organizację.",
+    "auditArchiveRequest": "Eksportuj rejestr aktywności",
+    "auditArchiveRequestNew": "Ponownie wyeksportuj rejestr aktywności",
+    "auditArchiveWorking": "Przygotowywanie archiwum rejestru aktywności…",
     "billingProfiles": "Profile rozliczeniowe",
     "deleteDescription": "Trwale usuniesz tę organizację i jej dane. Tej operacji nie można cofnąć.",
     "deleteOrganization": "Usuń organizację",
+    "deleteRefusedAuditArchive": "Przed usunięciem organizacji wyeksportuj jej rejestr aktywności.",
     "deleteRefusedSubscription": "Ta organizacja ma subskrypcję, która się odnawia. Najpierw anuluj ją w sekcji Plan i wykorzystanie, a następnie usuń organizację.",
     "deleteTypeToConfirm": "Wpisz {name}, aby potwierdzić.",
     "firmSetup": "Ustawienia kancelarii",
@@ -820,12 +829,14 @@
       "effectiveFrom": "Obowiązuje od",
       "effectiveRateRequired": "Nie ustawiono obowiązującej stawki dla tej sprawy, osoby i daty. Dodaj stawkę lub zapisz czas jako niepodlegający rozliczeniu.",
       "effectiveTo": "Obowiązuje do",
+      "firstTableIsDefault": "Pierwsza tabela stawek w sprawie jest domyślna.",
       "hourlyRate": "Stawka godzinowa",
       "logNonBillable": "Zapisz jako niepodlegający rozliczeniu",
       "noRateEntries": "Brak wpisów stawek",
       "noRateFound": "Brak skonfigurowanej stawki",
       "noRateTables": "Brak tabel stawek",
       "ongoing": "Bezterminowo",
+      "onlyDefaultApplies": "Stawki są stosowane tylko z domyślnej tabeli sprawy.",
       "override": "Nadpisz",
       "perHour": "/godz.",
       "rateCount": "{count, plural, one {# stawka} few {# stawki} many {# stawek} other {# stawki}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
-    "addCustomMcp": "Dodaj serwer MCP",
+    "addCustomMcp": "Dodaj integrację",
     "addCustomSkill": "Dodaj umiejętność",
     "by": "Autor: {author}",
     "configuration": "Konfiguracja",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Uwierzytelnianie",
     "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
     "filter": {
-      "mcps": "Serwery MCP",
+      "mcps": "Integracje",
       "nativeTools": "Wbudowane narzędzia",
       "skills": "Umiejętności"
     },
@@ -1803,6 +1814,7 @@
     "sendErrorContinuationRejected": "Nie udało się kontynuować czatu. Wyślij nową wiadomość, aby zacząć od nowa.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
+    "sendErrorMessageEmpty": "Ta wiadomość nie zawiera tekstu do wysłania. Wpisz pytanie lub dołącz plik, a następnie ją wyślij.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
     "sendErrorNotStarted": "Rozmowa jest nadal zajęta. Poczekaj chwilę i spróbuj ponownie.",
     "sendErrorPreparationFailed": "Nie udało się przygotować wiadomości. Otwórz ponownie czat i spróbuj jeszcze raz.",
@@ -1819,8 +1831,8 @@
     "signInToChatAbout": "Zaloguj się, aby czatować o",
     "skills": {
       "scope": {
-        "private": "Twoje umiejętności AI",
-        "team": "Umiejętności AI zespołu"
+        "private": "Twoje umiejętności",
+        "team": "Umiejętności zespołu"
       }
     },
     "sourceChips": {
@@ -2484,7 +2496,7 @@
     "scopeChat": "Odczyt i zarządzanie Twoimi czatami i wiadomościami",
     "scopeContactsWrite": "Tworzenie, edytowanie i usuwanie kontaktów w całej organizacji",
     "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
-    "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
+    "scopeExternalMcps": "Korzystanie z połączonych integracji",
     "scopeFeedback": "Wysyłanie opinii o produkcie do opiekunów stelli",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
@@ -2510,7 +2522,7 @@
     "summaryChat": "czaty",
     "summaryContactsWrite": "kontakty",
     "summaryDocumentsWrite": "dokumenty",
-    "summaryExternalMcps": "połączone narzędzia zewnętrzne",
+    "summaryExternalMcps": "połączone integracje",
     "summaryKnowledgeWrite": "klauzule i playbooki",
     "summaryLawRead": "publiczne przepisy prawa i orzecznictwo",
     "summaryLineChange": "<group>Tworzenie i edycja:</group> {items}",
@@ -2539,8 +2551,8 @@
     "attorneys": {
       "none": "Nieprzypisany",
       "originating": "Główny kontakt",
-      "responsible": "Prawnik prowadzący",
-      "title": "Prawnicy klienta"
+      "responsible": "Osoba odpowiedzialna",
+      "title": "Opiekunowie klienta"
     },
     "billing": {
       "addBankAccount": "Dodaj konto bankowe",
@@ -2594,9 +2606,16 @@
       "value": "Wartość pola"
     },
     "datePrecision": "Dokładność daty",
+    "deleteBlockedByMattersCount": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
+    "deleteBlockedCount": "Nieusunięte kontakty: {count}",
     "deleteContact": "Usuń kontakt",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
+    "deleteNotFoundCount": "Nieznalezione kontakty: {count}.",
+    "deleteSelected": "Usuń {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
+    "deleteSelectedConfirm": "Trwale usunąć {count, plural, one {ten kontakt} few {te # kontakty} many {tych # kontaktów} other {tego # kontaktu}}? Tej operacji nie można cofnąć.",
+    "deleteSelectedLimit": "Wybierz nie więcej niż {limit} kontaktów do usunięcia jednocześnie.",
+    "deletedCount": "Usunięto {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
     "editContact": "Edytuj kontakt",
     "emailTypes": {
       "other": "Inny",
@@ -2727,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazylijski CPF/CNPJ (suma kontrolna)",
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
+      "undoImport": "Cofnij import ({count})",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
       "warning": {
         "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
@@ -2756,6 +2776,7 @@
     "saved": "Zapisano dane kontaktu.",
     "search": "Szukaj kontaktów...",
     "searchCountries": "Szukaj krajów",
+    "selectContact": "Wybierz {name}",
     "title": "Klienci",
     "type": {
       "organization": "Organizacja",
@@ -2772,6 +2793,28 @@
     },
     "backToList": "Wróć do korespondencji",
     "createAddress": "Utwórz adres",
+    "dataBox": {
+      "acceptedAt": "Doręczono",
+      "acceptedByFiction": "w drodze fikcji doręczenia",
+      "acceptedByLogin": "przez zalogowanie",
+      "channel": "Skrzynka danych",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Dostarczono do skrzynki",
+      "delivery": "Doręczenie",
+      "directionUnknown": "Kierunek nieznany",
+      "messageId": "Identyfikator wiadomości",
+      "moreContacts": "Więcej kontaktów pasuje do tej skrzynki danych.",
+      "openFile": "Otwórz plik .zfo",
+      "personalDelivery": "Do rąk własnych",
+      "recipient": "Adresat",
+      "recipientReference": "Sygnatura adresata",
+      "sealNotVerified": "Elektroniczna pieczęć pliku jest przechowywana wraz z nim i nie jest weryfikowana.",
+      "senderReference": "Sygnatura nadawcy",
+      "sent": "Wysłana",
+      "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
+      "toHands": "Do rąk: {name}",
+      "uploaded": "Przesłana wiadomość ze skrzynki danych"
+    },
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
     "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
@@ -2942,6 +2985,7 @@
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
+      "correspondenceSourceChanged": "Ta korespondencja zmieniła się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
@@ -2967,6 +3011,8 @@
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
+      "organizationDataBoxLimitReached": "Ta organizacja osiągnęła limit skrzynek danych. Usuń jedną, zanim dodasz kolejną.",
+      "organizationDataBoxesChanged": "Skrzynki danych organizacji zmieniły się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "organizationLastOwner": "Organizacja musi mieć właściciela. Najpierw przekaż własność.",
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -3382,7 +3428,7 @@
     "doubleClickFooter": "Kliknij dwukrotnie, aby dodać stopkę",
     "doubleClickHeader": "Kliknij dwukrotnie, aby dodać nagłówek",
     "downloadCheckpoint": "Pobierz punkt kontrolny",
-    "editAuthRequired": "Odśwież Stellę i zaloguj się ponownie przed edycją tego dokumentu.",
+    "editAuthRequired": "Odśwież stellę i zaloguj się ponownie przed edycją tego dokumentu.",
     "editDownloadFailed": "Nie udało się pobrać dokumentu do edycji.",
     "editLink": "Edytuj link",
     "editOpenFailed": "Nie udało się otworzyć dokumentu do edycji.",
@@ -3455,7 +3501,7 @@
     "redoShortcut": "Ponów (Ctrl+Y)",
     "rejectChange": "Odrzuć zmianę",
     "removeLink": "Usuń link",
-    "renderErrorDescription": "Wystąpił błąd podczas renderowania tego komponentu. Spróbuj ponownie albo skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał.",
+    "renderErrorDescription": "Nie udało się wyświetlić tej części dokumentu. Odśwież stronę, a jeśli problem będzie się powtarzał, daj nam znać.",
     "saveCheckpointFailedDescription": "Plik DOCX został utworzony lokalnie, ale stella nie mogła przesłać punktu kontrolnego. Pozostaw edytor otwarty i spróbuj zapisać ponownie.",
     "saveCheckpointFailedTitle": "Nie udało się przesłać zapisu",
     "saveEditorUnavailableDescription": "Edytor nie jest jeszcze gotowy. Poczekaj, aż dokument zakończy ładowanie, a następnie spróbuj zapisać ponownie.",
@@ -4156,7 +4202,7 @@
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",
-      "addServerCardTitle": "Dodaj nowy serwer MCP",
+      "addServerCardTitle": "Dodaj nową integrację",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Bez uwierzytelniania",
@@ -4419,7 +4465,7 @@
         "title": "Szablony"
       },
       "tools": {
-        "description": "Połącz stella z rejestrami publicznymi i innymi źródłami",
+        "description": "Umiejętności, integracje i zawsze dostępne narzędzia, z których AI może korzystać na czacie",
         "title": "Narzędzia"
       },
       "workflows": {
@@ -4453,7 +4499,7 @@
       },
       "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
       "commandHelp": "Wpisz to na czacie, aby uruchomić tę umiejętność.",
-      "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
+      "commandLabel": "Polecenie czatu (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
       "errors": {
         "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń"
@@ -4522,6 +4568,10 @@
         "textRestored": "Przywrócono treść komentarza",
         "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
         "visibilityRestored": "Przywrócono udostępnianie"
+      },
+      "orphaned": {
+        "description": "Tekst tego dokumentu zmienił się od ich utworzenia: nie udało się ponownie odnaleźć w nim oznaczonych fragmentów albo występują one teraz w kilku miejscach. Nie są one wyświetlane w tekście.",
+        "summary": "{count, plural, one {# zaznaczenie lub komentarz nie pasuje już do tekstu} few {# zaznaczenia lub komentarze nie pasują już do tekstu} many {# zaznaczeń lub komentarzy nie pasuje już do tekstu} other {# zaznaczenia lub komentarza nie pasuje już do tekstu}}"
       },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
@@ -4600,7 +4650,7 @@
     "chat": "Czat",
     "contacts": "Kontakty",
     "inbox": "Skrzynka",
-    "knowledge": "Wiedza",
+    "knowledge": "Analityka",
     "myTodos": "Moje zadania",
     "pinned": "Przypięte",
     "recentMatters": "Ostatnie sprawy",
@@ -5338,11 +5388,16 @@
       "auditLogsActionDownload": "Pobierz",
       "auditLogsActionExecute": "Uruchom",
       "auditLogsActionUpdate": "Aktualizuj",
+      "auditLogsActorId": "ID wykonawcy",
+      "auditLogsAfter": "Po",
       "auditLogsAllActions": "Wszystkie akcje",
+      "auditLogsAnyone": "Każdy",
+      "auditLogsBefore": "Przed",
       "auditLogsChanges": "Zmiany",
       "auditLogsDeletedResource": "usunięty element: {kind}",
       "auditLogsDescription": "Kto co zrobił w tej organizacji i kiedy.",
       "auditLogsEmpty": "Brak aktywności.",
+      "auditLogsEmptyValue": "(puste)",
       "auditLogsError": "Nie udało się wczytać rejestru aktywności.",
       "auditLogsExport": "Eksportuj dzienniki",
       "auditLogsExportFailed": "Nie udało się wyeksportować rejestru aktywności.",
@@ -5350,6 +5405,13 @@
       "auditLogsExporting": "Eksportowanie...",
       "auditLogsFrom": "Data od",
       "auditLogsLoading": "Ładowanie dzienników...",
+      "auditLogsMoreChanges": "+{count, plural, one {# kolejna} few {# kolejne} many {# kolejnych} other {# kolejnej}}",
+      "auditLogsNoChanges": "Nie zarejestrowano zmian pól.",
+      "auditLogsPerformer": "Wykonane przez",
+      "auditLogsPerformerAll": "Osoby i automatyzacje",
+      "auditLogsPerformerAutomations": "Automatyzacje",
+      "auditLogsPerformerPeople": "Osoby",
+      "auditLogsPersonPlaceholder": "Szukaj po nazwisku lub e-mailu",
       "auditLogsResourceId": "Identyfikator zasobu",
       "auditLogsResourceIdentifier": "Identyfikator zasobu: {id}",
       "auditLogsResourceType": "Typ zasobu",
@@ -5372,8 +5434,6 @@
       "auditLogsTo": "Data do",
       "auditLogsUnavailableResource": "{kind} (niedostępny)",
       "auditLogsUnknownResource": "nieznany element",
-      "auditLogsUserId": "Identyfikator użytkownika",
-      "auditLogsUserIdPlaceholder": "Filtruj według identyfikatora użytkownika",
       "auditResourceKinds": {
         "agent_skill": "umiejętność",
         "agent_skill_comment": "komentarz do umiejętności",
@@ -5462,6 +5522,12 @@
         "firm": "Wytyczne kancelarii",
         "ledes": "Fakturowanie elektroniczne (LEDES)",
         "title": "Projekty rozliczeń z AI"
+      },
+      "dataBoxes": {
+        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
+        "remove": "Usuń skrzynkę danych {address}",
+        "title": "Skrzynki danych organizacji"
       },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
@@ -6341,6 +6407,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ta sprawa jest zarchiwizowana i dostępna tylko do odczytu.",
     "calculations": {
       "choose": "Oblicz",
       "kinds": {
@@ -6428,7 +6495,8 @@
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
       "selectAValue": "Wybierz wartość",
-      "selectValues": "Wybierz wartości"
+      "selectValues": "Wybierz wartości",
+      "wholeNumberOnly": "Wpisz liczbę całkowitą"
     },
     "files": {
       "addFilePropertyToUpload": "Dodaj właściwość typu plik, aby przesyłać pliki",
@@ -6722,7 +6790,7 @@
     "matterInfo": "Informacje o sprawie",
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
     "members": {
-      "addMember": "Dodaj członka",
+      "addMember": "Dodaj do sprawy",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
       "alreadyOnMatter": "Już należy do tej sprawy",
@@ -7197,6 +7265,7 @@
       "aiModel": "Model AI",
       "manualInput": "Ręcznie"
     },
+    "unarchiveBeforeDelete": "Przed usunięciem tej sprawy cofnij jej archiwizację.",
     "unarchiveMatter": "Przywróć z archiwum",
     "uploadDocuments": "Prześlij dokumenty",
     "views": {

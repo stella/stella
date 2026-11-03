@@ -58,8 +58,15 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "budgets",
   ],
   "system:usage-webhook-retention": ["redactedEvents"],
+  "system:hosted-customer-erasure": [
+    "claimed",
+    "erased",
+    "failed",
+    "terminalFailures",
+  ],
   "system:file-comparison-sweep": ["sweptUploads"],
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
+  "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [
@@ -120,6 +127,7 @@ export const TENANT_SYSTEM_ACTOR = {
   memoryCurator: "system:memory-curator",
   memoryExtractor: "system:memory-extractor",
   usageProvider: "system:usage-provider",
+  uploadedMail: "system:uploaded-mail",
 } as const;
 
 /** The shape the database CHECK enforces on `system_audit_runs.actor`. */

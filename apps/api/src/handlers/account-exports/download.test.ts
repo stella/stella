@@ -16,6 +16,7 @@ import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
 import { McpTokenVerificationError } from "@/api/mcp/errors";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const EXPORT_ID = "11111111-1111-4111-8111-111111111111";
@@ -27,13 +28,15 @@ const ORGANIZATION_ID = brandPersistedOrganizationId(
 const MEMBER_ID = "55555555-5555-4555-8555-555555555555";
 const ARCHIVE = "account export archive";
 
+const oauthCredential = await admittedOAuthCredentialForTest("cli");
+
 const tokenSession = (userId: string, scopes: string[]) =>
   Result.ok({
     userId,
     organizationId: ORGANIZATION_ID,
     memberId: MEMBER_ID,
     scopes,
-    credential: { type: "oauth_client" as const, clientId: "cli" },
+    credential: oauthCredential,
   });
 
 const causeChain = (error: unknown): unknown[] => {
@@ -99,6 +102,11 @@ const createDownloadRoute = (membership: { currentId: string | null }) =>
       return {
         id,
         userId,
+        kind: "account",
+        organizationId: null,
+        auditRowCount: null,
+        auditCoveredThrough: null,
+        downloadedAt: null,
         status: "ready",
         attemptCount: 1,
         claimToken: null,

@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "IA",
+    "auditArchiveDescription": "La suppression de l’organisation supprime aussi son journal d’activité. Exportez d’abord le journal d’activité et téléchargez l’archive ; elle reste disponible pendant une heure.",
+    "auditArchiveDownloadFirst": "Téléchargez l’archive du journal d’activité avant de supprimer l’organisation.",
+    "auditArchiveFailed": "L’archive du journal d’activité n’a pas pu être préparée.",
+    "auditArchiveOutdated": "Le journal d’activité contient de nouvelles entrées depuis cette archive. Exportez-le à nouveau avant de supprimer l’organisation.",
+    "auditArchiveReady": "L’archive du journal d’activité est prête. Vous pouvez maintenant supprimer l’organisation.",
+    "auditArchiveRequest": "Exporter le journal d’activité",
+    "auditArchiveRequestNew": "Exporter à nouveau le journal d’activité",
+    "auditArchiveWorking": "Préparation de l’archive du journal d’activité…",
     "billingProfiles": "Profils de facturation",
     "deleteDescription": "Supprimez définitivement cette organisation et ses données. Cette action est irréversible.",
     "deleteOrganization": "Supprimer l’organisation",
+    "deleteRefusedAuditArchive": "Exportez le journal d’activité de l’organisation avant de la supprimer.",
     "deleteRefusedSubscription": "Cette organisation a un abonnement qui se renouvelle. Résiliez-le d’abord dans Offre et utilisation, puis supprimez l’organisation.",
     "deleteTypeToConfirm": "Saisissez {name} pour confirmer.",
     "firmSetup": "Configuration du cabinet",
@@ -820,12 +829,14 @@
       "effectiveFrom": "Applicable à partir du",
       "effectiveRateRequired": "Aucun taux applicable n’est défini pour ce dossier, cette personne et cette date. Ajoutez un taux ou enregistrez ce temps comme non facturable.",
       "effectiveTo": "Applicable jusqu'au",
+      "firstTableIsDefault": "Le premier barème du dossier est son barème par défaut.",
       "hourlyRate": "Taux horaire",
       "logNonBillable": "Enregistrer comme non facturable",
       "noRateEntries": "Aucune entrée tarifaire",
       "noRateFound": "Aucun tarif configuré",
       "noRateTables": "Aucun barème",
       "ongoing": "En cours",
+      "onlyDefaultApplies": "Seuls les tarifs du barème par défaut du dossier s'appliquent.",
       "override": "Remplacer",
       "perHour": "/h",
       "rateCount": "{count, plural, one {# tarif} other {# tarifs} many {# tarifs}}",
@@ -1320,7 +1331,7 @@
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",
-    "addCustomMcp": "Ajouter un serveur MCP",
+    "addCustomMcp": "Ajouter une intégration",
     "addCustomSkill": "Ajouter une compétence",
     "by": "Par {author}",
     "configuration": "Configuration",
@@ -1331,7 +1342,7 @@
     "detailAuthMethod": "Authentification",
     "empty": "Aucune entrée ne correspond au filtre actuel.",
     "filter": {
-      "mcps": "Serveurs MCP",
+      "mcps": "Intégrations",
       "nativeTools": "Outils intégrés",
       "skills": "Compétences"
     },
@@ -1803,6 +1814,7 @@
     "sendErrorContinuationRejected": "La conversation n’a pas pu continuer. Envoyez un nouveau message pour recommencer.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
     "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
+    "sendErrorMessageEmpty": "Ce message ne contient aucun texte à envoyer. Saisissez votre question ou joignez un fichier, puis envoyez-le.",
     "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
     "sendErrorNotStarted": "La conversation est encore occupée. Patientez un instant et réessayez.",
     "sendErrorPreparationFailed": "Votre message n’a pas pu être préparé. Rouvrez la conversation et réessayez.",
@@ -2484,7 +2496,7 @@
     "scopeChat": "Lire et gérer vos conversations et vos messages",
     "scopeContactsWrite": "Créer, modifier et supprimer des contacts dans toute votre organisation",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
-    "scopeExternalMcps": "Utiliser vos outils externes connectés",
+    "scopeExternalMcps": "Utiliser vos intégrations connectées",
     "scopeFeedback": "Envoyer des retours produit aux mainteneurs de stella",
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",
     "scopeLawRead": "Lire les textes législatifs publics et la jurisprudence",
@@ -2510,7 +2522,7 @@
     "summaryChat": "conversations",
     "summaryContactsWrite": "les contacts",
     "summaryDocumentsWrite": "les documents",
-    "summaryExternalMcps": "outils externes connectés",
+    "summaryExternalMcps": "intégrations connectées",
     "summaryKnowledgeWrite": "clauses et playbooks",
     "summaryLawRead": "textes législatifs publics et jurisprudence",
     "summaryLineChange": "<group>Créer et modifier :</group> {items}",
@@ -2539,8 +2551,8 @@
     "attorneys": {
       "none": "Non attribué",
       "originating": "Contact principal",
-      "responsible": "Avocat responsable",
-      "title": "Avocats"
+      "responsible": "Personne responsable",
+      "title": "Responsables de la relation"
     },
     "billing": {
       "addBankAccount": "Ajouter un compte bancaire",
@@ -2594,9 +2606,16 @@
       "value": "Valeur du champ"
     },
     "datePrecision": "Précision de la date",
+    "deleteBlockedByMattersCount": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
+    "deleteBlockedCount": "Contacts non supprimés : {count}",
     "deleteContact": "Supprimer le contact",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
+    "deleteNotFoundCount": "Contacts introuvables : {count}.",
+    "deleteSelected": "Supprimer {count, plural, one {# contact} many {# contacts} other {# contacts}}",
+    "deleteSelectedConfirm": "Supprimer définitivement {count, plural, one {ce contact} many {ces # contacts} other {ces # contacts}} ? Cette action est irréversible.",
+    "deleteSelectedLimit": "Sélectionnez au maximum {limit} contacts à supprimer à la fois.",
+    "deletedCount": "{count, plural, one {# contact supprimé} many {# contacts supprimés} other {# contacts supprimés}}",
     "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
@@ -2727,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
+      "undoImport": "Annuler l’importation ({count})",
       "validateFailed": "Impossible de vérifier ces contacts.",
       "warning": {
         "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",
@@ -2756,6 +2776,7 @@
     "saved": "Les coordonnées du contact ont été enregistrées.",
     "search": "Rechercher des contacts...",
     "searchCountries": "Rechercher des pays",
+    "selectContact": "Sélectionner {name}",
     "title": "Clients",
     "type": {
       "organization": "Organisation",
@@ -2772,6 +2793,28 @@
     },
     "backToList": "Retour à la correspondance",
     "createAddress": "Créer une adresse",
+    "dataBox": {
+      "acceptedAt": "Notifié",
+      "acceptedByFiction": "par notification réputée faite",
+      "acceptedByLogin": "par connexion",
+      "channel": "Boîte de données",
+      "contact": "Contact : {name}",
+      "deliveredAt": "Remis dans la boîte",
+      "delivery": "Remise",
+      "directionUnknown": "Sens inconnu",
+      "messageId": "Identifiant du message",
+      "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
+      "openFile": "Ouvrir le fichier .zfo",
+      "personalDelivery": "En main propre",
+      "recipient": "Destinataire",
+      "recipientReference": "Référence du destinataire",
+      "sealNotVerified": "Le cachet électronique du fichier est conservé avec celui-ci et n’est pas vérifié.",
+      "senderReference": "Référence de l’expéditeur",
+      "sent": "Envoyé",
+      "statedInFile": "Message de boîte de données (selon le fichier)",
+      "toHands": "À l’attention de {name}",
+      "uploaded": "Message de boîte de données importé"
+    },
     "deliveredBy": "Distribué par <address>{sender}</address>",
     "deliveredByAuthenticated": "Distribué par <address>{sender}</address> · authentifié",
     "deliveryAuthentication": "Authentification de la distribution",
@@ -2942,6 +2985,7 @@
       "clauseDirectivesInvalid": "Une clause liée contient des directives non valides. Corrigez la clause avant de remplir le modèle.",
       "clauseDirectivesInvalidDetails": "La clause {clauseName} dans le champ {slotName} contient des directives non valides. Ouvrez l’éditeur de clauses, corrigez les paragraphes indiqués et remplissez à nouveau le modèle.",
       "clauseDirectivesOverrideInvalidDetails": "Le texte de remplacement de la clause {clauseName} dans le champ {slotName} contient des directives non valides. Corrigez ce texte pour ce remplissage avant de réessayer.",
+      "correspondenceSourceChanged": "Cette correspondance a changé entre-temps. Rechargez la page et réessayez.",
       "deeplKeyRejected": "La clé DeepL enregistrée a été refusée. Remplacez-la dans les paramètres de l’organisation.",
       "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
       "disposableEmailNotAllowed": "Les adresses e-mail temporaires ne sont pas autorisées. Utilisez une adresse e-mail permanente.",
@@ -2967,6 +3011,8 @@
       "matterContactCapacityReached": "Ce dossier a atteint la limite de contacts. Retirez un lien vers un contact avant d’en ajouter un autre.",
       "mcpAuthorizationApprovalRequired": "Un administrateur doit approuver ce connecteur avant que vous puissiez vous connecter.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
+      "organizationDataBoxLimitReached": "Cette organisation a atteint sa limite de boîtes de données. Retirez-en une avant d’en ajouter une autre.",
+      "organizationDataBoxesChanged": "Les boîtes de données de l’organisation ont changé entre-temps. Rechargez la page et réessayez.",
       "organizationLastOwner": "Une organisation doit avoir un propriétaire. Transférez d’abord la propriété.",
       "organizationMemberLimitReached": "Cette organisation a atteint sa limite de membres.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
@@ -3455,7 +3501,7 @@
     "redoShortcut": "Rétablir (Ctrl+Y)",
     "rejectChange": "Rejeter la modification",
     "removeLink": "Supprimer le lien",
-    "renderErrorDescription": "Une erreur s'est produite lors du rendu de ce composant. Réessayez ou contactez le support si le problème persiste.",
+    "renderErrorDescription": "Impossible d’afficher cette partie du document. Rechargez la page et, si le problème se reproduit, prévenez-nous.",
     "saveCheckpointFailedDescription": "Le DOCX a été créé localement, mais stella n’a pas pu téléverser le point de sauvegarde. Laissez l’éditeur ouvert et réessayez d’enregistrer.",
     "saveCheckpointFailedTitle": "Impossible de téléverser la sauvegarde",
     "saveEditorUnavailableDescription": "L’éditeur n’est pas encore prêt. Attendez la fin du chargement du document, puis réessayez d’enregistrer.",
@@ -4156,7 +4202,7 @@
     "mcp": {
       "addAndConnect": "Ajouter et connecter",
       "addServer": "Ajouter un serveur",
-      "addServerCardTitle": "Ajouter un nouveau serveur MCP",
+      "addServerCardTitle": "Ajouter une nouvelle intégration",
       "auth": {
         "bearer": "Jeton Bearer",
         "none": "Sans authentification",
@@ -4453,7 +4499,7 @@
       },
       "commandConflict": "Une compétence avec cette commande / existe déjà",
       "commandHelp": "Saisissez-la dans une conversation pour exécuter cette compétence.",
-      "commandLabel": "Commande slash (facultatif)",
+      "commandLabel": "Commande de conversation (facultatif)",
       "commandPlaceholder": "p. ex. résumer",
       "errors": {
         "commandInvalid": "Utilisez uniquement des lettres minuscules, des chiffres, des traits d'union et des tirets bas"
@@ -4522,6 +4568,10 @@
         "textRestored": "Texte du commentaire rétabli",
         "undoShortcut": "Annuler une modification de surlignage ou de commentaire",
         "visibilityRestored": "Partage rétabli"
+      },
+      "orphaned": {
+        "description": "Le texte de ce document a été mis à jour depuis leur création : les passages marqués n'ont pas pu y être retrouvés ou y figurent désormais à plusieurs endroits. Ils ne sont pas affichés dans le texte.",
+        "summary": "{count, plural, one {# surlignage ou commentaire ne correspond plus au texte} other {# surlignages et commentaires ne correspondent plus au texte} many {# surlignages et commentaires ne correspondent plus au texte}}"
       },
       "removeHighlight": "Retirer le surlignage",
       "sharedBadge": "Partagé",
@@ -4600,7 +4650,7 @@
     "chat": "Conversation",
     "contacts": "Contacts",
     "inbox": "Boîte de réception",
-    "knowledge": "Connaissances",
+    "knowledge": "Intelligence",
     "myTodos": "Mes tâches",
     "pinned": "Épinglés",
     "recentMatters": "Dossiers récents",
@@ -5338,11 +5388,16 @@
       "auditLogsActionDownload": "Télécharger",
       "auditLogsActionExecute": "Exécuter",
       "auditLogsActionUpdate": "Mettre à jour",
+      "auditLogsActorId": "Identifiant de l’acteur",
+      "auditLogsAfter": "Après",
       "auditLogsAllActions": "Toutes les actions",
+      "auditLogsAnyone": "Tout le monde",
+      "auditLogsBefore": "Avant",
       "auditLogsChanges": "Modifications",
       "auditLogsDeletedResource": "{kind} supprimé",
       "auditLogsDescription": "Qui a fait quoi dans cette organisation, et quand.",
       "auditLogsEmpty": "Aucune activité pour l'instant.",
+      "auditLogsEmptyValue": "(vide)",
       "auditLogsError": "Impossible de charger le journal d'activité.",
       "auditLogsExport": "Exporter les journaux",
       "auditLogsExportFailed": "Impossible d'exporter le journal d'activité.",
@@ -5350,6 +5405,13 @@
       "auditLogsExporting": "Exportation...",
       "auditLogsFrom": "Date de début",
       "auditLogsLoading": "Chargement des journaux...",
+      "auditLogsMoreChanges": "+{count, plural, one {# autre} other {# autres} many {# autres}}",
+      "auditLogsNoChanges": "Aucune modification de champ enregistrée.",
+      "auditLogsPerformer": "Effectué par",
+      "auditLogsPerformerAll": "Personnes et automatisations",
+      "auditLogsPerformerAutomations": "Automatisations",
+      "auditLogsPerformerPeople": "Personnes",
+      "auditLogsPersonPlaceholder": "Rechercher par nom ou e-mail",
       "auditLogsResourceId": "ID de ressource",
       "auditLogsResourceIdentifier": "ID de la ressource : {id}",
       "auditLogsResourceType": "Type de ressource",
@@ -5372,8 +5434,6 @@
       "auditLogsTo": "Date de fin",
       "auditLogsUnavailableResource": "{kind} (indisponible)",
       "auditLogsUnknownResource": "élément inconnu",
-      "auditLogsUserId": "ID utilisateur",
-      "auditLogsUserIdPlaceholder": "Filtrer par ID utilisateur",
       "auditResourceKinds": {
         "agent_skill": "compétence",
         "agent_skill_comment": "commentaire sur la compétence",
@@ -5462,6 +5522,12 @@
         "firm": "Directives du cabinet",
         "ledes": "Facturation électronique (LEDES)",
         "title": "Brouillons de facturation par IA"
+      },
+      "dataBoxes": {
+        "description": "Un message envoyé depuis l’une de ces boîtes est classé comme sortant, un message qui leur est adressé comme entrant. Chaque modification recalcule le sens des messages déjà classés dans les dossiers auxquels vous avez accès.",
+        "invalid": "Un identifiant de boîte de données compte sept lettres ou chiffres.",
+        "remove": "Retirer la boîte de données {address}",
+        "title": "Boîtes de données de l’organisation"
       },
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
@@ -6341,6 +6407,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ce dossier est archivé et en lecture seule.",
     "calculations": {
       "choose": "Calculer",
       "kinds": {
@@ -6428,7 +6495,8 @@
       "errored": "Erreur",
       "formatNotSupported": "Format non pris en charge",
       "selectAValue": "Sélectionner une valeur",
-      "selectValues": "Sélectionner des valeurs"
+      "selectValues": "Sélectionner des valeurs",
+      "wholeNumberOnly": "Saisir un nombre entier"
     },
     "files": {
       "addFilePropertyToUpload": "Ajoutez une propriété de fichier pour importer des fichiers",
@@ -6722,7 +6790,7 @@
     "matterInfo": "Informations sur le dossier",
     "mattersCount": "{count, plural, one {# dossier} other {# dossiers} many {# dossiers}}",
     "members": {
-      "addMember": "Ajouter un membre",
+      "addMember": "Ajouter au dossier",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
       "alreadyOnMatter": "Déjà dans ce dossier",
@@ -6917,7 +6985,7 @@
       },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
-      "evidence": "Pièce à conviction",
+      "evidence": "Justification",
       "incorrectPassword": "Mot de passe incorrect. Veuillez réessayer.",
       "nextPage": "Page suivante",
       "pageEditor": {
@@ -7197,6 +7265,7 @@
       "aiModel": "Modèle IA",
       "manualInput": "Manuellement"
     },
+    "unarchiveBeforeDelete": "Désarchivez ce dossier avant de le supprimer.",
     "unarchiveMatter": "Désarchiver",
     "uploadDocuments": "Importer des documents",
     "views": {

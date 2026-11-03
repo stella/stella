@@ -1852,11 +1852,11 @@ jobs:
             .github/actions
             .github/ci-job-classification-decisions
             .github/ci-job-classification-sources.json
+            .github/global-rule-inputs.json
             scripts/check-ci-job-classification.ts
             scripts/ci-job-classification
             packages/collation/src/collation.ts
             packages/sha256/src/node.ts
-            packages/sha256/src/types.ts
 
       - name: Check workflow job classifications
         id: job-classification
@@ -4606,7 +4606,7 @@ jobs:
     runs-on: ubuntu-24.04
     # The rehearsal step's budget plus the setup before it (checkout, install,
     # image pulls); scripts/rehearse-migration-upgrade.test.ts derives both.
-    timeout-minutes: 42
+    timeout-minutes: 52
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -4626,9 +4626,26 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: ${{ needs.ci-plan.outputs.redis }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
-      - *checkout_input_sha
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The candidate image bundles the template-pack content submodule;
+          # its runtime-asset smoke fails without it.
+          submodules: true
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -4664,7 +4681,12 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .workflow-tooling
           persist-credentials: false
-          sparse-checkout: scripts/retry.sh
+          sparse-checkout: |
+            scripts/retry.sh
+            scripts/ci-service-images.ts
+            scripts/ci-service-images.json
+            packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
           sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
@@ -4680,7 +4702,6 @@ jobs:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
         run: |
           bash .workflow-tooling/scripts/retry.sh docker pull --quiet "$BASE_IMAGE"
-          rm -rf .workflow-tooling
 
       - name: Drop the registry credential
         if: always()
@@ -4690,12 +4711,18 @@ jobs:
       # fixed-point rerun, each bounded by REHEARSAL_MIGRATE_BUDGET_SECONDS.
       # This cap only catches a hang outside them.
       - name: Rehearse the upgrade from the promoted release at scale
-        timeout-minutes: 38
+        timeout-minutes: 48
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
+          REHEARSAL_CI_TOOLING: ${{ github.workspace }}/.workflow-tooling
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: bash scripts/rehearse-migration-upgrade.sh
+
+      - name: Remove workflow tooling
+        if: always()
+        run: rm -rf .workflow-tooling
 
       - *merge_group_cancel
 
@@ -5964,6 +5991,9 @@ jobs:
   # main with `-f branch=<this branch>`), which is also why the comparison
   # tolerance can stay tight:
   # baselines and comparison render on the same image.
+  # A screenshot difference passes this job with a warning
+  # (scripts/marketing-screenshot-verdict.ts); any failure of this job
+  # blocks the release.
 
   marketing-screenshots:
     # A bounded poll can expire while web-build is still waiting for a runner;
@@ -7406,11 +7436,6 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS=""
           required_jobs='[]'
-          # The unmet checks the full-depth verdict found, published beside
-          # (never inside) the required-jobs record as `ci-required-violations`
-          # so a reader can tell a failure it may excuse from one it may not.
-          violations=""
-          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7449,19 +7474,9 @@ jobs:
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
           }
-          record_required_violations() {
-            local violations_record
-            violations_record=$(jq -nce --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
-              --arg head "${HEAD_SHA:-}" --arg evaluated "$violations_evaluated" --arg violations "${violations:-}" '
-              def nonempty: if . == "" then null else . end;
-              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
-              {run_id: ($run | count), run_attempt: ($attempt | count), head_sha: ($head | nonempty),
-                evaluated: ($evaluated == "true"), violations: ($violations | nonempty)}') || return 1
-            echo "required_violations=$violations_record" >> "${GITHUB_OUTPUT:-}"
-          }
-          # Neither record depends on the other's serialization. Install this
-          # before reading inputs so an evaluator failure still has a record.
-          trap 'status=$?; record_required_violations || echo "::error::The required-violations record could not be written."; record_required_jobs "$status" || echo "::error::The required-jobs record could not be written."' EXIT
+          # Install this before reading inputs so an evaluator failure still
+          # has a record.
+          trap 'status=$?; record_required_jobs "$status" || echo "::error::The required-jobs record could not be written."' EXIT
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; the planner tests require every job to be in
           # `needs`. The previous step wrote job results and plan outputs.
@@ -7486,7 +7501,9 @@ jobs:
               elif .basis == "evaluated" then
                 (if .verdict == "success" and (.required | length) > 0 and all(.required[]; .conclusion == "success")
                   then "evaluated-success" else "evaluated-failure" end)
-              elif .basis == "pass_through" and .pass_through_reason == "reused" and (.reused_from_run_id | type) == "number"
+              elif .basis == "pass_through" and .verdict == "success"
+                and (.pass_through_reason == "reused" or .pass_through_reason == "metadata" or .pass_through_reason == "enqueued")
+                and (.reused_from_run_id | type) == "number"
                 then "reused \(.reused_from_run_id)"
               elif .basis == "pass_through" then "pass-through \(.pass_through_reason // "unknown")"
               else "invalid basis" end'
@@ -7661,7 +7678,10 @@ jobs:
           fi
           if [[ "$QUEUE_VALIDATION" == true && "$EVENT" == pull_request && "$PR_ACTION" == enqueued ]] &&
             jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS" >/dev/null; then
-            echo "Queued tree validation belongs to merge_group."
+            # Keep a direct reference to the evaluated record: repeated queue
+            # entries must not bury the head's proof behind pass-through runs.
+            mirror_metadata_code_run || exit $?
+            echo "Queued tree validation belongs to merge_group; head evidence comes from run $reused_from_run_id."
             pass_through_reason=enqueued
             exit 0
           fi
@@ -7928,7 +7948,6 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
-              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
@@ -8119,34 +8138,6 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
-          retention-days: 90
-          if-no-files-found: error
-
-      # The unmet checks behind the verdict, as an artifact of their own: the
-      # required-jobs record above has a fixed key set that other readers
-      # parse strictly. The release health gate reads both.
-      - name: Write required-violations record
-        if: always() && steps.outcome.outcome != 'skipped'
-        continue-on-error: true
-        env:
-          REQUIRED_VIOLATIONS: ${{ steps.outcome.outputs.required_violations }}
-          RECORD_PATH: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
-        run: |
-          if [[ -z "$REQUIRED_VIOLATIONS" ]]; then
-            echo "::error::Evaluate CI outcome wrote no required-violations record."
-            exit 1
-          fi
-          mkdir -p "$(dirname "$RECORD_PATH")"
-          printf '%s\n' "$REQUIRED_VIOLATIONS" > "$RECORD_PATH"
-
-      - name: Upload required-violations record
-        if: always() && steps.outcome.outcome != 'skipped'
-        continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ci-required-violations
-          overwrite: true
-          path: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
           retention-days: 90
           if-no-files-found: error
 

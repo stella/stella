@@ -27,7 +27,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
-  buildCzNssDecision,
+  buildCzNssDecision as uncheckedBuildCzNssDecision,
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
@@ -40,7 +40,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
@@ -66,11 +66,15 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(czNssAdapter);
