@@ -37,7 +37,10 @@ export const readConformanceVocabulary = (
     "utf-8",
   );
   const declared = DECLARED_PAIRS.exec(contents);
-  if (declared?.[1] === undefined) {
+  if (declared === null) {
+    panic(`${algorithm}: fixture declares no pair count`);
+  }
+  if (declared[1] === undefined) {
     panic(`${algorithm}: fixture declares no pair count`);
   }
 
