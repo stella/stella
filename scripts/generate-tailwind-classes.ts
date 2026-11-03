@@ -1,6 +1,13 @@
 import { panic } from "better-result";
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import {
+  mkdir,
+  mkdtemp,
+  open,
+  readdir,
+  readFile,
+  rename,
+  rm,
+} from "node:fs/promises";
 import path from "node:path";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
@@ -8,7 +15,8 @@ import * as v from "valibot";
 import oxlintConfig from "../oxlint.config.ts";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
-const committedCache = path.join(repositoryRoot, ".tailwind-cache");
+const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
+const staleLockAgeMs = 5 * 60_000;
 const tailwindSettings = v.object({
   tailwindcss: v.object({
     entryPoint: v.array(
@@ -163,7 +171,7 @@ const answersOf = (text: string | undefined) => {
 };
 
 /**
- * Why the committed cache cannot serve lint, decided without compiling. The
+ * Why the generated cache cannot serve lint, decided without compiling. The
  * plugin names each snapshot by the hash of what compiles it (the stylesheet
  * and its imports, including workspace stylesheets imported by package name
  * such as `@stll/ui/theme.css`, the installed packages' versions, the Tailwind
@@ -186,23 +194,28 @@ export const snapshotProblems = (committed: ReadonlySet<string>) =>
   ].toSorted();
 
 /** The cache check: digests only, so it never starts lint or a worker. */
-export const checkCache = async () =>
-  snapshotProblems(new Set(await readdir(committedCache)));
+export const checkCache = async () => {
+  try {
+    return snapshotProblems(new Set(await readdir(generatedCache)));
+  } catch {
+    return snapshotProblems(new Set());
+  }
+};
 
 /**
- * The committed cache after a generation. Fresh answers win; an answer the
+ * A cache merged after generation. Fresh answers win; an answer the
  * sources no longer use stays, because a concurrent change may use that class
  * again; only artifacts of a snapshot that is no longer generated go.
  */
 export const mergeCache = (
-  committed: CacheFiles,
+  existing: CacheFiles,
   generated: CacheFiles,
 ): Map<string, string> => {
   const currentSnapshots = new Set(
     [...generated.keys()].map((name) => name.slice(0, 32)),
   );
   const merged = new Map<string, string>();
-  for (const [name, text] of committed) {
+  for (const [name, text] of existing) {
     if (isDeclarationShard(name) && currentSnapshots.has(name.slice(0, 32))) {
       merged.set(name, text);
     }
@@ -232,30 +245,113 @@ export const mergeCache = (
   return merged;
 };
 
-const write = async () => {
+const lockValue = (value: unknown) => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("createdAt" in value) ||
+    typeof value.createdAt !== "number" ||
+    !("pid" in value) ||
+    typeof value.pid !== "number" ||
+    !("token" in value) ||
+    typeof value.token !== "string"
+  ) {
+    return undefined;
+  }
+  return { createdAt: value.createdAt, pid: value.pid, token: value.token };
+};
+
+const acquireLock = async (cacheLock: string, token: string) => {
+  while (true) {
+    try {
+      const lock = await open(cacheLock, "wx");
+      await lock.writeFile(
+        JSON.stringify({ createdAt: Date.now(), pid: process.pid, token }),
+      );
+      await lock.close();
+      break;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "EEXIST"
+      ) {
+        throw error;
+      }
+      let staleToken: string | undefined;
+      try {
+        const value = lockValue(JSON.parse(await readFile(cacheLock, "utf-8")));
+        if (value && Date.now() - value.createdAt > staleLockAgeMs) {
+          staleToken = value.token;
+        } else if (value) {
+          try {
+            process.kill(value.pid, 0);
+          } catch {
+            staleToken = value.token;
+          }
+        }
+      } catch {
+        // A writer may be between creating and filling its lock file.
+      }
+      if (staleToken !== undefined) {
+        const current = lockValue(
+          JSON.parse(await readFile(cacheLock, "utf-8")),
+        );
+        if (current?.token === staleToken) {
+          await rm(cacheLock, { force: true });
+        }
+      } else {
+        await Bun.sleep(50);
+      }
+    }
+  }
+};
+
+export const writeCache = async (cacheDirectory = generatedCache) => {
+  const cacheLock = `${cacheDirectory}.lock`;
+  const token = `${process.pid}:${crypto.randomUUID()}`;
+  await acquireLock(cacheLock, token);
+
   const temporaryRoot = await mkdtemp(
-    path.join(tmpdir(), "stella-tailwind-cache-"),
+    path.join(path.dirname(cacheDirectory), ".tailwind-cache-build-"),
   );
   try {
     await generate(temporaryRoot);
-    const merged = mergeCache(
-      await readCache(committedCache),
-      await readCache(temporaryRoot),
-    );
-    await mkdir(committedCache, { recursive: true });
-    for (const name of await readdir(committedCache)) {
-      if (!merged.has(name)) {
-        await rm(path.join(committedCache, name), {
-          recursive: true,
-          force: true,
-        });
-      }
+    const generated = await readCache(temporaryRoot);
+    const merged = mergeCache(await readCache(cacheDirectory), generated);
+    const current = await readCache(cacheDirectory);
+    if (
+      current.size === merged.size &&
+      [...merged].every(([name, text]) => current.get(name) === text)
+    ) {
+      return;
     }
+    await mkdir(cacheDirectory, { recursive: true });
     for (const [name, text] of merged) {
-      await Bun.write(path.join(committedCache, name), text);
+      const temporaryFile = path.join(temporaryRoot, `.publish-${name}`);
+      await Bun.write(temporaryFile, text);
+      await rename(temporaryFile, path.join(cacheDirectory, name));
+    }
+    for (const name of await readdir(cacheDirectory)) {
+      if (artifact.test(name) && !merged.has(name)) {
+        await rm(path.join(cacheDirectory, name), { force: true });
+      }
     }
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
+    try {
+      const current: unknown = JSON.parse(await readFile(cacheLock, "utf-8"));
+      if (
+        typeof current === "object" &&
+        current !== null &&
+        "token" in current &&
+        current.token === token
+      ) {
+        await rm(cacheLock, { force: true });
+      }
+    } catch {
+      // The lock was already removed or replaced after becoming stale.
+    }
   }
 };
 
@@ -263,7 +359,7 @@ const check = async () => {
   const problems = await checkCache();
   if (problems.length > 0) {
     process.stderr.write(
-      `Tailwind cache is stale:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write and commit .tailwind-cache.\n`,
+      `Tailwind cache is missing or stale:\n${problems.join("\n")}\nRun bun scripts/generate-tailwind-classes.ts --write.\n`,
     );
     process.exitCode = 1;
   }
@@ -272,7 +368,7 @@ const check = async () => {
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "--write") {
-    await write();
+    await writeCache();
   } else if (mode === "--check") {
     await check();
   } else {

@@ -296,6 +296,7 @@ const buildContext = ({
         await Promise.resolve({
           status: "available" as const,
           readBlocks: async () => await Promise.resolve([]),
+          readTextPieces: async () => await Promise.resolve([]),
         }),
     },
     safeDb,
@@ -1759,6 +1760,8 @@ describe("MCP anonymization canary corpus", () => {
         startOffset: 0,
         endOffset: 5,
         quote,
+        quotePrefix: "",
+        quoteSuffix: "",
         body,
         createdAt: new Date("2026-01-01"),
         updatedAt: new Date("2026-01-01"),
