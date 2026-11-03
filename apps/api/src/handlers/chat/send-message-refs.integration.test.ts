@@ -15,6 +15,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreadNames, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -280,72 +281,75 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     workspaceId: null,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      if (bindingStore === BINDING_STORE.mixed) {
-        await tx.insert(chatMessages).values({
-          content: toPersistedChatMessageContentV3({
-            data: [listedPart],
-            metadata: {
-              refContext: {
-                entities: [],
-                unresolvedInputs: [],
-                version: 1,
-                workspaceScope: refContext.workspaceScope,
-              },
-              refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          if (bindingStore === BINDING_STORE.mixed) {
+            await tx.insert(chatMessages).values({
+              content: toPersistedChatMessageContentV3({
+                data: [listedPart],
+                metadata: {
+                  refContext: {
+                    entities: [],
+                    unresolvedInputs: [],
+                    version: 1,
+                    workspaceScope: refContext.workspaceScope,
+                  },
+                  refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+                },
+              }),
+              // Stored before the turn below.
+              createdAt: new Date(Date.now() - 60_000),
+              id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            });
+          }
+          await tx.insert(chatMessages).values([
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [
+                  { content: `Compare with [B](${mentionHref})`, type: "text" },
+                ],
+              }),
+              id: userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
             },
-          }),
-          // Stored before the turn below.
-          createdAt: new Date(Date.now() - 60_000),
-          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-          role: "assistant",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        });
-      }
-      await tx.insert(chatMessages).values([
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [
-              { content: `Compare with [B](${mentionHref})`, type: "text" },
-            ],
-          }),
-          id: userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [listedPart, pendingAskUserCall],
-            metadata: {
-              refContext:
-                bindingStore === BINDING_STORE.legacy
-                  ? ({
-                      entities: refContext.entities,
-                      unresolvedInputs: refContext.unresolvedInputs,
-                      version: 1,
-                      workspaceScope: refContext.workspaceScope,
-                    } satisfies ChatRefContext)
-                  : refContext,
-              refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [listedPart, pendingAskUserCall],
+                metadata: {
+                  refContext:
+                    bindingStore === BINDING_STORE.legacy
+                      ? ({
+                          entities: refContext.entities,
+                          unresolvedInputs: refContext.unresolvedInputs,
+                          version: 1,
+                          workspaceScope: refContext.workspaceScope,
+                        } satisfies ChatRefContext)
+                      : refContext,
+                  refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
+                },
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
             },
-          }),
-          id: assistantMessageId,
-          role: "assistant",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-      ]);
-      expect(
-        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
-      ).toMatchObject({
-        type: "accepted",
-      });
-    }),
+          ]);
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toMatchObject({
+            type: "accepted",
+          });
+        }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -363,17 +367,21 @@ const seedAwaitingTurn = async (bindingStore: BindingStore) => {
     throw new Error("Expected the accepted turn to be claimed");
   }
   unwrap(
-    await safeDb(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution,
-          outcome: {
-            interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
-            type: "awaiting-user",
-          },
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution,
+              outcome: {
+                interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
+                type: "awaiting-user",
+              },
+              tx,
+            }),
+        ),
     ),
   );
   return { assistantMessageId, threadId };

@@ -17,6 +17,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -198,8 +199,12 @@ const createRunningTurn = async (): Promise<Fixture> => {
     workspaceId: null,
   });
   unwrap(
-    await safeDb(
-      async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) =>
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+        ),
     ),
   );
   const execution =
@@ -238,25 +243,29 @@ const createRunningTurn = async (): Promise<Fixture> => {
     await log.close();
     const assistantMessageId = createSafeId<"chatMessage">();
     const settled = unwrap(
-      await safeDb(async (tx) => {
-        await tx.insert(chatMessages).values({
-          content: toPersistedChatMessageContentV3({
-            data: [{ content: "The lease runs until 2031.", type: "text" }],
-            metadata: { turnOutcome: { type: "completed" } },
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(async (tx) => {
+            await tx.insert(chatMessages).values({
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "The lease runs until 2031.", type: "text" }],
+                metadata: { turnOutcome: { type: "completed" } },
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: owner,
+              workspaceId: null,
+            });
+            return await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution,
+              outcome: { type: "completed" },
+              tx,
+            });
           }),
-          id: assistantMessageId,
-          role: "assistant",
-          threadId,
-          userId: owner,
-          workspaceId: null,
-        });
-        return await settleChatTurnOnTx({
-          assistantMessageId,
-          execution,
-          outcome: { type: "completed" },
-          tx,
-        });
-      }),
+      ),
     );
     expect(settled).not.toBe("not-owned");
   };

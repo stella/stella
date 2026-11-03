@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   readChatTurnView,
   stopChatTurnOnTx,
@@ -62,7 +63,13 @@ const cancelChatTurn = createSafeRootHandler(
   config,
   async function* ({ params: { threadId, turnId }, safeDb, set }) {
     const stop = yield* Result.await(
-      safeDb(async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId })),
+      withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+          ),
+      ),
     );
     switch (stop.type) {
       case "not-found":

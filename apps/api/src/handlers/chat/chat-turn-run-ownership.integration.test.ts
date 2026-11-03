@@ -12,6 +12,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   bindChatTurnRunId,
   CHAT_TURN_RUN_LEASE_MS,
@@ -121,19 +122,22 @@ const seedRunningTurn = async (member?: Member) => {
     workspaceId: as.workspaceId,
   });
   unwrap(
-    await as.safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: toPersistedChatMessageContentV3({
-          data: [{ content: "Draft it", type: "text" }],
+    await withChatRunPings(
+      async (pings) =>
+        await as.safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft it", type: "text" }],
+            }),
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: as.userId,
+            workspaceId: as.workspaceId,
+          });
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx });
         }),
-        id: userMessageId,
-        role: "user",
-        threadId,
-        userId: as.userId,
-        workspaceId: as.workspaceId,
-      });
-      await insertChatTurnAcceptanceOnTx({ acceptance, tx });
-    }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -235,31 +239,35 @@ const produceUntilCut = ({
       persist ??
         (async () => {
           const settlement = unwrap(
-            await safeDb(async (tx) => {
-              const assistantMessageId =
-                outcome.type === "completed"
-                  ? toSafeId<"chatMessage">(Bun.randomUUIDv7())
-                  : null;
-              if (assistantMessageId !== null) {
-                await tx.insert(chatMessages).values({
-                  content: toPersistedChatMessageContentV3({
-                    data: [{ content: "Done", type: "text" }],
-                    metadata: { turnOutcome: outcome },
-                  }),
-                  id: assistantMessageId,
-                  role: "assistant",
-                  threadId,
-                  userId: ids.userA1,
-                  workspaceId: ids.wsA1,
-                });
-              }
-              return await settleChatTurnOnTx({
-                assistantMessageId,
-                execution,
-                outcome,
-                tx,
-              });
-            }),
+            await withChatRunPings(
+              async (pings) =>
+                await safeDb(async (tx) => {
+                  const assistantMessageId =
+                    outcome.type === "completed"
+                      ? toSafeId<"chatMessage">(Bun.randomUUIDv7())
+                      : null;
+                  if (assistantMessageId !== null) {
+                    await tx.insert(chatMessages).values({
+                      content: toPersistedChatMessageContentV3({
+                        data: [{ content: "Done", type: "text" }],
+                        metadata: { turnOutcome: outcome },
+                      }),
+                      id: assistantMessageId,
+                      role: "assistant",
+                      threadId,
+                      userId: ids.userA1,
+                      workspaceId: ids.wsA1,
+                    });
+                  }
+                  return await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId,
+                    execution,
+                    outcome,
+                    tx,
+                  });
+                }),
+            ),
           );
           stored.settlement = settlement;
           return settlement === "not-owned"
@@ -598,8 +606,12 @@ describe("a producing run", () => {
     });
     // Renewed past now: the reaper leaves a live owner's turn alone.
     unwrap(
-      await safeDb(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+          ),
       ),
     );
     expect((await readTurn(execution.id)).status).toBe("running");
@@ -617,8 +629,12 @@ describe("a producing run", () => {
     });
     await expireLease(execution.id);
     unwrap(
-      await safeDb(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+          ),
       ),
     );
 
@@ -657,17 +673,21 @@ describe("a producing run", () => {
     const output = async function* (): AsyncGenerator<StreamChunk> {
       await run.settle(async () => {
         unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: {
-                  reason: "client-disconnected",
-                  type: "interrupted",
-                },
-                tx,
-              }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId: null,
+                    execution,
+                    outcome: {
+                      reason: "client-disconnected",
+                      type: "interrupted",
+                    },
+                    tx,
+                  }),
+              ),
           ),
         );
         // The turn is no longer running while the settlement finishes: a
@@ -828,17 +848,21 @@ describe("a producing run", () => {
       await beatStarted.promise;
       await run.settle(async () => {
         unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: {
-                  reason: "client-disconnected",
-                  type: "interrupted",
-                },
-                tx,
-              }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId: null,
+                    execution,
+                    outcome: {
+                      reason: "client-disconnected",
+                      type: "interrupted",
+                    },
+                    tx,
+                  }),
+              ),
           ),
         );
         return {
@@ -952,14 +976,18 @@ describe("a run id", () => {
       ),
     ).toBe("run-taken");
     unwrap(
-      await safeDb(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: first.execution,
-            outcome: { type: "interrupted", reason: "client-disconnected" },
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: first.execution,
+                outcome: { type: "interrupted", reason: "client-disconnected" },
+                tx,
+              }),
+          ),
       ),
     );
     expect((await readTurn(first.execution.id)).runId).toBe(runId);
@@ -1062,14 +1090,18 @@ describe("a run id", () => {
     ).toBe("run-taken");
 
     unwrap(
-      await safeDb(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: first.execution,
-            outcome: OWNER_LOST_OUTCOME,
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: first.execution,
+                outcome: OWNER_LOST_OUTCOME,
+                tx,
+              }),
+          ),
       ),
     );
     expect(await readTurn(first.execution.id)).toMatchObject({

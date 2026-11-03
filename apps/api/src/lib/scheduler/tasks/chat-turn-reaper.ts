@@ -5,6 +5,8 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import { chatTurns } from "@/api/db/schema";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
@@ -29,6 +31,7 @@ const REAP_CONCURRENCY = 4;
 export const createReapOwnerlessChatTurnsTask =
   (
     reapOwnerlessChatTurnOnTx: (args: {
+      pings: ChatRunPings;
       threadId: SafeId<"chatThread">;
       tx: Transaction;
     }) => Promise<void>,
@@ -55,8 +58,12 @@ export const createReapOwnerlessChatTurnsTask =
         if (signal.aborted) {
           return 0;
         }
-        await db.transaction(
-          async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+        await withChatRunPings(
+          async (pings) =>
+            await db.transaction(
+              async (tx) =>
+                await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+            ),
         );
         return 1;
       },

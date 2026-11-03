@@ -11,6 +11,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -95,8 +96,12 @@ const seedRunningTurn = async (): Promise<SeededRun> => {
     workspaceId: ids.wsA1,
   });
   const safeDb = toSafeDbMock(ownerDb());
-  const inserted = await safeDb(
-    async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+  const inserted = await withChatRunPings(
+    async (pings) =>
+      await safeDb(
+        async (tx) =>
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+      ),
   );
   if (Result.isError(inserted)) {
     panic("Could not seed chat turn", inserted.error);
@@ -486,14 +491,18 @@ describe("chat turn resume", () => {
     });
     const settled = await seedRunningTurn();
     await logFor(settled).append([customChunk("stopped")]);
-    const settledState = await ownerDb()(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId: null,
-          execution: settled.execution,
-          outcome: USER_STOP_OUTCOME,
-          tx,
-        }),
+    const settledState = await withChatRunPings(
+      async (pings) =>
+        await ownerDb()(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId: null,
+              execution: settled.execution,
+              outcome: USER_STOP_OUTCOME,
+              tx,
+            }),
+        ),
     );
     expect(settledState).toBe("settled");
     for (const resume of [join, probe]) {

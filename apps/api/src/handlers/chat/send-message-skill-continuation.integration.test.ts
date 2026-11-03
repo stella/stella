@@ -16,6 +16,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -223,35 +224,38 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     workspaceId: null,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values([
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [{ content: "Review this", type: "text" }],
-          }),
-          id: userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-        {
-          content: toPersistedChatMessageContentV3({
-            data: [...skillCallParts, pendingAskUserCall],
-          }),
-          id: assistantMessageId,
-          role: "assistant",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-      ]);
-      expect(
-        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
-      ).toMatchObject({
-        type: "accepted",
-      });
-    }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values([
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Review this", type: "text" }],
+              }),
+              id: userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [...skillCallParts, pendingAskUserCall],
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+          ]);
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toMatchObject({
+            type: "accepted",
+          });
+        }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -269,17 +273,21 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     throw new Error("Expected the accepted turn to be claimed");
   }
   unwrap(
-    await safeDb(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution,
-          outcome: {
-            interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
-            type: "awaiting-user",
-          },
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution,
+              outcome: {
+                interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
+                type: "awaiting-user",
+              },
+              tx,
+            }),
+        ),
     ),
   );
   return { assistantMessageId, threadId };

@@ -9,6 +9,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   readChatTurnTiming,
   settleChatTurnOnTx,
@@ -250,14 +251,18 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const pending = reader.next();
       expect(
-        await scopedDb(
-          async (tx) =>
-            await settleChatTurnOnTx({
-              assistantMessageId: null,
-              execution,
-              outcome: USER_STOP_OUTCOME,
-              tx,
-            }),
+        await withChatRunPings(
+          async (pings) =>
+            await scopedDb(
+              async (tx) =>
+                await settleChatTurnOnTx({
+                  pings,
+                  assistantMessageId: null,
+                  execution,
+                  outcome: USER_STOP_OUTCOME,
+                  tx,
+                }),
+            ),
         ),
       ).toBe("settled");
       const timing = await readChatTurnTiming({
