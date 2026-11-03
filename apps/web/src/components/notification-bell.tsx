@@ -5,7 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
+import { REALTIME_EVENT_TYPE } from "@stll/api-contract";
 import {
   NOTIFICATION_ENTITY_TYPE,
   NOTIFICATION_KIND,
@@ -83,16 +83,23 @@ export const NotificationBell = () => {
   useUnreadFaviconDot(unreadCount > 0);
 
   useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    return [
-      firstNotificationsPageRefresh({
-        organizationId,
-        queryClient,
-        userId,
-      }),
-    ];
+    // Exhaustive, so a new user-channel event kind is a compile error here
+    // instead of a silently ignored event.
+    switch (eventType) {
+      case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
+        return [
+          firstNotificationsPageRefresh({
+            organizationId,
+            queryClient,
+            userId,
+          }),
+        ];
+      case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
+        return [];
+      default:
+        eventType satisfies never;
+        return panic(`Unhandled user event: ${String(eventType)}`);
+    }
   });
 
   useExternalSyncEffect(() => {
