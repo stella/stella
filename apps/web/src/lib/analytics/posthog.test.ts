@@ -2762,6 +2762,9 @@ describe("PostHog browser analytics adapter", () => {
       expect(fingerprint).toContain(
         JSON.stringify(["cause0.StructuredFailure.reason.kind", kind]),
       );
+      expect(event?.properties?.["exception_fields"]).toEqual({
+        "cause0.StructuredFailure.reason.kind": kind,
+      });
       expect(JSON.stringify(event)).not.toContain("PRIVATE_");
       return fingerprint;
     };

@@ -390,6 +390,13 @@ const sanitizeExceptionEntry = (
   };
 };
 
+// The same finite dimensions the fingerprint carries, kept readable so an
+// issue's events can be filtered by them.
+const exceptionFieldsProperty = (
+  fields: Record<string, string>,
+): { exception_fields: Record<string, string> } | undefined =>
+  Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
+
 type RouteTemplateHistory = Map<string, string>;
 
 type TemplateUrl = { url: string; pathname: string };
@@ -498,6 +505,7 @@ export const sanitizeExceptionEvent = (
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...exceptionFieldsProperty(fields),
       ...(properties["exception_identity_status"] === "read_failed"
         ? { exception_identity_status: "read_failed" }
         : {}),
