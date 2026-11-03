@@ -145,6 +145,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
@@ -161,6 +164,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
@@ -653,6 +662,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
@@ -1295,6 +1307,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#1"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#1"
@@ -2116,6 +2131,9 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#1"
           },
           {
+            "location": "apps/web/src/components/search-dialog-results.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
@@ -2557,6 +2575,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
           },
           {
@@ -2864,6 +2885,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
@@ -3880,6 +3904,9 @@
             "location": "packages/ui/src/components/copy-button.tsx#4"
           },
           {
+            "location": "packages/ui/src/components/court-filter.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
@@ -3917,6 +3944,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#1"
@@ -5487,6 +5517,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
@@ -5503,6 +5536,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
@@ -5995,6 +6034,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
@@ -6637,6 +6679,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#1"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#1"
@@ -7458,6 +7503,9 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#1"
           },
           {
+            "location": "apps/web/src/components/search-dialog-results.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
@@ -7899,6 +7947,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
           },
           {
@@ -8206,6 +8257,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
@@ -9222,6 +9276,9 @@
             "location": "packages/ui/src/components/copy-button.tsx#4"
           },
           {
+            "location": "packages/ui/src/components/court-filter.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
@@ -9259,6 +9316,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#1"
@@ -10683,6 +10743,9 @@
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#2"
           },
           {
@@ -10702,6 +10765,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/list-items.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/middle-truncate.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/outline-rail.fixture.tsx#2"
@@ -10800,6 +10866,9 @@
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#2"
           },
           {
@@ -10819,6 +10888,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/list-items.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/middle-truncate.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/outline-rail.fixture.tsx#2"
@@ -10894,24 +10966,24 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@formatjs/icu-messageformat-parser/package.json",
+            "concludedValue": "apps/web/node_modules/@formatjs/icu-messageformat-parser/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
+                "value": "apps/web/node_modules/@formatjs/icu-messageformat-parser/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "packages/scripts/src/i18n-check.ts#19"
+            "location": "packages/scripts/src/i18n-check.ts#25"
           },
           {
-            "location": "packages/scripts/src/i18n-check.ts#20"
+            "location": "packages/scripts/src/i18n-check.ts#26"
           },
           {
             "location": "packages/scripts/src/i18n-lint.ts#28"
@@ -10945,6 +11017,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@formatjs/icu-messageformat-parser/package.json"
         }
       ],
       "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.22",
@@ -11756,9 +11832,6 @@
         ],
         "occurrences": [
           {
-            "location": "packages/mcp-apps/src/decision-reader/model.ts#1"
-          },
-          {
             "location": "packages/mcp-apps/src/document-upload/runtime.ts#1"
           },
           {
@@ -11769,6 +11842,9 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/bridge.ts#10"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/size.ts#1"
           },
           {
             "location": "packages/mcp-apps/src/shared/upload-bridge.ts#1"
@@ -12098,6 +12174,9 @@
         "occurrences": [
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/icons.ts#2"
           },
           {
             "location": "apps/api/src/lib/case-law/plain-text.ts#5"
@@ -14436,6 +14515,21 @@
             "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
           },
           {
+            "location": "packages/agent-engine/src/harness/adapter.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/stream-chunks.ts#8"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/transcript-handoff.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/desktop-runner.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/desktop-runner.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/types.ts#8"
           },
           {
@@ -14476,6 +14570,10 @@
       ],
       "name": "ai",
       "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/api-contract/node_modules/@tanstack/ai/package.json"
+        },
         {
           "name": "SrcFile",
           "value": "packages/agent-engine/node_modules/@tanstack/ai/package.json"
@@ -15386,10 +15484,13 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#1"
           },
           {
-            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#3"
           },
           {
-            "location": "apps/web/src/hooks/use-time-billing-preview.ts#2"
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#4"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-chrome-visible.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-verified-email-citation-target.ts#1"
@@ -15513,6 +15614,9 @@
           },
           {
             "location": "apps/web/src/lib/organization/ai-config-queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/organization/audit-export-queries.ts#1"
           },
           {
             "location": "apps/web/src/lib/organization/creation-state.ts#1"
@@ -15935,6 +16039,9 @@
             "location": "apps/web/src/components/breadcrumbs/contact-breadcrumb.tsx#1"
           },
           {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#3"
           },
           {
@@ -16193,10 +16300,10 @@
             "location": "apps/web/src/components/search-dialog-preview.tsx#3"
           },
           {
-            "location": "apps/web/src/components/search-dialog-results.tsx#3"
+            "location": "apps/web/src/components/search-dialog-results.tsx#4"
           },
           {
-            "location": "apps/web/src/components/search-dialog-results.tsx#4"
+            "location": "apps/web/src/components/search-dialog-results.tsx#5"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#16"
@@ -16394,7 +16501,7 @@
             "location": "apps/web/src/features/chat/components/proxy-chat-link.tsx#4"
           },
           {
-            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+            "location": "apps/web/src/features/chat/source-chips.tsx#3"
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#3"
@@ -16497,6 +16604,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#1"
@@ -16763,7 +16873,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx#1"
@@ -17171,6 +17281,9 @@
             "location": "apps/web/src/lib/capabilities/screen-model.ts#1"
           },
           {
+            "location": "apps/web/src/lib/errors/route-resource.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/organization/feature-access/action-capabilities.logic.ts#1"
           },
           {
@@ -17298,6 +17411,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/contact-breadcrumb.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#4"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#4"
@@ -17483,7 +17599,7 @@
             "location": "apps/web/src/features/case-law/research/add-question-column.tsx#3"
           },
           {
-            "location": "apps/web/src/features/chat/source-chips.tsx#2"
+            "location": "apps/web/src/features/chat/source-chips.tsx#4"
           },
           {
             "location": "apps/web/src/features/inbox/components/signal-inspector-view.tsx#2"
@@ -17544,6 +17660,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#15"
@@ -17634,6 +17753,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/contact-name-link.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-owners-editor.tsx#2"
@@ -17783,7 +17905,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#14"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#3"
@@ -17807,7 +17929,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/route.tsx#1"
@@ -18572,13 +18694,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/desktop/src/shared/desktop-events.ts#1"
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#10"
           },
           {
-            "location": "apps/desktop/src/shared/desktop-events.ts#2"
-          },
-          {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#30"
+            "location": "apps/desktop/src/activity/billing-draft-transport.ts#1"
           },
           {
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#3"
@@ -18639,6 +18758,15 @@
           },
           {
             "location": "apps/desktop/src/shared/ShortcutRecorder.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/shared/desktop-events.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/shared/desktop-events.ts#2"
+          },
+          {
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#30"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#31"
@@ -18708,6 +18836,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
@@ -18724,6 +18855,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
@@ -19216,6 +19353,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
@@ -19858,6 +19998,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#1"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#1"
@@ -20679,6 +20822,9 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#1"
           },
           {
+            "location": "apps/web/src/components/search-dialog-results.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
@@ -21120,6 +21266,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
           },
           {
@@ -21427,6 +21576,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
@@ -22443,6 +22595,9 @@
             "location": "packages/ui/src/components/copy-button.tsx#4"
           },
           {
+            "location": "packages/ui/src/components/court-filter.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
@@ -22480,6 +22635,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#1"
@@ -23845,6 +24003,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
@@ -23861,6 +24022,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
@@ -24353,6 +24520,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
@@ -24995,6 +25165,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#1"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#1"
@@ -25816,6 +25989,9 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#1"
           },
           {
+            "location": "apps/web/src/components/search-dialog-results.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
@@ -26257,6 +26433,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
           },
           {
@@ -26564,6 +26743,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
@@ -27580,6 +27762,9 @@
             "location": "packages/ui/src/components/copy-button.tsx#4"
           },
           {
+            "location": "packages/ui/src/components/court-filter.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
@@ -27617,6 +27802,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#1"
@@ -29079,6 +29267,9 @@
             "location": "apps/api/scripts/lib/generated-output-store.ts#6"
           },
           {
+            "location": "apps/api/scripts/lib/mcp-app-inputs.ts#1"
+          },
+          {
             "location": "apps/api/scripts/lib/web-api-alias-names.ts#25"
           },
           {
@@ -29170,6 +29361,9 @@
           },
           {
             "location": "apps/api/scripts/seed-case-law.ts#1"
+          },
+          {
+            "location": "apps/api/scripts/seed-content/locales.ts#1"
           },
           {
             "location": "apps/api/scripts/seed-dev.ts#1"
@@ -29337,6 +29531,9 @@
             "location": "apps/api/src/db/long-running-connection.ts#1"
           },
           {
+            "location": "apps/api/src/db/migrate-entrypoint.test-helpers.ts#1"
+          },
+          {
             "location": "apps/api/src/db/migrate.ts#1"
           },
           {
@@ -29362,6 +29559,12 @@
           },
           {
             "location": "apps/api/src/db/online-migration-registry.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/online-migration-rehearsal-guard.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/online-migration-rehearsal-report.ts#1"
           },
           {
             "location": "apps/api/src/db/online-migrations.ts#1"
@@ -29700,10 +29903,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#7"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts#8"
@@ -29718,7 +29921,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#5"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts#8"
@@ -29739,16 +29942,16 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-attribute-budget.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts#4"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts#5"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kis.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa-dataset.ts#1"
@@ -29760,16 +29963,16 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-sn.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uodo.ts#6"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts#4"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#4"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#5"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-policy.ts#22"
@@ -29811,7 +30014,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl-removal.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts#3"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts#4"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/background-replay-runner.ts#1"
@@ -29865,43 +30068,43 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-decision-regions.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris-markup.ts#14"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris-markup.ts#15"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/blocks.ts#12"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/blocks.ts#13"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/compose.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#12"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#13"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/select.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/source-defects.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/source-defects.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#8"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/usability.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#28"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#29"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts#2"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/document-note-paths.fixtures.ts#1"
@@ -29910,7 +30113,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#45"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#46"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/hu-bhgy.ts#2"
@@ -29925,7 +30128,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-common-court-inlines.ts#29"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#28"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#32"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-nsa.ts#17"
@@ -29934,19 +30137,19 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-operative-verbs.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-sn.ts#23"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-sn.ts#26"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#18"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#19"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#17"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/rtf-line-parity.fixtures.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/rtf-line-parity.fixtures.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts#28"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts#29"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/strip-html.ts#1"
@@ -30051,7 +30254,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-ns.ts#15"
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-ns.ts#16"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-regional.ts#13"
@@ -30060,10 +30263,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-uohs.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-us.ts#16"
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-us.ts#17"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/docx-paragraphs.ts#12"
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/docx-paragraphs.ts#13"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pdf-text.ts#15"
@@ -30081,13 +30284,16 @@
             "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-sn.ts#16"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-tk.ts#11"
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-tk.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-uokik.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/uk-fcl.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/us-courtlistener.ts#17"
+            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/us-courtlistener.ts#18"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/slice-listing.ts#9"
@@ -30132,7 +30338,7 @@
             "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#1"
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#17"
           },
           {
             "location": "apps/api/src/handlers/case-law/judges/portrait.ts#1"
@@ -30243,7 +30449,7 @@
             "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-prompt.ts#1"
+            "location": "apps/api/src/handlers/chat/chat-prompt.ts#7"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-revision-context.ts#1"
@@ -30813,19 +31019,28 @@
             "location": "apps/api/src/handlers/desktop-time-entries/batch.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-draft-settings.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts-context.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts-validation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/desktop-time-entries/candidates.ts#1"
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/create.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/desktop-time-entries/drafting-model.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/desktop-time-entries/matters.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/desktop-time-entries/narrative-model.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/desktop-time-entries/narrative.ts#1"
           },
           {
             "location": "apps/api/src/handlers/dev/firm-knowledge-job-store.ts#1"
@@ -31770,6 +31985,15 @@
             "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts/get.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/business-registry-credentials.ts#1"
           },
           {
@@ -31831,6 +32055,12 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organizations/audit-export/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organizations/audit-export/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organizations/create.ts#1"
@@ -32919,6 +33149,9 @@
             "location": "apps/api/src/lib/account-export/archive.ts#1"
           },
           {
+            "location": "apps/api/src/lib/account-export/organization-audit-archive.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/account-export/pages.ts#1"
           },
           {
@@ -33135,6 +33368,9 @@
             "location": "apps/api/src/lib/billing/arrangements.ts#1"
           },
           {
+            "location": "apps/api/src/lib/billing/billing-guidelines.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/billing/daily-target.ts#1"
           },
           {
@@ -33145,6 +33381,9 @@
           },
           {
             "location": "apps/api/src/lib/billing/invoice-document-type.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/billing/invoice-issue-readiness.ts#1"
           },
           {
             "location": "apps/api/src/lib/billing/invoice-lines.ts#1"
@@ -33579,6 +33818,9 @@
             "location": "apps/api/src/lib/db/operator-registrations/input.ts#1"
           },
           {
+            "location": "apps/api/src/lib/db/organization-creation.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/db/partner-client-operator.ts#1"
           },
           {
@@ -33628,6 +33870,9 @@
           },
           {
             "location": "apps/api/src/lib/delete-account.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/deployment-feature-route.ts#1"
           },
           {
             "location": "apps/api/src/lib/deployment-feature.ts#1"
@@ -34179,9 +34424,6 @@
             "location": "apps/api/src/lib/idempotency/request-receipts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/json-schema/null-optionals.ts#1"
-          },
-          {
             "location": "apps/api/src/lib/kill-switches/admission.ts#1"
           },
           {
@@ -34374,7 +34616,7 @@
             "location": "apps/api/src/lib/legal-search/document-builders/html-document-ast.ts#13"
           },
           {
-            "location": "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts#2"
+            "location": "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts#3"
           },
           {
             "location": "apps/api/src/lib/legal-search/document-builders/legislation-citations.ts#18"
@@ -34446,7 +34688,7 @@
             "location": "apps/api/src/lib/legal-search/parsers/document-footnotes.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts#1"
+            "location": "apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/rtf-reader.ts#28"
@@ -34458,7 +34700,7 @@
             "location": "apps/api/src/lib/legal-search/parsers/text-encoding.ts#1"
           },
           {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#19"
+            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#20"
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
@@ -34525,6 +34767,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/search-error.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/search-index-unavailable.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/sk-collection-enrichment.ts#1"
@@ -35028,6 +35273,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/case-law-decision-identifier-reconciliation.ts#1"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-parsed-input-state-backfill.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts#1"
           },
           {
@@ -35086,6 +35334,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/file-derivative-repair.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/inbound-mail-receive.ts#1"
@@ -35664,6 +35915,9 @@
             "location": "apps/api/src/mcp/input-normalization.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/input-schemas.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/instructions.ts#1"
           },
           {
@@ -35770,6 +36024,9 @@
           },
           {
             "location": "apps/api/src/scripts/apply-reviewed-citation-labels.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/assert-online-migration-rehearsal.ts#1"
           },
           {
             "location": "apps/api/src/scripts/backfill-chat-content-v3.ts#1"
@@ -36066,6 +36323,15 @@
             "location": "apps/desktop/src/activity/activity-calendar-logic.ts#1"
           },
           {
+            "location": "apps/desktop/src/activity/billing-draft-logic.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#11"
+          },
+          {
+            "location": "apps/desktop/src/activity/billing-draft-transport.ts#2"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clipboard-logic.ts#1"
           },
           {
@@ -36195,6 +36461,12 @@
             "location": "apps/mobile/src/components/use-chat-turn.ts#3"
           },
           {
+            "location": "apps/mobile/src/components/use-dictation.ts#3"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#3"
+          },
+          {
             "location": "apps/mobile/src/components/use-palette-entities.ts#3"
           },
           {
@@ -36267,10 +36539,16 @@
             "location": "apps/mobile/src/state/decision-page.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/dictation.ts#1"
+          },
+          {
             "location": "apps/mobile/src/state/document-file.ts#1"
           },
           {
             "location": "apps/mobile/src/state/document-upload.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/state/edit-session.ts#1"
           },
           {
             "location": "apps/mobile/src/state/entity-detail.ts#1"
@@ -36891,7 +37169,16 @@
             "location": "apps/web/src/features/chat/legal-document-chat-context.ts#9"
           },
           {
+            "location": "apps/web/src/features/chat/lib/build-chat-request-message.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/lib/chat-message-model-content.ts#1"
+          },
+          {
             "location": "apps/web/src/features/chat/lib/mcp-reconnect.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/lib/start-new-thread-command-handoff.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/lib/suggested-prompts-availability.ts#1"
@@ -37008,7 +37295,7 @@
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
           },
           {
-            "location": "apps/web/src/hooks/use-time-billing-preview.ts#3"
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#5"
           },
           {
             "location": "apps/web/src/hooks/use-unsaved-work.ts#3"
@@ -37116,13 +37403,16 @@
             "location": "apps/web/src/lib/errors/query-result.ts#1"
           },
           {
+            "location": "apps/web/src/lib/errors/route-resource-census.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/errors/route-resource.ts#2"
+          },
+          {
             "location": "apps/web/src/lib/errors/telemetry.ts#1"
           },
           {
             "location": "apps/web/src/lib/errors/user-safe.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/errors/user-toast.ts#3"
           },
           {
             "location": "apps/web/src/lib/export-download.ts#1"
@@ -37530,6 +37820,21 @@
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
           },
           {
+            "location": "packages/agent-engine/src/harness/adapter.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/compatibility.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/event-queue.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/stream-chunks.ts#9"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/transcript-handoff.ts#2"
+          },
+          {
             "location": "packages/agent-engine/src/run.ts#3"
           },
           {
@@ -37537,6 +37842,9 @@
           },
           {
             "location": "packages/agent-input/src/locale.ts#12"
+          },
+          {
+            "location": "packages/agent-input/src/null-optionals.ts#1"
           },
           {
             "location": "packages/agent-input/src/number.ts#16"
@@ -37597,6 +37905,9 @@
           },
           {
             "location": "packages/api-contract/src/decision-ruling-identity.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/desktop-runner.ts#3"
           },
           {
             "location": "packages/api-contract/src/http-input.ts#1"
@@ -37755,6 +38066,9 @@
             "location": "packages/cli/src/action-admission-refusal.ts#1"
           },
           {
+            "location": "packages/cli/src/auth/command-scopes.ts#1"
+          },
+          {
             "location": "packages/cli/src/auth/credential-store.ts#1"
           },
           {
@@ -37777,6 +38091,12 @@
           },
           {
             "location": "packages/cli/src/auth/oauth-metadata.ts#3"
+          },
+          {
+            "location": "packages/cli/src/auth/persist-login.ts#7"
+          },
+          {
+            "location": "packages/cli/src/auth/refresh-lock.ts#1"
           },
           {
             "location": "packages/cli/src/auth/resolve-access-token.ts#1"
@@ -37869,6 +38189,12 @@
             "location": "packages/cli/src/registry-drift.ts#11"
           },
           {
+            "location": "packages/cli/src/registry-projection-cache.ts#1"
+          },
+          {
+            "location": "packages/cli/src/registry-refresh-output.ts#1"
+          },
+          {
             "location": "packages/cli/src/registry-refresh.ts#1"
           },
           {
@@ -37882,6 +38208,9 @@
           },
           {
             "location": "packages/cli/src/run-resource-command.ts#7"
+          },
+          {
+            "location": "packages/cli/src/unavailable-command.ts#1"
           },
           {
             "location": "packages/cli/src/upload-document.ts#1"
@@ -37950,6 +38279,9 @@
             "location": "packages/docx-utils/src/archive.ts#2"
           },
           {
+            "location": "packages/errors/src/detached.ts#6"
+          },
+          {
             "location": "packages/errors/src/exception-cause-chain.ts#2"
           },
           {
@@ -37978,6 +38310,9 @@
           },
           {
             "location": "packages/fetch/src/publisher.ts#1"
+          },
+          {
+            "location": "packages/html/src/load.ts#2"
           },
           {
             "location": "packages/infosoud/scripts/extract-codes.ts#1"
@@ -38109,7 +38444,7 @@
             "location": "packages/mcp-apps/src/citation-graph/model.ts#2"
           },
           {
-            "location": "packages/mcp-apps/src/decision-reader/model.ts#2"
+            "location": "packages/mcp-apps/src/decision-reader/model.ts#1"
           },
           {
             "location": "packages/mcp-apps/src/document-upload/runtime.ts#2"
@@ -38125,6 +38460,12 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/locale.ts#1"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/size.ts#2"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/tool-input.ts#1"
           },
           {
             "location": "packages/mcp-apps/src/shared/upload-bridge.ts#2"
@@ -38340,7 +38681,10 @@
             "location": "packages/scripts/src/glossary-gen.ts#16"
           },
           {
-            "location": "packages/scripts/src/i18n-check.ts#21"
+            "location": "packages/scripts/src/i18n-brief.ts#16"
+          },
+          {
+            "location": "packages/scripts/src/i18n-check.ts#27"
           },
           {
             "location": "packages/scripts/src/i18n-lint.ts#30"
@@ -38673,6 +39017,9 @@
             "location": "scripts/ci-api-test-plan.ts#1"
           },
           {
+            "location": "scripts/ci-browser-suite-selection.ts#3"
+          },
+          {
             "location": "scripts/ci-check-budgets.ts#13"
           },
           {
@@ -38733,10 +39080,22 @@
             "location": "scripts/contract-domain-ledger.ts#1"
           },
           {
+            "location": "scripts/dated-waiver-base.ts#3"
+          },
+          {
+            "location": "scripts/dated-waiver-core.ts#1"
+          },
+          {
+            "location": "scripts/dated-waiver-entry.ts#1"
+          },
+          {
             "location": "scripts/dated-waiver-fix-task.ts#1"
           },
           {
             "location": "scripts/dated-waiver-healing.ts#1"
+          },
+          {
+            "location": "scripts/dated-waiver-owners.ts#4"
           },
           {
             "location": "scripts/dated-waiver-probes.ts#1"
@@ -38995,6 +39354,9 @@
           },
           {
             "location": "scripts/release-heavy-verdict.ts#1"
+          },
+          {
+            "location": "scripts/render-phase-update-baseline.ts#11"
           },
           {
             "location": "scripts/resolve-package-binary.ts#1"
@@ -39615,7 +39977,7 @@
             "location": "apps/web/src/components/search-dialog-preview.tsx#4"
           },
           {
-            "location": "apps/web/src/components/search-dialog-results.tsx#5"
+            "location": "apps/web/src/components/search-dialog-results.tsx#6"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#20"
@@ -39888,6 +40250,9 @@
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#4"
           },
           {
@@ -39904,6 +40269,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization-audit-archive.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#5"
@@ -40011,7 +40379,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/matter-card.tsx#5"
@@ -40209,6 +40577,9 @@
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#4"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#4"
           },
           {
@@ -40404,6 +40775,10 @@
         {
           "name": "SrcFile",
           "value": "packages/infosoud/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/html/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -40631,252 +41006,36 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/cheerio/package.json",
+            "concludedValue": "node_modules/cheerio/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/cheerio/package.json"
+                "value": "node_modules/cheerio/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/api/scripts/case-law-parse-profile.ts#2"
+            "location": "packages/html/src/load.ts#3"
           },
           {
-            "location": "apps/api/scripts/repair-plans/cz-ns-complaints-dry-run.ts#3"
+            "location": "packages/html/src/selection.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss-documents.ts#2"
+            "location": "packages/html/src/selection.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#7"
+            "location": "packages/html/src/load.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts#8"
+            "location": "packages/html/src/selection.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts#6"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts#55"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts#49"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-uokik.ts#60"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/blocks.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/plain-text-structure.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/plain-text.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/source-defects.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#8"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#29"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography.ts#20"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-notice.ts#28"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#46"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#29"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-kio-layout.ts#39"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts#22"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/rtf-line-parity.fixtures.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts#50"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts#29"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/at-findok.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/at-ris.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-ns.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-nss.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/cz-us.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/docx-paragraphs.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/eu-ecj.ts#21"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/html-paragraphs.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-decision-content.ts#8"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-ncourt.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-tk.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-uodo.ts#15"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/us-courtlistener.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
-          },
-          {
-            "location": "apps/api/src/handlers/external-preview/preview.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/mcp-connectors/icons.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/bfdi.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/edpb.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/edpb.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/listing-only.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/uoou-sk.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/soft-law/adapters/wp29.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/visual-sandbox/literal-links.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/visual-sandbox/sanitize.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/email/inbound/message.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/files/conversion-input.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/files/email-to-html.ts#15"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/document-builders/html-document-ast.ts#14"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#20"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/parsers/visible-html-text.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/lists/sanctions/source-fetch.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/markdown/ai-tool.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/markdown/chat-message.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/search/extraction-worker.ts#22"
-          },
-          {
-            "location": "apps/api/src/mcp/app-source-guard.ts#1"
-          },
-          {
-            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#32"
-          },
-          {
-            "location": "packages/chat/src/html-to-markdown.ts#1"
-          },
-          {
-            "location": "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts#1"
-          },
-          {
-            "location": "scripts/parser-output-fixtures.ts#3"
+            "location": "packages/html/src/selection.ts#5"
           }
         ]
       },
@@ -40903,19 +41062,15 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "packages/mcp-apps/node_modules/cheerio/package.json"
+          "value": "packages/html/node_modules/cheerio/package.json"
         },
         {
-          "name": "SrcFile",
-          "value": "packages/chat/node_modules/cheerio/package.json"
+          "name": "ExportedModules",
+          "value": "cheerio/slim,CheerioAPI,cheerio/slim/CheerioAPI"
         },
         {
           "name": "SrcFile",
           "value": "node_modules/cheerio/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/api/node_modules/cheerio/package.json"
         }
       ],
       "purl": "pkg:npm/cheerio@1.2.0",
@@ -41465,171 +41620,30 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/domhandler/package.json",
+            "concludedValue": "node_modules/domhandler/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/domhandler/package.json"
+                "value": "node_modules/domhandler/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts#4"
+            "location": "packages/html/src/bounded.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts#6"
+            "location": "packages/html/src/load.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.ts#56"
+            "location": "packages/html/src/nodes.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-tk.ts#50"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#6"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-findok.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/at-ris-markup.ts#15"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/blocks.ts#23"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/html.ts#21"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/outcome.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/plain-text-structure.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/plain-text.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#30"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#31"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-notice.ts#29"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#47"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#38"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-kio-layout.ts#40"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-ncourt.ts#23"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-tk.ts#20"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts#51"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts#30"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/at-ris.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/docx-paragraphs.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/html-paragraphs.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-ncourt.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/pl-uodo.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/ingestion/retention/sources/us-courtlistener.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/external-preview/preview.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/visual-sandbox/literal-links.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/visual-sandbox/sanitize.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/files/conversion-input.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/files/email-to-html.ts#16"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/document-builders/html-document-ast.ts#15"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts#10"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/document-builders/inline-style.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/document-builders/inline-style.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/parsers/validate-ast.ts#21"
-          },
-          {
-            "location": "apps/api/src/lib/legal-search/parsers/visible-html-text.ts#3"
-          },
-          {
-            "location": "apps/api/src/mcp/app-source-guard.ts#2"
-          },
-          {
-            "location": "packages/chat/src/html-to-markdown.ts#2"
-          },
-          {
-            "location": "packages/chat/src/html-to-markdown.ts#3"
-          },
-          {
-            "location": "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts#2"
+            "location": "packages/html/src/nodes.ts#13"
           }
         ]
       },
@@ -41652,19 +41666,15 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "packages/mcp-apps/node_modules/domhandler/package.json"
+          "value": "packages/html/node_modules/domhandler/package.json"
         },
         {
-          "name": "SrcFile",
-          "value": "packages/chat/node_modules/domhandler/package.json"
+          "name": "ExportedModules",
+          "value": "domhandler,AnyNode,domhandler/AnyNode,Element,domhandler/Element,ParentNode,domhandler/ParentNode,Text,domhandler/Text"
         },
         {
           "name": "SrcFile",
           "value": "node_modules/domhandler/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "apps/api/node_modules/domhandler/package.json"
         }
       ],
       "purl": "pkg:npm/domhandler@6.0.1",
@@ -41880,7 +41890,7 @@
             "location": "apps/api/scripts/seed-case-law.ts#21"
           },
           {
-            "location": "apps/api/scripts/seed-dev.ts#25"
+            "location": "apps/api/scripts/seed-dev.ts#29"
           },
           {
             "location": "apps/api/scripts/seed-email-viewer-demo.ts#8"
@@ -42477,6 +42487,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#16"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#17"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/source-total-hold.ts#1"
           },
           {
@@ -42504,7 +42517,7 @@
             "location": "apps/api/src/handlers/case-law/judges/decision-judges.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#20"
+            "location": "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts#18"
           },
           {
             "location": "apps/api/src/handlers/case-law/judges/portrait.ts#3"
@@ -42603,7 +42616,7 @@
             "location": "apps/api/src/handlers/chat/chat-message-persistence.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-prompt.ts#9"
+            "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-revision-context.ts#2"
@@ -42853,6 +42866,15 @@
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/batch.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-draft-mode.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-draft-settings.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts-context.ts#2"
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/candidates.ts#2"
@@ -43401,6 +43423,12 @@
             "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/get.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/business-registry-credentials.ts#2"
           },
           {
@@ -43734,6 +43762,9 @@
             "location": "apps/api/src/handlers/templates/delete.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/templates/list-cursor.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/templates/list.ts#2"
           },
           {
@@ -43986,7 +44017,7 @@
             "location": "apps/api/src/handlers/workspaces/justifications/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/list.ts#11"
+            "location": "apps/api/src/handlers/workspaces/list.ts#12"
           },
           {
             "location": "apps/api/src/handlers/workspaces/member-previews/list.ts#2"
@@ -44050,6 +44081,9 @@
           },
           {
             "location": "apps/api/src/lib/account-deletion-steps.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/account-export/organization-audit-archive.ts#2"
           },
           {
             "location": "apps/api/src/lib/account-export/owner-read.ts#1"
@@ -44127,6 +44161,12 @@
             "location": "apps/api/src/lib/audit-log-details.ts#3"
           },
           {
+            "location": "apps/api/src/lib/audit-log-export.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/audit-log-matter-access.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/auth/accessible-workspace.ts#1"
           },
           {
@@ -44188,6 +44228,9 @@
           },
           {
             "location": "apps/api/src/lib/billing/arrangements.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/billing/billing-guidelines.ts#2"
           },
           {
             "location": "apps/api/src/lib/billing/daily-target.ts#2"
@@ -44583,9 +44626,6 @@
             "location": "apps/api/src/lib/db/audit-recording.ts#2"
           },
           {
-            "location": "apps/api/src/lib/db/audit-recording.ts#3"
-          },
-          {
             "location": "apps/api/src/lib/db/better-auth-oauth-policy-census.ts#2"
           },
           {
@@ -44623,6 +44663,9 @@
           },
           {
             "location": "apps/api/src/lib/db/operator-registrations/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/organization-creation.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/outer-column-reference.ts#1"
@@ -45555,6 +45598,9 @@
             "location": "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts#2"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-parsed-input-state-backfill.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts#2"
           },
           {
@@ -45589,6 +45635,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/flow-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts#2"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/infosoud.ts#2"
@@ -46329,6 +46378,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/ruling-identity-match.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/replay.ts#17"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/polarity/rule-engine.ts#14"
           },
           {
@@ -46395,7 +46447,7 @@
             "location": "apps/api/src/lib/db/aggregate-lock.ts#20"
           },
           {
-            "location": "apps/api/src/lib/db/audit-recording.ts#3"
+            "location": "apps/api/src/lib/db/audit-recording.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/operator-activity/read.ts#3"
@@ -46587,6 +46639,9 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#9"
           },
           {
+            "location": "apps/api/src/handlers/mcp-connectors/icons.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/case-law/plain-text.ts#5"
           },
           {
@@ -46635,6 +46690,76 @@
       ],
       "type": "library",
       "version": "8.1.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "650 Industries"
+        },
+        {
+          "name": " Inc."
+        }
+      ],
+      "bom-ref": "pkg:npm/expo-audio@58.0.10",
+      "description": "A cross-platform audio library for React Native and Expo apps.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/mobile/node_modules/expo-audio/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/mobile/node_modules/expo-audio/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#11"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#12"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.expo.dev/versions/latest/sdk/audio/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "expo-audio",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/expo-audio/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/mobile/node_modules/expo-audio/package.json"
+        }
+      ],
+      "purl": "pkg:npm/expo-audio@58.0.10",
+      "scope": "required",
+      "type": "library",
+      "version": "58.0.10"
     },
     {
       "authors": [
@@ -46866,6 +46991,76 @@
       "scope": "required",
       "type": "library",
       "version": "58.0.4"
+    },
+    {
+      "authors": [
+        {
+          "name": "650 Industries"
+        },
+        {
+          "name": " Inc."
+        }
+      ],
+      "bom-ref": "pkg:npm/expo-file-system@58.0.10",
+      "description": "Provides access to the local file system on the device.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/mobile/node_modules/expo-file-system/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/mobile/node_modules/expo-file-system/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#13"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.expo.dev/versions/latest/sdk/filesystem/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "expo-file-system",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/expo-file-system/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/mobile/node_modules/expo-file-system/package.json"
+        }
+      ],
+      "purl": "pkg:npm/expo-file-system@58.0.10",
+      "scope": "required",
+      "type": "library",
+      "version": "58.0.10"
     },
     {
       "authors": [
@@ -47111,6 +47306,9 @@
             "location": "apps/mobile/src/components/new-chat.ts#2"
           },
           {
+            "location": "apps/mobile/src/components/use-document-editing.ts#5"
+          },
+          {
             "location": "apps/mobile/src/components/use-pick-document.ts#3"
           },
           {
@@ -47133,6 +47331,9 @@
           },
           {
             "location": "apps/mobile/src/app/(tabs)/more.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/(tabs)/more.tsx#3"
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#4"
@@ -47213,13 +47414,19 @@
             "location": "apps/mobile/src/components/ui/bar-glyph.tsx#1"
           },
           {
-            "location": "apps/mobile/src/app/(tabs)/_layout.tsx#1"
+            "location": "apps/mobile/src/components/use-document-editing.ts#5"
+          },
+          {
+            "location": "apps/mobile/src/app/(tabs)/more.tsx#3"
           },
           {
             "location": "apps/mobile/src/app/thread/[threadId].tsx#2"
           },
           {
             "location": "apps/mobile/src/components/detail-panes.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/(tabs)/_layout.tsx#1"
           }
         ]
       },
@@ -47675,7 +47882,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#6"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/marker-injection.test-helper.ts#3"
           },
           {
             "location": "packages/api-contract/src/decision-docket-identity.fixtures.ts#1"
@@ -47716,6 +47923,10 @@
         {
           "name": "SrcFile",
           "value": "packages/uuid-codec/node_modules/fast-check/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/ui/node_modules/fast-check/package.json"
         },
         {
           "name": "SrcFile",
@@ -47828,6 +48039,10 @@
         {
           "name": "SrcFile",
           "value": "packages/agent-input/node_modules/fast-check/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/agent-engine/node_modules/fast-check/package.json"
         },
         {
           "name": "SrcFile",
@@ -48787,7 +49002,10 @@
             "location": "apps/mobile/src/icons.gen.ts#69"
           },
           {
-            "location": "apps/mobile/src/icons.gen.ts#320"
+            "location": "apps/mobile/src/icons.gen.ts#73"
+          },
+          {
+            "location": "apps/mobile/src/icons.gen.ts#324"
           },
           {
             "location": "packages/ui/src/components/matter-icon.native.tsx#1"
@@ -48895,7 +49113,10 @@
             "location": "packages/ui/src/icons.ts#66"
           },
           {
-            "location": "packages/ui/src/icons.ts#317"
+            "location": "packages/ui/src/icons.ts#70"
+          },
+          {
+            "location": "packages/ui/src/icons.ts#321"
           }
         ]
       },
@@ -49584,7 +49805,7 @@
             "location": "scripts/check-test-retries.ts#7"
           },
           {
-            "location": "scripts/dated-waivers.ts#7"
+            "location": "scripts/dated-waiver-core.ts#2"
           }
         ]
       },
@@ -49854,24 +50075,27 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/parse5-htmlparser2-tree-adapter/package.json",
+            "concludedValue": "node_modules/parse5-htmlparser2-tree-adapter/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/parse5-htmlparser2-tree-adapter/package.json"
+                "value": "node_modules/parse5-htmlparser2-tree-adapter/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts#6"
+            "location": "packages/html/src/bounded.ts#3"
           },
           {
-            "location": "apps/api/src/lib/files/email-to-html.ts#18"
+            "location": "packages/html/src/email.ts#3"
+          },
+          {
+            "location": "packages/html/src/load.ts#6"
           }
         ]
       },
@@ -49898,11 +50122,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/parse5-htmlparser2-tree-adapter/package.json"
+          "value": "packages/html/node_modules/parse5-htmlparser2-tree-adapter/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/api/node_modules/parse5-htmlparser2-tree-adapter/package.json"
+          "value": "node_modules/parse5-htmlparser2-tree-adapter/package.json"
         }
       ],
       "purl": "pkg:npm/parse5-htmlparser2-tree-adapter@7.1.0",
@@ -49924,21 +50148,24 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/api/node_modules/parse5/package.json",
+            "concludedValue": "node_modules/parse5/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/api/node_modules/parse5/package.json"
+                "value": "node_modules/parse5/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/files/email-to-html.ts#17"
+            "location": "packages/html/src/email.ts#2"
+          },
+          {
+            "location": "packages/html/src/load.ts#5"
           }
         ]
       },
@@ -49965,11 +50192,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/parse5/package.json"
+          "value": "packages/html/node_modules/parse5/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/api/node_modules/parse5/package.json"
+          "value": "node_modules/parse5/package.json"
         }
       ],
       "purl": "pkg:npm/parse5@7.3.0",
@@ -50329,10 +50556,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/email/inbound/message.ts#8"
+            "location": "apps/api/src/lib/email/inbound/message.ts#7"
           },
           {
-            "location": "apps/api/src/lib/files/email-to-html.ts#19"
+            "location": "apps/api/src/lib/files/email-to-html.ts#15"
           }
         ]
       },
@@ -50798,6 +51025,9 @@
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#2"
           },
           {
@@ -50817,6 +51047,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/list-items.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/middle-truncate.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/outline-rail.fixture.tsx#2"
@@ -50915,6 +51148,9 @@
             "location": "packages/ui/src/components/fixtures/control-states.fixture.tsx#1"
           },
           {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#2"
+          },
+          {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#2"
           },
           {
@@ -50934,6 +51170,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/list-items.fixture.tsx#2"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/middle-truncate.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/outline-rail.fixture.tsx#2"
@@ -51086,7 +51325,7 @@
             "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
           },
           {
-            "location": "apps/mobile/src/app/(tabs)/more.tsx#4"
+            "location": "apps/mobile/src/app/(tabs)/more.tsx#8"
           },
           {
             "location": "apps/mobile/src/app/(tabs)/tasks.tsx#1"
@@ -51330,6 +51569,9 @@
             "location": "apps/mobile/src/components/use-chat-turn.ts#6"
           },
           {
+            "location": "apps/mobile/src/components/use-document-editing.ts#6"
+          },
+          {
             "location": "apps/mobile/src/components/use-pick-document.ts#4"
           },
           {
@@ -51345,7 +51587,7 @@
             "location": "apps/mobile/src/app/(tabs)/_layout.tsx#2"
           },
           {
-            "location": "apps/mobile/src/app/(tabs)/more.tsx#3"
+            "location": "apps/mobile/src/app/(tabs)/more.tsx#4"
           },
           {
             "location": "apps/mobile/src/app/document/[workspaceId]/[entityId].tsx#13"
@@ -51622,6 +51864,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/desktop/src/activity/billing-draft-settings.ts#8"
+          },
+          {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
@@ -51638,6 +51883,12 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
@@ -52130,6 +52381,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
+          },
+          {
+            "location": "apps/web/src/hooks/use-time-billing-preview.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-time-passed.ts#1"
@@ -52772,6 +53026,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#1"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#1"
@@ -53593,6 +53850,9 @@
             "location": "apps/web/src/components/search-dialog-results.tsx#1"
           },
           {
+            "location": "apps/web/src/components/search-dialog-results.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/search-dialog.tsx#1"
           },
           {
@@ -54034,6 +54294,9 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/source-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#1"
           },
           {
@@ -54341,6 +54604,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
@@ -55357,6 +55623,9 @@
             "location": "packages/ui/src/components/copy-button.tsx#4"
           },
           {
+            "location": "packages/ui/src/components/court-filter.tsx#3"
+          },
+          {
             "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
@@ -55394,6 +55663,9 @@
           },
           {
             "location": "packages/ui/src/components/fixtures/color-picker.fixture.tsx#1"
+          },
+          {
+            "location": "packages/ui/src/components/fixtures/court-filter.fixture.tsx#1"
           },
           {
             "location": "packages/ui/src/components/fixtures/date-picker.fixture.tsx#1"
@@ -56105,7 +56377,7 @@
             "location": "apps/api/scripts/codemod-jinja-dialect.ts#26"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#7"
+            "location": "apps/api/src/handlers/case-law/ingestion/adapters/publisher-page.ts#6"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl-feed.ts#2"
@@ -56114,7 +56386,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/adapters/uk-fcl.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#15"
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/harvard-xml.ts#14"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts#12"
@@ -56189,7 +56461,7 @@
             "location": "apps/api/src/lib/entity-versions/validate-docx-buffer.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/conversion-input.ts#4"
+            "location": "apps/api/src/lib/files/conversion-input.ts#2"
           },
           {
             "location": "apps/api/src/lib/files/document-properties.ts#14"
@@ -56499,6 +56771,9 @@
             "location": "apps/mobile/src/state/timers.ts#2"
           },
           {
+            "location": "packages/agent-engine/src/harness/compatibility.ts#2"
+          },
+          {
             "location": "packages/business-registries/src/brreg/roles.ts#1"
           },
           {
@@ -56614,6 +56889,9 @@
           },
           {
             "location": "apps/mobile/src/state/timers.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/compatibility.ts#2"
           },
           {
             "location": "packages/business-registries/src/brreg/roles.ts#1"
@@ -56750,6 +57028,10 @@
         {
           "name": "SrcFile",
           "value": "packages/business-registries/node_modules/temporal-polyfill/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/agent-engine/node_modules/temporal-polyfill/package.json"
         },
         {
           "name": "SrcFile",
@@ -57409,6 +57691,9 @@
             "location": "apps/web/src/components/app-sidebar.tsx#22"
           },
           {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#8"
           },
           {
@@ -57478,7 +57763,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#11"
           },
           {
             "location": "apps/web/src/routes/knowledge/-components/clause-detail.tsx#4"
@@ -57571,6 +57856,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-attachments.ts#6"
+          },
+          {
+            "location": "apps/mobile/src/components/use-document-editing.ts#7"
           },
           {
             "location": "apps/mobile/src/components/use-pick-document.ts#5"
@@ -57900,7 +58188,7 @@
             "location": "apps/mobile/src/app/(tabs)/matters.tsx#2"
           },
           {
-            "location": "apps/mobile/src/app/(tabs)/more.tsx#5"
+            "location": "apps/mobile/src/app/(tabs)/more.tsx#9"
           },
           {
             "location": "apps/mobile/src/app/(tabs)/tasks.tsx#2"
@@ -58198,6 +58486,9 @@
           },
           {
             "location": "apps/web/src/components/breadcrumbs/clauses-breadcrumb.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/breadcrumbs/document-switcher.tsx#6"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/matter-switcher.tsx#5"
@@ -58785,7 +59076,7 @@
             "location": "apps/web/src/components/search-dialog-preview.tsx#5"
           },
           {
-            "location": "apps/web/src/components/search-dialog-results.tsx#6"
+            "location": "apps/web/src/components/search-dialog-results.tsx#7"
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#22"
@@ -59262,7 +59553,7 @@
             "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#4"
           },
           {
-            "location": "apps/web/src/features/chat/source-chips.tsx#3"
+            "location": "apps/web/src/features/chat/source-chips.tsx#5"
           },
           {
             "location": "apps/web/src/features/command-palette/components/upload-document-dialog.tsx#4"
@@ -59511,6 +59802,9 @@
             "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#6"
+          },
+          {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#2"
           },
           {
@@ -59587,6 +59881,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.admin/-components/organization-audit-archive.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#4"
@@ -59991,6 +60288,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#12"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx#4"
           },
           {
@@ -60030,7 +60330,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-hooks/use-matter-client-drop.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#10"
           },
           {
             "location": "apps/web/src/routes/agent-claim.tsx#6"
@@ -60621,7 +60921,7 @@
             "location": "apps/api/scripts/record-provider-cassettes.ts#45"
           },
           {
-            "location": "apps/api/scripts/repair-plans/cz-ns-complaints-dry-run.ts#5"
+            "location": "apps/api/scripts/repair-plans/cz-ns-complaints-dry-run.ts#4"
           },
           {
             "location": "apps/api/scripts/replay-provider-events-performer.ts#3"
@@ -60666,6 +60966,9 @@
             "location": "apps/api/src/db/function-dependent-index-reindex.ts#2"
           },
           {
+            "location": "apps/api/src/db/online-migration-rehearsal-guard.ts#2"
+          },
+          {
             "location": "apps/api/src/db/root.ts#5"
           },
           {
@@ -60694,6 +60997,9 @@
           },
           {
             "location": "apps/api/src/env-online-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/env-parsed-input-state-backfill.ts#1"
           },
           {
             "location": "apps/api/src/env-replay.ts#1"
@@ -60924,7 +61230,7 @@
             "location": "apps/api/src/handlers/chat/chat-message-parts.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-prompt.ts#10"
+            "location": "apps/api/src/handlers/chat/chat-prompt.ts#9"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-schema.ts#8"
@@ -61275,7 +61581,16 @@
             "location": "apps/api/src/handlers/desktop-registry/request.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-draft-settings.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/desktop-time-entries/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/desktop-time-entries/drafting-model.ts#2"
           },
           {
             "location": "apps/api/src/handlers/desktop-time-entries/matters.ts#2"
@@ -61497,7 +61812,7 @@
             "location": "apps/api/src/handlers/expenses/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/external-preview/preview.ts#4"
+            "location": "apps/api/src/handlers/external-preview/preview.ts#2"
           },
           {
             "location": "apps/api/src/handlers/feedback/create.ts#3"
@@ -61893,6 +62208,15 @@
             "location": "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts/update.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/billing-drafts.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/business-registry-credentials.ts#3"
           },
           {
@@ -62208,10 +62532,10 @@
             "location": "apps/api/src/handlers/skills/upload.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/soft-law/adapters/bfdi.ts#3"
+            "location": "apps/api/src/handlers/soft-law/adapters/bfdi.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/soft-law/adapters/uoou-sk.ts#3"
+            "location": "apps/api/src/handlers/soft-law/adapters/uoou-sk.ts#2"
           },
           {
             "location": "apps/api/src/handlers/style-sets/create.ts#2"
@@ -62541,13 +62865,13 @@
             "location": "apps/api/src/handlers/visual-sandbox/browser/shell-ready.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/visual-sandbox/literal-links.ts#3"
+            "location": "apps/api/src/handlers/visual-sandbox/literal-links.ts#1"
           },
           {
             "location": "apps/api/src/handlers/visual-sandbox/resource-origin.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/visual-sandbox/sanitize.ts#4"
+            "location": "apps/api/src/handlers/visual-sandbox/sanitize.ts#2"
           },
           {
             "location": "apps/api/src/handlers/work-obligations/queues/list.ts#3"
@@ -62599,6 +62923,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/justifications/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/list.ts#13"
           },
           {
             "location": "apps/api/src/handlers/workspaces/matter-activity-query.ts#1"
@@ -63243,7 +63570,13 @@
             "location": "apps/api/src/mcp/capability-tools.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/case-law-citations-input.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/case-law-search-headnotes.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/case-law-search-input.ts#1"
           },
           {
             "location": "apps/api/src/mcp/client-identity.ts#1"
@@ -63300,13 +63633,19 @@
             "location": "apps/api/src/mcp/gateway/dynamic-tool-policy.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/input-schemas.ts#1"
+            "location": "apps/api/src/mcp/input-schemas.ts#2"
           },
           {
             "location": "apps/api/src/mcp/knowledge-tools.ts#3"
           },
           {
+            "location": "apps/api/src/mcp/legal-resolve-input.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/legal-resolve-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/legislation-input.ts#1"
           },
           {
             "location": "apps/api/src/mcp/legislation-tools.ts#2"
@@ -63423,7 +63762,7 @@
             "location": "apps/api/src/scripts/partner-oauth-client.ts#17"
           },
           {
-            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#33"
+            "location": "apps/api/src/scripts/post-deploy-response-policy.ts#32"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke-chat.ts#25"
@@ -63442,6 +63781,9 @@
           },
           {
             "location": "apps/collab/src/server.ts#12"
+          },
+          {
+            "location": "apps/desktop/src/activity/billing-draft-logic.ts#2"
           },
           {
             "location": "apps/extension/scripts/publish-store.ts#2"
@@ -63507,10 +63849,16 @@
             "location": "apps/mobile/src/state/decision-document.ts#1"
           },
           {
+            "location": "apps/mobile/src/state/dictation.ts#2"
+          },
+          {
             "location": "apps/mobile/src/state/document-file.ts#2"
           },
           {
             "location": "apps/mobile/src/state/document-upload.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/state/edit-session.ts#2"
           },
           {
             "location": "apps/mobile/src/state/entity-detail.ts#2"
@@ -63744,6 +64092,9 @@
             "location": "apps/web/src/lib/workspaces/table-store.logic.ts#2"
           },
           {
+            "location": "apps/web/src/lib/workspaces/time-billing-access-memory.ts#1"
+          },
+          {
             "location": "apps/web/src/route-search-params.ts#2"
           },
           {
@@ -63810,6 +64161,12 @@
             "location": "apps/web/src/routes/onboarding/-search.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/compatibility.ts#3"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/events.ts#8"
+          },
+          {
             "location": "packages/ai-catalog/src/index.ts#22"
           },
           {
@@ -63843,6 +64200,9 @@
             "location": "packages/api-contract/src/chat-connector.ts#1"
           },
           {
+            "location": "packages/api-contract/src/chat-message-content.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/chat-message-revisions.ts#1"
           },
           {
@@ -63864,10 +64224,19 @@
             "location": "packages/api-contract/src/decision-paragraph-range.ts#2"
           },
           {
+            "location": "packages/api-contract/src/desktop-billing-drafts.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/desktop-presence.ts#1"
           },
           {
+            "location": "packages/api-contract/src/desktop-runner.ts#4"
+          },
+          {
             "location": "packages/api-contract/src/desktop-time-entries.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/display-name.ts#1"
           },
           {
             "location": "packages/api-contract/src/document-properties.ts#1"
@@ -63889,6 +64258,9 @@
           },
           {
             "location": "packages/api-contract/src/legal-resolve.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/mcp-app-failure.ts#1"
           },
           {
             "location": "packages/api-contract/src/mcp-app.fixtures.ts#1"
@@ -63940,6 +64312,9 @@
           },
           {
             "location": "packages/api-contract/src/time-entry-report.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/uuid.ts#1"
           },
           {
             "location": "packages/api-contract/src/visual-bridge-policy.ts#2"
@@ -64002,6 +64377,9 @@
             "location": "packages/cli/src/compatibility.ts#2"
           },
           {
+            "location": "packages/cli/src/registry-projection-cache.ts#5"
+          },
+          {
             "location": "packages/cli/src/registry-trust.ts#13"
           },
           {
@@ -64041,7 +64419,10 @@
             "location": "packages/mcp-apps/src/citation-graph/parse.ts#1"
           },
           {
-            "location": "packages/mcp-apps/src/decision-reader/model.ts#3"
+            "location": "packages/mcp-apps/src/decision-reader/model.ts#2"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/app-error.ts#2"
           },
           {
             "location": "packages/mcp-apps/src/statute-timeline/parse.ts#1"
@@ -64137,6 +64518,9 @@
             "location": "scripts/ci-api-test-plan.ts#4"
           },
           {
+            "location": "scripts/ci-browser-suites.test-support.ts#3"
+          },
+          {
             "location": "scripts/ci-expression-context.ts#3"
           },
           {
@@ -64173,10 +64557,13 @@
             "location": "scripts/dated-waiver-healing.ts#14"
           },
           {
-            "location": "scripts/dated-waiver-probes.ts#4"
+            "location": "scripts/dated-waiver-owners.ts#5"
           },
           {
             "location": "scripts/dated-waiver-publish.ts#5"
+          },
+          {
+            "location": "scripts/dated-waivers.ts#8"
           },
           {
             "location": "scripts/design-lint-baseline.ts#34"
@@ -64380,7 +64767,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#11"
           },
           {
             "location": "apps/web/src/routes/agent-claim.tsx#7"
@@ -64515,6 +64902,10 @@
         {
           "name": "SrcFile",
           "value": "packages/ai-catalog/node_modules/valibot/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/agent-engine/node_modules/valibot/package.json"
         },
         {
           "name": "SrcFile",
@@ -65163,7 +65554,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-anonymization-store.ts#2"
@@ -65286,7 +65677,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#12"
           }
         ]
       },
