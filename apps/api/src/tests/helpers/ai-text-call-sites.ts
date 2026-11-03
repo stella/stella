@@ -9,13 +9,6 @@ import {
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import {
-  capNarrative,
-  generateDesktopTimeEntryNarrative,
-  NARRATIVE_FAILURE_MESSAGE,
-  NARRATIVE_FINISH_POLICY,
-} from "@/api/handlers/desktop-time-entries/narrative-model";
-import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { compactionGenerationRequest } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
@@ -340,77 +333,6 @@ const modelCompactionDriver = textCallSiteDriver({
     ),
 });
 
-// --- Desktop time-entry narrative -------------------------------------------
-
-/** What the desktop receives: a narrative, or the failure it answers by
- *  keeping its template. */
-type NarrativeAnswer =
-  | { type: "narrative"; text?: string }
-  | { type: "keep-template"; status: number; message: string; cause: unknown };
-
-const KEEP_TEMPLATE = {
-  type: "keep-template",
-  status: 502,
-  message: NARRATIVE_FAILURE_MESSAGE,
-  cause: undefined,
-} as const satisfies NarrativeAnswer;
-
-const desktopNarrativeDriver = textCallSiteDriver({
-  name: "generateDesktopTimeEntryNarrative",
-  finishPolicy: NARRATIVE_FINISH_POLICY,
-  run: async (cassette): Promise<NarrativeAnswer> => {
-    const admission = testModelAdmission(
-      organizationId,
-      "desktop-time-entries.narrative",
-    );
-    const result = await generateDesktopTimeEntryNarrative({
-      request: {
-        titles: ["Smlouva o dílo – návrh.docx", "Katastr nemovitostí"],
-        locale: "cs-CZ",
-        matterName: null,
-      },
-      admission,
-      organizationId,
-      userId: toSafeId<"user">("user_ai_text_replay"),
-      orgAIConfig: replayOrgAIConfig(cassette),
-      managedAIResidency: "eu",
-      caching: { enabled: false, reason: "org-disabled" },
-      analytics: createTanStackAIAnalyticsCallbacks({
-        dataClass: "customer",
-        feature: "desktop_time_entries.narrative",
-        modelTier: admission.modelTier,
-        traceId: "ai-text-replay",
-      }),
-      abortSignal: new AbortController().signal,
-    });
-    if (Result.isError(result)) {
-      const { status, message, cause } = result.error;
-      return { type: "keep-template", status, message, cause };
-    }
-    const expected = expectedTextOutcome(
-      cassette.expect,
-      NARRATIVE_FINISH_POLICY,
-    );
-    return expected.type === "success" && expected.text === undefined
-      ? { type: "narrative" }
-      : { type: "narrative", text: result.value };
-  },
-  answerFor: (expected): NarrativeAnswer => {
-    if (expected.type !== "success") {
-      return KEEP_TEMPLATE;
-    }
-    if (expected.text === undefined) {
-      return { type: "narrative" };
-    }
-    const text = expected.text.trim();
-    return text === ""
-      ? KEEP_TEMPLATE
-      : { type: "narrative", text: capNarrative(text) };
-  },
-});
-
-// --- The census -------------------------------------------------------------
-
 /**
  * Every call site the replay drives, by file (relative to `apps/api/src`),
  * with one driver per runtime reference the file makes to a text export of
@@ -420,7 +342,6 @@ export const TEXT_CALL_SITE_DRIVERS: Readonly<
   Record<string, readonly TextCallSiteDriver[]>
 > = {
   "handlers/chat/compaction.ts": [chatCompactionDriver, modelCompactionDriver],
-  "handlers/desktop-time-entries/narrative-model.ts": [desktopNarrativeDriver],
 };
 
 /**

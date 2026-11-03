@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
@@ -20,8 +20,8 @@ import type { LoginBoundaries } from "./login.js";
 import { startLoopbackListener } from "./loopback-listener.js";
 import { resolveServerUrl } from "./server-resolution.js";
 
-// `login()` is the orchestrator: it wires PKCE + discovery + registration +
-// (loopback | manual) callback + token exchange + credential persistence. The
+// `login()` is the orchestrator: it wires PKCE + discovery + the CLI's fixed
+// client id + (loopback | manual) callback + token exchange + credential persistence. The
 // pure pieces are covered by their own sibling tests; this file pins the
 // *orchestration decisions* — which callback transport is chosen, that a state
 // mismatch is rejected before any token is stored, that a token-exchange
@@ -48,8 +48,10 @@ const boundaries: LoginBoundaries = {
     await onBrowserOpen(url);
     return { status: browserLaunchStatus };
   },
-  startLoopbackListener: async () =>
-    loopbackMode === "headless" ? undefined : await startLoopbackListener(),
+  startLoopbackListener: async (options) =>
+    loopbackMode === "headless"
+      ? undefined
+      : await startLoopbackListener(options),
 };
 
 const base64url = (value: object): string =>
@@ -75,12 +77,17 @@ const DEFAULT_SUPPORTED = [
   "stella:search",
 ];
 
+/** stella's issuer in the tests: https, so it publishes the CLI's document. */
+const ISSUER = "https://api.stella.example/api/auth";
+const CLI_CLIENT_ID = `https://api.stella.example${CLI_CLIENT_METADATA_PATH}`;
+
 type ProviderOptions = {
   readonly scopesSupported?: readonly string[];
-  readonly registrationResponse?: () => Response;
-  /** Advertise client metadata document support under this issuer. */
-  readonly documentIssuer?: string;
+  readonly issuer?: string;
+  /** Whether discovery advertises client metadata document support. */
+  readonly documentSupport?: boolean;
   readonly tokenResponse?: (body: URLSearchParams) => Response;
+  readonly onTokenRequest?: () => void;
 };
 
 const okTokenResponse = (): Response =>
@@ -101,9 +108,14 @@ const okTokenResponse = (): Response =>
     { headers: { "Content-Type": "application/json" }, status: 200 },
   );
 
-/** In-process authorization server: discovery + registration + token, routed by path. */
+/**
+ * In-process authorization server: discovery + token, routed by path. It also
+ * offers dynamic registration, as stella does, to count that the CLI never
+ * uses it.
+ */
 const startProvider = (options: ProviderOptions = {}) => {
   const counts = { registration: 0, token: 0 };
+  const tokenRequests: URLSearchParams[] = [];
   const server = Bun.serve({
     fetch: async (request) => {
       const url = new URL(request.url);
@@ -111,8 +123,8 @@ const startProvider = (options: ProviderOptions = {}) => {
       if (url.pathname === "/.well-known/oauth-authorization-server") {
         return Response.json({
           authorization_endpoint: `${origin}/authorize`,
-          issuer: options.documentIssuer ?? origin,
-          ...(options.documentIssuer
+          issuer: options.issuer ?? ISSUER,
+          ...((options.documentSupport ?? true)
             ? { client_id_metadata_document_supported: true }
             : {}),
           registration_endpoint: `${origin}/register`,
@@ -122,14 +134,13 @@ const startProvider = (options: ProviderOptions = {}) => {
       }
       if (url.pathname === "/register") {
         counts.registration += 1;
-        return (
-          options.registrationResponse?.() ??
-          Response.json({ client_id: "cli-client-1" })
-        );
+        return Response.json({ client_id: "registered-client" });
       }
       if (url.pathname === "/token") {
         counts.token += 1;
+        options.onTokenRequest?.();
         const body = new URLSearchParams(await request.text());
+        tokenRequests.push(body);
         return options.tokenResponse?.(body) ?? okTokenResponse();
       }
       return new Response("not found", { status: 404 });
@@ -142,14 +153,23 @@ const startProvider = (options: ProviderOptions = {}) => {
       void server.stop(true);
     },
     counts,
+    tokenRequests,
     url: server.url.origin,
   };
 };
 
-/** Drives the loopback redirect the way a browser would after consent. */
+/** What the browser was answered on each loopback redirect it followed. */
+type BrowserPage = { readonly status: number; readonly html: string };
+let browserPages: Promise<BrowserPage | undefined>[] = [];
+
+/**
+ * Drives the loopback redirect the way a browser would after consent. Like a
+ * real browser opener it does not wait for the page: the listener holds the
+ * redirect open until `login` has used the code.
+ */
 const driveCallback =
   (options: { code?: string; state?: string } = {}) =>
-  async (authorizeUrl: string) => {
+  (authorizeUrl: string): void => {
     const parsed = new URL(authorizeUrl);
     const redirectUri = parsed.searchParams.get("redirect_uri");
     if (!redirectUri) {
@@ -161,9 +181,20 @@ const driveCallback =
       "state",
       options.state ?? parsed.searchParams.get("state") ?? "",
     );
-    // swallow-ok: callback server may close after responding; login result and stored token are asserted by callers
-    await fetch(callback).catch(() => {});
+    browserPages.push(
+      fetch(callback)
+        .then(async (response) => ({
+          html: await response.text(),
+          status: response.status,
+        }))
+        // swallow-ok: a refused redirect has no page; callers assert the login result and stored token
+        .catch(() => undefined),
+    );
   };
+
+const pageHeading = (page: BrowserPage | undefined): string =>
+  /<h1>(?<heading>[^<]*)<\/h1>/u.exec(page?.html ?? "")?.groups?.["heading"] ??
+  "";
 
 /** A minimal fake process: captures stdout, optionally pre-feeds a stdin line. */
 const makeProcess = (stdinLine?: string) => {
@@ -183,7 +214,6 @@ const makeProcess = (stdinLine?: string) => {
 const baseOptions = (configDir: string, serverFlag: string) => ({
   configDir,
   orgHint: undefined,
-  registrationScopes: ["openid", "stella:read"] as const,
   requiredScopes: ["openid", "stella:read"] as const,
   resourceScopes: ["stella:read"] as const,
   serverFlag,
@@ -197,6 +227,7 @@ describe("login orchestration", () => {
     loopbackMode = "real";
     onBrowserOpen = () => {};
     browserLaunchStatus = "opened";
+    browserPages = [];
   });
 
   afterEach(async () => {
@@ -211,11 +242,11 @@ describe("login orchestration", () => {
 
   test("loopback happy path persists a credential with org, scopes, and refresh token", async () => {
     const provider = startProvider();
-    onBrowserOpen = async (authorizeUrl) => {
+    onBrowserOpen = (authorizeUrl) => {
       expect(new URL(authorizeUrl).searchParams.get("resource")).toBe(
         `${provider.url}/mcp/advanced`,
       );
-      await driveCallback()(authorizeUrl);
+      driveCallback()(authorizeUrl);
     };
 
     try {
@@ -239,7 +270,7 @@ describe("login orchestration", () => {
       expect(credential?.orgId).toBe("org-42");
       expect(credential?.refreshToken).toBe("refresh-abc");
       expect(credential?.scope).toContain("stella:read");
-      expect(credential?.clientId).toBe("cli-client-1");
+      expect(credential?.clientId).toBe(CLI_CLIENT_ID);
       // Account identity decoded from the id_token, which is the only place
       // the email and name arrive (the access token has neither).
       expect(credential?.email).toBe("person@example.com");
@@ -251,14 +282,12 @@ describe("login orchestration", () => {
     }
   });
 
-  test("uses the published client document when the server accepts one", async () => {
-    const provider = startProvider({
-      documentIssuer: "https://api.stella.example/api/auth",
-    });
-    const authorized: { clientId: string | null } = { clientId: null };
-    onBrowserOpen = async (authorizeUrl) => {
-      authorized.clientId = new URL(authorizeUrl).searchParams.get("client_id");
-      await driveCallback()(authorizeUrl);
+  test("signs in as its fixed client id with PKCE and a loopback redirect, never registering", async () => {
+    const provider = startProvider();
+    const authorized: { url: URL | null } = { url: null };
+    onBrowserOpen = (authorizeUrl) => {
+      authorized.url = new URL(authorizeUrl);
+      driveCallback()(authorizeUrl);
     };
 
     try {
@@ -269,33 +298,50 @@ describe("login orchestration", () => {
       );
 
       expect(Result.isOk(result)).toBe(true);
-      const clientId = `https://api.stella.example${CLI_CLIENT_METADATA_PATH}`;
-      expect(authorized.clientId).toBe(clientId);
+      const query = authorized.url?.searchParams;
+      expect(query?.get("client_id")).toBe(CLI_CLIENT_ID);
+      expect(query?.get("code_challenge_method")).toBe("S256");
+      expect(query?.get("code_challenge")).toMatch(/^[\w-]{43}$/u);
+      const redirect = new URL(query?.get("redirect_uri") ?? "");
+      expect(`${redirect.protocol}//${redirect.hostname}`).toBe(
+        "http://127.0.0.1",
+      );
+      expect(redirect.pathname).toBe("/callback");
+
+      const exchange = provider.tokenRequests.at(0);
+      expect(exchange?.get("client_id")).toBe(CLI_CLIENT_ID);
+      expect(exchange?.get("code_verifier")).toMatch(/^[\w-]{43,128}$/u);
+      expect(exchange?.get("redirect_uri")).toBe(query?.get("redirect_uri"));
       expect(provider.counts.registration).toBe(0);
-      const persisted = await readCredentialFile(configDir);
-      expect(persisted.credentials.at(0)?.clientId).toBe(clientId);
     } finally {
       provider.close();
     }
   });
 
-  test("registers a client when the server's issuer cannot host a client document", async () => {
-    const provider = startProvider({
-      documentIssuer: "http://localhost:3001/api/auth",
-    });
-    onBrowserOpen = driveCallback();
+  test("refuses a server that cannot identify it by its document, without registering", async () => {
+    for (const options of [
+      { issuer: "http://localhost:3001/api/auth" },
+      { documentSupport: false },
+    ]) {
+      const provider = startProvider(options);
+      onBrowserOpen = driveCallback();
 
-    try {
-      const result = await login(
-        makeProcess(),
-        baseOptions(configDir, provider.url),
-        boundaries,
-      );
+      try {
+        const result = await login(
+          makeProcess(),
+          baseOptions(configDir, provider.url),
+          boundaries,
+        );
 
-      expect(Result.isOk(result)).toBe(true);
-      expect(provider.counts.registration).toBe(1);
-    } finally {
-      provider.close();
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error._tag).toBe("ClientDocumentUnsupportedError");
+        }
+        expect(provider.counts.registration).toBe(0);
+        expect(provider.counts.token).toBe(0);
+      } finally {
+        provider.close();
+      }
     }
   });
 
@@ -334,9 +380,9 @@ describe("login orchestration", () => {
   test("always requests the identity scopes alongside the resource scopes", async () => {
     const provider = startProvider();
     let requestedScope = "";
-    onBrowserOpen = async (authorizeUrl) => {
+    onBrowserOpen = (authorizeUrl) => {
       requestedScope = new URL(authorizeUrl).searchParams.get("scope") ?? "";
-      await driveCallback()(authorizeUrl);
+      driveCallback()(authorizeUrl);
     };
 
     try {
@@ -519,7 +565,7 @@ describe("login orchestration", () => {
 
   test("fails closed via scope negotiation when a required scope is unadvertised", async () => {
     // The server advertises scopes but not `stella:read`; negotiation must
-    // abort before any client registration or token request happens.
+    // abort before any authorization or token request happens.
     const provider = startProvider({
       scopesSupported: ["openid", "profile", "email"],
     });
@@ -541,5 +587,104 @@ describe("login orchestration", () => {
     } finally {
       provider.close();
     }
+  });
+
+  // The browser that delivered the code is answered only once `login` knows
+  // how the sign-in ended, so it never reads "Signed in" for a sign-in that
+  // then failed in the terminal.
+  describe("the browser's answer", () => {
+    test("shows success only after the code is exchanged and the credential saved", async () => {
+      let browserAnswered = false;
+      let browserAnsweredBeforeExchange: boolean | undefined;
+      const provider = startProvider({
+        onTokenRequest: () => {
+          browserAnsweredBeforeExchange = browserAnswered;
+        },
+      });
+      let credentialsWhenShown: Promise<number> | undefined;
+      onBrowserOpen = (authorizeUrl) => {
+        driveCallback()(authorizeUrl);
+        // Read off disk the moment the page arrives, before `login` returns.
+        credentialsWhenShown = browserPages.at(0)?.then(async () => {
+          browserAnswered = true;
+          return (await readCredentialFile(configDir)).credentials.length;
+        });
+      };
+
+      try {
+        const result = await login(
+          makeProcess(),
+          baseOptions(configDir, provider.url),
+          boundaries,
+        );
+
+        expect(Result.isOk(result)).toBe(true);
+        const page = await browserPages.at(0);
+        expect(page?.status).toBe(200);
+        expect(pageHeading(page)).toBe("Signed in to stella");
+        expect(browserAnsweredBeforeExchange).toBe(false);
+        expect(await credentialsWhenShown).toBe(1);
+      } finally {
+        provider.close();
+      }
+    });
+
+    test("shows the failure page, never success, when the exchange fails", async () => {
+      const provider = startProvider({
+        tokenResponse: () =>
+          new Response(JSON.stringify({ error: "invalid_grant" }), {
+            headers: { "Content-Type": "application/json" },
+            status: 400,
+          }),
+      });
+      onBrowserOpen = driveCallback();
+
+      try {
+        const result = await login(
+          makeProcess(),
+          baseOptions(configDir, provider.url),
+          boundaries,
+        );
+
+        expect(Result.isError(result)).toBe(true);
+        const page = await browserPages.at(0);
+        expect(page?.status).toBe(500);
+        expect(pageHeading(page)).toBe("Sign-in failed");
+        expect(page?.html).toContain(
+          "stella CLI could not finish signing in. Return to your terminal for details, then run stella auth login to try again.",
+        );
+        expect(page?.html).not.toContain("Signed in to stella");
+      } finally {
+        provider.close();
+      }
+    });
+
+    test("shows the not-saved page when the credential cannot be stored", async () => {
+      const provider = startProvider();
+      // A file where the configuration directory should be: every write fails.
+      const unwritable = path.join(configDir, "not-a-directory");
+      await writeFile(unwritable, "");
+      onBrowserOpen = driveCallback();
+
+      try {
+        const result = await login(
+          makeProcess(),
+          baseOptions(unwritable, provider.url),
+          boundaries,
+        );
+
+        expect(Result.isError(result)).toBe(true);
+        expect(provider.counts.token).toBe(1);
+        const page = await browserPages.at(0);
+        expect(page?.status).toBe(500);
+        expect(pageHeading(page)).toBe("Sign-in not saved");
+        expect(page?.html).toContain(
+          "stella CLI could not save your sign-in on this computer.",
+        );
+        expect(page?.html).not.toContain("Signed in to stella");
+      } finally {
+        provider.close();
+      }
+    });
   });
 });

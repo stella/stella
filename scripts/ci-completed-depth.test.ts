@@ -1196,23 +1196,25 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   }
 });
 
-test("enqueue aggregation accepts only the queued PR event and successful structural checks", () => {
+test("enqueue aggregation requires the queued PR event, successful structural checks and verified evidence", () => {
   const start = aggregate.indexOf('if [[ "$QUEUE_VALIDATION" == true');
   const end = aggregate.indexOf("# Read failure and timeout evidence", start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  const branch = `${aggregate.slice(start, end)}\nexit 9`;
-  for (const [event, action, outcome, expected] of [
-    ["pull_request", "enqueued", "success", 0],
-    ["pull_request", "enqueued", "failure", 9],
-    ["pull_request", "enqueued", "cancelled", 9],
-    ["pull_request", "synchronize", "success", 9],
-    ["merge_group", "enqueued", "success", 9],
+  const branch = `mirror_metadata_code_run() { reused_from_run_id=90; return "$MIRROR_STATUS"; }\n${aggregate.slice(start, end)}\nexit 9`;
+  for (const [event, action, outcome, evidence, expected] of [
+    ["pull_request", "enqueued", "success", "0", 0],
+    ["pull_request", "enqueued", "success", "1", 1],
+    ["pull_request", "enqueued", "failure", "0", 9],
+    ["pull_request", "enqueued", "cancelled", "0", 9],
+    ["pull_request", "synchronize", "success", "0", 9],
+    ["merge_group", "enqueued", "success", "0", 9],
   ] as const) {
     const child = Bun.spawnSync(["bash", "-c", branch], {
       env: {
         ...process.env,
         QUEUE_VALIDATION: "true",
+        MIRROR_STATUS: evidence,
         EVENT: event,
         PR_ACTION: action,
         NEEDS: JSON.stringify({
@@ -2100,6 +2102,8 @@ test("the patch-id step lists every queue entry's own patch down to the group ba
       { pr: 12, patch_id: patchOf(first, second) },
       { pr: 11, patch_id: patchOf(base, first) },
     ]);
+    // Per-entry checks compare against the entry ahead, not the target.
+    expect(batched["entry_base_sha"]).toBe(first);
     expect(batched["tested_tree"]).toBe(git("rev-parse", "HEAD^{tree}"));
     expect(batched["workflow_tree"]).toBe(git("rev-parse", `${second}^{tree}`));
     const retryFailure = nodePath.join(repository, ".git", "retry-failure.sh");
@@ -2117,10 +2121,10 @@ test("the patch-id step lists every queue entry's own patch down to the group ba
     // An entry whose queue ref is gone breaks the chain: nothing is proven.
     git("update-ref", "-d", firstRef);
     expect(chain(second, secondRef)).toBe("null");
-    // A pull request run has no chain.
-    expect(
-      runPatchIdStep({ repository, base, head: second })["entry_chain"],
-    ).toBe("null");
+    // A pull request run has no chain and no entry base.
+    const pullRequest = runPatchIdStep({ repository, base, head: second });
+    expect(pullRequest["entry_chain"]).toBe("null");
+    expect(pullRequest["entry_base_sha"]).toBe("");
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }

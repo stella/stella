@@ -16,13 +16,18 @@ import {
   credentialsFilePath,
   findCredentialByOrgId,
   readCredentialFile,
+  updateCredentialFile,
   upsertCredential,
-  writeCredentialFile,
 } from "./credential-store.js";
 import type { CredentialFile, StoredCredential } from "./credential-store.js";
-import { CredentialNotFoundError, NoRefreshTokenError } from "./errors.js";
+import {
+  CredentialNotFoundError,
+  NoRefreshTokenError,
+  TokenRefreshError,
+} from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+import { acquireRefreshLock, credentialLockPath } from "./refresh-lock.js";
 import { refreshAccessToken } from "./token-exchange.js";
 
 /** How much of a credential's remaining lifetime triggers a proactive refresh. */
@@ -60,7 +65,7 @@ export type EnsureFreshCredentialInput = {
  * `credentials.json` (read-only config dir, full disk, etc.). The token in
  * `credential` is still valid and safe to use for the command in flight
  * either way — persistence failing doesn't invalidate it, it just means the
- * next command will have to refresh again instead of finding it on disk.
+ * a later command may have to refresh again instead of finding it on disk.
  */
 export type EnsureFreshCredentialOutcome = {
   readonly credential: StoredCredential;
@@ -94,19 +99,22 @@ type StoredGenerationCheck =
       readonly result: Result<EnsureFreshCredentialOutcome, CliAuthError>;
     };
 
+const sameGeneration = (
+  stored: StoredCredential,
+  attempted: StoredCredential,
+): boolean =>
+  stored.accessToken === attempted.accessToken &&
+  stored.refreshToken === attempted.refreshToken &&
+  stored.expiresAt === attempted.expiresAt &&
+  stored.scope === attempted.scope &&
+  stored.updatedAt === attempted.updatedAt;
+
 const checkForNewerStoredGeneration = async (
   input: EnsureFreshCredentialInput,
   now: number,
 ): Promise<StoredGenerationCheck> => {
-  // Re-read right before deciding rather than trusting any snapshot the
-  // caller took earlier: both the token exchange and metadata discovery
-  // that precede this check are network round trips, during which another
-  // `stella` process (a concurrent command, or `auth login`/`logout`) may
-  // have written to `credentials.json`. This keeps that window as small as
-  // this process can make it without a lock (full read-modify-write
-  // atomicity — a store-level lock or true compare-and-swap across the
-  // whole critical section — is a separate, tracked follow-up: this is a
-  // compare-and-skip, not a swap).
+  // Re-read under the refresh lock; login/logout can still change the store
+  // while the exchange is in flight, so their newer generation takes priority.
   const latestCredentialFile = await readCredentialFile(input.configDir);
   const stillPresent = findCredentialByOrgId(
     latestCredentialFile,
@@ -126,12 +134,10 @@ const checkForNewerStoredGeneration = async (
     };
   }
 
-  const unchangedSinceAttemptStarted =
-    stillPresent.accessToken === input.credential.accessToken &&
-    stillPresent.refreshToken === input.credential.refreshToken &&
-    stillPresent.expiresAt === input.credential.expiresAt &&
-    stillPresent.scope === input.credential.scope &&
-    stillPresent.updatedAt === input.credential.updatedAt;
+  const unchangedSinceAttemptStarted = sameGeneration(
+    stillPresent,
+    input.credential,
+  );
   if (unchangedSinceAttemptStarted) {
     return { kind: "unchanged", latestCredentialFile };
   }
@@ -150,7 +156,7 @@ const checkForNewerStoredGeneration = async (
   // terminates once nothing further races in.
   return {
     kind: "resolved",
-    result: await ensureFreshCredential({
+    result: await refreshCredentialUnderLock({
       ...input,
       credential: stillPresent,
       now,
@@ -176,7 +182,7 @@ const checkForNewerStoredGeneration = async (
  * refreshed token is valid in memory regardless, so it comes back as
  * `Result.ok` with `persistWarning` set, not as an error.
  */
-export const ensureFreshCredential = async (
+const refreshCredentialUnderLock = async (
   input: EnsureFreshCredentialInput,
 ): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
   const now = input.now ?? Temporal.Now.instant().epochMilliseconds;
@@ -214,32 +220,90 @@ export const ensureFreshCredential = async (
     updatedAt: now,
   };
 
-  const check = await checkForNewerStoredGeneration(input, now);
-  if (check.kind === "resolved") {
-    return check.result;
-  }
-
-  // The write itself (mkdir + writeFile + chmod) can throw — a read-only
-  // config dir, a full disk — outside anything the `Result` flow above
-  // accounts for. `resolvePreamble()` (cli.ts) calls this path before
-  // dispatching every command, so an unhandled rejection here would crash
-  // ordinary commands that have nothing to do with credential storage. The
-  // refresh itself already succeeded, so treat a persistence failure as a
-  // warning, not a failure: hand back the (unsaved) fresh credential and
-  // let the caller decide how to surface the warning.
-  const persisted = await Result.tryPromise(
-    async () =>
-      await writeCredentialFile(
-        input.configDir,
-        upsertCredential(check.latestCredentialFile, updated),
-      ),
-  );
+  // The shared lock covers only the local generation check and whole-file update.
+  // A different credential may finish its exchange at the same time.
+  const persisted = await updateCredentialFile(input.configDir, (latest) => {
+    const stored = findCredentialByOrgId(
+      latest,
+      input.credential.serverUrl,
+      input.credential.orgId,
+    );
+    if (stored === undefined || !sameGeneration(stored, input.credential)) {
+      return { status: "unchanged", value: "changed" } as const;
+    }
+    return {
+      status: "updated",
+      file: upsertCredential(latest, updated),
+      value: "persisted",
+    } as const;
+  });
   if (Result.isError(persisted)) {
     return Result.ok({
       credential: updated,
-      persistWarning: `Warning: refreshed the stella credential but could not save it to ${credentialsFilePath(input.configDir)} (${persisted.error.message}). This command will use the fresh token; the next command will need to refresh again.`,
+      persistWarning: `Warning: refreshed the stella credential but persistence did not complete cleanly at ${credentialsFilePath(input.configDir)} (${persisted.error.message}). This command will use the fresh token; a later command may need to refresh again.`,
     });
   }
 
+  if (persisted.value === "changed") {
+    // Resolve or refresh a newer generation after releasing the store lock.
+    const check = await checkForNewerStoredGeneration(input, now);
+    if (check.kind === "resolved") {
+      return check.result;
+    }
+    return await refreshCredentialUnderLock(input);
+  }
+
   return Result.ok({ credential: updated });
+};
+
+export const ensureFreshCredential = async (
+  input: EnsureFreshCredentialInput,
+): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
+  const now = input.now ?? Temporal.Now.instant().epochMilliseconds;
+  if (!credentialNeedsRefresh(input.credential, now)) {
+    return Result.ok({ credential: input.credential });
+  }
+  if (!input.credential.refreshToken) {
+    return Result.err(
+      new NoRefreshTokenError({ message: NO_REFRESH_TOKEN_MESSAGE }),
+    );
+  }
+  const lock = await acquireRefreshLock(input.configDir, input.credential);
+  if (Result.isError(lock)) {
+    return Result.err(lock.error);
+  }
+  const outcome = await Result.tryPromise(async () => {
+    const check = await checkForNewerStoredGeneration(input, now);
+    if (check.kind === "resolved") {
+      return check.result;
+    }
+    return await refreshCredentialUnderLock(input);
+  });
+  const released = await Result.tryPromise(lock.value);
+  const recoveryMessage = `Could not remove the credential refresh lock ${credentialLockPath(input.configDir, { serverUrl: input.credential.serverUrl, orgId: input.credential.orgId })}. Confirm no command is refreshing this credential, then remove this lock before retrying.`;
+  if (Result.isError(outcome)) {
+    return Result.err(
+      new TokenRefreshError({
+        message: `Could not refresh the stored credential.${Result.isError(released) ? ` ${recoveryMessage}` : ""}`,
+        cause: outcome.error,
+      }),
+    );
+  }
+  if (Result.isError(released)) {
+    if (Result.isError(outcome.value)) {
+      return Result.err(
+        new TokenRefreshError({
+          message: `${outcome.value.error.message} ${recoveryMessage}`,
+          cause: outcome.value.error,
+        }),
+      );
+    }
+    return Result.ok({
+      credential: outcome.value.value.credential,
+      persistWarning: [outcome.value.value.persistWarning, recoveryMessage]
+        .filter((warning) => warning !== undefined)
+        .join(" "),
+    });
+  }
+  return outcome.value;
 };

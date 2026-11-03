@@ -5,6 +5,9 @@ import {
   provisionBlocks,
   provisionPreviewBlocks,
 } from "@stll/legal-ast/provision-preview";
+import type { StatuteBlocks } from "@stll/legal-ast/statute-anchor-scheme";
+
+type SubdivisionTarget = { provisionAnchorId: string; citedAnchorId: string };
 
 /**
  * The blocks one subdivision anchor owns, or null when the provision it is
@@ -17,19 +20,21 @@ import {
  * anchor is resolved first, and only a resolved one is narrowed.
  */
 const subdivisionBlocks = (
-  blocks: readonly Block[],
-  headingAnchorId: string,
-  anchorId: string,
+  statute: StatuteBlocks<Block>,
+  { provisionAnchorId, citedAnchorId }: SubdivisionTarget,
 ): readonly Block[] | null => {
-  const provision = provisionBlocks(blocks, headingAnchorId);
+  const provision = provisionBlocks(statute, provisionAnchorId);
   if (
     provision === null ||
-    resolveDocumentAnchor(provision, anchorId) === null
+    resolveDocumentAnchor(
+      { blocks: provision, scheme: statute.scheme },
+      citedAnchorId,
+    ) === null
   ) {
     return null;
   }
 
-  return provisionPreviewBlocks(blocks, headingAnchorId, anchorId);
+  return provisionPreviewBlocks(statute, { provisionAnchorId, citedAnchorId });
 };
 
 /**
@@ -40,28 +45,30 @@ const subdivisionBlocks = (
  * provision. Nested subdivisions stay inside, which is what a reader
  * comparing two consolidations of a section expects to see.
  *
- * A subdivision (`par_1729-odst_1`) owns itself and the subdivisions nested
- * under it. Both spellings are addressable because both are what a citation
- * names, and the narrowing rule is the shared one in `@stll/legal-ast` rather
- * than a second reading of the anchor grammar here.
+ * A subdivision (`par_1729-odst_1`, `paragraf-36.pismeno-a`) owns itself and
+ * the subdivisions nested under it. Both spellings are addressable because
+ * both are what a citation names. The narrowing rule and the anchor grammar
+ * are the shared ones in `@stll/legal-ast`, read through the publisher's
+ * scheme, rather than a second reading of the path here.
  *
  * Returns null when the consolidation carries no such anchor, which is how an
- * unknown anchor is told apart from a provision that exists and is empty.
+ * unknown anchor is told apart from a provision that exists and is empty. An
+ * anchor in another publisher's grammar continues no heading, so it reads as
+ * absent too.
  */
 export const extractProvisionText = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   anchorId: string,
 ): string | null => {
   // A provision heading first, because that is what the anchor usually is and
-  // a heading anchor may itself contain a hyphen (`sec-1-a`): the anchor
+  // a heading anchor may itself contain a separator (`sec-1-a`): the anchor
   // grammar is not a reliable way to tell the two apart, but the document is.
   const owned =
-    provisionBlocks(blocks, anchorId) ??
-    subdivisionBlocks(
-      blocks,
-      enclosingHeadingAnchor(blocks, anchorId) ?? anchorId,
-      anchorId,
-    );
+    provisionBlocks(statute, anchorId) ??
+    subdivisionBlocks(statute, {
+      provisionAnchorId: enclosingHeadingAnchor(statute, anchorId) ?? anchorId,
+      citedAnchorId: anchorId,
+    });
   if (owned === null) {
     return null;
   }

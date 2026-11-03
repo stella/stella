@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/workspace-deletion.ts",
+  "delta": 1,
+  "reason": "Matter deletion takes its owner connection and post-commit search flush as required dependencies; one request entry point beside it binds both explicitly, so the command no longer defaults to the owner connection and the module, which already imports it, gains no new reach."
+}

@@ -193,6 +193,7 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  "organization_creation_requests",
   // Work-identifier aliases are served through the public-law reader; the
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
@@ -209,6 +210,11 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_sitemap_drain_progress",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
+  // Coverage populations: owner-maintained, read only by the public-law reader.
+  "case_law_population_counts",
+  "case_law_population_deltas",
+  "case_law_population_projections",
+  "case_law_population_seed_state",
   // Removal generations are owner/ingestion-only, beside shard staging counts.
   "case_law_sitemap_country_generations",
   "case_law_replay_batches",
@@ -222,6 +228,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "eu_completion_controls",
   "action_cost_records",
   "action_cost_calls",
+  // Provider erasure intents belong to the scheduler, never request roles.
+  "hosted_customer_erasures",
   // Chat content repair receipts: forced owner-only RLS; the owner-run
   // backfill and deploy repair write them, request roles never see them.
   "chat_content_v3_backfill_receipts",

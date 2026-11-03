@@ -27,7 +27,7 @@ rules.
 
 Every new guard or lint ships with an autofix or codemod registered in the PR
 Autofix job, or enforces only lines changed against the merge base for its first
-week. Register the dated scope in `scripts/guard-rollouts/<id>.ts` so the existing
+week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
 dated-waiver inventory and healing checks enforce its seven-day deadline.
 
 - Dead-export checks (knip) enforce the no-placeholder rule where a package is

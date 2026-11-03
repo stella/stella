@@ -3,6 +3,7 @@ import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-ti
 import {
   accountExports,
   caseLawDecisionCitationStatsState,
+  caseLawPopulationSeedState,
   caseLawReplayBatches,
   caseLawSitemapDrainProgress,
   desktopEditSessions,
@@ -12,6 +13,7 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  hostedCustomerErasures,
   invoices,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
@@ -173,6 +175,21 @@ const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
   initial: ["draining"],
 });
 
+// The population seed scans every source, folds its queued deltas, then
+// completes; one call may finish the scan and the fold together.
+const CASE_LAW_POPULATION_SEED_TRANSITIONS = defineScopedTransitions({
+  table: caseLawPopulationSeedState,
+  key: "slot",
+  scope: [],
+  stateColumn: "phase",
+  edges: {
+    scan: ["fold", "complete"],
+    fold: ["complete"],
+    complete: [],
+  },
+  initial: ["scan"],
+});
+
 // Readmission and recovery move the attempt and receipt status atomically.
 // Legacy replay writers remain in the shrinking direct-write ledger.
 const CASE_LAW_REPLAY_BATCH_TRANSITIONS = defineLifecycle({
@@ -226,6 +243,16 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   pdfSigningSessions,
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
+);
+
+export const HOSTED_CUSTOMER_ERASURE_TRANSITIONS = defineTransitions(
+  hostedCustomerErasures,
+  {
+    pending: ["erased", "failed"],
+    failed: ["erased", "failed"],
+    erased: [],
+  },
+  { terminal: ["erased"] },
 );
 
 const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
@@ -430,6 +457,7 @@ export const TRANSITIONS = {
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawPopulationSeedState: CASE_LAW_POPULATION_SEED_TRANSITIONS,
   caseLawProvisionCitations: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -468,6 +496,7 @@ export const TRANSITIONS = {
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
+  hostedCustomerErasures: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
   invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },

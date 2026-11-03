@@ -1,4 +1,3 @@
-import { tenantDecisionTableNames } from "@/api/lib/account-export/schema-census";
 import type { DatabaseSchema } from "@/api/lib/account-export/schema-census";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -125,7 +124,7 @@ type DecisionCopyRegistry = {
 };
 
 /** Each field names its persisted owner and the read projection that handles it. */
-const WITHDRAWN_COPY_REGISTRY = {
+export const WITHDRAWN_COPY_REGISTRY = {
   legalReaderAnnotations: {
     metadata: [
       "id",
@@ -152,6 +151,8 @@ const WITHDRAWN_COPY_REGISTRY = {
     fields: {
       targetId: { kind: "identity", projection: "annotation" },
       quote: { kind: "quote", projection: "annotation" },
+      quotePrefix: { kind: "quote", projection: "annotation" },
+      quoteSuffix: { kind: "quote", projection: "annotation" },
       body: { kind: "user-text", projection: "annotation" },
     },
   },
@@ -386,10 +387,21 @@ type ConflictingCopyColumn = {
 true satisfies UnclassifiedCopyColumn extends never ? true : never;
 true satisfies ConflictingCopyColumn extends never ? true : never;
 
-/** Require a projection for every schema-derived decision-associated store. */
-export const unregisteredDecisionCopyStores = (
-  tables?: Record<string, unknown>,
-): string[] =>
-  tenantDecisionTableNames(tables).filter(
-    (name) => !Object.hasOwn(WITHDRAWN_COPY_REGISTRY, name),
-  );
+/** The copied words each read projection must replace for a withdrawn decision. */
+export const quoteFieldsForProjection = (
+  projection: CopyField["projection"],
+) => {
+  const fields = new Set<string>();
+  for (const store of Object.values(WITHDRAWN_COPY_REGISTRY)) {
+    const classifications: Readonly<Record<string, CopyField>> = store.fields;
+    for (const [field, classification] of Object.entries(classifications)) {
+      if (
+        classification.kind === "quote" &&
+        classification.projection === projection
+      ) {
+        fields.add(field);
+      }
+    }
+  }
+  return [...fields];
+};

@@ -45,6 +45,8 @@ use tokio::{
 };
 
 use crate::chatgpt_auth::{AGENT_NAME, AccessError, ChatGptAuth};
+#[cfg(unix)]
+use crate::local_store::token_broker::OwnedDirectory;
 
 /// The argument that starts the desktop executable as the token helper.
 pub const TOKEN_HELPER_ARGUMENT: &str = "--codex-chatgpt-token";
@@ -301,11 +303,9 @@ impl CodexManagedTokenBroker {
     if path.as_os_str().len() > UNIX_SOCKET_PATH_BYTES {
       return Err(std::io::Error::other("token broker path is too long"));
     }
-    let listener = tokio::net::UnixListener::bind(&path)?;
-    {
-      use std::os::unix::fs::PermissionsExt;
-      std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    let listener = std::os::unix::net::UnixListener::from(directory.bind_socket()?);
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
     let endpoint = path
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
@@ -350,7 +350,11 @@ impl CodexManagedTokenBroker {
     use std::os::windows::io::AsHandle;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
-    let endpoint = format!(r"\\.\pipe\stella-token-{}", uuid::Uuid::new_v4());
+    let endpoint = format!(
+      "{}{}",
+      crate::local_store::token_broker::PIPE_PREFIX,
+      uuid::Uuid::new_v4()
+    );
     // Remote clients are refused, only the current user may open the pipe,
     // and the first instance claims the name, so no other process can have
     // created it first.
@@ -408,85 +412,6 @@ impl CodexManagedTokenBroker {
     Err(std::io::Error::other(
       "no private token channel on this platform",
     ))
-  }
-}
-
-/// A `0700` directory this process created, removed (only if it is still
-/// the same directory) when dropped.
-#[cfg(unix)]
-struct OwnedDirectory {
-  path: std::path::PathBuf,
-  device: u64,
-  inode: u64,
-}
-
-#[cfg(unix)]
-impl OwnedDirectory {
-  fn create() -> std::io::Result<Self> {
-    let candidates = [std::env::temp_dir(), std::path::PathBuf::from("/tmp")];
-    let mut last = std::io::Error::other("no private directory for the token broker");
-    for parent in candidates {
-      match Self::create_in(&parent) {
-        Ok(directory) => return Ok(directory),
-        Err(error) => last = error,
-      }
-    }
-    Err(last)
-  }
-
-  fn create_in(parent: &Path) -> std::io::Result<Self> {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
-
-    let parent = std::fs::canonicalize(parent)?;
-    let name = format!(
-      "stella-token-{}",
-      &uuid::Uuid::new_v4().simple().to_string()[..12]
-    );
-    let path = parent.join(name);
-    std::fs::DirBuilder::new().mode(0o700).create(&path)?;
-    let created = std::fs::symlink_metadata(&path)?;
-    let owner = created.uid();
-    let parent_metadata = std::fs::symlink_metadata(&parent)?;
-    let parent_mode = parent_metadata.mode();
-    // The parent must be ours and closed to others, or root's and sticky.
-    let parent_trusted = parent_metadata.is_dir()
-      && ((parent_metadata.uid() == owner && parent_mode & 0o022 == 0)
-        || (parent_metadata.uid() == 0
-          && (parent_mode & 0o022 == 0 || parent_mode & 0o1000 != 0)));
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
-    let created = std::fs::symlink_metadata(&path)?;
-    if !parent_trusted
-      || !created.is_dir()
-      || created.file_type().is_symlink()
-      || created.mode() & 0o777 != 0o700
-    {
-      let _ = std::fs::remove_dir(&path);
-      return Err(std::io::Error::other(
-        "token broker directory is not private",
-      ));
-    }
-    Ok(Self {
-      path,
-      device: created.dev(),
-      inode: created.ino(),
-    })
-  }
-}
-
-#[cfg(unix)]
-impl Drop for OwnedDirectory {
-  fn drop(&mut self) {
-    use std::os::unix::fs::MetadataExt;
-    // Never remove a directory that was replaced, or anything but our socket.
-    let Ok(current) = std::fs::symlink_metadata(&self.path) else {
-      return;
-    };
-    if current.dev() != self.device || current.ino() != self.inode || !current.is_dir()
-    {
-      return;
-    }
-    let _ = std::fs::remove_file(self.path.join("s"));
-    let _ = std::fs::remove_dir(&self.path);
   }
 }
 
@@ -657,21 +582,7 @@ fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
 
 #[cfg(windows)]
 fn connect(endpoint: &str) -> Option<std::fs::File> {
-  use std::os::windows::fs::OpenOptionsExt;
-
-  /// `SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`: a server answering
-  /// on this name can identify the helper but never act as it.
-  const IDENTIFY_ONLY: u32 = 0x0010_0000 | 0x0001_0000;
-
-  if !endpoint.starts_with(r"\\.\pipe\stella-token-") {
-    return None;
-  }
-  std::fs::OpenOptions::new()
-    .read(true)
-    .write(true)
-    .security_qos_flags(IDENTIFY_ONLY)
-    .open(endpoint)
-    .ok()
+  crate::local_store::token_broker::connect(endpoint)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -698,8 +609,10 @@ mod tests {
     stream
       .set_read_timeout(Some(Duration::from_secs(10)))
       .unwrap();
-    stream.write_all(request).unwrap();
-    stream.shutdown(std::net::Shutdown::Write).unwrap();
+    // The broker closes a refused peer at once, so these can lose that race;
+    // only the response says what the broker decided.
+    let _ = stream.write_all(request);
+    let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut response = Vec::new();
     let _ = stream.read_to_end(&mut response);
     response

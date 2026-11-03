@@ -9,6 +9,9 @@ import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
+import { sendRefusal } from "@/state/chat-attachments";
+import type { ChatDraft, SendRefusal } from "@/state/chat-attachments";
+import { sentEntry } from "@/state/chat-messages";
 import type { ChatEntry } from "@/state/chat-messages";
 import {
   applyChatEvent,
@@ -84,7 +87,7 @@ export const useChatTurn = ({
   const thread = { matterId, source, threadId };
   const turn = useLiveTurn(activeTurnId);
   const { connection } = turn;
-  const [sendFailed, setSendFailed] = useState(false);
+  const [sendError, setSendError] = useState<SendRefusal>();
 
   const finish = async (opened: Connection, status?: AnswerStatus) => {
     turn.close(status);
@@ -179,25 +182,22 @@ export const useChatTurn = ({
   };
 
   /**
-   * Sends `text`, unless a turn is still answering. `onRefused` hands the
-   * text back when the server never took it, so it can be sent again.
+   * Sends the draft, unless a turn is still answering. `onRefused` hands the
+   * draft back when the server never took it, so it can be sent again.
    */
-  const send = (text: string, onRefused: () => void): boolean => {
+  const send = (draft: ChatDraft, onRefused: () => void): boolean => {
     if (connection.current !== null) {
       return false;
     }
-    setSendFailed(false);
+    setSendError(undefined);
     const messageId = randomUUID();
-    const opened = turn.open({
-      id: messageId,
-      role: "user",
-      createdAt: nowIso(),
-      text,
-      tools: [],
-    });
+    const opened = turn.open(
+      sentEntry({ createdAt: nowIso(), draft, messageId }),
+    );
     void (async () => {
       const read = await sendChatMessage({
         ...thread,
+        ...draft,
         anonymized,
         fetch: streamingFetch,
         messageId,
@@ -207,7 +207,6 @@ export const useChatTurn = ({
         },
         runId: randomUUID(),
         signal: opened.controller.signal,
-        text,
       });
       if (
         Result.isError(read) &&
@@ -217,7 +216,7 @@ export const useChatTurn = ({
         turn.close();
         turn.clear(opened);
         if (!signedOut(read.error.error)) {
-          setSendFailed(true);
+          setSendError(sendRefusal(read.error.error, draft.files.length > 0));
           onRefused();
         }
         return;
@@ -282,7 +281,7 @@ export const useChatTurn = ({
     canStop: turn.turnId !== undefined,
     live: turn.live,
     send,
-    sendFailed,
+    sendError,
     stop,
   };
 };

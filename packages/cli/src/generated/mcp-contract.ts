@@ -5,6 +5,7 @@ export const MCP_CAPABILITY_EXECUTORS = {
   write: "write_capability",
 } as const;
 export const MCP_HTTP_PATH = "/mcp/advanced" as const;
+export const MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version" as const;
 export const MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource/mcp/advanced" as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = 71;
@@ -30,6 +31,7 @@ export const CLI_KNOWN_SCOPES = [
   "stella:admin_write",
   "stella:account_export_read",
   "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -51,6 +53,7 @@ export const CLI_REQUIRED_RESOURCE_SCOPES = [
   "stella:admin_write",
   "stella:account_export_read",
   "stella:account_export_write",
+  "stella:organization_create",
   "stella:onboarding",
   "stella:skills",
   "stella:feedback",
@@ -156,6 +159,7 @@ export const MCP_CLI_TOOL_SCOPES = [
   "billing_write",
   "admin_read",
   "admin_write",
+  "organization_create",
   "feedback",
 ] as const;
 export const MCP_SCOPE_IMPLICATIONS = [

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 4,
+  "reason": "Mobile push device rows are a person's own alert delivery addresses: registering or unregistering the device the app runs on, pruning a token APNs reports dead, and erasing them with the account change no organization, matter or document data and grant no access. The alerts they receive carry no content, and account erasure is recorded by the deletion request itself."
+}

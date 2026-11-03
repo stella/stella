@@ -50,7 +50,11 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -352,13 +356,17 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props
-      .indexThread(props.threadId)
-      .catch(
-        createErrorCapture(
-          handlerErrorContext("persistMessage.props_indexThread"),
-        ),
-      );
+    detached(
+      async () =>
+        props
+          .indexThread(props.threadId)
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("persistMessage.props_indexThread"),
+            ),
+          ),
+      "chat-message-persistence.index-thread",
+    );
   }
   return result;
 };
@@ -412,9 +420,9 @@ const toTerminalAssistantMessage = ({
     }),
     parts: runProducedParts ? responseMessage.parts : owningParts,
     role: responseMessage?.role ?? "assistant",
-    ...(owningAssistantMessage?.createdAt === undefined
-      ? {}
-      : { createdAt: owningAssistantMessage.createdAt }),
+    ...(owningAssistantMessage?.createdAt !== undefined
+      ? { createdAt: owningAssistantMessage.createdAt }
+      : {}),
   });
   return attachTerminalTurnOutcome({ message, turnOutcome: outcome });
 };
@@ -1155,6 +1163,9 @@ type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
   /** The history the message's plan read: its persistence plan, deletions,
    *  and the run's model history. */
   plannedOnHistory: ChatHistorySnapshot;
+  /** How the caller's request names a refusal under the thread lock; an
+   *  edit carries its own typed codes. */
+  refuseTurn?: ((refusal: ChatTurnRefusal) => HandlerError<409>) | undefined;
   turnAcceptance: ChatTurnAcceptance;
 };
 
@@ -1170,6 +1181,12 @@ const CHAT_TURN_REFUSAL_MESSAGE = {
   "turn-running": "A chat turn is already running",
 } as const satisfies Record<ChatTurnRefusal, string>;
 
+const refuseChatTurn = (refusal: ChatTurnRefusal): HandlerError<409> =>
+  new HandlerError({
+    status: 409,
+    message: CHAT_TURN_REFUSAL_MESSAGE[refusal],
+  });
+
 /**
  * Persist a new user message, create its durable turn, and claim execution
  * before releasing the thread lock. No other sender can observe and supersede
@@ -1178,6 +1195,7 @@ const CHAT_TURN_REFUSAL_MESSAGE = {
  */
 export const persistAcceptedMessageWithClaim = async ({
   plannedOnHistory,
+  refuseTurn = refuseChatTurn,
   safeDb,
   turnAcceptance,
   ...persistenceProps
@@ -1191,12 +1209,7 @@ export const persistAcceptedMessageWithClaim = async ({
       tx,
     });
     if (reservation !== "reserved") {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: CHAT_TURN_REFUSAL_MESSAGE[reservation],
-        }),
-      );
+      return Result.err(refuseTurn(reservation));
     }
     const persistenceResult = await runPersistMessage({
       ...persistenceProps,
@@ -1204,7 +1217,13 @@ export const persistAcceptedMessageWithClaim = async ({
       turnAcceptance,
     });
     if (Result.isError(persistenceResult)) {
-      return Result.err(persistenceResult.error);
+      // Its only refusal is the turn acceptance the reservation above
+      // already holds: a turn that runs.
+      return Result.err(
+        persistenceResult.error instanceof HandlerError
+          ? refuseTurn("turn-running")
+          : persistenceResult.error,
+      );
     }
 
     const execution = await claimChatTurnForExecutionOnTx({
@@ -1231,15 +1250,19 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  persistenceProps
-    .indexThread(persistenceProps.threadId)
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+  detached(
+    async () =>
+      persistenceProps
+        .indexThread(persistenceProps.threadId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+            ),
+          ),
         ),
-      ),
-    );
+    "chat-message-persistence.index-thread",
+  );
   return Result.ok(result.value.value);
 };
 
@@ -1274,14 +1297,18 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  persistenceProps
-    .indexThread(persistenceProps.threadId)
-    .catch(
-      createErrorCapture(
-        handlerErrorContext(
-          "persistClaimedReplayMessage.persistenceProps_indexThread",
+  detached(
+    async () =>
+      persistenceProps
+        .indexThread(persistenceProps.threadId)
+        .catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "persistClaimedReplayMessage.persistenceProps_indexThread",
+            ),
+          ),
         ),
-      ),
-    );
+    "chat-message-persistence.index-thread",
+  );
   return Result.ok(result.value.execution);
 };

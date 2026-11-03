@@ -17,6 +17,7 @@ import {
   classifyPostgresTestIsolation,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
+import { postgresTestSelectionFromEnv } from "./postgres-test-selection-env";
 import {
   planPostgresTestShards,
   selectPostgresTestShard,
@@ -52,7 +53,9 @@ process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
   script: "test:postgres",
   preload: "./src/tests/setup-postgres.ts",
-  selection: process.env["CI_POSTGRES_TEST_SELECTION"],
+  selection: postgresTestSelectionFromEnv(
+    process.env["CI_POSTGRES_TEST_SELECTION_ENCODED"],
+  ),
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
   runnerArguments: parsedWorkers.arguments,
   spawnTestProcess: spawnPostgresTestProcess,

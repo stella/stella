@@ -4,8 +4,8 @@ import * as v from "valibot";
  * The part of the `codex app-server` protocol (JSON-RPC over stdio, one JSON
  * object per line, no `jsonrpc` member) this adapter consumes. Unknown fields
  * are dropped; a known message with the wrong shape is a protocol violation.
- * `real-codex.test.ts` binds the method and item lists below to the schema
- * an installed CLI generates, so an upstream change fails a test.
+ * `adapter.test.ts` binds the method and item lists below to the schema an
+ * installed CLI generates, so an upstream change fails a test.
  */
 
 const RequestId = v.union([v.string(), v.number()]);
@@ -83,7 +83,7 @@ const TurnSchema = v.object({
 export const TurnStartResponseSchema = v.object({ turn: TurnSchema });
 
 /**
- * Every thread item kind the pinned protocol defines. `real-codex.test.ts`
+ * Every thread item kind the pinned protocol defines. `adapter.test.ts`
  * binds this list to the schema the installed CLI generates; what Stella does
  * with each kind is decided in `items.ts`.
  */

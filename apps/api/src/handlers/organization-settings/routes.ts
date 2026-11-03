@@ -12,6 +12,9 @@ import deleteCorrespondenceAllowedSender from "@/api/handlers/organization-setti
 import listCorrespondenceAllowedSenders from "@/api/handlers/organization-settings/correspondence/allowed-senders/list";
 import addCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add";
 import removeCorrespondenceAllowedSenderScope from "@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove";
+import addOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/create";
+import removeOrganizationDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/delete";
+import getOrganizationDataBoxes from "@/api/handlers/organization-settings/correspondence/data-boxes/get";
 import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-availability/get";
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
@@ -32,56 +35,96 @@ import updateOrganizationSettings from "@/api/handlers/organization-settings/upd
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
-import { routes } from "@/api/http/route";
+import { mount, routes } from "@/api/http/route";
+import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const organizationSettingsRoute = routes(
-  {
-    "/correspondence/allowed-senders": {
-      GET: listCorrespondenceAllowedSenders,
-      POST: createCorrespondenceAllowedSender,
-    },
-    "/correspondence/allowed-senders/:senderId": {
-      DELETE: deleteCorrespondenceAllowedSender,
-    },
-    "/correspondence/allowed-senders/:senderId/scope": {
-      POST: addCorrespondenceAllowedSenderScope,
-      DELETE: removeCorrespondenceAllowedSenderScope,
-    },
-    "/": { GET: readOrganizationSettings, POST: updateOrganizationSettings },
-    "/business-registry-credentials": {
-      GET: readBusinessRegistryCredentials,
-      POST: saveBusinessRegistryCredential,
-      DELETE: deleteBusinessRegistryCredential,
-    },
-    "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
-    "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
-    "/preview": { POST: previewOrganizationSettings },
-    "/ai-availability": { GET: readAIAvailability },
-    "/feature-enrolments": { GET: getFeatureEnrolments },
-    "/feature-enrolments/:featureId": {
-      PUT: enrolFeature,
-      DELETE: unenrolFeature,
-    },
-    "/feature-access": { GET: getFeatureAccess },
-    "/document-ocr-availability": { GET: getDocumentOcrAvailability },
-    "/ai-config/defaults-preview": { POST: previewAIConfigDefaults },
-    "/ai-config": {
-      GET: readAIConfig,
-      POST: updateAIConfig,
-      DELETE: deleteAIConfig,
-    },
-    "/deepl": {
-      GET: readDeepLAvailability,
-      POST: updateDeepLKey,
-      DELETE: deleteDeepLKey,
-    },
-    "/deepl-config": { GET: readDeepLConfig },
-    "/web-search-config": { GET: readWebSearchConfig },
-    "/web-search-key": { POST: updateWebSearchKey, DELETE: deleteWebSearchKey },
-    "/anonymization-blacklist": {
-      GET: readAnonymizationBlacklist,
-      PUT: updateAnonymizationBlacklist,
-    },
-  },
+import {
+  listBillingKnowledgeFiles,
+  readBillingKnowledgeFile,
+} from "./billing-drafts";
+import readBillingDraftConfiguration from "./billing-drafts/get";
+import updateBillingDraftConfiguration from "./billing-drafts/update";
+
+export const organizationSettingsRoute = mount(
+  [
+    routes(
+      {
+        "/": {
+          GET: readBillingDraftConfiguration,
+          POST: updateBillingDraftConfiguration,
+        },
+        "/knowledge-files": { GET: listBillingKnowledgeFiles },
+        "/knowledge-files/:resourceId": {
+          GET: readBillingKnowledgeFile,
+        },
+      },
+      {
+        prefix: "/billing-drafts",
+        middleware: [
+          deploymentFeatureGate("FEATURE_TIME_BILLING"),
+          featureAccessGate("time-billing"),
+        ],
+      },
+    ),
+    routes({
+      "/correspondence/data-boxes": {
+        GET: getOrganizationDataBoxes,
+        POST: addOrganizationDataBox,
+      },
+      "/correspondence/data-boxes/:boxId": {
+        DELETE: removeOrganizationDataBox,
+      },
+      "/correspondence/allowed-senders": {
+        GET: listCorrespondenceAllowedSenders,
+        POST: createCorrespondenceAllowedSender,
+      },
+      "/correspondence/allowed-senders/:senderId": {
+        DELETE: deleteCorrespondenceAllowedSender,
+      },
+      "/correspondence/allowed-senders/:senderId/scope": {
+        POST: addCorrespondenceAllowedSenderScope,
+        DELETE: removeCorrespondenceAllowedSenderScope,
+      },
+      "/": { GET: readOrganizationSettings, POST: updateOrganizationSettings },
+      "/business-registry-credentials": {
+        GET: readBusinessRegistryCredentials,
+        POST: saveBusinessRegistryCredential,
+        DELETE: deleteBusinessRegistryCredential,
+      },
+      "/sanctions-monitoring": { POST: updateSanctionsMonitoring },
+      "/practice-jurisdictions": { POST: updatePracticeJurisdictions },
+      "/preview": { POST: previewOrganizationSettings },
+      "/ai-availability": { GET: readAIAvailability },
+      "/feature-enrolments": { GET: getFeatureEnrolments },
+      "/feature-enrolments/:featureId": {
+        PUT: enrolFeature,
+        DELETE: unenrolFeature,
+      },
+      "/feature-access": { GET: getFeatureAccess },
+      "/document-ocr-availability": { GET: getDocumentOcrAvailability },
+      "/ai-config/defaults-preview": { POST: previewAIConfigDefaults },
+      "/ai-config": {
+        GET: readAIConfig,
+        POST: updateAIConfig,
+        DELETE: deleteAIConfig,
+      },
+      "/deepl": {
+        GET: readDeepLAvailability,
+        POST: updateDeepLKey,
+        DELETE: deleteDeepLKey,
+      },
+      "/deepl-config": { GET: readDeepLConfig },
+      "/web-search-config": { GET: readWebSearchConfig },
+      "/web-search-key": {
+        POST: updateWebSearchKey,
+        DELETE: deleteWebSearchKey,
+      },
+      "/anonymization-blacklist": {
+        GET: readAnonymizationBlacklist,
+        PUT: updateAnonymizationBlacklist,
+      },
+    }),
+  ],
   { prefix: "/organization-settings" },
 );

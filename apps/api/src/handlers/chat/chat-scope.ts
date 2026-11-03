@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { CHAT_THREAD_SCOPE_MISMATCH_CODE } from "@stll/api-contract/chat-thread-scope";
+
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -87,4 +89,32 @@ export const hasChatWorkspaceAccess = async ({
   }
   const workspace = await getWorkspaceAccess(workspaceId);
   return workspace !== null && workspace.status !== "deleting";
+};
+
+type ChatThreadScopeMismatchErrorOptions = {
+  workspaceId: SafeId<"workspace"> | null;
+  getWorkspaceAccess: ChatWorkspaceAccess;
+};
+
+export const chatThreadScopeMismatchError = async ({
+  workspaceId,
+  getWorkspaceAccess,
+}: ChatThreadScopeMismatchErrorOptions): Promise<HandlerError<400 | 404>> => {
+  const canReadWorkspace = await hasChatWorkspaceAccess({
+    workspaceId,
+    getWorkspaceAccess,
+  });
+  if (workspaceId === null || !canReadWorkspace) {
+    return new HandlerError({
+      status: 404,
+      message: "Chat thread not found",
+    });
+  }
+
+  return new HandlerError({
+    status: 400,
+    code: CHAT_THREAD_SCOPE_MISMATCH_CODE,
+    message: "Chat thread scope does not match request",
+    workspaceId,
+  });
 };

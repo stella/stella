@@ -33,11 +33,12 @@ import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/ag
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
-import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
+import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
@@ -62,6 +63,7 @@ import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/ema
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
 import { RECEIVE_INBOUND_MAIL_TASK } from "@/api/lib/scheduler/tasks/inbound-mail-receive";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -333,7 +335,8 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Release queued native extraction runs to their worker",
+    description:
+      "Release queued native extraction runs and extract small uploads here",
     id: "documentProcessing.dispatchNativeExtraction.twoMinute",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
@@ -450,13 +453,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     reads: "unmeasured",
   },
   {
-    description: "Refresh the Postgres case-law browse facet counts",
-    enabled: envBase.LEGAL_SEARCH_PROVIDER === "pg-fts",
-    id: "caseLaw.refreshBrowseFacets.hourly",
+    description: "Fold incremental case-law population deltas",
+    id: SCHEDULER_BACKFILL_IDS.populationCounts,
+    firstRun: "on-registration",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
-    task: REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
-    reads: "unmeasured",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+    reads: "load-governed",
   },
   {
     description: "Recount the shards the public statute sitemap index lists",
@@ -554,7 +557,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.backfillProvisionState",
+      governance: "load-governed",
+    },
   },
   {
     description:
@@ -564,6 +570,18 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+    reads: {
+      budget: "scheduled.legislation.backfillExpressionIds",
+      governance: "load-governed",
+    },
+  },
+  {
+    description: "Derive parsed input state for historical case-law decisions",
+    id: SCHEDULER_BACKFILL_IDS.parsedInputState,
+    mode: "oneShot",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
     reads: "load-governed",
   },
   {
@@ -677,6 +695,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
     reads: "unmeasured",
     enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
+  },
+  {
+    description: "Erase deleted organizations' hosted billing customers",
+    id: "usage.eraseHostedCustomers.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: ERASE_HOSTED_CUSTOMERS_TASK,
+    reads: { budget: "scheduled.usage.eraseHostedCustomers" },
+    enabled: env.HOSTED_USAGE_PROVIDER === "polar",
   },
   {
     description: "Delete expired action cost observations",

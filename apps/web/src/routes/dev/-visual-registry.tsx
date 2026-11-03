@@ -91,6 +91,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "button-label": {
+    load: async () => {
+      const { ButtonLabelPlayground } =
+        await import("./-components/button-label-playground");
+      return { default: ButtonLabelPlayground };
+    },
+  },
   "chat-composer-reference": {
     load: async () => {
       const { ChatComposerReferencePlayground } =
@@ -129,6 +136,20 @@ const visualLoaders = {
       return {
         default: () => (
           <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
+    },
+  },
+  "chat-answer-footer": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_FOOTER_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-footer-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
         ),
       };
     },

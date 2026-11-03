@@ -7,6 +7,7 @@ import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
 import { Button } from "@stll/ui/button";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -147,7 +148,7 @@ export const PublicLawPager = ({
             {t("caseLaw.pagination.refineForMore")}
           </p>
         ) : null}
-        <label className="text-muted-foreground flex items-center gap-2 text-xs">
+        <Label variant="muted">
           {t("caseLaw.pagination.perPage")}
           <Select
             onValueChange={(value: string | null) => {
@@ -175,7 +176,7 @@ export const PublicLawPager = ({
               ))}
             </SelectPopup>
           </Select>
-        </label>
+        </Label>
       </div>
     </nav>
   );
