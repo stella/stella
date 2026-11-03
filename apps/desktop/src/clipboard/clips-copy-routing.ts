@@ -105,6 +105,7 @@ export const installClipsCopyRouting = ({
         ) {
           // The editing command keeps the undo stack and fires `input`, so
           // editors and controlled fields see the cut like a typed deletion.
+          // oxlint-disable-next-line typescript/no-deprecated -- no standard API deletes a selection through the editing undo stack; a Range deletion would bypass undo and `input`
           document.execCommand("delete");
         }
         return undefined;

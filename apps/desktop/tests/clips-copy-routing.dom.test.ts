@@ -35,9 +35,11 @@ const install = (windowLabel: string) => {
       windowLabel,
       write: async (selection) => {
         writes.push(selection);
-        return await Promise.resolve();
+        await Promise.resolve();
       },
-      onFailure: (error) => failures.push(error),
+      onFailure: (error) => {
+        failures.push(error);
+      },
     }),
   );
   return { failures, writes };
