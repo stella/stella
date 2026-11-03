@@ -14,7 +14,11 @@ import {
 } from "@/api/lib/case-law/population-seed-batch";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { BackfillHeldError, createBackfillRuntime } from "./backfill-runtime";
+import {
+  BackfillHeldError,
+  createBackfillRuntime,
+  decodeCheckpoint,
+} from "./backfill-runtime";
 import type { OnlineRepair } from "./online-migration-connection";
 
 const HOLD_RETRY_FLOOR_MS = 1000;
@@ -48,31 +52,15 @@ export const CASE_LAW_POPULATION_REPAIR = {
     if (checkpoint === undefined) {
       return { type: "incomplete", reason };
     }
-    if (
-      !isRecord(checkpoint) ||
-      !(
-        checkpoint["cursor"] === null ||
-        typeof checkpoint["cursor"] === "string"
-      ) ||
-      !isRecord(checkpoint["batch"])
-    ) {
-      return panic("Invalid case-law population backfill checkpoint");
-    }
-    const batch = checkpoint["batch"];
-    if (
-      !(
-        batch["holdUntil"] === null || typeof batch["holdUntil"] === "number"
-      ) ||
-      !(batch["heldSince"] === null || typeof batch["heldSince"] === "number")
-    ) {
-      return panic("Invalid case-law population backfill hold");
-    }
+    // The resume path's own decoder: a checkpoint it would refuse on the next
+    // batch is refused here too, rather than admitted as pending.
+    const { cursor, batch } = decodeCheckpoint(checkpoint);
     return {
       type: "pending",
       reason,
-      cursor: checkpoint["cursor"],
-      holdUntil: batch["holdUntil"],
-      heldSince: batch["heldSince"],
+      cursor,
+      holdUntil: batch.holdUntil,
+      heldSince: batch.heldSince,
     };
   },
   repair: async (connection) => {
