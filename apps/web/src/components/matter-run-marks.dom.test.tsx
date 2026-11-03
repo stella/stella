@@ -10,6 +10,7 @@ import englishMessages from "@/i18n/langs/en.json";
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { MatterRunBadge, MatterRunMarks } = await import("./matter-run-marks");
 
 afterEach(() => {
@@ -28,7 +29,9 @@ const renderIn = (node: React.ReactNode, locale: "ar" | "cs" | "en" = "en") => {
   }[locale];
   return render(
     <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-      {node}
+      <FormattingProvider locale={locale} timeZone="UTC">
+        {node}
+      </FormattingProvider>
     </IntlProvider>,
   );
 };

@@ -56,12 +56,14 @@ export const MatterRunMarks = ({
   status,
 }: {
   status: MatterRunStatus | undefined;
-}) => {
+}) =>
+  topMatterRunState(status) === null || status === undefined ? null : (
+    <OpenRunMarks status={status} />
+  );
+
+const OpenRunMarks = ({ status }: { status: MatterRunStatus }) => {
   const t = useTranslations();
   const format = useFormatter();
-  if (status === undefined) {
-    return null;
-  }
   const marks = [
     {
       count: status.needsYou,
@@ -79,9 +81,6 @@ export const MatterRunMarks = ({
     state: ActiveChatRunState;
   }[];
   const shown = marks.filter(({ count }) => count > 0);
-  if (shown.length === 0) {
-    return null;
-  }
   return (
     <span
       className="text-muted-foreground text-3xs flex shrink-0 items-center gap-1.5 leading-none tabular-nums"
