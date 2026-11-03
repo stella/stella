@@ -15,8 +15,8 @@
  * transactions through `runUnderCorpusSchemaLane`. So do the readers on the
  * API's root pool that hold a corpus table for seconds while another is
  * almost always in flight: the public sitemap shard read
- * (`caseLawPublicReadUnderSchemaLane`, which answers a refusal with a
- * retryable 503) and the scheduled sitemap and coverage refreshes, which
+ * (`caseLawPublicReadUnderSchemaLane`, whose route answers a refusal with
+ * a retryable 503) and the scheduled sitemap and coverage refreshes, which
  * yield to a later run. The migrate entrypoint
  * takes the lane EXCLUSIVE for the schema migrations
  * (`CORPUS_SCHEMA_LANE_LOCK_SQL`), which waits for the batches in flight;

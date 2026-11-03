@@ -1,3 +1,5 @@
+import { Result, UnhandledException } from "better-result";
+
 import { classifyFailure } from "@stll/errors";
 
 import {
@@ -60,6 +62,22 @@ const corpusMaintenanceRefusal = (cause: CorpusSchemaLaneUnavailableError) =>
     "pg_lock_timeout_budgeted",
   );
 
+/**
+ * How a public case-law route reads a failed handler: a read the corpus
+ * schema lane refused answers a retryable 503 with Retry-After, anything
+ * else stays the failure it was.
+ */
+export const caseLawPublicReadFailure = (
+  cause: unknown,
+): HandlerError | UnhandledException =>
+  CorpusSchemaLaneUnavailableError.is(cause)
+    ? corpusMaintenanceRefusal(cause)
+    : new UnhandledException({ cause });
+
+/** Run a public case-law handler for its route; see `caseLawPublicReadFailure`. */
+export const tryCaseLawPublicRead = async <T>(handler: () => Promise<T>) =>
+  await Result.tryPromise({ try: handler, catch: caseLawPublicReadFailure });
+
 type CaseLawPublicLaneOptions = {
   /** Test seam: how a refused try waits before the next; `Bun.sleep` otherwise. */
   sleep?: (ms: number) => Promise<void>;
@@ -70,25 +88,19 @@ type CaseLawPublicLaneOptions = {
  * corpus schema lane shared (see `db/corpus-schema-lane.ts`): the upgrade
  * drains it before its DDL instead of losing its table lock to it. Each try
  * is its own read transaction, ended when refused, so a refused read holds
- * no lock and no snapshot while it waits; a read the lane stays closed to
- * within `CASE_LAW_PUBLIC_READ_LANE_WAIT_MS` rejects with a retryable 503.
+ * no lock and no snapshot while it waits. A read the lane stays closed to
+ * within `CASE_LAW_PUBLIC_READ_LANE_WAIT_MS` rejects with
+ * `CorpusSchemaLaneUnavailableError`, which a route run through
+ * `tryCaseLawPublicRead` answers with a retryable 503.
  */
 export const caseLawPublicReadUnderSchemaLane = async <T>(
   caseLawDb: CaseLawPublicReadDb,
   read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
   { sleep }: CaseLawPublicLaneOptions = {},
-): Promise<T> => {
-  try {
-    return await runUnderCorpusSchemaLane({
-      database: { transaction: caseLawDb },
-      work: read,
-      laneWaitMs: CASE_LAW_PUBLIC_READ_LANE_WAIT_MS,
-      ...(sleep === undefined ? {} : { sleep }),
-    });
-  } catch (error) {
-    if (CorpusSchemaLaneUnavailableError.is(error)) {
-      throw corpusMaintenanceRefusal(error);
-    }
-    throw error;
-  }
-};
+): Promise<T> =>
+  await runUnderCorpusSchemaLane({
+    database: { transaction: caseLawDb },
+    work: read,
+    laneWaitMs: CASE_LAW_PUBLIC_READ_LANE_WAIT_MS,
+    ...(sleep === undefined ? {} : { sleep }),
+  });

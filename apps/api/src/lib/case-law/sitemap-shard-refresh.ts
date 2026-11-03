@@ -6,10 +6,7 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { compareCodeUnit } from "@stll/collation";
 
-import {
-  CorpusSchemaLaneUnavailableError,
-  runUnderCorpusSchemaLane,
-} from "@/api/db/corpus-schema-lane";
+import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
@@ -120,8 +117,10 @@ type RefreshTransaction = Parameters<
 
 /**
  * How long one refresh transaction keeps trying the corpus schema lane. The
- * refresh is deferrable: while a schema upgrade holds the lane the run ends
- * as pending and a later one continues.
+ * refresh is deferrable: while a schema upgrade holds the lane the run
+ * rejects with `CorpusSchemaLaneUnavailableError` and its task schedules a
+ * later run. A month a refused transaction did not work is still logged, so
+ * yielding loses nothing: the later run continues from the log.
  */
 const SITEMAP_REFRESH_LANE_WAIT_MS = 5000;
 
@@ -968,39 +967,25 @@ export const refreshCaseLawSitemapShards = async (
     }
   };
 
-  const refresh = async (): Promise<SitemapRefreshOutcome> => {
-    for (;;) {
-      // db-await-in-loop: consecutive durable drain steps share one tick row budget and stop between month transactions
-      const step = await advance();
-      if (step === "done") {
-        break;
-      }
-      if (step !== "progress") {
-        return pendingOutcome(step);
-      }
+  for (;;) {
+    // db-await-in-loop: consecutive durable drain steps share one tick row budget and stop between month transactions
+    const step = await advance();
+    if (step === "done") {
+      break;
     }
+    if (step !== "progress") {
+      return pendingOutcome(step);
+    }
+  }
 
-    const extent = await readPublicShardExtent(laneDb, budget);
-    if (
-      extent.largestShard > LIMITS.caseLawSitemapShardUrlLimit ||
-      extent.shards > LIMITS.caseLawSitemapIndexEntryLimit - 1
-    ) {
-      logger.error("case_law.sitemap.shard_refresh_over_capacity", extent);
-    }
-    return { type: "refreshed", months: progress.months, ...extent };
-  };
-
-  // A month a refused transaction did not work is still logged, so yielding
-  // to a schema upgrade loses nothing: a later run continues from the log.
-  return await refresh().catch((error: unknown) => {
-    if (!CorpusSchemaLaneUnavailableError.is(error)) {
-      throw error;
-    }
-    logger.info("case_law.sitemap.shard_refresh_yielded", {
-      months: progress.months,
-    });
-    return pendingOutcome("delayed");
-  });
+  const extent = await readPublicShardExtent(laneDb, budget);
+  if (
+    extent.largestShard > LIMITS.caseLawSitemapShardUrlLimit ||
+    extent.shards > LIMITS.caseLawSitemapIndexEntryLimit - 1
+  ) {
+    logger.error("case_law.sitemap.shard_refresh_over_capacity", extent);
+  }
+  return { type: "refreshed", months: progress.months, ...extent };
 };
 
 /** Retire both staged counts and published shards for the changed country. */

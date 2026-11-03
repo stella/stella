@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
@@ -8,6 +8,7 @@ import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readine
 import {
   CORPUS_SCHEMA_LANE_RETRY_MS,
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  CorpusSchemaLaneUnavailableError,
 } from "@/api/db/corpus-schema-lane";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
@@ -26,7 +27,9 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   CASE_LAW_PUBLIC_READ_LANE_WAIT_MS,
+  caseLawPublicReadFailure,
   CORPUS_MAINTENANCE_CODE,
+  tryCaseLawPublicRead,
 } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
@@ -240,12 +243,19 @@ test("a shard read the schema lane refuses ends each try's transaction and answe
     () => null,
     (error: unknown) => error,
   );
-  expect(rejection).toBeInstanceOf(HandlerError);
-  expect(rejection).toMatchObject({
+  expect(CorpusSchemaLaneUnavailableError.is(rejection)).toBe(true);
+  // The route reads that refusal as a retryable 503; any other failure stays
+  // what it was.
+  const refusal = caseLawPublicReadFailure(rejection);
+  expect(refusal).toBeInstanceOf(HandlerError);
+  expect(refusal).toMatchObject({
     status: 503,
     code: CORPUS_MAINTENANCE_CODE,
     retryable: true,
   });
+  expect(caseLawPublicReadFailure(new Error("read failed"))).toBeInstanceOf(
+    UnhandledException,
+  );
   // Each try was its own transaction, which sent the try and nothing else.
   expect(held.transactions.length).toBeGreaterThan(1);
   for (const sent of held.transactions) {
@@ -275,7 +285,7 @@ test("a shard read refused by the schema lane answers 503 with Retry-After", asy
     },
     async function* ({ query }) {
       yield* Result.await(
-        Result.tryPromise(
+        tryCaseLawPublicRead(
           async () =>
             await listSitemapShardDecisionsHandler(query, held.db, {
               sleep: async () => {},

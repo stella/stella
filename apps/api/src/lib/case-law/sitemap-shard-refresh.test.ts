@@ -13,6 +13,7 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import {
   CORPUS_SCHEMA_LANE_RETRY_MS,
   CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  CorpusSchemaLaneUnavailableError,
 } from "@/api/db/corpus-schema-lane";
 import {
   caseLawDecisions,
@@ -864,12 +865,16 @@ test(
         : undefined,
     );
     const sleeps: number[] = [];
-    const outcome = await refreshCaseLawSitemapShards(refused.db, {
+    const rejection: unknown = await refreshCaseLawSitemapShards(refused.db, {
       laneSleep: async (ms) => {
         sleeps.push(ms);
       },
-    });
-    expect(outcome).toEqual({ type: "pending", months: 0, retry: "delayed" });
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Its task reads this refusal as a delayed continuation.
+    expect(CorpusSchemaLaneUnavailableError.is(rejection)).toBe(true);
     // Each refused try ended its transaction having sent nothing else.
     expect(refused.transactions.length).toBeGreaterThan(1);
     expect(

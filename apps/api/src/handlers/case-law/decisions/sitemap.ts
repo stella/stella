@@ -320,8 +320,8 @@ export const listSitemapShardDecisionsHandler = async (
   // A shard read scans one country-month of the corpus and can run for many
   // seconds, while crawlers keep one in flight almost always: it holds the
   // corpus schema lane so a schema upgrade drains it rather than queueing its
-  // DDL behind it. While an upgrade holds the lane this rejects with a
-  // retryable 503 and Retry-After.
+  // DDL behind it. While an upgrade holds the lane this rejects, and the
+  // route (`tryCaseLawPublicRead`) answers a retryable 503 and Retry-After.
   const queryResult = await caseLawPublicReadUnderSchemaLane(
     caseLawDb,
     async (tx) => {
