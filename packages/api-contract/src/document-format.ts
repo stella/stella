@@ -193,7 +193,7 @@ const formatOf = (entry: FormatEntry): DocumentFormat => ({
  */
 export const documentFormat = (
   mimeType: string | null | undefined,
-  fileName?: string | null | undefined,
+  fileName?: string | null,
 ): DocumentFormat => {
   const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
   const byMimeType = BY_MIME_TYPE.get(media);
