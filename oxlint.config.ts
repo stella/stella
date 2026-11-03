@@ -152,8 +152,8 @@ const colourExemptions = [
       "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts",
       // Class styles restored for the sender's own email markup.
       "apps/api/src/lib/files/email-sender-styles.ts",
-      // Seeded sample emails.
-      "apps/api/scripts/seed-dev.ts",
+      // Seeded sample emails and documents.
+      "apps/api/scripts/seed-content/**",
       // The XLSX comment shape's fill is Excel's own comment default.
       "apps/api/src/lib/views/table-export.ts",
       // An awareness placeholder the collaboration server replaces; never drawn.
