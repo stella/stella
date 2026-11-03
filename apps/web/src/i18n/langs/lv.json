@@ -5524,7 +5524,7 @@
         "title": "AI norēķinu melnraksti"
       },
       "dataBoxes": {
-        "description": "Ziņa, kas nosūtīta no kādas no šīm pastkastēm, tiek reģistrēta kā izejošā, bet tām nosūtītā — kā ienākošā. Katra izmaiņa no jauna nosaka jau reģistrēto ziņu virzienu lietās, kurām jums ir piekļuve.",
+        "description": "Ziņa, kas nosūtīta no kādas no šīm pastkastēm, tiek reģistrēta kā izejošā, bet ziņa, kas nosūtīta uz tām, tiek reģistrēta kā ienākošā. Katra izmaiņa no jauna nosaka jau reģistrēto ziņu virzienu lietās, kurām jums ir piekļuve.",
         "invalid": "Datu pastkastes ID ir septiņi burti vai cipari.",
         "remove": "Noņemt datu pastkasti {address}",
         "title": "Organizācijas datu pastkastes"
