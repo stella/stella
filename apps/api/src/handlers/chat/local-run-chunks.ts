@@ -710,13 +710,8 @@ async function* startLocalRun({
       model: destination.model,
       harnessSessionId,
       instructions: input.instructions,
-      messages: messages.flatMap((message) =>
-        message.role === "user" ||
-        message.role === "assistant" ||
-        message.role === "tool"
-          ? [{ ...message, role: message.role }]
-          : [],
-      ),
+      // Copied to plain objects: the wire schema reads them as records.
+      messages: messages.map((message) => ({ ...message })),
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
       chatThreadId: context.chatThreadId,
