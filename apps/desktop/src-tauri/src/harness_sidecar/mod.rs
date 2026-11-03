@@ -361,7 +361,7 @@ impl Supervisor {
   async fn run(mut self) {
     let mut failures = 0;
     loop {
-      let started = Instant::now();
+      let started = Instant::now(); // kit-allow: restart backoff over a real process
       let end = self.session().await;
       self.fail_held();
       if matches!(end, SessionEnd::Shutdown) {
@@ -403,7 +403,7 @@ impl Supervisor {
 
   /// The restart delay; commands meanwhile are answered as failed.
   async fn wait(&mut self, delay: Duration) -> SessionEnd {
-    let sleep = tokio::time::sleep(delay);
+    let sleep = tokio::time::sleep(delay); // kit-allow: restart backoff over a real process
     tokio::pin!(sleep);
     loop {
       tokio::select! {
@@ -430,7 +430,7 @@ impl Supervisor {
 
   async fn session(&mut self) -> SessionEnd {
     let launch = &self.settings.launch;
-    let spawned = Command::new(&launch.program)
+    let spawned = Command::new(&launch.program) // kit-allow: spawns the supervised sidecar
       .args(&launch.args)
       .envs(launch.env.iter().map(|(name, value)| (name, value)))
       .stdin(Stdio::piped())
