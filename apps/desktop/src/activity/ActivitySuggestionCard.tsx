@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
@@ -19,6 +19,7 @@ import {
   CollapsibleTrigger,
 } from "@stll/ui/collapsible";
 import { CopyButton } from "@stll/ui/copy-button";
+import type { DayCalendarRange } from "@stll/ui/day-calendar.logic";
 import { Form } from "@stll/ui/form";
 import { AiActionIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
@@ -29,13 +30,20 @@ import { diffWords } from "@stll/ui/review-word-diff";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
+import { TimeField } from "@stll/ui/time-field";
 
 import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
-import { appRows, titleRows } from "./activity-calendar-logic";
+import {
+  appRows,
+  titleRows,
+  wallClockTime,
+  withMovedEdge,
+} from "./activity-calendar-logic";
 import type {
   ActivitySuggestion,
   EvidenceRow,
+  RangeEdge,
 } from "./activity-calendar-logic";
 import { calendarDate } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
@@ -79,8 +87,22 @@ export type DraftAssistView =
   | { after: string; before: string; type: "proposal" }
   | { kind: DraftFailureKind; type: "failed" };
 
+/** Where a card's time comes from: what was recorded for a matched
+ * suggestion, or a range the user selected and sets to the minute. */
+export type SuggestionTimes =
+  | { type: "recorded" }
+  | {
+      /** The calendar day, `YYYY-MM-DD`, the range stays on. */
+      date: string;
+      onRangeChange: (range: DayCalendarRange) => void;
+      range: DayCalendarRange;
+      timeZone: string;
+      type: "selected";
+    };
+
 type ActivitySuggestionCardProps = {
   suggestion: ActivitySuggestion;
+  times: SuggestionTimes;
   edit: SuggestionEdit;
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   editable: boolean;
@@ -141,6 +163,7 @@ const cardShortcut = (event: KeyboardEvent): CardShortcut | null => {
 
 export const ActivitySuggestionCard = ({
   suggestion,
+  times,
   edit,
   candidates,
   editable,
@@ -257,6 +280,13 @@ export const ActivitySuggestionCard = ({
           <XIcon aria-hidden="true" />
         </Button>
       </header>
+      {times.type === "selected" ? (
+        <SelectedRangeFields
+          durationMs={suggestion.durationMs}
+          editable={editable}
+          times={times}
+        />
+      ) : null}
       {suggestion.segments.length === 0 ? (
         <p className="text-muted-foreground text-xs">{t("rangeEmpty")}</p>
       ) : null}
@@ -349,6 +379,64 @@ export const ActivitySuggestionCard = ({
       </div>
       <Evidence suggestion={suggestion} sourceAppVisuals={sourceAppVisuals} />
     </section>
+  );
+};
+
+/**
+ * The start and end of a selected range, to the minute, in the locale's own
+ * clock. The exact time the entry covers sits below them; the header keeps
+ * the hours it bills, which round up to a tenth.
+ */
+const SelectedRangeFields = ({
+  durationMs,
+  editable,
+  times: { date, onRangeChange, range, timeZone },
+}: {
+  durationMs: number;
+  editable: boolean;
+  times: Extract<SuggestionTimes, { type: "selected" }>;
+}) => {
+  const t = useTranslations("activity");
+  const locale = useLocale();
+  const durationLabel = useDurationLabel();
+  const errorId = useId();
+  const backwards = range.endMs <= range.startMs;
+  const move = (edge: RangeEdge) => (time: { hour: number; minute: number }) =>
+    onRangeChange(withMovedEdge({ date, edge, range, time, timeZone }));
+  return (
+    <div className="flex flex-col gap-1.5" data-activity-entry-times="">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <TimeField
+          className="min-w-0 flex-1 basis-44"
+          disabled={!editable}
+          label={t("entryStart")}
+          locale={locale}
+          onChange={move("start")}
+          time={wallClockTime(range.startMs, timeZone)}
+        />
+        <TimeField
+          className="min-w-0 flex-1 basis-44"
+          describedBy={backwards ? errorId : undefined}
+          disabled={!editable}
+          invalid={backwards}
+          label={t("entryEnd")}
+          locale={locale}
+          onChange={move("end")}
+          time={wallClockTime(range.endMs, timeZone)}
+        />
+      </div>
+      {backwards ? (
+        <p className="text-destructive text-xs" id={errorId}>
+          {t("rangeEndBeforeStart")}
+        </p>
+      ) : (
+        <p className="text-muted-foreground text-xs tabular-nums">
+          {durationMs < range.endMs - range.startMs
+            ? t("rangeDraftedLeftOut", { duration: durationLabel(durationMs) })
+            : durationLabel(durationMs)}
+        </p>
+      )}
+    </div>
   );
 };
 

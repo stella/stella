@@ -12,11 +12,7 @@ import type {
   DayCalendarRange,
 } from "@stll/ui/day-calendar.logic";
 
-import {
-  appTotals,
-  roundedTenthsOfHour,
-  totalDurationMs,
-} from "./activity-logic";
+import { appTotals, roundedTenthsOfHour } from "./activity-logic";
 import type { AppTotal } from "./activity-logic";
 import {
   appEvidence,
@@ -458,19 +454,71 @@ export const matchedSuggestions = (
     .map((group) => toSuggestion(group, "matched"))
     .sort((left, right) => left.startMs - right.startMs);
 
-/** The undrafted recorded time inside a range the user selected, with the
- * matter that took most of it as a starting choice. */
-export const manualSuggestion = (
-  segments: readonly MatchedSegment[],
+/** The parts of `range` no drafted entry covers, in time order; an empty or
+ * backwards range has none. */
+export const undraftedParts = (
   range: DayCalendarRange,
-): ActivitySuggestion => {
-  const clipped = segments.flatMap((segment) => {
-    const startMs = Math.max(segment.startMs, range.startMs);
-    const endMs = Math.min(segment.endMs, range.endMs);
-    return !segment.drafted && endMs > startMs
-      ? [{ ...segment, endMs, startMs }]
-      : [];
-  });
+  drafted: readonly DayCalendarRange[],
+): DayCalendarRange[] => {
+  const parts: DayCalendarRange[] = [];
+  let cursorMs = range.startMs;
+  for (const taken of [...drafted].sort(
+    (left, right) => left.startMs - right.startMs,
+  )) {
+    if (
+      taken.endMs <= taken.startMs ||
+      taken.endMs <= cursorMs ||
+      taken.startMs >= range.endMs
+    ) {
+      continue;
+    }
+    if (taken.startMs > cursorMs) {
+      parts.push({ endMs: taken.startMs, startMs: cursorMs });
+    }
+    cursorMs = taken.endMs;
+  }
+  if (cursorMs < range.endMs) {
+    parts.push({ endMs: range.endMs, startMs: cursorMs });
+  }
+  return parts;
+};
+
+type ManualSuggestionOptions = {
+  /** Stays the same while the user moves the range, so the card keeps what
+   * was typed into it. */
+  id: string;
+  range: DayCalendarRange;
+  segments: readonly MatchedSegment[];
+  /** Ranges entries already cover; a new entry never claims them again. */
+  drafted: readonly { start: string; end: string }[];
+};
+
+/**
+ * An entry for exactly the range the user selected, less any time an entry
+ * already covers: the range is the claim, whether or not activity was
+ * recorded in it. The recorded time inside it is the evidence, and the matter
+ * that took most of that time is the starting choice.
+ */
+export const manualSuggestion = ({
+  id,
+  range,
+  segments,
+  drafted,
+}: ManualSuggestionOptions): ActivitySuggestion => {
+  const parts = undraftedParts(
+    range,
+    drafted.map(({ start, end }) => ({
+      endMs: Temporal.Instant.from(end).epochMilliseconds,
+      startMs: Temporal.Instant.from(start).epochMilliseconds,
+    })),
+  );
+  const clipped = segments.flatMap((segment) =>
+    parts.flatMap((part) => {
+      const startMs = Math.max(segment.startMs, part.startMs);
+      const endMs = Math.min(segment.endMs, part.endMs);
+      return endMs > startMs ? [{ ...segment, endMs, startMs }] : [];
+    }),
+  );
   const matterTime = new Map<
     string,
     { durationMs: number; matter: DesktopTimeEntryMatterCandidate }
@@ -493,28 +541,89 @@ export const manualSuggestion = (
           left.matter.id.localeCompare(right.matter.id),
       )
       .at(0)?.matter ?? null;
-  const durationMs = totalDurationMs(clipped);
-  const suggestion = toSuggestion(
-    {
-      apps: appTotals(clipped),
-      confidence: "manual",
-      durationMs,
-      evidence: appEvidence(clipped),
-      id: `manual:${String(range.startMs)}:${String(range.endMs)}`,
-      matter,
-      ranges: clipped.map(({ startMs, endMs }) => ({
-        start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
-        end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
-      })),
-      roundedTenths: roundedTenthsOfHour(durationMs),
-      segments: clipped,
-    },
-    "manual",
+  const durationMs = parts.reduce(
+    (sum, part) => sum + part.endMs - part.startMs,
+    0,
   );
-  // An empty range still anchors its card at the selection.
-  return clipped.length > 0
-    ? suggestion
-    : { ...suggestion, endMs: range.endMs, startMs: range.startMs };
+  return {
+    apps: appTotals(clipped),
+    confidence: "manual",
+    durationMs,
+    // The card and the selection show the range as the user set it.
+    endMs: Math.max(range.startMs, range.endMs),
+    evidence: appEvidence(clipped),
+    id,
+    matter,
+    ranges: parts.map(({ startMs, endMs }) => ({
+      start: Temporal.Instant.fromEpochMilliseconds(startMs).toString(),
+      end: Temporal.Instant.fromEpochMilliseconds(endMs).toString(),
+    })),
+    roundedTenths: roundedTenthsOfHour(durationMs),
+    runs: parts,
+    segments: clipped,
+    startMs: range.startMs,
+    type: "manual",
+  };
+};
+
+export type RangeEdge = "end" | "start";
+
+/** A wall-clock time to the minute. */
+type WallClock = { hour: number; minute: number };
+
+/** The `HH:mm` wall-clock time an instant shows in `timeZone`. */
+export const wallClockTime = (ms: number, timeZone: string): string =>
+  Temporal.Instant.fromEpochMilliseconds(ms)
+    .toZonedDateTimeISO(timeZone)
+    .toPlainTime()
+    .toString({ smallestUnit: "minute" });
+
+type MovedEdgeOptions = {
+  /** The calendar day, `YYYY-MM-DD`, both edges stay on. */
+  date: string;
+  edge: RangeEdge;
+  range: DayCalendarRange;
+  time: WallClock;
+  timeZone: string;
+};
+
+/**
+ * The range with one edge set to a wall-clock time on `date`. A new start
+ * moves the range and keeps its length, as far as the day allows; a new end
+ * resizes it and may land at or before the start, which the card reports
+ * rather than corrects. An end at midnight is the day's end, the only
+ * midnight after a start on the same day. A time a daylight-saving change
+ * skips resolves forward, as clocks read once it has passed.
+ */
+export const withMovedEdge = ({
+  date,
+  edge,
+  range,
+  time,
+  timeZone,
+}: MovedEdgeOptions): DayCalendarRange => {
+  const day = Temporal.PlainDate.from(date);
+  const dayEndMs = day
+    .add({ days: 1 })
+    .toZonedDateTime({ timeZone }).epochMilliseconds;
+  const atMs = day.toZonedDateTime({
+    plainTime: Temporal.PlainTime.from(time),
+    timeZone,
+  }).epochMilliseconds;
+  switch (edge) {
+    case "start": {
+      const lengthMs = Math.max(0, range.endMs - range.startMs);
+      return { endMs: Math.min(atMs + lengthMs, dayEndMs), startMs: atMs };
+    }
+    case "end":
+      return {
+        endMs: time.hour === 0 && time.minute === 0 ? dayEndMs : atMs,
+        startMs: range.startMs,
+      };
+    default:
+      edge satisfies never;
+      return panic("Unhandled range edge");
+  }
 };
 
 /** The suggestion to triage next: the first one after `afterMs`, else the
