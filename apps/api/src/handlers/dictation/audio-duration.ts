@@ -573,8 +573,11 @@ const readAudioTrackDuration = (
     }
     audio = track;
   }
+  if (audio === undefined) {
+    return Result.err(createUnreadableAudioError());
+  }
   if (
-    audio?.header === undefined ||
+    audio.header === undefined ||
     audio.timing === undefined ||
     audio.sampleCount === undefined
   ) {

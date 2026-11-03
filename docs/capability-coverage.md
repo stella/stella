@@ -113,6 +113,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `contacts.bulk.delete` | write, destructive | stella:contacts_write | — | generic invoke → `stella capability contacts bulk-delete` |
 | `contacts.business-registries.check` | read | stella:read | — | curated tool `check_counterparty` |
 | `contacts.business-registries.lookup` | read | stella:read | — | curated tool `lookup_business_registry` |
 | `contacts.create` | write | stella:contacts_write | — | curated tool `save_contact` |
@@ -762,10 +763,10 @@ mechanics, and similar), not gaps in coverage.
 
 | Reason | Count |
 | --- | --- |
-| account_lifecycle | 4 |
+| account_lifecycle | 6 |
 | assistant_chat | 15 |
 | auth_plumbing | 38 |
-| billing_ui | 2 |
+| billing_ui | 1 |
 | chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |

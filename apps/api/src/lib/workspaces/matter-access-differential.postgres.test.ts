@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import fc from "fast-check";
 
 import { roles } from "@stll/permissions";
@@ -28,6 +28,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 /**
  * Differential test: every app-side matter access decision agrees with the
@@ -236,9 +237,7 @@ const withWorld = async (
     try {
       await check({ db, seeded });
     } finally {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, seeded.organizationId));
+      await deleteOrganizationsForTest(db, [seeded.organizationId]);
       await db.delete(user).where(inArray(user.id, seeded.userIds));
     }
   });

@@ -674,7 +674,7 @@ const listClausesArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.clausesPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max clauses to return"),
         ),
       ),
@@ -1719,7 +1719,7 @@ const toPlaybookScope = ({
   const scope = {
     ...(documentTypeKey === undefined ? {} : { documentTypeKey }),
     ...(perspective === undefined ? {} : { perspective }),
-    ...(stored?.trigger === undefined ? {} : { trigger: stored.trigger }),
+    ...(stored?.trigger !== undefined ? { trigger: stored.trigger } : {}),
   };
   // An unscoped playbook is stored as null, never as an empty object.
   return Object.keys(scope).length === 0 ? null : scope;

@@ -163,7 +163,7 @@ export const entityFeatureCoverageViolations = (
       continue;
     }
     const expression =
-      policy?.using === undefined ? "" : dialect.sqlToQuery(policy.using).sql;
+      policy?.using !== undefined ? dialect.sqlToQuery(policy.using).sql : "";
     const fenced = (column: AnyPgColumn, relationExpression?: string) =>
       policy?.as === "restrictive" &&
       policy.for === "all" &&
