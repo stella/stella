@@ -115,8 +115,9 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #   - Root package.json / bun.lock: these change with nearly every
 #     release (repo-wide dependency maintenance), so including them
 #     would also defeat the skip. This is an accepted staleness
-#     window: a root catalog bump of a settings-webview JS dep does
-#     not rebuild the desktop until the next in-path change. The
+#     window: a root catalog or lockfile bump of a settings-webview JS
+#     dep, or of an npm package the harness sidecar bundles, does not
+#     rebuild the desktop until the next in-path change. The
 #     shipped native binary's dependencies are pinned in-tree
 #     (apps/desktop/src-tauri/Cargo.lock) and therefore ARE covered;
 #     when a root-level bump must ship immediately, a manual
