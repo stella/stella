@@ -449,6 +449,54 @@ describe("harness sidecar over stdio", () => {
     expect(answer?.result).toEqual({ decision: "decline" });
   });
 
+  test("answers a blocking question under the request id its pause carries", async () => {
+    const sidecar = spawnSidecar();
+    await hello(sidecar);
+    const runId = runStart(sidecar, "blocking_question");
+    const pause = await sidecar.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    const outcome = v.parse(
+      v.object({
+        type: v.literal("interrupt"),
+        interrupts: v.tuple([
+          v.object({ id: v.string(), toolCallId: v.string() }),
+        ]),
+      }),
+      pause.chunk["outcome"],
+    );
+    const [{ id: requestId, toolCallId }] = outcome.interrupts;
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(toolCallId).toBe("ask-1");
+    // A response to a request the run does not hold changes nothing.
+    sidecar.send({
+      type: "run.answer",
+      runId,
+      requestId: crypto.randomUUID(),
+      answers: { law: ["Slovak"] },
+    });
+    sidecar.send({
+      type: "run.answer",
+      runId,
+      requestId,
+      answers: { law: ["Czech"] },
+    });
+    expect(await sidecar.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+    const replies = sidecar
+      .received()
+      .filter(
+        (message) =>
+          message.method === undefined && message.result !== undefined,
+      )
+      .map(({ result }) => result);
+    expect(replies).toEqual([{ answers: { law: { answers: ["Czech"] } } }]);
+  });
+
   test("interrupt finishes as interrupted, cancel as cancelled", async () => {
     for (const [type, outcome] of [
       ["run.interrupt", "interrupted"],
