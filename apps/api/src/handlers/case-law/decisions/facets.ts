@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -6,20 +6,21 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
-import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
-import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   type NonRedistributableSourcesError,
   readNonRedistributableCaseLawSourceIds,
 } from "@/api/lib/case-law/non-redistributable-sources";
+import {
+  populationCountsCacheVersion,
+  readCaseLawPopulationFreshness,
+} from "@/api/lib/case-law/population-count-freshness";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
-import { corpusIndexBrowseFacetsWithin } from "@/api/lib/legal-search/corpus-index-facets";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
-import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
-import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
+import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -30,9 +31,8 @@ import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Facet counts for the public browse page: which countries, courts and years
- * the corpus holds, and how many decisions each has. Provider-dispatched, so a
- * deployment with a corpus index answers from engine aggregations while one
- * without still answers from Postgres.
+ * the corpus holds, and how many decisions each has. Decision transactions
+ * maintain these populations independently of the search provider.
  */
 
 export const listDecisionFacetsQuerySchema = v.object({
@@ -46,11 +46,15 @@ type ListDecisionFacetsQuery = v.InferOutput<
 const FACETS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FACETS_CACHE_MAX_ENTRIES = 32;
 
-const EMPTY_FACETS: LegalBrowseFacets = { country: [], court: [], year: [] };
+const EMPTY_FACETS: LegalBrowseFacets = {
+  country: [],
+  court: [],
+  year: [],
+  countsFreshness: { status: "unavailable" },
+};
 
 const browseFacets = createBrowseFacetsCache({
-  load: async (query) =>
-    await getLegalSearchProvider().browseFacets(query, "unobserved"),
+  load: async (query) => await pgFtsBrowseFacets(query),
   ttlMs: FACETS_CACHE_TTL_MS,
   maxEntries: FACETS_CACHE_MAX_ENTRIES,
 });
@@ -98,44 +102,24 @@ export const readBrowseFacetsUnderPolicy = async ({
   excludedSourceIds,
 }: BrowseFacetsUnderPolicyRead): Promise<
   Result<LegalBrowseFacets, LegalBrowseFacetsError>
-> =>
-  // The accepted code is case-insensitive, but the providers are not equally
-  // so: the corpus index lowercases it into an index name while the Postgres
-  // path compares it to the stored column, which is upper-case. Canonicalising
-  // once here is what keeps the two answering the same question — and keeps
-  // one jurisdiction to one cache entry.
-  await browseFacets({
+> => {
+  const freshness = await Result.tryPromise({
+    try: async () => await caseLawPublicReadDb(readCaseLawPopulationFreshness),
+    catch: (cause) =>
+      new LegalBrowseFacetsError({
+        message: "Population freshness read failed",
+        cause,
+      }),
+  });
+  if (Result.isError(freshness)) {
+    return freshness;
+  }
+  return await browseFacets({
     jurisdiction: country.toUpperCase(),
     excludedSourceIds,
+    populationVersion: populationCountsCacheVersion(freshness.value),
     limit: LIMITS.caseLawFacetLimit,
   });
-
-/** Facets for a caller holding a database connection; every database read uses it. */
-export const readBrowseFacetsWithin = async (
-  tx: CaseLawPublicReadTransaction,
-  { country, excludedSourceIds }: BrowseFacetsUnderPolicyRead,
-): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
-  const query = {
-    jurisdiction: country.toUpperCase(),
-    excludedSourceIds,
-    limit: LIMITS.caseLawFacetLimit,
-  };
-  const engine = envBase.LEGAL_SEARCH_PROVIDER;
-  switch (engine) {
-    case "pg-fts":
-      return await Result.tryPromise({
-        try: async () => await readPgFtsBrowseFacets(tx, query),
-        catch: (cause) =>
-          new LegalBrowseFacetsError({
-            message: "postgres browse facets failed",
-            cause,
-          }),
-      });
-    case "corpus-index":
-      return await corpusIndexBrowseFacetsWithin(tx, query);
-    default:
-      return panic("Unhandled legal search engine", engine satisfies never);
-  }
 };
 
 /** The same facets under the current source policy. */

@@ -9,12 +9,12 @@ import {
 } from "@stll/api-contract/organization-ai-availability";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 

@@ -8,3 +8,11 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may
 not use this product except in compliance with the License. You may
 obtain a copy of the License in the LICENSE file at the root of this
 repository or at http://www.apache.org/licenses/LICENSE-2.0.
+
+Desktop dictation downloads the Parakeet Ultra speech model on request. The
+model is by Moondream, based on NVIDIA Parakeet TDT 0.6B v3, converted to GGUF
+by handy-computer, and licensed under CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). stella does not modify it.
+
+Desktop dictation's design was informed by Hex
+(https://github.com/anomalyco/hex), MIT License.

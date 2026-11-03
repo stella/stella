@@ -6,6 +6,7 @@ import type {
   RouteErrorLifecycleProperties,
 } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
+import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
 
 export type RouteErrorAnalytics = Pick<
   Analytics,
@@ -45,8 +46,17 @@ export const resolveCaughtRouteTemplate = (
   matches.at(-1)?.fullPath ??
   "unknown";
 
+type LoadedRouteErrorLifecycleModule = {
+  createLoadedRouteErrorLifecycleController: (
+    analytics: RouteErrorAnalytics,
+    initial: RouteErrorLifecycleSnapshot,
+  ) => RouteErrorLifecycleController;
+};
+
 export const createRouteErrorLifecycleController = (
   analytics: RouteErrorAnalytics,
+  loadModule: () => Promise<LoadedRouteErrorLifecycleModule> = async () =>
+    import("@/lib/analytics/route-error-lifecycle-loaded"),
 ): RouteErrorLifecycleController => {
   let snapshot: RouteErrorLifecycleSnapshot = {
     inspectorState: "unavailable",
@@ -58,11 +68,17 @@ export const createRouteErrorLifecycleController = (
   const load = async () => {
     if (!loaded) {
       const initial = snapshot;
-      loaded = import("@/lib/analytics/route-error-lifecycle-loaded")
+      loaded = loadModule()
         .then((module) =>
           module.createLoadedRouteErrorLifecycleController(analytics, initial),
         )
         .catch((error: unknown) => {
+          // Vite's preload helper also dispatches this rejection as
+          // `vite:preloadError`, so preload recovery owns a stale chunk. Its
+          // redacted exception carries no message and no in-app frame.
+          if (isStaleDeploymentLoadError(error)) {
+            return undefined;
+          }
           analytics.captureError(error, {
             fingerprintKey: "createRouteErrorLifecycleController.load:failure",
             scope: {

@@ -1,4 +1,4 @@
-import type { AiDisclosureMessageKey } from "@stll/api-contract/ai-disclosure";
+import type { ReaderAiDisclosureMessageKey } from "@stll/api-contract/ai-disclosure";
 
 export type ReaderMessageKey =
   | "statutes.diffRemoved"
@@ -18,6 +18,7 @@ export type ReaderMessageKey =
   | "statutes.provisionTextUnavailable"
   | "statutes.showCitedPartOnly"
   | "statutes.showFullProvision"
-  // Every disclosure context, so a context added to the contract cannot ship
-  // until each host that renders the reader carries its sentence.
-  | AiDisclosureMessageKey;
+  // Every reader disclosure context, so a reader context added to the
+  // contract cannot ship until each host that renders the reader carries its
+  // sentence.
+  | ReaderAiDisclosureMessageKey;

@@ -9,10 +9,12 @@ export * from "./schema/case-law-replay";
 export * from "./schema/eu-completion";
 export * from "./schema/system-audit";
 export * from "./schema/service-oauth-clients";
+export * from "./schema/oauth-grant-revocations";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
 export * from "./schema/billing";
+export * from "./schema/billing-drafts";
 export * from "./schema/billing-arrangements";
 export * from "./schema/workspace-admin";
 export * from "./schema/clauses";
@@ -160,6 +162,7 @@ export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
+export * from "./schema/desktop-runner";
 
 export * from "./schema/mcp-web-handoff";
 

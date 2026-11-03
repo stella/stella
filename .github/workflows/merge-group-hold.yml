@@ -80,6 +80,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           MERGE_GROUP_BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
+          # Every STELLA_PR_HOLD_<n> value: a hold variable refuses its pull request without the label.
+          HOLD_VARS: ${{ toJSON(vars) }}
         run: node scripts/check-merge-group-hold.mjs
       - name: Pass pull request checks
         if: github.event_name == 'pull_request'
@@ -87,7 +89,8 @@ jobs:
 
   dequeue-held-pull-request:
     name: dequeue-held-pull-request
-    if: github.event_name == 'pull_request_target'
+    # Only the default branch's scripts run with write permission; a retargeted base never supplies them.
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -110,4 +113,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HOLD_VALUE: ${{ vars[format('STELLA_PR_HOLD_{0}', github.event.pull_request.number)] }}
+          PR_HOLD_CONTEXT: ${{ vars.STELLA_PR_HOLD_CONTEXT }}
         run: node scripts/check-merge-group-hold.mjs

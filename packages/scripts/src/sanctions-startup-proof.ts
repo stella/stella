@@ -3,6 +3,7 @@ import { Result, TaggedError } from "better-result";
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { createFetchWithTimeout, fetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
+import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
 class SanctionsStartupProofError extends TaggedError(
   "SanctionsStartupProofError",
@@ -65,15 +66,13 @@ export const proveSanctionsStartup = async ({
       : createFetchWithTimeout(transport);
   const startedAt = now();
   const remaining = () => pollTimeoutMs - (now() - startedAt);
-  // The deadline signal reaches the body too: the idle wrapper errors the
-  // stream it hands back when the signal aborts, whatever the transport does.
   const requestBeforeDeadline = async (url: URL, init?: RequestInit) =>
     await Result.tryPromise({
       try: async () =>
         await request(url, {
           ...init,
           signal: AbortSignal.timeout(Math.max(1, remaining())),
-          timeout: { type: "idle", ms: pollTimeoutMs },
+          timeout: { type: "headers", ms: pollTimeoutMs },
         }),
       catch: (cause) => cause,
     });
@@ -109,7 +108,15 @@ export const proveSanctionsStartup = async ({
     );
   }
   const body = await Result.tryPromise({
-    try: async (): Promise<unknown> => await response.value.json(),
+    try: async (): Promise<unknown> =>
+      JSON.parse(
+        new TextDecoder().decode(
+          await readBodyWithIdleDeadline(response.value, {
+            idleMs: pollTimeoutMs,
+            signal: AbortSignal.timeout(Math.max(1, remaining())),
+          }),
+        ),
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(body)) {

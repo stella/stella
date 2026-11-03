@@ -1,8 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json" with { type: "json" };
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { MemberInvitation } from "./members-invitations";
 
@@ -116,4 +117,44 @@ test("only open invitations count as pending; history excludes accepted and lets
   await waitFor(() => expect(resent.map(({ id }) => id)).toEqual(["expired"]));
   fireEvent.click(disclosure);
   expect(screen.queryByText("expired@example.com")).toBeNull();
+});
+
+test("cancelling an invitation waits for a confirmation", async () => {
+  const cancelled: string[] = [];
+  render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <TooltipProvider>
+          <MembersInvitations
+            invitations={invitations}
+            now={NOW}
+            onResend={() => {}}
+            onCancel={(invitationId) => {
+              cancelled.push(invitationId);
+            }}
+            resendPending={false}
+            cancelPending={false}
+          />
+        </TooltipProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: messages.common.actions }),
+  );
+  fireEvent.click(
+    await screen.findByRole("menuitem", {
+      name: messages.organization.invitations.cancelInvitation,
+    }),
+  );
+  const confirmation = await screen.findByRole("alertdialog");
+  expect(confirmation.textContent).toContain("open@example.com");
+  expect(cancelled).toEqual([]);
+
+  fireEvent.click(
+    within(confirmation).getByRole("button", {
+      name: messages.organization.invitations.cancelInvitation,
+    }),
+  );
+  await waitFor(() => expect(cancelled).toEqual(["open"]));
 });

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   AUDIT_ACTION,
+  AUDIT_NAMED_RESOURCE_KINDS,
   AUDIT_RESOURCE_TYPE,
 } from "@stll/api-contract/audit-log";
 
@@ -126,6 +127,33 @@ test("Czech and German catalogues render translated resource kinds", () => {
         messages.auditLogsUnavailableResource.replace("{kind}", () => value),
     });
     expect(label).toBe(expected);
+  }
+});
+
+test("a kind without a name source reads as itself, not as lost", () => {
+  const project = (action: string) =>
+    projectAuditResourceLabel({
+      action,
+      resource: { kind: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS, name: null },
+      deletedLabel: (value) => `${value} (deleted)`,
+      kind: "organization settings",
+      unavailableLabel: (value) => `${value} (not available)`,
+    });
+  expect(project(AUDIT_ACTION.UPDATE)).toBe("Organization settings");
+  expect(project(AUDIT_ACTION.DELETE)).toBe("organization settings (deleted)");
+});
+
+test("a named kind without a readable name stays not available", () => {
+  for (const kind of AUDIT_NAMED_RESOURCE_KINDS) {
+    expect(
+      projectAuditResourceLabel({
+        action: AUDIT_ACTION.UPDATE,
+        resource: { kind, name: null },
+        deletedLabel: (value) => `${value} (deleted)`,
+        kind,
+        unavailableLabel: (value) => `${value} (not available)`,
+      }),
+    ).toBe(`${kind} (not available)`);
   }
 });
 

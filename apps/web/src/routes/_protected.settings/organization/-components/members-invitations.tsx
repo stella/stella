@@ -4,6 +4,15 @@ import { useTranslations } from "use-intl";
 
 import { classifyInvitation } from "@stll/auth-model/invitation-sections";
 import type { InvitationStatus } from "@stll/auth-model/invitation-sections";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
@@ -143,6 +152,11 @@ function InvitationsTable({
 }: MembersInvitationsProps) {
   const t = useTranslations();
   const formatter = useFormatter();
+  // Cancelling is final: the auth layer has no way back to the same invitation,
+  // and a new one carries a new link. Hence a confirmation rather than an undo.
+  const [cancelTarget, setCancelTarget] = useState<MemberInvitation | null>(
+    null,
+  );
   const formatMemberDate = (date: Date | string) =>
     formatter.dateTime(new Date(date), { dateStyle: "medium" });
   return (
@@ -213,7 +227,7 @@ function InvitationsTable({
                         classifyInvitation(invitation, now).section !==
                           "pending" || cancelPending
                       }
-                      onClick={() => onCancel(invitation.id)}
+                      onClick={() => setCancelTarget(invitation)}
                       variant="destructive"
                     >
                       {t("organization.invitations.cancelInvitation")}
@@ -235,6 +249,46 @@ function InvitationsTable({
           )}
         </TableBody>
       </Table>
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+          }
+        }}
+        open={cancelTarget !== null}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("organization.invitations.cancelInvitation")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("organization.invitations.cancelConfirmDescription", {
+                email: cancelTarget?.email ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("organization.invitations.keepInvitation")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={
+                <Button
+                  onClick={() => {
+                    if (cancelTarget) {
+                      onCancel(cancelTarget.id);
+                    }
+                  }}
+                  variant="destructive"
+                />
+              }
+            >
+              {t("organization.invitations.cancelInvitation")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </Frame>
   );
 }

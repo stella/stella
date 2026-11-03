@@ -919,13 +919,7 @@
       }
     },
     {
-      "id": "openai/o3-mini-high",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "openai/o4-mini-high",
+      "id": "particle-ai/particle-1",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1052,12 +1046,6 @@
     },
     {
       "id": "upstage/solar-mini4",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "upstage/solar-pro-3",
       "reasoning": {
         "default_effort": "medium"
       }

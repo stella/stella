@@ -17,7 +17,8 @@ import type { McpToolLatencyBudgetKey } from "@/api/mcp/tool-latency-budgets";
  * or on a public corpus route the tools share, is declared here with the
  * tools and route classes that reach it, and must be shorter than each of
  * their budgets, unless the site clamps to the request's remaining budget
- * (`requestBoundedTimeoutMs`, including the enclosing transaction deadline)
+ * (`requestBoundedTimeoutMs` or `requestBoundedTimeout`, including the
+ * enclosing transaction deadline)
  * or does not hold the request at all.
  *
  * The scan is the lint half: a new `timeoutMs`, `deadlineMs`,
@@ -446,6 +447,11 @@ const CENSUS: readonly CensusEntry[] = [
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
   },
+  {
+    site: "apps/api/src/mcp/tool-freshness.ts#this.#reprojectionDeadlineMs",
+    path: "off-request",
+    why: "Bounds a live session's tool reprojection; registration and every publish run detached from the request that triggered them.",
+  },
   // --- Public corpus handlers the tools share --------------------------------
   {
     site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#requestBoundedTimeoutMs(READ_BUDGET_MS)",
@@ -523,20 +529,12 @@ const CENSUS: readonly CensusEntry[] = [
   },
   // --- Corpus index client and public-law reads -------------------------------
   {
-    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#requestBoundedTimeoutMs(request.timeoutMs)",
-    path: "request",
-    tools: PUBLIC_LAW_READ_TOOLS,
-    bound: "request",
-    onExpiry: "fails-fast",
-    why: "The clamp every corpus request passes: its own timeout, or what is left of the request's budget.",
-  },
-  {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#request.timeoutMs",
     path: "request",
     tools: PUBLIC_LAW_READ_TOOLS,
     bound: "request",
     onExpiry: "fails-fast",
-    why: "The corpus request's timeout after the clamp, passed to the fetch.",
+    why: "The corpus request's timeout after the clamp every corpus request passes (`requestBoundedTimeout`: its own timeout, or what is left of the request's budget), passed to the fetch.",
   },
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS)",
@@ -653,6 +651,9 @@ const CENSUS: readonly CensusEntry[] = [
 const scanned = REQUEST_PATH_ROOTS.flatMap(listSourceFiles).flatMap(scanSites);
 const declared = new Map(CENSUS.map((entry) => [entry.site, entry]));
 
+/** A call to the request clamp, with or without its expiry attribution. */
+const REQUEST_CLAMP_CALL = /\brequestBoundedTimeout(?:Ms)?\(/u;
+
 const siteFile = (site: string): string => site.slice(0, site.indexOf("#"));
 const siteExpression = (site: string): string =>
   site.slice(site.indexOf("#") + 1);
@@ -764,9 +765,7 @@ describe("request-path timeout census", () => {
       if (entry.path === "request" && entry.bound === "request") {
         expect({
           site: entry.site,
-          clamps: readSource(siteFile(entry.site)).includes(
-            "requestBoundedTimeoutMs(",
-          ),
+          clamps: REQUEST_CLAMP_CALL.test(readSource(siteFile(entry.site))),
         }).toEqual({ site: entry.site, clamps: true });
       }
     }

@@ -17,6 +17,7 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { OrganizationDangerZone } from "@/routes/_protected.settings/organization/-components/organization-danger-zone";
+import { OrganizationDataBoxesCard } from "@/routes/_protected.settings/organization/-components/organization/data-boxes-card";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/organization/-components/organization/jurisdictions-card";
 import { OrganizationProfileCard } from "@/routes/_protected.settings/organization/-components/organization/profile-card";
 import { OrganizationSlugCard } from "@/routes/_protected.settings/organization/-components/organization/slug-card";
@@ -98,6 +99,12 @@ function OrganizationGeneralPage() {
           {t("settings.organization.timeZone.title")}
         </h2>
         <OrganizationTimeZoneCard />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold">
+          {t("settings.organization.dataBoxes.title")}
+        </h2>
+        <OrganizationDataBoxesCard />
       </section>
       <OrganizationDangerZone
         organizationId={organization.id}

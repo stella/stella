@@ -24,7 +24,10 @@ import {
   plCourtsAdapter,
   plCourtsModifiedSince,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 /** One policy entry naming a kind this adapter serves. */
 type WalkEntry = {
@@ -188,17 +191,18 @@ const requestedParams = (sourceUrl: string | undefined): URLSearchParams => {
 };
 
 const answerWith = (body: unknown): (() => void) => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = asFetchMock(
-    async () =>
-      await Promise.resolve(
-        new Response(JSON.stringify(body), {
-          headers: { "Content-Type": "application/json; charset=utf-8" },
-        }),
-      ),
+  testFetchState.set(
+    asFetchMock(
+      async () =>
+        await Promise.resolve(
+          new Response(JSON.stringify(body), {
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+          }),
+        ),
+    ),
   );
   return () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   };
 };
 
@@ -308,19 +312,20 @@ describe("a configured policy drives the crawl", () => {
         textContent: "Rejected label",
       },
     ];
-    const originalFetch = globalThis.fetch;
     restore = () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     };
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = input instanceof Request ? input.url : input.toString();
-      return new Response(
-        JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        return new Response(
+          JSON.stringify(url.includes("/judgments/") ? {} : { items: rows }),
+          {
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }),
+    );
     const page = (await plCourtsAdapter.fetchPage("offset:0", {})).unwrap();
     expect(page.decisions).toHaveLength(2);
     expect(page.nextCursor).toBe("offset:2");

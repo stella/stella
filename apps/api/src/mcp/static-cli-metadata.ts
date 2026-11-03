@@ -294,7 +294,6 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       command: ["template", "list"],
       scope: "templates",
       itemsKey: "templates",
-      paginationless: true,
       singleReadWhen: "template_id",
     },
     fill_template: { command: ["template", "fill"], scope: "templates" },

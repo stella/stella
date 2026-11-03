@@ -16,12 +16,13 @@ import {
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   AGENDA_ITEM_KIND,
@@ -371,7 +372,7 @@ export const createTaskEntityHandler = async function* ({
         kind: "task",
         listItemType,
         parentId: body.parentId ?? null,
-        name: body.name,
+        name: normalizeEntityName(body.name),
         createdBy: userId,
         agendaKind,
         status: taskStatus,
@@ -512,10 +513,16 @@ export const createTaskEntityHandler = async function* ({
   // pass a transaction today assign only their own actor, so they owe none.
   if (props.tx === undefined) {
     fileNotifications(txResult.notifications);
-    flushEntitySearchRepairs([txResult.entityId]).catch(
-      createErrorCapture(
-        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
-      ),
+    detached(
+      async () =>
+        flushEntitySearchRepairs([txResult.entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "createTaskEntityHandler.flushEntitySearchRepairs",
+            ),
+          ),
+        ),
+      "create-task-entity.flush-entity-search-repairs",
     );
   }
 

@@ -27,6 +27,8 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "packages/html/src/**/*.{ts,tsx}",
+  "apps/api/src/db/online-migration-entries/**/*.ts",
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
@@ -67,6 +69,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-runner/**/*.ts",
+  "apps/api/src/lib/desktop-runner/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/dictation/**/*.ts",
@@ -205,6 +209,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/_protected.settings/-components/settings-shell/**/*.{ts,tsx}",
   "apps/web/src/routes/_protected.settings/organization*.{ts,tsx}",
   "apps/web/src/routes/_protected.settings/organization/**/*.{ts,tsx}",
+  "apps/web/src/routes/_protected.time_.report/**/*.{ts,tsx}",
   "apps/web/src/routes/dev/**/*.{ts,tsx}",
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
@@ -270,6 +275,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Router consumes a loader's notFound() and failures through
+  // Promise rejection; this adapter translates the typed route-resource Result.
+  "apps/web/src/lib/errors/route-resource.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
@@ -294,6 +302,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-deletion-cleanup-queue.ts",
   // The ZIP async iterator and Node pipeline propagate failures to the worker.
   "apps/api/src/lib/account-export/archive.ts",
+  "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
   "apps/api/src/lib/document-processing-queue.ts",
@@ -373,6 +382,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // a checkout without installed packages gets one actionable line; it cannot
   // import the Result library, which is one of the packages that may be missing.
   "packages/cli/src/cli.ts",
+  // Protected CLI startup must reject before check work when its network-denying preload is absent.
+  "packages/scripts/src/offline-check-startup.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
   "packages/property-testing/src/index.ts",

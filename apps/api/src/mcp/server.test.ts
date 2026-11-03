@@ -1591,7 +1591,22 @@ describe("handleMcpHttpRequest", () => {
       );
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
-      expect((await reader.read()).done).toBe(true);
+      // The only frame the stream may carry before it ends is the tool-list
+      // signal it sends once it opens.
+      const decoder = new TextDecoder();
+      const framesBeforeEnd = async (
+        frames: readonly string[],
+      ): Promise<readonly string[]> => {
+        const read = await reader.read();
+        return read.done
+          ? frames
+          : await framesBeforeEnd([...frames, decoder.decode(read.value)]);
+      };
+      const frames = await framesBeforeEnd([]);
+      expect(frames.length).toBeLessThanOrEqual(1);
+      for (const frame of frames) {
+        expect(frame).toContain("notifications/tools/list_changed");
+      }
     } finally {
       await reader.cancel();
     }
@@ -1640,7 +1655,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1709,7 +1728,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",

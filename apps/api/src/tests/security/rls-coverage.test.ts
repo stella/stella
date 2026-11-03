@@ -535,6 +535,7 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
@@ -548,10 +549,22 @@ describe("policy coverage", () => {
     // one owner-only policy and every privilege is revoked from stella; the
     // dedicated assertion below covers that instead of tenant CRUD.
     "chat_content_v3_backfill_receipts",
+    // Account exports belong to the requesting account: RLS admits a row by
+    // user_id alone. An organization audit export names the organization its
+    // archive covers, but that organization_id is never a tenant scope, and
+    // the row outlives the organization so its owner can still download it.
+    "account_exports",
     // Professional-use acceptances are written once at organization creation
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
+    // Desktop runner sockets and runs are served on the owner connection:
+    // every row is bound to an account, organization, installation and device
+    // key the socket proved, and the request role is denied outright
+    // (owner-only policies, privileges revoked; asserted in
+    // rls-table-grants.test.ts).
+    "desktop_runners",
+    "desktop_runner_runs",
     // Account-owned creation receipts exist before membership; organization_id
     // is a cascade pointer. Owner-only RLS and revoked request-role grants are
     // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
@@ -1568,6 +1581,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "oauth_grant_revocations",
       "service_oauth_clients",
       "mcp_web_handoff",
       "oauth_consent",

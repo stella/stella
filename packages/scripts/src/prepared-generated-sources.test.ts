@@ -45,6 +45,14 @@ const fixture = () => {
     "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
+  write(
+    "node_modules/tsrs/package.json",
+    JSON.stringify({ version: "test-tsrs" }),
+  );
+  write(
+    "node_modules/oxc-parser/package.json",
+    JSON.stringify({ version: "test-oxc" }),
+  );
   write("input.ts", "export const input = 1;\n");
   write("packages/cli/capabilities/fixture.read.json", '{"id":"fixture.read"}');
   write("packages/mcp-apps/src/fixture/app.html", "<!doctype html>");
@@ -86,10 +94,21 @@ const fixture = () => {
   return { root, write, manifest };
 };
 
-test("the identity names the TypeScript 6 compiler the generators run on", () => {
-  const { root, manifest } = fixture();
+test("the identity names the compilers the generators run on", () => {
+  const { root, manifest, write } = fixture();
   try {
-    expect(manifest.compilerVersion).toBe("test-compiler");
+    expect(manifest.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+    );
+    write(
+      "node_modules/oxc-parser/package.json",
+      JSON.stringify({ version: "next-oxc" }),
+    );
+    const upgraded = generatedInputIdentity(root);
+    expect(upgraded.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@next-oxc",
+    );
+    expect(upgraded.inputHash).not.toBe(manifest.inputHash);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -492,7 +511,11 @@ test("prepared input identities retain tracked directory, symlink and byte frami
     });
     expect(inventory.exitCode).toBe(0);
     const oracle = createSha256().update(
-      JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
+      JSON.stringify({
+        bun: Bun.version,
+        compiler:
+          "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+      }),
     );
     const generated = new Set<string>(ciGeneratedFiles(root));
     for (const entry of inventory.stdout.toString().split("\0")) {

@@ -1,5 +1,199 @@
 [
   {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24087,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "21 meaningful words missing: ustálenou, judikaturu, soudů, založit, ojedinělý, navíc, vzápětí, zrušen, pravomocný, doby",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 23507,
+        "retainedPct": 96.6,
+        "blockCount": 59,
+        "missingWords": [
+          "ustálenou",
+          "judikaturu",
+          "soudů",
+          "založit",
+          "ojedinělý",
+          "navíc",
+          "vzápětí",
+          "zrušen",
+          "pravomocný",
+          "doby",
+          "svého",
+          "zrušení",
+          "závazný",
+          "výlučně",
+          "týkal",
+          "kasačním",
+          "jediném",
+          "představovat",
+          "obecnějších",
+          "dopadů",
+          "případy"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 45,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24667,
+        "retainedPct": 101.4,
+        "blockCount": 61,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 47,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24086,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": ["ustálenou", "judikaturu"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24087,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/cz-nss-10-as-124-2025.html.gz#current",
     "result": {
       "ok": true,
@@ -12,10 +206,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 127,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -38,18 +232,16 @@
       "issues": [],
       "stats": {
         "originalLength": 68844,
-        "astLength": 68312,
-        "retainedPct": 99.2,
+        "astLength": 68330,
+        "retainedPct": 99.3,
         "blockCount": 138,
-        "missingWords": [
-          "https://upmb.brno.cz/uzemni-plan-mesta-brna/historie-uzemniho-planovani-mesta-brna"
-        ],
+        "missingWords": ["rozmístění"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 126,
+          "paragraph": 125,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -78,16 +270,16 @@
       ],
       "stats": {
         "originalLength": 68844,
-        "astLength": 68518,
+        "astLength": 68500,
         "retainedPct": 99.5,
         "blockCount": 140,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 128,
+          "paragraph": 127,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -113,13 +305,13 @@
         "astLength": 68414,
         "retainedPct": 99.4,
         "blockCount": 139,
-        "missingWords": [],
+        "missingWords": ["rozmístění"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 127,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -148,10 +340,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 127,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -183,10 +375,10 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
-          "paragraph": 126,
+          "paragraph": 125,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -215,8 +407,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 43,
           "paragraph-closing": 1,
@@ -241,14 +433,14 @@
       "issues": [],
       "stats": {
         "originalLength": 20452,
-        "astLength": 20139,
-        "retainedPct": 98.5,
+        "astLength": 20112,
+        "retainedPct": 98.3,
         "blockCount": 52,
-        "missingWords": [],
+        "missingWords": ["stanoveno", "vypuštěn"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 42,
           "paragraph-closing": 1,
@@ -279,14 +471,14 @@
       ],
       "stats": {
         "originalLength": 20452,
-        "astLength": 20291,
-        "retainedPct": 99.2,
+        "astLength": 20318,
+        "retainedPct": 99.3,
         "blockCount": 54,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 44,
           "paragraph-closing": 1,
@@ -317,8 +509,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 43,
           "paragraph-closing": 1,
@@ -349,8 +541,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 1,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 43,
           "paragraph-closing": 1,
@@ -381,8 +573,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -407,57 +599,71 @@
       "issues": [
         {
           "code": "MISSING_WORDS",
-          "message": "36 meaningful words missing: dostupným, informacím, naplňují, dovozené, maximální, míře, důvěryhodné, vyvážené, aktuální, ověřené",
+          "message": "50 meaningful words missing: uvedl, vycházet, skutkového, stavu, nicméně, opřel, tvrdí, nezjistil, skutkový, nepatřičně",
           "severity": "error"
         }
       ],
       "stats": {
         "originalLength": 16231,
-        "astLength": 15053,
-        "retainedPct": 92.7,
+        "astLength": 14647,
+        "retainedPct": 90.2,
         "blockCount": 27,
         "missingWords": [
-          "dostupným",
-          "informacím",
-          "naplňují",
-          "dovozené",
-          "maximální",
-          "míře",
-          "důvěryhodné",
-          "vyvážené",
-          "aktuální",
-          "ověřené",
-          "různých",
-          "zdrojů",
-          "transparentní",
-          "opírá",
-          "velké",
-          "množství",
-          "podkladů",
-          "seznatelné",
-          "považoval",
-          "jakými",
-          "úvahami",
-          "řídil",
-          "žalobní",
-          "body",
-          "spisu",
-          "neučinil",
-          "následků",
-          "účasti",
-          "srozumitelně",
-          "vysvětlil",
-          "proč",
-          "uplatňování",
-          "politických",
-          "práv",
-          "uzavřít",
-          "přezkoumatelný"
+          "uvedl",
+          "vycházet",
+          "skutkového",
+          "stavu",
+          "nicméně",
+          "opřel",
+          "tvrdí",
+          "nezjistil",
+          "skutkový",
+          "nepatřičně",
+          "zlehčoval",
+          "jakož",
+          "nesprávnému",
+          "zločinech",
+          "páchaných",
+          "ukrajiny",
+          "těmto",
+          "závěrům",
+          "přisvědčil",
+          "vysíláni",
+          "evropského",
+          "parlamentu",
+          "rady",
+          "normách",
+          "splňovat",
+          "státní",
+          "příslušníci",
+          "třetích",
+          "zemí",
+          "bez",
+          "aby",
+          "mohli",
+          "požívat",
+          "jednotném",
+          "statusu",
+          "uprchlíky",
+          "mají",
+          "nárok",
+          "doplňkovou",
+          "poskytnuté",
+          "navíc",
+          "nepřihlédli",
+          "dojít",
+          "nezávisle",
+          "vůli",
+          "odvodům",
+          "využívány",
+          "násilné",
+          "nelegální",
+          "praktiky"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 18,
           "paragraph-closing": 1,
@@ -488,14 +694,14 @@
       ],
       "stats": {
         "originalLength": 16231,
-        "astLength": 17261,
-        "retainedPct": 106.3,
+        "astLength": 17667,
+        "retainedPct": 108.8,
         "blockCount": 29,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 20,
           "paragraph-closing": 1,
@@ -526,8 +732,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -558,8 +764,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -590,8 +796,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 4,
+          "paragraph-intro": 4,
+          "heading": 2,
           "paragraph-holding": 2,
           "paragraph": 45,
           "paragraph-closing": 1,
@@ -612,18 +818,52 @@
   {
     "name": "parsers/cz-nss-2-afs-154-2005.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "27 meaningful words missing: prokazování, problematické, jedná, výstupem, hmotný, hmatatelný, výstup, kobík, šperl, aspi",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 31273,
-        "astLength": 31070,
-        "retainedPct": 99.4,
+        "astLength": 30403,
+        "retainedPct": 97.2,
         "blockCount": 54,
-        "missingWords": ["podává", "napadenému", "následujících"],
+        "missingWords": [
+          "prokazování",
+          "problematické",
+          "jedná",
+          "výstupem",
+          "hmotný",
+          "hmatatelný",
+          "výstup",
+          "kobík",
+          "šperl",
+          "aspi",
+          "publishing",
+          "praha",
+          "smluvní",
+          "typy",
+          "často",
+          "využívány",
+          "krácení",
+          "zkoumat",
+          "nad",
+          "běžných",
+          "potřeb",
+          "shromažďoval",
+          "mohou",
+          "předmětným",
+          "zprostředkováním",
+          "realizace",
+          "něž"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 4,
+          "paragraph-intro": 4,
+          "heading": 2,
           "paragraph-holding": 2,
           "paragraph": 44,
           "paragraph-closing": 1,
@@ -654,14 +894,14 @@
       ],
       "stats": {
         "originalLength": 31273,
-        "astLength": 31310,
-        "retainedPct": 100.1,
+        "astLength": 31977,
+        "retainedPct": 102.3,
         "blockCount": 56,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 4,
+          "paragraph-intro": 4,
+          "heading": 2,
           "paragraph-holding": 2,
           "paragraph": 46,
           "paragraph-closing": 1,
@@ -689,11 +929,11 @@
         "astLength": 31189,
         "retainedPct": 99.7,
         "blockCount": 55,
-        "missingWords": [],
+        "missingWords": ["prokazování"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 4,
+          "paragraph-intro": 4,
+          "heading": 2,
           "paragraph-holding": 2,
           "paragraph": 45,
           "paragraph-closing": 1,
@@ -724,8 +964,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 4,
+          "paragraph-intro": 4,
+          "heading": 2,
           "paragraph-holding": 2,
           "paragraph": 45,
           "paragraph-closing": 1,
@@ -756,8 +996,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 39,
           "paragraph-closing": 1,
@@ -778,18 +1018,62 @@
   {
     "name": "parsers/cz-nss-2-afs-180-2004.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "37 meaningful words missing: afs, kdo, právech, zkrácen, přímo, porušení, předcházejícím, úkonem, orgánu, jímž",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 23005,
-        "astLength": 22914,
-        "retainedPct": 99.6,
+        "astLength": 22006,
+        "retainedPct": 95.7,
         "blockCount": 46,
-        "missingWords": [],
+        "missingWords": [
+          "afs",
+          "kdo",
+          "právech",
+          "zkrácen",
+          "přímo",
+          "porušení",
+          "předcházejícím",
+          "úkonem",
+          "orgánu",
+          "jímž",
+          "zakládají",
+          "mění",
+          "ruší",
+          "závazně",
+          "určují",
+          "domáhat",
+          "takového",
+          "popř",
+          "vyslovení",
+          "nicotnosti",
+          "nestanoví-li",
+          "zvláštní",
+          "všechna",
+          "jimiž",
+          "zasahuje",
+          "sféry",
+          "dána",
+          "výslovná",
+          "kompetenční",
+          "výluka",
+          "soudním",
+          "řádem",
+          "emancipováno",
+          "omezení",
+          "správních",
+          "opětovně",
+          "vyloučena"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 38,
           "paragraph-closing": 1,
@@ -811,17 +1095,23 @@
     "name": "parsers/cz-nss-2-afs-180-2004.html.gz#duplicated-paragraph",
     "result": {
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
       "stats": {
         "originalLength": 23005,
-        "astLength": 22926,
-        "retainedPct": 99.7,
+        "astLength": 23834,
+        "retainedPct": 103.6,
         "blockCount": 48,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 40,
           "paragraph-closing": 1,
@@ -829,7 +1119,7 @@
         },
         "tinyBlocks": 4,
         "hugeBlocks": 0,
-        "duplicateBlocks": 0,
+        "duplicateBlocks": 1,
         "markupResidue": [],
         "work": {
           "textComputations": 100,
@@ -852,14 +1142,14 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 39,
           "paragraph-closing": 1,
           "paragraph-signature": 1
         },
-        "tinyBlocks": 5,
+        "tinyBlocks": 4,
         "hugeBlocks": 0,
         "duplicateBlocks": 0,
         "markupResidue": [],
@@ -884,8 +1174,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 3,
           "paragraph-holding": 1,
           "paragraph": 39,
           "paragraph-closing": 1,
@@ -916,8 +1206,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 1,
+          "heading": 12,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 29,
           "paragraph-closing": 1,
@@ -942,18 +1232,27 @@
       "issues": [],
       "stats": {
         "originalLength": 28174,
-        "astLength": 28037,
-        "retainedPct": 99.5,
+        "astLength": 27761,
+        "retainedPct": 98.5,
         "blockCount": 46,
-        "missingWords": [],
+        "missingWords": [
+          "kasinem",
+          "rozumí",
+          "samostatný",
+          "stavebně",
+          "oddělený",
+          "kterém",
+          "provozována",
+          "hlavní"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 1,
+          "heading": 12,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
-          "paragraph": 29,
+          "paragraph": 28,
           "paragraph-closing": 1,
-          "paragraph-signature": 1
+          "paragraph-signature": 2
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -980,18 +1279,18 @@
       ],
       "stats": {
         "originalLength": 28174,
-        "astLength": 28069,
-        "retainedPct": 99.6,
+        "astLength": 28345,
+        "retainedPct": 100.6,
         "blockCount": 48,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 1,
+          "heading": 12,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
-          "paragraph": 29,
+          "paragraph": 30,
           "paragraph-closing": 1,
-          "paragraph-signature": 3
+          "paragraph-signature": 2
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -1018,8 +1317,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 1,
+          "heading": 12,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 29,
           "paragraph-closing": 1,
@@ -1050,8 +1349,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 1,
+          "heading": 12,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 29,
           "paragraph-closing": 1,
@@ -1082,8 +1381,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -1104,27 +1403,55 @@
   {
     "name": "parsers/cz-nss-22-as-35-2026.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "30 meaningful words missing: institut, mimořádnou, povahu, soudnictví, není, řádným, opravným, prostředkem, něhož, možno",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 11012,
-        "astLength": 10609,
-        "retainedPct": 96.3,
+        "astLength": 10355,
+        "retainedPct": 94,
         "blockCount": 27,
         "missingWords": [
-          "žalobou",
-          "kterou",
-          "zamítl",
-          "rozsudkem",
-          "brojí",
-          "stížností",
-          "součástí",
-          "této"
+          "institut",
+          "mimořádnou",
+          "povahu",
+          "soudnictví",
+          "není",
+          "řádným",
+          "opravným",
+          "prostředkem",
+          "něhož",
+          "možno",
+          "dalšího",
+          "očekávat",
+          "odnímá",
+          "vlastním",
+          "pravomocného",
+          "třeba",
+          "hledět",
+          "jako",
+          "zákonné",
+          "věcně",
+          "správné",
+          "není-li",
+          "zákonným",
+          "postupem",
+          "zrušeno",
+          "vyhrazeno",
+          "ojedinělé",
+          "případy",
+          "zákonodárce",
+          "vyjádřil"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 18,
           "paragraph-closing": 1,
@@ -1155,14 +1482,14 @@
       ],
       "stats": {
         "originalLength": 11012,
-        "astLength": 11307,
-        "retainedPct": 102.7,
+        "astLength": 11561,
+        "retainedPct": 105,
         "blockCount": 29,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 20,
           "paragraph-closing": 1,
@@ -1190,11 +1517,11 @@
         "astLength": 10957,
         "retainedPct": 99.5,
         "blockCount": 28,
-        "missingWords": [],
+        "missingWords": ["institut"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -1225,8 +1552,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph-intro": 1,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
           "paragraph": 19,
           "paragraph-closing": 1,
@@ -1257,8 +1584,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 5,
+          "paragraph-intro": 4,
+          "heading": 3,
           "paragraph-holding": 2,
           "paragraph": 23,
           "paragraph-closing": 1,
@@ -1283,23 +1610,14 @@
       "issues": [],
       "stats": {
         "originalLength": 22762,
-        "astLength": 22323,
-        "retainedPct": 98.1,
+        "astLength": 22458,
+        "retainedPct": 98.7,
         "blockCount": 34,
-        "missingWords": [
-          "kromě",
-          "obecných",
-          "náležitostí",
-          "označení",
-          "němuž",
-          "směřuje",
-          "napadá",
-          "údaj"
-        ],
+        "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 5,
+          "paragraph-intro": 4,
+          "heading": 3,
           "paragraph-holding": 2,
           "paragraph": 22,
           "paragraph-closing": 1,
@@ -1330,14 +1648,14 @@
       ],
       "stats": {
         "originalLength": 22762,
-        "astLength": 22871,
-        "retainedPct": 100.5,
+        "astLength": 22736,
+        "retainedPct": 99.9,
         "blockCount": 36,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 5,
+          "paragraph-intro": 4,
+          "heading": 3,
           "paragraph-holding": 2,
           "paragraph": 24,
           "paragraph-closing": 1,
@@ -1368,8 +1686,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 5,
+          "paragraph-intro": 4,
+          "heading": 3,
           "paragraph-holding": 2,
           "paragraph": 23,
           "paragraph-closing": 1,
@@ -1400,8 +1718,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 2,
-          "heading": 5,
+          "paragraph-intro": 4,
+          "heading": 3,
           "paragraph-holding": 2,
           "paragraph": 23,
           "paragraph-closing": 1,
@@ -1432,8 +1750,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
           "paragraph": 76,
           "paragraph-closing": 1,
@@ -1458,28 +1776,18 @@
       "issues": [],
       "stats": {
         "originalLength": 27131,
-        "astLength": 26125,
-        "retainedPct": 96.3,
+        "astLength": 27092,
+        "retainedPct": 99.9,
         "blockCount": 90,
-        "missingWords": [
-          "požadavek",
-          "námitkách",
-          "řízením",
-          "týkajícím",
-          "odůvodněním",
-          "ohledu",
-          "jakékoli",
-          "nesporoval",
-          "neopodstatněnosti"
-        ],
+        "missingWords": ["lukáš", "pišvejc", "v.r"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
-          "paragraph": 75,
+          "paragraph": 76,
           "paragraph-closing": 1,
-          "paragraph-signature": 2
+          "paragraph-signature": 1
         },
         "tinyBlocks": 6,
         "hugeBlocks": 0,
@@ -1506,18 +1814,18 @@
       ],
       "stats": {
         "originalLength": 27131,
-        "astLength": 28107,
-        "retainedPct": 103.6,
+        "astLength": 27140,
+        "retainedPct": 100,
         "blockCount": 92,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
-          "paragraph": 77,
+          "paragraph": 76,
           "paragraph-closing": 1,
-          "paragraph-signature": 2
+          "paragraph-signature": 3
         },
         "tinyBlocks": 6,
         "hugeBlocks": 0,
@@ -1541,11 +1849,11 @@
         "astLength": 27115,
         "retainedPct": 99.9,
         "blockCount": 91,
-        "missingWords": [],
+        "missingWords": ["lukáš"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
           "paragraph": 76,
           "paragraph-closing": 1,
@@ -1576,8 +1884,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
           "paragraph": 76,
           "paragraph-closing": 1,
@@ -1608,8 +1916,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 5,
-          "paragraph-intro": 5,
+          "heading": 3,
+          "paragraph-intro": 7,
           "paragraph-holding": 2,
           "paragraph": 75,
           "paragraph-closing": 1,
@@ -1640,8 +1948,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 12,
-          "paragraph-intro": 1,
+          "heading": 11,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 38,
           "paragraph-closing": 1,
@@ -1662,18 +1970,44 @@
   {
     "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "19 meaningful words missing: týče, dotčeného, žáka, jakožto, nahlížet, přípustná, napadá-li, jednotlivec, chybí, individualizovaný",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 34941,
-        "astLength": 34732,
-        "retainedPct": 99.4,
+        "astLength": 33673,
+        "retainedPct": 96.4,
         "blockCount": 54,
-        "missingWords": ["nevyjádřil"],
+        "missingWords": [
+          "týče",
+          "dotčeného",
+          "žáka",
+          "jakožto",
+          "nahlížet",
+          "přípustná",
+          "napadá-li",
+          "jednotlivec",
+          "chybí",
+          "individualizovaný",
+          "aktivně",
+          "legitimován",
+          "podání",
+          "domáhat",
+          "vyslovení",
+          "konstatujícího",
+          "rozpor",
+          "pakliže",
+          "spatřován"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 12,
-          "paragraph-intro": 1,
+          "heading": 11,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 37,
           "paragraph-closing": 1,
@@ -1704,14 +2038,14 @@
       ],
       "stats": {
         "originalLength": 34941,
-        "astLength": 34828,
-        "retainedPct": 99.7,
+        "astLength": 35887,
+        "retainedPct": 102.7,
         "blockCount": 56,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 12,
-          "paragraph-intro": 1,
+          "heading": 11,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 39,
           "paragraph-closing": 1,
@@ -1742,8 +2076,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 12,
-          "paragraph-intro": 1,
+          "heading": 11,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 38,
           "paragraph-closing": 1,
@@ -1774,8 +2108,8 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 12,
-          "paragraph-intro": 1,
+          "heading": 11,
+          "paragraph-intro": 2,
           "paragraph-holding": 1,
           "paragraph": 38,
           "paragraph-closing": 1,
@@ -1806,11 +2140,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -1833,23 +2166,16 @@
       "issues": [],
       "stats": {
         "originalLength": 104813,
-        "astLength": 103655,
-        "retainedPct": 98.9,
+        "astLength": 103936,
+        "retainedPct": 99.2,
         "blockCount": 169,
-        "missingWords": [
-          "vykonával",
-          "jara",
-          "podzimu",
-          "zakazovala",
-          "samotná"
-        ],
+        "missingWords": ["systematiky", "pramenů", "odmítnout", "naposledy"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 93,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -1878,17 +2204,16 @@
       ],
       "stats": {
         "originalLength": 104813,
-        "astLength": 104813,
-        "retainedPct": 100,
+        "astLength": 104532,
+        "retainedPct": 99.7,
         "blockCount": 171,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 95,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -1917,11 +2242,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -1950,11 +2274,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 94,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -1983,11 +2306,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 22,
-          "paragraph-intro": 1,
+          "heading": 21,
+          "paragraph-intro": 3,
           "paragraph-holding": 2,
           "paragraph": 93,
-          "paragraph-signature": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 47
         },
@@ -2017,7 +2339,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2061,7 +2384,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 44,
+          "paragraph": 43,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2097,7 +2421,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 46,
+          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2127,7 +2452,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2157,7 +2483,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2187,7 +2514,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2230,7 +2558,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 21,
+          "paragraph": 20,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2266,7 +2595,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 23,
+          "paragraph": 22,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2296,7 +2626,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2326,7 +2657,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -2356,8 +2688,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2385,8 +2718,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 25,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 24
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2420,8 +2754,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 27,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 26
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2449,8 +2784,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2478,8 +2814,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2507,8 +2844,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2566,8 +2904,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 30,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 29,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2603,8 +2942,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 32,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 31,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2634,8 +2974,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2665,8 +3006,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2696,8 +3038,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -2728,8 +3071,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 43,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -2766,8 +3110,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 46,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -2798,8 +3143,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -2830,8 +3176,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -2862,8 +3209,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -2981,8 +3329,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 123,
+          "paragraph-intro": 2,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3012,8 +3361,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3043,8 +3393,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3074,8 +3425,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3117,8 +3469,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 23,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 22,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3154,8 +3507,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 25,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 24,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3185,8 +3539,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3216,8 +3571,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -3255,8 +3611,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -3276,30 +3633,90 @@
   {
     "name": "parsers/cz-us-pl-us-36-93.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "64 meaningful words missing: pl.ús, sbnu, charakteristika, dis, kriminaci, novelizací, jednoznačně, preferoval, umožněno, prakticky",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 42332,
-        "astLength": 41968,
-        "retainedPct": 99.1,
+        "astLength": 40097,
+        "retainedPct": 94.7,
         "blockCount": 78,
         "missingWords": [
           "pl.ús",
           "sbnu",
           "charakteristika",
-          "mého",
-          "napadená",
-          "zrušena",
           "dis",
           "kriminaci",
+          "novelizací",
+          "jednoznačně",
+          "preferoval",
+          "umožněno",
+          "prakticky",
+          "volné",
+          "termínovaných",
+          "respektoval",
+          "specifičnost",
+          "typů",
+          "vylučoval",
+          "nedomnívám",
+          "specifika",
+          "významná",
+          "odlišovala",
+          "zmíněná",
+          "nezbytně",
+          "direktivně",
+          "určit",
+          "uzavírány",
+          "současném",
+          "určení",
+          "akademickými",
+          "svobodami",
+          "vymezeny",
+          "relativně",
+          "krátkodobé",
+          "nedávaly",
+          "plného",
+          "využívání",
+          "akademických",
+          "činily",
+          "značně",
+          "závislými",
+          "vedení",
+          "fakult",
+          "mají-li",
+          "samostatnými",
+          "jisté",
+          "autonomními",
+          "vzdělávacími",
+          "pracovišti",
+          "ponechat",
+          "uvážení",
+          "pracovníkem",
+          "jaký",
+          "typ",
+          "zakotvují",
+          "připouštějí",
           "sta",
           "novených",
-          "sou"
+          "souvislosti",
+          "poskytoval",
+          "uveřejněný",
+          "sou",
+          "těmito",
+          "hledisky",
+          "dost",
+          "problematice"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 13
@@ -3329,8 +3746,8 @@
       ],
       "stats": {
         "originalLength": 42332,
-        "astLength": 42150,
-        "retainedPct": 99.6,
+        "astLength": 44021,
+        "retainedPct": 104,
         "blockCount": 80,
         "missingWords": [
           "pl.ús",
@@ -3344,8 +3761,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 15
@@ -3376,7 +3794,6 @@
           "pl.ús",
           "sbnu",
           "charakteristika",
-          "mého",
           "dis",
           "kriminaci",
           "sta",
@@ -3385,8 +3802,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -3425,8 +3843,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -3457,8 +3876,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -3501,8 +3921,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 72
         },
@@ -3538,8 +3959,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 74
         },
@@ -3569,8 +3991,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -3600,8 +4023,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -3631,8 +4055,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -3661,8 +4086,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 151,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 150,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -3697,8 +4123,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 153,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 152,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -3727,8 +4154,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -3757,8 +4185,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -3934,8 +4363,8 @@
         "blockTypeCounts": {
           "heading": 7,
           "paragraph-intro": 5,
-          "paragraph": 37,
-          "paragraph-holding": 6
+          "paragraph": 39,
+          "paragraph-holding": 4
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -3972,8 +4401,8 @@
         "blockTypeCounts": {
           "heading": 7,
           "paragraph-intro": 5,
-          "paragraph": 36,
-          "paragraph-holding": 6
+          "paragraph": 38,
+          "paragraph-holding": 4
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4008,8 +4437,8 @@
         "blockTypeCounts": {
           "heading": 7,
           "paragraph-intro": 5,
-          "paragraph": 38,
-          "paragraph-holding": 6
+          "paragraph": 40,
+          "paragraph-holding": 4
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4038,8 +4467,8 @@
         "blockTypeCounts": {
           "heading": 7,
           "paragraph-intro": 5,
-          "paragraph": 37,
-          "paragraph-holding": 6
+          "paragraph": 39,
+          "paragraph-holding": 4
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4068,8 +4497,8 @@
         "blockTypeCounts": {
           "heading": 7,
           "paragraph-intro": 5,
-          "paragraph": 37,
-          "paragraph-holding": 6
+          "paragraph": 39,
+          "paragraph-holding": 4
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4098,8 +4527,8 @@
         "blockTypeCounts": {
           "heading": 6,
           "paragraph-intro": 6,
-          "paragraph": 32,
-          "paragraph-holding": 4
+          "paragraph": 35,
+          "paragraph-holding": 1
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4128,8 +4557,8 @@
         "blockTypeCounts": {
           "heading": 6,
           "paragraph-intro": 6,
-          "paragraph": 31,
-          "paragraph-holding": 4
+          "paragraph": 34,
+          "paragraph-holding": 1
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4164,8 +4593,8 @@
         "blockTypeCounts": {
           "heading": 6,
           "paragraph-intro": 6,
-          "paragraph": 33,
-          "paragraph-holding": 4
+          "paragraph": 36,
+          "paragraph-holding": 1
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4194,8 +4623,8 @@
         "blockTypeCounts": {
           "heading": 6,
           "paragraph-intro": 6,
-          "paragraph": 32,
-          "paragraph-holding": 4
+          "paragraph": 35,
+          "paragraph-holding": 1
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4224,8 +4653,8 @@
         "blockTypeCounts": {
           "heading": 6,
           "paragraph-intro": 6,
-          "paragraph": 32,
-          "paragraph-holding": 4
+          "paragraph": 35,
+          "paragraph-holding": 1
         },
         "tinyBlocks": 1,
         "hugeBlocks": 0,
@@ -4254,8 +4683,8 @@
         "blockTypeCounts": {
           "heading": 10,
           "paragraph-intro": 24,
-          "paragraph": 55,
-          "paragraph-holding": 5
+          "paragraph": 58,
+          "paragraph-holding": 2
         },
         "tinyBlocks": 2,
         "hugeBlocks": 0,
@@ -4284,8 +4713,8 @@
         "blockTypeCounts": {
           "heading": 10,
           "paragraph-intro": 24,
-          "paragraph": 54,
-          "paragraph-holding": 5
+          "paragraph": 57,
+          "paragraph-holding": 2
         },
         "tinyBlocks": 2,
         "hugeBlocks": 0,
@@ -4320,8 +4749,8 @@
         "blockTypeCounts": {
           "heading": 10,
           "paragraph-intro": 24,
-          "paragraph": 56,
-          "paragraph-holding": 5
+          "paragraph": 59,
+          "paragraph-holding": 2
         },
         "tinyBlocks": 2,
         "hugeBlocks": 0,
@@ -4350,8 +4779,8 @@
         "blockTypeCounts": {
           "heading": 10,
           "paragraph-intro": 24,
-          "paragraph": 55,
-          "paragraph-holding": 5
+          "paragraph": 58,
+          "paragraph-holding": 2
         },
         "tinyBlocks": 2,
         "hugeBlocks": 0,
@@ -4380,8 +4809,8 @@
         "blockTypeCounts": {
           "heading": 10,
           "paragraph-intro": 24,
-          "paragraph": 55,
-          "paragraph-holding": 5
+          "paragraph": 58,
+          "paragraph-holding": 2
         },
         "tinyBlocks": 2,
         "hugeBlocks": 0,
@@ -4410,8 +4839,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 19,
-          "paragraph": 135,
-          "paragraph-holding": 4
+          "paragraph": 136,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -4440,8 +4869,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 19,
-          "paragraph": 134,
-          "paragraph-holding": 4
+          "paragraph": 135,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 6,
         "hugeBlocks": 0,
@@ -4470,8 +4899,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 19,
-          "paragraph": 136,
-          "paragraph-holding": 4
+          "paragraph": 137,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 8,
         "hugeBlocks": 0,
@@ -4500,8 +4929,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 19,
-          "paragraph": 135,
-          "paragraph-holding": 4
+          "paragraph": 136,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -4530,8 +4959,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 19,
-          "paragraph": 135,
-          "paragraph-holding": 4
+          "paragraph": 136,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 7,
         "hugeBlocks": 0,
@@ -4560,8 +4989,8 @@
         "blockTypeCounts": {
           "heading": 8,
           "paragraph-intro": 17,
-          "paragraph": 46,
-          "paragraph-holding": 6
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4590,8 +5019,8 @@
         "blockTypeCounts": {
           "heading": 8,
           "paragraph-intro": 17,
-          "paragraph": 45,
-          "paragraph-holding": 6
+          "paragraph": 48,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4626,8 +5055,8 @@
         "blockTypeCounts": {
           "heading": 8,
           "paragraph-intro": 17,
-          "paragraph": 47,
-          "paragraph-holding": 6
+          "paragraph": 50,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4656,8 +5085,8 @@
         "blockTypeCounts": {
           "heading": 8,
           "paragraph-intro": 17,
-          "paragraph": 46,
-          "paragraph-holding": 6
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -4686,8 +5115,8 @@
         "blockTypeCounts": {
           "heading": 8,
           "paragraph-intro": 17,
-          "paragraph": 46,
-          "paragraph-holding": 6
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -7867,8 +8296,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 4,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -7903,8 +8332,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 156,
-          "paragraph-holding": 4,
+          "paragraph": 158,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -7940,8 +8369,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 158,
-          "paragraph-holding": 4,
+          "paragraph": 160,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -7971,8 +8400,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 4,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -8002,8 +8431,8 @@
         "blockTypeCounts": {
           "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 4,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,

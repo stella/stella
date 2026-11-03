@@ -1142,7 +1142,7 @@ mod tests {
   fn unreadable_preferences_disable_reporting() {
     let directory =
       std::env::temp_dir().join(format!("stella-telemetry-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir(&directory).unwrap();
+    crate::local_store::create_private_dir(&directory).unwrap();
     assert_eq!(
       reporting_gate(&MarkerFile::at(directory.clone())).preference,
       ReportingPreference::Disabled

@@ -218,6 +218,11 @@ export type { McpToolName };
  *   `assistant_chat`.
  * - `notification_inbox`: the caller's own notifications (list, mark one
  *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -240,7 +245,8 @@ type McpCapabilityReason =
   | "assistant_memory"
   | "notification_inbox"
   | "organization_management"
-  | "organization_admin";
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -2249,7 +2255,8 @@ export const createSafeRootHandler = <
     : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
 ): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
   const admission = dependencies.at(0);
-  if (config.idempotency !== undefined && admission?.authorize === undefined) {
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
     panic("Replay-enabled root handlers require pre-replay authorization");
   }
   const core = createSafeScopedHandler("member", config, handler, admission);

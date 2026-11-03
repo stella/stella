@@ -13,7 +13,10 @@ import {
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 
 type ToolCatalogueCardProps = {
   entry: LoadedCatalogueEntry;
@@ -23,6 +26,11 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
   const t = useTranslations();
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
   const displayName = labelKey ? t(labelKey) : entry.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
+  const description = descriptionKey ? t(descriptionKey) : entry.description;
   const isFirstParty = entry.author === "stella";
   const isIncluded = entry.kind === "native-tool" && entry.pinned;
 
@@ -44,12 +52,12 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
             icon={ArrowRightIcon}
           />
         </div>
-        {entry.description.length > 0 && (
+        {description.length > 0 && (
           <BidiText
             as="p"
             className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-5"
           >
-            {entry.description}
+            {description}
           </BidiText>
         )}
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">

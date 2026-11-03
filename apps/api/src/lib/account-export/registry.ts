@@ -72,7 +72,12 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  billing_draft_user_settings: { type: "exported" },
   case_law_matter_links: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  legislation_matter_links: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
@@ -133,6 +138,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   desktop_presence: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
+  desktop_runners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
@@ -293,6 +302,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },
   oauth_consent: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  oauth_grant_revocations: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
   },

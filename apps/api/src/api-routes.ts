@@ -29,6 +29,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { dictationRoute } from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
@@ -101,6 +102,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -193,6 +195,7 @@ export const apiRoutes = mount([
   timeApprovalQueueRoute,
   internalTimeEntriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   memberTimeTargetsRoute,
   timeTimersRoute,
   servedIfLoaded(localDevRoutes?.devPublicRoute),
@@ -299,4 +302,5 @@ export const apiRoutes = mount([
   desktopPresenceRoute,
   desktopFeatureAccessRoute,
   desktopTimeEntriesRoute,
+  desktopRunnerRoute,
 ]);

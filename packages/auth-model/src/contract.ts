@@ -95,6 +95,12 @@ export const ORGANIZATION_OPAQUE_SLUG_BYTES = 10;
 const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 
 /**
+ * The shape of every slug `createOpaqueOrganizationSlug` returns: the `org-`
+ * prefix and one alphabet symbol per random byte.
+ */
+export const OPAQUE_ORGANIZATION_SLUG_PATTERN = /^org-[a-z2-7]{10}$/u;
+
+/**
  * The opaque `org-` slug shared by organization creation and slug changes.
  * The source fills this function's own fixed-size buffer, so it cannot change
  * the identifier's length; organization names never enter the identifier.

@@ -9,10 +9,11 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -252,7 +253,10 @@ test("a long statute title stays on one row with its full accessible tooltip", a
 });
 
 describe("file actions in the inspector header", () => {
-  const actionIds = (mainViewHasFileActions: boolean) =>
+  const actionIds = (
+    mainViewHasFileActions: boolean,
+    printsTextPreview = false,
+  ) =>
     fileTabHeaderActions({
       desktopEditTarget: { fileType: "docx", propertyId: "file" },
       downloadRenditions: [],
@@ -263,12 +267,22 @@ describe("file actions in the inspector header", () => {
         propertyId: "file",
         workspaceId: letter.workspaceId,
       },
+      printsTextPreview,
       tab: letter,
     }).map((action) => action.id);
 
   test("the peek header offers download, desktop open and sign", () => {
     expect(actionIds(false)).toEqual([
       "download",
+      "open-in-desktop-app",
+      "sign",
+    ]);
+  });
+
+  test("a text preview adds print beside the file's other actions", () => {
+    expect(actionIds(false, true)).toEqual([
+      "download",
+      "print",
       "open-in-desktop-app",
       "sign",
     ]);

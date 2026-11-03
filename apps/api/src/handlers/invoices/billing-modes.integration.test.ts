@@ -29,6 +29,10 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -53,6 +57,7 @@ let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
 const invoiceIds: SafeId<"invoice">[] = [];
 const auditEvents: AuditEvent[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -73,6 +78,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(db, ids.orgA);
 });
 afterEach(async () => {
   if (invoiceIds.length) {
@@ -88,7 +94,13 @@ afterEach(async () => {
   invoiceIds.length = 0;
   auditEvents.length = 0;
 });
-afterAll(releaseRlsFixture);
+afterAll(async () => {
+  try {
+    await removeIssuingSeller(db, issuingSellerId);
+  } finally {
+    await releaseRlsFixture();
+  }
+});
 
 const recordAuditEvent = async (
   _tx: unknown,

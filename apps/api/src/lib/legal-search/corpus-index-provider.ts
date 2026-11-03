@@ -25,7 +25,7 @@ import {
   caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   caseLawCorpusServingGeneration,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   type CorpusHitDispositionCounter,
@@ -201,7 +201,7 @@ export const rehydrateCorpusIndexProviderCandidatesStatement = (
       and(
         inArray(publishedCaseLawDecisions.id, ids),
         redistributableCaseLawSource,
-        currentCaseLawCorpusProjection(generation),
+        servedCaseLawCorpusProjection(generation),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.

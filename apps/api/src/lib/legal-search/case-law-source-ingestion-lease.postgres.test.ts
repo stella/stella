@@ -48,20 +48,23 @@ describe.skipIf(!enabled)("case-law source ingestion lease owner", () => {
       ) => {
         let releases = 0;
         const releaseDb = createIngestionDb(markRlsDatabase(db));
-        const value = await withCaseLawSourceIngestionLease(
-          {
-            scopedDb,
-            sourceId,
-            releaseDb: async (query) => {
-              releases++;
-              return await releaseDb(query);
+        try {
+          return await withCaseLawSourceIngestionLease(
+            {
+              scopedDb,
+              sourceId,
+              releaseDb: async (query) => {
+                releases++;
+                return await releaseDb(query);
+              },
             },
-          },
-          work,
-        );
-        expect(releases).toBe(1);
-        await assertReleased();
-        return value;
+            work,
+          );
+        } finally {
+          // Checked on every outcome, the rejected one included.
+          expect(releases).toBe(1);
+          await assertReleased();
+        }
       };
 
       expect(await run(async () => "completed")).toBe("completed");

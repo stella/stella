@@ -5,20 +5,23 @@ import {
 } from "@modelcontextprotocol/server";
 import {
   afterAll,
-  afterEach,
   beforeAll,
   beforeEach,
   describe,
   expect,
   type Mock,
   mock,
-  spyOn,
   test,
 } from "bun:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
+
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // Mirrors https://chatgpt.com/oauth/client.json, fetched 2026-10-05. The
 // documents and signing keys are test-owned; no request reaches ChatGPT.
@@ -99,7 +102,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -264,11 +267,10 @@ const mcpRequest = (token: string, method: "tools/list" | "tools/call") =>
   });
 
 beforeEach(() => {
-  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveAuthJwks);
-});
-
-afterEach(() => {
-  mock.restore();
+  fetchSpy = Object.assign(mock(serveAuthJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
 });
 
 describe("confidential CIMD private_key_jwt OAuth", () => {

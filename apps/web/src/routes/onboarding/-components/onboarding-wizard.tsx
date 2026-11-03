@@ -466,9 +466,16 @@ export const OnboardingWizard = () => {
             ),
           );
 
-          const failedCount = inviteResults.filter(
-            (r) => r.error !== null,
-          ).length;
+          const failures = inviteResults.flatMap(({ error }) =>
+            error ? [error] : [],
+          );
+          for (const failure of failures) {
+            analytics.captureError(toAuthClientError(failure), {
+              fingerprintKey: "OnboardingWizard:invite",
+              scope: { type: "handler", handlerId: "OnboardingWizard:invite" },
+            });
+          }
+          const failedCount = failures.length;
 
           if (failedCount > 0) {
             stellaToast.add({

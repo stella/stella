@@ -307,6 +307,12 @@ type RehydrateLegislationCandidatesOptions = CorpusCandidateRankingInput & {
   ranking?: "authority" | "lexical" | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   readCandidateRows?: typeof readLegislationCandidateRows | undefined;
+  /**
+   * What this request already read. A scan ranks every candidate it has
+   * gathered after each engine round, so without it each round re-reads every
+   * earlier candidate and Work.
+   */
+  hydration?: LegislationHydrationMemo | undefined;
 };
 
 /** Undated search keeps historical wording discoverable; an explicit date
@@ -480,6 +486,34 @@ const representativeRow = (row: RawRow): RepresentativeRow => ({
   isCurrent: row["is_current"] === true,
 });
 
+type LegislationCandidateRow = Awaited<
+  ReturnType<typeof readLegislationCandidateRows>
+>["rows"][number];
+
+type LegislationCursorWork = Pick<
+  LegislationSearchRow,
+  "sourceId" | "eli" | "language"
+>;
+
+/**
+ * The rows one search request has read, keyed like the reads themselves: a
+ * candidate by id (null when the read returned no row), a Work's
+ * representative by Work key (null when the Work has none), and the cursor's
+ * Work by the cursor id. The request filters, generation and body are fixed
+ * for the request, so a row read once stands for every later round and phase.
+ */
+export type LegislationHydrationMemo = {
+  rows: Map<string, LegislationCandidateRow | null>;
+  representatives: Map<string, RepresentativeRow | null>;
+  cursorWork: Map<string, LegislationCursorWork | null>;
+};
+
+export const createLegislationHydrationMemo = (): LegislationHydrationMemo => ({
+  rows: new Map(),
+  representatives: new Map(),
+  cursorWork: new Map(),
+});
+
 /** `legislationWorkRepresentativesQuery` read, one row per Work that has one. */
 const readLegislationWorkRepresentatives = async (
   tx: LegislationReadTransaction,
@@ -574,6 +608,55 @@ export const readLegislationCandidateRows = async (
     records: await legislationCandidateRowsStatement(tx, options),
   });
 
+const readCursorWork = async (
+  tx: LegislationReadTransaction,
+  cursorId: string,
+  hydration: LegislationHydrationMemo,
+): Promise<LegislationCursorWork | undefined> => {
+  const known = hydration.cursorWork.get(cursorId);
+  if (known !== undefined) {
+    return known ?? undefined;
+  }
+  const [work] = await tx
+    .select({
+      sourceId: legislationDocuments.sourceId,
+      eli: legislationDocuments.eli,
+      language: legislationDocuments.language,
+    })
+    .from(legislationDocuments)
+    .where(
+      eq(legislationDocuments.id, toSafeId<"legislationDocument">(cursorId)),
+    );
+  hydration.cursorWork.set(cursorId, work ?? null);
+  return work;
+};
+
+/** Representatives of `works`, reading only the Works this request has not. */
+const readMemoizedWorkRepresentatives = async (
+  tx: LegislationReadTransaction,
+  works: readonly LegislationWorkRef[],
+  filters: readonly SQL[],
+  hydration: LegislationHydrationMemo,
+): Promise<RepresentativeRow[]> => {
+  const keys = [...new Set(works.map((work) => legislationWorkRefKey(work)))];
+  const unread = works.filter(
+    (work) => !hydration.representatives.has(legislationWorkRefKey(work)),
+  );
+  if (unread.length > 0) {
+    const read = await readLegislationWorkRepresentatives(tx, unread, filters);
+    for (const work of unread) {
+      hydration.representatives.set(legislationWorkRefKey(work), null);
+    }
+    for (const row of read) {
+      hydration.representatives.set(legislationWorkRefKey(row), row);
+    }
+  }
+  return keys.flatMap((key) => {
+    const row = hydration.representatives.get(key);
+    return row === null || row === undefined ? [] : [row];
+  });
+};
+
 /**
  * The production corpus-index rehydration query, exported so the reader-role
  * suite executes this exact query surface under SET ROLE.
@@ -595,10 +678,16 @@ export const rehydrateLegislationCandidates = async ({
   hitDispositions = createCorpusHitDispositionCounter(),
   readCandidateRows = readLegislationCandidateRows,
   observeStage = async (_stage, operation) => await operation(),
+  hydration = createLegislationHydrationMemo(),
 }: RehydrateLegislationCandidatesOptions) => {
-  const ids = candidates.map((candidate) =>
-    toSafeId<"legislationDocument">(candidate.id),
-  );
+  const ids = [
+    ...new Set(
+      candidates.map((candidate) =>
+        toSafeId<"legislationDocument">(candidate.id),
+      ),
+    ),
+  ];
+  const unreadIds = ids.filter((id) => !hydration.rows.has(id));
   // Reapply the request filters against the current rows: a stale corpus hit
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
@@ -608,10 +697,10 @@ export const rehydrateLegislationCandidates = async ({
     async () =>
       await legislationDb(async (tx) => {
         const candidateRead =
-          ids.length === 0
+          unreadIds.length === 0
             ? { rows: [], dispositions: [] }
             : await readCandidateRows(tx, {
-                ids,
+                ids: unreadIds,
                 generation,
                 body,
               });
@@ -619,33 +708,31 @@ export const rehydrateLegislationCandidates = async ({
           candidateRead.dispositions,
           hitDispositions,
         );
-        const rows = candidateRead.rows;
+        for (const id of unreadIds) {
+          hydration.rows.set(id, null);
+        }
+        for (const row of candidateRead.rows) {
+          hydration.rows.set(String(row.id), row);
+        }
+        const rows = ids.flatMap((id) => {
+          const row = hydration.rows.get(id);
+          return row === null || row === undefined ? [] : [row];
+        });
         const named =
           namedWorks ??
           (await readNamedLegislationWorks(tx, {
             query: body.query,
             country: body.jurisdiction,
           }));
-        const [cursorWork] =
+        const cursorWork =
           cursorId === undefined || !isUuid(cursorId)
-            ? []
-            : await tx
-                .select({
-                  sourceId: legislationDocuments.sourceId,
-                  eli: legislationDocuments.eli,
-                  language: legislationDocuments.language,
-                })
-                .from(legislationDocuments)
-                .where(
-                  eq(
-                    legislationDocuments.id,
-                    toSafeId<"legislationDocument">(cursorId),
-                  ),
-                );
-        const representatives = await readLegislationWorkRepresentatives(
+            ? undefined
+            : await readCursorWork(tx, cursorId, hydration);
+        const representatives = await readMemoizedWorkRepresentatives(
           tx,
           [...rows, ...named],
           requestFilters,
+          hydration,
         );
         return { rows, named, cursorWork, representatives };
       }),
@@ -1283,6 +1370,20 @@ type ReadCorpusPhaseOptions = {
   cursor: SearchCursor | null;
 };
 
+/** The Works the query names, read once per request for the strict phase. */
+const readRequestNamedWorks = async (
+  legislationDb: LegislationReadDb,
+  reads: CorpusLegislationReadDependencies,
+  body: SearchLegislationBody,
+) =>
+  await legislationDb(
+    async (tx) =>
+      await reads.readNamedWorks(tx, {
+        query: body.query,
+        country: body.jurisdiction,
+      }),
+  );
+
 const corpusIndexSearch = async ({
   body,
   parsedCursor,
@@ -1308,16 +1409,12 @@ const corpusIndexSearch = async ({
     fingerprint,
     generation,
   };
+  // Shared by both phases: a relaxed pass rescans the strict pass's Works.
+  const hydration = createLegislationHydrationMemo();
   const namedWorks =
     phase.type === "relaxed"
       ? []
-      : await legislationDb(
-          async (tx) =>
-            await reads.readNamedWorks(tx, {
-              query: body.query,
-              country: body.jurisdiction,
-            }),
-        );
+      : await readRequestNamedWorks(legislationDb, reads, body);
 
   const readPhase = async ({
     active,
@@ -1377,6 +1474,7 @@ const corpusIndexSearch = async ({
           ranking: active.type === "strict" ? "authority" : "lexical",
           observeStage,
           readCandidateRows: reads.readCandidateRows,
+          hydration,
         });
         const ranked = await attributeRankingCallbackRejection(
           pendingRanking,
