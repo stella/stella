@@ -24,7 +24,7 @@ test("TanStack terminal hook canary rejects a second terminal signal", async () 
   await hooks.onFinish(context, asTestRaw<FinishInfo>({}));
   const secondTerminal = hooks.onError(context, asTestRaw<ErrorInfo>({}));
   if (!(secondTerminal instanceof Promise)) {
-    throw new Error(
+    throw new TypeError(
       "Expected TanStack terminal hook adapter to be asynchronous",
     );
   }

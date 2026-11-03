@@ -857,7 +857,7 @@ const grantConversationTools = (
   return [...granted].map((name) =>
     isApprovalToolName(name)
       ? storedToolGrant(recording.threadId, name)
-      : expect.unreachable(`${name} is not an approval tool`),
+      : expect.unreachable(`${String(name)} is not an approval tool`),
   );
 };
 

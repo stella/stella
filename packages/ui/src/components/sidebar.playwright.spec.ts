@@ -58,7 +58,7 @@ const readGeometry = async (page: Page) =>
     const required = (selector: string) => {
       const element = document.querySelector(selector);
       if (!(element instanceof HTMLElement)) {
-        throw new Error(`Missing fixture geometry element: ${selector}`);
+        throw new TypeError(`Missing fixture geometry element: ${selector}`);
       }
       return element;
     };

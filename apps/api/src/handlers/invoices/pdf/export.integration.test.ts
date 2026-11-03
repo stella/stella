@@ -380,7 +380,7 @@ describe("invoice document export", () => {
       `exports/${fixture.ids.orgA}/${fixture.ids.wsA1}/`,
     );
     if (!(written?.data instanceof Uint8Array)) {
-      throw new Error("the export stored no PDF bytes");
+      throw new TypeError("the export stored no PDF bytes");
     }
     expect(new TextDecoder().decode(written.data)).toStartWith("%PDF-");
     const text = (await PDF.load(written.data))

@@ -192,6 +192,7 @@ const resolvedModel = ({
   })(modelId);
   // SAFETY: the provider and its own model options are built together from
   // one `provider`, which the union cannot see through the generic call.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
   return {
     adapter,
     keySource: "byok",
@@ -203,7 +204,6 @@ const resolvedModel = ({
       provider,
       task: "short-text",
     }),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
   } as ResolvedTanStackTextModel;
 };
 

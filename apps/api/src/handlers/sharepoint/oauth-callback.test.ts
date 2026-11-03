@@ -35,7 +35,9 @@ const userA = toSafeId<"user">("user_a");
 
 const reasonOf = (result: unknown): string | null => {
   if (!(result instanceof Response)) {
-    throw new Error(`expected a 302 Response, got ${JSON.stringify(result)}`);
+    throw new TypeError(
+      `expected a 302 Response, got ${JSON.stringify(result)}`,
+    );
   }
   expect(result.status).toBe(302);
   const location = result.headers.get("Location");

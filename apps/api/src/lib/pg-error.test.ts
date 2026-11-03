@@ -499,7 +499,9 @@ describe("isTransientPgConnectionError", () => {
     // Doubles as the assertion that the driver rejected at all, and narrows
     // the caught value without asserting a shape onto it.
     if (!(failure instanceof Error)) {
-      throw new Error(`expected a driver rejection, got ${String(failure)}`);
+      throw new TypeError(
+        `expected a driver rejection, got ${String(failure)}`,
+      );
     }
     const code = "code" in failure ? failure.code : undefined;
     if (typeof code !== "string") {

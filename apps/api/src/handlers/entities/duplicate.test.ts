@@ -252,6 +252,7 @@ const createContext = ({
     server: null,
   };
 
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   return {
     workspaceId,
     user: { id: userId },
@@ -263,7 +264,6 @@ const createContext = ({
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
   } as Parameters<typeof duplicateEntity.handler>[0];
 };
 
