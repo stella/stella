@@ -56,6 +56,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/contacts": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/contacts/:contactId": {
     type: "non-replay",
     reason: "current-state",
@@ -613,6 +617,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "read",
   },
+  "POST /v1/organization-settings/billing-drafts": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/business-registry-credentials": {
     type: "non-replay",
     reason: "current-state",
@@ -643,6 +651,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organizations/audit-export": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -995,8 +1007,7 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "replay",
   },
   "PUT /v1/contacts": {
-    type: "non-replay",
-    reason: "lifecycle",
+    type: "replay",
   },
   "PUT /v1/contacts/import": {
     type: "non-replay",
@@ -1095,8 +1106,6 @@ const apiRoot = path.resolve(import.meta.dir, "../..");
 
 // These lifecycle boundaries cannot retain a scoped JSON replay receipt.
 const IDEMPOTENCY_EXCEPTIONS = {
-  "src/handlers/contacts/create.ts":
-    "Contact creation is followed by matter-client assignment and uses caller-generated IDs outside the create receipt.",
   "src/handlers/entities/create.ts":
     "Folder reservations, file uploads and file organization require lifecycle work beyond the create response.",
   "src/handlers/invoices/create.ts":

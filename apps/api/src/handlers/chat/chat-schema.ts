@@ -7,6 +7,7 @@ import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import * as v from "valibot";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
@@ -14,6 +15,7 @@ import {
   type BrowserExtensionCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_EDIT_APPLY_MODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
@@ -32,6 +34,7 @@ import {
   isChatPastedTextPart,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -74,7 +77,6 @@ import {
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
@@ -1147,15 +1149,15 @@ const normalizeContinuationInput = ({
     refRegistry,
     toolName,
   });
-  if (tool?.inputSchema === undefined) {
-    return Result.ok(withNullsOmitted(input));
+  if (tool?.inputSchema !== undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: tool.name,
+    });
   }
-  return validateToolPayload({
-    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
-    payloadName: "input",
-    schema: tool.inputSchema,
-    toolName: tool.name,
-  });
+  return Result.ok(withNullsOmitted(input));
 };
 
 const validateContinuationToolCallTransition = ({
@@ -2242,4 +2244,31 @@ export const parseMessage = ({
     },
     mentions,
   };
+};
+
+/**
+ * Refuses a user message that would reach the provider with nothing to read:
+ * its text normalizes to whitespace (an empty paragraph, a lone line break, a
+ * reference chip the sender may not see) and it carries no attachment. Run on
+ * the normalized message, before the turn creates or changes anything, so
+ * the refusal stores nothing and calls no provider.
+ */
+export const requireUserMessageContent = (
+  message: Pick<PersistableChatMessage, "parts" | "role">,
+): Result<void, HandlerError<422>> => {
+  if (
+    message.role !== "user" ||
+    v.is(chatUserMessageContentSchema, message.parts)
+  ) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      status: 422,
+      message: "Chat message has no text or attachment",
+      hint: "Send text or attach a file.",
+      retryable: false,
+    }),
+  );
 };

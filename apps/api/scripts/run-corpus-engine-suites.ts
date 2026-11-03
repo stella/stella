@@ -6,6 +6,7 @@ import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
+import { CORPUS_INDEX_CONFIG_VERSION } from "../src/lib/legal-search/corpus-index-config";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   dockerContainerName,
@@ -22,6 +23,7 @@ const TEMPLATE_CONTAINER = "corpus-engine";
 // Two PGlite schema builders can overlap with the longest engine-only suite.
 const ENGINE_TEST_LANES = 3;
 const COMMAND_TIMEOUT_MS = 90_000;
+const ENGINE_STARTUP_TIMEOUT_MS = 60_000;
 const SUITE_TIMEOUT_MS = 40 * 60_000;
 
 // Longest suite first; every file owns its engine, index storage and process.
@@ -172,6 +174,97 @@ const runCommand = async ({
   return stdout.trim();
 };
 
+type CorpusEngineReadinessOptions = {
+  apiRoot: string;
+  endpoint: string;
+  signal: AbortSignal;
+  run?: (options: CommandOptions) => Promise<string>;
+};
+
+export const waitForCorpusEngineReadiness = async ({
+  apiRoot,
+  endpoint,
+  signal,
+  run = runCommand,
+}: CorpusEngineReadinessOptions) => {
+  const deadline = performance.now() + ENGINE_STARTUP_TIMEOUT_MS;
+  const command = async (args: string[]) => {
+    const remainingMs = Math.floor(deadline - performance.now());
+    if (remainingMs <= 0) {
+      throw new CorpusSuiteCommandError({
+        message: "Corpus engine startup deadline exceeded",
+      });
+    }
+    return await run({
+      command: args,
+      cwd: apiRoot,
+      signal,
+      timeoutMs: remainingMs,
+    });
+  };
+  const retry = [
+    "--retry",
+    "30",
+    "--retry-connrefused",
+    "--retry-all-errors",
+    "--retry-delay",
+    "1",
+  ];
+  await command([
+    "curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    ...retry,
+    "--max-time",
+    "2",
+    `${endpoint}/health/readyz`,
+  ]);
+  // readyz precedes control-plane ingestion-pool registration. Admit a write
+  // in an owned disposable index before any contract-test writes execute.
+  const indexId = `corpus_suite_readiness_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+  await command([
+    "curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--request",
+    "POST",
+    "--header",
+    "content-type: application/json",
+    "--data-binary",
+    JSON.stringify({
+      version: CORPUS_INDEX_CONFIG_VERSION,
+      index_id: indexId,
+      doc_mapping: { field_mappings: [{ name: "probe", type: "text" }] },
+    }),
+    `${endpoint}/api/v1/indexes`,
+  ]);
+  await command([
+    "curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    ...retry,
+    "--request",
+    "POST",
+    "--header",
+    "content-type: application/x-ndjson",
+    "--data-binary",
+    '{"probe":"ready"}\n',
+    `${endpoint}/api/v1/${indexId}/ingest?commit=force`,
+  ]);
+  await command([
+    "curl",
+    "--fail",
+    "--silent",
+    "--show-error",
+    "--request",
+    "DELETE",
+    `${endpoint}/api/v1/indexes/${indexId}`,
+  ]);
+};
+
 type ExecuteCorpusSuiteOptions = {
   apiRoot: string;
   image: string;
@@ -225,23 +318,7 @@ export const executeCorpusSuite = async ({
       panic(`Unexpected corpus engine port binding: ${binding}`);
     }
     const endpoint = `http://${binding}`;
-    await command([
-      "curl",
-      "--fail",
-      "--silent",
-      "--show-error",
-      "--retry",
-      "30",
-      "--retry-connrefused",
-      "--retry-all-errors",
-      "--retry-delay",
-      "1",
-      "--retry-max-time",
-      "60",
-      "--max-time",
-      "2",
-      `${endpoint}/health/readyz`,
-    ]);
+    await waitForCorpusEngineReadiness({ apiRoot, endpoint, signal, run });
     const environment = {
       ...process.env,
       [CORPUS_ENGINE_GATE]: corpusRunner.gateValue,

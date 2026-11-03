@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CASE_DECISION_VIEW,
@@ -228,7 +228,8 @@ describe("case decision inspector", () => {
   // same way, never its URL segments, and route to the same decision. It
   // carries no route identity of its own, so a rebuild states that as nulls.
   test("a tab rebuilt from its own payload names and routes the same decision", () => {
-    fc.assert(
+    assertProperty(
+      "a tab rebuilt from its own payload names and routes the same decision",
       fc.property(
         fc.record({
           caseNumber: fc.string({ minLength: 1 }),
@@ -263,7 +264,7 @@ describe("case decision inspector", () => {
           ).toBe(decision.decisionId);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

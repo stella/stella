@@ -32,7 +32,11 @@ export const REVIEW_RESET_KEPT_TABLES = {
   member: "Membership: the review account stays in its organization.",
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
+  account_exports:
+    "Account-owned export ledger: an organization audit archive belongs to the requesting account and keeps no reference to the organization.",
   organization_settings: "Organization settings, not reviewer content.",
+  billing_draft_user_settings:
+    "Per-user billing draft consent and preferences, not reviewer content.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:

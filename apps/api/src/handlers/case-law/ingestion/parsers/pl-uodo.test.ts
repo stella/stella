@@ -9,9 +9,9 @@
 
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import type {
   Block,
   Inline,
@@ -19,11 +19,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
-  parsePlUodoDecisionXml,
+  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",
@@ -59,7 +62,7 @@ const paragraphs = (blocks: readonly Block[]): ParagraphBlock[] =>
  * numeric index. Other markup is dropped and whitespace collapsed.
  */
 const xTextsOf = (xml: string, withFootnoteMarks: boolean): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const labels = new Map(
     $("xGloss")
       .toArray()

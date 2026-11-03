@@ -355,6 +355,15 @@ test("crawler verification bounds waiters on one coalesced DNS flight", async ()
   }
 });
 
+const isAdmissionLine = (line: string): boolean => {
+  const value: unknown = JSON.parse(line);
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "PublicCorpusAdmissions" in value
+  );
+};
+
 type AdmissionCountOptions = {
   lines: string[];
   routeClass: string;
@@ -683,16 +692,32 @@ describe("public corpus fleet request budgets", () => {
           })
         ).status,
       ).toBe(200);
-      expect(lines).toHaveLength(3);
+      // Each refused 503 is observed from its cause as a transient capacity
+      // failure next to its admission line.
+      const failures = lines.filter((line) => !isAdmissionLine(line));
+      expect(failures.map((line): unknown => JSON.parse(line))).toEqual(
+        Array.from({ length: 3 }, () =>
+          expect.objectContaining({
+            sink: "api.capacity_refused",
+            reason: "work_capacity_unavailable",
+          }),
+        ),
+      );
+      const admissions = lines.filter(isAdmissionLine);
+      expect(admissions).toHaveLength(3);
       for (const routeClass of ["search", "aggregate", "sitemap"]) {
-        expect(admissionCount({ lines, routeClass, outcome: "acquired" })).toBe(
-          0,
-        );
-        expect(admissionCount({ lines, routeClass, outcome: "refused" })).toBe(
-          1,
-        );
+        expect(
+          admissionCount({
+            lines: admissions,
+            routeClass,
+            outcome: "acquired",
+          }),
+        ).toBe(0);
+        expect(
+          admissionCount({ lines: admissions, routeClass, outcome: "refused" }),
+        ).toBe(1);
       }
-      for (const line of lines) {
+      for (const line of admissions) {
         expect(JSON.parse(line)).toMatchObject({
           PublicCorpusAdmissions: 1,
         });
@@ -891,14 +916,17 @@ describe("public corpus fleet request budgets", () => {
           request("/case/decisions/search", "POST"),
         );
         expect(response.status).toBe(503);
-        expect(lines).toHaveLength(1);
-        for (const line of lines) {
-          expect(JSON.parse(line)).toMatchObject({
+        expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+          expect.objectContaining({
             class: "search",
             outcome: "refused",
             PublicCorpusAdmissions: 1,
-          });
-        }
+          }),
+          expect.objectContaining({
+            sink: "api.capacity_refused",
+            reason: "work_capacity_unavailable",
+          }),
+        ]);
       } finally {
         context.kill();
       }

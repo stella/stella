@@ -298,6 +298,7 @@ const installFixtureNetwork = () => {
     clientId: null,
     leadUserId: null,
     billingReference: null,
+    billingNarrativeLanguage: null,
     color: null,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
@@ -860,7 +861,12 @@ const declareCensus = (fixture: FixtureRuntime) => {
           .filter(
             (route) => route.parentRoute?.id === "__root__" && hasUi(route),
           )
-          .filter((route) => route.options.staticData?.appFrame === undefined)
+          .filter((route) => {
+            if (route.options.staticData === undefined) {
+              return true;
+            }
+            return route.options.staticData.appFrame === undefined;
+          })
           .map(({ id }) => id),
       ).toEqual([]);
       const publicLeaves = uiLeaves.filter((route) => !isLegacyTool(route));

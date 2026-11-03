@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { createTestState } from "@stll/test-state";
 
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
@@ -202,7 +202,8 @@ describe("the token the GitHub reads are made with", () => {
   });
 
   test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
-    fc.assert(
+    assertProperty(
+      "changes GITHUB_TOKEN alone, whatever the parent environment holds",
       fc.property(
         fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
         fc.option(fc.string({ minLength: 1 }), { nil: null }),
@@ -220,7 +221,7 @@ describe("the token the GitHub reads are made with", () => {
           expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -673,7 +674,8 @@ describe("pending changesets folded into the release", () => {
 
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
-    fc.assert(
+    assertProperty(
+      "increments every safe stable patch version without changing its series",
       fc.property(
         fc.nat({ max: 1_000_000 }),
         fc.nat({ max: 1_000_000 }),
@@ -690,7 +692,7 @@ describe("maintenance release preparation", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -1359,7 +1361,8 @@ describe("a superseded version's notes folded into the release", () => {
   // of cuts leaves no undated page behind the newest, and a bullet of a
   // superseded version stays on exactly one page.
   test("leaves every page but the newest dated after any run of cuts", () => {
-    fc.assert(
+    assertProperty(
+      "leaves every page but the newest dated after any run of cuts",
       fc.property(
         fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
           maxLength: 6,
@@ -1405,7 +1408,7 @@ describe("a superseded version's notes folded into the release", () => {
           expect(holding).toHaveLength(1);
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });

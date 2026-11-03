@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
 /**
@@ -43,10 +44,11 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -119,7 +121,7 @@ export type ParseEcjDecisionOutput = {
 export const parseEcjDecisionHtml = (
   input: ParseEcjDecisionInput,
 ): ParseEcjDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const { boundary, root: $document } = ecjDocumentRoot($);
   const blocks = buildBlocks($, $document);
   const keywords = extractKeywords($document);
@@ -431,7 +433,7 @@ export const ecjConverterVersion = (html: string): string | undefined =>
  * the caller must be able to tell apart from a bounded document.
  */
 export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const document = ecjDocumentRoot($);
   return {
     boundary: document.boundary,
@@ -580,11 +582,33 @@ const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
     ? KEYWORD_SEPARATOR
     : LOOSE_KEYWORD_SEPARATOR;
 
-  return inner
-    .split(separator)
+  const keywords: string[] = [];
+  let previousSeparator = "";
+  // Capture each separator, so a dash that closes a range keeps its spacing.
+  for (const [index, piece] of inner
+    .split(new RegExp(`(${separator.source})`, "u"))
+    .entries()) {
+    if (index % 2 === 1) {
+      previousSeparator = piece;
+      continue;
+    }
+    const last = keywords.at(-1);
+    // A bare number after a dash closes a range inside the keyword before
+    // it (`Artikli 1 lõiked 1 – 3`, paragraphs 1 to 3): a number alone is
+    // never a keyword of its own.
+    if (last !== undefined && BARE_NUMBER.test(piece.trim())) {
+      keywords[keywords.length - 1] = `${last}${previousSeparator}${piece}`;
+    } else {
+      keywords.push(piece);
+    }
+  }
+  return keywords
     .map((part) => part.replace(/\s+/gu, " ").trim())
     .filter((part) => part.length > 0);
 };
+
+/** A number with nothing else: the end of a range, not a keyword. */
+const BARE_NUMBER = /^\d{1,4}$/u;
 
 /**
  * Whether a normalized historical payload lost spacing that determines ECJ
@@ -603,7 +627,7 @@ export const ecjStatesKeywordChain = (html: string): boolean =>
   new RegExp(`class="(?:${CLASS_PREFIX})?${CLASS.index}"`, "u").test(html);
 
 export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const raw = visibleHtmlText($(sel(CLASS.index)).first()).trim();
   return (
     raw.length > 0 &&
@@ -1279,7 +1303,8 @@ const visitLegacyParagraph = (
     printedNumbers.candidates.push({
       index,
       number: printed.value,
-      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+      marker: match?.groups?.["dot"] !== undefined ? "dotted" : "bare",
       dated:
         printed.value <= DAYS_IN_MONTH_MAX &&
         MONTH_AND_YEAR.test(body.plainText),
