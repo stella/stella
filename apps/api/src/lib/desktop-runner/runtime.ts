@@ -4,9 +4,16 @@ import type { HttpServer } from "@/api/http/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import {
+  createDesktopRunnerControl,
+  type DesktopRunnerControl,
+} from "@/api/lib/desktop-runner/control";
+import {
   createLocalDoorbell,
+  createLocalRunBell,
   createRedisDoorbell,
+  createRedisRunBell,
   type DesktopRunnerDoorbell,
+  type DesktopRunnerRunBell,
 } from "@/api/lib/desktop-runner/doorbell";
 import { runnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
@@ -35,6 +42,32 @@ const getDoorbell = () =>
       ? createLocalDoorbell()
       : createRedisDoorbell({ createClient: createRedisClient }));
 
+let runBell: DesktopRunnerRunBell | null = null;
+// Readers of a run may sit on any task; without Redis there is only this one.
+const getRunBell = () =>
+  (runBell ??=
+    envBase.REDIS_URL === undefined
+      ? createLocalRunBell()
+      : createRedisRunBell({ createClient: createRedisClient }));
+
+let control: DesktopRunnerControl | null = null;
+
+/**
+ * This process's handle on runs it starts on members' computers, with the
+ * bell that wakes it when a run's messages arrive. Every call names the
+ * member it acts for.
+ */
+export const getDesktopRunnerControl = (): {
+  control: DesktopRunnerControl;
+  runBell: DesktopRunnerRunBell;
+} => {
+  control ??= createDesktopRunnerControl({
+    db: rootDb,
+    doorbell: getDoorbell(),
+  });
+  return { control, runBell: getRunBell() };
+};
+
 let gateway: DesktopRunnerGateway | null = null;
 
 /** Start accepting runner sockets in this task; called once by the server boot. */
@@ -42,6 +75,7 @@ export const startDesktopRunnerGateway = async () => {
   gateway ??= createDesktopRunnerGateway({
     db: rootDb,
     doorbell: getDoorbell(),
+    runBell: getRunBell(),
     instanceId: INSTANCE_ID,
     authorize: authorizeRunnerWith(authorizeDesktopAccount),
     mintRunToken: mintAgentRunToken,
