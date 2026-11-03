@@ -90,12 +90,20 @@ export const TOPIC_BRIDGE_GAP_MS = 2 * MINUTE_MS;
  */
 export type ActivityBlock = DayCalendarRange & {
   apps: AppTotal[];
+  /** Where the block is drawn to: at least one label line tall, so a brief
+   * block can still be read, hovered and clicked, and never past the next
+   * block's start. */
+  drawnEndMs: number;
   id: string;
   matter: DesktopTimeEntryMatterCandidate | null;
   /** Every recorded segment in the block, in time order. */
   sources: MatchedSegment[];
   /** The title the block spent longest on; `null` when none was recorded. */
   title: string | null;
+  /** The topic holding at least half the block's recorded time: its matter,
+   * call, document or window title, or app. `null` when no topic does, as in
+   * quick switching between unrelated windows. */
+  topic: string | null;
 };
 
 type TopicDraft = DayCalendarRange & {
@@ -200,8 +208,10 @@ const preferredNeighbour = (
  * The Activity column, one block per topic: consecutive time on one matter is
  * one block whatever apps it moved through, and time no matter claimed groups
  * by the document or window title it was on. A stretch too short to hold a
- * label line joins its neighbour unless it is a matter's own time, so quick
- * switching never draws slivers and a matter's time always shows. A pause is
+ * label line joins its neighbour unless it is a matter's own time, and
+ * brief stretches with no matter less than a label line apart are one, so
+ * quick switching never draws slivers and a matter's time always shows. A
+ * pause is
  * time with nothing recorded: one of up to {@link TOPIC_BRIDGE_GAP_MS} does
  * not split a block, so a matter's time around a quick look at another app is
  * one block as long as each pause on either side of that look is short. Every
@@ -243,8 +253,9 @@ export const activityBlocks = (
         topic: topicOf(segment),
       })),
   );
-  // Quick switching: consecutive stretches with no matter, each too short for
-  // a label, are one stretch named by the topic it spent longest on.
+  // Quick switching: stretches with no matter, each too short for a label and
+  // less than a label line apart, are one stretch named by the topic it spent
+  // longest on.
   const runs: { draft: TopicDraft; loose: boolean; merged: boolean }[] = [];
   for (const draft of drafts) {
     const last = runs.at(-1);
@@ -252,7 +263,7 @@ export const activityBlocks = (
     if (
       loose &&
       last?.loose === true &&
-      draft.startMs - last.draft.endMs <= TOPIC_BRIDGE_GAP_MS
+      draft.startMs - last.draft.endMs <= thresholdMs
     ) {
       appendDraft(last.draft, draft);
       last.merged = true;
@@ -265,7 +276,8 @@ export const activityBlocks = (
       run.draft.topic = dominantTopic(run.draft.sources, topicOf);
     }
   }
-  // A stretch still too short for a label joins a neighbour.
+  // A stretch still too short for a label joins a neighbour a pause apart at
+  // most; one left alone is drawn a label line tall where there is room.
   const placed: TopicDraft[] = [];
   let carried: TopicDraft | null = null;
   for (const [index, run] of runs.entries()) {
@@ -299,7 +311,7 @@ export const activityBlocks = (
     }
   }
   const blocks = joinSameTopic(placed);
-  return blocks.map((draft) => {
+  return blocks.map((draft, index) => {
     const titleTotals = new Map<string, number>();
     for (const segment of draft.sources) {
       const title = titleOf(segment);
@@ -319,8 +331,13 @@ export const activityBlocks = (
       }
     }
     const first = draft.sources.at(0);
+    const nextStartMs = blocks[index + 1]?.startMs ?? Number.POSITIVE_INFINITY;
     return {
       apps: appTotals(draft.sources),
+      drawnEndMs: Math.min(
+        Math.max(draft.endMs, draft.startMs + thresholdMs),
+        Math.max(draft.endMs, nextStartMs),
+      ),
       endMs: draft.endMs,
       id:
         first === undefined
@@ -330,8 +347,27 @@ export const activityBlocks = (
       sources: draft.sources,
       startMs: draft.startMs,
       title,
+      topic: majorityTopic(draft, topicOf),
     };
   });
+};
+
+/** The topic holding at least half a stretch's recorded time, if any. */
+const majorityTopic = (
+  draft: TopicDraft,
+  topicOf: (segment: MatchedSegment) => string,
+): string | null => {
+  if (draft.matter !== null) {
+    return `matter:${draft.matter.id}`;
+  }
+  const topic = dominantTopic(draft.sources, topicOf);
+  let topicMs = 0;
+  for (const segment of draft.sources) {
+    if (topicOf(segment) === topic) {
+      topicMs += segment.endMs - segment.startMs;
+    }
+  }
+  return topicMs * 2 >= draft.durationMs ? topic : null;
 };
 
 const rawSegmentTitle = (segment: MatchedSegment) => {

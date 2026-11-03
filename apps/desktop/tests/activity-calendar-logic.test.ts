@@ -266,18 +266,86 @@ describe("activity blocks", () => {
           ) {
             const before = blocks[index - 1];
             const after = blocks[index + 1];
-            expect(
-              before === undefined ||
-                block.startMs - before.endMs > TOPIC_BRIDGE_GAP_MS,
-            ).toBe(true);
-            expect(
-              after === undefined ||
-                after.startMs - block.endMs > TOPIC_BRIDGE_GAP_MS,
-            ).toBe(true);
+            // A brief block left alone is a pause from every block, and more
+            // than a label line from every other brief block with no matter.
+            const apart = (other: (typeof blocks)[number] | undefined) => {
+              if (other === undefined) {
+                return true;
+              }
+              const gapMs =
+                other.startMs > block.startMs
+                  ? other.startMs - block.endMs
+                  : block.startMs - other.endMs;
+              const otherBrief =
+                other.matter === null &&
+                other.endMs - other.startMs < threshold;
+              return gapMs > (otherBrief ? threshold : TOPIC_BRIDGE_GAP_MS);
+            };
+            expect(apart(before)).toBe(true);
+            expect(apart(after)).toBe(true);
           }
+          // Drawn at least a label line tall, never over the next block.
+          const next = blocks[index + 1];
+          expect(block.drawnEndMs).toBeGreaterThanOrEqual(block.endMs);
+          expect(next === undefined || block.drawnEndMs <= next.startMs).toBe(
+            true,
+          );
+          expect(
+            block.drawnEndMs - block.startMs >= threshold ||
+              block.drawnEndMs === next?.startMs,
+          ).toBe(true);
         }
       }
     }
+  });
+
+  test("brief stretches a few minutes apart are one block, drawn a label line tall when alone", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 1, title: "Inbox" }),
+      segment({ from: 4, to: 5, app: "browser", title: "News" }),
+      segment({ from: 9, to: 10, title: "Calendar" }),
+      // Alone: more than a label line from anything.
+      segment({ from: 40, to: 41, app: "browser", title: "Weather" }),
+    ]);
+    const threshold = shortSegmentThresholdMs(15);
+    expect(threshold).toBeGreaterThan(9 * MINUTE);
+    expect(
+      activityBlocks(segments, 15).map((block) => [
+        block.startMs,
+        block.endMs,
+        block.drawnEndMs,
+        block.sources.length,
+      ]),
+    ).toEqual([
+      [ms(0), ms(10), ms(0) + threshold, 3],
+      [ms(40), ms(41), ms(40) + threshold, 1],
+    ]);
+  });
+
+  test("a block takes the topic holding half its time, and none when nothing does", () => {
+    const { segments } = day([
+      // Mostly one document: its topic.
+      segment({ from: 0, to: 6, title: "Board minutes.docx" }),
+      segment({ from: 6, to: 8, app: "browser", title: "Court calendar" }),
+      segment({ from: 8, to: 30, title: "Board minutes.docx" }),
+      // Quick switching between four unrelated windows: no topic.
+      segment({ from: 60, to: 62, title: "Inbox" }),
+      segment({ from: 62, to: 64, app: "browser", title: "News" }),
+      segment({ from: 64, to: 66, title: "Calendar" }),
+      segment({ from: 66, to: 68, app: "browser", title: "Weather" }),
+      // A matter's time: the matter.
+      segment({ from: 90, to: 120, matterId: "lease" }),
+    ]);
+    expect(
+      activityBlocks(segments, 15).map(({ startMs, topic }) => [
+        startMs,
+        topic,
+      ]),
+    ).toEqual([
+      [ms(0), "title:board minutes.docx"],
+      [ms(60), null],
+      [ms(90), "matter:lease"],
+    ]);
   });
 
   test("a block's details list its apps longest first with their longest title", () => {

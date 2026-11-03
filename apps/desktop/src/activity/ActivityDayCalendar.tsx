@@ -44,7 +44,10 @@ import {
   nextSuggestion,
   segmentTitles,
 } from "./activity-calendar-logic";
-import type { ActivitySuggestion } from "./activity-calendar-logic";
+import type {
+  ActivityBlock,
+  ActivitySuggestion,
+} from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
@@ -674,9 +677,10 @@ function useCalendarColumns({
               .filter((part) => part !== null)
               .join(" · ")}, ${range}`,
         caption: namedByApp ? range : apps,
-        endMs: block.endMs,
+        endMs: block.drawnEndMs,
         id: block.id,
-        kind: switching ? "mixed" : "segment",
+        // Time no one topic held reads as quick switching, in the quiet tone.
+        kind: block.topic === null ? "mixed" : "segment",
         startMs: block.startMs,
         title: (
           <span className="flex min-w-0 items-center gap-1.5">
@@ -684,7 +688,7 @@ function useCalendarColumns({
             <bdi className="truncate">{label}</bdi>
           </span>
         ),
-        tone: matterTone(block.matter),
+        tone: activityTone(block),
         tooltip,
       };
     },
@@ -767,6 +771,19 @@ function useCalendarColumns({
       type: "blocks",
     },
   ];
+}
+
+/** A matter's time in its colour; other time in its topic's, so one document
+ * reads alike all day; time no one topic held in the neutral tone. */
+function activityTone(
+  block: Pick<ActivityBlock, "matter" | "topic">,
+): DayCalendarTone {
+  if (block.matter !== null) {
+    return matterTone(block.matter);
+  }
+  return block.topic === null
+    ? { type: "neutral" }
+    : { key: block.topic, type: "topic" };
 }
 
 function matterTone(
