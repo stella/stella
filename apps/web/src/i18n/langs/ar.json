@@ -6362,6 +6362,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "هذا الملف مؤرشف ومتاح للقراءة فقط.",
     "calculations": {
       "choose": "حساب",
       "kinds": {
@@ -7219,6 +7220,7 @@
       "aiModel": "نموذج الذكاء الاصطناعي",
       "manualInput": "يدويًا"
     },
+    "unarchiveBeforeDelete": "ألغِ أرشفة هذا الملف قبل حذفه.",
     "unarchiveMatter": "إلغاء الأرشفة",
     "uploadDocuments": "رفع المستندات",
     "views": {
