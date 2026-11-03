@@ -540,10 +540,12 @@ impl SidecarHarnessHost {
         self.lost(run);
         continue;
       };
+      // Read now: the first probe after a restart may not have answered yet.
       let grant = self
         .shared
-        .cached(holder_run.harness)
-        .and_then(|cached| cached.credentials)
+        .harnesses
+        .credentials(holder_run.harness)
+        .await
         .and_then(|credentials| credentials.grant);
       let sinks = {
         let mut runs = locked(&self.shared.runs);

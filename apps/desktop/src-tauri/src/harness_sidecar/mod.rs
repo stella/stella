@@ -592,23 +592,19 @@ fn read_secret(dir: &Path) -> Option<HolderSecret> {
 
 /// Create the folder for the user alone, or refuse one others can reach.
 fn private_dir(dir: &Path) -> std::io::Result<()> {
-  crate::local_store::create_private_dir(dir)?;
+  // An existing folder is checked as found: creating it privately must not
+  // quietly tighten one someone else opened.
   #[cfg(unix)]
-  {
+  if let Ok(metadata) = std::fs::symlink_metadata(dir) {
     use std::os::unix::fs::PermissionsExt;
-    let mode = std::fs::metadata(dir)?.permissions().mode();
-    if mode & 0o077 != 0 {
+    if !metadata.is_dir() || metadata.permissions().mode() & 0o077 != 0 {
       return Err(std::io::Error::new(
         std::io::ErrorKind::PermissionDenied,
         "the holder folder is open to other users",
       ));
     }
-    Ok(())
   }
-  #[cfg(not(unix))]
-  {
-    Ok(())
-  }
+  crate::local_store::create_private_dir(dir)
 }
 
 /// The program to start: in place, or a byte copy in the version's folder.
@@ -624,8 +620,16 @@ fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<Path
     return Ok(target);
   }
   let temporary = dir.join(format!(".{BUNDLED_NAME}.{}.tmp", uuid::Uuid::new_v4()));
-  let copied = copy_bytes(&launch.program, &temporary)
-    .and_then(|()| crate::local_store::rename_private(&temporary, &target));
+  let copied = (|| -> std::io::Result<()> {
+    copy_bytes(&launch.program, &temporary)?;
+    #[allow(
+      clippy::disallowed_methods,
+      reason = "local_store created the copy executable and private; its rename \
+                would reset the copy to a data file's mode"
+    )]
+    std::fs::rename(&temporary, &target)?;
+    Ok(())
+  })();
   if copied.is_err() {
     let _removed = std::fs::remove_file(&temporary);
   }
