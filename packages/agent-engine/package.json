@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "build:sidecar": "bun scripts/build-sidecar.ts",
     "clean": "git clean -xdf .cache .turbo node_modules",
     "e2e:cloud": "bun --env-file=.env.e2e scripts/e2e-cloud-run.ts",
     "e2e:mcp-canary": "bun scripts/e2e-mcp-canary.ts",
