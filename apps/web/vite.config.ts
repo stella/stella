@@ -29,6 +29,7 @@ import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
 import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
 import { routeTreeOptions } from "./route-tree.config.ts";
 import { routeTemplateManifestPlugin } from "./scripts/route-template-manifest.ts";
+import { workerEntryFileName } from "./scripts/runtime-asset-contracts.ts";
 
 export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
@@ -467,6 +468,9 @@ export default defineConfig(({ mode, command }) => {
       // asset plugins so dependencies that rewrite and emit WASM sidecars keep
       // the same contract when they move off the main thread.
       plugins: workerRuntimeAssetPlugins,
+      rolldownOptions: {
+        output: { entryFileNames: workerEntryFileName },
+      },
     },
     build: {
       target: "es2025",
