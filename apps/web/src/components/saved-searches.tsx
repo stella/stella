@@ -26,6 +26,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -33,6 +34,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
@@ -52,6 +54,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -133,20 +136,26 @@ export const SavedSearches = ({
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
+  const submitIntent = useIdempotentSubmit();
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
       const { time, workspaceIds, ...requiredCriteria } = criteria;
       return unwrapApiResponse(
-        await api["saved-searches"].post({
-          name,
-          criteria: {
-            ...requiredCriteria,
-            workspaceIds: workspaceIds.map((workspaceId) =>
-              toSafeId<"workspace">(workspaceId),
-            ),
-            ...(time !== undefined && { time }),
+        await submitIntent.run({
+          operation: "saved-searches.create",
+          body: {
+            name,
+            criteria: {
+              ...requiredCriteria,
+              workspaceIds: workspaceIds.map((workspaceId) =>
+                toSafeId<"workspace">(workspaceId),
+              ),
+              ...(time !== undefined && { time }),
+            },
           },
+          send: async (creationPayload) =>
+            api["saved-searches"].post(creationPayload),
         }),
       );
     },
@@ -361,16 +370,17 @@ export const SavedSearches = ({
                 : t("search.saveSearchTitle")}
             </DialogTitle>
           </DialogHeader>
-          <form
+          <Form
+            className="gap-0"
             onSubmit={(event) => {
               event.preventDefault();
               saveName();
             }}
           >
             <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-search-name">
+              <Label className="sr-only" htmlFor="saved-search-name">
                 {t("common.name")}
-              </label>
+              </Label>
               <Input
                 autoFocus
                 dir={contentDir(dialogName)}
@@ -407,7 +417,7 @@ export const SavedSearches = ({
                 {t("common.save")}
               </Button>
             </DialogFooter>
-          </form>
+          </Form>
         </DialogPopup>
       </Dialog>
 

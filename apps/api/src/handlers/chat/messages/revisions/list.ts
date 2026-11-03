@@ -21,6 +21,7 @@ import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revision
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import {
   paginationCursorSchema,
   paginationLimitSchema,
@@ -188,6 +189,18 @@ export const readChatMessageRevisionsOnTx = async ({
     ...(before === undefined ? {} : { before }),
     limit,
   });
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: rows,
+  });
+  const maskedContent = (
+    content: (typeof chatMessages.$inferSelect)["content"],
+  ) =>
+    projection.chat(
+      { role: "assistant", content },
+      subjectByThread.get(threadId),
+    ).content;
   return createCursorPage({
     rows: rows.map(
       ({
@@ -204,9 +217,9 @@ export const readChatMessageRevisionsOnTx = async ({
         }
         return {
           ...revision,
-          content: serializeRevisionSnapshot(content),
-          beforeText: revisionText(content),
-          afterText: revisionText(nextContent ?? currentContent),
+          content: serializeRevisionSnapshot(maskedContent(content)),
+          beforeText: revisionText(maskedContent(content)),
+          afterText: revisionText(maskedContent(nextContent ?? currentContent)),
         };
       },
     ),

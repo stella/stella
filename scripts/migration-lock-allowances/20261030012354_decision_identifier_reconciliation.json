@@ -1,0 +1,4 @@
+{
+  "add-column": "The three count columns use PostgreSQL's constant fast-default catalog path; the completion and retry timestamps are nullable. No checkpoint row is rewritten or scanned, with 1s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "The retry-shape CHECK is added NOT VALID without scanning checkpoint rows; its new columns begin at the valid zero/null default. Lock acquisition is bounded by 1s and execution by 30s."
+}

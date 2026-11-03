@@ -62,14 +62,14 @@ export const createProviderCallError = ({
   const input = new HandlerError({
     message: PROVIDER_CALL_ERROR_MESSAGE,
     status,
-    code,
+    code: code ?? "internal_error",
     cause: evidence,
   });
   return new ProviderCallError({
     model,
     status,
     providerDiagnostic: createProviderDiagnostic({ model, evidence }),
-    code: providerCallErrorCode(code),
+    code: providerCallErrorCode(code) ?? "provider_error",
     kind: classifyAIError(input),
     facts: providerFailureFacts(input),
     requestId: providerRequestIdFrom(evidence),

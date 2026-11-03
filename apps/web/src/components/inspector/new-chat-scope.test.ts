@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import * as ts from "typescript6";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+import {
+  type CallExpression,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
@@ -156,22 +161,26 @@ const SCOPED_BY_WHAT_THEY_OPEN: Record<string, string> = {
     "tries a skill from the skill editor, which has no matter",
 };
 
-const calleeName = (call: ts.CallExpression): string | undefined => {
-  const callee = call.expression;
-  if (ts.isPropertyAccessExpression(callee)) {
-    return callee.name.text;
+const calleeName = (call: CallExpression): string | undefined => {
+  const callee = call.callee;
+  if (
+    callee.type === "MemberExpression" &&
+    callee.property.type === "Identifier"
+  ) {
+    return callee.property.name;
   }
-  if (ts.isIdentifier(callee)) {
-    return callee.text;
+  if (callee.type === "Identifier") {
+    return callee.name;
   }
   return undefined;
 };
 
 type OpenChatCall = {
-  argument: ts.Node;
+  /** Absent for a bare openChat(), which opens a global chat. */
+  argument: Node | undefined;
   file: string;
   line: number;
-  source: ts.SourceFile;
+  sourceText: string;
 };
 
 const openChatCalls = (): OpenChatCall[] =>
@@ -182,46 +191,62 @@ const openChatCalls = (): OpenChatCall[] =>
         sourceText.includes("openChat("),
     )
     .flatMap((entry) => {
-      const source = entry.sourceFile(false);
+      const source = parseSource(entry.filePath, entry.sourceText);
       const calls: OpenChatCall[] = [];
-      const visit = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && calleeName(node) === "openChat") {
+      walk(source.program, (node) => {
+        if (node.type === "CallExpression" && calleeName(node) === "openChat") {
           // A bare openChat() opens a global chat wherever the user is, so
           // it has to be listed too: its argument is the empty object.
           calls.push({
-            argument:
-              node.arguments[0] ?? ts.factory.createObjectLiteralExpression(),
+            argument: node.arguments[0],
             file: entry.relativePath,
-            line:
-              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-              1,
-            source,
+            line: source.locate(node.start).line,
+            sourceText: source.sourceText,
           });
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(source);
+      });
       return calls;
     });
 
-const callsBuilder = (node: ts.Node): boolean =>
-  (ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    ROUTE_SCOPE_BUILDERS.has(node.expression.text)) ||
-  (ts.forEachChild(node, (child) => callsBuilder(child) || undefined) ?? false);
+const someNode = (
+  root: Node | undefined,
+  predicate: (node: Node) => boolean,
+): boolean => {
+  let found = false;
+  if (root !== undefined) {
+    walk(root, (node) => {
+      if (found || predicate(node)) {
+        found = true;
+        return "skip-children";
+      }
+      return undefined;
+    });
+  }
+  return found;
+};
+
+const callsBuilder = (root: Node | undefined): boolean =>
+  someNode(
+    root,
+    (node) =>
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      ROUTE_SCOPE_BUILDERS.has(node.callee.name),
+  );
 
 const MATTER_FIELDS = new Set(["contextMatterIds", "workspaceId"]);
-const readsTabMatter = (node: ts.Node, source: ts.SourceFile): boolean =>
-  (ts.isPropertyAccessExpression(node) &&
-    MATTER_FIELDS.has(node.name.text) &&
-    /tab/iu.test(node.expression.getText(source))) ||
-  (ts.isIdentifier(node) &&
-    /^tab(WorkspaceId|ContextMatterIds)$/u.test(node.text)) ||
-  (ts.forEachChild(
-    node,
-    (child) => readsTabMatter(child, source) || undefined,
-  ) ??
-    false);
+const readsTabMatter = (root: Node | undefined, sourceText: string): boolean =>
+  someNode(
+    root,
+    (node) =>
+      (node.type === "MemberExpression" &&
+        node.property.type === "Identifier" &&
+        !node.computed &&
+        MATTER_FIELDS.has(node.property.name) &&
+        /tab/iu.test(sourceText.slice(node.object.start, node.object.end))) ||
+      (node.type === "Identifier" &&
+        /^tab(WorkspaceId|ContextMatterIds)$/u.test(node.name)),
+  );
 
 describe("openChat census", () => {
   const calls = openChatCalls();
@@ -233,7 +258,9 @@ describe("openChat census", () => {
   test("no caller copies an open tab's matter into openChat", () => {
     expect(
       calls
-        .filter(({ argument, source }) => readsTabMatter(argument, source))
+        .filter(({ argument, sourceText }) =>
+          readsTabMatter(argument, sourceText),
+        )
         .map(({ file, line }) => `${file}:${line}`),
     ).toEqual([]);
   });

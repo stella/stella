@@ -10,10 +10,14 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 import { arrayOrEmpty } from "@/api/lib/array";
 
 /** What each chunk says about an answer. `text` answers only when its delta
  *  holds more than whitespace. */
+type ChunkAnswerPolicy = "call" | "none" | "text";
+
 const CHUNK_ANSWER_POLICY = {
   ACTIVITY_DELTA: "none",
   ACTIVITY_SNAPSHOT: "none",
@@ -46,11 +50,15 @@ const CHUNK_ANSWER_POLICY = {
   TOOL_CALL_END: "none",
   TOOL_CALL_RESULT: "none",
   TOOL_CALL_START: "call",
-} as const satisfies Record<StreamChunk["type"], "call" | "none" | "text">;
+} as const satisfies Record<StreamChunk["type"], ChunkAnswerPolicy>;
+
+const chunkAnswerPolicy = (type: string): ChunkAnswerPolicy =>
+  ownEntry(CHUNK_ANSWER_POLICY, type) ?? "none";
 
 /** Whether a chunk a model streamed carries an answer. */
 export const chunkCarriesAnswer = (chunk: StreamChunk): boolean => {
-  const policy = CHUNK_ANSWER_POLICY[chunk.type];
+  // A type the installed SDK does not name carries no answer it can read.
+  const policy = chunkAnswerPolicy(chunk.type);
   switch (policy) {
     case "call":
       return true;

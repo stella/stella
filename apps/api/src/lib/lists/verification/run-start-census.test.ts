@@ -118,5 +118,5 @@ test("the census detects named aliases, namespace aliases, local aliases and raw
 test("REST and generated MCP, CLI and chat capability dispatch share the create handler", async () => {
   const capability =
     await CAPABILITY_DISPATCH["lists.verifications.create"].load();
-  expect(capability.default).toBe(createVerification);
+  expect(capability["default"]).toBe(createVerification);
 });

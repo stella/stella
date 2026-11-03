@@ -3,12 +3,25 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
+import { CONNECTABLE_CONNECTORS_PAGE_SIZE } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,
@@ -21,8 +34,10 @@ import type {
   McpConnectionStatus,
 } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { safeOutboundFetchStream } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -52,10 +67,7 @@ import type {
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  safeOutboundFetchStream,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
 import {
   errorResult,
@@ -235,6 +247,7 @@ const bindMcpConnection = (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP connection resource does not match the connector URL",
         }),
       );
@@ -405,6 +418,88 @@ export const loadMcpConnectionById = async ({
     userId,
   });
   return normalized.at(0) ?? null;
+};
+
+/**
+ * Connectors the organization offers whose tools would not load for this
+ * user: no connection yet, or an enabled one that is not connected (it needs
+ * sign-in again). A connection the user disabled is a choice, not a gap, so
+ * it is not offered. Uses the same authorization-review gate as
+ * {@link loadActiveMcpConnectionsForUser}.
+ */
+export const loadConnectableMcpConnectorsForUser = async ({
+  afterSlug,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  afterSlug?: string | undefined;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<ConnectableMcpConnectorCatalog, SafeDbError>> => {
+  const result = await safeDb(async (tx) =>
+    readCursorPage(
+      tx
+        .selectDistinctOn([mcpConnectors.slug], {
+          slug: mcpConnectors.slug,
+          displayName: mcpConnectors.displayName,
+        })
+        .from(mcpConnectors)
+        .leftJoin(
+          mcpConnectorAuthorizationReviews,
+          and(
+            eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+            eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+          ),
+        )
+        .leftJoin(
+          mcpUserConnections,
+          and(
+            eq(mcpUserConnections.connectorId, mcpConnectors.id),
+            eq(mcpUserConnections.organizationId, organizationId),
+            eq(mcpUserConnections.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            or(
+              isNull(mcpConnectors.organizationId),
+              eq(mcpConnectors.organizationId, organizationId),
+            ),
+            approvedMcpAuthorizationReview,
+            afterSlug === undefined
+              ? undefined
+              : gt(mcpConnectors.slug, afterSlug),
+            or(
+              isNull(mcpUserConnections.id),
+              and(
+                eq(mcpUserConnections.enabled, true),
+                or(
+                  ne(mcpUserConnections.status, "connected"),
+                  ne(
+                    mcpUserConnections.responseDisposition,
+                    MCP_RESPONSE_DISPOSITION.normal,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(mcpConnectors.slug), asc(mcpConnectors.id)),
+      {
+        limit: CONNECTABLE_CONNECTORS_PAGE_SIZE,
+        cursorForItem: ({ slug }) => slug,
+      },
+    ),
+  );
+  return result.map((page) => ({
+    connectors: page.items,
+    continuation:
+      page.nextCursor === null
+        ? { type: "complete" }
+        : { type: "more-available", afterSlug: page.nextCursor },
+  }));
 };
 
 /**

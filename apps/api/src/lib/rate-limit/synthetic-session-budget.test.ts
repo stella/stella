@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { SYNTHETIC_SESSION_MINT_BUDGETS } from "@/api/lib/rate-limit/budget-config";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
+import { LimiterStoreUnavailableError } from "./store-unavailable";
 import { createSyntheticSessionBudget } from "./synthetic-session-budget";
 
 test.each(Object.entries(SYNTHETIC_SESSION_MINT_BUDGETS))(
@@ -37,7 +40,9 @@ test("session minting is unavailable when the counter service is unavailable", a
   });
   try {
     const reserve = createSyntheticSessionBudget({ context });
-    expect(await reserve()).toBe(false);
+    expect(await rejectionOf(reserve())).toBeInstanceOf(
+      LimiterStoreUnavailableError,
+    );
   } finally {
     context.kill();
   }

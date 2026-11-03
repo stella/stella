@@ -9,7 +9,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
@@ -32,7 +32,7 @@ export const DocumentProcessingCard = ({
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 

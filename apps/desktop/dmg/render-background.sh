@@ -5,6 +5,7 @@ dmg_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd "$dmg_dir/../../.." && pwd)
 onboarding_gradient="$repo_root/apps/web/public/branding/onboarding-gradient-light.svg"
 arrow_overlay="$dmg_dir/background.svg"
+wordmark="$repo_root/apps/landing/public/brand/stella-wordmark.svg"
 
 for command_name in rsvg-convert ffmpeg; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -13,7 +14,7 @@ for command_name in rsvg-convert ffmpeg; do
   fi
 done
 
-for source_file in "$onboarding_gradient" "$arrow_overlay"; do
+for source_file in "$onboarding_gradient" "$arrow_overlay" "$wordmark"; do
   if [[ ! -f "$source_file" ]]; then
     echo "error: source asset not found: $source_file" >&2
     exit 1
@@ -33,18 +34,24 @@ render_background() {
   local suffix=$4
   local gradient_png="$render_dir/gradient-$suffix.png"
   local overlay_png="$render_dir/overlay-$suffix.png"
+  local wordmark_png="$render_dir/wordmark-$suffix.png"
+  local scale=$((width / 660))
 
   rsvg-convert --width "$width" --height "$height" \
     "$onboarding_gradient" --output "$gradient_png"
   rsvg-convert --width "$width" --height "$height" \
     "$arrow_overlay" --output "$overlay_png"
 
+  rsvg-convert --width "$((96 * scale))" \
+    "$wordmark" --output "$wordmark_png"
+
   ffmpeg -hide_banner -loglevel error -y \
     -f lavfi -i "color=c=0xf5f5f4:s=${width}x${height}" \
     -i "$gradient_png" \
     -i "$overlay_png" \
+    -i "$wordmark_png" \
     -filter_complex \
-      "[1:v]format=rgba,colorchannelmixer=aa=0.28[rays];[0:v][rays]overlay[base];[base][2:v]overlay,format=rgb24" \
+      "[1:v]format=rgba,colorchannelmixer=aa=0.28[rays];[0:v][rays]overlay[base];[base][2:v]overlay[copy];[copy][3:v]overlay=x=$((32 * scale)):y=$((28 * scale)),format=rgb24" \
     -frames:v 1 \
     "$output"
 }

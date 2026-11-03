@@ -40,12 +40,20 @@ import type {
   CreateAnnotationBody,
   UpdateAnnotationBody,
 } from "@/api/lib/legal-search/reader-annotations/schema";
-import { DOCUMENT_ANNOTATION_REACH } from "@/api/lib/legal-search/reader-annotations/target";
+import {
+  DOCUMENT_ANNOTATION_REACH,
+  PUBLIC_LAW_ANNOTATION_PLACEMENT,
+} from "@/api/lib/legal-search/reader-annotations/target";
 import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -60,15 +68,12 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  cursorInput,
   errorResult,
   internalFailureResult,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -282,6 +287,7 @@ const handleListTool: TypedMcpToolHandler<
         ...(limit === undefined ? {} : { limit }),
       },
       safeDb: context.safeDb,
+      readCopies: context.testDependencies?.readWithdrawnCopies,
       userId: context.userId,
     }),
   );
@@ -506,6 +512,7 @@ const handleCreateTool: TypedMcpToolHandler<
     createReaderAnnotationHandler({
       body,
       organizationId: context.organizationId,
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent: context.recordAuditEvent,
       safeDb: context.safeDb,
       userId: context.userId,

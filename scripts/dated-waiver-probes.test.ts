@@ -650,3 +650,68 @@ test.each([
 ])("a nonzero release age %j is not a zero-age override", (command) => {
   expect(ZERO_AGE_OVERRIDE.test(` ${command}`)).toBe(false);
 });
+
+const rolloutFile = (id: string, fields: string) =>
+  `{ "id": ${JSON.stringify(id)}, ${fields} "check": ["bun", "scripts/check-${id}.ts"] }\n`;
+
+test("guard rollout healing restores full enforcement in only the entry's own file", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.json",
+    "fixture-guard",
+  );
+  const other = {
+    file: "scripts/guard-rollouts/other-guard.json",
+    source: rolloutFile(
+      "other-guard",
+      '"type": "changed-lines", "expiresAt": "2026-10-06T00:00:00.000Z",',
+    ),
+  };
+  for (const fields of [
+    '"type": "changed-lines", "expiresAt": "2026-10-05T00:00:00.000Z",',
+    '"expiresAt": "2026-10-05T00:00:00.000Z", "type": "changed-lines",',
+  ]) {
+    const changes = removeWaiver(
+      entry,
+      reader({
+        [entry.source]: rolloutFile("fixture-guard", fields),
+        [other.file]: other.source,
+      }),
+    );
+    expect(changes.map(({ source }) => source)).toEqual([entry.source]);
+    const changed = changes.at(0)?.after ?? "";
+    expect(JSON.parse(changed).id).toBe("fixture-guard");
+    expect(JSON.parse(changed).type).toBe("full");
+    expect(JSON.parse(changed).check).toEqual([
+      "bun",
+      "scripts/check-fixture-guard.ts",
+    ]);
+    expect(changed).not.toContain(entry.expiresAt);
+    expect(() =>
+      removeWaiver(entry, reader({ [entry.source]: changed })),
+    ).toThrow("Guard rollout scope or expiry changed");
+  }
+  expect(() =>
+    removeWaiver(
+      { ...entry, source: other.file },
+      reader({ [other.file]: other.source }),
+    ),
+  ).toThrow(
+    "Guard rollout heals only in its own file: scripts/guard-rollouts/other-guard.json (fixture-guard)",
+  );
+});
+
+test("guard rollout healing rejects a changed deadline", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.json",
+    "fixture-guard",
+  );
+  const source = rolloutFile(
+    "fixture-guard",
+    '"type": "changed-lines", "expiresAt": "2026-10-06T00:00:00.000Z",',
+  );
+  expect(() => removeWaiver(entry, reader({ [entry.source]: source }))).toThrow(
+    "Guard rollout scope or expiry changed",
+  );
+});

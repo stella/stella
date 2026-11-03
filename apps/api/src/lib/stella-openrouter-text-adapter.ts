@@ -9,6 +9,7 @@ import type {
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
+import { withOptionalsNullable } from "@stll/agent-input";
 import { Temporal } from "@stll/time";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -23,7 +24,6 @@ import {
   withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import {
   readEvidence,
   readProviderStatus,
@@ -176,8 +176,11 @@ const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
 
 const OPENROUTER_DATA_REGION_FILTER = "Filter by Data Region";
 
-const isManagedRoutingRefusal = (error: unknown): boolean => {
+const isManagedProviderRefusal = (error: unknown): boolean => {
   const status = readProviderStatus(error)?.status;
+  if (status === 402) {
+    return true;
+  }
   if (status !== 404 || typeof error !== "object" || error === null) {
     return false;
   }
@@ -250,7 +253,7 @@ const withManagedRequestEligibility = async function* ({
     };
     return;
   }
-  yield* withManagedProviderErrors(stream, isManagedRoutingRefusal);
+  yield* withManagedProviderErrors(stream, isManagedProviderRefusal);
 };
 
 const withManagedProviderErrors = async function* (
@@ -374,7 +377,9 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   override chatStream(options: OpenRouterTextOptions) {
     return withManagedProviderErrors(
       super.chatStream({ ...options, logger: resolveDebugOption(false) }),
-      this.isFederatedCredentialRefusal,
+      (error) =>
+        this.isFederatedCredentialRefusal(error) ||
+        isManagedProviderRefusal(error),
     );
   }
 
@@ -387,7 +392,9 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
           logger: resolveDebugOption(false),
         },
       }),
-      this.isFederatedCredentialRefusal,
+      (error) =>
+        this.isFederatedCredentialRefusal(error) ||
+        isManagedProviderRefusal(error),
     );
   }
 
@@ -461,7 +468,7 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
     const result = await Result.tryPromise({
       try: async () => await super.structuredOutput(options),
       catch: (error) =>
-        isManagedRoutingRefusal(error)
+        isManagedProviderRefusal(error)
           ? managedProviderUnavailable("openrouter")
           : error,
     });

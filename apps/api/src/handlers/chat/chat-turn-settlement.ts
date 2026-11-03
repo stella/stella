@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import {
   cancelPendingChatToolCalls,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
   isApprovedClientCallAwaitingResult,
   isChatPart,
@@ -315,7 +316,7 @@ export const settleOpenToolCallsForOutcome = ({
   return parts.flatMap((part): ChatPart[] =>
     part.type === "tool-call" && isApprovedWithoutResult(part, parts)
       ? [
-          unfinishedCall(part),
+          continueStoredChatPart(part, unfinishedCall(part)),
           errorToolResult(part.id, UNFINISHED_APPROVED_CALL_ERROR),
         ]
       : [part],

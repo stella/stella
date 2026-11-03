@@ -19,10 +19,11 @@
 //   const p = `%${q}%`;        like(col, p)
 //   sql`${col} ILIKE ${`%${q}%`}`
 //   sql`${col} LIKE '%' || ${q} || '%'`
+//   sql`${col} LIKE ${fold(escapeLike(q))} || '%'`   // escaped, then folded
 //
 // Allows:
 //   ilike(col, `%${escapeLike(q)}%`)
-//   sql`${col} LIKE ${fold(escapeLike(q))} || '%'`
+//   sql`${col} LIKE ${escapeLikeSql(fold(q))} || '%'`
 //   ilike(col, pattern)        // opaque variable: cannot inspect
 //   like(col, "literal")       // constant, no interpolation
 //
@@ -54,7 +55,10 @@ const LIKE_OPERATORS: ReadonlySet<string> = new Set([
   "notIlike",
 ]);
 const SQL_TAG: ReadonlySet<string> = new Set(["sql"]);
-const ESCAPE_LIKE: ReadonlySet<string> = new Set(["escapeLike"]);
+const ESCAPE_LIKE: ReadonlySet<string> = new Set([
+  "escapeLike",
+  "escapeLikeSql",
+]);
 const ESCAPE_LIKE_MODULE = "apps/api/src/lib/escape-like";
 
 const isDrizzleModule = (moduleId: string): boolean =>
@@ -84,9 +88,11 @@ const constInitializer = (
   return variable === null ? null : stableInitializer(variable);
 };
 
-// Whether an expression is, or wraps, an `escapeLike(...)` call from its
-// owning module: `escapeLike(q)`, `fold(escapeLike(q))`,
-// `escapeLike(q).toLowerCase()`, or a const holding one of those.
+// Whether an expression is an escape call from its owning module:
+// `escapeLike(q)`, `escapeLikeSql(fold(q))`, `escapeLike(q).toLowerCase()`, or
+// a const holding one of those. A call that wraps an escaped value is not
+// escaped: a SQL fold (`unaccent`, NFKC) can turn full-width `％` and `＿`
+// into the ASCII wildcards after the escape ran, so the escape goes last.
 const isEscaped = (context: RuleContext, node: unknown, depth = 0): boolean => {
   const expression = unwrapExpression(node);
   if (expression === null || depth > MAX_RESOLVE_DEPTH) {
@@ -104,17 +110,9 @@ const isEscaped = (context: RuleContext, node: unknown, depth = 0): boolean => {
       return true;
     }
     const callee = unwrapExpression(expression.callee);
-    if (
+    return (
       callee?.type === "MemberExpression" &&
       isEscaped(context, callee.object, depth + 1)
-    ) {
-      return true;
-    }
-    return (
-      Array.isArray(expression.arguments) &&
-      expression.arguments.some((argument) =>
-        isEscaped(context, argument, depth + 1),
-      )
     );
   }
   const init = constInitializer(context, expression);
@@ -192,7 +190,9 @@ export default eslintCompatPlugin({
           unescaped:
             "Wrap interpolated values in this LIKE/ILIKE pattern with " +
             "`escapeLike()` (from @/api/lib/escape-like) so a typed `%` or `_` " +
-            "matches literally instead of acting as a wildcard.",
+            "matches literally instead of acting as a wildcard. Escape after " +
+            "any SQL fold, with `escapeLikeSql(fold(q))`: a fold can turn " +
+            "full-width `％` into `%`.",
         },
       },
       createOnce(context) {

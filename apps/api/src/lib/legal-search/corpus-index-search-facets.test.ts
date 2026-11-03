@@ -54,6 +54,19 @@ const fakeEngine = (options?: {
           answered[name] = { value: options?.total ?? 7 };
           continue;
         }
+        if (name === "courtYear") {
+          answered[name] = {
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+            buckets: [
+              {
+                key: "court-value",
+                years: { buckets: [engineBucket("2024", 40, 3)] },
+              },
+            ],
+          };
+          continue;
+        }
         answered[name] = {
           buckets: [
             engineBucket(
@@ -137,9 +150,7 @@ test("every facet aggregates its own index field, by its own kind", async () => 
     Object.fromEntries(
       engine.requests.flatMap((request) =>
         Object.entries(request.aggs).flatMap(([name, aggregation]) =>
-          name === "total" || name === "courtYear"
-            ? []
-            : [[name, describeAggregation(aggregation)]],
+          name === "total" ? [] : [[name, describeAggregation(aggregation)]],
         ),
       ),
     ),
@@ -168,7 +179,7 @@ test("facets sharing a query share one engine round trip", async () => {
 
   expect(engine.requests).toHaveLength(1);
   expect(Object.keys(engine.requests.at(0)?.aggs ?? {}).toSorted()).toEqual(
-    [...CORPUS_SEARCH_FACET_NAMES, "courtYear", "total"].toSorted(),
+    [...CORPUS_SEARCH_FACET_NAMES, "total"].toSorted(),
   );
 });
 
@@ -285,7 +296,7 @@ test("every aggregation counts over the generation's document-id field", async (
   const cardinalityFields = JSON.stringify(engine.requests.at(0)?.aggs).match(
     /"cardinality":\{"field":"(?<field>[^"]+)"\}/gu,
   );
-  expect(cardinalityFields).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 2);
+  expect(cardinalityFields).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 1);
   expect(
     cardinalityFields?.every((entry) => entry.includes(`"${DOCUMENT_ID}"`)),
   ).toBe(true);
@@ -584,18 +595,63 @@ test("the read counts under exactly the query each facet was given", async () =>
   }
 });
 
-test("the matrix uses the whole filtered result query in the existing total round trip", async () => {
+test("only explicitly selected facets are aggregated, while every selection retains the total", async () => {
+  for (
+    let selection = 0;
+    selection < 2 ** CORPUS_SEARCH_FACET_NAMES.length;
+    selection += 1
+  ) {
+    const requestedFacets = CORPUS_SEARCH_FACET_NAMES.filter(
+      (_name, index) => Math.floor(selection / 2 ** index) % 2 === 1,
+    );
+    const engine = fakeEngine({ total: 412 });
+    const result = await readCorpusSearchFacets({
+      aggregate: engine.aggregate,
+      requestedFacets,
+      currentYear: CURRENT_YEAR,
+      decisionCountField: DOCUMENT_ID,
+      excludedSourceIds: [],
+      queryFor: (name) => `cross-filter:${name}`,
+      totalQuery: QUERY,
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.total).toBe(412);
+    expect(result.value.courtYear).toBeNull();
+    expect(engine.requests).toHaveLength(requestedFacets.length + 1);
+    expect(
+      engine.requests.flatMap(({ aggs }) => Object.keys(aggs)).toSorted(),
+    ).toEqual([...requestedFacets, "total"].toSorted());
+    for (const name of CORPUS_SEARCH_FACET_NAMES) {
+      expect(result.value.facets[name].length).toBe(
+        requestedFacets.includes(name) ? 1 : 0,
+      );
+    }
+  }
+});
+
+test("the matrix is aggregated only on explicit request under the whole filtered result query", async () => {
   const engine = fakeEngine();
-  const result = await read(engine, (name) => `cross-filter:${name}`);
-  const request = engine.requests.find(({ aggs }) =>
-    Object.hasOwn(aggs, "courtYear"),
-  );
-  expect(request?.query).toBe(QUERY);
-  expect(request?.aggs["total"]).toEqual({
-    cardinality: { field: DOCUMENT_ID },
+  const result = await readCorpusSearchFacets({
+    aggregate: engine.aggregate,
+    requestedFacets: ["courtYear"],
+    currentYear: CURRENT_YEAR,
+    decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
+    queryFor: (name) => `cross-filter:${name}`,
+    totalQuery: QUERY,
   });
-  expect(engine.requests).toHaveLength(CORPUS_SEARCH_FACET_NAMES.length + 1);
-  expect(
-    Result.isError(result) ? undefined : result.value.courtYear,
-  ).toBeNull();
+  expect(engine.requests).toHaveLength(1);
+  expect(engine.requests.at(0)?.query).toBe(QUERY);
+  expect(Object.keys(engine.requests.at(0)?.aggs ?? {}).toSorted()).toEqual([
+    "courtYear",
+    "total",
+  ]);
+  expect(Result.isError(result) ? undefined : result.value.courtYear).toEqual({
+    buckets: [{ court: "court-value", year: 2024, count: 3 }],
+    truncated: false,
+  });
 });

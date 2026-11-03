@@ -33,7 +33,7 @@ read_sig() {
   local name="$1"
   local sig_name="${name}.sig"
   local found
-  found=$(echo "$assets_json" | jq -r --arg n "$sig_name" '.[] | select(.name == $n) | .apiUrl' | head -n1)
+  found=$(jq -r --arg n "$sig_name" 'first(.[] | select(.name == $n) | .apiUrl)' <<<"$assets_json")
   if [[ -z "$found" || "$found" == "null" ]]; then
     return 1
   fi
@@ -48,7 +48,7 @@ require_signed_version() {
   local sig="$2"
   local comment
   comment=$(printf '%s' "$sig" | base64 -d | sed -n 's/^trusted comment: //p')
-  if ! printf '%s' "$comment" | tr '\t' '\n' | grep -qxF "version:${APP_VERSION}"; then
+  if ! grep -qxF "version:${APP_VERSION}" <<<"${comment//$'\t'/$'\n'}"; then
     echo "::error::${name}.sig does not bind version ${APP_VERSION} (trusted comment: ${comment})" >&2
     exit 1
   fi
@@ -56,36 +56,41 @@ require_signed_version() {
 
 # Find an asset name matching a glob pattern.
 find_asset() {
-  echo "$assets_json" | jq -r --arg p "$1" '.[] | select(.name | test($p)) | .name' | head -n1
+  jq -r --arg p "$1" 'first(.[] | select(.name | test($p)) | .name)' <<<"$assets_json"
 }
 
 # Tauri 2's NSIS updater downloads the .exe directly and verifies it
 # with the .exe.sig — there is no .nsis.zip wrapper. Confirmed against
 # Yaak's live updater manifest, where the Windows entry points at
 # `<basename>-setup.exe`. Point at the .exe we already produce.
-windows_archive=$(find_asset '^Stella-windows-x64-setup\.exe$') || true
+windows_x64_archive=$(find_asset '^Stella-windows-x64-setup\.exe$') || true
+windows_arm64_archive=$(find_asset '^Stella-windows-arm64-setup\.exe$') || true
 macos_archive=$(find_asset '^Stella-macos-universal\.app\.tar\.gz$') || true
 
-platforms=""
-if [[ -n "${windows_archive:-}" ]]; then
-  sig=$(read_sig "$windows_archive")
-  require_signed_version "$windows_archive" "$sig"
-  platforms+=$(jq -n --arg sig "$sig" --arg url "${base}/${windows_archive}" \
-    '{"windows-x86_64": {"signature": $sig, "url": $url}}')
-fi
-if [[ -n "${macos_archive:-}" ]]; then
-  sig=$(read_sig "$macos_archive")
-  require_signed_version "$macos_archive" "$sig"
-  mac_block=$(jq -n --arg sig "$sig" --arg url "${base}/${macos_archive}" \
-    '{"darwin-aarch64": {"signature": $sig, "url": $url}, "darwin-x86_64": {"signature": $sig, "url": $url}}')
-  if [[ -z "$platforms" ]]; then
-    platforms="$mac_block"
-  else
-    platforms=$(jq -n --argjson a "$platforms" --argjson b "$mac_block" '$a * $b')
-  fi
-fi
+platforms='{}'
 
-if [[ -z "$platforms" || "$platforms" == "{}" ]]; then
+# List one signed archive under every updater key that downloads it. The
+# keys are the `{os}-{arch}` strings the updater plugin looks up.
+add_platforms() {
+  local archive="$1" sig key
+  shift
+  if [[ -z "$archive" ]]; then
+    return 0
+  fi
+  sig=$(read_sig "$archive")
+  require_signed_version "$archive" "$sig"
+  for key in "$@"; do
+    platforms=$(jq -n --argjson platforms "$platforms" --arg key "$key" \
+      --arg sig "$sig" --arg url "${base}/${archive}" \
+      '$platforms + {($key): {signature: $sig, url: $url}}')
+  done
+}
+
+add_platforms "${windows_x64_archive:-}" windows-x86_64
+add_platforms "${windows_arm64_archive:-}" windows-aarch64
+add_platforms "${macos_archive:-}" darwin-aarch64 darwin-x86_64
+
+if [[ "$platforms" == "{}" ]]; then
   echo "::error::No platform updater archives found on release $RELEASE_REF" >&2
   exit 1
 fi

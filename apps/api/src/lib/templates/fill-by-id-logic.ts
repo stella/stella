@@ -1,11 +1,11 @@
 import { Result } from "better-result";
+
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 /**
  * `templates.fills.download`'s fill logic, factored out of the endpoint module
  * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
-
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -171,6 +171,7 @@ export const fillByIdLogic = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "PDF conversion failed",
         }),
       );

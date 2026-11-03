@@ -149,6 +149,10 @@ const EXACT_AUTH_SESSION_PATHS = new Map<string, AuthSessionPathClassification>(
       noSession("recovery code generation"),
     ],
     ["/unlink-account", noSession("authenticated account unlinking")],
+    [
+      "/sign-in-methods/send-otp",
+      noSession("sign-in method confirmation delivery"),
+    ],
     ["/verify-password", noSession("authenticated credential verification")],
     ["/organization/create", noSession("organization management")],
     ["/organization/update", noSession("organization management")],

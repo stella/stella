@@ -13,12 +13,13 @@ updates:
       default-days: 5
     groups:
       stella-shared:
+        # Reusable workflows are named stella/.github/.github/workflows/<file>,
+        # so they need their own pattern to land in this one grouped update.
+        # These are pinned by commit SHA, so an update has no semver type and
+        # an update-types filter would leave every one of them ungrouped.
         patterns:
           - "stella/.github/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
+          - "stella/.github/.github/workflows/*"
       minor-and-patch:
         patterns:
           - "*"
@@ -160,9 +161,14 @@ updates:
       default-days: 5
     open-pull-requests-limit: 10
     groups:
+      # Tauri crates release with the npm @tauri-apps packages, so they share
+      # the Bun entry's tauri group shape instead of riding minor-and-patch.
       minor-and-patch:
         patterns:
           - "*"
+        exclude-patterns:
+          - "tauri"
+          - "tauri-*"
         update-types:
           - "minor"
           - "patch"
@@ -172,6 +178,8 @@ updates:
           - "tauri-*"
         update-types:
           - "major"
+          - "minor"
+          - "patch"
       async-runtime:
         patterns:
           - "tokio"
@@ -325,12 +333,6 @@ updates:
           - "drizzle-kit"
         update-types:
           - "major"
-      react-email:
-        patterns:
-          - "react-email"
-          - "@react-email/*"
-        update-types:
-          - "major"
       rivetkit:
         patterns:
           - "rivetkit"
@@ -381,13 +383,13 @@ updates:
       - dependency-name: "@expo/*"
         update-types:
           - "version-update:semver-major"
-      # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
-      # when Expo's supported range advances to 4.27 or newer.
+      # Expo SDK 58 requires react-native-screens ~4.30.0. Remove this guard
+      # when Expo's supported range advances to 4.31 or newer.
       - dependency-name: "react-native-screens"
         update-types:
           - "version-update:semver-minor"
-      # Expo SDK 57 requires react-native 0.86.x (`expo doctor` fails on
-      # 0.87). Remove this guard when the SDK upgrade moves react-native.
+      # Expo SDK 58 requires react-native 0.88.x (`expo doctor` fails on
+      # 0.89). Remove this guard when the SDK upgrade moves react-native.
       - dependency-name: "react-native"
         update-types:
           - "version-update:semver-minor"

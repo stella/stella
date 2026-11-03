@@ -1,3 +1,5 @@
+import { isValidElement } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
@@ -5,17 +7,23 @@ import type {
   ReaderAnswer,
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
-const { cleanup, render, fireEvent, act, waitFor } =
+const { cleanup, render, renderHook, fireEvent, act, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
+const { CopyActionButton } = await import("@/components/copy-action-button");
+const { resolveReaderAnswerCitation } =
+  await import("./reader-answer-citation.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const arabicMessages = (await import("@/i18n/langs/ar.json")).default;
 const observers: IntersectionObserverCallback[] = [];
@@ -121,6 +129,47 @@ const answer = {
   createdAt: "2026-10-10",
   updatedAt: "2026-10-10",
 } satisfies ReaderAnswer;
+const openBlocks = [
+  {
+    id: "five",
+    anchorId: "p-5",
+    type: "paragraph",
+    number: 5,
+    inlines: [],
+    plainText: "The applicant was not heard before the order was made.",
+  },
+] satisfies Block[];
+const citedDecision = {
+  decisionId: "00000000-0000-4000-8000-000000000005",
+  court: "Synthetic Supreme Court",
+  courtShortCode: "SYN",
+  caseNumber: "SYN 12/2026",
+  decisionDate: "2026-01-12",
+  readerUrl: "/law/cze/cases/synthetic-supreme-court/synthetic-decision",
+  originalUrl: null,
+} satisfies DecisionCitationMetadata;
+const citedBlocks = [
+  {
+    id: "six",
+    anchorId: "p-6",
+    type: "paragraph",
+    number: 6,
+    inlines: [],
+    plainText: "A hearing is required before an order of that kind.",
+  },
+] satisfies Block[];
+const citationTarget = (citation: ReaderAnswerCitation) =>
+  resolveReaderAnswerCitation({
+    citation,
+    decisionId: answer.decisionId,
+    blocks: openBlocks,
+    formatNumber: String,
+    readCitedDecision: () => ({
+      type: "loaded",
+      decision: citedDecision,
+      blocks: citedBlocks,
+    }),
+  });
 const mount = (
   overrides: Partial<Parameters<typeof ReaderAnswerCard>[0]> = {},
   locale = "en",
@@ -139,12 +188,8 @@ const mount = (
     ...handlers,
     active: false,
     openRevision: 0,
-    citationLabel: (
-      citation: ReaderAnswer["messages"][number]["citations"][number],
-    ) =>
-      citation.decisionId === answer.decisionId
-        ? `¶${citation.paragraphId}`
-        : `${citation.decisionId} · ¶${citation.paragraphId}`,
+    citationTarget,
+    language: "en",
     busy: false,
     ...overrides,
   };
@@ -152,18 +197,38 @@ const mount = (
     <IntlProvider
       locale={locale}
       messages={locale === "ar" ? arabicMessages : messages}
+      timeZone="UTC"
     >
-      <ReaderAnswerCard {...updated} />
+      <FormattingProvider locale={locale} timeZone="UTC">
+        <ReaderAnswerCard {...updated} />
+      </FormattingProvider>
     </IntlProvider>
   );
   return { ...render(tree()), handlers, tree, props };
 };
 
-test("citations preserve both decision and paragraph identity and each action calls its owner", () => {
-  const { getByRole, handlers } = mount();
-  fireEvent.click(getByRole("button", { name: "¶p-5" }));
+test("citations preserve both decision and paragraph identity and each action calls its owner", async () => {
+  const { container, findByRole, getByRole, handlers } = mount();
+  expect(
+    [...container.querySelectorAll<HTMLElement>("[data-citation-kind]")].map(
+      (chip) => chip.dataset["citationKind"],
+    ),
+  ).toEqual(["paragraph", "decision"]);
+  await waitFor(() =>
+    expect(container.querySelector("p")?.textContent).toBe("An explanation."),
+  );
+  fireEvent.click(getByRole("button", { name: "Paragraph 5" }));
+  const decisionChip = getByRole("button", {
+    name: "Synthetic Supreme Court, SYN 12/2026, Jan 12, 2026, paragraph 6",
+  });
+  expect(decisionChip.getAttribute("href")).toBe(
+    `${citedDecision.readerUrl}#p-6`,
+  );
+  await act(async () => {
+    fireEvent.click(decisionChip);
+  });
   fireEvent.click(
-    getByRole("button", { name: /00000000-0000-4000-8000-000000000005/u }),
+    await findByRole("link", { name: messages.common.openInStella }),
   );
   const message = answer.messages.at(0);
   if (message === undefined) {
@@ -217,7 +282,7 @@ test("IME confirmation does not send a margin comment until composition ends", a
     (_body: string, _visibility: "private" | "shared") => undefined,
   );
   const view = render(
-    <IntlProvider locale="en" messages={messages}>
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <MarginNotes
         placement="inline"
         items={[
@@ -225,6 +290,7 @@ test("IME confirmation does not send a margin comment until composition ends", a
             kind: "composer",
             id: "comment-composer",
             startAnchorId: "p-2",
+            targetType: "decision",
             onSubmit,
             onCancel: () => undefined,
           },
@@ -454,7 +520,10 @@ test("answer and comment share the canonical gutter placement without overlappin
       text: "A nearby comment",
       startAnchorId: "p-3",
       author: { name: null, image: null },
+      createdAt: "2026-09-01T10:00:00.000Z",
+      updatedAt: "2026-09-01T10:00:00.000Z",
       mine: false,
+      targetType: "decision",
       visibility: "private",
       onDelete: () => undefined,
       onToggleVisibility: () => undefined,
@@ -465,12 +534,14 @@ test("answer and comment share the canonical gutter placement without overlappin
     ];
     const expected = placeGutterNotes({ notes, region: { width: 320 } });
     const { container } = render(
-      <IntlProvider locale="en" messages={messages}>
-        <MarginNotes
-          placement="gutter"
-          items={[answerItem, commentItem]}
-          scrollContainerRef={{ current: scroll }}
-        />
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <MarginNotes
+            placement="gutter"
+            items={[answerItem, commentItem]}
+            scrollContainerRef={{ current: scroll }}
+          />
+        </FormattingProvider>
       </IntlProvider>,
     );
     await waitFor(() => {
@@ -502,4 +573,110 @@ test("answer and comment share the canonical gutter placement without overlappin
       Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
     }
   }
+});
+
+test("copy uses the quiet card action variant and size", () => {
+  const { props } = mount();
+  const { result } = renderHook(() => ReaderAnswerCard(props), {
+    wrapper: ({ children }) => (
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {children}
+      </IntlProvider>
+    ),
+  });
+  const copies: unknown[] = [];
+  const visit = (node: unknown) => {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        visit(child);
+      }
+      return;
+    }
+    if (!isValidElement(node)) {
+      return;
+    }
+    if (node.type === CopyActionButton) {
+      copies.push(node.props);
+    }
+    if (
+      typeof node.props === "object" &&
+      node.props !== null &&
+      "children" in node.props
+    ) {
+      visit(node.props.children);
+    }
+  };
+  visit(result.current);
+  expect(copies).toEqual([
+    expect.objectContaining({ variant: "ghost", size: "sm" }),
+  ]);
+});
+
+test("skeleton lines give way to identical streamed and reloaded markdown without an internal scroller", async () => {
+  const content = `## Explanation\n\n- **First point** with *emphasis*.\n- Second point.\n\n${"A longer paragraph. ".repeat(300)}`;
+  const withContent = (
+    status: "streaming" | "complete",
+    text: string,
+  ): ReaderAnswer => ({
+    ...answer,
+    messages: answer.messages.map((message) => ({
+      ...message,
+      content: text,
+      status,
+    })),
+  });
+  const view = mount({ busy: true, answer: withContent("streaming", "") });
+  expect(view.getByRole("status").children).toHaveLength(3);
+  view.rerender(
+    view.tree({ ...view.props, answer: withContent("streaming", content) }),
+  );
+  await waitFor(() =>
+    expect(view.container.querySelectorAll("li")).toHaveLength(2),
+  );
+  expect(view.queryByRole("status")).toBeNull();
+  await waitFor(() =>
+    expect(
+      view.container.querySelector('[data-streamdown="strong"]')?.textContent,
+    ).toBe("First point"),
+  );
+  expect(view.container.querySelector("em")?.textContent).toBe("emphasis");
+  const streamed = view.container.querySelector("ul")?.outerHTML;
+  expect(streamed).toBeDefined();
+  view.rerender(
+    view.tree({
+      ...view.props,
+      busy: false,
+      answer: withContent("complete", content),
+    }),
+  );
+  const finished = view.container.querySelector("h2")?.parentElement?.innerHTML;
+  expect(finished).toBeDefined();
+  view.unmount();
+  const reloaded = mount({ answer: withContent("complete", content) });
+  await waitFor(() =>
+    expect(reloaded.container.querySelectorAll("li")).toHaveLength(2),
+  );
+  expect(reloaded.container.querySelector("ul")?.outerHTML).toBe(streamed);
+  expect(reloaded.container.querySelector("h2")?.parentElement?.innerHTML).toBe(
+    finished,
+  );
+  for (const node of reloaded.container.querySelectorAll<HTMLElement>(
+    "section, section *",
+  )) {
+    expect(node.getAttribute("class") ?? "").not.toMatch(
+      /overflow(?:-[xy])?-(?:auto|scroll)/u,
+    );
+    expect([
+      node.style.overflow,
+      node.style.overflowX,
+      node.style.overflowY,
+    ]).not.toContain("auto");
+    expect([
+      node.style.overflow,
+      node.style.overflowX,
+      node.style.overflowY,
+    ]).not.toContain("scroll");
+  }
+  fireEvent.click(reloaded.getByRole("button", { name: "Minimise answer" }));
+  expect(reloaded.container.querySelector("h2")).toBeNull();
 });

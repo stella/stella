@@ -10,8 +10,8 @@ Short-lived objects for redlining two DOCX files that stella does not store: the
 
 ```text
 file_comparison_uploads.id               pUuid               pk,not null       file-comparisons.ts:62
-file_comparison_uploads.organization_id  safeOrganizationId  not null          file-comparisons.ts:63
-file_comparison_uploads.user_id          text                not null          file-comparisons.ts:64
+file_comparison_uploads.organization_id  safeOrganizationId  fk,not null       file-comparisons.ts:63
+file_comparison_uploads.user_id          text                fk,not null       file-comparisons.ts:64
 file_comparison_uploads.kind             text                not null          file-comparisons.ts:65
 file_comparison_uploads.declared_name    varchar             not null          file-comparisons.ts:66
 file_comparison_uploads.declared_size    bigint              not null          file-comparisons.ts:67

@@ -26,6 +26,15 @@ import type {
   SignatureStamp,
   StampRotation,
 } from "@/api/lib/files/pdf-signing/stamp";
+import {
+  STAMP_BRAND_BLUE,
+  STAMP_DETAIL_COLOR,
+  STAMP_NAME_COLOR,
+} from "@/api/lib/files/pdf-signing/stamp-colors";
+import {
+  STELLA_MARK_HEIGHT,
+  STELLA_MARK_WIDTH,
+} from "@/api/lib/files/pdf-signing/stamp-mark";
 import { settled } from "@/api/tests/helpers/settled";
 import { readSignatureIntegrity } from "@/api/tests/helpers/signed-pdf";
 import {
@@ -187,12 +196,30 @@ describe("placing a stamp drawn on the displayed page", () => {
 
 describe("the stamp's signing time", () => {
   test("is the recorded instant, in the signer's zone, with its offset", () => {
-    expect(formatStampTime(SIGNING_TIME, "Europe/Prague")).toBe(
-      "2026-06-01 14:00:00 +02:00",
-    );
-    expect(formatStampTime(SIGNING_TIME, "Asia/Kolkata")).toBe(
-      "2026-06-01 17:30:00 +05:30",
-    );
+    expect(formatStampTime(SIGNING_TIME, "Europe/Prague")).toEqual({
+      date: "2026.06.01",
+      time: "14:00:00 +02'00'",
+    });
+    expect(formatStampTime(SIGNING_TIME, "Asia/Kolkata")).toEqual({
+      date: "2026.06.01",
+      time: "17:30:00 +05'30'",
+    });
+  });
+
+  test("formats winter, negative, fractional and zero offsets", () => {
+    const winter = new Date("2026-01-08T12:50:57Z");
+    expect(formatStampTime(winter, "Europe/Prague")).toEqual({
+      date: "2026.01.08",
+      time: "13:50:57 +01'00'",
+    });
+    expect(formatStampTime(winter, "America/St_Johns")).toEqual({
+      date: "2026.01.08",
+      time: "09:20:57 -03'30'",
+    });
+    expect(formatStampTime(winter, "UTC")).toEqual({
+      date: "2026.01.08",
+      time: "12:50:57 +00'00'",
+    });
   });
 });
 
@@ -350,6 +377,10 @@ const readStampRows = async (bytes: Uint8Array) => {
       parseToUnicode(new TextDecoder().decode(cmap.getDecodedData())),
     );
   }
+  // Each column is drawn top to bottom, the name first: a baseline above the
+  // one before starts the details column.
+  let column = 0;
+  let baseline = Number.POSITIVE_INFINITY;
   const rows = new Map<string, string>();
   let font = "";
   let row = "";
@@ -358,12 +389,17 @@ const readStampRows = async (bytes: Uint8Array) => {
     .decode(appearance.getDecodedData())
     .split("\n")) {
     const fontMatch = /^\/(\w+) [\d.]+ Tf$/u.exec(line);
-    const matrix = /^1 0 0 1 [\d.-]+ ([\d.-]+) Tm$/u.exec(line);
+    const matrix = /^1 0 0 1 ([\d.-]+) ([\d.-]+) Tm$/u.exec(line);
     const span = /^\/Span << \/ActualText <FEFF([\dA-F]*)> >> BDC$/u.exec(line);
     if (fontMatch) {
       font = fontMatch[1] ?? "";
     } else if (matrix) {
-      row = matrix[1] ?? "";
+      const y = Number(matrix[2]);
+      if (y > baseline) {
+        column += 1;
+      }
+      baseline = y;
+      row = `${String(column)}:${String(y)}`;
     } else if (span) {
       actualText = new TextDecoder("utf-16be").decode(
         Buffer.from(span[1] ?? "", "hex"),
@@ -393,10 +429,35 @@ const withoutInvisibles = (text: string) =>
  * text itself.
  */
 const pdfJsWords = async (bytes: Uint8Array) => {
-  const { appearanceRef, page, pdf } = await readStamp(bytes);
+  const { appearance, appearanceRef, page, pdf, widget } =
+    await readStamp(bytes);
   if (!page) {
     throw new Error("no page");
   }
+  // Draw the appearance where a viewer does, its transformed BBox moved onto
+  // the widget Rect (ISO 32000-1, 12.5.5). At the page origin part of it
+  // would sit outside the CropBox, and pdf.js leaves out text off the page.
+  const numbers = (array: PdfArray | undefined) =>
+    (array?.toArray() ?? []).map((entry) =>
+      entry instanceof PdfNumber ? entry.value : Number.NaN,
+    );
+  const rect = numbers(widget?.getArray("Rect"));
+  const [a = 1, b = 0, c = 0, d = 1] = numbers(appearance.getArray("Matrix"));
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = numbers(appearance.getArray("BBox"));
+  const corners = (
+    [
+      [x1, y1],
+      [x1, y2],
+      [x2, y1],
+      [x2, y2],
+    ] as const
+  ).map(([x, y]) => ({ x: a * x + c * y, y: b * x + d * y }));
+  const shiftX =
+    Math.min(rect.at(0) ?? 0, rect.at(2) ?? 0) -
+    Math.min(...corners.map(({ x }) => x));
+  const shiftY =
+    Math.min(rect.at(1) ?? 0, rect.at(3) ?? 0) -
+    Math.min(...corners.map(({ y }) => y));
   page.dict.set(
     "Resources",
     PdfDict.of({ XObject: PdfDict.of({ Stamp: appearanceRef }) }),
@@ -404,7 +465,12 @@ const pdfJsWords = async (bytes: Uint8Array) => {
   page.dict.set(
     "Contents",
     pdf.context.registry.register(
-      new PdfStream(new PdfDict(), new TextEncoder().encode("/Stamp Do")),
+      new PdfStream(
+        new PdfDict(),
+        new TextEncoder().encode(
+          `q 1 0 0 1 ${shiftX.toFixed(3)} ${shiftY.toFixed(3)} cm /Stamp Do Q`,
+        ),
+      ),
     ),
   );
   page.dict.delete("Annots");
@@ -476,6 +542,92 @@ describe("signing with a visible stamp", () => {
     }
   });
 
+  test.each([0, 90, 180, 270] as const)(
+    "draws the rule and the mark before the text on a page turned by %d",
+    async (rotation) => {
+      const { applied } = await signWithStamp(rotation);
+      const { appearance, resolve } = await readStamp(applied.bytes);
+      const operators = new TextDecoder()
+        .decode(appearance.getDecodedData())
+        .split("\n");
+      const text = operators.indexOf("BT");
+      const before = operators.slice(0, text);
+
+      // The rule: a round-capped 1.5 pt stroke in the brand blue.
+      expect(before.slice(0, 4)).toEqual([
+        "q",
+        `${STAMP_BRAND_BLUE} RG`,
+        "1.500 w",
+        "1 J",
+      ]);
+      expect(operators.filter((line) => line === "S")).toHaveLength(1);
+      expect(before).toContain("S");
+      // The mark: both of its paths filled in the brand blue, before BT.
+      const fill = before.indexOf(`${STAMP_BRAND_BLUE} rg`);
+      expect(fill).toBeGreaterThan(before.indexOf("S"));
+      expect(before.slice(fill).filter((line) => line === "f")).toHaveLength(2);
+      expect(before.at(-1)).toBe("Q");
+      expect(
+        operators.slice(text).some((line) => /(?:^|\s)f\*?$/u.test(line)),
+      ).toBe(false);
+      // Opaque, so no transparency group or soft mask is involved; and no
+      // other colour than the brand blue, the name and the details grey.
+      expect(appearance.getDict("Resources", resolve)?.has("ExtGState")).toBe(
+        false,
+      );
+      expect(appearance.has("Group")).toBe(false);
+      expect(
+        new Set(operators.filter((line) => / (?:rg|RG)$/u.test(line))),
+      ).toEqual(
+        new Set([
+          `${STAMP_BRAND_BLUE} RG`,
+          `${STAMP_BRAND_BLUE} rg`,
+          `${STAMP_NAME_COLOR} rg`,
+          `${STAMP_DETAIL_COLOR} rg`,
+        ]),
+      );
+
+      // In appearance space, the same for every rotation: one cap height
+      // tall on the baseline of the first details row, just before its text.
+      const placement = /^([\d.]+) 0 0 \1 ([\d.]+) ([\d.]+) cm$/u.exec(
+        operators.at(fill + 1) ?? "",
+      );
+      expect(placement).not.toBeNull();
+      const [scale = 0, left = 0, bottom = 0] = (placement ?? [])
+        .slice(1)
+        .map(Number);
+      const right = left + STELLA_MARK_WIDTH * scale;
+      let size = 0;
+      const rows: { x: number; y: number; size: number }[] = [];
+      for (const line of operators.slice(text)) {
+        const font = /^\/\w+ ([\d.]+) Tf$/u.exec(line);
+        const matrix = /^1 0 0 1 ([\d.-]+) ([\d.-]+) Tm$/u.exec(line);
+        if (font) {
+          size = Number(font[1]);
+        } else if (matrix) {
+          rows.push({ x: Number(matrix[1]), y: Number(matrix[2]), size });
+        }
+      }
+      const lead = rows.find(
+        ({ x, y }) => Math.abs(y - bottom) < 0.002 && x > left,
+      );
+      expect(lead).toBeDefined();
+      // The scale is written to three decimals, a few hundredths of a point.
+      expect((lead?.x ?? 0) - right).toBeCloseTo(0.4 * (lead?.size ?? 0), 1);
+      expect(STELLA_MARK_HEIGHT * scale).toBeLessThan(lead?.size ?? 0);
+      expect(STELLA_MARK_HEIGHT * scale).toBeGreaterThan(
+        0.6 * (lead?.size ?? 0),
+      );
+      const bbox = (appearance.getArray("BBox")?.toArray() ?? []).map(
+        (entry) => (entry instanceof PdfNumber ? entry.value : Number.NaN),
+      );
+      expect(right).toBeLessThanOrEqual(bbox.at(2) ?? 0);
+      expect(bottom + STELLA_MARK_HEIGHT * scale).toBeLessThanOrEqual(
+        bbox.at(3) ?? 0,
+      );
+    },
+  );
+
   test("wraps the longest accepted text inside the largest box", async () => {
     // A 64-character name (the X.520 upper bound) and a reason and location
     // at the handoff's 256-character cap, in a 400 x 200 pt box.
@@ -513,6 +665,14 @@ describe("signing with a visible stamp", () => {
     expect(PdfSigningStampError.is(refused) && refused.reason).toBe("overflow");
   });
 
+  test("refuses an unbreakable name before signing when it cannot fit readably", async () => {
+    const refused = await signWithStamp(0, "W".repeat(64)).catch(
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(PdfSigningStampError);
+    expect(PdfSigningStampError.is(refused) && refused.reason).toBe("overflow");
+  });
+
   test("the signature still covers every byte it signed", async () => {
     const { applied } = await signWithStamp(90);
 
@@ -539,9 +699,42 @@ describe("signing with a visible stamp", () => {
     ).toBe(true);
 
     const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
+    const operators = new TextDecoder()
+      .decode(appearance.getDecodedData())
+      .split("\n");
+    // No border, background or image: the one stroke is the rule, and the
+    // only fills are the mark, both before the text.
+    expect(operators.filter((line) => line === "S")).toHaveLength(1);
+    expect(operators.some((line) => /(?:re|Do)$/u.test(line))).toBe(false);
+    // The name is set in DejaVu Sans Bold, both in its own column and in
+    // the details.
+    const fonts = appearance
+      .getDict("Resources", resolve)
+      ?.getDict("Font", resolve);
+    const baseFontOf = (resource: string) =>
+      fonts?.getDict(resource, resolve)?.getName("BaseFont", resolve)?.value;
+    const resourceOfRow: string[] = [];
+    let resource = "";
+    for (const line of operators) {
+      const tf = /^\/(\w+) [\d.]+ Tf$/u.exec(line);
+      if (tf) {
+        resource = tf[1] ?? "";
+      } else if (line.endsWith(" Tm")) {
+        resourceOfRow.push(resource);
+      }
+    }
+    const [jiri, cermak, label] = resourceOfRow.map(baseFontOf);
+    expect(jiri).toMatch(/^[A-Z]{6}\+DejaVuSans-Bold$/u);
+    expect(cermak).toBe(jiri);
+    expect(label).toMatch(/^[A-Z]{6}\+DejaVuSans$/u);
+    expect(resourceOfRow.slice(3).map(baseFontOf)).toContain(jiri);
     expect(rows).toEqual([
-      "Digitálně podepsal Jiří Čermák",
-      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Jiří",
+      "Čermák",
+      "Digitálně podepsal",
+      "Jiří Čermák",
+      "Datum: 2026.06.01",
+      "14:00:00 +02'00'",
       "Místo: Brno",
     ]);
   });
@@ -555,8 +748,12 @@ describe("signing with a visible stamp", () => {
 
     const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
     expect(rows).toEqual([
-      "Digitálně podepsal Jiří Čermák",
-      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Jiří",
+      "Čermák",
+      "Digitálně podepsal",
+      "Jiří Čermák",
+      "Datum: 2026.06.01",
+      "14:00:00 +02'00'",
       "Důvod: Приложение Ελληνικά",
       "Místo: नई दिल्ली · กรุงเทพ · 東京 · 서울",
     ]);

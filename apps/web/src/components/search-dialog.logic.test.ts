@@ -9,12 +9,14 @@ import {
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { formatMimeTypeLabel } from "@/components/search-dialog.shared";
 import { SEARCH_SCOPES } from "@/components/search-scope";
 import type {
   GlobalSearchHit,
   GlobalSearchResultType,
 } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 import {
   canUseAskAIShortcut,
@@ -424,9 +426,12 @@ describe("search facet labels", () => {
 });
 
 describe("document routes", () => {
+  const filesView = { workspaceId: "workspace-1", viewId: "files-view" };
+
   test("re-resolves a live search file immediately before navigation", async () => {
     expect(
       await resolveEntityDocumentRoute({
+        currentView: undefined,
         hit: {
           entityId: "entity-1",
           fileFieldId: "stale-field",
@@ -438,15 +443,19 @@ describe("document routes", () => {
       fileFieldId: "current-field",
       route: {
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId: "workspace-1", viewId: "all" },
+        params: {
+          workspaceId: "workspace-1",
+          viewId: DEFAULT_WORKSPACE_VIEW_ID,
+        },
         search: { entity: "entity-1", field: "current-field" },
       },
     });
   });
 
-  test("opens the all view when current resolution finds no file field", async () => {
+  test("opens the default view when current resolution finds no file field", async () => {
     expect(
       await resolveEntityDocumentRoute({
+        currentView: undefined,
         hit: {
           entityId: "entity-1",
           fileFieldId: "stale-field",
@@ -458,8 +467,48 @@ describe("document routes", () => {
       fileFieldId: null,
       route: {
         to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: "workspace-1", viewId: "all" },
+        params: {
+          workspaceId: "workspace-1",
+          viewId: DEFAULT_WORKSPACE_VIEW_ID,
+        },
       },
+    });
+  });
+
+  test("a hit in the matter on screen opens under the view on screen", async () => {
+    const routes = await Promise.all(
+      [null, "current-field"].map(
+        async (fileFieldId) =>
+          await resolveEntityDocumentRoute({
+            currentView: filesView,
+            hit: {
+              entityId: "entity-1",
+              fileFieldId: "stale-field",
+              workspaceId: "workspace-1",
+            },
+            resolveCurrentFileFieldId: async () => fileFieldId,
+          }),
+      ),
+    );
+    expect(routes.map(({ route }) => route.params)).toEqual([
+      filesView,
+      filesView,
+    ]);
+  });
+
+  test("a hit in another matter opens under that matter's default view", async () => {
+    const { route } = await resolveEntityDocumentRoute({
+      currentView: filesView,
+      hit: {
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-2",
+      },
+      resolveCurrentFileFieldId: async () => "field-1",
+    });
+    expect(route.params).toEqual({
+      workspaceId: "workspace-2",
+      viewId: DEFAULT_WORKSPACE_VIEW_ID,
     });
   });
 
@@ -511,15 +560,24 @@ describe("document routes", () => {
   test("opens a recent file directly when its field id was persisted", () => {
     expect(
       getRecentFileRoute({
+        currentView: undefined,
         entityId: "entity-1",
         fileFieldId: "field-1",
         workspaceId: "workspace-1",
       }),
     ).toEqual({
       to: "/workspaces/$workspaceId/$viewId/document",
-      params: { workspaceId: "workspace-1", viewId: "all" },
+      params: { workspaceId: "workspace-1", viewId: DEFAULT_WORKSPACE_VIEW_ID },
       search: { entity: "entity-1", field: "field-1" },
     });
+    expect(
+      getRecentFileRoute({
+        currentView: filesView,
+        entityId: "entity-1",
+        fileFieldId: "field-1",
+        workspaceId: "workspace-1",
+      }).params,
+    ).toEqual(filesView);
   });
 
   test("locates a recent file by its own tree row", () => {
@@ -651,4 +709,18 @@ describe("caseLawFacetCountMessage", () => {
       "search.caseLawMatchingDecisions",
     );
   });
+});
+
+test.each([
+  ["text/plain", "TXT"],
+  ["text/markdown", "Markdown"],
+  ["image/svg+xml", "SVG"],
+  ["application/x-msdownload", "EXE"],
+  ["application/pdf", "PDF"],
+  ["image/png", "PNG"],
+  ["text/csv", "CSV"],
+  ["application/x-7z-compressed", "7Z-COMPRESSED"],
+  ["application/vnd.apple.pages+zip", "APPLE.PAGES"],
+])("names %s as %s", (mimeType, label) => {
+  expect(formatMimeTypeLabel(mimeType)).toBe(label);
 });

@@ -79,6 +79,7 @@ test("failed audit persistence rolls back credential revocation and permits retr
           await recordAuditEvent(tx, event);
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Fixture audit failure",
           });
         },

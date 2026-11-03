@@ -8,6 +8,7 @@ import {
   createHeavyWorkSlot,
   type HeavyWorkKind,
 } from "@stll/db-load-gate/slot";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import {
   CORPUS_SCHEMA_LANE_LOCK_SQL,
@@ -29,11 +30,6 @@ import {
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import {
-  EMPTY_AST,
-  type SourceAdapter,
-  type StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   type BackgroundReplayBatch,
   type BackgroundReplaySource,
   type BackgroundReplayTickReport,
@@ -45,10 +41,7 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
-import {
-  BACKGROUND_REPLAY_LIMITS,
-  REPLAY_ENROLMENT,
-} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { BACKGROUND_REPLAY_LIMITS } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -62,6 +55,11 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  EMPTY_AST,
+  type SourceAdapter,
+  type StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
@@ -73,6 +71,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { OFF_REPLAY_ENROLMENT_FIXTURE } from "@/api/tests/helpers/replay-enrolment";
 import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
 
 /** A replayed raw key is reported only when the reserved batch has one. */
@@ -127,17 +126,15 @@ const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
 /** How long the deadline test waits for a server-side state to appear. */
 const BLOCKED_QUERY_DEADLINE_MS = 10_000;
 
-/** Polls `probe` until it holds or the deadline passes; true when it held. */
-const waitForState = async (probe: () => Promise<boolean>) => {
-  const deadline = Date.now() + BLOCKED_QUERY_DEADLINE_MS;
-  while (Date.now() < deadline) {
-    if (await probe()) {
-      return true;
-    }
-    await Bun.sleep(20);
-  }
-  return false;
-};
+/** Reads `probe` until it holds or the deadline passes; true when it held. */
+const waitForState = async (probe: () => Promise<boolean>) =>
+  await waitForExternalState({
+    description: "the backend state",
+    intervalMs: 20,
+    timeoutMs: BLOCKED_QUERY_DEADLINE_MS,
+    read: probe,
+    onTimeout: () => false,
+  });
 
 if (!databaseUrl || !enabled) {
   describe.skip("background replay ownership and durable batch boundaries", () => {
@@ -1277,7 +1274,7 @@ if (!databaseUrl || !enabled) {
             PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
           );
           const enrolment = {
-            ...REPLAY_ENROLMENT,
+            ...OFF_REPLAY_ENROLMENT_FIXTURE,
             [ADAPTER_KEYS.EU_ECJ]: {
               mode: "enrolled",
               dailyBudget: 3,

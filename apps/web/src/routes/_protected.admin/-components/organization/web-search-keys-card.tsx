@@ -8,7 +8,7 @@ import { Trash2Icon } from "@stll/ui/icons";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { webSearchConfigOptions } from "@/lib/web-search/queries";
 
 import { AISettingsSectionFeedback } from "./ai-settings-section";
@@ -35,7 +35,7 @@ export const WebSearchKeysCard = ({
   const settingsQuery = useQuery(
     webSearchConfigOptions({ organizationId: activeOrganizationId }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const config = settingsView.type === "items" ? settingsView.items : undefined;
 
   if (settingsView.type !== "items") {
@@ -112,6 +112,7 @@ const WebSearchKeyField = ({
             disabled={disabled}
             onClick={onRemove}
             size="sm"
+            tooltip={t("common.remove")}
             variant="ghost"
           >
             <Trash2Icon className="size-4" />

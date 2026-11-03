@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
@@ -230,17 +229,20 @@ describe("public corpus active request capacity", () => {
     try {
       await server.fetch(request({ method: "GET", path: "/v1/law/statutes" }));
       expect(lines).toEqual([]);
-      expect((await server.fetch(probeRequest(route))).status).toBe(429);
-      expect(lines).toHaveLength(1);
-      const line = lines.at(0);
-      if (line === undefined) {
-        panic("Capacity refusal must emit a metric line");
-      }
-      expect(JSON.parse(line)).toMatchObject({
-        class: "search",
-        outcome: "refused",
-        PublicCorpusAdmissions: 1,
-      });
+      expect((await server.fetch(probeRequest(route))).status).toBe(503);
+      // The refusal emits its admission line, and the 503 is observed from
+      // its cause as a transient capacity failure.
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          class: "search",
+          outcome: "refused",
+          PublicCorpusAdmissions: 1,
+        }),
+        expect.objectContaining({
+          sink: "api.capacity_refused",
+          reason: "work_capacity_unavailable",
+        }),
+      ]);
     } finally {
       completion.resolve("done");
       await Promise.all(running);
@@ -268,7 +270,7 @@ describe("public corpus active request capacity", () => {
         getPublicCorpusClassPolicy().totalConcurrency,
       );
       for (const route of [...searchPaths, ...aggregatePaths, sitemap]) {
-        expect((await server.fetch(probeRequest(route))).status).toBe(429);
+        expect((await server.fetch(probeRequest(route))).status).toBe(503);
       }
       const job = pending.at(0);
       const response = running.at(0);
@@ -285,7 +287,7 @@ describe("public corpus active request capacity", () => {
         observations.filter((event) => event.outcome === "acquired"),
       ).toHaveLength(getPublicCorpusClassPolicy().totalConcurrency + 1);
       expect((await server.fetch(probeRequest(aggregatePaths[0]))).status).toBe(
-        429,
+        503,
       );
     } finally {
       for (const job of pending) {
@@ -310,7 +312,7 @@ describe("public corpus active request capacity", () => {
         getPublicCorpusClassPolicy().classes.search.concurrency,
       );
       expect((await server.fetch(probeRequest(searchPaths[0]))).status).toBe(
-        429,
+        503,
       );
       running.push(server.fetch(request(aggregatePaths[0])));
       await fixture.whenPending(
@@ -320,7 +322,7 @@ describe("public corpus active request capacity", () => {
         getPublicCorpusClassPolicy().classes.search.concurrency + 1,
       );
       expect((await server.fetch(probeRequest(searchPaths[0]))).status).toBe(
-        429,
+        503,
       );
     } finally {
       for (const job of pending) {
@@ -363,12 +365,12 @@ describe("public corpus active request capacity", () => {
           const head = await server.fetch(
             probeRequest({ method: "HEAD", path: "/v1/law/statutes/search/" }),
           );
-          expect(head.status).toBe(429);
+          expect(head.status).toBe(503);
           expect(head.headers.get("retry-after")).toBe("1");
         }
         for (const path of paths) {
           const response = await server.fetch(probeRequest(path));
-          expect(response.status).toBe(429);
+          expect(response.status).toBe(503);
           expect(response.headers.get("retry-after")).toBe("1");
           expect(await response.text()).toBe("rate-limit reached");
           expect(pending).toHaveLength(capacity);
@@ -397,7 +399,7 @@ describe("public corpus active request capacity", () => {
         await fixture.whenPending(capacity + 1);
         expect(pending).toHaveLength(capacity + 1);
         expect((await server.fetch(probeRequest(replacementPath))).status).toBe(
-          429,
+          503,
         );
       } finally {
         for (const job of pending) {
@@ -427,7 +429,7 @@ describe("public corpus active request capacity", () => {
         await fixture.whenPending(
           getPublicCorpusClassPolicy().classes.search.concurrency,
         );
-        expect((await server.fetch(probeRequest(path))).status).toBe(429);
+        expect((await server.fetch(probeRequest(path))).status).toBe(503);
         const first = pending.at(0);
         const response = running.at(0);
         if (first === undefined || response === undefined) {
@@ -442,7 +444,7 @@ describe("public corpus active request capacity", () => {
         expect(pending).toHaveLength(
           getPublicCorpusClassPolicy().classes.search.concurrency + 1,
         );
-        expect((await server.fetch(probeRequest(path))).status).toBe(429);
+        expect((await server.fetch(probeRequest(path))).status).toBe(503);
       } finally {
         for (const job of pending) {
           job.finish();
@@ -482,7 +484,7 @@ describe("public corpus active request capacity", () => {
       // The server sees the disconnect while the handler is still working,
       // and the slot stays held.
       await job.disconnected;
-      expect((await server.fetch(probeRequest(path))).status).toBe(429);
+      expect((await server.fetch(probeRequest(path))).status).toBe(503);
       job.finish();
       // A round trip after the work settled: its lease is back by then.
       await server.fetch(request(browse));
@@ -490,7 +492,7 @@ describe("public corpus active request capacity", () => {
       await fixture.whenPending(capacity + 1);
       expect(pending).toHaveLength(capacity + 1);
       // Released exactly once: the replacement took the only free slot.
-      expect((await server.fetch(probeRequest(path))).status).toBe(429);
+      expect((await server.fetch(probeRequest(path))).status).toBe(503);
     } finally {
       for (const job of pending) {
         job.finish();
@@ -515,7 +517,7 @@ describe("public corpus active request capacity", () => {
     cancellation.abort();
     expect(await sent).toBe("AbortError");
     const response = await disconnect.served;
-    expect(response.status).toBe(429);
+    expect(response.status).toBe(503);
     expect(pending).toEqual([]);
     expect(observations).toEqual([{ class: "search", outcome: "refused" }]);
     // No lease was taken or returned: the full capacity is still free.
@@ -528,7 +530,7 @@ describe("public corpus active request capacity", () => {
       await fixture.whenPending(capacity);
       expect(pending).toHaveLength(capacity);
       expect((await server.fetch(probeRequest(searchPaths[0]))).status).toBe(
-        429,
+        503,
       );
     } finally {
       for (const job of pending) {

@@ -143,8 +143,8 @@ while IFS= read -r tag; do
   # Only consider a tag whose GitHub Release actually carries a
   # latest.json asset: that is the marker of a release a desktop
   # client on this channel would have received (built or carried).
-  if bash "$gh_retry_script" release view "$tag" --json assets --jq '.assets[].name' \
-    | grep -qx 'latest.json'; then
+  if asset_names="$(bash "$gh_retry_script" release view "$tag" --json assets --jq '.assets[].name')" \
+    && grep -Fqx 'latest.json' <<<"$asset_names"; then
     previous_tag="$tag"
     break
   fi

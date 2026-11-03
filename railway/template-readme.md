@@ -31,7 +31,7 @@ because it is an internal document conversion dependency.
 ## Dependencies for stella Hosting
 
 - `web`: TanStack Start SSR frontend.
-- `api`: Bun/Elysia backend.
+- `api`: Bun backend.
 - `Postgres`: application database.
 - `Redis`: queues, rate limits, and cross-instance events.
 - `gotenberg`: private document conversion service.

@@ -12,9 +12,9 @@ import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue
 import { initDocumentTranslationRunWorker } from "@/api/lib/document-translation/run-queue";
 import { initUploadedMailCorrespondenceWorker } from "@/api/lib/email/inbound/upload-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
-import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { initListVerificationRunWorker } from "@/api/lib/lists/verification/run-queue";
+import { initPushDeliveryWorker } from "@/api/lib/push/push-delivery-worker";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
@@ -35,9 +35,9 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
     initDocumentReviewRunWorker,
     initDocumentTranslationRunWorker,
     initEntityDeletionCleanupWorker,
-    initFileDerivativeWorker,
     initFlowRunWorker,
     initListVerificationRunWorker,
+    initPushDeliveryWorker,
     initReportExportWorker,
     initStyleSetPackageCleanupWorker,
     initUploadedMailCorrespondenceWorker,

@@ -21,6 +21,7 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
@@ -28,6 +29,7 @@ import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { installPgliteDecisionDocketFilingYear } from "@/api/tests/pglite-schema";
 
 import { czNsAdapter } from "./adapters/cz-ns";
 import { runIngestionPipeline } from "./pipeline";
@@ -48,6 +50,8 @@ const installCorpusTables = async (
   sourceDatabaseUrl: string,
 ) => {
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+  // Generated coverage indexes depend on this committed immutable function.
+  await installPgliteDecisionDocketFilingYear(db);
   const { generateDrizzleJson, generateMigration } =
     await import("drizzle-kit/api-postgres");
   const empty = await generateDrizzleJson({});
@@ -267,7 +271,11 @@ describe.skipIf(!enabled)(
             const warnings = spyOn(logger, "warn");
             let counts = 0;
             czNsAdapter.fetchPage = async () =>
-              Result.ok({ decisions: [], nextCursor: null });
+              Result.ok({
+                decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+                nextCursor: null,
+              });
             const run = async () => {
               const lease = await acquireCaseLawSourceIngestionLease({
                 scopedDb,

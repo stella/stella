@@ -75,6 +75,7 @@ const React = await import("react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { DocxEditorHost } = await import("@/components/docx/docx-editor-host");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
@@ -330,53 +331,55 @@ function renderFileTab(tab: typeof docxTab | typeof pdfTab) {
             messages={bundledEnglishMessages}
             timeZone="UTC"
           >
-            <button
-              data-testid="parent-rerender"
-              onClick={() => setParentRender((value) => value + 1)}
-              type="button"
-            >
-              {bundledEnglishMessages.common.retry}
-            </button>
-            <button
-              data-testid="report-scroll-top"
-              onClick={() => setDocxScrollTopByTab((current) => current)}
-              type="button"
-            >
-              {bundledEnglishMessages.common.retry}
-            </button>
-            <FileTabPanel
-              activeId={tab.id}
-              canUpdateEntity={false}
-              closeAll={noop}
-              commitRename={noop}
-              docxActionsRef={docxActionsRef}
-              docxScrollTopByTab={docxScrollTopByTab}
-              editingDocxTabId={editingDocxTabId}
-              editingTabId={editingTabId}
-              editValue={editValue}
-              handleCloseTab={noop}
-              handleMinimizeFromFullView={noop}
-              handleOpenFullView={openFullView}
-              handleResetZoom={noop}
-              handleWheelZoom={noop}
-              handleZoom={noop}
-              matterOrigin={null}
-              minimized={false}
-              mountedPdfIds={new Set([tab.id])}
-              documentReviewPaneFieldId={null}
-              pdfRouteJustification={null}
-              peekPdfViewId="peek-view"
-              ribbonLabelContextMenuOpenAt={noop}
-              scaleOffsets={scaleOffsets}
-              setDocxCompatibilityByTab={setDocxCompatibilityByTab}
-              setDocxScrollTopByTab={setDocxScrollTopByTab}
-              setEditingTabId={setEditingTabId}
-              setEditingDocxTabId={setEditingDocxTabId}
-              setEditValue={setEditValue}
-              setScaleOffsets={setScaleOffsets}
-              startRename={noop}
-              tab={tab}
-            />
+            <FormattingProvider locale="en" timeZone="UTC">
+              <button
+                data-testid="parent-rerender"
+                onClick={() => setParentRender((value) => value + 1)}
+                type="button"
+              >
+                {bundledEnglishMessages.common.retry}
+              </button>
+              <button
+                data-testid="report-scroll-top"
+                onClick={() => setDocxScrollTopByTab((current) => current)}
+                type="button"
+              >
+                {bundledEnglishMessages.common.retry}
+              </button>
+              <FileTabPanel
+                activeId={tab.id}
+                canUpdateEntity={false}
+                closeAll={noop}
+                commitRename={noop}
+                docxActionsRef={docxActionsRef}
+                docxScrollTopByTab={docxScrollTopByTab}
+                editingDocxTabId={editingDocxTabId}
+                editingTabId={editingTabId}
+                editValue={editValue}
+                handleCloseTab={noop}
+                handleMinimizeFromFullView={noop}
+                handleOpenFullView={openFullView}
+                handleResetZoom={noop}
+                handleWheelZoom={noop}
+                handleZoom={noop}
+                matterOrigin={null}
+                minimized={false}
+                mountedPdfIds={new Set([tab.id])}
+                documentReviewPaneFieldId={null}
+                pdfRouteJustification={null}
+                peekPdfViewId="peek-view"
+                ribbonLabelContextMenuOpenAt={noop}
+                scaleOffsets={scaleOffsets}
+                setDocxCompatibilityByTab={setDocxCompatibilityByTab}
+                setDocxScrollTopByTab={setDocxScrollTopByTab}
+                setEditingTabId={setEditingTabId}
+                setEditingDocxTabId={setEditingDocxTabId}
+                setEditValue={setEditValue}
+                setScaleOffsets={setScaleOffsets}
+                startRename={noop}
+                tab={tab}
+              />
+            </FormattingProvider>
           </IntlProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>

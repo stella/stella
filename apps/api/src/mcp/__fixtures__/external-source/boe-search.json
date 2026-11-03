@@ -1,0 +1,153 @@
+{
+    "status": {
+        "code": "200",
+        "text": "ok"
+    },
+    "data": [
+        {
+            "fecha_actualizacion": "20261026T113659Z",
+            "identificador": "BOE-A-2018-7292",
+            "ambito": {
+                "codigo": "1",
+                "texto": "Estatal"
+            },
+            "departamento": {
+                "codigo": "7723",
+                "texto": "Jefatura del Estado"
+            },
+            "rango": {
+                "codigo": "1180",
+                "texto": "Acuerdo Internacional"
+            },
+            "fecha_disposicion": "20011108",
+            "titulo": "Instrumento de ratificaci\u00f3n del Segundo Protocolo Adicional al Convenio europeo de asistencia judicial en materia penal, hecho en Estrasburgo el 8 de noviembre de 2001.",
+            "diario": "Bolet\u00edn Oficial del Estado",
+            "fecha_publicacion": "20180601",
+            "diario_numero": "133",
+            "fecha_vigencia": "20180701",
+            "vigencia_agotada": "N",
+            "estado_consolidacion": {
+                "codigo": "3",
+                "texto": "Finalizado"
+            },
+            "url_eli": "https:\/\/www.boe.es\/eli\/es\/ai\/2001\/11\/08\/(1)",
+            "url_html_consolidada": "https:\/\/www.boe.es\/buscar\/act.php?id=BOE-A-2018-7292"
+        },
+        {
+            "fecha_actualizacion": "20261026T113638Z",
+            "identificador": "BOE-A-2008-6963",
+            "ambito": {
+                "codigo": "1",
+                "texto": "Estatal"
+            },
+            "departamento": {
+                "codigo": "7723",
+                "texto": "Jefatura del Estado"
+            },
+            "rango": {
+                "codigo": "1180",
+                "texto": "Acuerdo Internacional"
+            },
+            "fecha_disposicion": "20061213",
+            "titulo": "Instrumento de Ratificaci\u00f3n de la Convenci\u00f3n sobre los derechos de las personas con discapacidad, hecho en Nueva York el 13 de diciembre de 2006.",
+            "diario": "Bolet\u00edn Oficial del Estado",
+            "fecha_publicacion": "20080421",
+            "diario_numero": "96",
+            "fecha_vigencia": "20080503",
+            "vigencia_agotada": "N",
+            "estado_consolidacion": {
+                "codigo": "3",
+                "texto": "Finalizado"
+            },
+            "url_eli": "https:\/\/www.boe.es\/eli\/es\/ai\/2006\/12\/13\/(1)",
+            "url_html_consolidada": "https:\/\/www.boe.es\/buscar\/act.php?id=BOE-A-2008-6963"
+        },
+        {
+            "fecha_actualizacion": "20261026T113620Z",
+            "identificador": "BOE-A-2008-2982",
+            "ambito": {
+                "codigo": "1",
+                "texto": "Estatal"
+            },
+            "departamento": {
+                "codigo": "7723",
+                "texto": "Jefatura del Estado"
+            },
+            "rango": {
+                "codigo": "1180",
+                "texto": "Acuerdo Internacional"
+            },
+            "fecha_disposicion": "20010323",
+            "titulo": "Instrumento de Ratificaci\u00f3n del Convenio Internacional sobre responsabilidad civil nacida de da\u00f1os debidos a contaminaci\u00f3n por hidrocarburos para combustible de los buques (BUNKERS 2001), hecho en Londres el 23 de marzo de 2001.",
+            "diario": "Bolet\u00edn Oficial del Estado",
+            "fecha_publicacion": "20080219",
+            "diario_numero": "43",
+            "fecha_vigencia": "20081121",
+            "vigencia_agotada": "N",
+            "estado_consolidacion": {
+                "codigo": "3",
+                "texto": "Finalizado"
+            },
+            "url_eli": "https:\/\/www.boe.es\/eli\/es\/ai\/2001\/03\/23\/(1)",
+            "url_html_consolidada": "https:\/\/www.boe.es\/buscar\/act.php?id=BOE-A-2008-2982"
+        },
+        {
+            "fecha_actualizacion": "20261026T113548Z",
+            "identificador": "BOE-A-2002-10139",
+            "ambito": {
+                "codigo": "1",
+                "texto": "Estatal"
+            },
+            "departamento": {
+                "codigo": "7723",
+                "texto": "Jefatura del Estado"
+            },
+            "rango": {
+                "codigo": "1180",
+                "texto": "Acuerdo Internacional"
+            },
+            "fecha_disposicion": "19980717",
+            "titulo": "Instrumento de Ratificaci\u00f3n del Estatuto de Roma de la Corte Penal Internacional, hecho en Roma el 17 de julio de 1998.",
+            "diario": "Bolet\u00edn Oficial del Estado",
+            "fecha_publicacion": "20020527",
+            "diario_numero": "126",
+            "fecha_vigencia": "20020701",
+            "vigencia_agotada": "N",
+            "estado_consolidacion": {
+                "codigo": "3",
+                "texto": "Finalizado"
+            },
+            "url_eli": "https:\/\/www.boe.es\/eli\/es\/ai\/1998\/07\/17\/(1)",
+            "url_html_consolidada": "https:\/\/www.boe.es\/buscar\/act.php?id=BOE-A-2002-10139"
+        },
+        {
+            "fecha_actualizacion": "20261026T113518Z",
+            "identificador": "BOE-A-1987-19691",
+            "ambito": {
+                "codigo": "1",
+                "texto": "Estatal"
+            },
+            "departamento": {
+                "codigo": "7723",
+                "texto": "Jefatura del Estado"
+            },
+            "rango": {
+                "codigo": "1180",
+                "texto": "Acuerdo Internacional"
+            },
+            "fecha_disposicion": "19801025",
+            "titulo": "Instrumento de Ratificaci\u00f3n del Convenio sobre los aspectos civiles de la sustracci\u00f3n internacional de menores, hecho en La Haya el 25 de octubre de 1980.",
+            "diario": "Bolet\u00edn Oficial del Estado",
+            "fecha_publicacion": "19870824",
+            "diario_numero": "202",
+            "fecha_vigencia": "19870901",
+            "vigencia_agotada": "N",
+            "estado_consolidacion": {
+                "codigo": "3",
+                "texto": "Finalizado"
+            },
+            "url_eli": "https:\/\/www.boe.es\/eli\/es\/ai\/1980\/10\/25\/(2)",
+            "url_html_consolidada": "https:\/\/www.boe.es\/buscar\/act.php?id=BOE-A-1987-19691"
+        }
+    ]
+}

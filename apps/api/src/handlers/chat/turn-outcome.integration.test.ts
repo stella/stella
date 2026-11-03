@@ -72,7 +72,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -188,6 +188,13 @@ let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const seededSkillIds: SafeId<"agentSkill">[] = [];
 
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ profile }),
+});
+
 beforeAll(
   async () =>
     await profile.measure("fixture", async () => {
@@ -203,14 +210,12 @@ beforeAll(
       previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
       process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
         "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-      replay = installProviderWireReplay({ profile });
     }),
 );
 
 afterAll(async () => {
   try {
     await profile.measure("close", async () => {
-      replay.restore();
       env.USE_MOCK_AI = previousMockAI;
       if (previousBedrockEndpoint === undefined) {
         delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
@@ -396,7 +401,6 @@ const prepareThread = async (
       );
       const outcome = await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
@@ -405,6 +409,8 @@ const prepareThread = async (
         safeDb,
         threadId,
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
       replay.takeFindings();
       expect(

@@ -42,7 +42,7 @@ export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // sharing with monitoring-drain peaked at 2633 MB against the 2560 MB cap.
   "src/lib/lists/sanctions/refresh-event-loop.db.test.ts",
   // Sets the deployment's public address before the environment is read.
-  "src/lib/oauth-cli-client-document.db.test.ts",
+  "src/lib/oauth-native-client-documents.db.test.ts",
   // Owns the CIMD transport module and the AS JWKS fetch for the whole process.
   "src/lib/oauth-cimd-private-key-jwt.db.test.ts",
 ]);
@@ -651,11 +651,18 @@ export const isDbTest = (testPath: string, source: string) => {
   if (DB_TEST_PATH_RE.test(testPath)) {
     return true;
   }
-  return parseSource(testPath, source).module.staticImports.some(
-    ({ entries, moduleRequest }) =>
-      // A bare or empty import runs the module; an import of only types does
-      // not.
-      (entries.length === 0 || entries.some(({ isType }) => !isType)) &&
-      DB_TEST_MARKERS.some((marker) => moduleRequest.value.includes(marker)),
+  return parseSource(testPath, source).program.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      // A bare or empty value import runs the module; a type-only
+      // declaration, empty or not, and an import of only types do not.
+      statement.importKind !== "type" &&
+      (statement.specifiers.length === 0 ||
+        statement.specifiers.some(
+          (specifier) =>
+            specifier.type !== "ImportSpecifier" ||
+            specifier.importKind !== "type",
+        )) &&
+      DB_TEST_MARKERS.some((marker) => statement.source.value.includes(marker)),
   );
 };

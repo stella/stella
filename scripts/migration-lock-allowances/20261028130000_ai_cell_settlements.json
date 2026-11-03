@@ -1,0 +1,3 @@
+{
+  "add-column": "The nullable JSONB column has no default or backfill, so PostgreSQL adds it as catalog-only metadata without rewriting existing rows; the 1s lock timeout and 5s statement timeout bound lock acquisition and execution."
+}

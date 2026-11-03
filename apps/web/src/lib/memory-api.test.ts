@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  createMemory,
   fetchMemoriesPage,
   fetchWorkspaceNavigationPage,
   updateMemory,
@@ -17,6 +18,27 @@ afterEach(() => {
 });
 
 describe("memory API boundary", () => {
+  test("creates memories without response replay keys", async () => {
+    const memoryId = "00000000-0000-0000-0000-000000000001";
+    const fetchMock = setFetch(async () => Response.json({ id: memoryId }));
+    const result = await createMemory({
+      content: "Use numbered paragraphs.",
+      kind: "preference",
+      scope: "user",
+    });
+    expect(String(result.id)).toBe(memoryId);
+    const [input, init] = fetchMock.mock.calls.at(0) ?? [];
+    expect(requestUrl(input).pathname).toBe("/v1/memories");
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toBeNull();
+    expect(init?.body).toBe(
+      JSON.stringify({
+        content: "Use numbered paragraphs.",
+        kind: "preference",
+        scope: "user",
+      }),
+    );
+  });
+
   test("reads memory pages and sends the opaque cursor", async () => {
     const fetchMock = setFetch(async () =>
       Response.json({

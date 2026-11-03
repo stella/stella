@@ -14,6 +14,8 @@ import {
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -80,6 +82,10 @@ const refineCaseLawSearch = createSafeRootHandler(
     session,
     user,
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const countryRead = readPublicLawCountry(body.country, {
       domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,

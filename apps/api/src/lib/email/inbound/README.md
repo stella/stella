@@ -82,7 +82,8 @@ scheduler job `inboundMail.receive.minutely` drains that queue; operator
 pauses apply to it like any other job. It runs only when
 `INBOUND_MAIL_QUEUE_URL`, `INBOUND_MAIL_TOPIC_ARN`, `INBOUND_MAIL_BUCKET` and
 `INBOUND_MAIL_KEY_PREFIX` are all set with `INBOUND_MAIL_DOMAIN`; a partial
-set fails boot. The queue and bucket are reached in `S3_REGION`.
+set fails boot. The queue is reached in the region its URL names (a URL
+that is not an SQS queue URL fails boot); the bucket in `S3_REGION`.
 
 The trust boundary is IAM: the queue policy must admit only the configured
 topic, and the topic only the receipt rule. SNS signatures are not fetched.

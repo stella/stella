@@ -31,7 +31,8 @@ const sends: unknown[] = [];
 const unexpected: string[] = [];
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -44,6 +45,8 @@ const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { AIAvailabilityProvider } = await import("@/components/require-ai-key");
 const { roleOptions } = await import("@/lib/auth-queries");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
@@ -104,7 +107,7 @@ const savedThread = {
   webSearchAvailable: false,
   webSearchEnabled: false,
 } satisfies ThreadResponse;
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   testing.cleanup();
@@ -228,12 +231,17 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
           nextCursor: null,
         } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
       }
+      if (pathname.endsWith("/mcp/connections")) {
+        return Response.json({
+          connections: [],
+        } satisfies WebApiRoutes["mcp"]["connections"]["get"]["response"][200]);
+      }
       if (pathname.endsWith("/mcp/connectors")) {
         return Response.json({
           canManageCustomConnectors: false,
           connectors: [],
           nativeTools: [],
-        });
+        } satisfies WebApiRoutes["mcp"]["connectors"]["get"]["response"][200]);
       }
       if (pathname.endsWith("/chat/skill-availability")) {
         return Response.json({ unavailable: [] });
@@ -252,7 +260,7 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
 };
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -273,10 +281,8 @@ const draftPrompt = (text: string) => {
     .insertInlineContent(getChatThreadKey(threadRef), [{ type: "text", text }]);
 };
 
-/** The thread page as its route mounts it, ready to send. */
-const openThreadPage = async (
-  client: InstanceType<typeof query.QueryClient>,
-) => {
+/** The mounted thread page after its availability read settles. */
+const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -303,7 +309,7 @@ const openThreadPage = async (
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
             <AuthenticatedUserProvider user={user}>
@@ -313,9 +319,22 @@ const openThreadPage = async (
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
+  await ui.findByRole("textbox");
+  await testing.waitFor(() =>
+    expect(
+      client.getQueryState(
+        aiAvailabilityOptions({ organizationId: user.activeOrganizationId })
+          .queryKey,
+      )?.status,
+    ).toBe("success"),
+  );
+  return ui;
+};
+
+const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.waitFor(() =>
     expect(
       ui
@@ -323,10 +342,6 @@ const openThreadPage = async (
         .hasAttribute("disabled"),
     ).toBe(false),
   );
-  return ui;
-};
-
-const send = async (ui: ReturnType<typeof testing.render>, count: number) => {
   await testing.act(async () => {
     testing.fireEvent.click(
       ui.getByRole("button", { name: messages.chat.sendPrompt }),
@@ -406,9 +421,7 @@ test("an evicted builder's chat lives and goes with the thread entry the page re
   expect(unexpected).toEqual([]);
 });
 
-// A send the page declines (no AI available, so it opens the configure-key
-// dialog instead) must leave the typed message in the composer for the retry.
-test("a send declined for missing AI keeps the typed draft in the composer", async () => {
+test("unavailable AI blocks sending and preserves the draft until availability recovers", async () => {
   serveSavedBuilder({ aiAvailable: false });
   const client = createClient();
   const prompt = "Summarise the indemnity clause";
@@ -418,25 +431,36 @@ test("a send declined for missing AI keeps the typed draft in the composer", asy
   const textbox = ui.getByRole("textbox");
   expect(textbox.textContent).toBe(prompt);
 
+  const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  expect(sendButton.hasAttribute("disabled")).toBe(true);
+  expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
-    testing.fireEvent.click(
-      ui.getByRole("button", { name: messages.chat.sendPrompt }),
-    );
-    await sleep(50);
+    testing.fireEvent.click(sendButton);
+    testing.fireEvent.keyDown(textbox, { key: "Enter" });
   });
-
-  // The page declined the send and asked for a key instead.
-  await testing.waitFor(() => expect(ui.queryByRole("dialog")).not.toBeNull());
+  expect(ui.queryByRole("dialog")).toBeNull();
   expect(sends).toEqual([]);
-  // Only the dialog's own settings read is new; this test does not serve it.
-  expect(
-    unexpected.filter(
-      (pathname) => !pathname.endsWith("/organization-settings/ai-config"),
-    ),
-  ).toEqual([]);
+  expect(unexpected).toEqual([]);
   expect(textbox.textContent).toBe(prompt);
   expect(
     useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef))?.doc
       .content,
   ).toEqual([{ type: "paragraph", content: [{ type: "text", text: prompt }] }]);
+
+  serveSavedBuilder();
+  await testing.act(async () => {
+    await client.invalidateQueries({
+      queryKey: aiAvailabilityOptions({
+        organizationId: user.activeOrganizationId,
+      }).queryKey,
+      exact: true,
+    });
+  });
+  expect(ui.getByRole("textbox")).toBe(textbox);
+  expect(textbox.textContent).toBe(prompt);
+  await send(ui, 1);
+  expect(sends.at(0)).toMatchObject({
+    messages: [{ content: `<p>${prompt}</p>`, role: "user" }],
+  });
+  expect(unexpected).toEqual([]);
 });

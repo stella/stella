@@ -544,28 +544,56 @@ describe("cross-filter reuse", () => {
     expect(engine.calls).toEqual([
       {
         query: QUERY,
-        names: [
-          "court",
-          "courtYear",
-          "decisionType",
-          "language",
-          "source",
-          "total",
-          "year",
-        ],
+        names: ["court", "decisionType", "language", "source", "total", "year"],
       },
       {
         query: `(${QUERY}) AND ${COURT_FILTER}`,
-        names: [
-          "courtYear",
-          "decisionType",
-          "language",
-          "source",
-          "total",
-          "year",
-        ],
+        names: ["decisionType", "language", "source", "total", "year"],
       },
     ]);
-    expect(filtered.outcome).toEqual({ hits: 1, misses: 6, sharedFlights: 0 });
+    expect(filtered.outcome).toEqual({ hits: 1, misses: 5, sharedFlights: 0 });
   });
+});
+
+test("cancellable readers isolate flights and reuse settled answers", async () => {
+  const { cache } = testCache();
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  const firstEngine = deferredEngine();
+  const secondEngine = deferredEngine();
+  const first = cache.reader({
+    target: TARGET,
+    scope: PUBLIC,
+    load: firstEngine.load,
+    signal: firstController.signal,
+  });
+  const second = cache.reader({
+    target: TARGET,
+    scope: PUBLIC,
+    load: secondEngine.load,
+    signal: secondController.signal,
+  });
+  const input = { query: "text:promlčení", aggs: { total: COUNT_AGGREGATION } };
+  const cancelled = first.aggregate(input);
+  const surviving = second.aggregate(input);
+  expect(firstEngine.calls).toHaveLength(1);
+  expect(secondEngine.calls).toHaveLength(1);
+  firstController.signal.addEventListener(
+    "abort",
+    () => {
+      firstEngine.answer(
+        Result.err(new CorpusIndexError({ message: "Cancelled aggregation" })),
+      );
+    },
+    { once: true },
+  );
+  firstController.abort();
+  secondEngine.answer(Result.ok({ total: { value: 42 } }));
+  expect((await cancelled).isErr()).toBe(true);
+  expect(valueOf(await surviving)).toEqual({ value: 42 });
+  expect(second.outcome()).toEqual({ hits: 0, misses: 1, sharedFlights: 0 });
+  const engine = countingEngine();
+  const warm = await read({ cache, load: engine.load });
+  expect(valueOf(warm.answer)).toEqual({ value: 42 });
+  expect(engine.calls).toHaveLength(0);
 });

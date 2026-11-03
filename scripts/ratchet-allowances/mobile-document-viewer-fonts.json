@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The document viewer bundles the fonts folio lays documents out with (folio-fonts.gen.ts imports their woff2 files from @stll/folio-fonts); the release install links only the app's own dependencies, so the app declares the package itself."
+}

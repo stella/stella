@@ -3001,6 +3001,9 @@ describe("chat runtime", () => {
       const refusal = {
         code,
         ...metadata,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       };
       const stored = {

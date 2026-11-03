@@ -5,7 +5,8 @@ import {
   PROPERTIES_PER_WORKSPACE_MAX,
 } from "@stll/api-contract";
 
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
@@ -24,7 +25,7 @@ export const usePropertiesCountLimit = (workspaceId: string | null) => {
     enabled: workspaceId !== null,
     select: (data) => data.length,
   });
-  const propertiesCountView = useQueryView(propertiesCountQuery);
+  const propertiesCountView = queryView(propertiesCountQuery);
   useQueryViewError(propertiesCountView, "usePropertiesCountLimit:query");
   const propertiesCount =
     propertiesCountView.type === "items"
@@ -47,7 +48,7 @@ export const useEntitiesCountLimit = (workspaceId: string) => {
   const entitiesCountQuery = useQuery({
     ...entitySummariesCountOptions(workspaceId),
   });
-  const entitiesCountView = useQueryView(entitiesCountQuery);
+  const entitiesCountView = queryView(entitiesCountQuery);
   useQueryViewError(entitiesCountView, "useEntitiesCountLimit:query");
   const entitiesCount =
     entitiesCountView.type === "items" ? entitiesCountView.items : undefined;

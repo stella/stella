@@ -25,9 +25,9 @@ properties.created_at              timestamptz      default,not null  properties
 
 ```text
 property_dependencies.id                      pUuid            pk,not null  properties.ts:87
-property_dependencies.workspace_id            safeWorkspaceId  not null     properties.ts:88
-property_dependencies.property_id             safeUuid         not null     properties.ts:89
-property_dependencies.depends_on_property_id  safeUuid         not null     properties.ts:90
+property_dependencies.workspace_id            safeWorkspaceId  fk,not null  properties.ts:88
+property_dependencies.property_id             safeUuid         fk,not null  properties.ts:89
+property_dependencies.depends_on_property_id  safeUuid         fk,not null  properties.ts:90
 property_dependencies.condition               jsonb            null         properties.ts:93
 ```
 
@@ -42,7 +42,7 @@ playbook_definitions.name               varchar             not null          pr
 playbook_definitions.starter_id         varchar             null              properties.ts:157  Stable bundled-starter provenance.
 playbook_definitions.description        text                null              properties.ts:158
 playbook_definitions.scope              jsonb               null              properties.ts:159
-playbook_definitions.document_type_key  text                null              properties.ts:163  Derived from `scope.documentTypeKey` by the `playbook_definitions_derive_document_type_key` trigger on every insert and update; a value a writer supplies is re…
+playbook_definitions.document_type_key  text                fk,null           properties.ts:163  Derived from `scope.documentTypeKey` by the `playbook_definitions_derive_document_type_key` trigger on every insert and update; a value a writer supplies is re…
 playbook_definitions.positions          jsonb               not null          properties.ts:164
 playbook_definitions.status             text                default,not null  properties.ts:171  Advisory approval status (v1): "draft" | "approved".
 playbook_definitions.approved_at        timestamptz         null              properties.ts:176
@@ -57,8 +57,8 @@ Immutable snapshot of a `playbookDefinitions` row taken on each approval (`appro
 
 ```text
 playbook_definition_versions.id                      pUuid               pk,not null       properties.ts:226
-playbook_definition_versions.organization_id         safeOrganizationId  not null          properties.ts:227
-playbook_definition_versions.playbook_definition_id  safeUuid            not null          properties.ts:228
+playbook_definition_versions.organization_id         safeOrganizationId  fk,not null       properties.ts:227
+playbook_definition_versions.playbook_definition_id  safeUuid            fk,not null       properties.ts:228
 playbook_definition_versions.version                 integer             not null          properties.ts:231
 playbook_definition_versions.source                  text                not null          properties.ts:232
 playbook_definition_versions.name                    varchar             not null          properties.ts:233

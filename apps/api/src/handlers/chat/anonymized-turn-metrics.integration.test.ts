@@ -409,7 +409,7 @@ describe("a turn's settlement count", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       firstWriteMayFail.resolve(undefined);

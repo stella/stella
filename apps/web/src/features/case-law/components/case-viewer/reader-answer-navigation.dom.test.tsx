@@ -87,7 +87,9 @@ const ReopenHarness = () => {
           });
         }}
       >
-        {anchors.at(0)?.render(answer.anchor.spans[0].quote)}
+        {anchors.at(0)?.render(answer.anchor.spans[0].quote, {
+          isRangeStart: true,
+        })}
       </div>
       <ReaderAnswerCard
         answer={answer}
@@ -95,7 +97,8 @@ const ReopenHarness = () => {
         active
         openRevision={revision}
         busy={false}
-        citationLabel={() => "¶48"}
+        citationTarget={() => ({ type: "unresolved" })}
+        language="en"
         onOpen={() => undefined}
         onFollowUp={() => undefined}
         onRegenerate={() => undefined}

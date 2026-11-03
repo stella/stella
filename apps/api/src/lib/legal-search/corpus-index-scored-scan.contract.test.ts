@@ -10,7 +10,6 @@ import { assertProperty } from "@stll/property-testing";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
@@ -369,7 +368,7 @@ const handlerQuery = (
   if (query === null) {
     throw new Error(`the entry ${text} built no engine query`);
   }
-  return withCaseLawDatedDecisions(query, "relevance");
+  return query;
 };
 
 const ENTRIES = [
@@ -760,8 +759,9 @@ describe.skipIf(!runEngineTests)(
           }
           // Equal-count buckets have no tie order in the engine contract.
           // Compare every facet's complete bucket contents across the flip.
+          const { country, court, year } = result.value;
           return Object.fromEntries(
-            Object.entries(result.value).map(([name, buckets]) => [
+            Object.entries({ country, court, year }).map(([name, buckets]) => [
               name,
               buckets.toSorted((left, right) =>
                 getCollator("en").compare(left.value, right.value),

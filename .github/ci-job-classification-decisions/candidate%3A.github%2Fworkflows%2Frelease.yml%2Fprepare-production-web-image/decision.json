@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Builds, publishes and attests the production web image for a release candidate, once, from the candidate commit."
+}

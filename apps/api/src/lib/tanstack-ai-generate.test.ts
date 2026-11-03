@@ -1,6 +1,6 @@
 import { convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
-import { Panic, TaggedError, UnhandledException } from "better-result";
+import { Panic, Result, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -14,7 +14,9 @@ import {
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
+import { env } from "@/api/env";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
@@ -30,6 +32,7 @@ import {
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
   ModelRunError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   PROVIDER_ERROR_CODE,
   ProviderCallError,
@@ -48,6 +51,7 @@ import {
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
+  DispatchRefusedError,
   generateTanStackObjectForTask,
   generateTanStackTextForTask,
   mergeGenerationOptions,
@@ -76,6 +80,9 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
 
 // The real `chat()` engine runs here; only the provider boundary is faked.
 // Replacing the engine instead lets a fixture invent public chunk shapes the
@@ -369,6 +376,20 @@ const testModel = {
 } as ResolvedTanStackTextModel;
 
 const resolveTextModel = () => testModel;
+
+/** A dispatch check that allows its first `allowed` requests and refuses
+ * the next one, recording how many requests had left at each call. */
+const refusingAfter = (allowed: number) => {
+  const refusal = new Error("Consent withdrawn");
+  const sentAtCheck: number[] = [];
+  const check = async () => {
+    sentAtCheck.push(providerRequests.length);
+    return await Promise.resolve(
+      sentAtCheck.length > allowed ? Result.err(refusal) : Result.ok(undefined),
+    );
+  };
+  return { check, refusal, sentAtCheck };
+};
 const generateTextForTestModel = async (
   options: Parameters<typeof generateTanStackTextForTask>[0],
 ) => await generateTanStackTextForTask({ ...options, resolveTextModel });
@@ -1195,6 +1216,40 @@ describe("TanStack AI structured output generation", () => {
     });
   });
 
+  test("a dispatch check refusing the standard-tier retry sends nothing more and keeps its own error", async () => {
+    const apiError = Object.assign(new Error("OpenAI flex tier unavailable"), {
+      isRetryable: true,
+      statusCode: 429,
+    });
+    queueRun(throwingRun(apiError));
+    queueRun(objectRun({ answer: "ok" }));
+    const gate = refusingAfter(1);
+
+    const caught = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      task: "chat",
+      serviceTier: "flex",
+      tenantWorkspaceIds: [],
+      beforeEachDispatch: gate.check,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1]);
+    expect(providerRequests).toHaveLength(1);
+  });
+
   test("rejects a cancelled object run as a cancelled generation", async () => {
     const controller = new AbortController();
     queueRun(cancelledObjectRun({ answer: "yes" }, controller));
@@ -1446,11 +1501,11 @@ describe("TanStack AI model-ingress guard", () => {
   const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
 
   test("redacts tenant ids out of the dispatched messages", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1480,12 +1535,56 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
   });
 
+  test("a text request runs the caller's dispatch check first and a refusal sends nothing", async () => {
+    const options = {
+      caching: noCaching,
+      finishPolicy: "require-complete" as const,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer" as const,
+      managedAIResidency: "eu" as const,
+      orgAIConfig: null,
+      prompt: "Summarize.",
+      task: "chat" as const,
+      serviceTier: "standard" as const,
+      tenantWorkspaceIds: [],
+    };
+    queueRun(textRun(["ok"], "stop"));
+    const sentBeforeCheck: number[] = [];
+    expect(
+      await generateTextForTestModel({
+        ...options,
+        beforeEachDispatch: async () => {
+          sentBeforeCheck.push(providerRequests.length);
+          return await Promise.resolve(Result.ok(undefined));
+        },
+      }),
+    ).toBe("ok");
+    expect(sentBeforeCheck).toEqual([0]);
+
+    resetProvider();
+    queueRun(textRun(["ok"], "stop"));
+    const refusal = new Error("Consent withdrawn");
+    const caught = await generateTextForTestModel({
+      ...options,
+      beforeEachDispatch: async () =>
+        await Promise.resolve(Result.err(refusal)),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    // The run may wrap what the check threw; nothing reached the provider.
+    expect(caught).toBeInstanceOf(Error);
+    expect(providerRequests).toEqual([]);
+  });
+
   test("leaves a request without tenant ids untouched and silent", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1510,11 +1609,11 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1546,10 +1645,10 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
 
     resetProvider();
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1588,7 +1687,7 @@ describe("model dispatch within its admitted action", () => {
   const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
   const dispatchOptions = {
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId,
     userId: null,
     dataClass: "customer",
@@ -1688,33 +1787,6 @@ describe("TanStack AI text generation", () => {
   // one adapter, and `testModel` is not the provider that shape was first seen
   // on: normalizing only the adapters named for it leaves the same truncated
   // answer returned on one provider and raised as a failure on the next.
-  test("returns the text a ceiling stop produced whichever adapter reports it", async () => {
-    queueRun(
-      runErrorRun({
-        code: "max_tokens",
-        deltas: ["as far as it got"],
-        message: "The response hit the output ceiling.",
-      }),
-    );
-
-    expect(
-      await generateTextForTestModel({
-        caching: noCaching,
-        finishPolicy: "allow-incomplete",
-        organizationId: null,
-        userId: null,
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        orgAIConfig: null,
-        prompt: "Recap it.",
-        task: "chat",
-        serviceTier: "standard",
-        tenantWorkspaceIds: [],
-      }),
-    ).toBe("as far as it got");
-  });
-
   test("accepts a ceiling stop as the length finish an output-ceiling caller allows", async () => {
     queueRun(
       runErrorRun({
@@ -1783,14 +1855,14 @@ describe("TanStack AI text generation", () => {
     );
   });
 
-  test("rejects a cancelled run instead of returning its truncated text", async () => {
+  test("names a cancelled run as cancelled, not as an unfinished answer", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["half an ans"], controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1830,7 +1902,7 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1857,7 +1929,7 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1873,14 +1945,16 @@ describe("TanStack AI text generation", () => {
     expect(output).toBe("a whole answer");
   });
 
-  test("keeps the output of a run that finished without a reason before the cancellation", async () => {
+  // A reported finish, even one without a reason, means the run completed
+  // before the signal fired: it is graded on that finish, never as cancelled.
+  test("grades a run that finished without a reason before the cancellation on its finish", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["a whole answer"], controller, "unreasoned"));
 
-    const output = await generateTextForTestModel({
+    const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1891,17 +1965,24 @@ describe("TanStack AI text generation", () => {
       task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-    });
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    expect(output).toBe("a whole answer");
+    expect(controller.signal.aborted).toBe(true);
+    expect(caught).toBeInstanceOf(ModelRunUnfinishedError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).not.toBe(
+      "generation_cancelled",
+    );
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
-    queueRun(textRun(["hello", " world"]));
+    queueRun(textRun(["hello", " world"], "stop"));
 
     const output = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1930,7 +2011,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -1960,7 +2041,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2000,7 +2081,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2025,7 +2106,7 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
       userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
@@ -2613,6 +2694,50 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     ]);
   });
 
+  test("the caller's dispatch check runs before every request, the repair turn included", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const sentBeforeCheck: number[] = [];
+
+    const object = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        sentBeforeCheck.push(providerRequests.length);
+        return await Promise.resolve(Result.ok(undefined));
+      },
+    });
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(sentBeforeCheck).toEqual([0, 1]);
+  });
+
+  test("a dispatch check that refuses before the repair turn sends no repair", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    let checks = 0;
+
+    const refusal = new Error("Consent withdrawn");
+    const caught = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        checks += 1;
+        return await Promise.resolve(
+          checks > 1 ? Result.err(refusal) : Result.ok(undefined),
+        );
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    // The caller's own refusal, untouched, and no repair outcome recorded.
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal });
+    expect(checks).toBe(2);
+    expect(providerRequests).toHaveLength(1);
+    expect(outcomeLogs()).toEqual([]);
+  });
+
   test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
     queueRun(objectRun({ answer: "ok", page: "three" }));
     queueRun(objectRun({ answer: "ok", page: "3" }));
@@ -2627,7 +2752,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(classifyAIError(caught)).toBe("output_invalid");
     expect(providerRequests).toHaveLength(2);
     expect(outcomeLogs()).toEqual([
-      { result: "failed", rung: "fallback_skipped", issueTypes: "number" },
+      { result: "failed", rung: "fallback_model", issueTypes: "number" },
     ]);
     // The outcome line carries paths and types, never the model's values.
     expect(JSON.stringify(logs.records)).not.toContain("three");
@@ -2890,6 +3015,57 @@ describe("an unrepaired structured answer falls back once within the approved se
     expect(providerRequests[3]?.messages).toEqual(
       providerRequests[0]?.messages,
     );
+  });
+
+  test("a dispatch check runs before the fallback model's request, and its refusal sends nothing and records no fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(2);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1, 2]);
+    expect(providerRequests).toHaveLength(2);
+    expect(fallbackOutcome()).toBeUndefined();
+  });
+
+  test("a dispatch check runs before a retry after the provider's delay, and its refusal sends nothing", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun({
+      type: "throw",
+      error: Object.assign(
+        new Error("Rate limit exceeded. Please retry in 1ms."),
+        {
+          status: 429,
+          headers: new Headers({ "retry-after-ms": "1" }),
+        },
+      ),
+    });
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(3);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(gate.sentAtCheck).toEqual([0, 1, 2, 3]);
+    expect(providerRequests).toHaveLength(3);
+    expect(fallbackOutcome()).toBeUndefined();
   });
 
   test("a repair rejected as invalid structured output still reaches the approved fallback", async () => {

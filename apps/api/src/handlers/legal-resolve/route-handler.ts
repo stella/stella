@@ -73,12 +73,20 @@ export const verifyLegalResolveCaller =
   async ({ request }) => {
     const authorization = await getAuthorization(request);
     if (authorization.status !== 200) {
+      const message = REFUSAL_MESSAGES[authorization.body.error];
       return Result.err(
-        new HandlerError({
-          status: authorization.status,
-          message: REFUSAL_MESSAGES[authorization.body.error],
-          error: authorization.body.error,
-        }),
+        authorization.status === 503
+          ? new HandlerError({
+              status: 503,
+              code: "access_unavailable",
+              message,
+              error: authorization.body.error,
+            })
+          : new HandlerError({
+              status: authorization.status,
+              message,
+              error: authorization.body.error,
+            }),
       );
     }
     return Result.ok({

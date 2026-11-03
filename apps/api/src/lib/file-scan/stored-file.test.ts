@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { envBase } from "@/api/env-base";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
@@ -16,11 +18,15 @@ describe("bounded stored file reads", () => {
     const bytes = new TextEncoder().encode("view");
     store.put(envBase.S3_BUCKET, key, bytes, "text/plain");
     try {
-      const file = await readStoredFile({
-        key,
-        mimeType: "text/plain",
-        maxBytes: bytes.byteLength,
-        signal: AbortSignal.timeout(5000),
+      const file = await runWithQueryCounter(async () => {
+        const stored = await readStoredFile({
+          key,
+          mimeType: "text/plain",
+          maxBytes: bytes.byteLength,
+          signal: AbortSignal.timeout(5000),
+        });
+        expect(currentReadWork()?.storageReadBytes).toBe(bytes.byteLength);
+        return stored;
       });
       expect(new Uint8Array(file.bytes)).toEqual(bytes);
       const error = await rejectionOf(

@@ -2,7 +2,11 @@ import { lazy, Suspense } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 
-import { TemplateListSkeleton } from "@/features/knowledge/views/templates/template-list-view";
+import {
+  TEMPLATE_LIST_LAYOUT,
+  TemplateListSkeleton,
+} from "@/features/knowledge/views/templates/template-list-view";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicTemplatesCatalogue } from "@/routes/knowledge/-public/public-templates-catalogue";
 import { templatesSearchSchema } from "@/routes/knowledge/-templates-search";
@@ -16,6 +20,12 @@ const LazyMemberTemplatesPage = lazy(async () => {
 });
 
 export const Route = createFileRoute("/knowledge/templates")({
+  staticData: {
+    presentation: routePresentation({
+      type: "knowledge-detail",
+      detail: "templates",
+    }),
+  },
   validateSearch: templatesSearchSchema,
   component: TemplatesSection,
 });
@@ -24,9 +34,13 @@ function TemplatesSection() {
   return (
     <KnowledgeAudienceGate
       anonymous={() => <PublicTemplatesCatalogue />}
-      checking={<TemplateListSkeleton />}
+      checking={<TemplateListSkeleton layout={TEMPLATE_LIST_LAYOUT.library} />}
       member={(organizationId) => (
-        <Suspense fallback={<TemplateListSkeleton />}>
+        <Suspense
+          fallback={
+            <TemplateListSkeleton layout={TEMPLATE_LIST_LAYOUT.library} />
+          }
+        >
           <LazyMemberTemplatesPage organizationId={organizationId} />
         </Suspense>
       )}

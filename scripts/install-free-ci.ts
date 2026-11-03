@@ -730,12 +730,14 @@ const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
 /**
  * The repository retry helper, wherever the step finds it: `scripts/retry.sh`
- * from the root, or a copy kept elsewhere such as a release tooling checkout.
- * It runs the rest of its words as the command, so it is unwrapped like
- * `timeout`.
+ * from the root, a copy kept elsewhere such as a release tooling checkout, or
+ * the copy a job stages and exports as `NETWORK_RETRY_SCRIPT`. It runs the
+ * rest of its words as the command, so it is unwrapped like `timeout`.
  */
 const isRetryHelper = (word: string | undefined): boolean =>
-  word === "retry.sh" || word?.endsWith("/retry.sh") === true;
+  word === "retry.sh" ||
+  word?.endsWith("/retry.sh") === true ||
+  word === "$NETWORK_RETRY_SCRIPT";
 
 /**
  * The release gate recorder (`scripts/release-gate.sh`, or its copy in the
@@ -869,10 +871,16 @@ type ResolveRepoPathOptions = {
   readonly checkouts: readonly CheckoutSource[];
 };
 
+const PRESERVED_TOOLING_FILES = new Map([
+  ["$RUNNER_TEMP/ci-pr-jobs-cli.ts", "scripts/ci-pr-jobs-cli.ts"],
+  [
+    "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts",
+    "scripts/staging-proof-readiness-cli.ts",
+  ],
+]);
+
 const preservedToolingFile = (target: string) =>
-  target === "$RUNNER_TEMP/ci-pr-jobs-cli.ts"
-    ? "scripts/ci-pr-jobs-cli.ts"
-    : undefined;
+  PRESERVED_TOOLING_FILES.get(target);
 
 const resolveRepoPath = ({
   cwd,

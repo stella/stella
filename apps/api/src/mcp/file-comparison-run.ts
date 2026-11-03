@@ -14,7 +14,6 @@ import { sha256Base64ToHex } from "@stll/sha256";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { fileComparisonUploads } from "@/api/db/schema";
 import {
   compareDocxBuffers,
@@ -29,6 +28,7 @@ import type {
 } from "@/api/handlers/documents/compare";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
 import {

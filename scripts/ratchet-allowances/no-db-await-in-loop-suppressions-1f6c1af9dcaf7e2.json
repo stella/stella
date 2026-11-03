@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/decisions/list.ts",
+  "delta": 2,
+  "reason": "The browse page reads at most two date bands in order (dated, then undated): one page query per band, and a count only when a page addressed by number lands past the dated band. The loop is bounded by DECISION_DATE_BANDS, not by input size."
+}

@@ -1,3 +1,6 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
+// parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -67,6 +70,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
+import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -206,6 +210,15 @@ export type RawIngestionResult = {
    */
   legacyEcli?: string | undefined;
   /**
+   * The docket an older adapter version stored this same publisher document
+   * under, where it differs from `caseNumber` (a court letter the publisher
+   * never printed, read off the publisher's own identifier). Like
+   * `legacyEcli`, it only lets the pipeline find the legacy null-id row this
+   * document produced, which it adopts only on ECLI or source URL proof; it
+   * is never stored.
+   */
+  legacyCaseNumber?: string | undefined;
+  /**
    * Sheet number within the court file, where the source appends one to the
    * docket. Split it out with `splitCaseReference` rather than leaving it on
    * `caseNumber`: a citation names the docket alone, so a number carrying a
@@ -297,6 +310,7 @@ type PlainTextResultFields = {
   sheetNumber?: PlainText | undefined;
   ecli?: PlainText | undefined;
   legacyEcli?: PlainText | undefined;
+  legacyCaseNumber?: PlainText | undefined;
   court: PlainText;
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
@@ -348,6 +362,7 @@ export const PLAIN_TEXT_RESULT_FIELDS = {
   sheetNumber: true,
   ecli: true,
   legacyEcli: true,
+  legacyCaseNumber: true,
   court: true,
   decisionType: true,
   metadata: true,
@@ -445,6 +460,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       sheetNumber: yield* optionalPlainText(raw.sheetNumber),
       ecli: yield* optionalPlainText(raw.ecli),
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
+      legacyCaseNumber: yield* optionalPlainText(raw.legacyCaseNumber),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
       metadata: yield* toPlainTextMetadataObject(
@@ -638,7 +654,26 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+  /**
+   * Whether the publisher was heard while building this page. Required, so
+   * an adapter cannot leave it to a default: only `answered` moves the
+   * source's `last_sync_at`, which coverage reads as how current it is.
+   */
+  publisherRequest: PublisherRequest;
 };
+
+/** What a page says about asking the publisher. */
+export const PUBLISHER_REQUEST = {
+  /** A request reached the publisher and it answered, whatever it held. */
+  ANSWERED: "answered",
+  /** Nothing was asked: the cursor is parked, waiting, or past the end. */
+  NONE: "none",
+  /** Every request this page made failed; recovery may advance the cursor. */
+  FAILED: "failed",
+} as const;
+
+export type PublisherRequest =
+  (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<
@@ -842,6 +877,8 @@ export const LEGACY_RAW_SHAPES = {
  */
 export type StoredRawReparseInput = {
   raw: Uint8Array;
+  /** Reads stored envelope objects only; supplied by the replay driver. */
+  readObject?: StoredRawResultReader;
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;
   caseNumber: string;
@@ -879,6 +916,18 @@ export const STORED_RAW_REPARSE_REJECTION = {
 export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
+export const STORED_RAW_REPLAY_STATUS = {
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+/** Missing capture is incomplete metadata, never a parsed-document withdrawal. */
+type StoredRawMetadataOnlyOutcome = {
+  type: "rejected";
+  rejection: typeof STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA;
+  status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
+  detail: string;
+};
+
 export type StoredRawReparseOutcome =
   | {
       type: "parsed";
@@ -900,9 +949,15 @@ export type StoredRawReparseOutcome =
   | {
       type: "rejected";
       rejection: StoredRawReparseRejection;
+      status?: never;
       /** Row-specific context for the operator; safe to print. */
       detail: string;
-    };
+    }
+  | StoredRawMetadataOnlyOutcome;
+
+/** Definitions can return a typed read failure; the adapter factory owns callback rejection. */
+export type StoredRawReparseValue =
+  StoredRawReparseOutcome | Result<StoredRawReparseOutcome, StoredRawReadError>;
 
 /** A rejection on its own, for a step that can refuse before a result exists. */
 type StoredRawReparseRejected = Extract<
@@ -1648,10 +1703,15 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name" | "observeDocumentStage"
+  "country" | "key" | "name" | "observeDocumentStage" | "reparseStoredRaw"
 > & {
   readonly key: TKey;
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+  reparseStoredRaw?:
+    | ((
+        stored: StoredRawReparseInput,
+      ) => StoredRawReparseValue | Promise<StoredRawReparseValue>)
+    | undefined;
 };
 
 type ScopedCallbacks<TSource> = {
@@ -1703,7 +1763,13 @@ export const defineSourceAdapter = <
     observeDocumentStage,
     getTotalCount: scoped(adapter.getTotalCount),
     reparseStoredRaw:
-      reparseStoredRaw === undefined ? undefined : scoped(reparseStoredRaw),
+      reparseStoredRaw === undefined
+        ? undefined
+        : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
+            return readStoredRawReparseResult(
+              await reparseStoredRaw.call(this, stored),
+            );
+          }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
         fetchPage: async () => {

@@ -1,10 +1,14 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  MATTER_REFERENCE_RETIRED_CODE,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   contacts,
@@ -13,17 +17,19 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -32,8 +38,10 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const updateWorkspaceBodySchema = v.object({
-  name: v.optional(defaultVarcharSchema),
+  billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
+  name: v.optional(displayNameSchema()),
   clientId: v.optional(resourceIdSchema("contact")),
+  expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
   reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
   billingReference: v.optional(
     v.nullable(v.pipe(v.string(), v.maxLength(128))),
@@ -45,10 +53,13 @@ const updateWorkspaceBodySchema = v.object({
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, client, reference, billing reference, colour, " +
-    "or lead (who must already be a member of it). Only the fields you pass " +
+    "Change a matter: its name, client, reference, billing reference, the " +
+    "language its billing narratives are written in, colour, or lead (who " +
+    "must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
-    "the client of a client matter; members are managed separately.",
+    "the client of a client matter; members are managed separately. " +
+    "Pass expectedClientId (null for a personal matter) to change the client " +
+    `only if its current assignment still matches; otherwise returns ${API_VERSION_CONFLICT_ERROR_CODE}.`,
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -156,6 +167,21 @@ export type UpdateWorkspaceHandlerProps = {
   body: v.InferOutput<typeof updateWorkspaceBodySchema>;
 };
 
+/** Repairs the matter's search projection after the response, off the request. */
+const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-update.flush-workspace-search-repairs",
+  );
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -167,6 +193,12 @@ export const updateWorkspaceHandler = async function* ({
   body,
 }: UpdateWorkspaceHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      tx,
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,
@@ -174,12 +206,17 @@ export const updateWorkspaceHandler = async function* ({
         clientId: workspaces.clientId,
         reference: workspaces.reference,
         billingReference: workspaces.billingReference,
+        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      );
     const workspace = workspaceRows.at(0);
 
     if (!workspace) {
@@ -239,7 +276,14 @@ export const updateWorkspaceHandler = async function* ({
       }
     }
 
-    await tx
+    const conditions = [eq(workspaces.id, workspaceId)];
+    if (body.expectedClientId === null) {
+      conditions.push(isNull(workspaces.clientId));
+    } else if (body.expectedClientId !== undefined) {
+      conditions.push(eq(workspaces.clientId, body.expectedClientId));
+    }
+
+    const updated = await tx
       .update(workspaces)
       .set({
         ...pickDefined(body, [
@@ -247,11 +291,24 @@ export const updateWorkspaceHandler = async function* ({
           "clientId",
           "reference",
           "billingReference",
+          "billingNarrativeLanguage",
           "color",
           "leadUserId",
         ]),
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(...conditions))
+      .returning({ id: workspaces.id });
+
+    if (updated.length === 0) {
+      return abortTransaction(
+        new HandlerError({
+          status: 409,
+          code: API_VERSION_CONFLICT_ERROR_CODE,
+          message:
+            "Matter client has changed; refresh the matter before retrying",
+        }),
+      );
+    }
 
     const changes: Record<string, { old: unknown; new: unknown }> = {};
     if (body.name !== undefined && body.name !== workspace.name) {
@@ -268,6 +325,17 @@ export const updateWorkspaceHandler = async function* ({
         old: workspace.reference,
         new: body.reference,
       };
+    }
+    if (
+      body.billingNarrativeLanguage !== undefined &&
+      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+    ) {
+      Object.assign(changes, {
+        billingNarrativeLanguage: {
+          old: workspace.billingNarrativeLanguage,
+          new: body.billingNarrativeLanguage,
+        },
+      });
     }
     if (
       body.billingReference !== undefined &&
@@ -304,15 +372,13 @@ export const updateWorkspaceHandler = async function* ({
   });
 
   if (Result.isError(txResult)) {
-    if (
-      DatabaseError.is(txResult.error) &&
-      txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
+    const error = transactionAbortError(txResult.error);
+    if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
       return yield* Result.err(
         new HandlerError({ status: 409, message: "Duplicate value" }),
       );
     }
-    return yield* Result.err(txResult.error);
+    return yield* Result.err(error);
   }
 
   const failure = txResult.value;
@@ -321,18 +387,12 @@ export const updateWorkspaceHandler = async function* ({
       new HandlerError({
         status: failure.status,
         message: failure.message,
-        // Only the retired-reference refusal carries a code; the status is its
-        // discriminator, so a branch without one cannot reach this spread.
         ...(failure.status === 409 ? { code: failure.code } : {}),
       }),
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(
-    createErrorCapture(
-      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
-    ),
-  );
+  flushUpdatedWorkspaceSearch(workspaceId);
 
   return Result.ok({});
 };

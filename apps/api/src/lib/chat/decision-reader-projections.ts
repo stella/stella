@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
   READER_PAGE_MAX_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
@@ -11,6 +12,7 @@ import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-ident
 import { blockSchema } from "@stll/legal-ast/document-ast";
 
 const readerMetadataSchema = v.strictObject({
+  extractionWarnings: extractionWarningsSchema,
   decisionId: v.string(),
   caseNumber: v.string(),
   caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
@@ -122,6 +124,8 @@ const previewHeading = v.strictObject({
 });
 export const provisionPreviewOutput = v.strictObject({
   url: v.nullable(v.string()),
+  /** The statute's country, whose publisher grammar its anchors are in. */
+  country: v.string(),
   documentId: v.string(),
   language: v.string(),
   anchorId: v.string(),

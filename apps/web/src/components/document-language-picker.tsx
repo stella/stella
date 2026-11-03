@@ -14,9 +14,10 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { Label } from "@stll/ui/label";
 
 import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import {
   DEEPL_TARGET_LANGUAGES,
   type DeepLTargetLanguageCode,
@@ -40,7 +41,7 @@ const LanguagePicker = ({
   disabled = false,
 }: LanguagePickerProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   const options: LanguageOption[] = (() => {
     const items = languages.map((lang) => ({
@@ -55,9 +56,7 @@ const LanguagePicker = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       <Combobox<LanguageOption>
         autoHighlight
         disabled={disabled}

@@ -9,6 +9,11 @@ import {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
+import {
+  API_OAUTH_RESOURCE_NAME,
+  API_OAUTH_RESOURCE_SCOPES,
+  apiOAuthResourceUrl,
+} from "@stll/api-contract/api-oauth-resource";
 
 import type { ToolScope } from "@/api/mcp/tool-types";
 
@@ -169,12 +174,22 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it. It also upgrades the exact
- * predecessor policy that omitted protocol scopes from token issuance.
+ * every existing client registration to each MCP audience
+ * (`buildEveryClientOAuthResources`). It also upgrades the exact predecessor
+ * policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
-export const buildBetterAuthOAuthResources = (baseUrl: string) =>
+export const buildBetterAuthOAuthResources = (baseUrl: string) => [
+  ...buildEveryClientOAuthResources(baseUrl),
+  buildApiOAuthResource(baseUrl),
+];
+
+/**
+ * The MCP audiences: every client registration is linked to each, and a new
+ * registration receives them by default.
+ */
+export const buildEveryClientOAuthResources = (baseUrl: string) =>
   MCP_MODES.map((mode) => {
     const config = getMcpResourceModeConfig(mode);
     return {
@@ -189,6 +204,29 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
       name: config.resourceName,
     };
   });
+
+/**
+ * The REST API as a resource. It is linked only to stella's own native apps
+ * (`OWN_NATIVE_CLIENT_RESOURCE_LINKS` in `lib/auth/oauth-own-client-documents`),
+ * never by default and never by the backfill, so a client connected over MCP
+ * cannot obtain a token the API accepts.
+ */
+export const buildApiOAuthResource = (baseUrl: string) => ({
+  allowedScopes: [...API_OAUTH_RESOURCE_SCOPES, ...MCP_OAUTH_PROTOCOL_SCOPES],
+  identifier: apiOAuthResourceUrl(baseUrl),
+  name: API_OAUTH_RESOURCE_NAME,
+});
+
+/**
+ * Whether a configured resource is linked to every client, i.e. is an MCP
+ * audience. Told apart by the resource name, which only Stella's seeding
+ * writes and the boot census pins, never by its URL: a deployment served
+ * under a path would otherwise shift the API resource's path out from under
+ * a comparison and link it to every client.
+ */
+export const isEveryClientOAuthResource = (resource: {
+  readonly name: string;
+}): boolean => resource.name !== API_OAUTH_RESOURCE_NAME;
 
 /**
  * The allowed scopes a stored resource row carried before protocol scopes

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { SAFE_AUTOFIX_RULES, safeAutofixRuleArgs } from "./autofix-safe-rules";
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
   CI_GENERATION_COMMANDS,
@@ -14,6 +15,7 @@ const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
+const CI_WORKFLOW_URL = new URL("../.github/workflows/ci.yml", import.meta.url);
 const HELPER_URL = new URL("dependabot-changeset.ts", import.meta.url);
 const HELPER_TEST_URL = new URL(
   "dependabot-changeset.test.ts",
@@ -78,7 +80,9 @@ test("the PR trigger drops exactly the workflow files autofix never reads", () =
   );
 });
 
-test("every workflow edit selects the classification digest refresh", () => {
+// Its outputs live under .github/, which the autofix action may not modify,
+// so no edit selects the classification digest refresh as an autofix.
+test("no edit selects the classification digest refresh as an autofix", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
@@ -88,11 +92,23 @@ test("every workflow edit selects the classification digest refresh", () => {
     expect(
       generatorsForFiles([file]).map(({ id }) => id),
       file,
-    ).toContain("ci-job-classification-digests");
+    ).not.toContain("ci-job-classification-digests");
   }
-  expect(
-    generatorsForFiles(["apps/web/src/main.tsx"]).map(({ id }) => id),
-  ).not.toContain("ci-job-classification-digests");
+});
+
+test("the bridge guard uses the merge-group base in merge queue runs", async () => {
+  const workflow: unknown = Bun.YAML.parse(
+    await Bun.file(CI_WORKFLOW_URL).text(),
+  );
+  const guard = namedCiStep(workflow, "Bridge-version guard");
+
+  // The root-check plan selects the guard for pull requests and merge groups;
+  // the step adds no event gate of its own.
+  expect(guard["if"]).toContain("'ci-checks-rest/Bridge-version guard'");
+  expect(guard["if"]).not.toContain("github.event_name");
+  expect(guard["env"]).toMatchObject({
+    BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+  });
 });
 
 const namedCiStep = (workflow: unknown, name: string) => {
@@ -540,6 +556,16 @@ describe("changed-file autofix boundary", () => {
     }
   });
 
+  test("bounds the merged lockfile network refresh", async () => {
+    const workflow: unknown = Bun.YAML.parse(
+      await Bun.file(WORKFLOW_URL).text(),
+    );
+    const refresh = namedCiStep(workflow, "Refresh merged lockfile");
+
+    expect(refresh["timeout-minutes"]).toBe(5);
+    expect(refresh["run"]).toContain("refresh-lock --repo");
+  });
+
   test("each named CI guard runs its generator command or check form", async () => {
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -594,6 +620,12 @@ describe("changed-file autofix boundary", () => {
     const fixStep = job.indexOf("- name: Fix changed files");
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const pushStep = job.indexOf("- name: Push autofixes");
+    const selectStep = job.indexOf("- name: Select fix paths");
+    const preflightStep = job.indexOf(
+      "- name: Check whether fixers can change files",
+    );
+    const installStep = job.indexOf("- name: Install dependencies");
+    const selection = job.slice(selectStep, preflightStep);
     const fix = job.slice(fixStep, restrictionStep);
 
     expect(job).toContain("needs: regenerate-scope");
@@ -601,7 +633,7 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
     expect(job).toContain("github.actor != 'autofix-ci[bot]'");
     expect(job.slice(generatorStep, restrictionStep)).toContain(
-      "if: needs.regenerate-scope.outputs.run == 'true'",
+      "needs.regenerate-scope.outputs.run == 'true'",
     );
     expect(job).toContain("scripts/autofix-plan.ts plan");
     expect(job).toContain("scripts/autofix-plan.ts plan --all");
@@ -613,23 +645,37 @@ describe("changed-file autofix boundary", () => {
     expect(generatorStep).toBeGreaterThan(fixStep);
     expect(restrictionStep).toBeGreaterThan(fixStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
+    expect(preflightStep).toBeLessThan(installStep);
+    for (const name of [
+      "Install dependencies",
+      "Prepare environment",
+      "Fix changed files",
+      "Restrict autofix changes",
+      "Push autofixes",
+    ]) {
+      const step = job.indexOf(`- name: ${name}`);
+      expect(job.slice(step, step + 220)).toContain(
+        "if: steps.preflight.outputs.run == 'true'",
+      );
+    }
 
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
-    expect(fix).toContain("while IFS= read -r -d '' path; do");
-    expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
+    expect(job).toContain("- name: Raise stale bridge version");
+    expect(job).toContain("bash scripts/fix-bridge-version.sh");
+    expect(job).toContain("BRIDGE_VERSION_ALLOWED");
+    // Path filtering lives in one helper shared with the local verify entry;
+    // its filtering is tested directly in autofix-select-paths.test.ts.
+    expect(selection).toContain("bun scripts/autofix-select-paths.ts");
+    expect(selection).toContain('"$RUNNER_TEMP/autofix-format-paths"');
+    expect(selection).toContain('"$RUNNER_TEMP/autofix-lint-paths"');
     expect(fix).toContain(
-      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
-    );
-    expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${safe_rule_args[@]}" "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
-    // The Astro project has no native-compiler type graph to fix against.
-    expect(fix).toContain(
-      `if [[ "$path" =~ \\.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then`,
-    );
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-format-paths"');
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-lint-paths"');
     const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
     const typecheck = fix.indexOf(
       "bun scripts/typecheck-coverage.ts --autofix",
@@ -641,6 +687,21 @@ describe("changed-file autofix boundary", () => {
     // the step continues so formatting and generators still push.
     expect(autofix).toBeGreaterThan(prepare);
     expect(typecheck).toBeGreaterThan(autofix);
+    // A syntactic pass with the same rules runs first, reads nothing it
+    // would rewrite, and only its clean exit skips the type graph.
+    const precheck = fix.indexOf(
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --max-warnings 0 "\${safe_rule_args[@]}" "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(precheck).toBeGreaterThan(0);
+    expect(prepare).toBeGreaterThan(precheck);
+    expect(fix.slice(precheck, prepare)).toContain(
+      `bun scripts/autofix-type-aware-precheck.ts "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(fix.slice(precheck, prepare)).toContain(
+      "if (( precheck_status == 0 )); then",
+    );
+    expect(fix.slice(precheck, prepare)).not.toContain("--fix");
+    expect(fix.slice(precheck, prepare)).not.toContain("--type-aware");
     expect(fix.slice(typecheck)).toContain("restore_lint_paths");
     expect(fix.slice(typecheck)).not.toContain('exit "$typecheck_status"');
     expect(fix).toContain("set -euo pipefail");
@@ -691,7 +752,7 @@ describe("changed-file autofix boundary", () => {
       "needs.regenerate-scope.outputs.needed != 'false'",
     );
     expect(job.slice(pruneStep, restrictionStep)).toContain(
-      "if: needs.regenerate-scope.outputs.prune != 'false'",
+      "needs.regenerate-scope.outputs.prune != 'false'",
     );
     // Fixers read the push scope; the rewrite boundary stays the whole PR.
     const changed = job.slice(changedStep, tauriStep);
@@ -708,11 +769,13 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(0, derivedJob)).toContain(
       `refix: \${{ steps.scope.outputs.refix }}`,
     );
-    expect(job.slice(tauriStep, fixStep)).toContain(
-      'done < "$RUNNER_TEMP/autofix-fix-paths"',
+    const selectStep = job.indexOf("- name: Select fix paths");
+    expect(selectStep).toBeGreaterThan(changedStep);
+    expect(job.slice(selectStep, fixStep)).toContain(
+      'bun scripts/autofix-select-paths.ts \\\n            "$RUNNER_TEMP/autofix-fix-paths"',
     );
     expect(job.slice(fixStep, pruneStep)).toContain(
-      'done < "$RUNNER_TEMP/autofix-fix-paths"',
+      'done < "$RUNNER_TEMP/autofix-format-paths"',
     );
     expect(job.slice(fixStep, pruneStep)).not.toContain(
       "autofix-changed-paths",
@@ -769,5 +832,107 @@ test("type-aware autofix fixtures require a successful dependency install", asyn
   expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",
+  );
+});
+
+test("source fixes use only the documented safe-rule allowlist and never save PR caches", () => {
+  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(workflow),
+    "regenerate-derived-files",
+  );
+  const fix = workflowStepByName(steps, "Fix changed files")["run"];
+  expect(fix).toContain("bun scripts/autofix-safe-rules.ts");
+  expect(fix).toContain(`"\${safe_rule_args[@]}" "\${lint_paths[@]}"`);
+  expect(safeAutofixRuleArgs()).toEqual([
+    "--allow",
+    "all",
+    ...Object.keys(SAFE_AUTOFIX_RULES).flatMap((rule) => ["--deny", rule]),
+  ]);
+  for (const reason of Object.values(SAFE_AUTOFIX_RULES)) {
+    expect(reason.length).toBeGreaterThan(20);
+  }
+  expect(workflow).not.toContain("save: true");
+  expect(workflow).not.toContain("--fix-dangerously");
+  const refresh = steps.indexOf(
+    workflowStepByName(steps, "Refresh merged lockfile"),
+  );
+  expect(refresh).toBeLessThan(
+    steps.indexOf(workflowStepByName(steps, "Install dependencies")),
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'refresh-lock --repo "$GITHUB_WORKSPACE"',
+  );
+});
+
+test("runs lockfile tooling from the workflow revision, not the pull request", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  const checkout = workflowStepByName(steps, "Checkout lockfile tooling");
+  const checkoutInputs = checkout["with"];
+  if (!isRecord(checkoutInputs)) {
+    throw new TypeError("Lockfile tooling checkout inputs must be a mapping");
+  }
+  expect(checkoutInputs).toMatchObject({
+    repository: `\${{ github.repository }}`,
+    ref: `\${{ github.workflow_sha }}`,
+    path: ".workflow-tooling",
+    "persist-credentials": false,
+    "sparse-checkout-cone-mode": false,
+  });
+  const sparseCheckout = String(checkoutInputs["sparse-checkout"]);
+  for (const source of [
+    "packages/scripts/src/generated-files.ts",
+    "scripts/autofix-protected-paths.ts",
+    "scripts/baseline-paths.ts",
+    "scripts/bun-lock-text.ts",
+    "scripts/generated-conflicts.ts",
+    "scripts/generated-files.ts",
+  ]) {
+    expect(sparseCheckout.split("\n")).toContain(source);
+  }
+  expect(
+    workflowStepByName(
+      steps,
+      "Preserve lockfile tooling across source checkout",
+    )["run"],
+  ).toContain('rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"');
+
+  for (const name of ["Refresh merged lockfile", "Restrict autofix changes"]) {
+    const run = String(workflowStepByName(steps, name)["run"]);
+    expect(run).toContain(
+      '"$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts"',
+    );
+    expect(run).not.toMatch(
+      /(?:^|[;&|]\s*)bun(?:\s+--[\w-]+)*\s+scripts\/generated-conflicts\.ts\b/mu,
+    );
+  }
+});
+
+test("rechecks refresh-approved lockfile pins at the final collection boundary", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  const restriction: unknown = workflowStepByName(
+    steps,
+    "Restrict autofix changes",
+  )["run"];
+  if (typeof restriction !== "string") {
+    throw new TypeError("Restrict autofix changes must be a shell step");
+  }
+  expect(restriction).toContain(
+    'assert-frozen-lock --repo "$GITHUB_WORKSPACE"',
+  );
+  expect(restriction).toContain(
+    '--frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  expect(restriction.indexOf("assert-frozen-lock")).toBeLessThan(
+    restriction.indexOf('excludes+=(":(exclude,literal)bun.lock")'),
   );
 });

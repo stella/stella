@@ -502,6 +502,7 @@ const formatReleaseDate = (publishedAt: string) =>
     } from "../lib/changelog-release";
     import { parseChangelogMarkdown } from "../lib/changelog-markdown";
     import { panic } from "better-result";
+    import { slugify } from "@stll/text-normalize";
 
     type GitHubRelease = {
       body: string | null;
@@ -591,12 +592,12 @@ const formatReleaseDate = (publishedAt: string) =>
     };
 
     const releaseAnchorId = (tagName: string) =>
-      tagName
-        .toLowerCase()
-        .replaceAll(".", "-")
-        .replace(/[^a-z0-9-]/gu, "-")
-        .replace(/-+/gu, "-")
-        .replace(/^-|-$/gu, "");
+      slugify(tagName, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  });
 
     const normalizeMarkdownText = (text: string) =>
       text

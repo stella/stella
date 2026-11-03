@@ -51,3 +51,32 @@ for (const side of ["bottom", "top"] as const) {
     );
   });
 }
+
+test("sizes a content-sized popup to the fact sheet it holds", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?content=details`);
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          () => document.documentElement.dataset["popoverResizeReady"] ?? "",
+        ),
+    )
+    .toBe("true");
+
+  await page.getByRole("button", { name: "Open" }).click();
+  const popup = page.locator('[data-slot="popover-popup"]');
+  await expect(popup).toBeVisible();
+
+  // A size-contained grid reports no width of its own; the popup shrank to
+  // its title and wrapped each value one letter per line.
+  await expect
+    .poll(async () => (await popup.boundingBox())?.width ?? 0)
+    .toBeGreaterThanOrEqual(320);
+  const value = page.getByTestId("last-updated").locator("dd");
+  const lineHeight = await value.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).lineHeight),
+  );
+  expect((await value.boundingBox())?.height ?? 0).toBeLessThan(lineHeight * 3);
+});

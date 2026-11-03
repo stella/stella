@@ -19,6 +19,7 @@ import {
   getMcpOAuthRedirectUri,
   getOAuthEndpointOrigins,
   MCP_OAUTH_INVALID_GRANT_CODE,
+  MCP_OAUTH_REFRESH_REFUSED_CODE,
   oauthDomainsMatch,
   refreshOAuthToken,
   tokenExpiresAt,
@@ -493,10 +494,15 @@ describe("upstream metadata binding", () => {
 });
 
 test("classifies refresh outcomes from the token endpoint", async () => {
-  for (const [status, error, definitive] of [
-    [400, "invalid_grant", true],
-    [503, "temporarily_unavailable", false],
-    [400, "invalid_client", false],
+  for (const [status, error, code] of [
+    [400, "invalid_grant", MCP_OAUTH_INVALID_GRANT_CODE],
+    [503, "temporarily_unavailable", "upstream_unavailable"],
+    [429, "slow_down", "upstream_unavailable"],
+    [408, "request_timeout", "upstream_unavailable"],
+    [400, "invalid_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
+    [401, "unauthorized_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
+    // A successful answer that is not a token breaks the contract: reported, not retried.
+    [200, "not_a_token", undefined],
   ] as const) {
     const transport = discoveryTransport();
     const metadata = await discoverOAuthMetadata({
@@ -517,7 +523,7 @@ test("classifies refresh outcomes from the token endpoint", async () => {
           Result.ok({
             body: new TextEncoder().encode(JSON.stringify({ error })).buffer,
             headers: new Headers(),
-            ok: false,
+            ok: status < 400,
             status,
           }),
       },
@@ -530,9 +536,8 @@ test("classifies refresh outcomes from the token endpoint", async () => {
     });
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error.code === MCP_OAUTH_INVALID_GRANT_CODE).toBe(
-        definitive,
-      );
+      expect(result.error.code).toBe(code);
+      expect(result.error.status).toBe(code === undefined ? 500 : 502);
     }
   }
 });

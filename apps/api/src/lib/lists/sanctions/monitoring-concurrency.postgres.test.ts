@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -40,13 +41,13 @@ import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
 const GATE_SETTING = "test.monitoring_write_gate";
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
 
 const backendPid = async (db: GatedTestDb) =>
   (await db.execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`)).at(0)
@@ -54,21 +55,19 @@ const backendPid = async (db: GatedTestDb) =>
 
 // Observing the server's lock graph proves the competing operation reached its fence.
 // The bounded wait only diagnoses a missing barrier; elapsed time is never the oracle.
-const blockersFor = async (db: GatedTestDb, pid: number) => {
-  for (let attempt = 0; attempt < BLOCK_OBSERVATION_ATTEMPTS; attempt += 1) {
-    const row =
-      (
-        await db.execute<{ blockers: number[] }>(sql`
-      SELECT pg_blocking_pids(${pid}) AS blockers
-    `)
-      ).at(0) ?? panic("Missing lock observation");
-    if (row.blockers.length > 0) {
-      return row.blockers;
-    }
-    await Bun.sleep(10);
-  }
-  return panic("Monitoring operation did not reach its database barrier");
-};
+const blockersFor = async (db: GatedTestDb, pid: number) =>
+  await waitForExternalState({
+    description: "the monitoring operation reaches its database barrier",
+    read: async () => {
+      const row =
+        (
+          await db.execute<{ blockers: number[] }>(sql`
+        SELECT pg_blocking_pids(${pid}) AS blockers
+      `)
+        ).at(0) ?? panic("Missing lock observation");
+      return row.blockers.length > 0 && row.blockers;
+    },
+  });
 
 type InstallGateOptions = {
   db: GatedTestDb;
@@ -469,9 +468,7 @@ if (!databaseUrl || !runPostgresTests) {
         }
         await Promise.allSettled(running);
         await removeGate();
-        await controlDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(controlDb, [organizationId]);
         await controlDb
           .update(sanctionsSources)
           .set({
@@ -855,9 +852,7 @@ if (!databaseUrl || !runPostgresTests) {
         controllers.abort();
         await Promise.allSettled(running);
         await removeGate();
-        await controlDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(controlDb, [organizationId]);
       }
     });
   }, 120_000);
@@ -1128,9 +1123,7 @@ if (!databaseUrl || !runPostgresTests) {
           sql`DROP FUNCTION IF EXISTS ${sql.identifier(faultName)}()`,
         );
         await removeGate();
-        await settingsDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(settingsDb, [organizationId]);
         await restoreFanouts();
       }
     });

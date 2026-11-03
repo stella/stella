@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/chrome": "0.3.5",
     "bun-types": "catalog:",

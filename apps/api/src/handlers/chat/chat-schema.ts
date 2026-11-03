@@ -7,12 +7,15 @@ import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import * as v from "valibot";
 
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserClientCapability,
+  BROWSER_EXTENSION_STATUS,
+  type BrowserExtensionCapability,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_EDIT_APPLY_MODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_RUN_MODE,
   CHAT_TURN_INTENT,
@@ -31,6 +34,7 @@ import {
   isChatPastedTextPart,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -40,6 +44,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   chatMessageFromPersisted,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
   getResumedUserInteraction,
   hasServerOwnedChatPartType,
@@ -50,6 +55,7 @@ import {
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import { validatePrivateReceipts } from "@/api/handlers/chat/chat-secret-validation";
+import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -68,9 +74,9 @@ import {
   type ChatToolMap,
   registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
+import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
@@ -200,23 +206,21 @@ export const activeExternalSchema = activeContextSchema({
   url: v.string(),
 });
 
-// Any version parses so a tab running an older or newer web build can still
-// chat; `resolveBrowserClientCapability` decides whether the tool registers.
-// A JSON number that is whole, not a numeric string.
-const browserClientSchema = v.strictObject({
-  protocolVersion: v.pipe(v.number(), v.minValue(1), v.multipleOf(1)),
+// Accept version skew so chat can continue; the capability policy disables
+// browser tools and supplies recovery guidance. Unknown statuses stay invalid.
+const browserExtensionSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  status: v.picklist(Object.values(BROWSER_EXTENSION_STATUS)),
 });
 
-/**
- * The browser tool is offered only to a client speaking this server's
- * extension protocol; another version chats without it.
- */
-export const resolveBrowserClientCapability = (
-  browserClient: v.InferOutput<typeof browserClientSchema> | undefined,
-): BrowserClientCapability | undefined =>
-  browserClient?.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
-    ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
-    : undefined;
+/** Non-web chat clients have no local Chrome-extension executor. */
+export const resolveBrowserExtensionCapability = (
+  browserExtension: v.InferOutput<typeof browserExtensionSchema> | undefined,
+): BrowserExtensionCapability =>
+  browserExtension ?? {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: BROWSER_EXTENSION_STATUS.unsupportedDevice,
+  };
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
@@ -261,7 +265,12 @@ const sendMessageCommonProperties = {
    */
   contextMatterIds: v.exactOptional(v.array(resourceIdSchema("workspace"))),
   truncateAfterMessageId: v.exactOptional(resourceIdSchema("chatMessage")),
-  turnIntent: v.exactOptional(v.literal(CHAT_TURN_INTENT.regenerate)),
+  turnIntent: v.exactOptional(
+    v.union([
+      v.literal(CHAT_TURN_INTENT.edit),
+      v.literal(CHAT_TURN_INTENT.regenerate),
+    ]),
+  ),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool
@@ -282,7 +291,7 @@ const sendMessageCommonProperties = {
   activeExternal: v.exactOptional(activeExternalSchema),
   activeSkill: v.exactOptional(activeSkillSchema),
   activeStatute: v.exactOptional(activeStatuteSchema),
-  browserClient: v.exactOptional(browserClientSchema),
+  browserExtension: v.exactOptional(browserExtensionSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
@@ -334,6 +343,47 @@ export const sendMessageBodySchema = v.union([
 ]);
 
 export type ChatSendRequest = v.InferOutput<typeof sendMessageBodySchema>;
+
+/**
+ * The stored user message a request edits, or null for any other request.
+ * An edit names the incoming user message itself as its truncation target;
+ * a user message that cuts stored history without the edit intent is refused,
+ * so every such request passes the edit authorization
+ * (`authorizeChatUserMessageEdit`).
+ */
+export const resolveEditedUserMessageId = (
+  body: Pick<
+    ChatSendRequest,
+    "message" | "truncateAfterMessageId" | "turnIntent"
+  >,
+): Result<SafeId<"chatMessage"> | null, HandlerError<400>> => {
+  if (body.turnIntent === CHAT_TURN_INTENT.edit) {
+    return body.message.role === "user" &&
+      body.truncateAfterMessageId !== undefined &&
+      body.truncateAfterMessageId === body.message.id
+      ? Result.ok(body.truncateAfterMessageId)
+      : Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              "An edit must name the incoming user message as its truncation target",
+          }),
+        );
+  }
+  if (
+    body.message.role === "user" &&
+    body.truncateAfterMessageId !== undefined &&
+    body.turnIntent === undefined
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Replacing a stored user message requires the edit intent",
+      }),
+    );
+  }
+  return Result.ok(null);
+};
 
 const agUiMessageEnvelopeSchema = v.looseObject({
   id: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
@@ -446,6 +496,7 @@ type ValidateMessageInput = {
     content: PersistedChatMessageContent;
     role: ChatMessageRole;
   } | null;
+  refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   tools: ChatToolMap;
@@ -567,6 +618,7 @@ const withValidatedToolPayload = ({
 export const validateMessage = async ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
   safeDb,
   threadId,
@@ -577,6 +629,7 @@ export const validateMessage = async ({
     const partsResult = validateIncomingChatParts({
       message,
       persistedMessage,
+      refRegistry,
       resume,
       tools,
     });
@@ -718,11 +771,13 @@ type ValidatedIncomingChatParts = {
 const validateIncomingChatParts = ({
   message,
   persistedMessage,
+  refRegistry,
   resume,
   tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
@@ -759,6 +814,7 @@ const validateIncomingChatParts = ({
     const continuationResult = validateContinuationToolCallIntegrity({
       incomingParts: validatedParts,
       persistedMessage: canonicalMessage,
+      refRegistry,
       resume,
       tools,
     });
@@ -799,12 +855,12 @@ const applyValidatedContinuationTransitions = ({
     }
     const validatedCall = validatedCallsById.get(part.id);
     if (validatedCall === undefined) {
-      return canonicalizeToolCall(part);
+      return continueStoredChatPart(part, canonicalizeToolCall(part));
     }
     if (validatedCall.type === "transitioned") {
       transitionedCallIds.add(part.id);
     }
-    return validatedCall.call;
+    return continueStoredChatPart(part, validatedCall.call);
   });
   const resultCallIds = new Set(
     persistedParts.flatMap((part) =>
@@ -854,8 +910,8 @@ const applyValidatedContinuationTransitions = ({
  * keeps only the adapter-normalized input and recomputes `arguments` from it,
  * while the client echoes the raw provider text, which strict tool schemas widen
  * with nulls for absent optionals. Both are the same call, so `input` is
- * compared after applying the tool schema on both sides, including its defaults
- * and placeholder rules, and the server copy is restored onto the accepted call.
+ * compared after applying the tool schema and resolving declared chat refs on
+ * both sides. The server copy is restored onto the accepted call.
  */
 type ValidatedContinuationToolCall =
   | { type: "transitioned"; call: ChatToolCallPart }
@@ -864,11 +920,13 @@ type ValidatedContinuationToolCall =
 const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedMessage,
+  refRegistry,
   resume,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedMessage: ChatMessage;
+  refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
   tools: ChatToolMap;
 }): Result<
@@ -896,6 +954,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
+      refRegistry,
       tool: registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
@@ -1066,32 +1125,50 @@ const canonicalToolCallBase = (
  * The continuation's input under the same schema that validated the stored
  * call. The browser echoes provider arguments before defaults were applied.
  * Fold placeholders before parsing, so nullable values remain values while
- * absent optional fields receive the same defaults as the stored input.
+ * absent optional fields receive the same defaults as the stored input. Resolve
+ * declared ref fields through the persistence owner so raw provider refs and
+ * stored ids name the same resources without rewriting opaque input values.
  * A call with no known schema (a tool this request does not register, or one
  * without an input schema) keeps the schema-blind fold of every `null`.
  */
-const normalizeContinuationInput = (
-  tool: ChatTool | undefined,
-  value: unknown,
-): Result<unknown, HandlerError<400>> => {
-  if (tool?.inputSchema === undefined) {
-    return Result.ok(withNullsOmitted(value));
-  }
-  return validateToolPayload({
-    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, value),
-    payloadName: "input",
-    schema: tool.inputSchema,
-    toolName: tool.name,
+type NormalizeContinuationInputOptions = {
+  refRegistry: ChatRefRegistry;
+  tool: ChatTool | undefined;
+  toolName: string;
+  value: unknown;
+};
+
+const normalizeContinuationInput = ({
+  refRegistry,
+  tool,
+  toolName,
+  value,
+}: NormalizeContinuationInputOptions): Result<unknown, HandlerError<400>> => {
+  const input = resolveRegistryToolInputRefs({
+    input: value,
+    refRegistry,
+    toolName,
   });
+  if (tool?.inputSchema !== undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: tool.name,
+    });
+  }
+  return Result.ok(withNullsOmitted(input));
 };
 
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
+  refRegistry,
   tool,
 }: {
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
+  refRegistry: ChatRefRegistry;
   tool: ChatTool | undefined;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
@@ -1100,8 +1177,18 @@ const validateContinuationToolCallTransition = ({
       call: canonicalizeToolCall(canonicalCall),
     });
   }
-  const incomingInput = normalizeContinuationInput(tool, incomingCall.input);
-  const canonicalInput = normalizeContinuationInput(tool, canonicalCall.input);
+  const incomingInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: incomingCall.input,
+  });
+  const canonicalInput = normalizeContinuationInput({
+    refRegistry,
+    tool,
+    toolName: canonicalCall.name,
+    value: canonicalCall.input,
+  });
   if (
     incomingCall.name !== canonicalCall.name ||
     Result.isError(incomingInput) ||
@@ -2157,4 +2244,31 @@ export const parseMessage = ({
     },
     mentions,
   };
+};
+
+/**
+ * Refuses a user message that would reach the provider with nothing to read:
+ * its text normalizes to whitespace (an empty paragraph, a lone line break, a
+ * reference chip the sender may not see) and it carries no attachment. Run on
+ * the normalized message, before the turn creates or changes anything, so
+ * the refusal stores nothing and calls no provider.
+ */
+export const requireUserMessageContent = (
+  message: Pick<PersistableChatMessage, "parts" | "role">,
+): Result<void, HandlerError<422>> => {
+  if (
+    message.role !== "user" ||
+    v.is(chatUserMessageContentSchema, message.parts)
+  ) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      status: 422,
+      message: "Chat message has no text or attachment",
+      hint: "Send text or attach a file.",
+      retryable: false,
+    }),
+  );
 };

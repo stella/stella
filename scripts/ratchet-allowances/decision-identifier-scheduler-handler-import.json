@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "The scheduler delegates each gated page to reconcileDecisionIdentifiersStep, the existing case-law identifier owner of checkpoint, citation-graph, and projection writes. Duplicating that path would split its replay and lock contract. Remove this boundary when the backfill and its ingestion dependencies move together into a shared case-law maintenance owner."
+}

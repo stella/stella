@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/auth/demo-account-otp-policy";
 
 const baseEnv = {
+  DEPLOY_ENVIRONMENT: "development",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
   S3_ENDPOINT: "http://localhost:9000",
   S3_BUCKET: "stella-test",

@@ -14,8 +14,8 @@ export const trimmedStringSchema = () => v.pipe(v.string(), v.trim());
 export const requiredTrimmedStringSchema = (message: string) =>
   v.pipe(v.string(), v.trim(), v.nonEmpty(message));
 
-export const emailSchema = () =>
-  v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email());
+export const emailSchema = (message: string) =>
+  v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email(message));
 
 export const optionalSearchStringSchema = () =>
   v.optional(v.pipe(v.string(), v.trim(), v.transform(toUndefinedIfEmpty)));

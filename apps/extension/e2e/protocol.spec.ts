@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
@@ -107,9 +108,12 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
     expect(elementNamed(snapshot.elements, "Shadow action").ref).toContain(
       ".s.",
     );
-    expect(elementNamed(snapshot.elements, "External decision 42").href).toBe(
-      "https://example.com/decision/42",
-    );
+    expect(
+      elementNamed(snapshot.elements, "External decision 42").href,
+    ).toEqual({
+      type: BROWSER_CONTROL_TARGET_METADATA.present,
+      value: "https://example.com/decision/42",
+    });
     for (const name of [
       "Password field",
       "Card number",
@@ -158,7 +162,20 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
         page: page(),
         target: {
           ...targetOf(elementNamed(snapshot.elements, "Second page")),
-          href: `${FIXTURE_ORIGIN}/other.html`,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.present,
+            value: `${FIXTURE_ORIGIN}/other.html`,
+          },
+        },
+      }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
+    expect(
+      await send({
+        action: "click",
+        page: page(),
+        target: {
+          ...targetOf(elementNamed(snapshot.elements, "Second page")),
+          href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
         },
       }),
     ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
@@ -221,14 +238,30 @@ test("reads frames and shadow roots, pages text, and enforces the origin policy"
       ({ name, role }) => name === "Delete" && role === "button",
     );
     expect(deleteButtons.map((button) => button.context)).toEqual([
-      "Case 12 C 345/2024 Delete",
-      "Case 7 T 89/2023 Delete",
+      {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "Case 12 C 345/2024 Delete",
+      },
+      {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "Case 7 T 89/2023 Delete",
+      },
     ]);
     const firstDeleteElement = deleteButtons.at(0);
     if (!firstDeleteElement) {
       throw new TypeError("Expected a Delete button");
     }
     const firstDelete = targetOf(firstDeleteElement);
+    expect(
+      await send({
+        action: "click",
+        page: page(),
+        target: {
+          ...firstDelete,
+          context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+        },
+      }),
+    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.staleSnapshot });
     snapshot = successful(
       await send({
         action: "click",

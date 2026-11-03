@@ -181,6 +181,7 @@ const writeTemplateAttempt = async function* ({
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message:
             "Template storage write could not be confirmed. Retry the operation.",
         }),

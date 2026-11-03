@@ -4,8 +4,9 @@ import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 
 import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
 import { optionalArray } from "@/lib/arrays";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /** Resolved outgoing citations already loaded for inline linking in a decision. */
 export const useDecisionCitationAnchors = (
@@ -14,7 +15,7 @@ export const useDecisionCitationAnchors = (
   const dataQuery = useInfiniteQuery(
     decisionCitationsInfiniteOptions(decisionId, "outgoing"),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useDecisionCitationAnchors:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const anchors: CitationAnchorSource[] = [];

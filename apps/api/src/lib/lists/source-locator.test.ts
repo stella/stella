@@ -14,6 +14,23 @@ describe("parseLegalListSourceLocator", () => {
     expect(
       parseLegalListSourceLocator({ type: "pdf-page", pageNumber: 4 }).success,
     ).toBe(true);
+    expect(
+      parseLegalListSourceLocator({
+        type: "docx-block",
+        blockId: "clause-12",
+        start: 2,
+        end: 9,
+      }).success,
+    ).toBe(true);
+    expect(
+      parseLegalListSourceLocator({
+        type: "pdf-page",
+        pageNumber: 4,
+        start: 2,
+        end: 9,
+        pageTextSha256: "a".repeat(64),
+      }).success,
+    ).toBe(true);
   });
 
   test("rejects unknown fields and invalid locations", () => {

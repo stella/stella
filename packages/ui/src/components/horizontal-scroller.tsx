@@ -5,6 +5,10 @@ import type { ComponentProps, UIEvent } from "react";
 
 import { containedEventHandler } from "../hooks/use-contained-handler";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
+import {
+  SCROLL_EDGE_FADE_CLASS,
+  writeScrollEdgeFade,
+} from "../lib/scroll-edge-fade";
 import { cn } from "../lib/utils";
 
 const CONTROL_CLASS =
@@ -41,6 +45,7 @@ export const HorizontalScroller = ({
   });
 
   const measure = useCallback((node: HTMLDivElement) => {
+    writeScrollEdgeFade(node);
     setState(
       scrollState(
         node.scrollLeft,
@@ -131,7 +136,8 @@ export const HorizontalScroller = ({
     >
       <div
         className={cn(
-          "scrollbar-subtle overflow-x-auto overscroll-x-contain",
+          "scrollbar-subtle overflow-x-auto overscroll-x-contain [--fade-size:2.5rem]",
+          SCROLL_EDGE_FADE_CLASS,
           viewportClassName,
         )}
         onScroll={onScroll}
@@ -141,12 +147,6 @@ export const HorizontalScroller = ({
           {children}
         </div>
       </div>
-      {state.canScrollStart && (
-        <div className="from-background pointer-events-none absolute inset-y-0 start-0 w-10 bg-linear-to-r to-transparent rtl:bg-linear-to-l" />
-      )}
-      {state.canScrollEnd && (
-        <div className="from-background pointer-events-none absolute inset-y-0 end-0 w-10 bg-linear-to-l to-transparent rtl:bg-linear-to-r" />
-      )}
       {(state.canScrollStart || state.canScrollEnd) && (
         // Both controls stay mounted while the row overflows: one that
         // reached its edge turns inert instead of unmounting, so keyboard

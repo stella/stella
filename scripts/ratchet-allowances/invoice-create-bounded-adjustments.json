@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/billing/invoice-create-operation.ts",
+  "delta": 1,
+  "reason": "The existing invoice creation operation moved into the billing owner without changing its loop: at most 500 requested time-entry adjustments update keyed rows with per-entry values and audit events in one transaction."
+}

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
 import * as v from "valibot";
 
+import { slugify } from "@stll/text-normalize";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
@@ -25,6 +27,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -32,7 +35,7 @@ import { oauthDomainsMatch } from "@/api/lib/mcp-upstream/oauth";
 
 const requestBody = v.object({
   url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
-  displayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(160))),
+  displayName: v.optional(displayNameSchema({ maxLength: 160 })),
   description: v.optional(
     v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   ),
@@ -170,7 +173,7 @@ export const createMcpConnectorHandler = ({
         input.displayName?.trim() || new URL(normalizedUrl).hostname;
       const [slug, iconUrl] = await Promise.all([
         nextSlug({
-          base: slugify(displayName),
+          base: connectorSlug(displayName),
           organizationId: session.activeOrganizationId,
           safeDb,
         }),
@@ -284,21 +287,13 @@ const findDuplicateConnector = async ({
   return Result.ok(result.value.at(0));
 };
 
-const slugify = (value: string): string => {
-  let slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .slice(0, 60);
-
-  while (slug.startsWith("-")) {
-    slug = slug.slice(1);
-  }
-  while (slug.endsWith("-")) {
-    slug = slug.slice(0, -1);
-  }
-
-  return slug || "mcp-server";
-};
+const connectorSlug = (value: string): string =>
+  slugify(value, {
+    charset: "ascii",
+    fallback: "mcp-server",
+    maxLength: 60,
+    separator: "-",
+  });
 
 const nextSlug = async ({
   base,

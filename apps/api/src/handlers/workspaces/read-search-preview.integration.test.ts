@@ -223,9 +223,7 @@ describe("matter search preview", () => {
       LIMITS.matterSearchPreviewAgendaItems,
     );
     expect(result.upcomingAgenda.map(({ id }) => id)).toEqual([
-      firstTaskId,
-      secondTaskId,
-      thirdTaskId,
+      ...overdueTaskIds,
     ]);
     expect(result.recentDocuments).toEqual([
       {
@@ -252,7 +250,7 @@ describe("matter search preview", () => {
     ).toBe(false);
     expect(
       result.upcomingAgenda.some(({ id }) => overdueTaskIds.includes(id)),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       result.upcomingAgenda.some(({ id }) =>
         referenceItems.some((item) => item.id === id),

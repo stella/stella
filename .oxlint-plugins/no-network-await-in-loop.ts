@@ -12,7 +12,7 @@
 //     `self.fetch(...)`.
 //   - A call to a binding imported from a fetch-owning module:
 //     `@stll/fetch` (packages/fetch), plus the api's other
-//     HTTP helpers `@/api/lib/safe-outbound-fetch` and
+//     HTTP helpers `@/api/lib/auth/authorized-outbound-fetch` and
 //     `@/api/lib/redirect-fetch`. Modules are matched by import source, so a
 //     local helper that merely spells `fetchSomething` is not a network call
 //     and an aliased import still is.

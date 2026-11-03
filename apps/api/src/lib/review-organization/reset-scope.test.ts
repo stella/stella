@@ -4,12 +4,15 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { WORKSPACE_DELETION_RETAINED_TABLES } from "@/api/lib/organization-storage-teardown";
 import {
+  REVIEW_RESET_BILLING_TABLES,
   REVIEW_RESET_CLEARED_TABLES,
   REVIEW_RESET_KEPT_TABLES,
   REVIEW_RESET_MANUAL_TABLES,
   REVIEW_RESET_MATTER_TABLE,
 } from "@/api/lib/review-organization/reset-scope";
+import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
@@ -21,7 +24,12 @@ const tables: ReadonlyMap<string, PgTable> = new Map(
     .map((table) => [getTableConfig(table).name, table]),
 );
 const kept = new Set(Object.keys(REVIEW_RESET_KEPT_TABLES));
-const cleared = new Set<string>(REVIEW_RESET_CLEARED_TABLES);
+/** Every table the reset deletes by name: billing records first, then the sweep. */
+const deleteOrder: readonly string[] = [
+  ...REVIEW_RESET_BILLING_TABLES,
+  ...REVIEW_RESET_CLEARED_TABLES,
+];
+const cleared = new Set<string>(deleteOrder);
 
 const columnNames = (table: PgTable) =>
   new Set(getTableConfig(table).columns.map((column) => column.name));
@@ -59,7 +67,7 @@ const cascadeClosure = (roots: Iterable<string>): Set<string> => {
 /** Tables the reset empties: directly, by hand, with a matter, or by cascade. */
 const clearedClosure = () =>
   cascadeClosure([
-    ...REVIEW_RESET_CLEARED_TABLES,
+    ...deleteOrder,
     ...REVIEW_RESET_MANUAL_TABLES,
     REVIEW_RESET_MATTER_TABLE,
   ]);
@@ -70,7 +78,7 @@ const matterClosure = () => cascadeClosure([REVIEW_RESET_MATTER_TABLE]);
 describe("review organization reset scope", () => {
   test("every listed table exists and has exactly one decision", () => {
     const listed = [
-      ...REVIEW_RESET_CLEARED_TABLES,
+      ...deleteOrder,
       ...REVIEW_RESET_MANUAL_TABLES,
       REVIEW_RESET_MATTER_TABLE,
       ...kept,
@@ -83,12 +91,16 @@ describe("review organization reset scope", () => {
     // Cleared means swept by name, or removed by a cascade from the matters
     // the authorized matter deletion takes first.
     const goneWithMatters = matterClosure();
+    const goneWithBilling = cascadeClosure(REVIEW_RESET_BILLING_TABLES);
     const undecided = [...tables.entries()]
       .filter(([, table]) => columnNames(table).has("organization_id"))
       .map(([name]) => name)
       .filter(
         (name) =>
-          !cleared.has(name) && !kept.has(name) && !goneWithMatters.has(name),
+          !cleared.has(name) &&
+          !kept.has(name) &&
+          !goneWithMatters.has(name) &&
+          !goneWithBilling.has(name),
       );
     expect(undecided).toEqual([]);
   });
@@ -102,8 +114,22 @@ describe("review organization reset scope", () => {
     expect(undecided).toEqual([]);
   });
 
+  test("invoice records admit the owner-fenced reset independently of matter visibility", () => {
+    for (const name of ["invoices", "invoice_lines", "invoice_payments"]) {
+      const table = tables.get(name);
+      expect(table, name).toBeDefined();
+      const policyNames = new Set(
+        table === undefined
+          ? []
+          : getTableConfig(table).policies.map(({ name: policy }) => policy),
+      );
+      expect(policyNames.has("review_reset_owner_select"), name).toBe(true);
+      expect(policyNames.has("review_reset_owner_delete"), name).toBe(true);
+    }
+  });
+
   test("swept tables are only those that name their organization", () => {
-    const unscoped = REVIEW_RESET_CLEARED_TABLES.filter((name) => {
+    const unscoped = deleteOrder.filter((name) => {
       const table = tables.get(name);
       return table === undefined || !columnNames(table).has("organization_id");
     });
@@ -126,9 +152,51 @@ describe("review organization reset scope", () => {
     ).toEqual([]);
   });
 
+  test("billing records a matter deletion refuses are cleared before the matters", () => {
+    const retained = WORKSPACE_DELETION_RETAINED_TABLES.map(
+      (table) => getTableConfig(table).name,
+    );
+    // The named roots and their cascades are exactly the retained tables.
+    expect(
+      [...cascadeClosure(REVIEW_RESET_BILLING_TABLES)]
+        .filter((name) => retained.includes(name))
+        .toSorted(),
+    ).toEqual(retained.toSorted());
+    // The owner deletes them, so none may force row security on its owner.
+    const unforced = new Set(TABLE_POLICY_SETTINGS_BASELINE);
+    expect(
+      REVIEW_RESET_BILLING_TABLES.filter((name) => !unforced.has(name)),
+    ).toEqual([]);
+    // A stage deletes its tables in one statement: a RESTRICT among them
+    // would be checked before its row's own delete.
+    const billing = new Set<string>(retained);
+    expect(
+      edges
+        .filter(
+          (edge) =>
+            billing.has(edge.parent) &&
+            billing.has(edge.child) &&
+            edge.onDelete === "restrict",
+        )
+        .map(({ child, parent }) => `${child} -> ${parent}`),
+    ).toEqual([]);
+    // While the matters still stand, nothing outside the retained set may
+    // hold a billing row back with a restrictive reference.
+    const blocking = edges.filter(
+      (edge) =>
+        billing.has(edge.parent) &&
+        !billing.has(edge.child) &&
+        edge.onDelete !== "cascade" &&
+        edge.onDelete !== "set null",
+    );
+    expect(
+      blocking.map(({ child, parent }) => `${child} -> ${parent}`),
+    ).toEqual([]);
+  });
+
   test("the delete order empties a restrictive child before its parent", () => {
     const position = new Map<string, number>(
-      REVIEW_RESET_CLEARED_TABLES.map((name, index) => [name, index]),
+      deleteOrder.map((name, index) => [name, index]),
     );
     const misordered = edges
       .filter(

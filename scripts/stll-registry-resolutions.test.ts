@@ -31,6 +31,7 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/docx-core",
   "@stll/folio-agents",
   "@stll/folio-core",
+  "@stll/folio-fonts",
   "@stll/folio-react",
   "@stll/fuzzy-search",
   "@stll/fuzzy-search-darwin-arm64",
@@ -58,6 +59,7 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/test-kit",
   "@stll/text-search",
   "@stll/time",
+  "@stll/utf8-boundaries",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

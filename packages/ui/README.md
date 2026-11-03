@@ -11,7 +11,10 @@ cannot reach into product code by accident. Lint enforces that boundary; the
 export map below is what "part of the design system" means.
 
 Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4),
-and `@tanstack/react-virtual`.
+`@dnd-kit/core`, `@dnd-kit/sortable`, and `@tanstack/react-virtual`.
+
+Derived in part from [coss ui](https://github.com/cosscom/ui) (MIT); see
+`THIRD_PARTY_NOTICES`.
 
 ## Import
 
@@ -101,11 +104,101 @@ unavailable state.
 minor. They will be removed after that; the export guard checks that both
 spellings land on the same module for as long as they both exist.
 
-## Kanban boards
+## Sortable boards
 
 `@stll/ui/kanban` provides board matrices, subgroup swimlanes, bounded virtual
-cells, and column bands. The caller owns card rendering, permissions, and
-persisted mutations.
+cells, and input/accessibility primitives. The caller keeps domain identifiers,
+card rendering, permissions, and persisted mutations. Wrap sortable boards in
+`KanbanSortableBoard`, render items through `useKanbanSortable`, and attach the
+returned bindings to `KanbanDragHandle` or `KanbanCardDragSurface`. This public
+contract supports external consumers with keyboard navigation across virtual rows
+and matrix cells, touch scrolling and long-press dragging, and host-controlled
+collapsed-band peeking. It remains supported independently of which interaction
+implementation the application board uses.
+
+```tsx
+import {
+  KanbanDragHandle,
+  KanbanSortableBoard,
+  KanbanVirtualCell,
+  useKanbanSortable,
+} from "@stll/ui/kanban";
+
+const Card = ({ id }: { id: string }) => {
+  const { activator, setNodeRef, style } = useKanbanSortable({
+    activation: { type: "handle" },
+    id,
+  });
+  if (activator.type !== "handle") {
+    return null;
+  }
+  return (
+    <article ref={setNodeRef} style={style}>
+      <KanbanDragHandle bindings={activator.bindings} label="Move card" />
+    </article>
+  );
+};
+
+<KanbanSortableBoard onDragEnd={handleDragEnd}>
+  <KanbanVirtualCell
+    rows={cardIds}
+    getRowKey={(id) => id}
+    renderRow={(id) => <Card id={id} />}
+    pagination={{ type: "none" }}
+    sortable={{
+      dropTarget: { id: "column", position: { column: 0, lane: 0 } },
+      getRowId: (id) => id,
+    }}
+  />
+</KanbanSortableBoard>;
+```
+
+For collapsed subgroup bands, the host maps each registered drop target to its
+band and clears the drag state on both drop and cancellation. Populate
+`bandIdByDropTargetId` from the same cell/slot registrations that supply the
+sortable target IDs (including folded-band slots).
+
+```tsx
+const [dragState, setDragState] = useState<
+  { type: "idle" } | { type: "dragging"; bandId: string | null }
+>({ type: "idle" });
+
+<KanbanSortableBoard
+  onDragStart={() => setDragState({ type: "dragging", bandId: null })}
+  onDragOver={({ over }) => {
+    setDragState({
+      type: "dragging",
+      bandId:
+        over === null ? null : (bandIdByDropTargetId.get(over.id) ?? null),
+    });
+  }}
+  onDragEnd={(event) => {
+    setDragState({ type: "idle" });
+    handleDragEnd(event);
+  }}
+  onDragCancel={() => setDragState({ type: "idle" })}
+>
+  <KanbanSubgroupBoard
+    {...boardProps}
+    isDragging={dragState.type === "dragging"}
+    dragOverBandId={dragState.type === "dragging" ? dragState.bandId : null}
+  />
+</KanbanSortableBoard>;
+```
+
+The default sensors are mouse (8px movement), touch (150ms delay with 8px
+tolerance), and keyboard. Scroll containers retain `touch-action: auto`.
+`KanbanDragHandle` and `{ type: "item" }` activation disable touch panning on
+their activation surfaces. Use `{ type: "card" }` with
+`KanbanCardDragSurface` to preserve scrolling from the card while supporting
+long-press dragging. `KanbanSortableBoard` also accepts
+custom `sensors`, `accessibility`, collision detection, keyboard coordinates,
+auto-scroll options, and an `overlay` render function.
+
+`getKanbanHorizontalEdge` takes `input: "pointer"` with a current client-x and
+`direction: "ltr" | "rtl"` for mouse and touch input. Keyboard calls use
+`input: "keyboard"` and require source and target indices, so every move has a
+logical edge without relying on ambiguous geometry.
 
 For Group/Sub-group boards, build one canonical matrix and render it with the
 installable layout and virtual cell:
@@ -141,6 +234,32 @@ const matrix = buildKanbanBoardMatrix({
   )}
 />;
 ```
+
+When rows inside a virtual cell are sortable, give the cell a unique drop target
+and its ordered matrix position. The cell registers its actual scroll element,
+including when `rows` is empty, and owns the matching `SortableContext`.
+
+```tsx
+<KanbanVirtualCell
+  getRowKey={(row) => row.id}
+  pagination={{ type: "none" }}
+  renderRow={(row) => <Card row={row} />}
+  rows={cell.rows}
+  sortable={{
+    dropTarget: {
+      id: cellId,
+      position: { column: columnIndex, lane: laneIndex },
+    },
+    getRowId: (row) => row.id,
+  }}
+/>
+```
+
+The default keyboard coordinates move through items in their cell before
+crossing into adjacent columns or subgroup lanes; empty cells remain reachable.
+Pointer and touch drops outside registered board targets cancel. Choose an
+explicit `{ type: "handle" }` activation for the 44px handle, or `{ type:
+"item" }` when the whole item is the intended activation surface.
 
 ### Column bands
 

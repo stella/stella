@@ -27,7 +27,7 @@ function SheetTrigger({
   ...props
 }: SheetPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />,
   });
 }
@@ -37,7 +37,7 @@ function SheetClose({
   ...props
 }: SheetPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <SheetPrimitive.Close data-slot="sheet-close" {...props} />,
   });
 }

@@ -111,67 +111,127 @@ test("declarations follow public type imports without serializing runtime-only r
   }
 });
 
+// Modules whose names say nothing are boundaries by what they build.
+const BOUNDARY_CONSTRUCTION: Readonly<Record<string, string>> = {
+  "handlers/example/events.ts":
+    'import { routes } from "@/api/http/route"; export const route = routes({}); ',
+  "handlers/example/group.ts":
+    'import { mount as nest } from "@/api/http/route"; export const group = nest([]); ',
+  "handlers/example/table.ts":
+    'import * as http from "../../http/route"; export const table = http.routes({}); ',
+  "handlers/example/serve.ts":
+    'import { createHttpApp } from "@/api/http/app"; export const app = createHttpApp({ routes: [] }); ',
+  "mcp/server-core.ts":
+    'import { Server } from "@modelcontextprotocol/server"; export const server = new Server(); ',
+};
+
+type BridgedModule = {
+  directory: string;
+  project: string;
+  surface: string;
+  bridge: string;
+  target: string;
+};
+
+/** A surface that reaches `module` (holding `source`) through a bridge. */
+const withBridgedModule = async (
+  module: string,
+  source: string,
+  check: (paths: BridgedModule) => Promise<void>,
+) => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "api-declaration-boundary-"),
+  );
+  try {
+    const sourceRoot = path.join(directory, "apps/api/src");
+    const target = path.join(sourceRoot, module);
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, `${source}export interface View { count: number }\n`);
+    const bridge = path.join(sourceRoot, "bridge.ts");
+    writeFileSync(
+      bridge,
+      `export type { View } from "./${module.replace(/\.ts$/u, "")}";\n`,
+    );
+    const surface = path.join(sourceRoot, "surface.ts");
+    writeFileSync(surface, 'export type { View } from "./bridge";\n');
+    const project = path.join(directory, "tsconfig.json");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          noEmit: false,
+          declaration: true,
+          emitDeclarationOnly: true,
+          rootDir: directory,
+          outDir: path.join(directory, "declarations"),
+          types: [],
+        },
+        files: [surface],
+      }),
+    );
+    await check({ directory, project, surface, bridge, target });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
 test.each([
   "lib/auth.ts",
   "server.ts",
   "handlers/example/routes.ts",
   "handlers/example/run-route.ts",
-  "handlers/example/events.ts",
-  "mcp/server-core.ts",
+  ...Object.keys(BOUNDARY_CONSTRUCTION),
 ])(
   "declarations reject retained runtime boundaries and report the import chain: %s",
   async (module) => {
-    const directory = mkdtempSync(
-      path.join(tmpdir(), "api-declaration-boundary-"),
+    await withBridgedModule(
+      module,
+      BOUNDARY_CONSTRUCTION[module] ?? "",
+      async ({ directory, project, surface, bridge, target }) => {
+        expect(
+          await rejectionOf(emitApiTypecheckDeclarations(project)),
+        ).toMatchObject({
+          message: expect.stringContaining(
+            `Forbidden API runtime declaration dependency: ${surface} -> ${bridge} -> ${target}`,
+          ),
+        });
+        expect(existsSync(path.join(directory, "declarations"))).toBe(false);
+      },
     );
-    try {
-      const sourceRoot = path.join(directory, "apps/api/src");
-      const forbidden = path.join(sourceRoot, module);
-      mkdirSync(path.dirname(forbidden), { recursive: true });
-      const constructor = module.endsWith("events.ts")
-        ? 'import Application from "elysia"; export const route = new Application(); '
-        : "";
-      const server = module.endsWith("server-core.ts")
-        ? 'import { Server } from "@modelcontextprotocol/server"; export const server = new Server(); '
-        : "";
-      writeFileSync(
-        forbidden,
-        `${constructor}${server}export interface View { count: number }\n`,
-      );
-      const bridge = path.join(sourceRoot, "bridge.ts");
-      writeFileSync(
-        bridge,
-        `export type { View } from "./${module.replace(/\.ts$/u, "")}";\n`,
-      );
-      const surface = path.join(sourceRoot, "surface.ts");
-      writeFileSync(surface, 'export type { View } from "./bridge";\n');
-      const project = path.join(directory, "tsconfig.json");
-      writeFileSync(
-        project,
-        JSON.stringify({
-          compilerOptions: {
-            noCheck: true,
-            noEmit: false,
-            declaration: true,
-            emitDeclarationOnly: true,
-            rootDir: directory,
-            outDir: path.join(directory, "declarations"),
-            types: [],
-          },
-          files: [surface],
-        }),
-      );
-      expect(
-        await rejectionOf(emitApiTypecheckDeclarations(project)),
-      ).toMatchObject({
-        message: expect.stringContaining(
-          `Forbidden API runtime declaration dependency: ${surface} -> ${bridge} -> ${forbidden}`,
-        ),
-      });
-      expect(existsSync(path.join(directory, "declarations"))).toBe(false);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
-    }
+  },
+);
+
+test.each([
+  [
+    "a type-only import of the route module",
+    'import type { RouteGroup } from "@/api/http/route"; export type Group = RouteGroup; ',
+  ],
+  [
+    "a local function that shares a builder's name",
+    "const routes = (count: number) => count; export const total = routes(1); ",
+  ],
+  [
+    "a builder of the same name from another module",
+    'import { routes } from "@/api/lib/route-names"; export const names = routes(); ',
+  ],
+])(
+  "declarations keep a module that builds no routes: %s",
+  async (_, source) => {
+    await withBridgedModule(
+      "handlers/example/view.ts",
+      source,
+      async ({ directory, project }) => {
+        expect(
+          (await emitApiTypecheckDeclarations(project)).diagnostics,
+        ).toEqual([]);
+        expect(
+          existsSync(
+            path.join(directory, "declarations/apps/api/src/surface.d.ts"),
+          ),
+        ).toBe(true);
+      },
+    );
   },
 );
 
@@ -582,7 +642,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
     writeFileSync(project, JSON.stringify(surfaceConfig));
     writeFileSync(
       path.join(api, "src/extra.ts"),
-      'import Elysia from "elysia"; export const extra = new Elysia();\n',
+      'import { routes } from "@/api/http/route"; export const extra = routes({});\n',
     );
     expect(
       await rejectionOf(regenerateApiDeclarationSurface(project)),
@@ -717,6 +777,54 @@ test("stable wrappers prepare and restore exact roots and owners without committ
     );
     expect(files).not.toContain(path.join(api, "src/value.ts"));
     expect(files.some((file) => file.endsWith("/value.d.ts"))).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("declarations retain API JSON ledger imports without parsing data as TypeScript", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-json-declarations-"));
+  try {
+    const sourceRoot = path.join(root, "apps/api/src/lib/db");
+    mkdirSync(sourceRoot, { recursive: true });
+    const ledger = path.join(sourceRoot, "statement-ceiling.json");
+    writeFileSync(ledger, '{\n  "request": {},\n  "mcp": {}\n}\n');
+    const surface = path.join(sourceRoot, "statement-ceiling.ts");
+    writeFileSync(
+      surface,
+      'import ledger from "./statement-ceiling.json";\nexport type StatementCeilingLedger = typeof ledger;\n',
+    );
+    const project = path.join(root, "tsconfig.json");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          resolveJsonModule: true,
+          esModuleInterop: true,
+          module: "esnext",
+          moduleResolution: "bundler",
+          rootDir: root,
+          outDir: path.join(root, "declarations"),
+          types: [],
+        },
+        files: [surface],
+      }),
+    );
+    const result = await emitApiTypecheckDeclarations(project);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toContain(ledger);
+    expect(
+      readFileSync(
+        path.join(
+          root,
+          "declarations/apps/api/src/lib/db/statement-ceiling.d.ts",
+        ),
+        "utf-8",
+      ),
+    ).toContain('import ledger from "./statement-ceiling.json"');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

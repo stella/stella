@@ -11,7 +11,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
@@ -167,7 +167,7 @@ export const useCollaborationVersionPublisher = ({
       });
       if (pendingPublication === null) {
         finishPublishing();
-        notifyUserError(undefined, t("folio.createVersionFailedTitle"), {
+        notifyUserProblem(t("folio.createVersionFailedTitle"), {
           description: t("folio.createVersionFailedDescription"),
         });
         return false;

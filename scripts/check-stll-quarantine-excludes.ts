@@ -570,26 +570,51 @@ export const pruneExpiredExcludes = ({
   };
 };
 
-const prune = () => {
-  const bunfigPath = path.join(REPO_ROOT, BUNFIG);
-  const { bunfig, pruned } = pruneExpiredExcludes({
-    bunfig: readFileSync(bunfigPath, "utf-8"),
-  });
-
-  if (pruned.length === 0) {
-    console.log(`${BUNFIG}: no expired quarantine excludes to remove.`);
-    return;
+export const pruneBunfigFiles = ({
+  root,
+  trackedFiles,
+  now = new Date(),
+}: {
+  root: string;
+  trackedFiles: readonly string[];
+  now?: Date;
+}): string[] => {
+  const changed: string[] = [];
+  for (const file of trackedFiles) {
+    if (path.posix.basename(file) !== BUNFIG) {
+      continue;
+    }
+    const bunfigPath = path.join(root, file);
+    const result = pruneExpiredExcludes({
+      bunfig: readFileSync(bunfigPath, "utf-8"),
+      now,
+    });
+    if (result.pruned.length === 0) {
+      continue;
+    }
+    writeFileSync(bunfigPath, result.bunfig);
+    changed.push(file);
+    console.log(
+      `${file}: removed ${result.pruned.length} expired quarantine exclude(s): ${result.pruned.join(", ")}.`,
+    );
   }
+  return changed;
+};
 
-  writeFileSync(bunfigPath, bunfig);
-  console.log(
-    `${BUNFIG}: removed ${pruned.length} expired quarantine exclude(s): ${pruned.join(", ")}.`,
-  );
+const prune = (trackedFiles: readonly string[]) => {
+  const changed = pruneBunfigFiles({ root: REPO_ROOT, trackedFiles });
+  if (changed.length === 0) {
+    console.log(
+      "No tracked bunfig.toml has expired quarantine excludes to remove.",
+    );
+  }
 };
 
 const main = () => {
   if (process.argv.includes("--prune")) {
-    prune();
+    const pruneIndex = process.argv.indexOf("--prune");
+    const trackedFiles = process.argv.slice(pruneIndex + 1);
+    prune(trackedFiles.length === 0 ? [BUNFIG] : trackedFiles);
     return;
   }
 

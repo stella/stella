@@ -10,9 +10,15 @@ import {
 import { MCP_APPS } from "@stll/mcp-apps/manifest";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import {
+  listSkillMetadata,
+  loadSkill,
+  readSkillRequiredTools,
+} from "@stll/skills";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   getMcpResourceScopes,
@@ -37,6 +43,10 @@ import {
   TEMPLATE_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/template-workflow-reference";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -45,6 +55,7 @@ const LEGISLATION_WORKFLOW_REFERENCE_URI =
   "stella://reference/legislation-workflow";
 const FEEDBACK_WORKFLOW_REFERENCE_URI = "stella://reference/feedback-workflow";
 const PRODUCT_IDENTITY_URI = "stella://about";
+const PLAYBOOK_SKILL_URI = "stella://skills/playbook-builder";
 
 /** The storage-only CSP every bundled upload panel is served with. */
 const expectedUploadAppMeta = (): Record<string, unknown> => {
@@ -90,27 +101,150 @@ const TEMPLATE_REFERENCE_URIS: ReadonlySet<string> = new Set([
 ]);
 
 describe("MCP resources", () => {
-  test("shares the official MCP Apps resource MIME type", () => {
+  test("lists and reads shipped skill guidance where its required tools are listed", async () => {
+    const authoringUris = [
+      PRODUCT_IDENTITY_URI,
+      MARKER_REFERENCE_URI,
+      FIELD_REFERENCE_URI,
+      WORKFLOW_REFERENCE_URI,
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+      FEEDBACK_WORKFLOW_REFERENCE_URI,
+      PLAYBOOK_SKILL_URI,
+    ] as const;
+    const expectedByMode = {
+      advanced: authoringUris,
+      default: authoringUris,
+      anonymized: [PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI],
+      documents: [PRODUCT_IDENTITY_URI],
+      law: [PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI],
+    } as const;
+
+    for (const mode of MCP_MODES) {
+      expect((await listMcpResources(mode)).map(({ uri }) => uri)).toEqual([
+        ...expectedByMode[mode],
+      ]);
+    }
+
+    const result = await readMcpResource(PLAYBOOK_SKILL_URI, "default");
+    const content = result.contents.at(0);
+    if (content === undefined || !("text" in content)) {
+      throw new Error("Expected shipped skill guidance");
+    }
+    expect(content.text).toBe(loadSkill("playbook-builder").body);
+    expect(
+      await rejectionOf(readMcpResource(PLAYBOOK_SKILL_URI, "law")),
+    ).toBeInstanceOf(ProtocolError);
+  });
+
+  test("a shipped skill the model may not start uninvoked is not served", async () => {
+    // No shipped skill is manual today, so the catalog is replaced with the
+    // playbook builder under each invocation; the auto run is the control.
+    const shippedAs = (invocation: "auto" | "manual") => ({
+      testDependencies: {
+        listShippedSkillMetadata: () =>
+          listSkillMetadata()
+            .filter(({ name }) => name === "playbook-builder")
+            .map((metadata) => ({ ...metadata, invocation })),
+      },
+    });
+    const servedUris = async (invocation: "auto" | "manual") =>
+      (
+        await listMcpResources("default", { context: shippedAs(invocation) })
+      ).map(({ uri }) => uri);
+
+    expect(await servedUris("auto")).toContain(PLAYBOOK_SKILL_URI);
+    expect(await servedUris("manual")).not.toContain(PLAYBOOK_SKILL_URI);
+    expect(
+      await rejectionOf(
+        readMcpResource(PLAYBOOK_SKILL_URI, "default", shippedAs("manual")),
+      ),
+    ).toBeInstanceOf(ProtocolError);
+  });
+
+  test("an enabled tenant skill shadows the shipped resource with the same slug", async () => {
+    const installed = {
+      id: toSafeId<"agentSkill">("skill_shadow"),
+      scope: "team" as const,
+      name: "Tenant playbook builder",
+      slug: "playbook-builder",
+      description: "Tenant guidance",
+      version: null,
+      license: null,
+      compatibility: null,
+      metadata: {},
+    };
+    const { safeDb } = createScopedDbMock({
+      select: () => createSelectQueryMock([installed]),
+    });
+    const resources = await listMcpResources("default", {
+      context: {
+        organizationId: toSafeId<"organization">("org_shadow"),
+        safeDb,
+        userId: toSafeId<"user">("user_shadow"),
+      },
+    });
+
+    expect(resources.map(({ uri }) => uri)).not.toContain(PLAYBOOK_SKILL_URI);
+    expect(
+      await rejectionOf(
+        readMcpResource(PLAYBOOK_SKILL_URI, "default", {
+          organizationId: toSafeId<"organization">("org_shadow"),
+          safeDb,
+          userId: toSafeId<"user">("user_shadow"),
+        }),
+      ),
+    ).toBeInstanceOf(ProtocolError);
+  });
+
+  test("a law client can discover and read shipped case-law guidance when present", async () => {
+    const listed = await listMcpResources("law");
+    const lawTools = new Set(
+      listStaticMcpToolDefinitions("law").map(({ name }) => name),
+    );
+    for (const metadata of listSkillMetadata().filter(
+      (skill) =>
+        readSkillRequiredTools(skill.metadata).every((tool) =>
+          lawTools.has(tool),
+        ) &&
+        readSkillRequiredTools(skill.metadata).some((tool) =>
+          tool.includes("case_law"),
+        ),
+    )) {
+      const uri = `stella://skills/${metadata.name}`;
+      expect(listed.map((resource) => resource.uri)).toContain(uri);
+      const content = (await readMcpResource(uri, "law")).contents.at(0);
+      if (content === undefined || !("text" in content)) {
+        throw new Error(`Expected case-law skill guidance at ${uri}`);
+      }
+      expect(content.text).toBe(loadSkill(metadata.name).body);
+    }
+  });
+
+  test("shares the official MCP Apps resource MIME type", async () => {
     expect(MCP_APP_RESOURCE_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
   });
 
-  test("lists the public static resources on every matter-bearing surface", () => {
+  test("lists the public static resources on every matter-bearing surface", async () => {
     for (const mode of ["default", "anonymized"] as const) {
-      const uris = listMcpResources(mode).map((resource) => resource.uri);
+      const uris = (await listMcpResources(mode)).map(
+        (resource) => resource.uri,
+      );
       expect(uris).toContain(PRODUCT_IDENTITY_URI);
       expect(uris).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
     }
-    const defaultUris = listMcpResources("default").map((r) => r.uri);
+    const defaultUris = (await listMcpResources("default")).map((r) => r.uri);
     expect(defaultUris).toContain(MARKER_REFERENCE_URI);
     expect(defaultUris).toContain(FIELD_REFERENCE_URI);
     expect(defaultUris).toContain(WORKFLOW_REFERENCE_URI);
   });
 
-  test("a template reference is served only where its authoring tools are listed", () => {
+  test("a template reference is served only where its authoring tools are listed", async () => {
     // Each names create_template or configure_template_fields, which the
     // anonymized and documents audiences do not list.
     for (const mode of ["anonymized", "documents", "law"] as const) {
-      const uris = listMcpResources(mode).map((resource) => resource.uri);
+      const uris = (await listMcpResources(mode)).map(
+        (resource) => resource.uri,
+      );
       for (const uri of [
         MARKER_REFERENCE_URI,
         FIELD_REFERENCE_URI,
@@ -121,48 +255,51 @@ describe("MCP resources", () => {
     }
   });
 
-  test("only a surface that lists both feedback tools serves their workflow", () => {
-    const defaultUris = listMcpResources("default").map((r) => r.uri);
+  test("only a surface that lists both feedback tools serves their workflow", async () => {
+    const defaultUris = (await listMcpResources("default")).map((r) => r.uri);
     expect(defaultUris).toContain(FEEDBACK_WORKFLOW_REFERENCE_URI);
     // The anonymized surface differs from the default one by this reference
     // and the template authoring references: their tools are excluded there,
     // so the procedures are too.
-    expect(listMcpResources("anonymized").map((r) => r.uri)).toEqual(
+    expect((await listMcpResources("anonymized")).map((r) => r.uri)).toEqual(
       defaultUris.filter(
         (uri) =>
           uri !== FEEDBACK_WORKFLOW_REFERENCE_URI &&
+          uri !== PLAYBOOK_SKILL_URI &&
           !TEMPLATE_REFERENCE_URIS.has(uri),
       ),
     );
     for (const mode of ["anonymized", "documents", "law"] as const) {
-      expect(listMcpResources(mode).map((r) => r.uri)).not.toContain(
+      expect((await listMcpResources(mode)).map((r) => r.uri)).not.toContain(
         FEEDBACK_WORKFLOW_REFERENCE_URI,
       );
     }
   });
 
-  test("the documents surface drops the reference it cannot drive", () => {
+  test("the documents surface drops the reference it cannot drive", async () => {
     // The documents audience lists no corpus tool, so every procedure step
     // filters out and the document would be a title with no procedure.
-    const uris = listMcpResources("documents").map((resource) => resource.uri);
+    const uris = (await listMcpResources("documents")).map(
+      (resource) => resource.uri,
+    );
     expect(uris).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
     expect(uris).toEqual(
-      listMcpResources("default")
+      (await listMcpResources("default"))
         .map((resource) => resource.uri)
         .filter(
           (uri) =>
             uri !== LEGISLATION_WORKFLOW_REFERENCE_URI &&
             uri !== FEEDBACK_WORKFLOW_REFERENCE_URI &&
+            uri !== PLAYBOOK_SKILL_URI &&
             !TEMPLATE_REFERENCE_URIS.has(uri),
         ),
     );
   });
 
-  test("the law surface lists only the identity and the corpus workflow", () => {
-    expect(listMcpResources("law").map((resource) => resource.uri)).toEqual([
-      PRODUCT_IDENTITY_URI,
-      LEGISLATION_WORKFLOW_REFERENCE_URI,
-    ]);
+  test("the law surface lists only the identity and the corpus workflow", async () => {
+    expect(
+      (await listMcpResources("law")).map((resource) => resource.uri),
+    ).toEqual([PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI]);
   });
 
   test("the law surface reads exactly what it lists", async () => {
@@ -228,7 +365,7 @@ describe("MCP resources", () => {
   });
 
   test("reads the workflow reference describing the create-then-configure order", async () => {
-    const workflow = listMcpResources("default").find(
+    const workflow = (await listMcpResources("default")).find(
       (resource) => resource.uri === WORKFLOW_REFERENCE_URI,
     );
     expect(workflow?.mimeType).toBe("text/markdown");
@@ -255,7 +392,7 @@ describe("MCP resources", () => {
   // against the registry union, so a rename is already a compile error; the
   // scan below catches the other direction, a name written into the prose that
   // the registry never had.
-  test("every tool the workflow reference names is in the registry", () => {
+  test("every tool the workflow reference names is in the registry", async () => {
     const text = buildWorkflowReference();
     const registryNames = new Set<string>(MCP_STATIC_TOOL_NAMES);
     for (const name of TEMPLATE_WORKFLOW_TOOL_NAMES) {
@@ -290,7 +427,7 @@ describe("MCP resources", () => {
   });
 
   test("reads the legislation workflow reference in corpus-reading order", async () => {
-    const workflow = listMcpResources("default").find(
+    const workflow = (await listMcpResources("default")).find(
       (resource) => resource.uri === LEGISLATION_WORKFLOW_REFERENCE_URI,
     );
     expect(workflow?.mimeType).toBe("text/markdown");
@@ -335,7 +472,7 @@ describe("MCP resources", () => {
     );
   });
 
-  test("every tool the legislation reference names is in the registry", () => {
+  test("every tool the legislation reference names is in the registry", async () => {
     const text = buildLegislationWorkflowReference();
     const registryNames = new Set<string>(MCP_STATIC_TOOL_NAMES);
     for (const name of LEGISLATION_WORKFLOW_TOOL_NAMES) {
@@ -365,17 +502,23 @@ describe("MCP resources", () => {
     ).toEqual([]);
   });
 
-  test("the legislation reference names only tools the audience lists", () => {
+  test("the legislation reference names only tools the audience lists", async () => {
     // The reference is copied into model context as the complete contract, so
     // a step naming a tool the surface does not carry is a dead end. Scanned
     // the same way the other reference guards in this file scan: a multi-word
     // snake_case token is what reads as a tool name to an agent.
     const registryNames = new Set<string>(MCP_STATIC_TOOL_NAMES);
-    const servingModes = MCP_MODES.filter((mode) =>
-      listMcpResources(mode).some(
-        ({ uri }) => uri === LEGISLATION_WORKFLOW_REFERENCE_URI,
-      ),
+    const resourcesByMode = await Promise.all(
+      MCP_MODES.map(async (mode) => ({
+        mode,
+        resources: await listMcpResources(mode),
+      })),
     );
+    const servingModes = resourcesByMode
+      .filter(({ resources }) =>
+        resources.some(({ uri }) => uri === LEGISLATION_WORKFLOW_REFERENCE_URI),
+      )
+      .map(({ mode }) => mode);
     expect(servingModes).toEqual(["advanced", "default", "anonymized", "law"]);
 
     for (const mode of servingModes) {
@@ -426,9 +569,9 @@ describe("MCP resources", () => {
     expect(content.text).toBe(text);
   });
 
-  test("every stella:// uri the legislation reference names is a listed resource", () => {
+  test("every stella:// uri the legislation reference names is a listed resource", async () => {
     const listedUris = new Set(
-      listMcpResources("default").map((resource) => resource.uri),
+      (await listMcpResources("default")).map((resource) => resource.uri),
     );
     expect(
       [
@@ -443,9 +586,9 @@ describe("MCP resources", () => {
     ).toEqual([]);
   });
 
-  test("every stella:// uri the workflow reference names is a listed resource", () => {
+  test("every stella:// uri the workflow reference names is a listed resource", async () => {
     const listedUris = new Set(
-      listMcpResources("default").map((resource) => resource.uri),
+      (await listMcpResources("default")).map((resource) => resource.uri),
     );
     const mentioned = [
       ...buildWorkflowReference().matchAll(/stella:\/\/[\w/-]+/gu),
@@ -457,7 +600,7 @@ describe("MCP resources", () => {
   });
 
   test("exposes canonical lowercase branding and verified product links", async () => {
-    const resources = listMcpResources("default");
+    const resources = await listMcpResources("default");
     const about = resources.find(
       (resource) => resource.uri === PRODUCT_IDENTITY_URI,
     );
@@ -490,7 +633,7 @@ describe("MCP resources", () => {
   });
 
   test("serves the bundled document upload MCP App with storage-only CSP", async () => {
-    expect(listMcpResources("default")).not.toContainEqual(
+    expect(await listMcpResources("default")).not.toContainEqual(
       expect.objectContaining({ uri: DOCUMENT_UPLOAD_APP_RESOURCE_URI }),
     );
 
@@ -512,7 +655,7 @@ describe("MCP resources", () => {
   });
 
   test("serves the bundled file comparison MCP App with storage-only CSP", async () => {
-    expect(listMcpResources("default")).not.toContainEqual(
+    expect(await listMcpResources("default")).not.toContainEqual(
       expect.objectContaining({ uri: FILE_COMPARISON_TRANSPORT.resourceUri }),
     );
 
@@ -586,7 +729,7 @@ describe("MCP resources", () => {
       // deployment, so a reference telling a model to call them would hand it
       // a procedure it has no advertised schema for.
       expect(
-        listMcpResources("default").map((entry) => entry.uri),
+        (await listMcpResources("default")).map((entry) => entry.uri),
       ).not.toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
       let caught: unknown;
       try {
@@ -596,14 +739,14 @@ describe("MCP resources", () => {
       }
       expect(caught).toBeInstanceOf(ProtocolError);
       // An ungated reference is unaffected.
-      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
-        WORKFLOW_REFERENCE_URI,
-      );
+      expect(
+        (await listMcpResources("default")).map((entry) => entry.uri),
+      ).toContain(WORKFLOW_REFERENCE_URI);
 
       env.FEATURE_PUBLIC_LAW = true;
-      expect(listMcpResources("default").map((entry) => entry.uri)).toContain(
-        LEGISLATION_WORKFLOW_REFERENCE_URI,
-      );
+      expect(
+        (await listMcpResources("default")).map((entry) => entry.uri),
+      ).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
       restoreRuntimeMode();

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterClauseLinkCandidates } from "./link-clause-dialog.logic";
 
@@ -31,6 +32,20 @@ const searchTextArbitrary = fc
   )
   .map((parts) => parts.join(""));
 
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
+  );
+};
+
 const clauses = [
   { id: "1", categoryId: "terms", title: "Delivery + payment" },
   { id: "2", categoryId: "terms", title: "Delivery schedule" },
@@ -38,7 +53,7 @@ const clauses = [
 ] as const;
 
 describe("clause link filtering", () => {
-  test("uses the raw case-insensitive title substring and preserves order", () => {
+  test("matches a title substring regardless of case and preserves order", () => {
     expect(
       filterClauseLinkCandidates({
         clauses,
@@ -55,7 +70,7 @@ describe("clause link filtering", () => {
     ).toEqual([clauses[0], clauses[1]]);
   });
 
-  test("keeps blank search unfiltered and treats whitespace as a literal", () => {
+  test("keeps a blank or whitespace search unfiltered", () => {
     expect(
       filterClauseLinkCandidates({ clauses, selectedCategory: "", search: "" }),
     ).toEqual([...clauses]);
@@ -68,14 +83,22 @@ describe("clause link filtering", () => {
     ).toEqual([clauses[0], clauses[1], clauses[2]]);
   });
 
-  test("does not add accent folding", () => {
+  test("ignores accents on both sides", () => {
+    const accented = [{ categoryId: null, title: "Gewährleistung für Mängel" }];
     expect(
       filterClauseLinkCandidates({
-        clauses: [{ categoryId: null, title: "Café" }],
+        clauses: accented,
         selectedCategory: "",
-        search: "cafe",
+        search: "mangel",
       }),
-    ).toEqual([]);
+    ).toEqual(accented);
+    expect(
+      filterClauseLinkCandidates({
+        clauses: [{ categoryId: null, title: "Gewahrleistung" }],
+        selectedCategory: "",
+        search: "GEWÄHR",
+      }),
+    ).toHaveLength(1);
   });
 
   test("matches well-formed replacement characters without matching half an astral character", () => {
@@ -104,9 +127,9 @@ describe("clause link filtering", () => {
     ).toEqual([]);
   });
 
-  test("clause filtering matches the previous substring predicate for generated Unicode inputs", () => {
+  test("clause filtering keeps exactly the folded title matches for generated Unicode inputs", () => {
     assertProperty(
-      "clause filtering matches the previous substring predicate for generated Unicode inputs",
+      "clause filtering keeps exactly the folded title matches for generated Unicode inputs",
       fc.property(
         fc.array(
           fc.record({
@@ -122,16 +145,7 @@ describe("clause link filtering", () => {
             if (selectedCategory && clause.categoryId !== selectedCategory) {
               return false;
             }
-            if (
-              search &&
-              !clause.title
-                .toLowerCase()
-                .toWellFormed()
-                .includes(search.toLowerCase().toWellFormed())
-            ) {
-              return false;
-            }
-            return true;
+            return matchesFolded(clause.title, search);
           });
           expect(
             filterClauseLinkCandidates({

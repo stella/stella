@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, not } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { documentProcessingRuns, workspaces } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -21,9 +21,15 @@ import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-del
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  completeWorkspaceDeletion,
+  WorkspaceBillingHistoryError,
+  workspaceRetainsBillingHistory,
+} from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
@@ -36,8 +42,9 @@ export type WorkspaceDeletionDatabase = {
 
 export type WorkspaceDeletionDependencies = {
   captureDeliveryError?: typeof captureError;
-  database?: WorkspaceDeletionDatabase;
+  database: WorkspaceDeletionDatabase;
   enqueueCleanup?: typeof enqueueEntityDeletionCleanup;
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
 };
 
 type ExecuteAuthorizedWorkspaceDeletionOptions = {
@@ -150,13 +157,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
     recordAuditEvent,
     workspaceId,
   }: ExecuteAuthorizedWorkspaceDeletionOptions,
-  dependencies: WorkspaceDeletionDependencies = {},
+  dependencies: WorkspaceDeletionDependencies,
 ): Promise<Result<WorkspaceDeletionOutcome, unknown>> => {
-  const database = dependencies.database ?? {
-    transaction: async <TResult>(
-      callback: (tx: Transaction) => Promise<TResult>,
-    ) => await rootDb.transaction(callback),
-  };
+  const { database } = dependencies;
   const runTransaction = async (
     attempt = 0,
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
@@ -231,10 +234,25 @@ export const executeAuthorizedWorkspaceDeletion = async (
         }
 
         // audit: skip; internal write fence for the DELETE event below.
-        await tx
+        const fenced = await tx
           .update(workspaces)
           .set({ status: "deleting" })
-          .where(eq(workspaces.id, workspaceId));
+          .where(
+            and(
+              eq(workspaces.id, workspaceId),
+              not(
+                workspaceRetainsBillingHistory({ organizationId, workspaceId }),
+              ),
+            ),
+          )
+          .returning({ id: workspaces.id });
+        if (fenced.length === 0) {
+          throw new WorkspaceBillingHistoryError({
+            message:
+              "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+            workspaceId,
+          });
+        }
 
         const teardown = await completeWorkspaceDeletion({
           organizationId,
@@ -279,5 +297,28 @@ export const executeAuthorizedWorkspaceDeletion = async (
     enqueueCleanup: dependencies.enqueueCleanup ?? enqueueEntityDeletionCleanup,
     requestIds: transactionResult.value.cleanupRequestIds,
   });
+  // The delete has committed; a failed flush leaves its repair marks queued
+  // for the scheduled drain and must not turn the outcome into a failure.
+  await dependencies
+    .flushWorkspaceSearchRepairs([workspaceId])
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "executeAuthorizedWorkspaceDeletion.flushWorkspaceSearchRepairs",
+        ),
+      ),
+    );
   return Result.ok({ status: "deleted" });
 };
+
+/**
+ * The request entry point: binds the owner connection and the post-commit
+ * search flush once, so the command above keeps both as required inputs.
+ */
+export const executeAuthorizedWorkspaceDeletionWithRoot = async (
+  options: ExecuteAuthorizedWorkspaceDeletionOptions,
+) =>
+  await executeAuthorizedWorkspaceDeletion(options, {
+    database: rootDb,
+    flushWorkspaceSearchRepairs,
+  });

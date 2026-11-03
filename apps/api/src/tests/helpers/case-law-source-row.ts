@@ -27,6 +27,7 @@ const defaultCaseLawSourceRow = () =>
     lastSyncAt: null,
     observationOrder: 0n,
     checkpointObservationOrder: 0n,
+    removalCheckpoint: null,
     ingestionLeaseToken: null,
     ingestionLeaseExpiresAt: null,
     ingestionLeasePurpose: "ingestion",

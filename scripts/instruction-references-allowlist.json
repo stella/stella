@@ -18,5 +18,15 @@
     "file": ".claude/skills/plan/SKILL.md",
     "reference": ".agents/plans/",
     "reason": "The planning directory is local and gitignored, so it is absent from a clean checkout."
+  },
+  {
+    "file": ".agents/skills/regression-hunt/SKILL.md",
+    "reference": "./setup.ts",
+    "reason": "A placeholder in an example debugger command; the reader substitutes the preload file their own package script passes."
+  },
+  {
+    "file": ".claude/skills/regression-hunt/SKILL.md",
+    "reference": "./setup.ts",
+    "reason": "A placeholder in an example debugger command; the reader substitutes the preload file their own package script passes."
   }
 ]

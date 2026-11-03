@@ -66,7 +66,12 @@ const result = screen(
 `screen` returns every entry scoring at or above the cutoff as a possible
 match for human review, with the evidence per field. Names match regardless of
 word order, diacritics, Cyrillic or Latin script, transcription conventions,
-legal forms, omitted middle names and small typos. A matching identifier is
+legal forms, omitted middle names and small typos. Listed names and queries
+are also read without their bracketed parts ("KOREA KWANGSON BANKING
+CORPORATION (KKBC)") and with dotted acronyms as one word ("K.K.B.C."), so a
+name matches whichever side carries the qualifier; a bracketed part never
+counts on its own, and these further readings do not change token
+frequencies. A matching identifier is
 decisive unless the list marks the document false; birth date, nationality and
 entity type raise or lower the score. A near-exact name whose client fields
 contradict the listing stays reported at the cutoff, with the conflicts named

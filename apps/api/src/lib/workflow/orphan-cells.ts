@@ -1,6 +1,8 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
+import type { AiCellSettlement } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import {
@@ -80,6 +82,11 @@ export const errorPendingCell = async (
     .update(fields)
     .set({
       content: { type: "error", version: 1 },
+      aiSettlement: {
+        type: "failed",
+        runId: cell.ownerRunId,
+        settledAt: Temporal.Now.instant().toString(),
+      } satisfies AiCellSettlement,
       ownerRunId: null,
       ownerBatchId: null,
       deadlineAt: null,
@@ -145,9 +152,17 @@ export const errorPendingCells = async (
   database: OrphanCellsDatabase,
   workspaceId: SafeId<"workspace">,
 ): Promise<number> => {
+  const settledAt = Temporal.Now.instant().toString();
   const erroredFields = await database
     .update(fields)
-    .set({ content: { type: "error", version: 1 } })
+    .set({
+      content: { type: "error", version: 1 },
+      aiSettlement: sql<AiCellSettlement>`jsonb_build_object(
+        'type', 'failed',
+        'runId', ${fields.ownerRunId},
+        'settledAt', ${settledAt}::text
+      )`,
+    })
     .where(
       and(
         eq(fields.workspaceId, workspaceId),

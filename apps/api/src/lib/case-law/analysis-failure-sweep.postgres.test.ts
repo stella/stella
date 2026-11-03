@@ -10,6 +10,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   caseLawAnalysisFailures,
   caseLawDecisions,
@@ -162,13 +164,12 @@ if (!databaseUrl || !runPostgresTests) {
           `);
           return (rows[0]?.waiting ?? 0) > 0;
         };
-        const deadline = Date.now() + 10_000;
-        while (!(await blocked())) {
-          if (Date.now() > deadline) {
-            throw new Error("the sweep never waited on the refreshed row");
-          }
-          await Bun.sleep(20);
-        }
+        await waitForExternalState({
+          description: "the sweep waits on the refreshed row",
+          intervalMs: 20,
+          timeoutMs: 10_000,
+          read: blocked,
+        });
       });
       await sweep;
 
@@ -226,13 +227,12 @@ if (!databaseUrl || !runPostgresTests) {
           `);
           return (rows[0]?.waiting ?? 0) > 0;
         };
-        const deadline = Date.now() + 10_000;
-        while (!(await claimWaits())) {
-          if (Date.now() > deadline) {
-            throw new Error("the claim never waited on the decision row");
-          }
-          await Bun.sleep(20);
-        }
+        await waitForExternalState({
+          description: "the claim waits on the decision row",
+          intervalMs: 20,
+          timeoutMs: 10_000,
+          read: claimWaits,
+        });
       });
 
       expect(await claim).toMatchObject({ status: "ok", value: null });

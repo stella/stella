@@ -27,6 +27,20 @@ for (const [name, { label }] of Object.entries(visualRegistry)) {
       section.locator(":scope > :not(header)").first(),
     ).toBeVisible();
     await waitForStableGeometry(page, section);
+    if (name === "mcp-reconnect") {
+      // Require the real notice, including the approval-only connection,
+      // rather than accepting an empty fixture wrapper.
+      const notice = section.locator(
+        '[data-playground-section="mcp-reconnect"]',
+      );
+      await expect(notice.locator("span > bdi")).toHaveText([
+        "Registry Search",
+        "Document Archive",
+      ]);
+      await expect(notice.getByRole("button")).toHaveCount(2);
+      await expect(notice.getByRole("button").first()).toBeVisible();
+      await expect(notice.getByRole("button").last()).toBeVisible();
+    }
     if (name === "chat-history-decision") {
       // The fixtures stay out of this spec: they are typed against the web
       // API routes, which would pull the app's types into the browser tests.

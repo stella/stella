@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The foreign keys are created with their new empty table, so no existing rows are scanned while the short catalog lock is held.",
+  "row-level-security": "Row security is enabled and forced on the new empty table before application code can write it.",
+  "create-policy": "Policies are catalog-only additions to the new empty table and run under the migration's one-second lock timeout."
+}

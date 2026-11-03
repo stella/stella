@@ -49,6 +49,7 @@ type ChatInputSurfaceProps = {
   className?: string;
   controller: ChatEditorController;
   disabled?: boolean;
+  sendDisabled?: boolean;
   /** Register this as the canonical main-chat guide surface. Shared and
    * nested chat composers leave this off so tours cannot target duplicates. */
   guideAnchorsEnabled?: boolean;
@@ -127,7 +128,8 @@ export const ChatInputSurface = ({
   autoFocus,
   className,
   controller,
-  disabled = false,
+  disabled,
+  sendDisabled,
   guideAnchorsEnabled = false,
   variant = "compact",
   onSubmit,
@@ -160,11 +162,11 @@ export const ChatInputSurface = ({
     placeholder,
     removeFile,
   } = controller;
-  const inputDisabled = disabled;
+  const inputDisabled = Boolean(disabled);
   // Submitting stays enabled while the assistant streams: a send
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
-  const submitDisabled = disabled;
+  const submitDisabled = Boolean(disabled || sendDisabled);
 
   // A failed send has already restored the draft (see `submit` in
   // chat-editor-provider), so the only thing missing is a user-visible

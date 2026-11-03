@@ -32,6 +32,7 @@ const BOUNDED_OWNER = "apps/api/src/lib/db/read-bounded.ts";
 type FindingKind =
   | "numeric-timeout"
   | "total-timeout-body"
+  | "headers-timeout-unbounded-body"
   | "constant-limit"
   | "fixed-page-size";
 export type ReadFinding = {
@@ -293,6 +294,11 @@ class TransferReadInspector {
     if (value.type !== "ObjectExpression") {
       return [];
     }
+    const hasExplicitPolicy = value.properties.some(
+      (property) =>
+        property.type === "Property" &&
+        this.propertyKey(property) === "timeout",
+    );
     const found: Node[] = [];
     for (const property of value.properties) {
       if (property.type === "SpreadElement") {
@@ -302,7 +308,47 @@ class TransferReadInspector {
           !property.method &&
           property.kind === "init") ||
           property.shorthand) &&
-        this.propertyKey(property) === "timeoutMs"
+        this.propertyKey(property) === "timeoutMs" &&
+        !hasExplicitPolicy
+      ) {
+        found.push(property);
+      }
+    }
+    return found;
+  };
+
+  readonly headersTimeoutProperties = (node: Expression, depth = 0): Node[] => {
+    if (depth >= 8) {
+      return [];
+    }
+    const value = this.resolve(node);
+    if (value.type !== "ObjectExpression") {
+      return [];
+    }
+    const found: Node[] = [];
+    for (const property of value.properties) {
+      if (property.type === "SpreadElement") {
+        found.push(
+          ...this.headersTimeoutProperties(property.argument, depth + 1),
+        );
+        continue;
+      }
+      if (this.propertyKey(property) !== "timeout") {
+        continue;
+      }
+      const timeout = this.resolve(property.value);
+      if (
+        timeout.type === "ObjectExpression" &&
+        timeout.properties.some((candidate) => {
+          if (
+            candidate.type !== "Property" ||
+            this.propertyKey(candidate) !== "type"
+          ) {
+            return false;
+          }
+          const type = this.resolve(candidate.value);
+          return type.type === "Literal" && type.value === "headers";
+        })
       ) {
         found.push(property);
       }
@@ -382,6 +428,13 @@ class TransferReadInspector {
         this.isConstant(value.right, depth + 1)
       );
     }
+    // `??`, `||` and `&&` between constants pick a constant.
+    if (value.type === "LogicalExpression") {
+      return (
+        this.isConstant(value.left, depth + 1) &&
+        this.isConstant(value.right, depth + 1)
+      );
+    }
     return (
       value.type === "UnaryExpression" &&
       this.isConstant(value.argument, depth + 1)
@@ -390,6 +443,16 @@ class TransferReadInspector {
 
   readonly isBodyAccess = (node: Node): boolean =>
     node.type === "MemberExpression" && this.memberName(node) === "body";
+  readonly isBodyCancellation = (node: Node): boolean => {
+    let current = this.parents.get(node);
+    for (let depth = 0; current !== undefined && depth < 4; depth += 1) {
+      if (current.type === "CallExpression") {
+        return this.callName(current.callee) === "cancel";
+      }
+      current = this.parents.get(current);
+    }
+    return false;
+  };
   readonly isOne = (node: Expression): boolean => {
     const value = this.resolve(node);
     return (
@@ -861,9 +924,13 @@ class TransferReadInspector {
     const findings: ReadFinding[] = [];
     const scanScope = (root: Node, name: string) => {
       const totalTimeouts: Node[] = [];
+      const headersTimeouts: Node[] = [];
       // A mutable record: `visit` sets this from a closure, which control-flow
       // narrowing of a plain `let` would not see after `visit(root)` returns.
       const body = { read: false };
+      const unboundedBodyAccess = { read: false };
+      const boundedBody = { read: false };
+      const unboundedMethod = { read: false };
       const record = (kind: FindingKind, node: Node) =>
         findings.push({
           file: this.file,
@@ -882,6 +949,9 @@ class TransferReadInspector {
         }
         if (this.isBodyAccess(node)) {
           body.read = true;
+          if (!this.isBodyCancellation(node)) {
+            unboundedBodyAccess.read = true;
+          }
         }
         if (node.type === "CallExpression") {
           const resolvedCall = this.resolve(node.callee);
@@ -905,6 +975,18 @@ class TransferReadInspector {
             ].includes(called)
           ) {
             body.read = true;
+            unboundedMethod.read = true;
+          }
+          if (
+            called !== undefined &&
+            [
+              "readBodyWithIdleDeadline",
+              "readBodyTextWithIdleDeadline",
+              "readBodyJsonWithIdleDeadline",
+              "iterateBodyWithIdleDeadline",
+            ].includes(called)
+          ) {
+            boundedBody.read = true;
           }
           if (
             called === "timeout" &&
@@ -918,6 +1000,14 @@ class TransferReadInspector {
               for (const property of this.timeoutProperties(argument)) {
                 record("numeric-timeout", property);
                 totalTimeouts.push(property);
+              }
+              if (
+                called === "fetchWithTimeout" ||
+                called === "createFetchWithTimeout"
+              ) {
+                headersTimeouts.push(
+                  ...this.headersTimeoutProperties(argument),
+                );
               }
             }
           }
@@ -956,6 +1046,14 @@ class TransferReadInspector {
           record("total-timeout-body", node);
         }
       }
+      if (
+        unboundedMethod.read ||
+        (unboundedBodyAccess.read && !boundedBody.read)
+      ) {
+        for (const node of headersTimeouts) {
+          record("headers-timeout-unbounded-body", node);
+        }
+      }
     };
     scanScope(this.parsed.program, "module");
     return findings;
@@ -992,6 +1090,7 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry =>
   "kind" in value &&
   (value.kind === "numeric-timeout" ||
     value.kind === "total-timeout-body" ||
+    value.kind === "headers-timeout-unbounded-body" ||
     value.kind === "constant-limit" ||
     value.kind === "fixed-page-size") &&
   "count" in value &&
@@ -1085,7 +1184,7 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
         continue;
       }
       const source = await Bun.file(path.join(REPO_ROOT, file)).text();
-      if (!/timeoutMs|AbortSignal|\blimit\b/u.test(source)) {
+      if (!/\btimeout(?:Ms)?\b|AbortSignal|\blimit\b/u.test(source)) {
         continue;
       }
       found.push(...findTransferReads(file, source));
@@ -1104,9 +1203,11 @@ export const scanTransferTree = async (): Promise<ReadFinding[]> => {
 
 const DEFAULT_REASON = {
   "numeric-timeout":
-    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+    "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner.",
   "total-timeout-body":
-    "Existing total timeout; select an explicit header or idle policy at the fetch owner.",
+    "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner.",
+  "headers-timeout-unbounded-body":
+    "A headers-only fetch timeout cannot bound response body reads; consume the body with an idle-bounded reader.",
   "constant-limit":
     "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract.",
   "fixed-page-size":

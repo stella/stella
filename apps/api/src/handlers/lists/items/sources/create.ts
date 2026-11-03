@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH } from "@stll/api-contract/limits";
+import { spotTargetSchema } from "@stll/api-contract/spot";
 
 import {
   entities,
@@ -24,17 +25,7 @@ const bodySchema = v.object({
   itemEntityId: resourceIdSchema("entity"),
   sourceEntityId: resourceIdSchema("entity"),
   sourceEntityVersionId: resourceIdSchema("entityVersion"),
-  locator: v.union([
-    v.object({ type: v.literal("document") }),
-    v.object({
-      type: v.literal("docx-block"),
-      blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
-    }),
-    v.object({
-      type: v.literal("pdf-page"),
-      pageNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
-    }),
-  ]),
+  locator: spotTargetSchema,
   quote: v.optional(
     v.nullable(
       v.pipe(v.string(), v.maxLength(LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH)),

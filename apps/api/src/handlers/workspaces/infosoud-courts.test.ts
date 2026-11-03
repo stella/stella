@@ -116,6 +116,7 @@ describe("infosoudCourts", () => {
       throw new Error("Expected the courts load failure to return a status");
     }
     expect(result.code).toBe(502);
+    expect(result.response).toMatchObject({ code: "upstream_unavailable" });
     // Sequential awaits short-circuit on the first rejection: the
     // district-court call is never issued, so only one fetch ever fires.
     // Reintroducing Promise.all here would enqueue it regardless of the

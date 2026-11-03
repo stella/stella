@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -13,6 +13,11 @@ import {
   orderBatchesForLanes,
   runInLanes,
 } from "./test-lanes";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const GIB = 1024 * 1024 * 1024;
 
@@ -349,18 +354,19 @@ describe("orderBatchesForLanes", () => {
               return 0;
             },
           });
-          while (settlers.size > 0) {
-            // Finish the most recently started batch to vary completion order.
-            const next = [...settlers.entries()].at(-1);
-            if (next === undefined) {
+          // Every batch starts exactly once, so settle that many: the most
+          // recently started first, to vary completion order. The runner
+          // refills its lanes in microtasks, which a macrotask turn drains.
+          for (const _batch of batches) {
+            const [current, settle] =
+              [...settlers.entries()].at(-1) ??
               panic("An active batch must have a settler");
-            }
-            const [current, settle] = next;
             settlers.delete(current);
             active.delete(current);
             settle();
             await Bun.sleep(0);
           }
+          expect(settlers.size).toBe(0);
           const outcomes = await done;
           for (const check of checks) {
             check();

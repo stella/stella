@@ -39,6 +39,10 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  generateMock.mockClear();
+});
+
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };
 
 const captured: Captured[] = [];

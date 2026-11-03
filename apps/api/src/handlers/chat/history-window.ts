@@ -17,6 +17,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -65,6 +66,7 @@ export const EMPTY_CHAT_HISTORY_SNAPSHOT: ChatHistorySnapshot = {
 };
 
 type LoadWindowedThreadMessagesOnTxArgs = {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   tx: Transaction;
   threadId: SafeId<"chatThread">;
   /** Upper bound on rows read; defaults to the per-send history window. */
@@ -98,10 +100,11 @@ const loadWindowedThreadHistoryOnTx = async ({
   threadId,
   limit = LIMITS.chatSendHistoryWindowMax,
   checkpoint,
+  caseLawDb,
 }: LoadWindowedThreadMessagesOnTxArgs): Promise<WindowedThreadHistory> => {
   const resolvedCheckpoint =
     checkpoint === undefined
-      ? await readLatestChatCompactionOnTx({ threadId, tx })
+      ? await readLatestChatCompactionOnTx({ threadId, tx, caseLawDb })
       : checkpoint;
   const cursor = decodeChatCompactionDeltaCursor(resolvedCheckpoint);
 
@@ -132,7 +135,15 @@ const loadWindowedThreadHistoryOnTx = async ({
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(limit);
 
-  const ascending = rows.toReversed();
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: rows,
+    caseLawDb,
+  });
+  const ascending = rows
+    .toReversed()
+    .map((row) => projection.chat(row, subjectByThread.get(threadId)));
   return {
     messages: ascending,
     snapshot: {
@@ -173,6 +184,7 @@ export const loadWindowedThreadHistory = async ({
   threadId,
   limit,
   checkpoint,
+  caseLawDb,
   ...handle
 }: LoadWindowedThreadMessagesArgs): Promise<
   Result<WindowedThreadHistory, SafeDbError>
@@ -185,6 +197,7 @@ export const loadWindowedThreadHistory = async ({
         threadId,
         limit,
         checkpoint,
+        caseLawDb,
       }),
   );
 

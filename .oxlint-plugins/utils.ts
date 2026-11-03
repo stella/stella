@@ -660,7 +660,10 @@ export const dynamicModuleSourceForEnforcement = (
 };
 
 // The static key of a member expression: `a.b`, `a["b"]`, `` a[`b`] ``.
-export const memberPropertyName = (member: AstNode): string | null => {
+export const memberPropertyName = (member: unknown): string | null => {
+  if (!isAstNode(member)) {
+    return null;
+  }
   if (member.computed !== true) {
     return getPropertyName(member.property);
   }

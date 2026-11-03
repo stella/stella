@@ -27,6 +27,7 @@ import { TextSearch } from "@stll/text-search";
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
 import {
+  boldStampFonts,
   loadStampFontLicenses,
   loadStampFonts,
 } from "@/api/lib/files/pdf-signing/stamp-font";
@@ -429,6 +430,14 @@ await probe("signature stamp fonts and shaper", async () => {
   );
   if (glyphs.size !== 3) {
     panic("the stamp shaper did not join Arabic letters");
+  }
+  const bold = layoutStampRow({
+    direction: "ltr",
+    fonts: boldStampFonts(fonts),
+    text: "Č",
+  });
+  if (bold.runs.some(({ face }) => face.key !== "DejaVuSansBold")) {
+    panic("the stamp bold face did not set a Latin name");
   }
   const licenses = await loadStampFontLicenses();
   if (licenses.some((license) => license.length === 0)) {

@@ -66,7 +66,7 @@ export const CaseLawReaderPreview = () => (
             className="ps-2 text-[0.62rem] leading-relaxed"
             style={{
               color: "var(--muted-foreground)",
-              textAlign: "justify",
+              textAlign: "start",
               borderLeft:
                 "2px solid color-mix(in srgb, var(--primary) 35%, transparent)",
             }}
@@ -83,7 +83,7 @@ export const CaseLawReaderPreview = () => (
           </p>
           <p
             className="text-[0.62rem] leading-relaxed"
-            style={{ color: "var(--muted-foreground)", textAlign: "justify" }}
+            style={{ color: "var(--muted-foreground)", textAlign: "start" }}
           >
             Z obsahu správního spisu je zřejmé, že stěžovatel své tvrzení
             relevantními důkazními prostředky neprokázal. Soud neshledal důvody

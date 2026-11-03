@@ -3,7 +3,7 @@
 // `/v1` rate limiter never sees these (they mount at root), but index.ts uses
 // this so the agent-auth endpoints count only against their dedicated
 // `agentAuth` budget. The session-authed confirm endpoint is intentionally
-// excluded: it runs under the normal auth macro, not this bucket.
+// excluded: it runs under normal session auth, not this bucket.
 const AGENT_AUTH_RATE_LIMIT_PATH_RE =
   /^\/agent\/(?:identity(?:\/claim)?|token|event\/notify)$/u;
 

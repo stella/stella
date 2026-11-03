@@ -10,6 +10,17 @@ export const RELEASE_FAILURE_EVENT = "release_failure_window";
 /** The analytics client stamps every server event with the build's release. */
 export const RELEASE_VERSION_PROPERTY = "app_version";
 
+/** Runtime deployment, independent of the image build mode. */
+export const RELEASE_ENVIRONMENT_PROPERTY = "deploy_environment";
+
+export const DEPLOY_ENVIRONMENTS = [
+  "production",
+  "staging",
+  "development",
+] as const;
+
+export type DeployEnvironment = (typeof DEPLOY_ENVIRONMENTS)[number];
+
 /** A failure's identity across releases: where it failed and what failed. */
 export const RELEASE_FAILURE_FINGERPRINT_KEYS = [
   "handler",

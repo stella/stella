@@ -9,6 +9,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 
+import { DocumentSwitcher } from "@/components/breadcrumbs/document-switcher";
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
@@ -25,7 +26,7 @@ import {
   resolveFileRenameSubmission,
   splitFileName,
 } from "@/lib/files/file-name-edit";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 export const PdfBreadcrumb = () => {
@@ -54,7 +55,7 @@ export const PdfBreadcrumb = () => {
     enabled: pdfMatch !== undefined && fieldId.length > 0,
     select: (file) => file.fileName,
   });
-  const fileNameView = useQueryView(fileQuery);
+  const fileNameView = queryView(fileQuery);
   const fileName =
     fileNameView.type === "items" ? fileNameView.items : undefined;
   const canUpdateEntity = usePermissions({ entity: ["update"] });
@@ -183,6 +184,19 @@ export const PdfBreadcrumb = () => {
             />
           );
         })()}
+        {/* Switching away while pages are being organized would drop the
+            unsaved arrangement, so the caret waits until that ends. */}
+        {rename.state.mode !== "edit" &&
+        pendingName === null &&
+        pdfMode !== "organize" &&
+        entityId.length > 0 ? (
+          <DocumentSwitcher
+            entityId={entityId}
+            fieldId={fieldId}
+            viewId={viewId}
+            workspaceId={workspaceId}
+          />
+        ) : null}
       </BreadcrumbItem>
       {pdfMode === "organize" && (
         <>

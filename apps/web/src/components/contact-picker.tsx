@@ -26,7 +26,7 @@ import { ContactReadError } from "@/components/contact-read-error";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import {
   type WorkspacesData,
   workspacesRouteOptions,
@@ -114,7 +114,7 @@ export const ContactPicker = ({
     200,
   );
 
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...contactPickerSearchOptions({
         organizationId: activeOrganizationId,
@@ -143,7 +143,7 @@ export const ContactPicker = ({
   // so ranking and counting clients reuses it instead of a dedicated read.
   const suggestsRecentClients =
     suggestions === CONTACT_PICKER_SUGGESTIONS.recentClients;
-  const suggestionView = useQueryView(
+  const suggestionView = queryView(
     useQuery({
       ...workspacesRouteOptions(activeOrganizationId),
       select: selectRecentClients,

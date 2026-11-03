@@ -2,12 +2,15 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  stripSearchParams,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
 import {
@@ -18,8 +21,8 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -37,12 +40,17 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  isMatterInStatusView,
+  matterCardDragMode,
+} from "@/lib/workspaces/archived-matters.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 import {
   workspacesKeys,
   workspacesRouteOptions,
@@ -54,6 +62,7 @@ import type {
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupSection } from "@/routes/_protected.workspaces/-components/client-group-section";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
@@ -72,19 +81,26 @@ import {
 import { useConfigStore } from "@/stores/config-store";
 
 const searchSchema = routeSearchSchema({
+  status: v.optional(v.picklist(["active", "archived"]), "active"),
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),
 });
 
 export const Route = createFileRoute("/_protected/workspaces/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
-  loader: async ({ context }) => {
+  // Active is the default view, so `/workspaces` stays the canonical address.
+  search: {
+    middlewares: [stripSearchParams({ status: "active" })],
+  },
+  loaderDeps: ({ search }) => ({ status: search.status }),
+  loader: async ({ context, deps }) => {
     // Prime the workspaces query the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
     await ensureRouteQueryData(
       context.queryClient,
-      workspacesRouteOptions(context.user.activeOrganizationId),
+      workspacesRouteOptions(context.user.activeOrganizationId, deps.status),
     );
   },
   head: () => ({
@@ -128,10 +144,11 @@ const MattersContent = ({
   resetExternalState: boolean;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
+  const status = Route.useSearch({ select: (s) => s.status });
   const { data, isFetching } = useSuspenseQuery(
-    workspacesRouteOptions(activeOrganizationId),
+    workspacesRouteOptions(activeOrganizationId, status),
   );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -169,9 +186,11 @@ const MattersContent = ({
     );
   });
 
-  const workspaces = data.workspaces;
+  const workspaces = data.workspaces.filter((matter) =>
+    isMatterInStatusView(matter.status, status),
+  );
   const canOpenCreateMatter =
-    canCreateMatter && workspaces.length < WORKSPACES_PER_ORGANIZATION_MAX;
+    canCreateMatter && data.creationCapacity.canCreate;
 
   const searched = filterWorkspacesBySearch(workspaces, search);
 
@@ -259,6 +278,14 @@ const MattersContent = ({
     <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>
       <div className="flex min-h-0 flex-1 flex-col">
         <MattersToolbar
+          status={status}
+          onStatusChange={(nextStatus) => {
+            setFocusIndex(-1);
+            detached(
+              navigate({ to: "/workspaces", search: { status: nextStatus } }),
+              "workspaces.status",
+            );
+          }}
           onSearchChange={setSearch}
           search={search}
           searchRef={searchRef}
@@ -287,7 +314,7 @@ const MattersContent = ({
                   </div>
                 );
               }
-              if (workspaces.length === 0) {
+              if (workspaces.length === 0 && status === "active") {
                 return (
                   <EmptyScreen
                     className="min-h-full"
@@ -295,7 +322,8 @@ const MattersContent = ({
                     primaryAction={{
                       label: t("workspaces.createNewWorkspace"),
                       icon: PlusIcon,
-                      onClick: () => openCreateMatter(),
+                      onClick: (event) =>
+                        openCreateMatter({ opener: event.currentTarget }),
                     }}
                     title={t("workspaces.emptyMatters.title")}
                   />
@@ -388,11 +416,15 @@ const MattersToolbarSkeleton = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="w-64 max-w-[40%]"
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
         disabled
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={() => undefined}
         placeholder={t("common.search")}
         size="sm"
+        value=""
       />
       <Separator className="mx-1 h-4" orientation="vertical" />
       <Button disabled size="xs" variant="ghost">
@@ -553,6 +585,7 @@ const MattersPageContextMenu = ({
   const t = useTranslations();
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const [open, setOpen] = useState(false);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -569,6 +602,7 @@ const MattersPageContextMenu = ({
           return;
         }
         event.preventDefault();
+        setOpener(captureDialogReturnFocus().current);
         const x = event.clientX;
         const y = event.clientY;
         setAnchor({
@@ -587,12 +621,11 @@ const MattersPageContextMenu = ({
         }}
         open={open}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={anchor ?? undefined}>
-          <MenuItem onClick={() => openCreateMatter()}>
+        <MenuAnchor />
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => opener}>
+          <MenuItem
+            onClick={() => openCreateMatter(opener === null ? {} : { opener })}
+          >
             <PlusIcon />
             {t("workspaces.createNewWorkspace")}
           </MenuItem>
@@ -664,7 +697,10 @@ const MattersContentView = ({
                       {!collapsed &&
                         group.workspaces.map((workspace, i) => (
                           <MatterCard
-                            drag={canReassignClient ? "client-group" : "none"}
+                            drag={matterCardDragMode(
+                              workspace.status,
+                              canReassignClient,
+                            )}
                             focused={focusIndex === baseIndex + i}
                             hideClientName
                             key={workspace.id}

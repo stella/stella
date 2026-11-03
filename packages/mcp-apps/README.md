@@ -12,6 +12,13 @@ to exercise the React views, bridge contracts and package ownership guards.
 Regenerate API contracts first with `bun run --cwd apps/api generate:mcp-app-contracts`
 from the repository root (the canonical generated-files runner orders both).
 
+Every app is served as one HTML document with inline styles and scripts. The
+build stores what all apps share once: a classic runtime script with React and
+the modules every app includes, and the shared stylesheet. Each app keeps its
+own module script and stylesheet, and the API assembles the document on first
+read. `src/<app>/generated/app.html.txt` holds the assembled document for tests
+and budgets.
+
 Bundle budgets live in `scripts/bundle-baseline.json`; check them with
 `bun scripts/bundle-baseline.ts --mcp-apps --check`. Resource CSP requires inline
 fonts, so the build omits unused sans italic faces and retains the supported

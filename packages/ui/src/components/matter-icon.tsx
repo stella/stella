@@ -1,6 +1,10 @@
 import { LayersIcon } from "../icons";
 import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
+import {
+  ALL_MATTERS_STACK,
+  type MatterIconContract,
+} from "./matter-icon.shared";
 
 // The one and only place allowed to render the matter (layers) glyph.
 //
@@ -19,18 +23,7 @@ import { cn } from "../lib/utils";
 // control of size/spacing via `className`; this component only owns the
 // glyph and its colour.
 
-// The three stacked-plane tints for the "all matters" glyph. Fixed
-// palette option colours (not currentColor) so the stack reads as "many
-// matters at once" wherever it appears (picker rows, section headers).
-const ALL_MATTERS_STACK_COLORS = [
-  "var(--option-red)",
-  "var(--option-blue)",
-  "var(--option-green)",
-] as const;
-
-type MatterIconProps = { className?: string | undefined } & (
-  { matter: { id: string; color: string | null } } | { variant: "none" | "all" }
-);
+type MatterIconProps = { className?: string | undefined } & MatterIconContract;
 
 export const MatterIcon = (props: MatterIconProps) => {
   if ("matter" in props) {
@@ -45,8 +38,9 @@ export const MatterIcon = (props: MatterIconProps) => {
     );
   }
 
-  // "All matters": three stacked planes in fixed palette tints, so the
-  // affordance reads as "the whole set" rather than any one matter.
+  // "All matters": three stacked planes in fixed palette tints (not
+  // currentColor), so the affordance reads as "the whole set" rather than any
+  // one matter, wherever it appears (picker rows, section headers).
   if (props.variant === "all") {
     return (
       <svg
@@ -55,27 +49,16 @@ export const MatterIcon = (props: MatterIconProps) => {
         fill="none"
         viewBox="0 0 24 24"
       >
-        <path
-          d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
-          stroke={ALL_MATTERS_STACK_COLORS[0]}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-        />
-        <path
-          d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
-          stroke={ALL_MATTERS_STACK_COLORS[1]}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-        />
-        <path
-          d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
-          stroke={ALL_MATTERS_STACK_COLORS[2]}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-        />
+        {ALL_MATTERS_STACK.map(({ d, option }) => (
+          <path
+            d={d}
+            key={option}
+            stroke={`var(--option-${option})`}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+          />
+        ))}
       </svg>
     );
   }

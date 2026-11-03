@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   type ActivitySignal,
   clusterActivitySignals,
+  subtractRecordedTime,
   suggestionFingerprint,
 } from "./cluster";
 
@@ -38,6 +39,13 @@ const signalArbitrary = fc
   .map(({ minute, second, ordinal, evidence }): ActivitySignal => ({
     at: new Date(DAY_START_MS + minute * MS_PER_MINUTE + second * 1000),
     key: `signal:${ordinal}:${minute}:${second}`,
+    identity: {
+      source: "audit_log",
+      resourceId: `signal-${ordinal}`,
+      timestamp: new Date(
+        DAY_START_MS + minute * MS_PER_MINUTE + second * 1000,
+      ).toISOString(),
+    },
     evidence,
   }));
 
@@ -64,12 +72,18 @@ const signalAt = (
 ): ActivitySignal => ({
   at: new Date(DAY_START_MS + minutes * MS_PER_MINUTE),
   key,
+  identity: {
+    source: "audit_log",
+    resourceId: key,
+    timestamp: new Date(DAY_START_MS + minutes * MS_PER_MINUTE).toISOString(),
+  },
   evidence: evidence ?? DRAFTING_THREAD,
 });
 
 describe("clusterActivitySignals", () => {
   test("INVARIANT: clusters are ordered, disjoint, and separated by more than the merge gap", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: clusters are ordered, disjoint, and separated by more than the merge gap",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const clusters = clusterActivitySignals({
           date: DATE,
@@ -90,12 +104,13 @@ describe("clusterActivitySignals", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: every signal lands in exactly one cluster and durations cover the span plus the tail", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: every signal lands in exactly one cluster and durations cover the span plus the tail",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const clusters = clusterActivitySignals({
           date: DATE,
@@ -123,12 +138,13 @@ describe("clusterActivitySignals", () => {
           expect(messageCount).toBeLessThanOrEqual(cluster.signalCount);
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: fingerprints are unique per day and independent of input order", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: fingerprints are unique per day and independent of input order",
       fc.property(signalsArbitrary, optionsArbitrary, (signals, options) => {
         const forward = clusterActivitySignals({
           date: DATE,
@@ -147,12 +163,13 @@ describe("clusterActivitySignals", () => {
           new Set(forward.map((cluster) => cluster.fingerprint)).size,
         ).toBe(forward.length);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("INVARIANT: a later signal that extends a cluster keeps its fingerprint", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: a later signal that extends a cluster keeps its fingerprint",
       fc.property(
         signalsArbitrary.filter((signals) => signals.length > 0),
         optionsArbitrary,
@@ -196,7 +213,7 @@ describe("clusterActivitySignals", () => {
           expect(survivingFingerprints.size).toBe(after.length);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -259,6 +276,83 @@ describe("clusterActivitySignals", () => {
     expect(only?.signalCount).toBe(1);
   });
 
+  test("removes recorded windows once, including partial overlaps", () => {
+    const [cluster] = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a"), signalAt(15, "b")],
+      mergeGapMinutes: 20,
+      tailMinutes: 5,
+    });
+    if (!cluster) {
+      throw new Error("expected a cluster");
+    }
+    const partial = subtractRecordedTime(
+      [cluster],
+      [
+        {
+          durationMinutes: 10,
+          startedAt: new Date(DAY_START_MS + 5 * MS_PER_MINUTE),
+          endedAt: new Date(DAY_START_MS + 12 * MS_PER_MINUTE),
+        },
+        {
+          durationMinutes: 10,
+          startedAt: new Date(DAY_START_MS + 10 * MS_PER_MINUTE),
+          endedAt: new Date(DAY_START_MS + 17 * MS_PER_MINUTE),
+        },
+      ],
+    );
+    expect(partial.map(({ durationMinutes }) => durationMinutes)).toEqual([8]);
+
+    expect(
+      subtractRecordedTime(
+        [cluster],
+        [
+          {
+            durationMinutes: 20,
+            startedAt: new Date(DAY_START_MS),
+            endedAt: new Date(DAY_START_MS + 20 * MS_PER_MINUTE),
+          },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  test("marks duration-only coverage without assigning it to a window", () => {
+    const [cluster] = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a")],
+      mergeGapMinutes: 15,
+      tailMinutes: 5,
+    });
+    if (!cluster) {
+      throw new Error("expected a cluster");
+    }
+    expect(
+      subtractRecordedTime(
+        [cluster],
+        [{ durationMinutes: 5, startedAt: null, endedAt: null }],
+      ).at(0)?.alreadyCovered,
+    ).toBe(true);
+  });
+
+  test("duration-only coverage marks candidates only when it fits them all", () => {
+    const clusters = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a"), signalAt(120, "b")],
+      mergeGapMinutes: 15,
+      tailMinutes: 5,
+    });
+    expect(clusters).toHaveLength(2);
+    const coveredWith = (minutes: number) =>
+      subtractRecordedTime(clusters, [
+        { durationMinutes: minutes, startedAt: null, endedAt: null },
+      ]).map(({ alreadyCovered }) => alreadyCovered);
+
+    // Five logged minutes cannot cover two separate five-minute candidates.
+    expect(coveredWith(5)).toEqual([false, false]);
+    expect(coveredWith(10)).toEqual([true, true]);
+  });
+
   test("folds repeated resource actions and backfills a missing name", () => {
     const [only] = clusterActivitySignals({
       date: DATE,
@@ -295,6 +389,23 @@ describe("clusterActivitySignals", () => {
         resourceType: "entity",
         name: "Lease",
         actions: ["update", "download"],
+        signals: [
+          {
+            source: "audit_log",
+            resourceId: "a",
+            timestamp: "2026-09-18T00:00:00.000Z",
+          },
+          {
+            source: "audit_log",
+            resourceId: "b",
+            timestamp: "2026-09-18T00:01:00.000Z",
+          },
+          {
+            source: "audit_log",
+            resourceId: "c",
+            timestamp: "2026-09-18T00:02:00.000Z",
+          },
+        ],
       },
     ]);
   });

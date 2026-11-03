@@ -6,7 +6,7 @@ import { chatThreadTitleOptions } from "@/features/chat/queries";
 import type { ChatThreadFetched } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type FileChatTitleSlotProps = {
   activeOrganizationId: string;
@@ -37,7 +37,7 @@ export const FileChatTitleSlot = ({
     persistedThread,
   });
   const titleQuery = useQuery(titleQueryOptions);
-  const titleView = useQueryView(titleQuery);
+  const titleView = queryView(titleQuery);
   const byIdTitle = titleView.type === "items" ? titleView.items : undefined;
   // Feedback belongs to a read that ran: a first message still being sent
   // has no row to read yet, and its card shows the placeholder title.

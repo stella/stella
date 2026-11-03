@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
@@ -21,6 +23,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import addEntries from "../invoices/entries/add";
@@ -183,17 +186,15 @@ if (!databaseUrl || !runPostgresTests) {
                       body: { id: expenseId },
                     }),
                   );
-            let blocked = false;
-            for (let attempt = 0; attempt < 200 && !blocked; attempt += 1) {
-              const [row] = await setup.sql<
-                { blocked: boolean }[]
-              >`SELECT cardinality(pg_blocking_pids(${session.pid})) > 0 AS blocked`;
-              blocked = row?.blocked === true;
-              if (!blocked) {
-                await Bun.sleep(10);
-              }
-            }
-            expect(blocked).toBe(true);
+            await waitForExternalState({
+              description: "the mutation waits on the attaching transaction",
+              read: async () =>
+                (
+                  await setup.sql<
+                    { blocked: boolean }[]
+                  >`SELECT cardinality(pg_blocking_pids(${session.pid})) > 0 AS blocked`
+                ).at(0)?.blocked === true,
+            });
             release.resolve(undefined);
             expect(await attaching).toEqual({ totalAmount: cents(1000) });
             expect(await mutating).toMatchObject({ code: 400 });
@@ -224,9 +225,7 @@ if (!databaseUrl || !runPostgresTests) {
                 await setup.db
                   .delete(workspaces)
                   .where(eq(workspaces.id, workspaceId));
-                await setup.db
-                  .delete(organization)
-                  .where(eq(organization.id, organizationId));
+                await deleteOrganizationsForTest(setup.db, [organizationId]);
                 await setup.db.delete(user).where(eq(user.id, userId));
               }
             }

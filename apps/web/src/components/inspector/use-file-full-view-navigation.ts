@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 
-import { useMatch, useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 
-import { resolveFullViewOriginView } from "@/components/inspector/file-full-view-navigation.logic";
 import type { FileTab } from "@/components/inspector/file-tab";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { detached } from "@/lib/detached";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 type OpenFullViewOptions = { carryEditing: boolean };
 
@@ -16,26 +17,11 @@ type OpenFullViewOptions = { carryEditing: boolean };
 export const useFileFullViewNavigation = () => {
   const router = useRouter();
   const navigate = useNavigate();
-  const currentWorkspaceId = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-    select: (match) => match.params.workspaceId,
-  });
-  const currentViewId = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-    select: (match) => match.params.viewId,
-  });
+  const currentView = useCurrentWorkspaceView();
 
   const resolveOriginView = useCallback(
-    (tab: FileTab) =>
-      resolveFullViewOriginView(
-        tab.workspaceId,
-        currentWorkspaceId === undefined || currentViewId === undefined
-          ? undefined
-          : { workspaceId: currentWorkspaceId, viewId: currentViewId },
-      ),
-    [currentViewId, currentWorkspaceId],
+    (tab: FileTab) => resolveWorkspaceViewParams(tab.workspaceId, currentView),
+    [currentView],
   );
 
   const openFullView = useCallback(

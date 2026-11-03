@@ -33,6 +33,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -40,11 +41,13 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
 import {
+  defaultInviteRole,
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -60,7 +63,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  const currentUserRoleView = queryView(currentUserRoleQuery);
   useQueryViewError(currentUserRoleView, "InviteMemberDialog:query");
   const currentUserRole =
     currentUserRoleView.type === "items"
@@ -72,7 +75,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
   const defaultRole =
     currentUserRole === undefined
       ? undefined
-      : assignableRoles(currentUserRole).at(-1);
+      : defaultInviteRole(assignableRoles(currentUserRole));
   if (currentUserRole === undefined || defaultRole === undefined) {
     return null;
   }
@@ -103,10 +106,11 @@ const InviteMemberForm = ({
 }: InviteMemberFormProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const inviteMember = useInviteMember();
+  const isDialogOpen = useLatestCallback(() => isOpen);
+  const inviteMember = useInviteMember(isDialogOpen);
   const schema = useMemo(
-    () => inviteMemberSchema(currentUserRole),
-    [currentUserRole],
+    () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
+    [currentUserRole, t],
   );
   const defaultValues = useMemo(
     () => ({ email: "", role: defaultRole }),

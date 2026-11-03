@@ -1,3 +1,10 @@
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 /**
  * AWS SDK v3 wrapper for presigned PUT uploads and the matching
  * post-upload verification calls.
@@ -20,14 +27,6 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
-
-import {
-  CopyObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client as AwsS3Client,
-} from "@aws-sdk/client-s3";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
@@ -41,6 +40,7 @@ import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   isMissingS3ObjectError,
   resolveS3Credentials,
@@ -393,7 +393,7 @@ let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
 
 const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
   detached(
-    entry.promise.then(({ client }) => client.destroy()),
+    async () => entry.promise.then(({ client }) => client.destroy()),
     "s3-presign.dispose-scoped-client",
   );
 };
@@ -470,11 +470,12 @@ const getScopedAwsS3Client = async (
     throw error;
   });
   detached(
-    entry.promise.then((cached) => {
-      entry.cached = cached;
-      pruneScopedClientCache();
-      return undefined;
-    }),
+    async () =>
+      entry.promise.then((cached) => {
+        entry.cached = cached;
+        pruneScopedClientCache();
+        return undefined;
+      }),
     "s3-presign.cache-entry-settled",
   );
   _scopedClientCache.set(cacheKey, entry);
@@ -718,6 +719,7 @@ export const readTenantS3ArrayBuffer = async ({
       ),
     scope,
   });
+  recordReadWork("storageReadBytes", bytes.byteLength);
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,

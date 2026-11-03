@@ -1,8 +1,8 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { panic } from "better-result";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
@@ -14,18 +14,21 @@ import type {
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { StrictMode, useRef } = await import("react");
-const { QueryClient, QueryClientProvider } =
+const { notifyManager, QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { IntlProvider: MessagesProvider } = await import("use-intl");
+const { default: csMessages } = await import("@/i18n/langs/cs.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useReaderAnswers } = await import("./use-reader-answers");
 const {
@@ -37,8 +40,17 @@ const { readerAnswersOptions } = await import("./reader-answers-query");
 
 const { document: testDocument, window: testWindow } = globalThis;
 const originalFetch = globalThis.fetch;
+const originalAbortSignalTimeout = AbortSignal.timeout;
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
+  restoreRealTimers();
+  notifyManager.setScheduler((notify) => {
+    setTimeout(notify, 0);
+  });
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    value: originalAbortSignalTimeout,
+  });
   testDocument.getSelection()?.removeAllRanges();
   await act(async () => {
     cleanup();
@@ -88,14 +100,83 @@ const setup = () => {
     <StrictMode>
       <QueryClientProvider client={client}>
         <AuthenticatedUserProvider user={user}>
-          <FormattingProvider locale="cs" timeZone="UTC">
-            {children}
-          </FormattingProvider>
+          <MessagesProvider locale="cs" messages={csMessages} timeZone="UTC">
+            <FormattingProvider locale="cs" timeZone="UTC">
+              {children}
+            </FormattingProvider>
+          </MessagesProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>
     </StrictMode>
   );
   return { client, wrapper };
+};
+
+const advanceClock = async (milliseconds: number) => {
+  await act(async () => {
+    jest.advanceTimersByTime(milliseconds);
+  });
+  await act(
+    async () =>
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      }),
+  );
+};
+
+type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
+
+/**
+ * Settles once the cached reader answers reach a status, whatever number of
+ * event loop turns the response takes. A test that reads the hook right after
+ * also calls `deliverQueryNotificationsInline`, so the hook has the status by
+ * the time this settles.
+ */
+const cachedLastStatus = async (
+  client: InstanceType<typeof QueryClient>,
+  reached: (status: ReaderAnswerStatus | undefined) => boolean,
+) => {
+  const { queryKey } = readerAnswersOptions({
+    decisionId: "decision-1",
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
+  const { promise, resolve } = Promise.withResolvers<
+    ReaderAnswerStatus | undefined
+  >();
+  const check = () => {
+    const status = client
+      .getQueryData(queryKey)
+      ?.at(0)
+      ?.messages.at(-1)?.status;
+    if (reached(status)) {
+      unsubscribe();
+      resolve(status);
+    }
+  };
+  const unsubscribe = client.getQueryCache().subscribe(check);
+  check();
+  return await promise;
+};
+
+/**
+ * Hands query notifications to observers as they happen instead of on a timer
+ * turn, so a cached write reaches the hook with no race against the turn a
+ * test waits for. Timers under test stay on the fake clock.
+ */
+const deliverQueryNotificationsInline = () => {
+  notifyManager.setScheduler((notify) => {
+    notify();
+  });
+};
+
+const renderCachedStatus = async (
+  cached: ReturnType<typeof cachedLastStatus>,
+) => {
+  await act(async () => {
+    await cached;
+  });
+  await advanceClock(0);
 };
 
 const fakeServer = (
@@ -105,6 +186,7 @@ const fakeServer = (
   let rows: ReaderAnswer[] = [];
   let sequence = 0;
   const bodies: unknown[] = [];
+  const preferenceBodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const request = new Request(input, init);
@@ -117,6 +199,10 @@ const fakeServer = (
         return Response.json({ success: true });
       }
       const body: unknown = await request.json();
+      if (path.endsWith("/auth/update-user")) {
+        preferenceBodies.push(body);
+        return Response.json({ user });
+      }
       bodies.push(body);
       if (request.method === "PATCH") {
         if (
@@ -203,7 +289,7 @@ const fakeServer = (
     },
     { preconnect: originalFetch.preconnect },
   );
-  return { bodies };
+  return { bodies, preferenceBodies };
 };
 
 test("a response with the wrong stream content type cancels its body and releases creation", async () => {
@@ -253,6 +339,200 @@ test("a response with the wrong stream content type cancels its body and release
   expect(hook.result.current.busyAnswerIds.size).toBe(0);
 });
 
+test("a rejected account language update preserves the preference and does not regenerate", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (new URL(request.url).pathname.endsWith("/auth/update-user")) {
+        return Response.json(
+          { code: "BAD_REQUEST", message: "Language preference rejected" },
+          { status: 400 },
+        );
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper } = setup();
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "sk",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(
+    async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+  );
+  expect(hook.result.current.languagePreference).toBe("document");
+  expect(hook.result.current.isSavingLanguage).toBe(false);
+  expect(server.bodies).toEqual([]);
+});
+
+test.each(["sk", "cs", "pl"])(
+  "reader request uses document language %s and saves a chosen answer language before regenerating",
+  async (documentLanguage) => {
+    const server = fakeServer();
+    const { wrapper, client } = setup();
+    const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+    // The session owner supplies this preference after a reload too.
+    const sessionUser = {
+      ...user,
+      readerAnswerLanguage: "en",
+      emailVerified: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+      twoFactorEnabled: false,
+    };
+    client.setQueryData(
+      sessionOptions.queryKey,
+      () =>
+        ({
+          user: sessionUser,
+          session: {
+            id: "test-session",
+            userId: user.id,
+            activeOrganizationId: user.activeOrganizationId,
+            expiresAt: new Date("2030-01-01"),
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+            token: "test-token",
+            ipAddress: null,
+            userAgent: null,
+          },
+        }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+    );
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+          documentLanguage,
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(0)).toMatchObject({ locale: "en" });
+    await act(
+      async () =>
+        await hook.result.current.setAnswerLanguage("document", "answer-1"),
+    );
+    expect(server.preferenceBodies).toEqual([
+      { readerAnswerLanguage: "document" },
+    ]);
+    expect(server.bodies.at(-1)).toEqual({ locale: documentLanguage });
+    expect(hook.result.current.languagePreference).toBe("document");
+    await act(
+      async () => await hook.result.current.followUp("answer-1", "Continue"),
+    );
+    expect(server.bodies.at(-1)).toMatchObject({ locale: documentLanguage });
+    await act(
+      async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+    );
+    expect(server.preferenceBodies.at(-1)).toEqual({
+      readerAnswerLanguage: "en",
+    });
+    expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(-1)).toMatchObject({ locale: "en" });
+  },
+);
+
+test("a language change queues regeneration behind a busy answer", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  let releaseFollowUp: () => void = () => undefined;
+  const followUpGate = new Promise<void>((resolve) => {
+    releaseFollowUp = resolve;
+  });
+  let holdNextAnswerRequest = false;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      const path = new URL(request.url).pathname;
+      if (
+        holdNextAnswerRequest &&
+        request.method === "POST" &&
+        !path.endsWith("/auth/update-user")
+      ) {
+        holdNextAnswerRequest = false;
+        await followUpGate;
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper, client } = setup();
+  const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+  client.setQueryData(
+    sessionOptions.queryKey,
+    () =>
+      ({
+        user: {
+          ...user,
+          readerAnswerLanguage: "document",
+          emailVerified: true,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          twoFactorEnabled: false,
+        },
+        session: {
+          id: "test-session",
+          userId: user.id,
+          activeOrganizationId: user.activeOrganizationId,
+          expiresAt: new Date("2030-01-01"),
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+          token: "test-token",
+          ipAddress: null,
+          userAgent: null,
+        },
+      }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+  );
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "cs",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(async () => await hook.result.current.createExplain(anchor));
+  holdNextAnswerRequest = true;
+
+  let followUp: Promise<unknown> | undefined;
+  act(() => {
+    followUp = hook.result.current.followUp("answer-1", "Continue");
+  });
+  await waitFor(() =>
+    expect(hook.result.current.busyAnswerIds.has("answer-1")).toBe(true),
+  );
+  let languageChange: Promise<unknown> | undefined;
+  act(() => {
+    languageChange = hook.result.current.setAnswerLanguage("en", "answer-1");
+  });
+  await waitFor(() =>
+    expect(server.preferenceBodies).toEqual([{ readerAnswerLanguage: "en" }]),
+  );
+  expect(server.bodies).toHaveLength(1);
+
+  releaseFollowUp();
+  await act(async () => {
+    await followUp;
+    await languageChange;
+  });
+  expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+  expect(server.bodies).toHaveLength(3);
+});
+
 test("reader answers create, follow up, regenerate, share, reload and delete through the HTTP boundary", async () => {
   const server = fakeServer();
   const { wrapper } = setup();
@@ -274,7 +554,6 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
     decisionId: "decision-1",
     kind: "explain",
     anchor,
-    locale: "cs",
   });
   expect(hook.result.current.activeAnswerId).toBe("answer-1");
   await act(async () => {
@@ -461,7 +740,8 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
@@ -576,6 +856,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
   const { AnnotationToolbar } =
     await import("@/components/legal-reader/annotations/annotation-toolbar");
   const { ReaderAnswerCard } = await import("./reader-answer-card");
+  const { ReaderAnswerLanguagePicker } =
+    await import("./reader-answer-language-picker");
   const { ActionCapabilitiesProvider } =
     await import("@/lib/organization/feature-access/capability-actions");
   const { resolveActionCapabilities } =
@@ -596,13 +878,21 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
+          explainLanguagePicker={
+            <ReaderAnswerLanguagePicker
+              disabled={false}
+              documentLanguage="cs"
+              onChange={() => undefined}
+              value="document"
+            />
+          }
           onClearActive={() => undefined}
           onActivateAnnotation={() => undefined}
           scrollContainerRef={root}
@@ -655,7 +945,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}
@@ -724,6 +1015,26 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     const explain = await view.findByRole("button", {
       name: messages.readerAnswers.explain,
     });
+    fireEvent.click(
+      view.getByRole("button", { name: messages.readerAnswers.answerLanguage }),
+    );
+    const english = await view.findByRole("menuitemradio", {
+      name: "English",
+    });
+    if (fireEvent.mouseDown(english)) {
+      selection.removeAllRanges();
+      testDocument.dispatchEvent(new Event("selectionchange"));
+    }
+    fireEvent.click(english);
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+    expect(selection.toString()).toBe(span.quote);
+    expect(
+      view.getByRole("button", { name: messages.readerAnswers.explain }),
+    ).toBe(explain);
     fireEvent.click(explain);
     await waitFor(() => expect(view.getByText("Answer 1")).toBeTruthy());
     expect(view.getByRole("region")).toBeTruthy();
@@ -731,7 +1042,6 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "cs",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();
@@ -1057,7 +1367,21 @@ test.each(["never", "hanging"] as const)(
   "persisted claims stop polling at timeout when the server is %s",
   async (settlement) => {
     const server = pollingServer(settlement);
-    const { wrapper } = setup();
+    const { client, wrapper } = setup();
+    deliverQueryNotificationsInline();
+    const claimed = cachedLastStatus(
+      client,
+      (status) => status === "streaming",
+    );
+    jest.useFakeTimers();
+    Object.defineProperty(AbortSignal, "timeout", {
+      configurable: true,
+      value: (milliseconds: number) => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), milliseconds);
+        return controller.signal;
+      },
+    });
     const hook = renderHook(
       () =>
         useReaderAnswers({
@@ -1066,22 +1390,21 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    await waitFor(() =>
-      expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
-        "streaming",
-      ),
+    // Wait for the mounted query to cache the claim without advancing the 5000 ms recovery deadline.
+    await renderCachedStatus(claimed);
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
+      "streaming",
     );
+    const failed = cachedLastStatus(client, (status) => status === "failed");
     server.releaseRecovery();
-    await waitFor(
-      () =>
-        expect(
-          hook.result.current.answers.at(0)?.messages.at(-1),
-        ).toMatchObject({
-          status: "failed",
-          errorCode: "timeout",
-        }),
-      { timeout: 7000 },
-    );
+    await advanceClock(300);
+    await advanceClock(5000);
+    await renderCachedStatus(failed);
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
+      status: "failed",
+      errorCode: "timeout",
+    });
+    restoreRealTimers();
     const settledReads = server.reads();
     await act(async () => {
       await sleep(50);
@@ -1104,7 +1427,6 @@ test.each(["never", "hanging"] as const)(
     });
     expect(server.deletions()).toBe(1);
   },
-  10_000,
 );
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.

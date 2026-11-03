@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -210,6 +210,7 @@ describe("publisher throttling and transient failures", () => {
           status,
           stopKind: "publisher_refusal",
           cooldownUntilEpochMs: NOW + header.wait,
+          ...(header.value === null ? {} : { retryAfter: header.value }),
         });
         expect(requests).toBe(1);
         expect(gateWaits).toEqual([header.wait]);
@@ -438,7 +439,8 @@ describe("bounded full jitter and publisher minimum waits", () => {
   });
 
   test("every wait honors a bounded Retry-After and total waits remain bounded", () => {
-    fc.assert(
+    assertProperty(
+      "every wait honors a bounded Retry-After and total waits remain bounded",
       fc.property(
         fc.array(
           fc.record({
@@ -466,12 +468,13 @@ describe("bounded full jitter and publisher minimum waits", () => {
           ).toBeLessThanOrEqual(900_000 * inputs.length);
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("without Retry-After every jittered wait remains within the exponential cap", () => {
-    fc.assert(
+    assertProperty(
+      "without Retry-After every jittered wait remains within the exponential cap",
       fc.property(
         fc.integer({ min: 0, max: 40 }),
         fc.double({ min: 0, max: 0.999999, noNaN: true }),
@@ -487,7 +490,7 @@ describe("bounded full jitter and publisher minimum waits", () => {
           expect(wait).toBeLessThanOrEqual(2000 * 2 ** attempt);
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

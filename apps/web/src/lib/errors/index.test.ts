@@ -1,3 +1,4 @@
+import { organizationClient } from "better-auth/client/plugins";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -22,6 +23,7 @@ import {
   isUnauthorizedError,
   toAuthClientError,
 } from "./auth";
+import { ClientOperationError } from "./client";
 import { userErrorFromThrown, userErrorMessage } from "./user-safe";
 
 describe("API request retries", () => {
@@ -51,6 +53,65 @@ describe("API request retries", () => {
 
     expect(shouldRetryAPIRequest(2, transportError)).toBe(true);
     expect(shouldRetryAPIRequest(3, transportError)).toBe(false);
+  });
+
+  test.each([
+    ["network", true],
+    ["timeout", true],
+    ["aborted", false],
+  ] as const)(
+    "handles %s transport retryability",
+    (transportKind, expected) => {
+      const error = new APIError({
+        message: "Transport failure",
+        status: 0,
+        transportKind,
+      });
+
+      expect(shouldRetryAPIRequest(0, error)).toBe(expected);
+    },
+  );
+});
+
+describe("user-visible transport and client failures", () => {
+  test.each([
+    ["network", messages.common.networkError],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes a %s transport failure", (kind, expected) => {
+    try {
+      unwrapApiResponse({
+        data: null,
+        error: {
+          kind,
+          cause: new TypeError("private browser detail"),
+          status: 0,
+          value: null,
+        },
+      });
+      throw new TypeError("Expected transport failure");
+    } catch (error) {
+      expect(APIError.is(error)).toBe(true);
+      expect(userErrorFromThrown(error, "Fallback")).toBe(expected);
+    }
+  });
+
+  test("keeps an expected client refusal safe for display", () => {
+    const error = new ClientOperationError({
+      action: "upload-version",
+      message: "Choose a file with the same file type.",
+    });
+    expect(userErrorFromThrown(error, "Version upload failed")).toBe(
+      error.message,
+    );
+  });
+
+  test("hides an internal client operation message", () => {
+    const error = new ClientOperationError({
+      action: "prepare-file-upload",
+      message: "Prepared upload referenced an unknown file",
+    });
+
+    expect(userErrorFromThrown(error, "Upload failed")).toBe("Upload failed");
   });
 });
 
@@ -572,6 +633,22 @@ describe("toAuthClientError", () => {
       "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
       "You are not a member of this organization.",
     ],
+    [
+      "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
+      messages.errors.apiCodes.alreadyOrganizationMember,
+    ],
+    [
+      "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
+      messages.errors.apiCodes.invitationAlreadyPending,
+    ],
+    [
+      "INVITATION_LIMIT_REACHED",
+      messages.errors.apiCodes.invitationLimitReached,
+    ],
+    [
+      "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
+      messages.errors.apiCodes.invitationRoleNotAllowed,
+    ],
   ])("localizes the known auth client code %s", (code, expected) => {
     const error = toAuthClientError({
       code,
@@ -582,6 +659,25 @@ describe("toAuthClientError", () => {
 
     expect(AuthClientError.is(error)).toBe(true);
     expect(error.message).toBe(expected);
+  });
+
+  test("every organization code has a message of its own", () => {
+    const codes = Object.keys(organizationClient().$ERROR_CODES);
+
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) {
+      const error = toAuthClientError({
+        code,
+        message: "Raw auth error",
+        status: 400,
+        statusText: "Bad Request",
+      });
+
+      expect({ code, known: AuthClientError.is(error) }).toEqual({
+        code,
+        known: true,
+      });
+    }
   });
 });
 

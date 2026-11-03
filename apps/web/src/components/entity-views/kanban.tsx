@@ -193,7 +193,7 @@ export const EntityViewKanban = ({
     await invalidateTaskQueries({
       queryClient,
       workspaceId: entry.workspaceId,
-      taskId: entityId,
+      taskIds: [entityId],
     });
     pendingRef.current.delete(entityId);
     setPending(new Set(pendingRef.current));
@@ -354,8 +354,12 @@ const EntityViewKanbanCell = ({
     elementRef: ref,
     name: group?.label ?? "",
     enabled,
-    canDrop,
-    onDrop,
+    canDrop: (card) => canDrop(card.entityId),
+    onDrop: (cards) => {
+      for (const card of cards) {
+        onDrop(card.entityId, card.subgroupValue);
+      }
+    },
   });
   return (
     <div ref={ref} className="min-h-24">

@@ -44,6 +44,7 @@ const ID_ROUTE_PARAM_FALLBACK_PREFIX = "statute";
  * lawyer reads the act by, and it identifies the Work within a jurisdiction.
  */
 const ELI_CITATION_REGEX = /\/([a-z0-9]{1,32})\/(\d{4})\/(\d{1,6})$/u;
+const NON_ASCII_ALPHANUMERIC = /[^a-z0-9]/gu;
 
 /**
  * The name part of an official title. Czech titles open with the citation
@@ -128,8 +129,14 @@ export const createStatuteSlug = ({
     return null;
   }
 
+  // Every Expression of a Work shares one slug, minted from the title when
+  // each Expression is written, so the fold must not change under existing
+  // Works: a letter NFKD cannot strip (`ł`, `ß`, `ø`) stays a separator, as
+  // it was when their earlier Expressions were written.
   const name = slugify(
-    stripDiacriticsForSlug(title.replace(TITLE_CITATION_PREFIX_REGEX, "")),
+    stripDiacriticsForSlug(title.replace(TITLE_CITATION_PREFIX_REGEX, ""))
+      .toLowerCase()
+      .replaceAll(NON_ASCII_ALPHANUMERIC, " "),
     {
       charset: "ascii",
       separator: "-",

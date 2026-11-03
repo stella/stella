@@ -1,10 +1,14 @@
 import { APIError } from "better-auth/api";
 import { describe, expect, test } from "bun:test";
 
+import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
+
 import {
   classifySocialCallback,
+  completesSocialCallback,
   socialCallbackErrorUrl,
   type SocialSignInOutcome,
+  socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
 
 const errorUrl = "https://app.example.test/api/auth/error";
@@ -105,5 +109,25 @@ describe("social sign-in outcome", () => {
     expect(classifySocialCallback(new APIError("BAD_REQUEST"), errorUrl)).toBe(
       "failed",
     );
+  });
+
+  test("counts a callback once, on the GET a provider's form post redirects to", () => {
+    expect(
+      completesSocialCallback({ method: "GET", path: "/callback/apple" }),
+    ).toBe(true);
+    expect(
+      completesSocialCallback({ method: "POST", path: "/callback/apple" }),
+    ).toBe(false);
+    expect(
+      completesSocialCallback({ method: "GET", path: "/sign-in/social" }),
+    ).toBe(false);
+  });
+
+  test("names every known provider and folds the rest into other", () => {
+    for (const provider of AUTH_SOCIAL_PROVIDER_IDS) {
+      expect(socialSignInProvider(provider)).toBe(provider);
+    }
+    expect(socialSignInProvider("github")).toBe("other");
+    expect(socialSignInProvider(undefined)).toBe("other");
   });
 });

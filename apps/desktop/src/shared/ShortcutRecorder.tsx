@@ -247,7 +247,7 @@ export const ShortcutRecorder = ({
         })}
       </p>
       <div className="flex justify-end gap-2">
-        <Button onClick={onCancel} size="sm" variant="ghost">
+        <Button onClick={onCancel} variant="ghost">
           {t("cancel")}
         </Button>
         {state.status === "ready" || state.status === "saving" ? (
@@ -256,7 +256,6 @@ export const ShortcutRecorder = ({
             onClick={() => {
               void save(state.candidate);
             }}
-            size="sm"
           >
             {t("use", { shortcut: label(state.candidate) })}
           </Button>

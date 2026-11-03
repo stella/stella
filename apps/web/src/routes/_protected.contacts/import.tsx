@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -54,7 +54,7 @@ import { cn } from "@stll/ui/utils";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -62,8 +62,10 @@ import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
+import { ImportUndoContacts } from "@/routes/_protected.contacts/-components/bulk-delete";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
@@ -74,7 +76,16 @@ import {
 } from "@/routes/_protected.contacts/-import-review";
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
+const protectedRouteApi = getRouteApi("/_protected");
+
 export const Route = createFileRoute("/_protected/contacts/import")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "contacts.importStudio.title",
+      to: "/contacts/import",
+    }),
+  },
   head: () => ({
     meta: [{ title: pageTitle("contacts.importStudio.title") }],
   }),
@@ -190,8 +201,11 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (context) => context.user.activeOrganizationId,
+  });
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -210,7 +224,7 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+      notifyUserProblem(t("contacts.importStudio.fileInvalid"));
       return;
     }
 
@@ -268,11 +282,14 @@ function ContactImportStudio() {
 
     review.seed({
       taxIdScheme: state.mapping.taxIdScheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-      })),
+      rows: result.value.rows.map(
+        ({ contact, issues, rowNumber, warnings }) => ({
+          candidate: contact,
+          issues,
+          rowNumber,
+          warnings,
+        }),
+      ),
     });
     setState({
       status: "review",
@@ -375,6 +392,7 @@ function ContactImportStudio() {
         {state.status === "review" && (
           <div className="mx-auto max-w-6xl">
             <ReviewStep
+              activeOrganizationId={activeOrganizationId}
               fields={editableFieldsForMapping(state.mapping)}
               onRestart={restart}
               review={review}
@@ -443,7 +461,7 @@ const UploadStep = ({
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+        notifyUserProblem(t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);
@@ -708,11 +726,13 @@ const MappingStep = ({
 };
 
 const ReviewStep = ({
+  activeOrganizationId,
   fields,
   onRestart,
   review,
   stepHeadingRef,
 }: {
+  activeOrganizationId: string;
   fields: readonly ImportEditableField[];
   onRestart: () => void;
   review: ImportReview;
@@ -749,6 +769,12 @@ const ReviewStep = ({
           <Button onClick={onRestart} variant="outline">
             {t("contacts.importStudio.importAnother")}
           </Button>
+          <ImportUndoContacts
+            contactIds={results.flatMap((result) =>
+              result.status === "created" ? [result.contactId] : [],
+            )}
+            organizationId={activeOrganizationId}
+          />
         </div>
       </section>
     );
@@ -770,13 +796,12 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row, index) => (
+        {review.rows.map((row) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
-            ordinal={index + 1}
             row={row}
           />
         ))}

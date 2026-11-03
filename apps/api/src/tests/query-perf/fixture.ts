@@ -5,7 +5,10 @@ import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import { forceClosePool } from "@/api/db/sql-close";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import type {
+  GatedTestClientScope,
+  GatedTestDb,
+} from "@/api/tests/gated-test-database";
 
 import { createQueryPerfDeadline, type QueryPerfDeadline } from "./deadline";
 import { queryPerfDatabaseName, type QueryPerfProfileId } from "./profiles";
@@ -17,7 +20,14 @@ import {
 type QueryPerfFixtureOptions<T> = {
   databaseUrl: string;
   profileId: QueryPerfProfileId;
-  run: (database: GatedTestDb, deadline: QueryPerfDeadline) => Promise<T>;
+  /** The profile's whole budget for clone, seed and measurements. */
+  timeoutMs?: number;
+  run: (
+    database: GatedTestDb,
+    deadline: QueryPerfDeadline,
+    /** Further clients on the fixture database, closed with it. */
+    openClient: GatedTestClientScope["openClient"],
+  ) => Promise<T>;
 };
 
 type QueryPerfDiagnosticsOptions = {
@@ -90,6 +100,7 @@ class QueryPerfFixtureError extends TaggedError("QueryPerfFixtureError")<{
 export const withQueryPerfFixture = async <T>({
   databaseUrl,
   profileId,
+  timeoutMs,
   run,
 }: QueryPerfFixtureOptions<T>) => {
   const source = new URL(databaseUrl);
@@ -100,7 +111,7 @@ export const withQueryPerfFixture = async <T>({
   const fixtureName = queryPerfDatabaseName(profileId);
   const adminUrl = new URL(source);
   adminUrl.pathname = "/postgres";
-  const deadline = createQueryPerfDeadline({ profileId });
+  const deadline = createQueryPerfDeadline({ profileId, timeoutMs });
   const diagnostics = async () =>
     await dumpQueryPerfDiagnostics({
       adminUrl: adminUrl.toString(),
@@ -146,7 +157,7 @@ export const withQueryPerfFixture = async <T>({
             try {
               return await deadline.run(
                 "profile",
-                async () => await run(db, deadline),
+                async () => await run(db, deadline, fixture.openClient),
               );
             } catch (error) {
               await diagnostics();

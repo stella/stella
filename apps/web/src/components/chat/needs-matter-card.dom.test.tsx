@@ -1,5 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
@@ -7,23 +16,28 @@ import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const fetch = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(async () => Response.json({}), {
-    preconnect: globalThis.fetch.preconnect,
-  }),
-);
+let fetch: Mock<typeof globalThis.fetch>;
 const { act } = await import("react");
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { ChatMattersContext } = await import("./chat-matters-context");
 const { NeedsMatterCard } = await import("./needs-matter-card");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  fetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => Response.json({}), {
+      preconnect: globalThis.fetch.preconnect,
+    }),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
@@ -67,7 +81,7 @@ const mountPicker = (
   const Picker = () => {
     const query = useQuery({ queryKey, queryFn });
     const value = {
-      createDocumentMattersView: useQueryView(query),
+      createDocumentMattersView: queryView(query),
     };
     return (
       <ChatMattersContext value={value}>

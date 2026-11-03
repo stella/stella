@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 
-import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
-import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatMessage,
+  ChatPart,
+  UserInputChatToolName,
+} from "@/components/chat/chat-ui-tools";
+import {
+  isUserInputChatToolName,
+  resolveChatAssistantTurnOutcome,
+} from "@/components/chat/chat-ui-tools";
 
 type SuggestedPromptsAvailability =
   | { status: "eligible"; lastMessageId: string }
@@ -30,7 +37,7 @@ type ResolveSuggestedPromptsAvailabilityOptions = {
 };
 
 export type SuggestedPromptsTurnOwner =
-  "approval" | "ask-user" | "secret" | "composer";
+  "approval" | "ask-user" | "secret" | "connector" | "composer";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 const ASK_USER_STATE_OWNS_TURN = {
@@ -42,6 +49,16 @@ const ASK_USER_STATE_OWNS_TURN = {
   "input-complete": true,
   "input-streaming": true,
 } as const satisfies Record<ToolCallState, boolean>;
+
+type UserInputTurnOwner = Extract<
+  SuggestedPromptsTurnOwner,
+  "ask-user" | "secret" | "connector"
+>;
+const USER_INPUT_TURN_OWNERS = {
+  "ask-user": "ask-user",
+  connect_connector: "connector",
+  request_secret: "secret",
+} as const satisfies Record<UserInputChatToolName, UserInputTurnOwner>;
 
 type ResolveSuggestedPromptsTurnOwnerOptions = {
   approvalPendingMessageId: string | null;
@@ -60,25 +77,29 @@ export const resolveSuggestedPromptsTurnOwner = ({
   if (hasReopenedAskUser) {
     return "ask-user";
   }
-  if (
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        (part.name === "ask-user" || part.name === "request_secret") &&
-        ASK_USER_STATE_OWNS_TURN[part.state],
-    )
-  ) {
-    return lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        part.name === "request_secret" &&
-        ASK_USER_STATE_OWNS_TURN[part.state],
-    )
-      ? "secret"
-      : "ask-user";
+  if (lastMessage?.role !== "assistant") {
+    return "composer";
   }
-  return "composer";
+  const owners = new Set(
+    lastMessage.parts.flatMap((part) => {
+      if (
+        part.type !== "tool-call" ||
+        !ASK_USER_STATE_OWNS_TURN[part.state] ||
+        !isUserInputChatToolName(part.name)
+      ) {
+        return [];
+      }
+      return [USER_INPUT_TURN_OWNERS[part.name]];
+    }),
+  );
+  // A private input card outranks a connector card, which outranks a question.
+  if (owners.has("secret")) {
+    return "secret";
+  }
+  if (owners.has("connector")) {
+    return "connector";
+  }
+  return owners.has("ask-user") ? "ask-user" : "composer";
 };
 
 export const resolveSuggestedPromptsAvailability = ({

@@ -12,4 +12,4 @@ if (!container) {
 }
 const runtime = createFileComparisonRuntime();
 createRoot(container).render(<FileComparison runtime={runtime} />);
-await runtime.connect();
+await runtime.connect(runtime.mountViewport);

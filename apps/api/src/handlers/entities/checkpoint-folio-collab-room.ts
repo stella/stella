@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -16,6 +15,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

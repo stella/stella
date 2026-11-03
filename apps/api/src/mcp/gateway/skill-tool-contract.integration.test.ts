@@ -10,7 +10,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
-import { listSkillMetadata, loadSkill } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -254,11 +254,7 @@ describe("skill tool output contract", () => {
   });
 });
 
-describe("built-in skill tools", () => {
-  // The second organization has no skill rows, so every built-in is served
-  // unshadowed there.
-  // A skill is offered only beside the tools it requires, so the caller holds
-  // the scope of each built-in's required tools too.
+describe("built-in skill guidance", () => {
   const builtInScopes = ["stella:skills", "stella:knowledge_write"];
   const builtInContext = (): AuthorizedMcpRequestContext => ({
     ...createContext({ organizationId: ids.orgB, userId: ids.userB1 }),
@@ -266,42 +262,20 @@ describe("built-in skill tools", () => {
   });
 
   test.each(listSkillMetadata().map(({ name }) => name))(
-    "%s is listed and served with no stored row, within the contract",
+    "%s is not exposed as a tool",
     async (name) => {
       const listed = (
         await listMcpTools(builtInContext(), "advanced", builtInScopes)
       ).find((tool) => tool.name === namespaceSkillToolName(name));
-      if (listed === undefined) {
-        throw new Error(`expected built-in skill ${name} to be listed`);
-      }
 
+      expect(listed).toBeUndefined();
       const result = await handleMcpToolCall({
         mode: "advanced",
         args: {},
         context: builtInContext(),
-        toolName: listed.name,
+        toolName: namespaceSkillToolName(name),
       });
-      const missingResource = await handleMcpToolCall({
-        mode: "advanced",
-        args: { resource: "knowledge/not-shipped.md" },
-        context: builtInContext(),
-        toolName: listed.name,
-      });
-
-      expect(result.isError).toBeUndefined();
-      expect(result.structuredContent).toMatchObject({
-        body: loadSkill(name).body,
-        id: null,
-        name,
-        origin: "built-in",
-      });
-      expect(
-        v.safeParse(
-          SKILL_TOOL_OUTPUT.outputSchemaSource,
-          result.structuredContent,
-        ).success,
-      ).toBe(true);
-      expect(missingResource.isError).toBe(true);
+      expect(result.isError).toBe(true);
     },
   );
 });

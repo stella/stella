@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "scripts/generate-harness-releases.ts reads GitHub release and npm registry metadata through one fetch call when the agent CLI pins change. These are package metadata endpoints, not publisher content, so the robots.txt and crawl-delay owner does not apply; the single directive names the rule and the reason."
+}

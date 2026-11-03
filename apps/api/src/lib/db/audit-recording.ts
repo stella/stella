@@ -297,6 +297,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   workspace_member: "team",
   workspace_contact: "team",
   case_law_matter_link: "court",
+  legislation_matter_link: "court",
   case_law_decision_annotation: "court",
   statute_annotation: "court",
   case_law_research_column: "court",
@@ -327,6 +328,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   clause_variant: "other",
   contact: "other",
   contact_directory: "other",
+  document_annotation: "documents",
   document_type: "other",
   file_comparison: "documents",
   usage_allocation: "other",
@@ -349,6 +351,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   mcp_connection: "other",
   mcp_gateway_tool: "other",
   mcp_web_handoff: "other",
+  organization_access_state: "other",
   organization_settings: "other",
   property: "other",
   rate_entry: "other",
@@ -490,7 +493,7 @@ const createOrganizationBackgroundAuditRecorder =
     });
   };
 
-type AccountAuditEvent = {
+export type AccountAuditEvent = {
   type: AccountAuditEventType;
   resourceId: string;
 };

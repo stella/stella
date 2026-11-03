@@ -645,6 +645,33 @@ describe("install-free invocation classification", () => {
       ...extra,
     });
 
+  test("checks Bun inside an assigned command substitution with environment assignments", () => {
+    const root = repository(
+      `jobs:
+  fixture:
+    steps:
+      - run: 'x=$(A="$a" B="$b" bun scripts/s.ts)'
+`,
+      { "scripts/s.ts": 'import "fixture-package";\n' },
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+
+    expect(invocations).toHaveLength(1);
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/s.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) => invocationProblems(root, invocation)),
+    ).toEqual([
+      "fixture › step 1: bun scripts/s.ts: scripts/s.ts imports fixture-package",
+    ]);
+  });
+
   test("resolves pinned same-repository checkout paths and enforces sparse import availability", () => {
     const source = (options: string, condition = "") => `jobs:
   tooling:
@@ -1569,6 +1596,7 @@ describe("install-free invocation classification", () => {
       '"$RELEASE_TOOLING/scripts/retry.sh"',
       "./scripts/retry.sh",
       "tooling/retry.sh",
+      '"$NETWORK_RETRY_SCRIPT"',
     ]) {
       expect(
         classify(`bash ${helper} bun ci --ignore-scripts`).map(
@@ -1702,6 +1730,7 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
     "scripts/ci-pr-jobs-cli.ts",
+    "scripts/ui-playground-shards.ts",
   ]) {
     expect(loaded).toContain(file);
   }
@@ -1725,6 +1754,32 @@ test("everything CI runs without the dependency install imports only built-ins",
 // disable auto-install explicitly.
 const NO_FETCH_COMMAND =
   /^bun(?:\s+--[\w-]+)*\s+(?:dedupe\b|[^\n]*--no-install\b)/u;
+
+test("preserved staging proof commands resolve to their built-in import closure", () => {
+  const invocations = installFreeInvocations({
+    root: REPO_ROOT,
+    workflow: ".github/workflows/deploy-staging.yml",
+  }).filter(
+    ({ job, step }) =>
+      job === "promote-staging" &&
+      step === "Verify staging serves the release commit and environment",
+  );
+  expect(invocations.map(({ classification }) => classification)).toEqual([
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+  ]);
+  for (const invocation of invocations) {
+    expect(invocationProblems(REPO_ROOT, invocation)).toEqual([]);
+  }
+});
 
 test("every workflow's install-free Bun commands load only built-ins", () => {
   const workflows = readdirSync(path.join(REPO_ROOT, ".github/workflows"))

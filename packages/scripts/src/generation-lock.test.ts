@@ -1,13 +1,9 @@
 import { expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { waitForFileContent } from "@stll/property-testing/external-state";
 
 import { withGenerationLock } from "./generation-lock";
 
@@ -58,13 +54,12 @@ const fixture = () => {
 };
 
 const waitFor = async (filename: string) => {
-  const deadline = performance.now() + 5000;
-  while (!existsSync(filename)) {
-    if (performance.now() > deadline) {
-      throw new Error(`Worker did not publish ${filename}`);
-    }
-    await Bun.sleep(10);
-  }
+  await waitForFileContent({
+    description: `a worker publishes ${filename}`,
+    path: filename,
+    // An empty marker: once it exists, the announcement is complete.
+    parse: () => true,
+  });
 };
 
 test("independent generation processes never overlap", async () => {

@@ -22,8 +22,30 @@ export const answerEditStates = CHAT_ANSWER_EDIT_STATES;
 
 export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 
+/** Composer states with a reference chip, each in a 300px-wide composer,
+ * keyed to the composer variant they render. */
+export const composerReferenceVariants = {
+  "compact-long": "compact",
+  "large-long": "large",
+  "compact-short": "compact",
+  "compact-token": "compact",
+} as const;
+
+export const composerReferenceStates = Object.keys(composerReferenceVariants);
+
+/** Button label benches, each a narrow card that stacks its content at the
+ * start, so only the button can keep its label inside, keyed to what the
+ * label does there: cut to one line, or wrap onto several. */
+export const buttonLabelBenches = {
+  "outline-label": "cut",
+  "icon-label": "cut",
+  "popover-trigger": "cut",
+  "wrap-layout": "wrap",
+} as const;
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "column-composer": { label: "Column composer alignment", layout: "plain" },
   "handoff-confirmation": {
@@ -35,7 +57,12 @@ export const visualRegistry = {
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
+  "chat-composer-reference": {
+    label: "Chat composer references",
+    layout: "plain",
+  },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "button-label": { label: "Button labels", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",
@@ -45,7 +72,12 @@ export const visualRegistry = {
     label: "Chat statute citations",
     layout: "plain",
   },
+  "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "case-law-text-availability": {
+    label: "Case-law text availability",
+    layout: "plain",
+  },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },

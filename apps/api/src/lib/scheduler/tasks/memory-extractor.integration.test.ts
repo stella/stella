@@ -11,11 +11,15 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -41,7 +45,6 @@ import { createMemoryExtractorTask } from "@/api/lib/scheduler/tasks/memory-extr
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import * as tanstackGenerate from "@/api/lib/tanstack-ai-generate";
 import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -91,12 +94,13 @@ const matterMessageId = createSafeId<"chatMessage">();
 const threadIds = [userThreadId, matterThreadId];
 const messageIds = [userMessageId, matterMessageId];
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForTask");
-const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
-const warnSpy = spyOn(logger, "warn");
-const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let generateSpy: Mock<typeof tanstackGenerate.generateTanStackObjectForTask>;
+let transcriptSpy: Mock<typeof compactionTranscript.loadCompactionTranscript>;
+let warnSpy: Mock<typeof logger.warn>;
+let dedupSpy: Mock<typeof memoryDedup.createMemoryDedupIdentity>;
 const state = createTestState({ file: import.meta.path, config: env });
+
 const originalGrants = env.API_FEATURE_ACCESS_GRANTS;
 const originalUser =
   (
@@ -199,6 +203,12 @@ const accessLossWarnings = () =>
   );
 
 beforeEach(async () => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForTask");
+  transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
+  warnSpy = spyOn(logger, "warn");
+  dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
+
   state.setConfig("FEATURE_AI_MEMORY", true);
   state.setConfig("API_FEATURE_ACCESS_GRANTS", {
     ...originalGrants,
@@ -259,6 +269,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.update(user).set(originalUser).where(eq(user.id, ids.userA1));
   await testDb
     .delete(aiMemories)

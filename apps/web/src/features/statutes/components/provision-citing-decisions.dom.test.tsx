@@ -25,7 +25,7 @@ const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
-const { citingDecisionsInfiniteOptions } =
+const { citingDecisionsInfiniteOptions, topCitingDecisionsOptions } =
   await import("@/features/statutes/queries/citing-decisions");
 const { ProvisionCitingDecisions } =
   await import("./provision-citing-decisions");
@@ -92,6 +92,10 @@ const firstDecision = makeDecision(
   "00000000-0000-4000-8000-000000000011",
   "1 C 11/2020",
 );
+const leadingDecision = makeDecision(
+  "00000000-0000-4000-8000-000000000012",
+  "2 C 12/2020",
+);
 type CitingPage = PublicLawData<
   (typeof api.case.provisions)["citing-decisions"]["get"]
 >;
@@ -102,10 +106,15 @@ const page = (
   limit = 10,
 ) => ({ items, limit, nextCursor, snapshot }) satisfies CitingPage;
 
-const createClient = () => {
+const createClient = (leading: CitingDecisionRow[] = []) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  // The leading read settles first here, so each test drives the list's own.
+  client.setQueryData(
+    topCitingDecisionsOptions(citingDecisionKey).queryKey,
+    leading,
+  );
   clients.push(client);
   return client;
 };
@@ -332,5 +341,40 @@ for (const [locale, messages] of [
     expect(
       ui.queryByRole("button", { name: messages.common.loadMore }),
     ).toBeNull();
+  });
+
+  test(`${locale}: leading decisions head one list, each decision once and marked`, async () => {
+    const client = createClient([leadingDecision]);
+    seed(client, [firstDecision, leadingDecision]);
+    const ui = await mount({ client, locale, messages });
+
+    const rows = [...ui.container.querySelectorAll("li")];
+    expect(rows.map((row) => row.textContent.includes("2 C 12/2020"))).toEqual([
+      true,
+      false,
+    ]);
+    expect(
+      rows.map((row) =>
+        row.textContent.includes(messages.statutes.leadingDecision),
+      ),
+    ).toEqual([true, false]);
+  });
+
+  test(`${locale}: a court filter keeps its own order and still marks a leading decision`, async () => {
+    const filters = readProvisionCitingSearch({ citingCourt: "Supreme" });
+    const client = createClient([leadingDecision]);
+    seed(client, [firstDecision, leadingDecision], null, filters);
+    const ui = await mount({ client, locale, messages, filters });
+
+    const rows = [...ui.container.querySelectorAll("li")];
+    expect(rows.map((row) => row.textContent.includes("1 C 11/2020"))).toEqual([
+      true,
+      false,
+    ]);
+    expect(
+      rows.map((row) =>
+        row.textContent.includes(messages.statutes.leadingDecision),
+      ),
+    ).toEqual([false, true]);
   });
 }

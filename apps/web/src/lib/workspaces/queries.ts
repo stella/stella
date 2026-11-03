@@ -1,8 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { Temporal } from "@stll/time";
-
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -11,6 +9,7 @@ import {
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import type { MatterListStatus } from "@/lib/workspaces/archived-matters.logic";
 import {
   type MatterActivityFilters,
   toMatterActivityQuery,
@@ -18,6 +17,7 @@ import {
   type WorkspaceNavigationCaller,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
+import { rememberTimeBillingAccess } from "@/lib/workspaces/time-billing-access-memory";
 
 export {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -144,10 +144,14 @@ export const overviewActivityActorsOptions = (
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
-const readWorkspaces = async (signal?: AbortSignal) => {
-  const response = await api.workspaces.get(
-    signal ? { fetch: { signal } } : {},
-  );
+const readWorkspaces = async (
+  signal?: AbortSignal,
+  status: MatterListStatus = "active",
+) => {
+  const response = await api.workspaces.get({
+    query: { status },
+    ...(signal ? { fetch: { signal } } : {}),
+  });
 
   return unwrapApiResponse(response);
 };
@@ -162,10 +166,16 @@ export const workspacesOptions = (activeOrganizationId: string) =>
     refetchOnMount: "always",
   });
 
-export const workspacesRouteOptions = (activeOrganizationId: string) =>
+export const workspacesRouteOptions = (
+  activeOrganizationId: string,
+  status: MatterListStatus = "active",
+) =>
   queryOptions({
-    queryKey: workspacesKeys.list(activeOrganizationId),
-    queryFn: async ({ signal }) => await readWorkspaces(signal),
+    queryKey:
+      status === "active"
+        ? workspacesKeys.list(activeOrganizationId)
+        : [...workspacesKeys.list(activeOrganizationId), status],
+    queryFn: async ({ signal }) => await readWorkspaces(signal, status),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
@@ -180,6 +190,10 @@ export const workspacesNavigationOptions = (
         statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
       });
 
+      rememberTimeBillingAccess(
+        caller.organizationId,
+        page.features.timeBilling,
+      );
       return { workspaces: page.workspaces, features: page.features };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
@@ -240,15 +254,9 @@ export const overviewOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: workspacesKeys.overview(workspaceId),
     queryFn: async ({ signal }) => {
-      // The agenda starts at the reader's own date, read at fetch time; the
-      // overview drops deadlines that pass before the next fetch.
-      const agendaFrom = Temporal.Now.instant()
-        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-        .toPlainDate()
-        .toString();
       const response = await api
         .workspaces({ workspaceId })
-        .overview.get({ query: { agendaFrom }, fetch: { signal } });
+        .overview.get({ query: {}, fetch: { signal } });
 
       return unwrapApiResponse(response);
     },

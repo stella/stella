@@ -14,6 +14,7 @@ import {
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readDecisionWork } from "@/api/lib/case-law/decision-work";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -173,7 +174,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
     listOutgoingDecisionCitations({
       tx,
       cursor: undefined,
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
       countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
@@ -181,7 +182,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
     listIncomingDecisionCitations({
       tx,
       cursor: undefined,
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
       countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
@@ -198,7 +199,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       listOutgoingDecisionCitations({
         tx,
         cursor,
-        decisionId: subjectId,
+        work: await readDecisionWork(tx, subjectId),
         countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
@@ -213,7 +214,7 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       listIncomingDecisionCitations({
         tx,
         cursor,
-        decisionId: subjectId,
+        work: await readDecisionWork(tx, subjectId),
         countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
@@ -244,7 +245,7 @@ test("citation reads reject malformed cursors", async () => {
     listOutgoingDecisionCitations({
       tx,
       cursor: "not-a-cursor",
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
       countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );

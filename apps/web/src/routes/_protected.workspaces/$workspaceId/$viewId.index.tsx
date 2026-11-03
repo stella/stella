@@ -36,6 +36,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
@@ -72,6 +73,7 @@ const searchSchema = routeSearchSchema({
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/",
 )({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   component: RouteComponent,
   validateSearch: searchSchema,
   loader: async ({ context, params }) => {

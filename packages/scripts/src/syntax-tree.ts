@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import {
   type Comment,
   type EcmaScriptModule,
+  type ImportDeclaration,
   type Node,
   type ObjectProperty,
   parseSync,
@@ -33,6 +34,41 @@ export type ParsedSource = {
   readonly locate: (offset: number) => SourceLocation;
 };
 
+const IMPORT_KEYWORD_LENGTH = "import".length;
+
+/**
+ * Whether an import has no clause (`import "module"`). Comments and whitespace
+ * are parser-owned trivia, so they cannot change the classification.
+ */
+export const isSideEffectImport = (
+  node: ImportDeclaration,
+  source: Pick<ParsedSource, "comments" | "sourceText">,
+): boolean => {
+  if (node.specifiers.length > 0 || node.importKind === "type") {
+    return false;
+  }
+
+  const triviaStart = node.start + IMPORT_KEYWORD_LENGTH;
+  const triviaEnd = node.source.start;
+  let cursor = triviaStart;
+  for (const comment of source.comments) {
+    if (comment.end <= triviaStart) {
+      continue;
+    }
+    if (comment.start >= triviaEnd) {
+      break;
+    }
+    if (
+      comment.start < cursor ||
+      !/^\s*$/u.test(source.sourceText.slice(cursor, comment.start))
+    ) {
+      return false;
+    }
+    cursor = comment.end;
+  }
+  return /^\s*$/u.test(source.sourceText.slice(cursor, triviaEnd));
+};
+
 /**
  * oxc tags object literal entries and destructuring entries alike as
  * `Property`; only an entry of an object literal is an `ObjectProperty`, whose
@@ -45,6 +81,23 @@ export const isObjectLiteralProperty = (
   node.type === "Property" &&
   parent?.type === "ObjectExpression" &&
   parent.properties.some((property) => property === node);
+
+/** Computed identifiers are expressions, while uncomputed identifiers name keys. */
+export const staticPropertyName = ({
+  computed,
+  key,
+}: Pick<ObjectProperty, "computed" | "key">): string | undefined => {
+  if (!computed && key.type === "Identifier") {
+    return key.name;
+  }
+  if (key.type === "Literal" && typeof key.value === "string") {
+    return key.value;
+  }
+  if (key.type === "TemplateLiteral" && key.expressions.length === 0) {
+    return key.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
 
 const isNode = (value: unknown): value is Node =>
   typeof value === "object" &&

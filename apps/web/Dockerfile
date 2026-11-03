@@ -88,6 +88,7 @@ ARG PUBLIC_BROWSER_API_URL
 ARG PUBLIC_APP_URL
 ARG PUBLIC_GOOGLE_LOGIN_ENABLED
 ARG PUBLIC_MICROSOFT_LOGIN_ENABLED
+ARG PUBLIC_APPLE_LOGIN_ENABLED
 ARG PUBLIC_POSTHOG_TOKEN
 ARG PUBLIC_POSTHOG_HOST
 ARG PUBLIC_POSTHOG_UI_HOST
@@ -129,6 +130,7 @@ RUN VITE_API_URL="${PUBLIC_API_URL}" \
     VITE_PUBLIC_APP_URL="${PUBLIC_APP_URL}" \
     VITE_AUTH_GOOGLE="${PUBLIC_GOOGLE_LOGIN_ENABLED}" \
     VITE_AUTH_MICROSOFT="${PUBLIC_MICROSOFT_LOGIN_ENABLED}" \
+    VITE_AUTH_APPLE="${PUBLIC_APPLE_LOGIN_ENABLED}" \
     VITE_POSTHOG_KEY="${PUBLIC_POSTHOG_TOKEN}" \
     VITE_POSTHOG_HOST="${PUBLIC_POSTHOG_HOST}" \
     VITE_POSTHOG_UI_HOST="${PUBLIC_POSTHOG_UI_HOST}" \
@@ -176,7 +178,9 @@ RUN find apps/web/dist/client -type f -printf '%P\n' | LC_ALL=C sort \
 # which no stage copies), so the committed one from the deps stage survives,
 # but this install must never depend on that staying true.
 COPY --from=install-inputs /json/bun.lock /json/package.json ./
-COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
+# The staged packages' tsdown configs resolve their build tools through
+# scripts/resolve-package-binary.ts.
+COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/resolve-package-binary.ts /app/scripts/stage-web-runtime.ts /app/scripts/web-runtime-closure.ts ./scripts/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun scripts/stage-web-runtime.ts /app/web-runtime-stage --install-build-deps
 

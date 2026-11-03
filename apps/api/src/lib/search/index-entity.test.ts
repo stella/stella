@@ -13,6 +13,20 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  findFirstMock.mockReset();
+  selectLimitMock.mockReset();
+  selectMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockReset();
+  syncWorkspaceSearchActivityMock.mockImplementation(
+    syncWorkspaceSearchActivityDefault,
+  );
+  transactionMock.mockClear();
+  versionsFindManyMock.mockClear();
+});
+
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
@@ -40,14 +54,19 @@ const selectMock = mock((_fields: unknown) => ({
     where: (_where: unknown) => ({ limit: selectLimitMock }),
   }),
 }));
-const executeMock = mock(async (_query: SQL) => [
+const executeDefault = async (_query: SQL) => [
   {
     id: new PgDialect().sqlToQuery(_query).params.at(0),
     entityId: toSafeId<"entity">("entity_1"),
   },
-]);
+];
+const executeMock = mock(executeDefault);
+const syncWorkspaceSearchActivityDefault = async (
+  _workspaceId: unknown,
+  _db: unknown,
+) => undefined;
 const syncWorkspaceSearchActivityMock = mock(
-  async (_workspaceId: unknown, _db: unknown) => undefined,
+  syncWorkspaceSearchActivityDefault,
 );
 const organizationId = toSafeId<"organization">("org_1");
 // Extracted content is stored as a real per-org AES-GCM envelope; fixtures
@@ -174,7 +193,7 @@ beforeEach(() => {
   selectLimitMock.mockResolvedValue([
     { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
   ]);
-  findFirstMock.mockClear();
+  findFirstMock.mockReset();
   findFirstMock.mockResolvedValue(entityRow);
   selectedEntityRow = entityRow;
   versionRows = currentVersionOnly();

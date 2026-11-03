@@ -6,16 +6,17 @@ import { useTranslations } from "use-intl";
 import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
 import { copyToClipboard } from "@stll/clipboard";
+import { Button } from "@stll/ui/button";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 
-import { citationCopyText } from "@/components/legal-reader/citation-copy.logic";
+import {
+  citationCopyText,
+  previewQuotation,
+} from "@/components/legal-reader/citation-copy.logic";
 import type { QuotationMarks } from "@/components/legal-reader/citation-copy.logic";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-
-/** How much of a long quotation the preview shows before trimming. */
-const PREVIEW_QUOTE_CHARS = 220;
 
 /**
  * The copy choices for a cited passage, each previewed as the reader hovers
@@ -38,17 +39,17 @@ export const CitationCopyOptions = ({
 }) => {
   const t = useTranslations();
   const [previewMode, setPreviewMode] = useState<ReaderCopyMode | null>(null);
-  const previewQuote =
-    quote.length > PREVIEW_QUOTE_CHARS
-      ? `${quote.slice(0, PREVIEW_QUOTE_CHARS)}…`
-      : quote;
+  const previewQuote = previewQuotation(quote);
 
   return (
     <MenuPreviewLayout
       preview={
         // The submenu paints over the pane rather than in it, so its floor
         // is the viewport's, not the pane's.
-        <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
+        <PreviewPane
+          className="w-[min(18rem,calc(100vw-9rem))]"
+          overflow="scroll"
+        >
           {previewMode !== null && (
             <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
               {citationCopyText(previewMode, {
@@ -62,8 +63,10 @@ export const CitationCopyOptions = ({
       }
     >
       {READER_COPY_MODES.map((mode) => (
-        <button
-          className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
+        <Button
+          className="block w-full"
+          focusRing="inside"
+          variant="plain"
           key={mode}
           onClick={() => {
             const text = citationCopyText(mode, { citation, marks, quote });
@@ -85,10 +88,11 @@ export const CitationCopyOptions = ({
           // A press must not move focus: the readers' selection would clear.
           onMouseDown={(event) => event.preventDefault()}
           onMouseEnter={() => setPreviewMode(mode)}
-          type="button"
         >
-          {t(`legalReader.copyMenu.${mode}`)}
-        </button>
+          <span className="hover:bg-accent block rounded-sm px-2 py-1.5 text-xs whitespace-nowrap">
+            {t(`legalReader.copyMenu.${mode}`)}
+          </span>
+        </Button>
       ))}
     </MenuPreviewLayout>
   );

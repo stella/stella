@@ -318,6 +318,7 @@ export const App = () => {
           onClick={handleZoomOut}
           disabled={zoom <= ZOOM_MIN}
           title="Zoom out"
+          tooltip="Zoom out"
         >
           <MinusIcon />
         </Button>
@@ -336,6 +337,7 @@ export const App = () => {
           onClick={handleZoomIn}
           disabled={zoom >= ZOOM_MAX}
           title="Zoom in"
+          tooltip="Zoom in"
         >
           <PlusIcon />
         </Button>

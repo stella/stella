@@ -3,6 +3,8 @@ import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   apikey,
   member,
@@ -31,6 +33,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const liveSessionRow = (userId: string) => ({
@@ -136,25 +139,22 @@ if (!databaseUrl || !runPostgres) {
                 panic("Fixture organization must exist");
               }
               pending.push(create(firstDb), create(secondDb));
-              const deadline = performance.now() + 5000;
-              while (performance.now() < deadline) {
-                const [snapshot] = await observerDb
-                  .select({
-                    waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
-                    WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
-                      AND wait_event_type = 'Lock'
-                      AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
-                  })
-                  .from(organization)
-                  .where(eq(organization.id, organizationId));
-                if (snapshot?.waiting === 2) {
-                  return;
-                }
-                await Bun.sleep(10);
-              }
-              panic(
-                "Both competing mints must wait at the organization reservation SELECT",
-              );
+              await waitForExternalState({
+                description:
+                  "both competing mints wait at the organization reservation SELECT",
+                read: async () =>
+                  (
+                    await observerDb
+                      .select({
+                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
+                      WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
+                        AND wait_event_type = 'Lock'
+                        AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
+                      })
+                      .from(organization)
+                      .where(eq(organization.id, organizationId))
+                  ).at(0)?.waiting === 2,
+              });
             });
           } finally {
             // The control transaction has released the lock even on failure.
@@ -188,9 +188,7 @@ if (!databaseUrl || !runPostgres) {
           ).toHaveLength(5);
         } finally {
           await firstDb.delete(apikey).where(eq(apikey.referenceId, userId));
-          await firstDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(firstDb, [organizationId]);
           await firstDb.delete(user).where(eq(user.id, userId));
         }
       });
@@ -336,9 +334,7 @@ if (!databaseUrl || !runPostgres) {
             ).toEqual([]);
           } finally {
             await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
-            await mintDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(mintDb, [organizationId]);
             await mintDb.delete(user).where(eq(user.id, userId));
           }
         });
@@ -395,9 +391,7 @@ if (!databaseUrl || !runPostgres) {
           ).toEqual([]);
         } finally {
           await db.delete(apikey).where(eq(apikey.referenceId, userId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         }
       });

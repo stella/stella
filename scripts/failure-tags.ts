@@ -1,65 +1,59 @@
 import { panic } from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
+
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 
 /** Enumerate production error declarations without loading their modules. */
 export const failureTagsInSource = (source: string, file: string): string[] => {
   const tags: string[] = [];
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const factories = new Set<string>();
   const namespaces = new Set<string>();
-  for (const statement of parsed.statements) {
+  for (const statement of program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "better-result"
+      statement.type !== "ImportDeclaration" ||
+      statement.source.value !== "better-result"
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined) {
-      continue;
-    }
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if ((element.propertyName ?? element.name).text === "TaggedError") {
-        factories.add(element.name.text);
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.add(specifier.local.name);
+      } else if (
+        specifier.type === "ImportSpecifier" &&
+        (specifier.imported.type === "Identifier"
+          ? specifier.imported.name
+          : specifier.imported.value) === "TaggedError"
+      ) {
+        factories.add(specifier.local.name);
       }
     }
   }
-  const visit = (node: ts.Node) => {
-    if (!ts.isCallExpression(node)) {
-      ts.forEachChild(node, visit);
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
       return;
     }
-    const callee = node.expression;
-    const isFactory = ts.isIdentifier(callee)
-      ? factories.has(callee.text)
-      : ts.isPropertyAccessExpression(callee) &&
-        ts.isIdentifier(callee.expression) &&
-        namespaces.has(callee.expression.text) &&
-        callee.name.text === "TaggedError";
+    const { callee } = node;
+    const isFactory =
+      callee.type === "Identifier"
+        ? factories.has(callee.name)
+        : callee.type === "MemberExpression" &&
+          !callee.computed &&
+          callee.object.type === "Identifier" &&
+          namespaces.has(callee.object.name) &&
+          callee.property.type === "Identifier" &&
+          callee.property.name === "TaggedError";
     if (isFactory) {
       const tag = node.arguments.at(0);
-      if (tag === undefined || !ts.isStringLiteral(tag)) {
+      if (tag?.type !== "Literal" || typeof tag.value !== "string") {
         panic(`Nonliteral TaggedError tag in ${file}`);
       }
-      tags.push(tag.text);
+      tags.push(tag.value);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+  });
   return tags;
 };
 

@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
@@ -10,6 +11,7 @@ import type { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -73,7 +75,6 @@ type ContactMetadataSection =
   | { customFields: ContactCustomField[]; dataBoxes?: never };
 
 type CreateContactVars = {
-  id: SafeId<"contact">;
   type: ContactType;
   displayName: string;
   firstName?: string;
@@ -104,10 +105,11 @@ type CreateContactVars = {
 
 export const useCreateContact = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
-  return useMutation({
-    mutationFn: async (vars: CreateContactVars) => {
-      const response = await api.contacts.put(vars);
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateContactVars, request) => {
+      const response = await api.contacts.put(vars, request);
 
       return unwrapApiResponse(response);
     },
@@ -116,6 +118,7 @@ export const useCreateContact = () => {
         fingerprintKey: "useCreateContact:failure",
         scope: { type: "handler", handlerId: "useCreateContact:failure" },
       });
+      notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
@@ -224,6 +227,7 @@ export const useDeleteContact = () => {
         fingerprintKey: "useDeleteContact:failure",
         scope: { type: "handler", handlerId: "useDeleteContact:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

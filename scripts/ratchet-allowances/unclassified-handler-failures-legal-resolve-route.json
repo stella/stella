@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/handlers/legal-resolve/route-handler.ts",
+  "delta": 1,
+  "reason": "The 503 is the HTTP projection of an access check that could not complete; authorization.ts already captures the underlying failure (token verification, session resolution, organization id) where it occurs, and it is not an upstream outage, so it carries a descriptive code rather than a graded one."
+}

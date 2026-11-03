@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -14,10 +15,19 @@ describe("PDF worker runtime artifact", () => {
     try {
       mkdirSync(workerDir);
       mkdirSync(parentDir);
+      const pdf = PDF.create();
+      pdf.addPage({ size: "a4" }).drawText("isolated PDF text", {
+        x: 50,
+        y: 700,
+        size: 12,
+      });
+      const pdfPath = path.join(testDir, "source.pdf");
+      await Bun.write(pdfPath, await pdf.save());
 
       writeFileSync(
         entrypoint,
         `import { isEncryptedPdf } from ${JSON.stringify(path.join(import.meta.dir, "pdf-utils.ts"))};
+import { readPdfTextLines } from ${JSON.stringify(path.join(import.meta.dir, "pdf-text-lines.ts"))};
 
 const result = await isEncryptedPdf({ bytes: new ArrayBuffer(0) });
 if (result.status !== "unreadable") {
@@ -28,6 +38,13 @@ if (result.cause.message.includes("Module not found")) {
 }
 if (!result.cause.message.includes("pdf-worker error")) {
   throw new Error(result.cause.message);
+}
+const text = await readPdfTextLines(await Bun.file(${JSON.stringify(pdfPath)}).bytes(), 30_000);
+if (text.isErr()) {
+  throw text.error;
+}
+if (JSON.stringify(text.value) !== JSON.stringify(["isolated PDF text"])) {
+  throw new Error("Bundled PDF worker did not return its text lines");
 }
 `,
       );

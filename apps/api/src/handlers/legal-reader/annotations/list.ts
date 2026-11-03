@@ -16,16 +16,25 @@ const config = {
   query: listAnnotationsQuerySchema,
 } satisfies HandlerConfig;
 
-const listReaderAnnotations = createSafeRootHandler(
-  config,
-  async function* ({ query, safeDb, session, user: me }) {
-    return yield* listReaderAnnotationsHandler({
-      organizationId: session.activeOrganizationId,
-      query,
-      safeDb,
-      userId: me.id,
-    });
-  },
-);
+type ReadDependencies = Pick<
+  Parameters<typeof listReaderAnnotationsHandler>[0],
+  "readCopies"
+>;
 
-export default listReaderAnnotations;
+export const createListReaderAnnotations = ({
+  readCopies,
+}: ReadDependencies = {}) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ query, safeDb, session, user: me }) {
+      return yield* listReaderAnnotationsHandler({
+        organizationId: session.activeOrganizationId,
+        query,
+        safeDb,
+        readCopies,
+        userId: me.id,
+      });
+    },
+  );
+
+export default createListReaderAnnotations();

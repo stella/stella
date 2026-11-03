@@ -9,12 +9,15 @@ import { apiRoutes } from "@/api/api-routes";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
+import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
 import { createHttpApp } from "@/api/http/app";
 import { detached } from "@/api/lib/analytics/capture";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { realtimeAuthorizers } from "@/api/lib/auth";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
@@ -27,10 +30,12 @@ import {
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
+import { flushLogExport } from "@/api/lib/observability/otel";
 import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
@@ -53,6 +58,7 @@ import {
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
+import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -150,17 +156,25 @@ const startS3RefreshLoop = () => {
     // `refreshStale*` own both the staleness test and the deduplication, so a
     // resolution still in flight when the next tick arrives is joined rather
     // than started again.
-    refreshStaleS3().catch((error: unknown) => {
-      logger.error("s3.refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleS3().catch((error: unknown) => {
+          logger.error("s3.refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-s3",
+    );
 
-    refreshStaleCorpusS3().catch((error: unknown) => {
-      logger.error("s3.corpus_refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleCorpusS3().catch((error: unknown) => {
+          logger.error("s3.corpus_refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-corpus-s3",
+    );
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();
@@ -190,14 +204,19 @@ const startServer = async (): Promise<void> => {
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
     if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      detached(startActionAdmissionRedis(), "admission-store.start");
+      detached(
+        async () => startActionAdmissionRedis(),
+        "admission-store.start",
+      );
     }
     if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
-      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+      detached(async () => startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }
 
   startMemoryPressureHandler();
+  const stopFeatureAccessGrantsRefresh =
+    await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
@@ -242,6 +261,9 @@ const startServer = async (): Promise<void> => {
     maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
 
+  // The listener stays available for liveness while /started holds traffic.
+  sanctionsStartupWarmup.start();
+
   // From here the loop serves requests; boot work before this point delays
   // none, so it stays out of the stall signal.
   startEventLoopDelayReporting();
@@ -272,6 +294,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
+        await stopFeatureAccessGrantsRefresh?.();
         await backgroundWorkers.close();
       },
       closeManagedProviderChecks,
@@ -298,6 +321,21 @@ const startServer = async (): Promise<void> => {
       flushActionCostRecords(),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
+    // Telemetry queued in memory leaves before the process does. Analytics
+    // goes first: its flush never rejects and logs a failed delivery, which
+    // the log export then carries. Its retries can outlast the whole budget,
+    // so it gets half, and the log export always runs in what remains.
+    const flushTelemetry = async (): Promise<void> => {
+      await Promise.race([
+        getServerAnalytics().flush(),
+        Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS / 2),
+      ]);
+      await flushLogExport();
+    };
+    await Promise.race([
+      flushTelemetry(),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
     closeActionAdmissionRedis();
     closeMcpReadFenceRedis();
     await closeRateLimitContexts();
@@ -318,10 +356,10 @@ const startServer = async (): Promise<void> => {
     }
   };
   process.once("SIGTERM", () => {
-    detached(shutdownWorkers("SIGTERM"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    detached(shutdownWorkers("SIGINT"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGINT"), "server.shutdown");
   });
 
   // Scheduled jobs run here rather than in a process of their own. A separate
@@ -344,6 +382,9 @@ const startServer = async (): Promise<void> => {
       startSchedulerLoop({
         registry: createSchedulerTaskRegistry(
           createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+          createCaseLawCoverageRefreshTask({
+            compute: computeCaseLawCoverageAnswer,
+          }),
         ),
       }),
     logger,

@@ -8,9 +8,30 @@ import { compareCodeUnit } from "@stll/collation";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
 export type GlobalSearchCursor = {
+  tier: SearchRankingTier;
   score: number;
   id: string;
   seen: number;
+};
+
+const SEARCH_RANKING_TIERS = [0, 1, 2, 3, 4] as const;
+export type SearchRankingTier = (typeof SEARCH_RANKING_TIERS)[number];
+
+const parseSearchRankingTier = (value: string): SearchRankingTier | null => {
+  switch (value) {
+    case "0":
+      return 0;
+    case "1":
+      return 1;
+    case "2":
+      return 2;
+    case "3":
+      return 3;
+    case "4":
+      return 4;
+    default:
+      return null;
+  }
 };
 
 const LEGACY_GLOBAL_SEARCH_CURSOR_ID = "global";
@@ -32,20 +53,24 @@ export type ParsedGlobalSearchCursor =
 
 type ScoredSearchHit<T extends { id: string }> = {
   hit: T;
+  tier: SearchRankingTier;
   score: number;
 };
 
 export const compareScoredSearchHits = <T extends { id: string }>(
   a: ScoredSearchHit<T>,
   b: ScoredSearchHit<T>,
-): number => b.score - a.score || compareCodeUnit(b.hit.id, a.hit.id);
+): number =>
+  b.tier - a.tier || b.score - a.score || compareCodeUnit(b.hit.id, a.hit.id);
 
 export const isAfterGlobalSearchCursor = (
-  hit: { id: string; score: number },
+  hit: { id: string; tier: SearchRankingTier; score: number },
   cursor: GlobalSearchCursor,
 ): boolean =>
-  hit.score < cursor.score ||
-  (hit.score === cursor.score && compareCodeUnit(hit.id, cursor.id) < 0);
+  hit.tier < cursor.tier ||
+  (hit.tier === cursor.tier &&
+    (hit.score < cursor.score ||
+      (hit.score === cursor.score && compareCodeUnit(hit.id, cursor.id) < 0)));
 
 const decodeGlobalSearchKeysetPayload = (
   cursor: string,
@@ -59,9 +84,15 @@ const decodeGlobalSearchKeysetPayload = (
   const seen = parseIntegerToken(decoded.id.slice(0, separatorIndex), {
     sign: "unsigned",
   }).unwrapOr(null);
-  const id = decoded.id.slice(separatorIndex + 1);
+  const tierSeparatorIndex = decoded.id.indexOf(":", separatorIndex + 1);
+  const tier = parseSearchRankingTier(
+    decoded.id.slice(separatorIndex + 1, tierSeparatorIndex),
+  );
+  const id = decoded.id.slice(tierSeparatorIndex + 1);
   if (
     separatorIndex === -1 ||
+    tierSeparatorIndex === -1 ||
+    tier === null ||
     seen === null ||
     seen <= 0 ||
     seen >= GLOBAL_SEARCH_RESULT_LIMIT ||
@@ -72,7 +103,7 @@ const decodeGlobalSearchKeysetPayload = (
     return null;
   }
 
-  return { score: decoded.score, id, seen };
+  return { tier, score: decoded.score, id, seen };
 };
 
 const decodeLegacyGlobalSearchOffset = (cursor: string): number | null => {
@@ -134,6 +165,7 @@ export const decodeGlobalSearchCursor = (
 };
 
 export const encodeGlobalSearchCursor = ({
+  tier,
   score,
   id,
   seen,
@@ -150,17 +182,19 @@ export const encodeGlobalSearchCursor = ({
     paddingIndex === -1
       ? encodedLegacyCursor
       : encodedLegacyCursor.slice(0, paddingIndex);
-  const keysetPayload = encodeCursor(score, `${seen}:${id}`);
+  const keysetPayload = encodeCursor(score, `${seen}:${tier}:${id}`);
   return `${legacyPayload}${DUAL_CURSOR_SEPARATOR}${keysetPayload}`;
 };
 
 export const globalSearchCursorSql = ({
   cursor,
   score,
+  tier,
   id,
 }: {
   cursor: GlobalSearchCursor | null;
   score: SQL;
+  tier: SQL;
   id: SQL;
 }): SQL => {
   if (cursor === null) {
@@ -169,10 +203,16 @@ export const globalSearchCursorSql = ({
 
   return sql`
     AND (
-      ${score} < ${cursor.score}
+      ${tier} < ${cursor.tier}
       OR (
-        ${score} = ${cursor.score}
-        AND (${id}) COLLATE "C" < ${cursor.id}::text COLLATE "C"
+        ${tier} = ${cursor.tier}
+        AND (
+          ${score} < ${cursor.score}
+          OR (
+            ${score} = ${cursor.score}
+            AND (${id}) COLLATE "C" < ${cursor.id}::text COLLATE "C"
+          )
+        )
       )
     )
   `;
@@ -205,6 +245,7 @@ export const paginateScoredSearchHits = <T extends { id: string }>({
     nextSeen < GLOBAL_SEARCH_RESULT_LIMIT
       ? encodeGlobalSearchCursor({
           score: last.score,
+          tier: last.tier,
           id: last.hit.id,
           seen: nextSeen,
         })

@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
@@ -29,6 +30,8 @@ import {
   verifyPreparedGeneratedFiles,
 } from "./prepared-generated-sources";
 
+const state = createTestState({ file: import.meta.path, config: {} });
+
 const fixture = () => {
   const root = realpathSync(
     mkdtempSync(path.join(tmpdir(), "prepared-sources-")),
@@ -41,6 +44,14 @@ const fixture = () => {
   write(
     "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
+  );
+  write(
+    "node_modules/tsrs/package.json",
+    JSON.stringify({ version: "test-tsrs" }),
+  );
+  write(
+    "node_modules/oxc-parser/package.json",
+    JSON.stringify({ version: "test-oxc" }),
   );
   write("input.ts", "export const input = 1;\n");
   write("packages/cli/capabilities/fixture.read.json", '{"id":"fixture.read"}');
@@ -83,10 +94,21 @@ const fixture = () => {
   return { root, write, manifest };
 };
 
-test("the identity names the TypeScript 6 compiler the generators run on", () => {
-  const { root, manifest } = fixture();
+test("the identity names the compilers the generators run on", () => {
+  const { root, manifest, write } = fixture();
   try {
-    expect(manifest.compilerVersion).toBe("test-compiler");
+    expect(manifest.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+    );
+    write(
+      "node_modules/oxc-parser/package.json",
+      JSON.stringify({ version: "next-oxc" }),
+    );
+    const upgraded = generatedInputIdentity(root);
+    expect(upgraded.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@next-oxc",
+    );
+    expect(upgraded.inputHash).not.toBe(manifest.inputHash);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -256,21 +278,20 @@ test("restore validates the whole artifact before any writes and restores every 
 
 test("regeneration keeps its concrete file diff after a verified handoff is cleared", () => {
   const { root, manifest, write } = fixture();
-  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
   try {
     write(
       ".cache/ci-generated-sources/manifest.json",
       JSON.stringify(manifest),
     );
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
     expect(hasPreparedGeneratedSources(root)).toBe(true);
     write("input.ts", "export const input = 2;\n");
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "Generated source artifact does not match this source and toolchain",
     );
-    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = "";
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", "");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
     const drift = Bun.spawnSync(
       ["git", "diff", "--exit-code", "--", "input.ts"],
@@ -283,11 +304,6 @@ test("regeneration keeps its concrete file diff after a verified handoff is clea
     expect(drift.stdout.toString()).toContain("+export const input = 2;");
     expect(drift.stderr.toString()).not.toContain("artifact");
   } finally {
-    if (previous === undefined) {
-      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
-    } else {
-      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
-    }
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -331,18 +347,17 @@ test("a prepared file is offered only for the recorded inputs and bytes", () => 
 
 test("configured preparation fails closed and an ordinary checkout generates locally", () => {
   const { root, manifest, write } = fixture();
-  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
   try {
-    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = path.join(
-      root,
-      "other.json",
+    state.setEnv(
+      "CI_GENERATED_SOURCES_MANIFEST",
+      path.join(root, "other.json"),
     );
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "must belong to this checkout",
     );
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
     expect(() => hasPreparedGeneratedSources(root)).toThrow("ENOENT");
     write(
       ".cache/ci-generated-sources/manifest.json",
@@ -357,11 +372,6 @@ test("configured preparation fails closed and an ordinary checkout generates loc
       "Prepared generated source differs",
     );
   } finally {
-    if (previous === undefined) {
-      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
-    } else {
-      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
-    }
     rmSync(root, { recursive: true, force: true });
   }
 });
@@ -501,7 +511,11 @@ test("prepared input identities retain tracked directory, symlink and byte frami
     });
     expect(inventory.exitCode).toBe(0);
     const oracle = createSha256().update(
-      JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
+      JSON.stringify({
+        bun: Bun.version,
+        compiler:
+          "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+      }),
     );
     const generated = new Set<string>(ciGeneratedFiles(root));
     for (const entry of inventory.stdout.toString().split("\0")) {

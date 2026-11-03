@@ -1,5 +1,6 @@
 import type { ComponentProps, RefObject } from "react";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
@@ -12,7 +13,7 @@ import { provisionByBlockAnchor } from "@/features/statutes/statute-reader-block
 
 type AnnotatedStatuteTextProps = Omit<
   ComponentProps<typeof StatuteText>,
-  "annotationAnchors"
+  "annotationAnchors" | "statuteAnchors"
 > & {
   country: string;
   eli: string;
@@ -68,7 +69,11 @@ export const AnnotatedStatuteText = ({
         className="sticky top-0 z-20"
         count={annotations.guestCount}
       />
-      <StatuteText {...statuteText} annotationAnchors={annotationAnchors} />
+      <StatuteText
+        {...statuteText}
+        annotationAnchors={annotationAnchors}
+        statuteAnchors={statuteAnchorSchemeFor(country)}
+      />
       <AnnotationToolbar
         activeAnnotation={activeAnnotation}
         activeSpans={activeSpans}

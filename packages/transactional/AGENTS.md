@@ -6,9 +6,10 @@
 ## React
 
 - Put the root or exported component at the top of the file after imports; types
-  and helpers follow below it. A helper below the component must be a function
-  declaration (hoisted, so `no-use-before-define` with `functions: false` allows
-  it) or live in its own module, not a `const` arrow.
+  and helpers follow below it. Components are `const` arrows
+  (`react/function-component-definition`); a helper below the root may be a
+  `const` arrow, because `no-use-before-define` runs with `variables: false` and
+  the reference sits inside a function body.
 - When React Compiler is enabled, prefer plain React over prophylactic `useMemo`,
   `useCallback`, and `React.memo`.
 - Clean up legacy memoization gradually when touching a file; do not run broad

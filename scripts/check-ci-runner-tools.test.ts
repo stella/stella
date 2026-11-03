@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  retiredRunnerLabelProblems,
   RunnerToolInvariantError,
   runnerToolProblems,
   runnerTools,
@@ -326,7 +327,7 @@ test("runner defaults are specific to the image and do not leak into containers"
     "ubuntu-24.04",
     "ubuntu-24.04-arm",
     "windows-latest",
-    "macos-14",
+    "macos-15",
   ]) {
     expect(runnerTools(runner, undefined).has("jq"), runner).toBe(true);
     expect(runnerTools(runner, undefined).has("rg"), runner).toBe(false);
@@ -517,7 +518,7 @@ test("matrix runner profiles intersect their guarantees and PowerShell is not pa
           "runs-on": `\${{ matrix.runner }}`,
           strategy: {
             matrix: {
-              include: [{ runner: "windows-latest" }, { runner: "macos-14" }],
+              include: [{ runner: "windows-latest" }, { runner: "macos-15" }],
             },
           },
           steps: [
@@ -721,6 +722,81 @@ test("event-selected runners each receive an installation contract", () => {
       (root) => expect(problems(root)).toHaveLength(provision ? 0 : 1),
     );
   }
+});
+
+test("a variable-selected fallback runner receives its own installation contract", () => {
+  for (const provision of [true, false]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+            steps: [
+              ...(provision
+                ? [
+                    {
+                      if: "vars.DEPLOY_RUNNER == 'fallback'",
+                      run: "brew install jq",
+                    },
+                  ]
+                : []),
+              { run: "jq --version" },
+            ],
+          },
+        },
+      },
+      (root) => expect(problems(root)).toHaveLength(provision ? 0 : 1),
+    );
+  }
+});
+
+test("variable values compare case-insensitively, as GitHub compares them", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+          // 'FALLBACK' selects the self-hosted branch too, which lacks jq.
+          steps: [
+            { if: "vars.DEPLOY_RUNNER == 'FALLBACK'", run: "jq --version" },
+          ],
+        },
+      },
+    },
+    (root) => expect(problems(root)).toHaveLength(1),
+  );
+});
+
+test("a step guarded by the other variable branch is not checked against this runner", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+          // jq runs only on the hosted branch, which provides it.
+          steps: [
+            { if: "vars.DEPLOY_RUNNER != 'fallback'", run: "jq --version" },
+          ],
+        },
+      },
+    },
+    (root) => expect(problems(root)).toHaveLength(0),
+  );
+});
+
+test("a variable choice nested inside an event choice resolves every runner", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ github.event_name != 'pull_request' && (vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04') || 'ubuntu-24.04-arm' }}`,
+          steps: [{ run: "jq --version" }],
+        },
+      },
+    },
+    // Only the self-hosted leaf lacks jq.
+    (root) => expect(problems(root)).toHaveLength(1),
+  );
 });
 
 test("local actions use workspace paths and optional composite installs do not persist", () => {
@@ -1189,6 +1265,8 @@ test("unsupported runner expressions report the expression and fail closed", () 
     `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' }}`,
     `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' || 'ubuntu-24.04' || 'custom' }}`,
     `\${{ github.ref == 'main' && 'ubuntu-24.04' || 'ubuntu-24.04' }}`,
+    `\${{ vars.DEPLOY_RUNNER == 'fallback' && ('ubuntu-24.04' || 'ubuntu-24.04') }}`,
+    `\${{ vars['DEPLOY_RUNNER'] == 'fallback' && 'ubuntu-24.04' || 'ubuntu-24.04' }}`,
   ]) {
     withFixture(
       {
@@ -1697,3 +1775,42 @@ for (const statement of [
     }
   });
 }
+
+test("a retired hosted runner image is refused in runs-on and in a matrix, not in a comment", () => {
+  expect(
+    retiredRunnerLabelProblems(
+      ".github/workflows/x.yml",
+      [
+        "jobs:",
+        "  a:",
+        "    runs-on: macos-14",
+        "  b:",
+        "    strategy:",
+        "      matrix:",
+        "        include:",
+        "          - runner: macos-14 # arm64",
+        "  c:",
+        "    # moved off macos-14",
+        "    runs-on: macos-15",
+      ].join("\n"),
+    ),
+  ).toEqual([
+    ".github/workflows/x.yml:3: runner image macos-14 is retired on 2026-11-02 (actions/runner-images#13518); use a supported image",
+    ".github/workflows/x.yml:8: runner image macos-14 is retired on 2026-11-02 (actions/runner-images#13518); use a supported image",
+  ]);
+});
+
+test("the repository's workflows use no retired runner image", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const workflows = [
+    ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({ cwd: root }),
+  ];
+  expect(
+    workflows.flatMap((workflow) =>
+      retiredRunnerLabelProblems(
+        workflow,
+        readFileSync(path.join(root, workflow), "utf-8"),
+      ),
+    ),
+  ).toEqual([]);
+});

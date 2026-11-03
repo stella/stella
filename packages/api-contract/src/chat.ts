@@ -1,5 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { BrowserExtensionStatus } from "./browser-control";
 import type { SafeId } from "./safe-id";
 
 export type ChatTurnTiming =
@@ -56,6 +57,39 @@ export const isChatPastedTextPart = (
 export const ASK_USER_TOOL_NAME = "ask-user";
 export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
 
+/**
+ * The activity a stored message part of a type this release does not know
+ * reads as. A newer release may store part types an older one has never seen;
+ * the older one carries the stored part whole (`content.part`) so that saving
+ * the message writes it back unchanged, never shows it to the model, and the
+ * page shows a neutral row in its place.
+ */
+export const UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE = "stella.unsupported-part";
+
+/** A stored part carried whole because this release cannot read it. */
+export type UnsupportedChatPart = {
+  type: "activity";
+  activityType: typeof UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE;
+  content: { part: unknown };
+};
+
+/** Whether `part` is a stored part this release carries without reading. */
+export const isUnsupportedChatPart = (
+  part: unknown,
+): part is UnsupportedChatPart => {
+  if (typeof part !== "object" || part === null) {
+    return false;
+  }
+  const content: unknown = Reflect.get(part, "content");
+  return (
+    Reflect.get(part, "type") === "activity" &&
+    Reflect.get(part, "activityType") === UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE &&
+    typeof content === "object" &&
+    content !== null &&
+    Object.hasOwn(content, "part")
+  );
+};
+
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
@@ -109,9 +143,18 @@ export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+/**
+ * What a turn that rewrites stored history asks for: `regenerate` answers the
+ * latest user message again; `edit` replaces one of the user's own messages
+ * (named by `truncateAfterMessageId`) and drops every later turn.
+ */
 export const CHAT_TURN_INTENT = {
+  edit: "edit",
   regenerate: "regenerate",
 } as const;
+
+export type ChatTurnIntent =
+  (typeof CHAT_TURN_INTENT)[keyof typeof CHAT_TURN_INTENT];
 
 /**
  * Response header naming the server turn a chat request runs, so the page can
@@ -239,11 +282,14 @@ type ChatSendRequestBase = {
     templateId: SafeId<"template">;
   };
   /**
-   * The extension protocol the client speaks. Any version is accepted so a
-   * stale tab can still chat; the server offers the browser tool only when it
-   * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
+   * Any positive integer protocol version is accepted so a stale tab can still
+   * chat; the server offers the browser tool only for its own
+   * `BROWSER_CONTROL_PROTOCOL_VERSION`. Status must be known.
    */
-  browserClient?: { protocolVersion: number };
+  browserExtension?: {
+    protocolVersion: number;
+    status: BrowserExtensionStatus;
+  };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";
@@ -253,7 +299,7 @@ type ChatSendRequestBase = {
   runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
+  turnIntent?: ChatTurnIntent;
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {

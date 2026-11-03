@@ -27,7 +27,7 @@ import {
   hasExcessQueryTokens,
   MAX_QUERY_CHARACTERS,
   MAX_QUERY_TOKENS,
-  nameReading,
+  nameReadings,
 } from "./normalise";
 import type { NameReading } from "./normalise";
 import { IdentifierPostings, ScreeningEntries } from "./screening-entries";
@@ -595,7 +595,8 @@ const prepareScreeningQuery = (
       }),
     );
   }
-  const readings = kinds.map((kind) => nameReading(query.name, kind));
+  // Each reading of the name, its own first, in each interpretation.
+  const readings = kinds.flatMap((kind) => nameReadings(query.name, kind));
   const tokens = readings.at(0)?.tokens ?? [];
   const identifierKeys = new Set(
     (query.identifiers ?? [])

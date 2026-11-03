@@ -25,7 +25,7 @@ import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
@@ -47,7 +47,7 @@ export const MatterNumberingCard = () => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 
@@ -108,7 +108,7 @@ const MatterNumberingCardBody = ({
         ),
       ),
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const previewData =
     previewView.type === "items" ? previewView.items : undefined;
   const preview = previewData?.preview ?? null;

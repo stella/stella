@@ -31,7 +31,11 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import {
+  detachedUserAction,
+  notifyUserError,
+  notifyUserProblem,
+} from "@/lib/errors/user-toast";
 
 const START_ERROR_KEYS = {
   entity_read_only: "workspaces.files.pdfSigning.readOnlyDescription",
@@ -115,6 +119,8 @@ type UseDesktopPdfSignOptions = {
 };
 
 export type PdfSignRequest = {
+  authority?: (() => boolean) | undefined;
+  cancelAuthority?: (() => void) | undefined;
   target: PdfSignableFile;
   /** Omitting `stamp` signs without a visible mark on any page. */
   stamp?: PdfSigningStamp | undefined;
@@ -156,6 +162,9 @@ export const useDesktopPdfSign = ({
   const retryAction = (request: PdfSignRequest, toastId: string) => ({
     label: t("common.retry"),
     onClick: () => {
+      if (request.authority?.() === false) {
+        return;
+      }
       stellaToast.close(toastId);
       detachedUserAction(sign(request), {
         context: "use-desktop-pdf-sign.retry",
@@ -175,33 +184,25 @@ export const useDesktopPdfSign = ({
       // The deep link was never redeemed: the app is missing, not
       // running, or not connected to this account.
       case "handoff": {
-        notifyUserError(
-          undefined,
-          t("workspaces.files.pdfSigning.notPickedUpTitle"),
-          {
-            toastId,
-            action: retry,
-            description: (
-              <TextWithAction
-                actionLabel={t("workspaces.files.desktopGate.connect")}
-                onAction={connectDesktop}
-                text={t("workspaces.files.pdfSigning.notPickedUpDescription")}
-              />
-            ),
-          },
-        );
+        notifyUserProblem(t("workspaces.files.pdfSigning.notPickedUpTitle"), {
+          toastId,
+          action: retry,
+          description: (
+            <TextWithAction
+              actionLabel={t("workspaces.files.desktopGate.connect")}
+              onAction={connectDesktop}
+              text={t("workspaces.files.pdfSigning.notPickedUpDescription")}
+            />
+          ),
+        });
         return;
       }
       case "session": {
-        notifyUserError(
-          undefined,
-          t("workspaces.files.pdfSigning.expiredTitle"),
-          {
-            toastId,
-            action: retry,
-            description: t("workspaces.files.pdfSigning.expiredDescription"),
-          },
-        );
+        notifyUserProblem(t("workspaces.files.pdfSigning.expiredTitle"), {
+          toastId,
+          action: retry,
+          description: t("workspaces.files.pdfSigning.expiredDescription"),
+        });
         return;
       }
       default: {
@@ -212,13 +213,27 @@ export const useDesktopPdfSign = ({
   };
 
   const signWithToast = async (
-    { stamp, target }: PdfSignRequest,
+    { authority, cancelAuthority, stamp, target }: PdfSignRequest,
     toastId: string,
   ) => {
+    // A revoked signing action stops quietly and takes its loading toast along.
+    const isRevoked = () => {
+      if (authority?.() !== false) {
+        return false;
+      }
+      stellaToast.close(toastId);
+      return true;
+    };
+    if (isRevoked()) {
+      return;
+    }
     const started = await Result.tryPromise(
       async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
     if (Result.isError(started)) {
+      if (isRevoked()) {
+        return;
+      }
       getAnalytics().captureError(started.error.cause, {
         fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
         scope: {
@@ -234,6 +249,10 @@ export const useDesktopPdfSign = ({
       return;
     }
 
+    if (isRevoked()) {
+      return;
+    }
+
     const session = {
       sessionId: started.value.sessionId,
       workspaceId: target.workspaceId,
@@ -242,6 +261,7 @@ export const useDesktopPdfSign = ({
     // later read does not describe it as cancelled in stella desktop.
     const browserCancel = { settled: false };
     const cancel = async () => {
+      cancelAuthority?.();
       const snapshot = await cancelPdfSigningSession(session);
       if (
         snapshot.status !== "cancelled" ||
@@ -260,6 +280,9 @@ export const useDesktopPdfSign = ({
       });
     };
 
+    if (isRevoked()) {
+      return;
+    }
     launchPdfSigningDeepLink(started.value.deepLinkUrl);
     stellaToast.update(toastId, {
       action: {
@@ -330,7 +353,7 @@ export const useDesktopPdfSign = ({
               ),
             },
           );
-          notifyUserError(undefined, options.title, {
+          notifyUserProblem(options.title, {
             ...NO_ACTION,
             toastId,
             description: options.description,
@@ -338,8 +361,7 @@ export const useDesktopPdfSign = ({
           return;
         }
         if (outcome.closeReason === DESKTOP_HANDOFF_FAILURE.accountRequired) {
-          notifyUserError(
-            undefined,
+          notifyUserProblem(
             t("workspaces.files.desktopEdit.accountRequiredTitle"),
             {
               toastId,
@@ -366,7 +388,10 @@ export const useDesktopPdfSign = ({
       }
       case "expired": {
         notifyExpired({
-          retry: retryAction({ stamp, target }, toastId),
+          retry: retryAction(
+            { authority, cancelAuthority, stamp, target },
+            toastId,
+          ),
           stage: outcome.stage,
           toastId,
         });

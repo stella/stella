@@ -36,9 +36,10 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "held",
     "failed",
   ],
-  "system:case-law-sitemap-refresh": ["shards", "pages"],
+  "system:case-law-sitemap-refresh": ["months", "shards"],
   "system:statute-sitemap-refresh": ["shards"],
-  "system:case-law-browse-facet-refresh": ["buckets"],
+  "system:case-law-coverage-refresh": ["summaries", "countries", "unreadParts"],
+  "system:case-law-population-fold": ["deltas"],
   "system:legislation-facet-refresh": ["buckets"],
   "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
@@ -57,8 +58,15 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "budgets",
   ],
   "system:usage-webhook-retention": ["redactedEvents"],
+  "system:hosted-customer-erasure": [
+    "claimed",
+    "erased",
+    "failed",
+    "terminalFailures",
+  ],
   "system:file-comparison-sweep": ["sweptUploads"],
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
+  "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [

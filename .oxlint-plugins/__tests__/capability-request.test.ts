@@ -57,6 +57,28 @@ await invokeCapability("x.update", async (request) => await api.x.post(body, { h
   ).toEqual([3, 4, 5, 6]);
 });
 
+test("accepts custom headers only when the exact request headers win last", async () => {
+  expect(
+    await lintWebSource(
+      `import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { "Accept-Language": locale, ...request.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { locale, "x-format": format, ...request.headers }, fetch }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { ...request.headers, "x-stella-capability": "wrong" } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { ...request.headers, ...extra } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { ...other.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { ...request.headers }, ...extra }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: request.headers }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { "X-Stella-Capability": "wrong", ...request.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { ...extra, ...request.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { [key]: value, ...request.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { get custom() { return value; }, ...request.headers } }));
+await invokeCapability("x.update", async (request) => await api.x.post(body, { ...request, headers: { custom() { return value; }, ...request.headers } }));
+`,
+    ),
+  ).toEqual([5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+});
+
 test("accepts forwarded requests and writes outside capability callbacks", async () => {
   expect(
     await lintWebSource(

@@ -21,10 +21,10 @@ import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   BetterAuthMicrosoftIdentityMapError,

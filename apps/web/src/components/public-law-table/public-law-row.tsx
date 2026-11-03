@@ -89,6 +89,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   renderColumns,
   row,
   rowLabel,
+  selectionLabel,
   table,
 }: PublicLawRowProps<TRow>) => {
   const selected = table.state.rowSelection[row.id] === true;
@@ -155,6 +156,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
         selectCell={
           row_getCanSelect(row) ? (
             <SelectRowContent
+              ariaLabel={selectionLabel}
               firstLine={FIRST_LINE}
               index={index}
               label={rowLabel}
@@ -175,7 +177,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       />
       <AddPropertyCell
         cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
+        renderColumns={renderColumns}
         selected={selected}
       />
     </WorkspaceGridRow>

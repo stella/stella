@@ -7,6 +7,7 @@ export { buildPohodaXml } from "./pohoda";
 export { buildPeppolSkFiles } from "./peppol-sk";
 export { buildUblFiles } from "./ubl";
 export {
+  quantityText,
   variableSymbolOf,
   type InvoiceExportLine,
   type InvoiceExportLineSource,

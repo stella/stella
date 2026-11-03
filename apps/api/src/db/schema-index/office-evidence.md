@@ -11,9 +11,9 @@ office_file_evidence.{...entityFeatureGateColumns()}           spread           
 office_file_evidence.{...entityFeatureWorkspaceGateColumns()}  spread                                office-evidence.ts:41
 office_file_evidence.organization_id                           safeOrganizationId  fk,not null       office-evidence.ts:42
 office_file_evidence.workspace_id                              safeWorkspaceId     fk,not null       office-evidence.ts:45
-office_file_evidence.entity_id                                 safeUuid            not null          office-evidence.ts:48
+office_file_evidence.entity_id                                 safeUuid            fk,not null       office-evidence.ts:48
 office_file_evidence.entity_version_id                         safeUuid            fk,not null       office-evidence.ts:49
-office_file_evidence.field_id                                  safeUuid            not null          office-evidence.ts:52
+office_file_evidence.field_id                                  safeUuid            fk,not null       office-evidence.ts:52
 office_file_evidence.source_file_id                            uuid                not null          office-evidence.ts:53
 office_file_evidence.source_sha256_hex                         varchar             not null          office-evidence.ts:54
 office_file_evidence.format                                    text                not null          office-evidence.ts:55

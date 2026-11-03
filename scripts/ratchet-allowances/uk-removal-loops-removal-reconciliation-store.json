@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/removal-reconciliation-store.ts",
+  "delta": 2,
+  "reason": "The fixed typed retry-kind ranges are queried independently to reserve completion priority; superseded and retry outcomes use ordered row CAS in the same durable source step."
+}

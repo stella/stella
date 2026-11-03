@@ -200,12 +200,16 @@ describe("auth capabilities", () => {
         social: v.object({
           google: v.literal(false),
           microsoft: v.literal(false),
+          apple: v.literal(false),
         }),
       }),
       await response.json(),
     );
 
-    expect(body.social.google).toBe(false);
-    expect(body.social.microsoft).toBe(false);
+    expect(body.social).toEqual({
+      google: false,
+      microsoft: false,
+      apple: false,
+    });
   });
 });

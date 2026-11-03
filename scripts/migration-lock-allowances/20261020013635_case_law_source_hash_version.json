@@ -1,0 +1,4 @@
+{
+  "add-column": "The non-volatile constant smallint default uses PostgreSQL's fast-default catalog path without rewriting decision rows; lock acquisition is bounded by 5s and the statement by 30s.",
+  "replace-view": "The two decision views re-expand their existing SELECT * definitions to include source_hash_version while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 5s lock_timeout and 30s statement_timeout."
+}

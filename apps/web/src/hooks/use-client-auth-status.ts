@@ -122,6 +122,7 @@ export const useClientAuthStatus = ({
       name: sessionData.user.name || undefined,
       preferredName: sessionData.user.preferredName,
       timezoneId: sessionData.user.timezoneId,
+      readerAnswerLanguage: sessionData.user.readerAnswerLanguage,
       wordEditShortcut: sessionData.user.wordEditShortcut,
     },
   };

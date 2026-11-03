@@ -9,10 +9,14 @@
 import { panic } from "better-result";
 
 import { agentSkills, entities, playbookDefinitions } from "@/api/db/schema";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  ORG_AI_CONFIG_STATUS,
+  resolvePromptCachingPreference,
+} from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ReadablePositionSource } from "@/api/lib/workflow/playbook-position-sources";
 import type {
   PlaybookPositions,
@@ -203,15 +207,14 @@ export const createPlaybookStore = ({
       organizationId: mintAuthProviderId<"organization">(),
       recordAuditEvent: asTestRaw<AuditRecorder>(() => undefined),
       testDependencies: {
-        // Saving a graded position derives its ask with a model call. The eval
-        // measures the tool contract, not that derivation, and `unreadable` is
-        // the production state in which a save makes no call.
+        // The tool-contract eval has no organization provider and does not
+        // admit instance model work, so saves skip automatic ask derivation.
         loadOrgSettingsForAuth: async () =>
           await Promise.resolve({
             orgAIConfig: null,
-            orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
-            managedAIResidency: "eu",
-            promptCachingEnabled: false,
+            orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ownKeyRequired,
+            managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+            promptCachingEnabled: resolvePromptCachingPreference(undefined),
           }),
       },
       safeDb: toSafeDbMock(scopedDb),

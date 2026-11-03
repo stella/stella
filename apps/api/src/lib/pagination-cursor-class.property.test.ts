@@ -18,8 +18,9 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
+import { decisionDatePositionOf } from "@/api/lib/case-law/decision-date-order";
 import { encodeDecisionSearchCursor } from "@/api/lib/case-law/decision-search-cursor";
 import { encodeEntitiesWindowCursor } from "@/api/lib/entities/window-cursor";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -59,7 +60,8 @@ const timestampArbitrary = fc
 
 describe("every cursor encoder emits a cursor the surface recognizes", () => {
   test("encodePaginationCursor, over the part kinds it accepts", () => {
-    fc.assert(
+    assertProperty(
+      "encodePaginationCursor, over the part kinds it accepts",
       fc.property(
         fc.array(
           fc.oneof(
@@ -76,32 +78,35 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
             isIssuablePaginationCursor(encodePaginationCursor(parts)),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeEntitiesWindowCursor, over the sort values a row carries", () => {
-    fc.assert(
+    assertProperty(
+      "encodeEntitiesWindowCursor, over the sort values a row carries",
       fc.property(fc.array(sortValueArbitrary, { maxLength: 8 }), (values) =>
         expect(
           isIssuablePaginationCursor(encodeEntitiesWindowCursor(values)),
         ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeCursor, the shared (score, id) framing", () => {
-    fc.assert(
+    assertProperty(
+      "encodeCursor, the shared (score, id) framing",
       fc.property(scoreArbitrary, uuidArbitrary, (score, id) =>
         expect(isIssuablePaginationCursor(encodeCursor(score, id))).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeGlobalSearchCursor, whose dual form carries an inner ==", () => {
-    fc.assert(
+    assertProperty(
+      "encodeGlobalSearchCursor, whose dual form carries an inner ==",
       fc.property(
         scoreArbitrary,
         globalHitIdArbitrary,
@@ -109,16 +114,17 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
         (score, id, seen) =>
           expect(
             isIssuablePaginationCursor(
-              encodeGlobalSearchCursor({ score, id, seen }),
+              encodeGlobalSearchCursor({ tier: 2, score, id, seen }),
             ),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("encodeCorpusSearchCursor, over its window and order segments", () => {
-    fc.assert(
+    assertProperty(
+      "encodeCorpusSearchCursor, over its window and order segments",
       fc.property(
         scoreArbitrary,
         uuidArbitrary,
@@ -138,35 +144,45 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
             ),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
-  test("encodeDecisionSearchCursor, over its order segment", () => {
-    fc.assert(
+  test("encodeDecisionSearchCursor, in every order", () => {
+    assertProperty(
+      "encodeDecisionSearchCursor, in every order",
       fc.property(
         scoreArbitrary,
         uuidArbitrary,
+        fc.option(fc.constantFrom("1791-02-01", "2024-03-05", "2999-12-31")),
         fc.constantFrom(...SEARCH_SORTS),
-        (sortKey, id, sort) =>
+        (sortKey, id, decisionDate, sort) =>
           expect(
             isIssuablePaginationCursor(
-              encodeDecisionSearchCursor({ id, sort, sortKey }),
+              encodeDecisionSearchCursor(
+                sort === "relevance"
+                  ? { sort, sortKey, id }
+                  : {
+                      sort,
+                      position: decisionDatePositionOf({ decisionDate, id }),
+                    },
+              ),
             ),
           ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("the keyset codecs built on encodePaginationCursor", () => {
-    fc.assert(
+    assertProperty(
+      "the keyset codecs built on encodePaginationCursor",
       fc.property(timestampArbitrary, uuidArbitrary, (timestamp, id) =>
         expect(
           isIssuablePaginationCursor(encodePaginationCursor([timestamp, id])),
         ).toBe(true),
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

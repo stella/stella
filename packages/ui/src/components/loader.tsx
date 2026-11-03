@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 
 import { LoaderCircleIcon } from "../icons";
 import { cn } from "../lib/utils";
+import type { LoaderSize } from "./loader.shared";
 import { StellaMark } from "./stella-mark";
 
 /**
@@ -78,9 +79,7 @@ const LOADER_SIZE = {
   sm: "size-4",
   md: "size-6",
   lg: "size-8",
-} as const;
-
-type LoaderSize = keyof typeof LOADER_SIZE;
+} as const satisfies Record<LoaderSize, string>;
 
 const LoaderMark = () => (
   <StellaMark className="animate-loader text-muted-foreground size-full motion-reduce:animate-none motion-reduce:opacity-70" />

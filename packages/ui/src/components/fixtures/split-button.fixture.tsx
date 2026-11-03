@@ -32,6 +32,7 @@ const SplitButtonFixture = () => {
     control = (
       <SplitButton
         {...sharedProps}
+        primaryContent="text"
         primaryLabel="Create document"
         surface="popover"
         menu={
@@ -77,6 +78,7 @@ const SplitButtonFixture = () => {
     control = (
       <SplitButton
         {...sharedProps}
+        primaryContent="text"
         primaryLabel="Create document"
         surface="menu"
         menu={

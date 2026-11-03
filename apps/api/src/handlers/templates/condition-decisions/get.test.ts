@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   ORG_AI_CONFIG_STATUS,
@@ -22,7 +24,6 @@ import {
   NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createConditionPreviewHandler } from "./get";
@@ -45,7 +46,7 @@ const previewFixture = ({
   refusal,
 }: {
   manifestFields?: typeof fields;
-  refusal?: "busy" | "unavailable";
+  refusal?: "busy" | "store_unavailable";
 } = {}) => {
   const { scopedDb, safeDb } = createScopedDbMock({
     query: {
@@ -150,7 +151,7 @@ describe("condition preview conditional AI gates", () => {
 
   test.each([
     { reason: "busy", status: 429 },
-    { reason: "unavailable", status: 503 },
+    { reason: "store_unavailable", status: 503 },
   ] as const)(
     "open conditions preserve admission $status",
     async ({ reason, status }) => {
@@ -162,7 +163,7 @@ describe("condition preview conditional AI gates", () => {
           code:
             reason === "busy"
               ? "action_concurrency_busy"
-              : "action_admission_unavailable",
+              : "limiter_store_unavailable",
         },
       });
       expect(fixture.authorizeUsage).toHaveBeenCalledTimes(1);

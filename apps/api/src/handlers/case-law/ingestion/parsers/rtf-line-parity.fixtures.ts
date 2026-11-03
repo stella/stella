@@ -1,8 +1,9 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import * as cheerio from "cheerio";
 
 import type { BlockContent, Document } from "@stll/docx-core/model";
+import { load } from "@stll/html";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -63,6 +64,10 @@ const linesOf = (document: Document): string[] => {
         case "preservedBlock":
         case "bookmarkStart":
         case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
           break;
         default:
           block satisfies never;
@@ -91,7 +96,7 @@ export const assertRtfLineParity = (
 };
 
 export const assertHtmlRtfLineParity = (html: string): void => {
-  const rtf = cheerio.load(html)("input#docContentHidden").attr("value");
+  const rtf = load(html)("input#docContentHidden").attr("value");
   if (rtf === undefined || rtf.trim().length === 0) {
     return;
   }

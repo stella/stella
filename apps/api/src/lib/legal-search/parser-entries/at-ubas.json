@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "AT_UBAS",
+  "key": "at-ubas",
+  "parserVersion": 11,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Read the parts of an Austrian decision from what the court printed, not from the publisher's section labels: the docket line, formula and bench recital are head matter, the ruling is the holding wherever it is filed, the reasons, instructions on appeal and the place and date follow in order, and Findok decisions carry the same roles."
+  }
+}

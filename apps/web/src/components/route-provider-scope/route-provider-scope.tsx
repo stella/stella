@@ -5,6 +5,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import type { AppFrameScope, ProviderScope } from "@/routes/-app-frame-scope";
+import type { RoutePresentation } from "@/routes/-route-presentation";
 
 declare module "@tanstack/react-router" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging
@@ -12,6 +13,7 @@ declare module "@tanstack/react-router" {
     appFrame?: AppFrameScope;
     providerScopes?: readonly ProviderScope[];
     organizationSettingsAdmission?: "time-billing";
+    presentation?: RoutePresentation;
   }
 }
 

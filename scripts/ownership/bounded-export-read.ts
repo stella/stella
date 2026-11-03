@@ -7,6 +7,8 @@ export default {
   summary:
     "`readBounded` applies a cap-plus-one SQL limit and returns either the " +
     "complete rows or an explicit overflow result without a partial set. " +
+    "`readBoundedByGroup` supplies a limited lateral builder and refuses any " +
+    "group's sentinel before returning the grouped read as complete. " +
     "`readCursorPage` uses the same sentinel and the existing `Page` owner " +
     "to preserve worker continuation without claiming a partial set is complete. " +
     "This owner handles expected export ceilings; `boundedAll` instead " +

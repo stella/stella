@@ -1,10 +1,13 @@
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
 import { createAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
+import { PUBLIC_LAW_ANNOTATION_PLACEMENT } from "@/api/lib/legal-search/reader-annotations/target";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   permissions: { legalReaderAnnotation: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   description:
@@ -19,11 +22,13 @@ const createReaderAnnotation = createSafeRootHandler(
     return yield* createReaderAnnotationHandler({
       body,
       organizationId: session.activeOrganizationId,
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
       recordAuditEvent,
       safeDb,
       userId: user.id,
     });
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createReaderAnnotation;

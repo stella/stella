@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
@@ -7,6 +8,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 
 test("counter reads preserve quota and ignore expired local windows", () => {
   const context = new InMemoryRateLimitContext();
@@ -149,15 +151,17 @@ test.each(["fail_open_local", "fail_closed"] as const)(
     });
     context.init({ duration: 60_000 });
     try {
-      const empty = await context.read("address");
-      expect(operations).toEqual(["read"]);
+      const empty = context.read("address");
       if (failurePolicy === "fail_open_local") {
-        expect(empty).toBeNull();
+        expect(await empty).toBeNull();
         await context.increment("address");
         expect((await context.read("address"))?.count).toBe(1);
         expect((await context.read("address"))?.count).toBe(1);
       } else {
-        expect(empty?.count).toBe(Number.MAX_SAFE_INTEGER);
+        expect(await rejectionOf(empty)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+        expect(operations).toEqual([]);
       }
     } finally {
       context.kill();

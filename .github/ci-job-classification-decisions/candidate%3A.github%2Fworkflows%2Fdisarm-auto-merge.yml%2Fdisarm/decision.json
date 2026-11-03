@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Disarms auto-merge on pull requests; holds contents write."
+}

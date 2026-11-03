@@ -184,6 +184,7 @@ describe("classifyAIError", () => {
       cause: apiCallError(404),
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("model_unavailable");
@@ -248,6 +249,7 @@ describe("classifyAIError", () => {
       cause: apiCallError(401),
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("provider_credentials_rejected");
@@ -289,6 +291,7 @@ describe("classifyAIError", () => {
     const error = new HandlerError({
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("unknown");
@@ -392,6 +395,7 @@ describe("isAnticipatedAIFailure", () => {
     for (const status of SERVER_STATUS_CODES) {
       const error = new HandlerError({
         status,
+        code: "internal_error",
         message: `failed with ${status}`,
       });
       const kind = classifyAIError(error);
@@ -418,6 +422,7 @@ describe("isAnticipatedAIFailure", () => {
     // service constructed carries no provider status to classify by.
     const cancelled = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation was cancelled",
       cause: new AIGenerationCancelledError({
         message: "AI generation was cancelled",
@@ -436,6 +441,7 @@ describe("isAnticipatedAIFailure", () => {
     // quietly absorb every wrapped server-side failure.
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "generation failed",
       cause: new Error("stream ended before completion"),
     });
@@ -487,6 +493,7 @@ describe("providerStatusFields", () => {
   test("does not read a HandlerError's service status as provider code", () => {
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "generation failed",
     });
 
@@ -576,13 +583,18 @@ describe("isUnanticipatedAIFailure", () => {
     const cases: unknown[] = [
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "AI generation was cancelled",
         cause: new AIGenerationCancelledError({
           message: "AI generation was cancelled",
         }),
       }),
       new HandlerError({ status: 403, message: "no key for role" }),
-      new HandlerError({ status: 502, message: "generation failed" }),
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "generation failed",
+      }),
       new ChatEmptyCompletionError({ message: "no content" }),
       apiCallError(429),
       new Error("stream ended before completion"),
@@ -601,6 +613,7 @@ describe("isUnanticipatedAIFailure", () => {
     // a generation that genuinely broke.
     const cancelled = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation was cancelled",
       cause: new AIGenerationCancelledError({
         message: "AI generation was cancelled",
@@ -613,6 +626,7 @@ describe("isUnanticipatedAIFailure", () => {
   test("reports a 502 the cancellation tag does not explain", () => {
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation did not complete",
     });
 
@@ -800,6 +814,7 @@ describe("AWS SDK service exceptions", () => {
       [
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: throttled.message,
           cause: throttled,
         }),

@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId/invoices/new",
-  "reason": "Load the invoice prefill with the matter data; like the other matter routes it waits for professional-use acceptance and the member role.",
+  "reason": "Load the invoice prefill with the matter data; like the other matter routes it waits for professional-use acceptance and the member role. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 5,
     "requests": [
@@ -16,6 +16,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/properties/:id",
       "GET /v1/signals/count",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
@@ -45,7 +46,8 @@
       "GET /v1/workspaces/:id/events": 1,
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/workflow": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 2,
@@ -65,7 +67,8 @@
       "GET /v1/workspaces/:id/activity": 5,
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
-      "GET /v1/workspaces/navigation": 4
+      "GET /v1/workspaces/navigation": 4,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -85,7 +88,8 @@
       "GET /v1/workspaces/:id/activity": 1024,
       "GET /v1/workspaces/:id/overview": 1024,
       "GET /v1/workspaces/:id/workflow": 1024,
-      "GET /v1/workspaces/navigation": 1024
+      "GET /v1/workspaces/navigation": 1024,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

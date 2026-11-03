@@ -5,9 +5,12 @@ import path from "node:path";
 
 import { ENV_CATALOG, ENV_OWNER } from "./env-catalog";
 import {
+  RELEASE_ARTIFACT,
   renderSelfhostCompose,
   SELFHOST_APPLICATION_IMAGE_EXPRESSION,
   SELFHOST_COMPOSE_ENV,
+  SELFHOST_SERVICE,
+  SELFHOST_SERVICE_CONTRACT,
   selfhostComposeViolations,
 } from "./selfhost-contract";
 import {
@@ -41,7 +44,7 @@ describe("self-host Compose contract", () => {
       "\n  scheduler:\n    image: stella:scheduler\n\n  gotenberg:\n    image:",
     );
     expect(selfhostComposeViolations(compose)).toContain(
-      "Compose services must be exactly: api, document-processing-worker, gotenberg.",
+      "Compose services must be exactly: api, document-processing-worker, file-derivative-worker, gotenberg.",
     );
   });
 
@@ -69,6 +72,31 @@ describe("self-host Compose contract", () => {
     expect(selfhostComposeViolations(compose)).toContain(
       "api healthcheck must probe /ready.",
     );
+  });
+
+  test.each(
+    Object.values(SELFHOST_SERVICE).filter(
+      (service) => SELFHOST_SERVICE_CONTRACT[service].type === "queue-worker",
+    ),
+  )("requires an API health probe and healthy dependency for %s", (service) => {
+    const compose = renderSelfhostCompose();
+    const start = compose.indexOf(`\n  ${service}:\n`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const next = compose.slice(start + 1).search(/\n {2}\S/u);
+    const end = next === -1 ? compose.length : start + 1 + next;
+    const block = compose.slice(start, end);
+    for (const changed of [
+      block.replace(/ {4}healthcheck:[\s\S]*? {4}restart:/u, "    restart:"),
+      block.replace(
+        / {4}depends_on:[\s\S]*? {4}healthcheck:/u,
+        "    healthcheck:",
+      ),
+      block.replace("condition: service_healthy", "condition: service_started"),
+    ]) {
+      expect(
+        selfhostComposeViolations(compose.replace(block, () => changed)),
+      ).toContain(`${service} must depend on API readiness.`);
+    }
   });
 });
 
@@ -229,29 +257,29 @@ describe("release manifest contract", () => {
     reference: `ghcr.io/stella/stella-api@sha256:${"a".repeat(64)}`,
   };
 
+  const artifacts = Object.fromEntries(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => [
+      manifestKey,
+      digestArtifact,
+    ]),
+  );
+
   test("accepts digest-qualified artifact references", () => {
-    expect(
-      releaseManifestIssues({
-        image: digestArtifact,
-        webImage: digestArtifact,
-      }),
-    ).toEqual([]);
+    expect(releaseManifestIssues(artifacts)).toEqual([]);
   });
 
-  test.each(["image", "webImage"])(
-    "rejects a mutable %s reference",
-    (manifestKey) => {
-      expect(
-        releaseManifestIssues({
-          image: digestArtifact,
-          webImage: digestArtifact,
-          [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
-        }),
-      ).toContain(
-        `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
-      );
-    },
-  );
+  test.each(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => manifestKey),
+  )("rejects a mutable %s reference", (manifestKey) => {
+    expect(
+      releaseManifestIssues({
+        ...artifacts,
+        [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
+      }),
+    ).toContain(
+      `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
+    );
+  });
 });
 
 describe("self-host workflow contract", () => {

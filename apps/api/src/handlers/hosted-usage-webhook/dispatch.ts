@@ -31,7 +31,10 @@ import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
+import type {
+  DispatchOutcome,
+  IgnoredEventReason,
+} from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
@@ -504,13 +507,13 @@ export const handleHostedEntitlementReconciliation = async ({
   if (organizationId === null) {
     return {
       kind: "ignored",
-      reason: "cannot resolve reconciliation audit owner",
+      reason: "reconciliation_owner_unresolved",
     };
   }
   if (!existing && !(await lockOrganizationIfExists(tx, organizationId))) {
     return {
       kind: "ignored",
-      reason: "reconciliation organization does not exist",
+      reason: "reconciliation_organization_not_found",
     };
   }
   await recordWebhookAuditEvent({
@@ -673,7 +676,7 @@ type FirstEntitlementResolution =
       organizationId: SafeId<"organization">;
     }
   | { type: "existing"; row: ExistingEntitlement }
-  | { type: "ignored"; reason: string };
+  | { type: "ignored"; reason: IgnoredEventReason };
 
 type CreateFirstEntitlementOptions = {
   mode: DispatchMode;
@@ -703,16 +706,16 @@ const createFirstEntitlement = async ({
   // Truly fresh: no local mapping exists, so metadata is the only
   // ownership signal we have.
   if (metadataOrganizationId === null) {
-    return { type: "ignored", reason: "missing metadata.organization_id" };
+    return { type: "ignored", reason: "missing_organization_metadata" };
   }
   const organizationId = parseAuthProviderId<"organization">(
     metadataOrganizationId,
   );
   if (organizationId === null) {
-    return { type: "ignored", reason: "invalid metadata.organization_id" };
+    return { type: "ignored", reason: "invalid_organization_metadata" };
   }
   if (!(await lockOrganizationIfExists(tx, organizationId))) {
-    return { type: "ignored", reason: "organization does not exist" };
+    return { type: "ignored", reason: "organization_not_found" };
   }
   const inserted = await tx
     .insert(usageEntitlements)
@@ -781,7 +784,7 @@ const createFirstEntitlement = async ({
     signalSecondLiveSubscription({ mode, mapped: byAccount, payload });
     return {
       type: "ignored",
-      reason: "hosted account reference already maps to another entitlement",
+      reason: "account_reference_conflict",
     };
   }
   const conflicting =
@@ -816,7 +819,7 @@ export const handleHostedEntitlementUpsert = async ({
   const status = mapped.status;
   const period = readHostedPeriod(payload, status);
   if (period === null) {
-    return { kind: "ignored", reason: "invalid period dates" };
+    return { kind: "ignored", reason: "invalid_period_dates" };
   }
   const { start: periodStart, end: periodEnd } = period;
   // metadata.organization_id (which we set at hosted setup creation) is
@@ -837,7 +840,8 @@ export const handleHostedEntitlementUpsert = async ({
   if (!policy) {
     return {
       kind: "ignored",
-      reason: `no subscription usage_policy matches hosted policy reference ${payload.policy_ref}`,
+      reason: "subscription_policy_not_found",
+      detail: payload.policy_ref,
     };
   }
 
@@ -865,7 +869,7 @@ export const handleHostedEntitlementUpsert = async ({
     if (existingByProvider.source !== "hosted") {
       return {
         kind: "ignored",
-        reason: "matching entitlement is manually managed",
+        reason: "matching_entitlement_manual",
       };
     }
     if (
@@ -878,7 +882,7 @@ export const handleHostedEntitlementUpsert = async ({
     ) {
       return {
         kind: "ignored",
-        reason: "stale provider event (does not supersede current state)",
+        reason: "stale_provider_event",
       };
     }
     if (
@@ -892,7 +896,7 @@ export const handleHostedEntitlementUpsert = async ({
       // Absent metadata is fine: the local row is authoritative.
       return {
         kind: "ignored",
-        reason: "metadata organization_id mismatches local mapping",
+        reason: "organization_mapping_conflict",
       };
     }
     ownerOrganizationId = existingByProvider.organizationId;
@@ -911,7 +915,7 @@ export const handleHostedEntitlementUpsert = async ({
       });
       return {
         kind: "ignored",
-        reason: "hosted account reference already maps to another entitlement",
+        reason: "account_reference_conflict",
       };
     }
     previousRow = existingByProvider;
@@ -982,7 +986,7 @@ export const handleHostedEntitlementUpsert = async ({
         if (existing.source === "manual") {
           return {
             kind: "ignored",
-            reason: "org has manual entitlement; refuse hosted overwrite",
+            reason: "organization_manual_entitlement",
           };
         }
         if (
@@ -991,7 +995,7 @@ export const handleHostedEntitlementUpsert = async ({
         ) {
           return {
             kind: "ignored",
-            reason: "metadata organization_id mismatches local account mapping",
+            reason: "account_organization_mapping_conflict",
           };
         }
         const replacesExternalId =
@@ -1008,7 +1012,7 @@ export const handleHostedEntitlementUpsert = async ({
           }
           return {
             kind: "ignored",
-            reason: "terminal event for a superseded external entitlement",
+            reason: "superseded_terminal_event",
           };
         }
         signalSecondLiveSubscription({ mode, mapped: existing, payload });
@@ -1022,7 +1026,7 @@ export const handleHostedEntitlementUpsert = async ({
         ) {
           return {
             kind: "ignored",
-            reason: "stale provider event (does not supersede current state)",
+            reason: "stale_provider_event",
           };
         }
         const previousCreatedAt = replacesExternalId
@@ -1294,7 +1298,7 @@ export const handleUsageEntitlementStatusChange = async ({
       }
       return {
         kind: "ignored",
-        reason: "terminal event for a superseded external entitlement",
+        reason: "superseded_terminal_event",
       };
     }
     if (!current) {
@@ -1327,7 +1331,7 @@ export const handleUsageEntitlementStatusChange = async ({
   if (existing.source !== "hosted") {
     return {
       kind: "ignored",
-      reason: "entitlement is manually managed",
+      reason: "entitlement_manual",
     };
   }
   const occurredAt = parseOccurredAt(payload);
@@ -1346,7 +1350,7 @@ export const handleUsageEntitlementStatusChange = async ({
   ) {
     return {
       kind: "ignored",
-      reason: "stale provider event (does not supersede current state)",
+      reason: "stale_provider_event",
     };
   }
   await tx
@@ -1424,7 +1428,8 @@ export const handleHostedAllocation = async ({
   if (payload.allocation_reason !== "addon") {
     return {
       kind: "ignored",
-      reason: `allocation_reason ${payload.allocation_reason ?? "missing"} is not an addon allocation`,
+      reason: "non_addon_allocation",
+      detail: payload.allocation_reason ?? "missing",
     };
   }
 
@@ -1433,11 +1438,11 @@ export const handleHostedAllocation = async ({
   // to ignored; we never invent ownership from account_ref.
   const organizationIdRaw = payload.metadata?.organization_id;
   if (!organizationIdRaw) {
-    return { kind: "ignored", reason: "missing metadata.organization_id" };
+    return { kind: "ignored", reason: "missing_organization_metadata" };
   }
   const organizationId = parseAuthProviderId<"organization">(organizationIdRaw);
   if (organizationId === null) {
-    return { kind: "ignored", reason: "invalid metadata.organization_id" };
+    return { kind: "ignored", reason: "invalid_organization_metadata" };
   }
 
   const policy = await resolvePolicyByHostedPolicyRef(
@@ -1448,7 +1453,8 @@ export const handleHostedAllocation = async ({
   if (!policy) {
     return {
       kind: "ignored",
-      reason: `no add-on usage_policy matches hosted policy reference ${payload.policy_ref}`,
+      reason: "addon_policy_not_found",
+      detail: payload.policy_ref,
     };
   }
 
@@ -1462,7 +1468,7 @@ export const handleHostedAllocation = async ({
   if (!existing) {
     return {
       kind: "ignored",
-      reason: "add-on has no associated entitlement",
+      reason: "addon_without_entitlement",
     };
   }
   // Ownership: the metadata-supplied org id must match the locally
@@ -1472,7 +1478,7 @@ export const handleHostedAllocation = async ({
   if (existing.organizationId !== organizationId) {
     return {
       kind: "ignored",
-      reason: "metadata organization_id mismatches local mapping",
+      reason: "organization_mapping_conflict",
     };
   }
 
@@ -1486,7 +1492,7 @@ export const handleHostedAllocation = async ({
     .limit(1);
   const period = periodRows.at(0);
   if (!period) {
-    return { kind: "ignored", reason: "entitlement row vanished" };
+    return { kind: "ignored", reason: "entitlement_row_vanished" };
   }
 
   // metadata.seat_user_id is the Stella user.id of the seat that
@@ -1520,7 +1526,7 @@ export const handleHostedAllocation = async ({
     return { kind: "duplicate_allocation" };
   }
   if (allocationResult.status === "skipped") {
-    return { kind: "ignored", reason: "policy grants zero add-on units" };
+    return { kind: "ignored", reason: "zero_addon_units" };
   }
 
   await recordWebhookAuditEvent({

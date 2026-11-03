@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The diagnostic CHECK is replaced atomically and added NOT VALID under 1s lock_timeout and 5s statement_timeout; online validation runs outside the schema transaction."
+}

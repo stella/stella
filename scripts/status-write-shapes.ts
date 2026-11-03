@@ -11,6 +11,7 @@ import {
   parseSource,
   type Program,
   type SpreadElement,
+  staticPropertyName,
   type TemplateLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
@@ -823,13 +824,18 @@ export const unmanagedTransitionTables = (
       return false;
     }
     seen.add(object);
-    return object.properties.some((property) => {
+    const unmanagedOptions = object.properties.map((property) => {
       if (property.type !== "SpreadElement") {
-        return propertyName(property.key) === "unmanaged";
+        const name = staticPropertyName(property);
+        if (name === undefined) {
+          panic("Transition spec option keys must be static");
+        }
+        return name === "unmanaged";
       }
       const spread = objectOf(property.argument);
       return spread !== undefined && hasUnmanaged(spread, seen);
     });
+    return unmanagedOptions.includes(true);
   };
   let declarations: ObjectExpression | undefined;
   const visit = (node: Node) => {
@@ -866,7 +872,7 @@ export const unmanagedTransitionTables = (
       if (property.method || property.kind !== "init") {
         panic("Transition spec entries must be properties");
       }
-      const name = propertyName(property.key);
+      const name = staticPropertyName(property);
       if (name === undefined) {
         panic("Transition spec table keys must be static");
       }

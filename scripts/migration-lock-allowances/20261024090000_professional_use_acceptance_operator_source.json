@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The source CHECK is replaced transactionally and added NOT VALID, avoiding a scan under ACCESS EXCLUSIVE; 1s lock_timeout bounds acquisition and separate validation uses the weaker lock."
+}

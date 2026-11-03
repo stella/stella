@@ -12,6 +12,7 @@ export type AuthenticatedUser = {
   name: string | undefined;
   preferredName: string | null | undefined;
   timezoneId: string;
+  readerAnswerLanguage?: string | null | undefined;
   wordEditShortcut: string | null | undefined;
 };
 

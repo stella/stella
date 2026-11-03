@@ -257,15 +257,19 @@ const JURISDICTION_BY_REGION: ReadonlyMap<string, string> = new Map(
  * Quotation typography follows the cited jurisdiction, like the citation: the
  * marks of its working language. Accepts the route, corpus or region form.
  */
+export const jurisdictionQuotationMarks = (country: string) => {
+  const normalized = fromCaseLawCountryParam(country);
+  return quotationMarksFor({
+    country: JURISDICTION_BY_REGION.get(normalized) ?? normalized,
+    language: null,
+  });
+};
+
 export const formatJurisdictionQuotation = (
   text: string,
   country: string,
 ): string => {
-  const normalized = fromCaseLawCountryParam(country);
-  const marks = quotationMarksFor({
-    country: JURISDICTION_BY_REGION.get(normalized) ?? normalized,
-    language: null,
-  });
+  const marks = jurisdictionQuotationMarks(country);
   return `${marks.open}${text}${marks.close}`;
 };
 

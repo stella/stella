@@ -1,0 +1,3 @@
+{
+  "add-column": "Adding the nullable reader_answer_language column to user without a default is a catalog-only change with no table rewrite or row scan; the ACCESS EXCLUSIVE acquisition is bounded by 5s lock_timeout and the statement by 30s."
+}

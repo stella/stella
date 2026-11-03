@@ -65,8 +65,6 @@ describe("the sessions an open event stream may still serve", () => {
     await createDatabaseSessionLifetimeStore(testDb, {
       expiresIn: 30 * 24 * 60 * 60,
       updateAge: 24 * 60 * 60,
-      rotationEnabled: true,
-      capEnabled: true,
     }).revokeById({ sessionId: revoked, userId: owner });
 
     const held = await readLiveSseSessions(

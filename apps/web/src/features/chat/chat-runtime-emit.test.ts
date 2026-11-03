@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
@@ -21,6 +29,11 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { chatRefusal } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { toSafeId } from "@/lib/safe-id";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 // How often subscribers hear about a streaming response: messages that change
 // while a request runs reach them once per scheduled emit, however many

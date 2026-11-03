@@ -178,9 +178,31 @@ export const missingDeclarationCacheInputs = (
   return uncoveredApiTypecheckFiles({ files, inputs, project });
 };
 
+// Calls that build a route group, the API server, or an MCP server, keyed by
+// the module that exports them (relative to apps/api/src for API modules).
+const RUNTIME_CONSTRUCTORS: Readonly<Record<string, readonly string[]>> = {
+  "http/route": ["routes", "mount"],
+  "http/app": ["createHttpApp"],
+  "@modelcontextprotocol/server": ["Server"],
+};
+
+const constructorModule = (specifier: string, relative: string) => {
+  if (specifier.startsWith("@/api/")) {
+    return specifier.slice("@/api/".length);
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix.join(path.posix.dirname(relative), specifier);
+  }
+  return specifier;
+};
+
 // Route and server contracts belong to the source checker, never to the
-// declaration surface consumed by secondary compiler programs.
+// declaration surface consumed by secondary compiler programs. A module is a
+// boundary by its name, or by building routes or a server whatever its name.
 const isApiRuntimeBoundary = (filename: string, text: string) => {
+  if (JSON_MODULE.test(filename)) {
+    return false;
+  }
   const relative = filename
     .replaceAll(path.sep, "/")
     .split("/apps/api/src/")[1];
@@ -195,45 +217,62 @@ const isApiRuntimeBoundary = (filename: string, text: string) => {
     return true;
   }
   const parsed = parseSource(filename, text);
+  // Local names bound to a constructor, and namespaces that carry one.
   const constructors = new Set<string>();
+  const namespaces = new Map<string, readonly string[]>();
   for (const statement of parsed.program.body) {
     if (
       statement.type !== "ImportDeclaration" ||
-      !["elysia", "@modelcontextprotocol/server"].includes(
-        statement.source.value,
-      )
+      statement.importKind === "type"
     ) {
       continue;
     }
+    const names =
+      RUNTIME_CONSTRUCTORS[constructorModule(statement.source.value, relative)];
+    if (!names) {
+      continue;
+    }
     for (const binding of statement.specifiers) {
-      if (
-        binding.type === "ImportDefaultSpecifier" &&
-        statement.source.value === "elysia"
-      ) {
-        constructors.add(binding.local.name);
-      }
-      if (binding.type === "ImportSpecifier") {
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.set(binding.local.name, names);
+      } else if (binding.type === "ImportSpecifier") {
         const imported =
           binding.imported.type === "Identifier"
             ? binding.imported.name
             : binding.imported.value;
-        if (imported === "Elysia" || imported === "Server") {
+        if (binding.importKind !== "type" && names.includes(imported)) {
           constructors.add(binding.local.name);
         }
       }
     }
   }
-  let route = false;
+  if (constructors.size === 0 && namespaces.size === 0) {
+    return false;
+  }
+  let boundary = false;
   walk(parsed.program, (node) => {
-    if (
-      node.type === "NewExpression" &&
-      node.callee.type === "Identifier" &&
-      constructors.has(node.callee.name)
-    ) {
-      route = true;
+    if (boundary) {
+      return "skip-children";
     }
+    if (node.type !== "CallExpression" && node.type !== "NewExpression") {
+      return undefined;
+    }
+    const callee = node.callee;
+    if (callee.type === "Identifier") {
+      boundary = constructors.has(callee.name);
+    } else if (
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "Identifier" &&
+      callee.property.type === "Identifier"
+    ) {
+      boundary =
+        namespaces.get(callee.object.name)?.includes(callee.property.name) ??
+        false;
+    }
+    return undefined;
   });
-  return route;
+  return boundary;
 };
 
 // Emit the explicit public roots and their declaration dependencies. Runtime

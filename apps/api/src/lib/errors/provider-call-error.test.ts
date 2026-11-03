@@ -37,6 +37,7 @@ describe("provider call error structural contract", () => {
         };
         const original = new HandlerError({
           status: 502,
+          code: "internal_error",
           message: SENTINEL,
           cause: evidence,
         });
@@ -168,14 +169,14 @@ describe("provider call error codes", () => {
     );
   });
 
-  test("leaves an absent code absent", () => {
+  test("names an absent provider code explicitly", () => {
     expect(
       createProviderCallError({
         model: { provider: "openrouter", keySource: "byok" },
         status: 502,
         evidence: {},
       }).code,
-    ).toBeUndefined();
+    ).toBe(PROVIDER_ERROR_CODE);
   });
 
   test("reach the HTTP body and telemetry as the closed value", () => {

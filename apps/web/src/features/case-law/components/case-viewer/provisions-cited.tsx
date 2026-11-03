@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -54,8 +55,9 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -124,7 +126,7 @@ export const ProvisionsCited = ({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   useQueryViewError(resolvedView, "ProvisionsCited:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
@@ -286,7 +288,7 @@ const WorkReferences = ({
         references: group.provisions,
       }),
   });
-  const versionsView = useQueryView(versionsQuery);
+  const versionsView = queryView(versionsQuery);
   useQueryViewError(versionsView, "WorkReferences:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
@@ -322,9 +324,7 @@ const WorkReferences = ({
   const { basis, exceptions } = summarizeProvisionVersions(group.provisions);
   let title = group.title;
   if (statute !== undefined) {
-    title = statute.title.includes(group.title)
-      ? statute.title
-      : `${group.title}, ${statute.title}`;
+    title = statuteDisplayLabel(statute).text;
   }
 
   return (

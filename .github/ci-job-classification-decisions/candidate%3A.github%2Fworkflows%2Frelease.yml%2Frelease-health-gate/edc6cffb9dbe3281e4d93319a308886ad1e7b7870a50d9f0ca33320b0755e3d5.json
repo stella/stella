@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Requires healthy previous-release evidence or explicit manual acknowledgement before stable production promotion.",
+  "reviewedDigest": "edc6cffb9dbe3281e4d93319a308886ad1e7b7870a50d9f0ca33320b0755e3d5"
+}

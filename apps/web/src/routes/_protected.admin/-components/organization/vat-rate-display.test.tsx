@@ -60,9 +60,11 @@ describe("VAT rate display", () => {
         );
         expect(markup).toContain('role="alert"');
         expect(markup).toContain(
-          status === 409
-            ? messages.billing.vatRates.overlap
-            : messages.errors.actionFailed,
+          renderToStaticMarkup(
+            status === 409
+              ? messages.billing.vatRates.overlap
+              : messages.errors.actionFailed,
+          ),
         );
         expect(markup).not.toContain("private-server-details");
         expect(markup).not.toContain("private-raw-response");

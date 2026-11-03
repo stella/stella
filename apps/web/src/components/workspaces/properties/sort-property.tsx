@@ -1,73 +1,87 @@
+import { useId } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ArrowDownIcon, ArrowUpIcon } from "@stll/ui/icons";
+import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
+import { SORT_DIRECTIONS } from "@stll/workspace-ui/column-sort";
+import type {
+  ColumnSortKind,
+  SortDirection,
+} from "@stll/workspace-ui/column-sort";
 
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
+import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type {
   TableColumn,
   TableRowData,
   TableTreeNode,
 } from "@/components/workspaces/table/types";
 
-export type SortHint = "text" | "date" | "number";
+const DIRECTION_ICONS = {
+  asc: ArrowUpIcon,
+  desc: ArrowDownIcon,
+} as const satisfies Record<SortDirection, LucideIcon>;
 
 type SortPropertyProps<TRow extends TableRowData> = {
   column: TableColumn<TRow>;
-  sortHint?: SortHint | undefined;
+  /** What the column's values are, which decides what each item says. */
+  kind: ColumnSortKind;
+  /** Which ways the rows may be ordered by this column right now. */
+  directions: SortDirectionOffers;
 };
-
-const LABELS = {
-  text: { asc: "A → Z", desc: "Z → A" },
-  number: { asc: "1 → 9", desc: "9 → 1" },
-  // Date labels are filled in at render time from i18n.
-  date: { asc: "", desc: "" },
-} as const satisfies Record<SortHint, { asc: string; desc: string }>;
 
 export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
   column,
-  sortHint,
+  directions,
+  kind,
 }: SortPropertyProps<TRow>) => {
-  const t = useTranslations("workspaces.properties");
-  const disabled = !column.getCanSort();
-
-  let ascLabel: string;
-  let descLabel: string;
-
-  if (!sortHint) {
-    ascLabel = t("sortAscending");
-    descLabel = t("sortDescending");
-  } else if (sortHint === "date") {
-    ascLabel = t("sortAscendingDate");
-    descLabel = t("sortDescendingDate");
-  } else {
-    ascLabel = LABELS[sortHint].asc;
-    descLabel = LABELS[sortHint].desc;
-  }
+  const t = useTranslations();
+  const labels = sortDirectionLabels((key) => t(key));
+  const reasonIdPrefix = useId();
+  const canSort = column.getCanSort();
+  const active = column.getIsSorted();
 
   return (
     <div className="flex flex-col p-1">
-      <Button
-        className="justify-start font-normal"
-        size="sm"
-        disabled={disabled}
-        onClick={() => {
-          column.toggleSorting(false, false);
-        }}
-        variant="ghost"
-      >
-        <ArrowUpIcon /> {ascLabel}
-      </Button>
-      <Button
-        className="justify-start font-normal"
-        size="sm"
-        disabled={disabled}
-        onClick={() => {
-          column.toggleSorting(true, false);
-        }}
-        variant="ghost"
-      >
-        <ArrowDownIcon /> {descLabel}
-      </Button>
+      {SORT_DIRECTIONS.map((direction) => {
+        const Icon = DIRECTION_ICONS[direction];
+        const availability = directions[direction];
+        const isActive = active === direction;
+        const reasonId = `${reasonIdPrefix}-${direction}`;
+        return (
+          <div className="flex flex-col" key={direction}>
+            <Button
+              aria-describedby={
+                availability.type === "unavailable" ? reasonId : undefined
+              }
+              aria-pressed={isActive}
+              className="justify-start font-normal"
+              disabled={!canSort || availability.type === "unavailable"}
+              onClick={() => {
+                column.toggleSorting(direction === "desc", false);
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              <Icon />
+              <span className="flex-1 text-start">
+                {labels[kind][direction]}
+              </span>
+              {isActive && <CheckIcon aria-hidden />}
+            </Button>
+            {availability.type === "unavailable" && (
+              <p
+                className="text-muted-foreground max-w-56 px-2 pb-1 text-xs text-pretty"
+                id={reasonId}
+              >
+                {availability.reason}
+              </p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };

@@ -39,6 +39,7 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
 } from "./online-migration-connection";
+import { INVOICE_TENANT_UNIQUE_INDEX } from "./online-unique-indexes";
 
 /** Module-private, so a statement is constructible and readable only here. */
 const LOCK_TAKING: unique symbol = Symbol("stella.lockTakingStatement");
@@ -68,6 +69,9 @@ const quoteIdentifier = (identifier: string): string => {
   }
   return `"${identifier}"`;
 };
+
+const quoteLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
 
 type LockTakingOptions = {
   tableName: string;
@@ -184,6 +188,82 @@ export const renameIndex = ({
     lockQueue: "beside_writers",
   });
 };
+
+const INVOICE_TENANT_KEY_STATE_SQL = `
+WITH target AS (
+  SELECT 'public.invoices'::regclass AS table_id,
+    to_regclass('public.invoices_id_org_unique') AS index_id,
+    ARRAY[(SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='id'),
+      (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='organization_id')]::smallint[] AS referenced_columns,
+    ARRAY[(SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='original_invoice_id'),
+      (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='organization_id')]::smallint[] AS source_columns
+)
+SELECT
+  EXISTS (SELECT 1 FROM pg_catalog.pg_index i, target t WHERE i.indexrelid=t.index_id AND i.indrelid=t.table_id
+    AND i.indisunique AND i.indisvalid AND i.indisready AND i.indimmediate
+    AND pg_get_indexdef(i.indexrelid)=${quoteLiteral(`CREATE UNIQUE INDEX ${INVOICE_TENANT_UNIQUE_INDEX.name} ${INVOICE_TENANT_UNIQUE_INDEX.definitionBody}`)}) AS "indexReady",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique') AS "uniquePresent",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique'
+    AND c.contype='u' AND c.conindid=t.index_id AND c.conkey=t.referenced_columns AND NOT c.condeferrable AND NOT c.condeferred) AS "uniqueReady",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_original_organization_fk') AS "foreignPresent",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_original_organization_fk'
+    AND c.contype='f' AND c.confrelid=t.table_id AND c.conindid=t.index_id
+    AND c.conkey=t.source_columns AND c.confkey=t.referenced_columns
+    AND c.confupdtype='a' AND c.confdeltype='a' AND c.confmatchtype='s'
+    AND NOT c.condeferrable AND NOT c.condeferred) AS "foreignReady"
+FROM target`;
+
+/** Catalog identity, not a matching name, proves the online installation. */
+export const readInvoiceTenantKeyInstalled = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+): Promise<boolean> => {
+  const row = (await connection.query(INVOICE_TENANT_KEY_STATE_SQL)).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["indexReady"] !== "boolean" ||
+    typeof row["uniquePresent"] !== "boolean" ||
+    typeof row["uniqueReady"] !== "boolean" ||
+    typeof row["foreignPresent"] !== "boolean" ||
+    typeof row["foreignReady"] !== "boolean"
+  ) {
+    return panic("Invoice tenant key catalog state has an invalid shape");
+  }
+  if (!row["indexReady"]) {
+    return panic("Invoice tenant key index is missing, stale or not ready");
+  }
+  if (
+    (row["uniquePresent"] && !row["uniqueReady"]) ||
+    (row["foreignPresent"] && !row["foreignReady"])
+  ) {
+    return panic("Invoice tenant constraints have an unexpected identity");
+  }
+  return row["uniqueReady"] && row["foreignReady"];
+};
+
+/** One atomic catalog-only installation, gated as writer-blocking work. */
+export const installInvoiceTenantKey = (): LockTakingStatement =>
+  lockTaking({
+    tableName: INVOICE_TENANT_UNIQUE_INDEX.tableName,
+    lockQueue: "blocks_writers",
+    text: `DO $invoice_tenant_key$
+DECLARE state record;
+BEGIN
+  SELECT * INTO state FROM (${INVOICE_TENANT_KEY_STATE_SQL}) identity_state;
+  IF NOT state."indexReady" THEN
+    RAISE EXCEPTION 'Invoice tenant key index is missing, stale or not ready';
+  END IF;
+  IF (state."uniquePresent" AND NOT state."uniqueReady") OR (state."foreignPresent" AND NOT state."foreignReady") THEN
+    RAISE EXCEPTION 'Invoice tenant constraints have an unexpected identity';
+  END IF;
+  IF NOT state."uniqueReady" THEN
+    ALTER TABLE public.invoices ADD CONSTRAINT invoices_id_org_unique UNIQUE USING INDEX invoices_id_org_unique;
+  END IF;
+  IF NOT state."foreignReady" THEN
+    ALTER TABLE public.invoices ADD CONSTRAINT invoices_original_organization_fk
+      FOREIGN KEY (original_invoice_id,organization_id) REFERENCES public.invoices(id,organization_id) NOT VALID;
+  END IF;
+END $invoice_tenant_key$`,
+  });
 
 /** A NOT VALID CHECK or foreign key the online phase validates. */
 export type OnlineConstraintValidation = {
@@ -308,9 +388,6 @@ export const setRowLevelSecurity = (
   accessExclusive(tableName, [
     `ALTER TABLE "public".${quoteIdentifier(tableName)} ${mode.toUpperCase()} ROW LEVEL SECURITY`,
   ]);
-
-const quoteLiteral = (value: string): string =>
-  `'${value.replaceAll("'", "''")}'`;
 
 /**
  * A call to a function declared `online` in `DDL_FUNCTIONS`, gated on the

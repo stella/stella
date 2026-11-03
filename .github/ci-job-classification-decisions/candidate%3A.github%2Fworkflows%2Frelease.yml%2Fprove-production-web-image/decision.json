@@ -1,0 +1,4 @@
+{
+  "kind": "support",
+  "qualifier": "Boots the candidate's production web image and checks its assets and declared configuration as release evidence; no publication."
+}

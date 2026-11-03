@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { READER_MATTER_TARGET_TYPES } from "@stll/api-contract/legal-reader-annotations";
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 
 import { member } from "@/api/db/auth-schema";
@@ -12,6 +13,7 @@ import {
   agentSkillRevisions,
   agentSkills,
   aiMemories,
+  billingDraftUserSettings,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -33,6 +35,7 @@ import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   listAccountMembershipPage,
   readAccountProfileForExport,
@@ -402,13 +405,29 @@ const readLegalReaderAnnotationsPage = async ({
     extraWhere: and(
       or(
         eq(legalReaderAnnotations.visibility, "private"),
-        eq(legalReaderAnnotations.targetType, "verification-claim"),
+        inArray(legalReaderAnnotations.targetType, [
+          ...READER_MATTER_TARGET_TYPES,
+        ]),
       ),
       stillMember(organizationId, userId),
       after(legalReaderAnnotations.id, cursor),
     ),
   });
-  return projectRows(rows, projections.legal_reader_annotations);
+  const withdrawal = await readWithdrawnCopyProjection({
+    values: rows,
+    decisionIds: rows
+      .filter((row) => row.targetType === "decision")
+      .map((row) => row.targetId),
+  });
+  return projectRows(
+    rows.map((row) =>
+      withdrawal.annotation(
+        row,
+        row.targetType === "decision" ? row.targetId : null,
+      ),
+    ),
+    projections.legal_reader_annotations,
+  );
 };
 
 const readLegalReaderAnswersPage = async ({
@@ -444,7 +463,6 @@ const readLegalReaderAnswersPage = async ({
       .from(legalReaderAnswerMessages)
       .where(
         and(
-          eq(legalReaderAnswerMessages.role, "user"),
           inArray(
             legalReaderAnswerMessages.answerId,
             rows.map(({ id }) => id),
@@ -459,11 +477,16 @@ const readLegalReaderAnswersPage = async ({
     if (messages.length > maximumMessages) {
       panic("Reader answer messages exceed their owning limit");
     }
+    const withdrawal = await readWithdrawnCopyProjection({
+      values: [rows, messages],
+    });
     return rows.map((row) => ({
       id: row.id,
       value: projections.legal_reader_answers(
-        row,
-        messages.filter(({ answerId }) => answerId === row.id),
+        withdrawal.answer(row),
+        messages
+          .filter(({ answerId }) => answerId === row.id)
+          .map((message) => withdrawal.answerMessage(message, row.decisionId)),
       ),
     }));
   });
@@ -490,6 +513,33 @@ const readSavedTimeNarrativesPage = async ({
       .orderBy(asc(savedTimeNarratives.id))
       .limit(ACCOUNT_EXPORT_PAGE_SIZE);
     return projectRows(rows, projections.saved_time_narratives);
+  });
+
+// One row per organization and user; the user id pages it like any other id.
+const readBillingDraftSettingsPage = async ({
+  projections,
+  narrowScopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await narrowScopedDb(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(billingDraftUserSettings)
+      .where(
+        and(
+          eq(billingDraftUserSettings.organizationId, organizationId),
+          eq(billingDraftUserSettings.userId, userId),
+          stillMember(organizationId, userId),
+          after(billingDraftUserSettings.userId, cursor),
+        ),
+      )
+      .limit(1);
+    return rows.map((row) => ({
+      id: row.userId,
+      value: projections.billing_draft_user_settings(row),
+    }));
   });
 
 const readTemplateDefaultsPage = async ({
@@ -572,6 +622,8 @@ const readOrganizationPage = async ({
       return await readLegalReaderAnswersPage(options);
     case "saved_time_narratives":
       return await readSavedTimeNarrativesPage(options);
+    case "billing_draft_user_settings":
+      return await readBillingDraftSettingsPage(options);
     case "template_lookup_format_user_defaults":
       return await readTemplateDefaultsPage(options);
     case "workspace_view_templates":

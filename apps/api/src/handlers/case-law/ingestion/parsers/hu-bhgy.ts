@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
 import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
@@ -68,15 +69,9 @@ import {
   type DocumentLine,
 } from "@/api/lib/legal-search/parsers/document-footnotes";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -230,6 +225,10 @@ const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         item satisfies never;
@@ -325,12 +324,16 @@ const itemsOf = (
         // A content control is a wrapper; its children are the document's.
         return itemsOf(block.content, notesAfter);
       // No line of the decision: a preserved block is opaque markup folio does
-      // not model and holds no text, and a bookmark marker is a position. This
-      // parser reads text, so it skips all three rather than round-tripping
-      // them.
+      // not model and holds no text, and a bookmark or move range marker is a
+      // position. This parser reads text, so it skips them rather than
+      // round-tripping them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -367,13 +370,7 @@ const headingKey = (text: string): string =>
   ).toLocaleLowerCase("hu-HU");
 
 /** Where in the document the walk currently is, which decides a body role. */
-type Region =
-  | "front"
-  | "operative"
-  | "reasoning"
-  | "apparatus"
-  | "closing"
-  | "certification";
+type Region = "front" | "operative" | "reasoning" | "closing" | "certification";
 
 /**
  * The section headings the collection prints, and the depth each sits at.
@@ -394,11 +391,13 @@ type SectionHeading = {
 const SECTION_HEADINGS = [
   { key: "rendelkező rész", level: 1, region: "operative" },
   { key: "indokolás", level: 1, region: "reasoning" },
-  { key: "a döntés elvi tartalma", level: 1, region: "apparatus" },
+  { key: "a döntés elvi tartalma", level: 1, region: "reasoning" },
+  { key: "a határozat elvi tartalma", level: 1, region: "reasoning" },
+  { key: "alkalmazott jogszabályok", level: 1, region: "reasoning" },
   {
     key: "alkalmazott jogszabályok és joggyakorlat",
     level: 1,
-    region: "apparatus",
+    region: "reasoning",
   },
   { key: "záradék", level: 1, region: "closing" },
   { key: "a felülvizsgálat alapjául szolgáló tényállás", level: 2 },
@@ -435,7 +434,13 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
  * In the current era the operative part opens with `Rendelkező rész`, which is
  * a section heading.
  */
-const OPERATIVE_INTRODUCTIONS = new Set(["ítéletet", "végzést", "határozatot"]);
+const OPERATIVE_INTRODUCTIONS = new Set([
+  "ítéletet",
+  "részítéletet",
+  "közbenső ítéletet",
+  "végzést",
+  "határozatot",
+]);
 
 /** The republic's formula, printed above the operative part in the legacy era. */
 const REPUBLIC_FORMULAE = new Set([
@@ -552,13 +557,31 @@ type HeaderLabelMatch = {
 };
 
 /**
+ * Whether a line opens with a label: the form, perhaps a few more words of a
+ * longer label (`A másodfokú bíróság neve és a jogerős határozat száma:`), and
+ * its colon; or the form alone with its value on the next line. A sentence
+ * that opens with the same words (`A felperes másodfokú eljárásban…`) is the
+ * decision's own text.
+ */
+const LABEL_TAIL = /^[^:.;]{0,80}:/u;
+
+const isLabelOpening = (key: string, form: string): boolean =>
+  key.startsWith(form) &&
+  (key.length === form.length || LABEL_TAIL.test(key.slice(form.length)));
+
+/**
  * The header label a line opens with, or `null`.
  *
  * Longest form wins, so a plural line is read as the label it is rather than
  * as the shorter one it happens to contain.
  */
 const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
-  const key = headingKey(text);
+  // The heading key without its trailing-mark trim: a label's colon is what
+  // tells it from a sentence that opens with the same words.
+  const key = collapseSpacedLetters(text)
+    .replaceAll(/[\s ]+/gu, " ")
+    .trim()
+    .toLocaleLowerCase("hu-HU");
   let best: {
     label: HuBhgyHeaderLabel;
     role: ParagraphRole;
@@ -567,7 +590,7 @@ const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
   for (const { label, role, forms } of HEADER_LABELS) {
     for (const form of forms) {
       if (
-        key.startsWith(form) &&
+        isLabelOpening(key, form) &&
         (best === null || form.length > best.length)
       ) {
         best = { label, role, length: form.length };
@@ -804,6 +827,8 @@ const HU_DECISION_TYPES = [
   "kollégiumi állásfoglalás",
   "kollégiumi vélemény",
   "elvi határozat",
+  "részítélet",
+  "közbenső ítélet",
   "ítélet",
   "végzés",
   "határozat",
@@ -839,6 +864,20 @@ export const huDecisionTypeFrom = (
   }
   return undefined;
 };
+
+/**
+ * Whether a short line introduces the operative part: its accusative
+ * introduction (`Í T É L E T E T :`), or, below a header, the kind printed
+ * alone (`V é g z é s`). Above a header the same word is the title block's.
+ */
+const opensOperativePart = (
+  key: string,
+  text: string,
+  belowHeader: boolean,
+): boolean =>
+  text.length <= 40 &&
+  (OPERATIVE_INTRODUCTIONS.has(key) ||
+    (belowHeader && HU_DECISION_TYPES.some((type) => type === key)));
 
 /** `Az ügy száma:      Gfv.VI.30.091/2025/4.` */
 const DOCKET_LABEL = "az ügy száma:";
@@ -1120,9 +1159,8 @@ const BODY_ROLE = {
   front: "intro",
   operative: "holding",
   reasoning: "argumentation",
-  apparatus: "apparatus",
   closing: "closing",
-  certification: "apparatus",
+  certification: "closing",
 } as const satisfies Record<Region, ParagraphRole>;
 
 const HEADING_ROLE_BY_LEVEL = {
@@ -1146,6 +1184,11 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
+  /**
+   * Read through a call: the line handlers move `region`, and a direct
+   * comparison after them would still see the value narrowed before them.
+   */
+  const inFrontMatter = (): boolean => region === "front";
   let decisionDate: string | undefined;
   let dateBeforeSignature: string | undefined;
   /**
@@ -1177,7 +1220,7 @@ export const parseHuBhgyDecision = (
       region = "certification";
       builder.paragraph({
         type: "paragraph",
-        role: "apparatus",
+        role: "closing",
         inlines: inlinesOf(line.runs),
         plainText: line.text,
       });
@@ -1193,6 +1236,10 @@ export const parseHuBhgyDecision = (
 
     if (region === "front") {
       titleLines.push(line.text);
+      // Court numbering ends the caption even when its heading is absent.
+      if (COURT_PARAGRAPH_NUMBER.test(line.text.trim())) {
+        region = "reasoning";
+      }
     }
 
     // ── A section heading the publisher prints ──
@@ -1210,7 +1257,13 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The operative part's own introduction ──
-    if (OPERATIVE_INTRODUCTIONS.has(key) && line.text.length <= 40) {
+    if (
+      opensOperativePart(
+        key,
+        line.text,
+        region === "front" && statedLabels.size > 0,
+      )
+    ) {
       region = "operative";
       builder.heading({
         type: "heading",
@@ -1315,7 +1368,7 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
-    if (numbered === null || number === undefined) {
+    if (number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
@@ -1384,6 +1437,16 @@ export const parseHuBhgyDecision = (
       continue;
     }
     lineTexts.push(plainText);
+    if (inFrontMatter()) {
+      for (const row of item.table.rows) {
+        const labelled = huBhgyHeaderLabelIn(
+          row.map(({ value }) => value.text).join("\t"),
+        );
+        if (labelled !== null) {
+          statedLabels.add(labelled.label);
+        }
+      }
+    }
     builder.table({ type: "table", rows, plainText });
   }
 
@@ -1392,17 +1455,6 @@ export const parseHuBhgyDecision = (
     .map(({ plainText }) => plainText.trim())
     .filter((text) => text.length > 0)
     .join("\n\n");
-
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
 
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);

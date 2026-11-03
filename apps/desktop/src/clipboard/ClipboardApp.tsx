@@ -39,6 +39,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -64,6 +65,7 @@ import {
   ImageIcon,
   KeyboardIcon,
   LinkIcon,
+  ListFilterIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
@@ -93,6 +95,8 @@ import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -103,7 +107,12 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -124,10 +133,12 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
+  activeClipboardSearchOptionCount,
   adjacentClipboardIndex,
   adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_OPTION_KEYS,
   CLIPBOARD_SEARCH_SCOPES,
   clipboardCardRenderFormat,
   clipboardControlsKeyAction,
@@ -146,6 +157,7 @@ import {
   clipboardSourceTitle,
   clipboardTimelineKeyAction,
   clipboardUntitledName,
+  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
@@ -161,6 +173,7 @@ import {
 import type {
   ClipboardPastePreview,
   ClipboardPointerPosition,
+  ClipboardSearchOptions,
   ClipboardSearchScope,
 } from "./clipboard-logic";
 import { clipboardHistory } from "./clipboard-selection";
@@ -247,6 +260,12 @@ const CLIPBOARD_SCOPE_PRESENTATION = {
   ClipboardSearchScope,
   { icon: LucideIcon; label: "clips" | "externalRegistry" }
 >;
+const SEARCH_OPTION_LABELS = {
+  exactPhrase: "searchOptionExactPhrase",
+  matchCase: "searchOptionMatchCase",
+  matchDiacritics: "searchOptionMatchDiacritics",
+  wholeWords: "searchOptionWholeWords",
+} as const satisfies Record<keyof ClipboardSearchOptions, string>;
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
@@ -374,6 +393,7 @@ type ClipboardCardProps = {
   /** The preview held by this card's context menu. */
   pastePreview: ClipboardPastePreview;
   query: string;
+  searchOptions: ClipboardSearchOptions;
   sourceVisual: ClipboardSourceAppVisual | null;
 };
 
@@ -524,6 +544,7 @@ const ClipboardCard = ({
   onSelect,
   pastePreview,
   query,
+  searchOptions,
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
@@ -713,6 +734,7 @@ const ClipboardCard = ({
             item={item}
             onImagePreviewStatusChange={setImagePreviewStatus}
             query={query}
+            searchOptions={searchOptions}
           />
         </div>
       </button>
@@ -869,7 +891,7 @@ const DialogShell = ({
     >
       <DialogPopup
         backdropClassName="bg-background/50 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
@@ -1523,7 +1545,7 @@ const ClipboardWelcomeDialog = ({
     >
       <DialogPopup
         backdropClassName="bg-background/54 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/94 max-w-xl rounded-[28px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] p-4"
@@ -1685,6 +1707,13 @@ const ClipboardApp = () => {
     (node: HTMLDivElement | null) => {
       timelineRailRef.current = node;
       observeTimelineRail(node);
+      const stopFading = fadeScrollEdges(node);
+      // A returned cleanup replaces React's detach call with `null`.
+      return () => {
+        stopFading?.();
+        timelineRailRef.current = null;
+        observeTimelineRail(null);
+      };
     },
     [observeTimelineRail],
   );
@@ -1698,6 +1727,11 @@ const ClipboardApp = () => {
     () => Temporal.Now.instant().epochMilliseconds,
   );
   const [query, setQuery] = useState("");
+  const [searchOptions, setSearchOptions] = useState<ClipboardSearchOptions>(
+    DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+  );
+  const activeSearchOptionCount =
+    activeClipboardSearchOptionCount(searchOptions);
   const [searchSource, setSearchSource] =
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
@@ -1932,6 +1966,7 @@ const ClipboardApp = () => {
     snapshot.items,
     filterQuery,
     activeGroupId,
+    searchOptions,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const sourceAppVisuals = new Map(
@@ -1951,7 +1986,12 @@ const ClipboardApp = () => {
   const resolveActionItems = () =>
     query === filterQuery
       ? filteredItems
-      : filterClipboardItems(snapshot.items, query, activeGroupId);
+      : filterClipboardItems(
+          snapshot.items,
+          query,
+          activeGroupId,
+          searchOptions,
+        );
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
@@ -2435,6 +2475,7 @@ const ClipboardApp = () => {
     filterQuery,
     railWindow.end,
     railWindow.start,
+    searchOptions,
     snapshot.groups,
     snapshot.items,
   ]);
@@ -2506,7 +2547,7 @@ const ClipboardApp = () => {
     event.preventDefault();
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
-        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), a[href], input:not([disabled])",
+        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]):not([data-clipboard-search-options]), a[href], input:not([disabled])",
       ),
     ).filter((control) => !control.closest("[inert]"));
     const control = target.closest<HTMLElement>("button, a, input");
@@ -2943,21 +2984,27 @@ const ClipboardApp = () => {
                     </p>
                     {filterQuery ? (
                       <Button
-                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        className="h-auto min-h-11 max-w-sm rounded-xl px-4 py-2 text-wrap"
                         onClick={() =>
                           applyScope({ next: "registry", focusSearch: true })
                         }
-                        size="sm"
-                        variant="link"
                       >
-                        {t("noResultsDescription", { query: filterQuery })}
+                        <Building2Icon aria-hidden="true" className="size-4" />
+                        <span className="min-w-0 wrap-break-word">
+                          {t("noResultsSearchRegistries", {
+                            query: filterQuery,
+                          })}
+                        </span>
                       </Button>
                     ) : null}
                   </div>
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className={cn(
+                      "clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1 [--fade-size:3rem]",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
@@ -3025,6 +3072,7 @@ const ClipboardApp = () => {
                                 : NO_CLIPBOARD_PASTE_PREVIEW
                             }
                             query={filterQuery}
+                            searchOptions={searchOptions}
                             sourceVisual={
                               item.sourceApp?.visualKey
                                 ? (sourceAppVisuals.get(
@@ -3159,8 +3207,96 @@ const ClipboardApp = () => {
                 />
                 <InputGroupAddon
                   align="inline-end"
-                  className="pe-4 [&>kbd]:me-0"
+                  className="gap-1 pe-4 [&>kbd]:me-0"
                 >
+                  <span
+                    className={cn(
+                      "inline-flex",
+                      searchSource !== "clips" && "invisible",
+                    )}
+                    inert={searchSource !== "clips"}
+                  >
+                    <Menu>
+                      <Tooltip>
+                        <MenuTrigger
+                          render={
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  aria-label={t("searchOptions")}
+                                  data-clipboard-search-options=""
+                                  className="relative rounded-full"
+                                  data-active={
+                                    activeSearchOptionCount > 0 ? "" : undefined
+                                  }
+                                  size="icon-sm"
+                                  variant="ghost"
+                                />
+                              }
+                            />
+                          }
+                        >
+                          <ListFilterIcon
+                            aria-hidden="true"
+                            className={cn(
+                              "size-4",
+                              activeSearchOptionCount > 0 && "text-primary",
+                            )}
+                          />
+                          {activeSearchOptionCount > 0 ? (
+                            <span
+                              aria-hidden="true"
+                              className="bg-primary absolute end-1 top-1 size-1.5 rounded-full"
+                            />
+                          ) : null}
+                        </MenuTrigger>
+                        <TooltipPopup>{t("searchOptions")}</TooltipPopup>
+                      </Tooltip>
+                      <MenuPopup
+                        align="end"
+                        className="w-60"
+                        finalFocus={searchInputRef}
+                        side="top"
+                      >
+                        <MenuGroup>
+                          <MenuGroupLabel>{t("searchOptions")}</MenuGroupLabel>
+                          {CLIPBOARD_SEARCH_OPTION_KEYS.map((key) => (
+                            <MenuCheckboxItem
+                              checked={searchOptions[key]}
+                              className="min-h-11 rounded-xl"
+                              key={key}
+                              onCheckedChange={(checked) => {
+                                setSearchOptions((current) => ({
+                                  ...current,
+                                  [key]: checked,
+                                }));
+                                setSelectedIndex(0);
+                              }}
+                            >
+                              {t(SEARCH_OPTION_LABELS[key])}
+                            </MenuCheckboxItem>
+                          ))}
+                        </MenuGroup>
+                        {activeSearchOptionCount > 0 ? (
+                          <>
+                            <MenuSeparator />
+                            <MenuItem
+                              className="min-h-11 rounded-xl"
+                              onClick={() => {
+                                setSearchOptions(
+                                  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+                                );
+                                setSelectedIndex(0);
+                              }}
+                            >
+                              <RotateCcwIcon />
+                              {t("searchOptionsReset")}
+                            </MenuItem>
+                          </>
+                        ) : null}
+                      </MenuPopup>
+                    </Menu>
+                  </span>
                   <kbd className="text-foreground-muted text-3xs me-0 font-mono">
                     {PRIMARY_MODIFIER_LABEL}K
                   </kbd>
@@ -3220,9 +3356,13 @@ const ClipboardApp = () => {
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
                   <div
-                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    className={cn(
+                      "flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     data-clipboard-groups-scroller=""
                     onWheel={handleRailWheel}
+                    ref={fadeScrollEdges}
                   >
                     {snapshot.groups.map((group, groupIndex) => {
                       const groupStyle: ClipboardGroupStyle = {

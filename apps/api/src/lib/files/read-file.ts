@@ -1,5 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { status } from "@/api/http/status";
@@ -16,6 +18,12 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 
+const previewUnavailable = () =>
+  status(400, {
+    code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+    message: "This file has no preview. Download it instead.",
+  });
+
 type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
@@ -28,6 +36,30 @@ type ReadFileHandlerProps = {
   purpose: FilePurpose;
   recordAuditEvent: AuditRecorder;
   readSessionAuthority: SyntheticSessionAuthorityReader;
+};
+
+type DisplayedFileContent = {
+  id: string;
+  mimeType: string;
+  pdfFileId: string | null;
+};
+
+/**
+ * The PDF the viewer shows for a file field: its PDF rendition, else the
+ * file itself when it is a PDF. Null when the viewer renders the file
+ * natively, or there is no PDF to show. Anything anchored to what the
+ * reader saw (a mark's page text) reads these bytes.
+ */
+export const displayedPdfFileId = (
+  content: DisplayedFileContent,
+): string | null => {
+  if (isNativelyRenderableMimeType(content.mimeType)) {
+    return null;
+  }
+  return (
+    content.pdfFileId ??
+    (content.mimeType === PDF_MIME_TYPE ? content.id : null)
+  );
 };
 
 export const fileFieldQuery = async (
@@ -154,7 +186,7 @@ export const readFileHandler = async ({
     purpose === "native-display" &&
     !isNativelyRenderableMimeType(content.mimeType)
   ) {
-    return status(400);
+    return previewUnavailable();
   }
 
   if (
@@ -176,10 +208,10 @@ export const readFileHandler = async ({
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
-    return status(400);
+  const displayFileId = displayedPdfFileId(content);
+  if (displayFileId === null) {
+    return previewUnavailable();
   }
-  const displayFileId = content.pdfFileId ?? content.id;
   const displayFileKey = createFileKey({
     organizationId,
     workspaceId,

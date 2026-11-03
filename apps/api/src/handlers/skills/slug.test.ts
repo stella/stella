@@ -40,13 +40,12 @@ describe("slugify", () => {
     expect(slugify("!!!skill!!!")).toBe("skill");
   });
 
-  test("drops non-ASCII characters (no transliteration)", () => {
-    // Unicode letters are not in a-z0-9, so they are treated as separators.
-    expect(slugify("café")).toBe("caf");
-    expect(slugify("naïve résumé")).toBe("na-ve-r-sum");
-    expect(slugify("Žluťoučký kůň")).toBe("lu-ou-k-k");
+  test("transliterates Latin letters and drops other scripts", () => {
+    expect(slugify("café")).toBe("cafe");
+    expect(slugify("naïve résumé")).toBe("naive-resume");
+    expect(slugify("Žluťoučký kůň")).toBe("zlutoucky-kun");
     expect(slugify("日本語")).toBe("skill");
-    expect(slugify("smörgåsbord")).toBe("sm-rg-sbord");
+    expect(slugify("smörgåsbord")).toBe("smorgasbord");
   });
 
   test("returns the 'skill' fallback for empty or separator-only input", () => {

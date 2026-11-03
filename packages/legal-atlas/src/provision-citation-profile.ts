@@ -129,6 +129,17 @@ export type ActTitleSpec = CitedWindow &
     identifier: WorkIdentifier;
   };
 
+/**
+ * A noun a short title opens with (`zákon o obětech trestných činů`) and the
+ * forms a citing sentence declines it to (`§ 2 zákona o obětech …`). The
+ * words after the head keep their form in every case, so a name stored in
+ * the nominative is read in any case by declining the head alone.
+ */
+export type TitleHeadSpec = {
+  nominative: string;
+  forms: readonly string[];
+};
+
 type SuccessionOptions = {
   spellings: readonly string[];
   older: WorkIdentifier;
@@ -207,6 +218,11 @@ export type VersionGrammar = {
     >["relation"];
   }[];
   amendmentPrefixes: readonly string[];
+  /**
+   * Phrases that cite an act as amended to date (`ve znění pozdějších
+   * předpisů`); like a date or an amendment, they follow the act's name.
+   */
+  currentVersionMarkers: readonly string[];
   /** Inflected month spellings, mapped to calendar month numbers. */
   monthNames: Readonly<Record<string, number>>;
 };
@@ -253,6 +269,8 @@ export type JurisdictionProfile = {
   actLeadIns: readonly string[];
   aliases: readonly ActAliasSpec[];
   titles: readonly ActTitleSpec[];
+  /** Heads of short titles, with every declined form including the nominative. */
+  titleHeads: readonly TitleHeadSpec[];
   /** Ordinal words a sentence reference uses, mapped to their digit. */
   ordinalWords: Readonly<Record<string, string>>;
   /**

@@ -1,6 +1,6 @@
 import approveTimeEntries from "@/api/handlers/time-entries/approval-queue/approve";
 import listApprovalQueue from "@/api/handlers/time-entries/approval-queue/list";
-import returnTimeEntry from "@/api/handlers/time-entries/approval-queue/return";
+import returnTimeEntries from "@/api/handlers/time-entries/approval-queue/return";
 import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -11,7 +11,7 @@ export const timeApprovalQueueRoute = routes(
   {
     "/approval-queue": { GET: listApprovalQueue },
     "/approve": { POST: approveTimeEntries },
-    "/approval-queue/return": { POST: returnTimeEntry },
+    "/approval-queue/return": { POST: returnTimeEntries },
   },
   {
     prefix: "/v1/time-entries",

@@ -12,13 +12,15 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { hostedUsageWebhookEvents } from "@/api/db/schema";
+import { hostedUsageWebhookEvents, usagePolicies } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   HOSTED_USAGE_WEBHOOK_HEADERS,
   receiveHostedUsageWebhook,
 } from "@/api/handlers/hosted-usage-webhook/receive";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
 import {
   installRecordingAnalytics,
@@ -149,14 +151,23 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
     };
   };
 
-  test("records handled delivery without provider customer details", async () => {
+  test("reports missing organization metadata while preserving the receipt", async () => {
     await withWebhookConfig(async () => {
       const eventId = `evt_minimal_${Bun.randomUUIDv7()}`;
+      const policyRef = `policy_${Bun.randomUUIDv7()}`;
+      await db.insert(usagePolicies).values({
+        policyKey: policyRef,
+        displayName: "Webhook fixture",
+        monthlyUsageUnits: 100,
+        hostedPolicyRef: policyRef,
+      });
+      analytics = installRecordingAnalytics();
+      logs = installRecordingLogger();
       const data = {
         id: "subscription-fixture",
         status: "active",
         account_ref: "customer-fixture",
-        policy_ref: "missing-policy-fixture",
+        policy_ref: policyRef,
         current_period_start: "2026-10-01T00:00:00Z",
         current_period_end: "2026-11-01T00:00:00Z",
         created_at: "2026-10-01T00:00:00Z",
@@ -185,6 +196,78 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         payloadDigest: hashSha256Hex(body),
       });
       expect(stored?.result).toBe("ignored");
+      expect(stored?.errorMessage).toBe("missing metadata.organization_id");
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            ({ message }) =>
+              message === "usage_provider.webhook.event_needs_operator",
+          ),
+      ).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(1);
+    });
+  });
+
+  test("does not report a stale provider event as needing an operator", async () => {
+    await withWebhookConfig(async () => {
+      const suffix = Bun.randomUUIDv7();
+      const organizationId = toSafeId<"organization">(`org_${suffix}`);
+      const policyRef = `policy_${suffix}`;
+      await db.insert(organization).values({
+        id: organizationId,
+        name: "Webhook fixture",
+        slug: organizationId,
+        createdAt: new Date("2026-10-01T00:00:00Z"),
+      });
+      await db.insert(usagePolicies).values({
+        policyKey: policyRef,
+        displayName: "Webhook fixture",
+        monthlyUsageUnits: 100,
+        hostedPolicyRef: policyRef,
+      });
+      const data = {
+        id: `subscription_${suffix}`,
+        status: "active",
+        account_ref: `account_${suffix}`,
+        policy_ref: policyRef,
+        current_period_start: "2026-10-01T00:00:00Z",
+        current_period_end: "2026-11-01T00:00:00Z",
+        created_at: "2026-10-01T00:00:00Z",
+        metadata: { organization_id: organizationId },
+      };
+      const firstBody = JSON.stringify({
+        type: "entitlement.created",
+        data: { ...data, occurred_at: "2026-10-20T00:00:00Z" },
+      });
+      expect((await deliver(`evt_first_${suffix}`, firstBody)).status).toBe(
+        200,
+      );
+
+      analytics = installRecordingAnalytics();
+      logs = installRecordingLogger();
+      const staleEventId = `evt_stale_${suffix}`;
+      const staleBody = JSON.stringify({
+        type: "entitlement.updated",
+        data: { ...data, occurred_at: "2026-10-10T00:00:00Z" },
+      });
+      expect((await deliver(staleEventId, staleBody)).status).toBe(200);
+      const [stored] = await db
+        .select({ errorMessage: hostedUsageWebhookEvents.errorMessage })
+        .from(hostedUsageWebhookEvents)
+        .where(eq(hostedUsageWebhookEvents.eventId, staleEventId));
+      expect(stored?.errorMessage).toBe(
+        "stale provider event (does not supersede current state)",
+      );
+      expect(
+        logs
+          .at("ERROR")
+          .filter(
+            ({ message }) =>
+              message === "usage_provider.webhook.event_needs_operator",
+          ),
+      ).toHaveLength(0);
+      expect(analytics.exceptions()).toHaveLength(0);
     });
   });
 

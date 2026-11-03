@@ -15,6 +15,20 @@ afterEach(() => {
   useInspectorTabsStore.setState(useInspectorTabsStore.getInitialState(), true);
 });
 
+// The disclosure's own panel, found through the button's aria-controls, so
+// hidden elements elsewhere in the rail (menu anchors) do not count.
+const controlledPanelTag = (markup: string): string => {
+  const id = /aria-controls="([^"]+)"/u.exec(markup)?.[1];
+  if (id === undefined) {
+    throw new Error("disclosure button has no aria-controls");
+  }
+  const at = markup.indexOf(` id="${id}"`);
+  if (at === -1) {
+    throw new Error(`no element with id ${id}`);
+  }
+  return markup.slice(markup.lastIndexOf("<", at), markup.indexOf(">", at) + 1);
+};
+
 describe("Inspector group disclosure", () => {
   for (const locale of ["en", "ar"] as const) {
     test(`${locale}: collapsing preserves the active document and exposes an accessible disclosure`, () => {
@@ -80,7 +94,7 @@ describe("Inspector group disclosure", () => {
           ? 'aria-label="توسيع Novák"'
           : 'aria-label="Expand Novák"',
       );
-      expect(collapsed).toContain('hidden=""');
+      expect(controlledPanelTag(collapsed)).toContain('hidden=""');
       expect(useInspectorTabsStore.getState().activeId).toBe("deadline");
       store.setActive("deadline");
       const expanded = render();
@@ -90,7 +104,7 @@ describe("Inspector group disclosure", () => {
           ? 'aria-label="طي Novák"'
           : 'aria-label="Collapse Novák"',
       );
-      expect(expanded).not.toContain('hidden=""');
+      expect(controlledPanelTag(expanded)).not.toContain('hidden=""');
       expect(expanded).toContain("Filing deadline");
       queryClient.clear();
     });

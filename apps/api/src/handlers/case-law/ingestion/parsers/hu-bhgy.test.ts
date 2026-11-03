@@ -30,7 +30,7 @@ import {
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
-  parseHuBhgyDecision,
+  parseHuBhgyDecision as uncheckedParseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
 import {
   readRtf as readRtfDocument,
@@ -41,6 +41,7 @@ import {
   VISIBLE_RUN_CASES,
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   assertNotePath,
@@ -52,6 +53,8 @@ import {
 } from "./document-note-paths.fixtures";
 import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseHuBhgyDecision = guardParser(uncheckedParseHuBhgyDecision);
 
 const readRtf = (input: Uint8Array) => {
   const document = readRtfDocument(input);
@@ -907,6 +910,62 @@ describe("reading a document folio handed over", () => {
     ]);
   });
 
+  test("court summaries and applied legislation open substantive sections", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "[1] A Kúria döntése." },
+      { text: "A határozat elvi tartalma" },
+      { text: "A döntés jogelve." },
+      { text: "A döntés elvi tartalma" },
+      { text: "A döntés másik jogelve." },
+      { text: "Alkalmazott jogszabályok" },
+      { text: "2009. évi LXXV. törvény 40.§ (1) és (2) bekezdés" },
+      { text: "Alkalmazott jogszabályok és joggyakorlat" },
+      { text: "A döntésben alkalmazott joggyakorlat." },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks)).toEqual([
+      "h1:section-heading:Indokolás",
+      "p:argumentation#1:A Kúria döntése.",
+      "h1:section-heading:A határozat elvi tartalma",
+      "p:argumentation:A döntés jogelve.",
+      "h1:section-heading:A döntés elvi tartalma",
+      "p:argumentation:A döntés másik jogelve.",
+      "h1:section-heading:Alkalmazott jogszabályok",
+      "p:argumentation:2009. évi LXXV. törvény 40.§ (1) és (2) bekezdés",
+      "h1:section-heading:Alkalmazott jogszabályok és joggyakorlat",
+      "p:argumentation:A döntésben alkalmazott joggyakorlat.",
+    ]);
+  });
+
+  test("court numbering ends an unlabelled caption continuation", () => {
+    const parsed = parse([
+      { text: "A Kúria" },
+      { text: "A felperes képviselője: [név1] ([cím2])" },
+      { text: "[1] A Kúria döntése." },
+      { text: "A felperes képviselője: [név2] ([cím3])" },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks).slice(-2)).toEqual([
+      "p:argumentation#1:A Kúria döntése.",
+      "p:argumentation:A felperes képviselője: [név2] ([cím3])",
+    ]);
+  });
+
+  test("party labels inside the body retain source placeholders as body text", () => {
+    const parsed = parse([
+      { text: "Indokolás" },
+      { text: "A felperes: [cég1] ([cím1])" },
+      { text: "A felperes képviselője: [név1] ([cím2])" },
+      { text: "Az alperes: [cég2] ([cím3])" },
+      { text: "Az alperes képviselője: [név2] ([cím4])" },
+    ]);
+    expect(shapeOf(parsed.documentAst.blocks).slice(1)).toEqual([
+      "p:argumentation:A felperes: [cég1] ([cím1])",
+      "p:argumentation:A felperes képviselője: [név1] ([cím2])",
+      "p:argumentation:Az alperes: [cég2] ([cím3])",
+      "p:argumentation:Az alperes képviselője: [név2] ([cím4])",
+    ]);
+  });
+
   test("the court's bracketed number is structure, not a prefix in the text", () => {
     const [, block] = parse([
       { text: "Indokolás" },
@@ -1029,12 +1088,14 @@ describe("reading a document folio handed over", () => {
       { text: "Budapest, 2025. október 1." },
       { text: "Dr. Példa Anna s.k. a tanács elnöke" },
       { text: "A kiadmány hiteléül:" },
+      { text: "S.K. bírósági ügyintéző" },
     ]);
     expect(parsed.decisionDate).toBe("2025-10-01");
-    expect(shapeOf(parsed.documentAst.blocks).slice(-3)).toEqual([
+    expect(shapeOf(parsed.documentAst.blocks).slice(-4)).toEqual([
       "p:closing:Budapest, 2025. október 1.",
       "p:signature:Dr. Példa Anna s.k. a tanács elnöke",
-      "p:apparatus:A kiadmány hiteléül:",
+      "p:closing:A kiadmány hiteléül:",
+      "p:signature:S.K. bírósági ügyintéző",
     ]);
   });
 
@@ -1245,6 +1306,7 @@ describe("a decision the publisher served", () => {
       headings.some((heading) => heading.includes("Rendelkező rész")),
     ).toBe(true);
     expect(headings).toContain("Indokolás");
+    expect(headings).toContain("A határozat elvi tartalma");
     expect(parsed.documentDocket).toBe("Gfv.VI.30.197/2024/4");
     expect(parsed.decisionType).toBe("végzés");
     expect(parsed.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
@@ -1471,3 +1533,62 @@ for (const destination of ["header", "footer"] as const) {
     },
   );
 }
+
+describe("the operative part's introduction, wherever the court prints it", () => {
+  /** Each block's kind and role, then the words it opens with. */
+  const rolesOf = (blocks: readonly Block[]) =>
+    blocks.map((block) =>
+      block.type === "paragraph"
+        ? `p:${block.role ?? "-"}:${block.plainText.split(" ").slice(0, 4).join(" ")}`
+        : `${block.type}:${block.plainText}`,
+    );
+
+  // The header is a table; the kind printed alone below it (`V é g z é s`)
+  // introduces the operative part, whose sentences may open with a party's
+  // name.
+  test("Kf.700217/2022/7: the kind below the header table opens the operative part", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-kf-700217-2022-7.docx", FIXTURES_DIR),
+    ).arrayBuffer();
+    const parsed = parseHuBhgyDecision({
+      document: await parseDocx(bytes, {
+        detectVariables: false,
+        preloadFonts: false,
+      }),
+      listedCaseNumber: "Kf.700217/2022/7",
+      court: "Fővárosi Ítélőtábla",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "84d8db7d-444a-4ab4-9585-3b38169dbc6b",
+      statutes: [],
+    });
+    expect(rolesOf(parsed.documentAst.blocks).slice(2, 6)).toEqual([
+      "heading:V é g z é s",
+      "p:holding:A Fővárosi Ítélőtábla az",
+      "p:holding:A felperes másodfokú eljárásban",
+      "p:holding:A végzés ellen fellebbezésnek",
+    ]);
+    expect(parsed.decisionType).toBe("végzés");
+  });
+
+  // A partial judgment introduces its operative part as `r é s z í t é l e t e t .`
+  test("G.41582/2011/98: a partial judgment's operative part is the holding", async () => {
+    const bytes = await Bun.file(
+      new URL("hu-bhgy-g-41582-2011-98.rtf", FIXTURES_DIR),
+    ).bytes();
+    const parsed = parseHuBhgyDecision({
+      document: readRtf(bytes),
+      listedCaseNumber: "G.41582/2011/98",
+      court: "Fővárosi Törvényszék",
+      sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok",
+      documentUrl: "https://eakta.birosag.hu/hatarozat-letoltes/",
+      documentId: "AHK4T__16044485",
+      statutes: [],
+    });
+    expect(rolesOf(parsed.documentAst.blocks).slice(4, 6)).toEqual([
+      "heading:r é s z í t é l e t e t .",
+      "p:holding:A bíróság a keresetet",
+    ]);
+    expect(parsed.decisionType).toBe("részítélet");
+  });
+});

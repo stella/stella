@@ -129,7 +129,8 @@ type CreateCorpusAggregateCacheOptions = {
 type CorpusAggregateReaderOptions = {
   target: CorpusAggregateTarget;
   scope: CorpusAggregateScope;
-  /** The engine call a miss makes. It takes no caller signal: see below. */
+  /** Cancellable requests own their flights; settled entries remain shared. */
+  signal?: AbortSignal | undefined;
   load: CorpusAggregate;
 };
 
@@ -194,17 +195,19 @@ export const createCorpusAggregateCache = ({
   };
 
   /**
-   * A reader for one request. The flight a miss starts belongs to no caller:
-   * the engine call carries only its own timeout, so a request that stops
-   * waiting cannot cancel what other requests share. A flight that fails is
-   * answered to the requests waiting on it and then dropped, never stored, so
-   * the next request asks the engine again.
+   * Cancellable requests isolate in-flight work so aborting one caller cannot
+   * cancel another's engine read. Successful settled answers remain shared.
    */
   const reader = ({
     target,
     scope,
     load,
+    signal,
   }: CorpusAggregateReaderOptions): CorpusAggregateReader => {
+    const activeFlights =
+      signal === undefined
+        ? flights
+        : new Map<string, Promise<AggregationAnswer>>();
     const outcome: CorpusAggregateCacheOutcome = {
       hits: 0,
       misses: 0,
@@ -230,7 +233,7 @@ export const createCorpusAggregateCache = ({
           answered.push([name, cached]);
           continue;
         }
-        const flight = flights.get(key);
+        const flight = activeFlights.get(key);
         if (flight !== undefined) {
           outcome.sharedFlights += 1;
           waits.push([name, flight]);
@@ -246,7 +249,7 @@ export const createCorpusAggregateCache = ({
         );
         const release = (): void => {
           for (const { key } of missing) {
-            flights.delete(key);
+            activeFlights.delete(key);
           }
         };
         // Settled before any waiter resumes, so a request that follows a
@@ -267,7 +270,7 @@ export const createCorpusAggregateCache = ({
               ? Result.ok(answer.value[name])
               : Result.err(answer.error),
           );
-          flights.set(key, named);
+          activeFlights.set(key, named);
           waits.push([name, named]);
         }
       }

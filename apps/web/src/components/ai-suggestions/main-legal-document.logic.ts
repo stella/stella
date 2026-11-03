@@ -1,3 +1,4 @@
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 /**
  * The legal document the main view is showing, as the chat surfaces need it.
  *
@@ -10,7 +11,8 @@ import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-leg
 
 type MainLegalDocumentOptions = {
   decision: { caseNumber: string; id: string } | undefined;
-  statute: { id: string; title: string } | undefined;
+  statute:
+    (Parameters<typeof statuteDisplayLabel>[0] & { id: string }) | undefined;
 };
 
 /**
@@ -29,7 +31,11 @@ export const mainLegalDocument = ({
     };
   }
   if (statute !== undefined) {
-    return { type: "statute", documentId: statute.id, title: statute.title };
+    return {
+      type: "statute",
+      documentId: statute.id,
+      title: statuteDisplayLabel(statute).text,
+    };
   }
   return undefined;
 };

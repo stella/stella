@@ -7,11 +7,7 @@ import fc from "fast-check";
 
 import { getOutputTokenLimit } from "@stll/ai-catalog";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatToolGrants, mcpConnectors } from "@/api/db/schema";
@@ -1212,6 +1208,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
+  "continue-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
+  ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
     "Deleting the thread ends the conversation; nothing is left to check.",
@@ -1220,14 +1219,23 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-message": notModelled(
+    "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
+  ),
   export: READS_ONLY,
   fork: byCommands("ForkFrom", ForkFrom.allows),
+  "hold-queue-for-message-edit": notModelled(
+    "Holding queued prompts while a message editor is open lives in the session queue, which the harness does not render; user-message-edit-session.dom.test.tsx covers it.",
+  ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
+  "open-message-editor": notModelled(
+    "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
+  ),
   "open-playbook": READS_ONLY,
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
@@ -1254,6 +1262,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SendUserMessage.allows(model) ||
       SupersedeCards.allows(model) ||
       isBusy(model),
+  ),
+  "submit-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
   ),
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
@@ -1478,21 +1489,17 @@ const closeConversation = async ({ real }: { real: Real }) => {
   await real.harness.close();
 };
 
-const runConversations = async (
+const conversationsProperty = (
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
-) => {
-  await fc.assert(
-    fc.asyncProperty(commands, async (sequence) => {
-      const conversation = await openConversation();
-      try {
-        await fc.asyncModelRun(() => conversation, sequence);
-      } finally {
-        await closeConversation(conversation);
-      }
-    }),
-    propertyConfig({ numRuns: 25, seed: propertySeed() }),
-  );
-};
+) =>
+  fc.asyncProperty(commands, async (sequence) => {
+    const conversation = await openConversation();
+    try {
+      await fc.asyncModelRun(() => conversation, sequence);
+    } finally {
+      await closeConversation(conversation);
+    }
+  });
 
 // --- Example cases----------------------------------------------------------
 
@@ -2472,8 +2479,12 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every step of any conversation",
     async () => {
-      await runConversations(
-        fc.commands(conversationCommands, { maxCommands: 6 }),
+      await assertProperty(
+        "matches a reload and the ledger after every step of any conversation",
+        conversationsProperty(
+          fc.commands(conversationCommands, { maxCommands: 6 }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2730,10 +2741,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger after every action the page offers",
     async () => {
-      await runConversations(
-        fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger after every action the page offers",
+        conversationsProperty(
+          fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),
@@ -2742,10 +2757,14 @@ describe("a conversation's live view", () => {
   test(
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
-      await runConversations(
-        fc.commands([...conversationCommands, supersedeCommand], {
-          maxCommands: 6,
-        }),
+      await assertProperty(
+        "matches a reload and the ledger when a new message replaces waiting cards",
+        conversationsProperty(
+          fc.commands([...conversationCommands, supersedeCommand], {
+            maxCommands: 6,
+          }),
+        ),
+        { numRuns: 25 },
       );
     },
     propertyTestTimeout(240_000),

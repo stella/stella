@@ -34,6 +34,7 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 
 import { SkillAvailabilityField } from "./skill-availability-field";
@@ -149,6 +150,7 @@ const BlueprintGallerySheetBody = ({
     };
   };
 
+  const submitIntent = useIdempotentSubmit();
   const create = useMutation({
     mutationFn: async ({
       bindingFields,
@@ -157,10 +159,14 @@ const BlueprintGallerySheetBody = ({
       bindingFields: SkillBindingBody;
       id: BlueprintId;
     }) => {
-      const response = await api.skills["from-blueprint"].post({
-        scope,
-        blueprintId: id,
-        ...bindingFields,
+      const response = await submitIntent.run({
+        operation: "skills.from-blueprint",
+        body: { scope, blueprintId: id, ...bindingFields },
+        send: async (body) => {
+          const reply = await api.skills["from-blueprint"].post(body);
+          unwrapApiResponse(reply);
+          return reply;
+        },
       });
       return { id: unwrapApiResponse(response).id };
     },

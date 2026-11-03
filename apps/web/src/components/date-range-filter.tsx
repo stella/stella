@@ -6,7 +6,7 @@ import {
 } from "@stll/ui/date-range-filter";
 
 import { getPickerToday } from "@/components/date-picker-popover";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 
 type DateRangeFilterProps = Omit<
   UIDateRangeFilterProps,
@@ -23,7 +23,7 @@ export const DateRangeFilter = ({
   ...props
 }: DateRangeFilterProps) => {
   const t = useTranslations();
-  const appLocale = useLocale();
+  const appLocale = useFormattingLocale();
   return (
     <UIDateRangeFilter
       {...props}

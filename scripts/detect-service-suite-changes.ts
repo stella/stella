@@ -345,8 +345,9 @@ const walkLocalImports = ({
 export const serviceSuiteDependencies = (
   root = repositoryRoot,
   suite?: ServiceSuite,
+  manifestRoot = root,
 ) => {
-  const configuration = loadSuites(root);
+  const configuration = loadSuites(manifestRoot);
   if (configuration.status === "unresolved") {
     return configuration;
   }
@@ -503,8 +504,9 @@ type ServiceSuitePlan = Record<ServiceSuite | "devSeed", boolean>;
 export const planServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
+  manifestRoot = root,
 ): ServiceSuitePlan => {
-  const configuration = suiteConfiguration(root);
+  const configuration = suiteConfiguration(manifestRoot);
   if (configuration.status === "unresolved") {
     console.error(configuration.message);
     return {
@@ -518,8 +520,10 @@ export const planServiceSuites = (
   const required = (suite: ServiceSuite): boolean =>
     files.some((file) => directlyRequired(file, suite)) ||
     graphSelects(
-      cachedForRepository(suiteGraphs, { root, key: suite }, () =>
-        serviceSuiteDependencies(root, suite),
+      cachedForRepository(
+        suiteGraphs,
+        { root, key: `${manifestRoot}:${suite}` },
+        () => serviceSuiteDependencies(root, suite, manifestRoot),
       ),
       files,
     );

@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { aiColumnRunMenu, aiColumnRunScope } from "./ai-column-run.logic";
+import type { AiCellState } from "./ai-cell-state.logic";
+import {
+  AI_COLUMN_RUN_REVEAL,
+  aiColumnRunMenu,
+  aiColumnRunReveal,
+  aiColumnRunScope,
+  selectionShownOnPage,
+} from "./ai-column-run.logic";
+import type { AiColumnRunReveal } from "./ai-column-run.logic";
 
 describe("AI column actions follow the visible cells", () => {
   test("a fresh page runs the column, a partial page runs holes or reruns, a completed page reruns", () => {
@@ -38,5 +46,89 @@ describe("AI column actions follow the visible cells", () => {
     expect(
       aiColumnRunScope({ pageRowIds: ["a"], selectedRowIds: ["missing"] }),
     ).toEqual({ type: "page", rowIds: ["a"], count: 1 });
+  });
+});
+
+describe("the header Play stays on screen while it is the only sign of work", () => {
+  const revealFor = {
+    not_run: AI_COLUMN_RUN_REVEAL.pinned,
+    queued: AI_COLUMN_RUN_REVEAL.pinned,
+    running: AI_COLUMN_RUN_REVEAL.pinned,
+    done: AI_COLUMN_RUN_REVEAL.onInteraction,
+    not_stated: AI_COLUMN_RUN_REVEAL.onInteraction,
+    failed: AI_COLUMN_RUN_REVEAL.onInteraction,
+    refused: AI_COLUMN_RUN_REVEAL.onInteraction,
+    refused_budget: AI_COLUMN_RUN_REVEAL.onInteraction,
+  } as const satisfies Record<AiCellState["type"], AiColumnRunReveal>;
+  const cellStates = [
+    { type: "not_run" },
+    { type: "queued" },
+    { type: "running" },
+    { type: "done" },
+    { type: "not_stated" },
+    { type: "failed" },
+    { type: "refused", reason: "modelRefusal" },
+    { type: "refused_budget" },
+  ] as const satisfies readonly AiCellState[];
+
+  test("rows that never ran or are in flight pin it; settled rows leave it to hover and focus", () => {
+    for (const state of cellStates) {
+      expect(aiColumnRunReveal({ states: [state], menuOpen: false })).toBe(
+        revealFor[state.type],
+      );
+      // One pinning row among settled ones still pins the header.
+      expect(
+        aiColumnRunReveal({
+          states: [{ type: "done" }, state, { type: "failed" }],
+          menuOpen: false,
+        }),
+      ).toBe(revealFor[state.type]);
+    }
+    expect(aiColumnRunReveal({ states: [], menuOpen: false })).toBe(
+      AI_COLUMN_RUN_REVEAL.onInteraction,
+    );
+  });
+
+  test("an open column menu pins it whatever the rows show", () => {
+    for (const state of cellStates) {
+      expect(aiColumnRunReveal({ states: [state], menuOpen: true })).toBe(
+        AI_COLUMN_RUN_REVEAL.pinned,
+      );
+    }
+    expect(aiColumnRunReveal({ states: [], menuOpen: true })).toBe(
+      AI_COLUMN_RUN_REVEAL.pinned,
+    );
+  });
+});
+
+describe("selectionShownOnPage", () => {
+  test("keeps a selection the page still shows as it is", () => {
+    expect(
+      selectionShownOnPage({ pageRowIds: ["a", "b"], selectedRowIds: ["b"] }),
+    ).toBeNull();
+    expect(
+      selectionShownOnPage({ pageRowIds: ["a"], selectedRowIds: [] }),
+    ).toBeNull();
+  });
+
+  test("drops the picks a new answer on the same page no longer shows", () => {
+    expect(
+      selectionShownOnPage({
+        pageRowIds: ["b", "c"],
+        selectedRowIds: ["a", "b", "z"],
+      }),
+    ).toEqual(["b"]);
+    expect(
+      selectionShownOnPage({ pageRowIds: [], selectedRowIds: ["a"] }),
+    ).toEqual([]);
+  });
+
+  test("what it keeps is what a run counts", () => {
+    const pageRowIds = ["b", "c", "d"];
+    const selectedRowIds = ["a", "c", "d"];
+    const kept = selectionShownOnPage({ pageRowIds, selectedRowIds });
+    expect(kept?.length).toBe(
+      aiColumnRunScope({ pageRowIds, selectedRowIds }).count,
+    );
   });
 });

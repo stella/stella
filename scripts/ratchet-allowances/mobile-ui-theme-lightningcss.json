@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The root gains lightningcss as a dev dependency for scripts/generate-mobile-ui-theme.ts, which resolves @stll/ui's theme.css (var chains, oklch, color-mix) into the mobile app's colour tokens so the app cannot drift from the web. The web build already installs lightningcss through Tailwind."
+}

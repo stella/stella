@@ -20,11 +20,9 @@ describe("consent app details", () => {
             clientName="Example connector"
             redirectUri={null}
             info={{
-              client_name: "Example connector",
+              client: { type: "unverified", name: "Example connector" },
               redirectTargets: ["connector.example"],
               clientIdHost: "identity.example",
-              unverified: true,
-              verifiedBrand: null,
             }}
           />
         </IntlProvider>,

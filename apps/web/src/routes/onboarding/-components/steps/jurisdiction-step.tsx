@@ -5,7 +5,6 @@ import { Form } from "@stll/ui/form";
 import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { Globe, type GlobeMarker } from "@/components/globe";
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -15,6 +14,7 @@ import {
   removeJurisdiction,
 } from "@/lib/jurisdictions";
 import type { CountryCode, PracticeJurisdiction } from "@/lib/jurisdictions";
+import { Globe, type GlobeMarker } from "@/routes/onboarding/-components/globe";
 
 type JurisdictionStepProps = {
   selected: readonly PracticeJurisdiction[];

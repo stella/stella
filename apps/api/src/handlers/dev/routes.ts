@@ -8,6 +8,8 @@ import { Temporal } from "@stll/time";
 
 import {
   contacts,
+  expenses,
+  invoices,
   properties,
   propertyDependencies,
   timeEntries,
@@ -167,9 +169,9 @@ const startFirmKnowledgeSeed = defineEndpoint.member(
     // A requested organization is used only after the membership lookup
     // proves the caller belongs to it.
     const organizationId =
-      ctx.body?.organizationId === undefined
-        ? session.activeOrganizationId
-        : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
+      ctx.body?.organizationId !== undefined
+        ? await resolveMemberDevOrganization(ctx.body.organizationId, userId)
+        : session.activeOrganizationId;
     if (organizationId === null) {
       return status(403, "Organization membership not found");
     }
@@ -178,9 +180,9 @@ const startFirmKnowledgeSeed = defineEndpoint.member(
       matters: body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
       replaceIncomplete:
         body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
-      ...(body?.selectionSeed === undefined
-        ? {}
-        : { selectionSeed: body.selectionSeed }),
+      ...(body?.selectionSeed !== undefined
+        ? { selectionSeed: body.selectionSeed }
+        : {}),
     } satisfies FirmKnowledgeSeedParameters;
 
     if (firmKnowledgeInFlight) {
@@ -263,7 +265,10 @@ const cleanOrganization = defineEndpoint.member(
     await scopedDb(async (tx) => {
       // audit: skip — dev-only org-nuke endpoint; not deployed to prod
       // Delete in dependency order.
-      // 1. Time entries and workspace contacts (org-scoped)
+      // 1. Billing records, which a matter deletion refuses to take (lines
+      //    go with their invoices), and workspace contacts (org-scoped)
+      await tx.delete(invoices).where(eq(invoices.organizationId, orgId));
+      await tx.delete(expenses).where(eq(expenses.organizationId, orgId));
       await tx.delete(timeEntries).where(eq(timeEntries.organizationId, orgId));
       await tx
         .delete(workspaceContacts)

@@ -1,0 +1,5 @@
+{
+  "add-column": "Nullable columns without defaults add derived boundary metadata without a row rewrite, under 3s lock_timeout and 30s statement_timeout.",
+  "add-constraint": "The derived end check is NOT VALID; installation scans no retained rows and bounds catalog locks with the migration timeouts.",
+  "create-trigger": "The invoker trigger updates only derived boundary metadata within the inserted organization/run keys; installation is catalog-only under the migration timeouts."
+}

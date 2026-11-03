@@ -14,7 +14,6 @@ import { cn } from "@stll/ui/utils";
 
 import {
   getWeekStart,
-  isWorkspaceDocumentRoutePath,
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
@@ -30,6 +29,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -60,6 +60,16 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+  workspaceViewRouteIds,
+  workspaceViewsInclude,
+} from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -80,12 +90,15 @@ export const Route = createFileRoute(
   component: RouteComponent,
   pendingComponent: ViewPendingComponent,
   validateSearch: searchSchema,
-  beforeLoad: ({ params }) => {
+  // Annotated: the context this returns is part of the `matches` type it
+  // reads, so an inferred return would be circular.
+  beforeLoad: ({
+    matches,
+    params,
+  }): { documentOnScreen: CurrentWorkspaceDocument } => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
-    // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
-    const VALID_VIEW_ID =
-      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
-    if (!VALID_VIEW_ID.test(params.viewId)) {
+    // URLs).
+    if (!isWorkspaceViewId(params.viewId)) {
       if (import.meta.env.DEV) {
         // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(
@@ -99,17 +112,25 @@ export const Route = createFileRoute(
         replace: true,
       });
     }
+    // The loader sees no matches; the document page below this view is read
+    // from them here.
+    return { documentOnScreen: getCurrentWorkspaceDocument(matches) };
   },
-  loader: async ({ context, location, params }) => {
+  loader: async ({ context, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
-    const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname);
+    const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await ensureRouteQueryData(
-      queryClient,
-      viewsOptions(workspaceId),
-    );
-    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    const views = await loadRouteResource({
+      ids: workspaceViewRouteIds(workspaceId, viewId),
+      load: async () =>
+        await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+      exists: (loadedViews) => workspaceViewsInclude(loadedViews, viewId),
+    });
+    const activeView =
+      viewId === DEFAULT_WORKSPACE_VIEW_ID
+        ? selectAvailableWorkspaceView(views, viewId)
+        : views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
@@ -443,7 +464,7 @@ function VisibleFieldEntityViewContent({
 
 function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   const matches = useMatches();
-  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
+  const isOnPdfRoute = getCurrentWorkspaceDocument(matches) !== undefined;
   const paneRef = useRef<HTMLDivElement>(null);
 
   // File detail view: hide the view chrome; breadcrumbs provide navigation
@@ -503,7 +524,7 @@ function ViewChromeRow({
 }) {
   const navigate = Route.useNavigate();
   return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+    <div className="flex min-w-0 flex-col border-b md:flex-row md:flex-wrap md:items-center md:justify-between">
       <div
         className={cn(
           "flex min-w-0 items-center",

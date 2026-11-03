@@ -7,6 +7,18 @@ const legalResolveCandidateSchema = v.strictObject({
   readerUrl: v.string(),
 });
 
+const otherCourtCandidateSchema = v.strictObject({
+  ...legalResolveCandidateSchema.entries,
+  court: v.string(),
+  decisionDate: v.nullable(v.string()),
+  decisionType: v.nullable(v.string()),
+  subjectSummary: v.nullable(v.string()),
+});
+
+const otherCourtCandidatesSchema = v.optional(
+  v.array(otherCourtCandidateSchema),
+);
+
 const legalResolveDecisionTextSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("readable"),
@@ -69,22 +81,29 @@ export const legalResolveResponseSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("resolved"),
     document: legalResolveDocumentSchema,
+    otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({
     status: v.literal("not_found"),
+    hint: v.optional(v.string()),
     reason: v.picklist([
       "unknown_document",
       "unknown_section",
       "no_exact_identity",
+      "not_at_this_court",
+      "court_unrecognized",
     ]),
+    otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({
     status: v.literal("ambiguous"),
     candidates: v.array(legalResolveCandidateSchema),
+    otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({
     status: v.literal("incomplete_identifier"),
     missing: v.array(v.string()),
+    otherCourtCandidates: otherCourtCandidatesSchema,
   }),
   v.strictObject({ status: v.literal("country_unavailable") }),
 ]);

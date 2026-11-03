@@ -14,6 +14,7 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {
@@ -28,6 +29,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/auth/")({
+  staticData: { presentation: routePresentation({ type: "none" }) },
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
     if (context.session) {

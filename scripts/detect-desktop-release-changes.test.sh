@@ -125,9 +125,9 @@ expect_case() {
          bash "$SCRIPT" "$tag" 2>/dev/null
   )"
 
-  got_build="$(printf '%s\n' "$out" | grep '^should_build=' | head -n1)"
+  got_build="$(grep -m 1 '^should_build=' <<<"$out")"
   got_build="${got_build#should_build=}"
-  got_prev="$(printf '%s\n' "$out" | grep '^previous_tag=' | head -n1)"
+  got_prev="$(grep -m 1 '^previous_tag=' <<<"$out")"
   got_prev="${got_prev#previous_tag=}"
 
   if [[ "$got_build" != "$want_build" || "$got_prev" != "$want_prev" ]]; then

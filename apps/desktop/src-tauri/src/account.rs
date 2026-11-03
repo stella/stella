@@ -22,6 +22,28 @@ pub async fn lock_requests() -> tokio::sync::MutexGuard<'static, ()> {
   REQUESTS.get_or_init(|| Mutex::new(())).lock().await
 }
 
+/// Keeps account selection and the document owner inside the same request
+/// lease. Callers retain the lease through snapshot or recovery delivery.
+pub(crate) struct SessionAccountRead<'a> {
+  pub manager: tokio::sync::MutexGuard<'a, crate::session_manager::SessionManager>,
+  pub current: Result<Option<LinkedAccount>, String>,
+  pub lease: tokio::sync::MutexGuard<'static, ()>,
+}
+
+pub(crate) async fn read_session_account<'a>(
+  account: &AccountState,
+  sessions: &'a crate::commands::AppState,
+) -> SessionAccountRead<'a> {
+  let lease = lock_requests().await;
+  let manager = sessions.lock().await;
+  let current = current(account).await;
+  SessionAccountRead {
+    manager,
+    current,
+    lease,
+  }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PendingRotation {
@@ -857,26 +879,95 @@ async fn prepare_replacement(
 
 pub async fn link(
   state: &AccountState,
+  sessions: &crate::commands::AppState,
   request: LinkAccountRequest,
   web_origin: &str,
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
   let mut pending = LinkedAccount::from_request(request, web_origin)?;
   let _lease = lock_requests().await;
-  // Do not publish a profile for a credential the API has not accepted.
-  let mut store = state.lock().await;
   pending.device_key = crate::device_proof::required().await?;
-  persist_link(&mut store, pending, expected_identity).await
+  let (prepared, owner) = {
+    let mut store = state.lock().await;
+    let prepared = match prepare_link(&mut store, pending, expected_identity).await {
+      Ok(prepared) => prepared,
+      Err(error) => {
+        let current = store.load_usable().await;
+        drop(store);
+        match current {
+          Ok(current) => {
+            sessions
+              .lock()
+              .await
+              .set_account_owner(
+                current
+                  .as_ref()
+                  .map(crate::document_sessions::AccountOwner::for_account),
+              )
+              .await?;
+            crate::session_manager::SessionManager::attach_pending_listeners(sessions)
+              .await;
+          }
+          Err(lookup_error) => {
+            tracing::warn!(error = %lookup_error, "document account lookup remains unavailable")
+          }
+        }
+        return Err(error);
+      }
+    };
+    let current = match &prepared {
+      Some(account) => Some(account.clone()),
+      None => store.load_usable().await?,
+    };
+    drop(store);
+    let owner = current
+      .as_ref()
+      .map(crate::document_sessions::AccountOwner::for_account);
+    (prepared, owner)
+  };
+  let mut manager = sessions.lock().await;
+  let changed = !manager.is_account_owner(owner.as_ref());
+  if changed {
+    manager.set_account_owner(None).await?;
+  }
+  let outcome = match prepared {
+    Some(account) => {
+      let mut store = state.lock().await;
+      store.stage(None).await?;
+      store.save(account).await?;
+      drop(store);
+      LinkOutcome::Linked
+    }
+    None => LinkOutcome::Unchanged,
+  };
+  manager.set_account_owner(owner).await?;
+  drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions).await;
+  Ok(outcome)
 }
 
+#[cfg(test)]
 async fn persist_link(
   store: &mut AccountStore,
   pending: PendingLinkedAccount,
   expected_identity: &DesktopAccountIdentity,
 ) -> Result<LinkOutcome, String> {
+  let Some(account) = prepare_link(store, pending, expected_identity).await? else {
+    return Ok(LinkOutcome::Unchanged);
+  };
+  store.stage(None).await?;
+  store.save(account).await?;
+  Ok(LinkOutcome::Linked)
+}
+
+async fn prepare_link(
+  store: &mut AccountStore,
+  pending: PendingLinkedAccount,
+  expected_identity: &DesktopAccountIdentity,
+) -> Result<Option<LinkedAccount>, String> {
   let outcome = prepare_replacement(store, &pending).await?;
   if outcome == LinkOutcome::Unchanged {
-    return Ok(outcome);
+    return Ok(None);
   }
   let config = crate::registry::request(
     crate::registry::RegistryRequestAuth {
@@ -893,9 +984,7 @@ async fn persist_link(
   {
     return Err("Desktop account connection does not match".into());
   }
-  store.stage(None).await?;
-  store.save(account).await?;
-  Ok(LinkOutcome::Linked)
+  Ok(Some(account))
 }
 
 /// Ends the link after the API rejected `account`'s credential. The account
@@ -943,6 +1032,33 @@ pub(crate) fn set_reconnect_needed(app: &tauri::AppHandle, needed: bool) {
 }
 
 pub fn notify(app: &tauri::AppHandle) {
+  use tauri::Manager;
+  if let (Some(sessions), Some(account)) = (
+    app.try_state::<crate::commands::AppState>(),
+    app.try_state::<AccountState>(),
+  ) {
+    let sessions = Arc::clone(&sessions);
+    let account = Arc::clone(&account);
+    tauri::async_runtime::spawn(async move {
+      let _lease = lock_requests().await;
+      let owner = match current(&account).await {
+        Ok(account) => account
+          .as_ref()
+          .map(crate::document_sessions::AccountOwner::for_account),
+        Err(error) => {
+          tracing::warn!(error = %error, "document account lookup failed");
+          return;
+        }
+      };
+      let mut manager = sessions.lock().await;
+      if let Err(error) = manager.set_account_owner(owner).await {
+        tracing::warn!(error = %error, "document account transition remains pending");
+        return;
+      }
+      drop(manager);
+      crate::session_manager::SessionManager::attach_pending_listeners(&sessions).await;
+    });
+  }
   crate::feature_access::account_changed(app, crate::activity::unload_account);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(error = %error, "desktop account change was not delivered");
@@ -966,8 +1082,24 @@ pub async fn account_get_state(
   require_account_window(&window)?;
   // Name the server a new connection would really open, never a default the
   // selected self-hosted server overrides.
-  let server = crate::commands::browser_connect_server(&*sessions.lock().await);
-  let current = current(&state).await;
+  let SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = read_session_account(&state, &sessions).await;
+  let server = crate::commands::browser_connect_server(&manager);
+  if let Ok(current) = &current {
+    manager
+      .set_account_owner(
+        current
+          .as_ref()
+          .map(crate::document_sessions::AccountOwner::for_account),
+      )
+      .await?;
+  }
+  drop(manager);
+  crate::session_manager::SessionManager::attach_pending_listeners(sessions.inner())
+    .await;
   set_reconnect_needed(
     &app,
     matches!(&current, Err(error) if error == crate::device_proof::RECONNECT),
@@ -991,6 +1123,7 @@ pub async fn account_disconnect(
   app: tauri::AppHandle,
   window: WebviewWindow,
   state: State<'_, AccountState>,
+  sessions: State<'_, crate::commands::AppState>,
 ) -> Result<(), String> {
   require_account_window(&window)?;
   let _lease = lock_requests().await;
@@ -1022,9 +1155,12 @@ pub async fn account_disconnect(
     })
     .await?;
   }
+  let mut manager = sessions.lock().await;
+  manager.set_account_owner(None).await?;
   let mut store = state.lock().await;
   store.clear_ended_link().await?;
   drop(store);
+  drop(manager);
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;
@@ -1059,6 +1195,10 @@ struct BrowserConnection {
   api_base_url: String,
   web_origin: String,
   port_secret: String,
+  // The challenge the approval page received, kept so a signed status names
+  // the whole challenge and a page holding a different one cannot match it.
+  verifier_hash: String,
+  device_jkt: String,
   device_key: crate::device_proof::DeviceKey,
   expires_at: std::time::Instant,
   redemption: LinkRedemption,
@@ -1127,6 +1267,8 @@ fn new_browser_connection_with_key(
       api_base_url,
       web_origin,
       port_secret,
+      verifier_hash,
+      device_jkt,
       device_key,
       expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
@@ -1407,31 +1549,40 @@ pub struct SignedConnectionStatus {
   proof: String,
 }
 
+/// Signs `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp` with
+/// the port secret. The page may approve on its own only after a fresh
+/// `pending` status verifies against the challenge it holds, so the signature
+/// covers every challenge field a grant binds, not only the correlation.
+fn connection_status_proof(
+  connection: &BrowserConnection,
+  status: &str,
+  timestamp: &str,
+) -> String {
+  let key =
+    ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+  let message = format!(
+    "{}\n{}\n{}\n{status}\n{timestamp}",
+    connection.correlation_id, connection.verifier_hash, connection.device_jkt
+  );
+  hex::encode(ring::hmac::sign(&key, message.as_bytes()).as_ref())
+}
+
 pub async fn signed_browser_connection_status(
   state: &AccountState,
   correlation_id: &str,
 ) -> Result<SignedConnectionStatus, String> {
   let status = browser_connection_status(state, correlation_id).await;
   let now = std::time::Instant::now();
-  let key = BROWSER_CONNECTION
+  let timestamp = chrono::Utc::now().timestamp().to_string();
+  let proof = BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))?
     .as_ref()
     .filter(|connection| {
       connection.correlation_id == correlation_id && now < connection.expires_at
     })
-    .map(|connection| {
-      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes())
-    })
+    .map(|connection| connection_status_proof(connection, status, &timestamp))
     .ok_or("Desktop connection is unavailable")?;
-  let timestamp = chrono::Utc::now().timestamp().to_string();
-  let proof = hex::encode(
-    ring::hmac::sign(
-      &key,
-      format!("{correlation_id}\n{status}\n{timestamp}").as_bytes(),
-    )
-    .as_ref(),
-  );
   Ok(SignedConnectionStatus {
     correlation_id: correlation_id.to_string(),
     status,
@@ -1444,6 +1595,8 @@ pub async fn signed_browser_connection_status(
 pub(crate) struct BridgeProofFixture {
   pub correlation_id: String,
   pub port_secret: String,
+  pub verifier_hash: String,
+  pub device_jkt: String,
   previous: Option<BrowserConnection>,
 }
 
@@ -1453,10 +1606,14 @@ pub(crate) fn bridge_proof_fixture() -> BridgeProofFixture {
     new_browser_connection("https://api.stll.app", "http://localhost:3000").unwrap();
   let correlation_id = connection.correlation_id.clone();
   let port_secret = connection.port_secret.clone();
+  let verifier_hash = connection.verifier_hash.clone();
+  let device_jkt = connection.device_jkt.clone();
   let previous = BROWSER_CONNECTION.lock().unwrap().replace(connection);
   BridgeProofFixture {
     correlation_id,
     port_secret,
+    verifier_hash,
+    device_jkt,
     previous,
   }
 }
@@ -1653,7 +1810,15 @@ async fn redeem_browser_connection(
   };
   let credential_key = request.credential.key.clone();
   drop(saved);
-  if let Err(error) = link(&state, request, &web_origin, &expected_identity).await {
+  if let Err(error) = link(
+    &state,
+    &app.state::<crate::commands::AppState>(),
+    request,
+    &web_origin,
+    &expected_identity,
+  )
+  .await
+  {
     crate::registry::request(
       crate::registry::RegistryRequestAuth {
         api_base_url: &api_base_url,
@@ -1848,6 +2013,8 @@ mod tests {
       fields.get("deviceJkt"),
       Some(&connection.device_key.thumbprint().unwrap())
     );
+    assert_eq!(fields.get("verifierHash"), Some(&connection.verifier_hash));
+    assert_eq!(fields.get("deviceJkt"), Some(&connection.device_jkt));
     assert!(!url.contains(verifier.as_str()));
     assert_ne!(verifier.as_str(), connection.port_secret.as_str());
   }
@@ -1928,6 +2095,54 @@ mod tests {
     assert!(!valid_bridge_proof(
       &another, timestamp, &proof, "GET", path, now
     ));
+  }
+
+  #[test]
+  fn connection_status_proofs_bind_the_whole_challenge() {
+    let (connection, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    let timestamp = "1790851200";
+    let key =
+      ring::hmac::Key::new(ring::hmac::HMAC_SHA256, connection.port_secret.as_bytes());
+    let proof = connection_status_proof(&connection, "pending", timestamp);
+    let signature = hex::decode(&proof).unwrap();
+    let message = |correlation: &str, hash: &str, jkt: &str, status: &str, at: &str| {
+      format!("{correlation}\n{hash}\n{jkt}\n{status}\n{at}")
+    };
+    let (id, hash, jkt) = (
+      connection.correlation_id.as_str(),
+      connection.verifier_hash.as_str(),
+      connection.device_jkt.as_str(),
+    );
+    assert!(
+      ring::hmac::verify(
+        &key,
+        message(id, hash, jkt, "pending", timestamp).as_bytes(),
+        &signature
+      )
+      .is_ok()
+    );
+    let other_hash = "0".repeat(64);
+    let other_jkt = "A".repeat(43);
+    let other_id = "11111111-1111-4111-8111-111111111111";
+    for changed in [
+      message(other_id, hash, jkt, "pending", timestamp),
+      message(id, &other_hash, jkt, "pending", timestamp),
+      message(id, hash, &other_jkt, "pending", timestamp),
+      message(id, hash, jkt, "connected", timestamp),
+      message(id, hash, jkt, "pending", "1790851201"),
+      // The format before the challenge was bound.
+      format!("{id}\npending\n{timestamp}"),
+    ] {
+      assert!(ring::hmac::verify(&key, changed.as_bytes(), &signature).is_err());
+    }
+    let (another, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert_ne!(another.verifier_hash, connection.verifier_hash);
+    assert_ne!(
+      connection_status_proof(&another, "pending", timestamp),
+      proof
+    );
   }
 
   fn fixture(key: &str, expires_in: i64) -> LinkedAccount {

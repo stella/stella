@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -46,6 +47,13 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { removeWorkspaceMemberHandler } from "./remove";
+
+beforeEach(() => {
+  broadcastMock.mockClear();
+  broadcastSessionEventMock.mockClear();
+  closeSessionConnectionsMock.mockClear();
+  revokeWorkspaceSseAccessMock.mockClear();
+});
 
 const broadcastSessionEventMock = mock(() => undefined);
 const closeSessionConnectionsMock = mock(() => undefined);

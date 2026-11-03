@@ -199,6 +199,7 @@ const agentIdentityHandler = createSafePublicHandler(
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Could not issue an agent token.",
           }),
         );

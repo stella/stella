@@ -26,9 +26,8 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  buildCzNssDecision,
+  buildCzNssDecision as uncheckedBuildCzNssDecision,
   CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
@@ -40,7 +39,8 @@ import {
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
@@ -58,15 +58,24 @@ import {
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(czNssAdapter);
 
@@ -325,15 +334,19 @@ const installStub = ({
   htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
-}: StubOptions): { requests: RecordedRequest[] } => {
+}: StubOptions): { requests: RecordedRequest[]; timeouts: number[] } => {
   const requests: RecordedRequest[] = [];
+  const timeouts: number[] = [];
   let searchCalls = 0;
   let continuationCalls = 0;
 
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
+      if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
+        timeouts.push(init.timeoutMs);
+      }
       requests.push({
         method,
         url: url.toString(),
@@ -374,6 +387,14 @@ const installStub = ({
             ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
+        if (
+          url.hostname === "www.nssoud.cz" &&
+          url.pathname === "/rozhodovaci-cinnost/rozsireny-senat"
+        ) {
+          return htmlResponse(
+            "<table><tbody><tr><td>Nebyl nalezen žádný záznam.</td></tr></tbody></table>",
+          );
+        }
         if (url.pathname === "/") {
           return htmlResponse(SESSION_PAGE);
         }
@@ -381,10 +402,10 @@ const installStub = ({
       };
 
       return await Promise.resolve(answer());
-    },
+    }),
   );
 
-  return { requests };
+  return { requests, timeouts };
 };
 
 /**
@@ -409,26 +430,30 @@ const throughJsonb = (value: unknown): unknown =>
 const SLICE = "2026-06-10";
 
 test("allows the NSS listing endpoints to use their source-specific budget", async () => {
-  installStub({ search: [htmlResponse("", 503)] });
-  const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
-  expect(invalidation.isErr()).toBe(true);
-
+  const originalFetch = globalThis.fetch;
   const originalTimeout = AbortSignal.timeout;
-  const timeouts: number[] = [];
+  const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
     (milliseconds) => {
-      timeouts.push(milliseconds);
+      pageDeadlines.push(milliseconds);
       return originalTimeout(milliseconds);
     },
   );
   try {
     installStub({ search: [htmlResponse("", 503)] });
+    const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
+    expect(invalidation.isErr()).toBe(true);
+    pageDeadlines.length = 0;
+
+    const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
-    timeouts.length = 0;
+    // The page's own budget first, then one deadline per listing request.
+    expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...failedStub.timeouts]);
+    pageDeadlines.length = 0;
 
-    installStub({
+    const pageStub = installStub({
       search: [
         htmlResponse(
           searchPage({
@@ -442,9 +467,11 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
+    expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...pageStub.timeouts]);
   } finally {
     timeoutSpy.mockRestore();
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -741,10 +768,8 @@ describe("cz-nss page arithmetic", () => {
 // ── Listing walk ─────────────────────────────────────────
 
 describe("cz-nss listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("searches the day the slice names", async () => {
@@ -1126,14 +1151,12 @@ describe("cz-nss listSlicePage", () => {
 // ── Crawl cursor ─────────────────────────────────────────
 
 describe("cz-nss fetchPage", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   afterAll(() => {
@@ -1392,10 +1415,8 @@ describe("cz-nss fetchPage", () => {
 // ── Per-item build ───────────────────────────────────────
 
 describe("cz-nss buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const listedRow = async (): Promise<unknown> => {
@@ -1600,9 +1621,11 @@ describe("cz-nss buildDecision", () => {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
 
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const stored = {
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -1644,9 +1667,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -1992,9 +2017,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined || decision.sourceRaw === undefined) {
       throw new TypeError("Expected cz-nss stored-raw replay evidence");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
     const replay = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw),
       contentType: decision.sourceRawContentType ?? null,
@@ -2022,9 +2049,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const replayed = async (
       stored: Pick<StoredRawReparseInput, "raw" | "contentType" | "metadata">,
@@ -2153,6 +2182,44 @@ describe("cz-nss buildDecision", () => {
     ]);
   });
 
+  test("a rich document with no parsed blocks remains stored beside the fallback text", async () => {
+    const payload = await listedRow();
+    const html = "<html><body><p>pokračování</p></body></html>";
+    expect(isNssDocumentPlaceholder(html)).toBe(false);
+    expect(
+      parseNssDecisionHtml({
+        caseNumber: "1 Az 4/2026",
+        ecli: undefined,
+        court: "Městský soud v Praze",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        html,
+        detailMetadata: {},
+      }).documentAst.blocks,
+    ).toHaveLength(0);
+    installStub({ search: [] });
+    const served = globalThis.fetch;
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        return url.pathname.startsWith("/DokumentOriginal/Html/")
+          ? htmlResponse(html)
+          : await served(input, init);
+      }),
+    );
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(parts?.["document"]).toBe(html);
+    expect(parts?.["text"]).toBe(DOCUMENT_TEXT);
+  });
+
   test("a replay rebuilds the text-served row the crawl built", async () => {
     const payload = await listedRow();
     installStub({ search: [], htmlDocumentStatus: 404 });
@@ -2164,9 +2231,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
@@ -2285,7 +2354,6 @@ describe("cz-nss buildDecision", () => {
 // ── Reads the portal did not answer ──────────────────────
 
 describe("cz-nss reads the portal did not answer", () => {
-  const originalFetch = globalThis.fetch;
   let recording: RecordingLogger;
 
   beforeEach(() => {
@@ -2294,7 +2362,7 @@ describe("cz-nss reads the portal did not answer", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     recording.restore();
   });
 
@@ -2319,8 +2387,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub(stub ?? { search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2328,7 +2396,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.reject(failure());
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2442,8 +2510,8 @@ describe("cz-nss reads the portal did not answer", () => {
     installStub(stub);
     const served = globalThis.fetch;
     let detailReads = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2454,7 +2522,7 @@ describe("cz-nss reads the portal did not answer", () => {
           }
         }
         return await served(input, init);
-      },
+      }),
     );
     return { detailReads: () => detailReads };
   };
@@ -2659,8 +2727,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub({ search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2668,7 +2736,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.resolve().then(fail);
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2748,13 +2816,15 @@ describe("cz-nss reads the portal did not answer", () => {
     test(`holds a row whose text read answers ${status} with the typed refusal`, async () => {
       installStub({ search: [], htmlDocumentStatus: 404 });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) =>
-          new URL(
-            input instanceof Request ? input.url : String(input),
-          ).pathname.startsWith("/DokumentOriginal/Text/")
-            ? htmlResponse("", status)
-            : await served(input, init),
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) =>
+            new URL(
+              input instanceof Request ? input.url : String(input),
+            ).pathname.startsWith("/DokumentOriginal/Text/")
+              ? htmlResponse("", status)
+              : await served(input, init),
+        ),
       );
 
       const built = await buildCzNssDecision({

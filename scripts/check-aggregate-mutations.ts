@@ -36,12 +36,14 @@ import {
   walk,
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths";
+import { registryEntryNames } from "./db-registry-entries";
 
 type Identifier = Extract<Node, { type: "Identifier" }>;
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
 const REGISTRY = `${API}lib/db/aggregate-lock.ts`;
+const REGISTRY_DIRECTORY = `${API}lib/db/aggregate-lock-entries`;
 const OWNER = `${API}lib/db/aggregate-mutation-declaration.ts`;
 const DECLARE = "declareAggregateMutation";
 const BASELINE = BASELINE_PATHS.aggregateMutations;
@@ -178,44 +180,14 @@ const validateDeclaration = ({
   }
 };
 
-const readAggregateRegistry = (load: SourceLoader) => {
-  const registry = new Set<string>();
-  const registryContent = load(REGISTRY);
-  if (registryContent !== undefined) {
-    const registrySource = parse({ file: REGISTRY, source: registryContent });
-    const collectRegistry = (node: Node) => {
-      if (
-        node.type === "VariableDeclarator" &&
-        node.id.type === "Identifier" &&
-        node.id.name === "AGGREGATE_LOCKS" &&
-        node.init !== null
-      ) {
-        const initializer =
-          node.init.type === "TSAsExpression"
-            ? node.init.expression
-            : node.init;
-        if (!(initializer.type === "ObjectExpression")) {
-          panic("Aggregate registry requires a literal object");
-        }
-        for (const property of initializer.properties) {
-          if (!isPropertyAssignment(property)) {
-            panic("Aggregate registry cannot use computed spreads");
-          }
-          registry.add(
-            isStringLiteral(property.key)
-              ? property.key.value
-              : nodeText(property.key, registrySource),
-          );
-        }
-      }
-      visitChildren(node, collectRegistry);
-    };
-    collectRegistry(registrySource.program);
-  }
-  return registry;
+type CreateSourceAccessOptions = {
+  sourceLoader: SourceLoader;
+  files: readonly string[];
 };
-
-const createSourceAccess = (sourceLoader: SourceLoader) => {
+const createSourceAccess = ({
+  sourceLoader,
+  files,
+}: CreateSourceAccessOptions) => {
   const contents = new Map<string, string | undefined>();
   const load: SourceLoader = (file) => {
     if (contents.has(file)) {
@@ -261,7 +233,20 @@ const createSourceAccess = (sourceLoader: SourceLoader) => {
       ? path.posix.join(directory, target)
       : undefined;
   };
-  const registry = readAggregateRegistry(load);
+  const registry = new Set(
+    registryEntryNames(
+      REGISTRY_DIRECTORY,
+      files
+        .filter((file) => path.posix.dirname(file) === REGISTRY_DIRECTORY)
+        .map((file) => path.posix.basename(file)),
+    ),
+  );
+  for (const name of registry) {
+    const file = `${REGISTRY_DIRECTORY}/${name}.ts`;
+    if (load(file) === undefined) {
+      panic(`Missing aggregate registry entry: ${file}`);
+    }
+  }
   return { load, resolveSourceModule, registry };
 };
 
@@ -405,14 +390,35 @@ const handlerImplementation = ({
         visited,
       });
     }
-    // The handler callback comes last: `(config, handler)`, and a token
-    // handler's `(config, verifyCaller, handler)`.
-    const callback = handler.arguments.at(-1);
     if (
       factory?.kind !== "import" ||
-      factory.module !== `${API}lib/api-handlers.ts` ||
-      callback === undefined
+      factory.module !== `${API}lib/api-handlers.ts`
     ) {
+      return undefined;
+    }
+    // Optional dependencies may follow the callback. Its position belongs to
+    // the actual constructor contract, including the token verifier parameter.
+    const contractSource = access.load(factory.module);
+    if (contractSource === undefined) {
+      return undefined;
+    }
+    const contract = trustedTopLevel({
+      name: factory.exported,
+      source: parse({ file: factory.module, source: contractSource }),
+      access,
+    });
+    if (contract?.kind !== "function") {
+      return undefined;
+    }
+    const handlerPosition = contract.node.params.findIndex(
+      (parameter) =>
+        parameter.type === "Identifier" && parameter.name === "handler",
+    );
+    const callback =
+      handlerPosition === -1
+        ? undefined
+        : handler.arguments.at(handlerPosition);
+    if (callback === undefined) {
       return undefined;
     }
     return handlerImplementation({
@@ -903,6 +909,12 @@ const JOINING_RUNNERS = {
       suppliesTransaction: true,
     },
     {
+      module: `${API}db/safe-db.ts`,
+      exported: "resultTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
       module: REGISTRY,
       exported: "withAggregateSavepoint",
       argument: 1,
@@ -1220,6 +1232,103 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
+const hasLockIds = (argument: Argument | undefined): boolean => {
+  if (argument === undefined || argument.type === "SpreadElement") {
+    return false;
+  }
+  const ids = unwrapExpression(argument);
+  return (
+    !(ids.type === "ArrayExpression" && ids.elements.length === 0) &&
+    !(ids.type === "Identifier" && ids.name === "undefined") &&
+    !(ids.type === "Literal" && ids.value === null) &&
+    !(ids.type === "UnaryExpression" && ids.operator === "void")
+  );
+};
+
+const hasWorkspaceParentBatch = (
+  call: CallExpression,
+  access: SourceAccess,
+): boolean => {
+  const options = call.arguments.at(0);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateParentBatch"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        !property.method &&
+        property.kind === "init",
+    )
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (property) => staticPropertyKey(property) === "workspaceIds",
+  );
+  const field = workspaceIds.at(0);
+  return (
+    workspaceIds.length === 1 &&
+    field !== undefined &&
+    isPropertyAssignment(field) &&
+    hasLockIds(field.value)
+  );
+};
+
+/** The invoice owner acquires all participating matters before its invoice row. */
+const hasInvoiceMatterAcquisition = (
+  call: CallExpression,
+  access: SourceAccess,
+) => {
+  const options = call.arguments.at(1);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["lockInvoiceInStatus"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(isPropertyAssignment) ||
+    options.properties.some((property) => property.computed)
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (field) => staticPropertyKey(field) === "workspaceId",
+  );
+  const workspaceId = workspaceIds.at(0);
+  const locks = options.properties.filter(
+    (field) => staticPropertyKey(field) === "matterLocks",
+  );
+  const lock = locks.at(0);
+  if (
+    workspaceIds.length !== 1 ||
+    workspaceId === undefined ||
+    !hasLockIds(workspaceId.value) ||
+    locks.length !== 1 ||
+    lock?.value.type !== "ObjectExpression" ||
+    lock.value.properties.length !== 1
+  ) {
+    return false;
+  }
+  const type = lock.value.properties.at(0);
+  return (
+    type !== undefined &&
+    isPropertyAssignment(type) &&
+    staticPropertyKey(type) === "type" &&
+    isStringLiteral(type.value) &&
+    type.value.value === "acquire"
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1275,6 +1384,23 @@ const awaitedAggregateNames = ({
       node.argument.callee.type === "Identifier"
     ) {
       const options = node.argument.arguments.at(0);
+      if (
+        isTrustedImport({
+          identifier: node.argument.callee,
+          access,
+          module: REGISTRY,
+          exported: ["withInvoiceMatterLocks"],
+        }) &&
+        hasLockIds(node.argument.arguments.at(1))
+      ) {
+        names.add("workspace");
+      }
+      if (hasWorkspaceParentBatch(node.argument, access)) {
+        names.add("workspace");
+      }
+      if (hasInvoiceMatterAcquisition(node.argument, access)) {
+        names.add("workspace");
+      }
       if (
         isTrustedImport({
           identifier: node.argument.callee,
@@ -1616,7 +1742,7 @@ export const verifyAggregateDeclarations = ({
   files: readonly string[];
   load: SourceLoader;
 }): number => {
-  const access = createSourceAccess(load);
+  const access = createSourceAccess({ sourceLoader: load, files });
   let verified = 0;
   for (const file of files) {
     if (file !== OWNER && access.load(file)?.includes(DECLARE) === true) {
@@ -1709,7 +1835,11 @@ const aggregateMutationComparisonCommit = () => {
   const resolved = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
+    {
+      maxBuffer: 2 ** 30,
+      cwd: ROOT,
+      encoding: "utf-8",
+    },
   );
   if (resolved.status !== 0) {
     panic(`Aggregate mutation comparison ref is unavailable: ${requested}`);
@@ -1720,7 +1850,11 @@ const aggregateMutationComparisonCommit = () => {
   const base = spawnSync(
     "git",
     ["merge-base", "HEAD", resolved.stdout.trim()],
-    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
+    {
+      maxBuffer: 2 ** 30,
+      cwd: ROOT,
+      encoding: "utf-8",
+    },
   );
   if (base.status !== 0) {
     panic(

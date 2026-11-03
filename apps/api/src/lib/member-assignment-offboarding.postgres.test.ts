@@ -1,15 +1,16 @@
 import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { safeDbFromScoped } from "@/api/db/safe-db";
+import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingDraftUserSettings,
   contacts,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -24,6 +25,7 @@ import {
   mcpUserConnections,
   pdfSigningSessions,
   properties,
+  requestIdempotencyReceipts,
   searchHistoryEntries,
   sharepointConnections,
   sharepointOAuthState,
@@ -49,7 +51,9 @@ import {
 } from "@/api/lib/audit-log";
 import { getAuth, resolveMemberAuthorization } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
+import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
 import {
   removeOrganizationMemberInTransaction,
   tryLockMemberCleanupWorkspace,
@@ -64,6 +68,7 @@ import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -88,6 +93,198 @@ if (!databaseUrl || !runPostgresTests) {
     });
   });
 } else {
+  test("organization removal refuses live receipts, then clears only the departing user's organization cache", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const { db: owningDb } = openClient();
+      const organizationId = mintAuthProviderId<"organization">();
+      const otherOrganizationId = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      const actorUserId = mintAuthProviderId<"user">();
+      const memberId = Bun.randomUUIDv7();
+      const workspaceId = createSafeId<"workspace">();
+      const key = Bun.randomUUIDv7();
+      await db.insert(user).values(
+        [userId, actorUserId].map((id) => ({
+          id,
+          name: "Receipt member",
+          email: `${id}@example.test`,
+        })),
+      );
+      try {
+        await db.insert(organization).values(
+          [organizationId, otherOrganizationId].map((id) => ({
+            id,
+            name: "Receipt organization",
+            slug: id,
+            createdAt: new Date(),
+          })),
+        );
+        const departingPrincipal = { organizationId, userId };
+        const actorPrincipal = { organizationId, userId: actorUserId };
+        const otherOrganizationPrincipal = {
+          organizationId: otherOrganizationId,
+          userId,
+        };
+        const principals = [
+          departingPrincipal,
+          actorPrincipal,
+          otherOrganizationPrincipal,
+        ];
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
+        await db.insert(member).values(
+          principals.map((principal) => ({
+            ...principal,
+            id:
+              principal.organizationId === organizationId &&
+              principal.userId === userId
+                ? memberId
+                : Bun.randomUUIDv7(),
+            role: principal.userId === actorUserId ? "owner" : "member",
+            createdAt: new Date(),
+          })),
+        );
+        await db.insert(workspaces).values({
+          id: workspaceId,
+          organizationId,
+          name: "Receipt matter",
+          reference: workspaceId,
+        });
+        await db
+          .insert(workspaceMembers)
+          .values(
+            [userId, actorUserId].map((id) => ({ workspaceId, userId: id })),
+          );
+        const seedReceipt = async (principal: typeof departingPrincipal) =>
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            principal.organizationId,
+            principal.userId,
+          )(
+            async (tx) =>
+              await tx.insert(requestIdempotencyReceipts).values({
+                ...principal,
+                id: createSafeId<"requestIdempotencyReceipt">(),
+                idempotencyKey: key,
+                route: "/contacts",
+                requestFingerprint: "a".repeat(64),
+                state: "pending",
+              }),
+          );
+        await Promise.all([
+          seedReceipt(departingPrincipal),
+          seedReceipt(actorPrincipal),
+          seedReceipt(otherOrganizationPrincipal),
+        ]);
+        const safeDb = safeDbFromScoped(
+          async (fn) =>
+            await db.transaction(
+              async (tx) => await fn(asTestRaw<Transaction>(tx)),
+            ),
+        );
+        const remove = async () =>
+          await abortableTx(
+            safeDb,
+            async (tx) =>
+              await removeOrganizationMemberInTransaction(tx, {
+                organizationId,
+                memberId,
+                userId,
+                actorUserId,
+              }),
+          );
+        const holding = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        const original = createScopedDb(
+          markRlsDatabase(owningDb),
+          [],
+          organizationId,
+          userId,
+        )(async (tx) => {
+          const locked = await tx
+            .select({ id: requestIdempotencyReceipts.id })
+            .from(requestIdempotencyReceipts)
+            .where(
+              and(
+                eq(requestIdempotencyReceipts.organizationId, organizationId),
+                eq(requestIdempotencyReceipts.userId, userId),
+              ),
+            )
+            .for("update");
+          const receipt = locked.at(0);
+          if (receipt === undefined) {
+            panic("The original request must own its pending receipt");
+          }
+          holding.resolve(undefined);
+          await release.promise;
+          await tx.insert(contacts).values({
+            id: createSafeId<"contact">(),
+            organizationId,
+            displayName: "Committed create",
+            type: "person",
+          });
+          await completeRequestReceipt({
+            scopedDb: async (fn) => await withAggregateSavepoint(tx, fn),
+            id: receipt.id,
+            status: 201,
+            body: { userId },
+          });
+        });
+        await Promise.race([holding.promise, original]);
+        try {
+          const refused = await remove();
+          expect(Result.isError(refused)).toBe(true);
+          if (Result.isError(refused)) {
+            expect(refused.error).toMatchObject({
+              status: 409,
+              code: MEMBER_REMOVAL_BUSY_CODE,
+            });
+          }
+          expect(
+            await db.$count(
+              workspaceMembers,
+              and(
+                eq(workspaceMembers.workspaceId, workspaceId),
+                eq(workspaceMembers.userId, userId),
+              ),
+            ),
+          ).toBe(1);
+        } finally {
+          release.resolve(undefined);
+          await original;
+        }
+        expect(Result.isOk(await remove())).toBe(true);
+        const remaining = await db
+          .select({
+            organizationId: requestIdempotencyReceipts.organizationId,
+            userId: requestIdempotencyReceipts.userId,
+          })
+          .from(requestIdempotencyReceipts)
+          .where(eq(requestIdempotencyReceipts.idempotencyKey, key));
+        expect(remaining).toHaveLength(2);
+        expect(remaining).toEqual(expect.arrayContaining(principals.slice(1)));
+        expect(
+          await db.$count(
+            contacts,
+            eq(contacts.organizationId, organizationId),
+          ),
+        ).toBe(1);
+      } finally {
+        await deleteOrganizationsForTest(db, [
+          organizationId,
+          otherOrganizationId,
+        ]);
+        await db.delete(user).where(inArray(user.id, [userId, actorUserId]));
+      }
+    });
+  });
+
   test("organization removal clears the departing member's presence and history and rejoining starts unreported", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db } = openClient();
@@ -178,6 +375,38 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        await Promise.all(
+          [
+            {
+              organizationId,
+              userId,
+              preference: "Concise",
+              consentAt: new Date(),
+            },
+            {
+              organizationId,
+              userId: actorUserId,
+              preference: "Detailed",
+              consentAt: new Date(),
+            },
+            {
+              organizationId: otherOrganizationId,
+              userId,
+              preference: "Other firm",
+              consentAt: new Date(),
+            },
+          ].map(
+            async (settings) =>
+              await createScopedDb(
+                markRlsDatabase(db),
+                [],
+                settings.organizationId,
+                settings.userId,
+              )(async (tx) => {
+                await tx.insert(billingDraftUserSettings).values(settings);
+              }),
+          ),
+        );
         const historyLookupKey = Bun.randomUUIDv7();
         await db.insert(searchHistoryEntries).values(
           [
@@ -246,6 +475,27 @@ if (!databaseUrl || !runPostgresTests) {
               ),
           ),
         ).toBe(1);
+        expect(
+          await scopedDb(
+            async (tx) => await tx.$count(billingDraftUserSettings),
+          ),
+        ).toBe(0);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            organizationId,
+            actorUserId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
+        expect(
+          await createScopedDb(
+            markRlsDatabase(db),
+            [],
+            otherOrganizationId,
+            userId,
+          )(async (tx) => await tx.$count(billingDraftUserSettings)),
+        ).toBe(1);
         const remainingHistory = await db
           .select({
             organizationId: searchHistoryEntries.organizationId,
@@ -281,12 +531,8 @@ if (!databaseUrl || !runPostgresTests) {
             .type,
         ).toBe("current");
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
-        await db
-          .delete(organization)
-          .where(eq(organization.id, otherOrganizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
+        await deleteOrganizationsForTest(db, [otherOrganizationId]);
         await db.delete(user).where(eq(user.id, userId));
         await db.delete(user).where(eq(user.id, actorUserId));
       }
@@ -323,7 +569,7 @@ if (!databaseUrl || !runPostgresTests) {
           const memberId = Bun.randomUUIDv7();
           const workspaceId = createSafeId<"workspace">();
           const taskId = createSafeId<"entity">();
-          const contactId = createSafeId<"contact">();
+          let contactId = createSafeId<"contact">();
           const contactWrite =
             kind === "contact-create" || kind === "contact-update";
           const recordAuditEvent = createBackgroundAuditRecorder({
@@ -437,7 +683,9 @@ if (!databaseUrl || !runPostgresTests) {
                   addAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: { taskId, userId: leaverUserId },
                   }),
                 );
@@ -447,7 +695,9 @@ if (!databaseUrl || !runPostgresTests) {
                   moveAssigneeHandler({
                     safeDb,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
+                    fileNotifications: () => {},
                     body: {
                       taskId,
                       fromUserId: actorUserId,
@@ -457,14 +707,13 @@ if (!databaseUrl || !runPostgresTests) {
                 );
               }
               if (kind === "contact-create") {
-                return await Result.gen(() =>
+                const result = await Result.gen(() =>
                   createContactHandler({
                     safeDb,
                     organizationId,
                     userId: actorUserId,
                     recordAuditEvent,
                     body: {
-                      id: contactId,
                       type: "person",
                       displayName: "Assignment contact",
                       originatingAttorneyId: leaverUserId,
@@ -472,6 +721,10 @@ if (!databaseUrl || !runPostgresTests) {
                     },
                   }),
                 );
+                if (Result.isOk(result)) {
+                  contactId = result.value.id;
+                }
+                return result;
               }
               return await Result.gen(() =>
                 updateContactHandler({
@@ -608,9 +861,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
           } finally {
             release.resolve(undefined);
-            await checkDb
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(checkDb, [organizationId]);
             await checkDb.delete(user).where(eq(user.id, actorUserId));
             await checkDb.delete(user).where(eq(user.id, leaverUserId));
           }
@@ -745,9 +996,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           release.resolve(undefined);
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, leaverUserId));
         }
@@ -1162,9 +1411,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(accepted.status).toBe(200);
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         for (const browser of [owner, leaver, recipient]) {
           await db.delete(user).where(eq(user.id, browser.userId));
         }
@@ -1390,9 +1637,7 @@ if (!databaseUrl || !runPostgresTests) {
               : [],
           );
         } finally {
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, actorUserId));
           await db.delete(user).where(eq(user.id, userId));
         }
@@ -1551,9 +1796,7 @@ if (!databaseUrl || !runPostgresTests) {
           if (writer) {
             await writer;
           }
-          await holdingDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(holdingDb, [organizationId]);
           await holdingDb.delete(user).where(eq(user.id, actorUserId));
           await holdingDb.delete(user).where(eq(user.id, userId));
         }

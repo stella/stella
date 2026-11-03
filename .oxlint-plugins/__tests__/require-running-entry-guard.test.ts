@@ -111,3 +111,31 @@ test("does not confuse a same named inner transaction with the guarded one", asy
     ),
   ).toEqual([6]);
 });
+
+test.each([
+  {
+    transaction: "tx",
+    refusal: "return Result.err(guarded.error);",
+    expected: [],
+  },
+  {
+    transaction: "other",
+    refusal: "return Result.err(guarded.error);",
+    expected: [7],
+  },
+  { transaction: "tx", refusal: "record(guarded.error);", expected: [7] },
+])(
+  "invoice Result refusal keeps the transaction boundary: %o",
+  async ({ transaction, refusal, expected }) => {
+    expect(
+      await lintSingleRule(
+        "require-running-entry-guard",
+        `import { Result } from "better-result";\nimport { timeEntries } from "@/api/db/schema/billing";\nimport { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";\nasync function mutate(tx, other) {\n const guarded = await guardRunningTimeEntries({ tx: ${transaction} });\n if (guarded.isErr()) { ${refusal} }\n await tx.update(timeEntries);\n}`,
+        {
+          sourcePath: "apps/api/src/handlers/invoices/write.ts",
+          cwd: "scratch",
+        },
+      ),
+    ).toEqual([...expected]);
+  },
+);

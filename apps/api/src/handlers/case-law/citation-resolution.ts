@@ -131,6 +131,7 @@ import {
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
@@ -540,11 +541,10 @@ const citationMatchingHoldersSql = ({
            ${holder}.decision_date,
            ${holder}.language,
            ${holderSheetColumnsSql(holder)},
-           CASE
-             WHEN ${holder}.language_group_key IS NULL
-               THEN 'decision:' || ${holder}.id::text
-             ELSE 'group:' || ${holder}.language_group_key
-           END AS work_key
+           ${languageGroupWorkKeySql({
+             id: sql`${holder}.id`,
+             languageGroupKey: sql`${holder}.language_group_key`,
+           })} AS work_key
       FROM ${caseLawDecisionIdentifiers} identifier
       JOIN ${caseLawDecisions} ${holder}
         ON ${holder}.id = identifier.decision_id
@@ -565,11 +565,10 @@ const citationMatchingHoldersSql = ({
            ${holder}.decision_date,
            ${holder}.language,
            ${holderSheetColumnsSql(holder)},
-           CASE
-             WHEN ${holder}.language_group_key IS NULL
-               THEN 'decision:' || ${holder}.id::text
-             ELSE 'group:' || ${holder}.language_group_key
-           END AS work_key
+           ${languageGroupWorkKeySql({
+             id: sql`${holder}.id`,
+             languageGroupKey: sql`${holder}.language_group_key`,
+           })} AS work_key
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
        AND ${holder}.citation_key = ${citationKey}

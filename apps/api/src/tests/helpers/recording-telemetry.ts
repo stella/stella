@@ -78,10 +78,13 @@ export type RecordingLogger = {
 };
 
 /** Route every sanitized log record into an in-memory list. */
-export const installRecordingLogger = (): RecordingLogger => {
+export const installRecordingLogger = (
+  onRecord?: (record: LogRecord) => void,
+): RecordingLogger => {
   const records: LogRecord[] = [];
   setLogSinkForTesting((record) => {
     records.push(record);
+    onRecord?.(record);
   });
   return {
     records,

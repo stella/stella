@@ -11,7 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+
+import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];
@@ -40,20 +41,9 @@ const copyGenerator = ({ directory, file, copied }: CopyGeneratorOptions) => {
   copied.add(file);
   const source = readFileSync(path.join(repository, file), "utf-8");
   write({ directory, file, source });
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const specifier = statement.moduleSpecifier.text;
+  const { module } = parseSource(file, source);
+  for (const { moduleRequest } of module.staticImports) {
+    const specifier = moduleRequest.value;
     if (!specifier.startsWith(".")) {
       continue;
     }

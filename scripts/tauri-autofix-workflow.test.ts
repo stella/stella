@@ -94,7 +94,7 @@ test("source changes disable human autofix while the independent CI guard remain
   );
 });
 
-test("npm Tauri updates form their own group without changing the existing cadence", () => {
+test("npm and Rust Tauri updates form their own groups without changing the existing cadence", () => {
   const config = readFileSync(
     new URL("../.github/dependabot.yml", import.meta.url),
     "utf-8",
@@ -103,6 +103,16 @@ test("npm Tauri updates form their own group without changing the existing caden
   expect(bun).toContain('exclude-patterns:\n          - "@tauri-apps/*"');
   expect(bun).toContain(
     'tauri:\n        patterns:\n          - "@tauri-apps/*"\n        update-types:\n          - "major"\n          - "minor"\n          - "patch"',
+  );
+  const cargo = config.slice(
+    config.indexOf('  - package-ecosystem: "cargo"'),
+    config.indexOf('  - package-ecosystem: "bun"'),
+  );
+  expect(cargo).toContain(
+    'exclude-patterns:\n          - "tauri"\n          - "tauri-*"',
+  );
+  expect(cargo).toContain(
+    'tauri:\n        patterns:\n          - "tauri"\n          - "tauri-*"\n        update-types:\n          - "major"\n          - "minor"\n          - "patch"',
   );
   expect(bun).toContain("default-days: 5");
   const schedules = config.match(/^ {4}schedule:\n(?: {6}[^\n]+\n)+/gmu) ?? [];

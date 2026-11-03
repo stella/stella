@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { caseLawProvisionCitations } from "@/api/db/schema";
+import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
 import type { ProvisionBackfillSession } from "./step";
@@ -26,11 +27,13 @@ const fakeConnection = (
       validated.add(validatedName);
     }
   },
-  query: async () =>
-    CONSTRAINT_NAMES.map((name) => ({
-      name,
-      isValidated: validated.has(name),
-    })),
+  query: async (query) =>
+    query.includes("transaction_isolation")
+      ? [{ isolation: "read committed" }]
+      : CONSTRAINT_NAMES.map((name) => ({
+          name,
+          isValidated: validated.has(name),
+        })),
 });
 
 describe("provision citation CHECK validation", () => {
@@ -53,7 +56,7 @@ describe("provision citation CHECK validation", () => {
     (await PROVISION_CITATION_CHECK_STEP.advance(connection)).unwrap();
 
     expect(statements.slice(0, 4)).toEqual([
-      "BEGIN",
+      READ_COMMITTED_BEGIN,
       'budget {"lockTimeout":10000,"statementTimeout":1500000}',
       `ALTER TABLE public."case_law_provision_citations" VALIDATE CONSTRAINT "${firstPending}"`,
       "COMMIT",

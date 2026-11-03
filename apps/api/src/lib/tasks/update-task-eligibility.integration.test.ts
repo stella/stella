@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { user } from "@/api/db/auth-schema";
 import {
   entities,
@@ -18,7 +20,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

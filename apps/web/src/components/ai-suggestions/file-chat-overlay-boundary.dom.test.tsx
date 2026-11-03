@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -7,15 +15,26 @@ GlobalRegistrator.register();
 
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FileChatOverlayBoundary, FileChatOverlayErrorFallback } =
   await import("./file-chat-overlay-boundary");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
+beforeAll(() => {
+  Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
+    configurable: true,
+    value: "running-build",
+  });
+});
+
 afterEach(() => {
   cleanup();
+  mock.restore();
 });
 afterAll(async () => {
+  Reflect.deleteProperty(globalThis, "__APP_COMMIT_SHA__");
   await unregisterDomEnvironment();
 });
 
@@ -25,13 +44,15 @@ const renderFallback = (
   onDismiss: () => void = () => undefined,
 ) =>
   render(
-    <IntlProvider locale="en" messages={messages}>
-      <FileChatOverlayErrorFallback
-        error={error}
-        onDismiss={onDismiss}
-        onRetry={onRetry}
-      />
-    </IntlProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages}>
+        <FileChatOverlayErrorFallback
+          error={error}
+          onDismiss={onDismiss}
+          onRetry={onRetry}
+        />
+      </IntlProvider>
+    </QueryClientProvider>,
   );
 
 test("a failed chat load names the document chat and retries", () => {
@@ -50,7 +71,61 @@ test("a failed chat load names the document chat and retries", () => {
   );
 });
 
-test("a chunk removed by a deploy asks for a reload instead of a retry", () => {
+test("each chunk failure is classified anew under one query client", async () => {
+  const fetchSpy = spyOn(globalThis, "fetch");
+  fetchSpy.mockResolvedValueOnce(
+    new Response(JSON.stringify({ commit: "running-build" })),
+  );
+  fetchSpy.mockResolvedValueOnce(
+    new Response(JSON.stringify({ commit: "deployed-build" })),
+  );
+  const client = new QueryClient();
+  const chunkError = () =>
+    new TypeError(
+      "Failed to fetch dynamically imported module: https://app.example/assets/gated-chat-composer-old.js",
+    );
+  const renderWith = (error: Error) => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages}>
+        <FileChatOverlayErrorFallback
+          error={error}
+          onDismiss={() => undefined}
+          onRetry={() => undefined}
+        />
+      </IntlProvider>
+    </QueryClientProvider>
+  );
+
+  // The boundary unmounts the fallback on retry and mounts it again when the
+  // next attempt fails.
+  const first = render(renderWith(chunkError()));
+  await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+  expect(
+    first.getByRole("button", { name: messages.common.tryAgain }),
+  ).toBeDefined();
+  first.unmount();
+  await waitFor(() =>
+    expect(
+      client.getQueryCache().find({ queryKey: ["failed-document-chat-chunk"] }),
+    ).toBeUndefined(),
+  );
+
+  const view = render(renderWith(chunkError()));
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toContain(
+      messages.chat.overlayUpdated,
+    ),
+  );
+  expect(fetchSpy).toHaveBeenCalledTimes(2);
+  expect(
+    view.getByRole("button", { name: messages.common.reload }),
+  ).toBeDefined();
+});
+
+test("a chunk removed by a deploy asks for a reload instead of a retry", async () => {
+  spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ commit: "deployed-build" })),
+  );
   let retries = 0;
   const view = renderFallback(
     new TypeError(
@@ -61,8 +136,10 @@ test("a chunk removed by a deploy asks for a reload instead of a retry", () => {
     },
   );
 
-  expect(view.getByRole("alert").textContent).toContain(
-    messages.chat.overlayUpdated,
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toContain(
+      messages.chat.overlayUpdated,
+    ),
   );
   expect(view.queryByRole("button", { name: messages.common.tryAgain })).toBe(
     null,
@@ -106,16 +183,18 @@ test("a dismissed overlay failure leaves the reader working without the overlay"
   console.error = () => undefined;
   try {
     const view = render(
-      <IntlProvider locale="en" messages={messages}>
-        <article data-testid="reader" />
-        <FileChatOverlayBoundary
-          area="file-chat-overlay"
-          onRetry={() => undefined}
-          overlayKey="statute:89/2012"
-        >
-          <FailingOverlay />
-        </FileChatOverlayBoundary>
-      </IntlProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages}>
+          <article data-testid="reader" />
+          <FileChatOverlayBoundary
+            area="file-chat-overlay"
+            onRetry={() => undefined}
+            overlayKey="statute:89/2012"
+          >
+            <FailingOverlay />
+          </FileChatOverlayBoundary>
+        </IntlProvider>
+      </QueryClientProvider>,
     );
 
     const alert = await waitFor(() => view.getByRole("alert"));
@@ -147,18 +226,20 @@ test("try again re-renders the overlay after preparing a fresh attempt", async (
       return <aside data-testid="overlay" />;
     };
     const view = render(
-      <IntlProvider locale="en" messages={messages}>
-        <FileChatOverlayBoundary
-          area="file-chat-overlay"
-          onRetry={() => {
-            retries += 1;
-            failing = false;
-          }}
-          overlayKey="statute:89/2012"
-        >
-          <RecoveringOverlay />
-        </FileChatOverlayBoundary>
-      </IntlProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages}>
+          <FileChatOverlayBoundary
+            area="file-chat-overlay"
+            onRetry={() => {
+              retries += 1;
+              failing = false;
+            }}
+            overlayKey="statute:89/2012"
+          >
+            <RecoveringOverlay />
+          </FileChatOverlayBoundary>
+        </IntlProvider>
+      </QueryClientProvider>,
     );
 
     await waitFor(() => view.getByRole("alert"));

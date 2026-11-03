@@ -73,8 +73,9 @@ import {
   parseSource as parseSyntax,
   type Program,
   type SpreadElement,
+  staticPropertyName,
   walk,
-} from "../packages/scripts/src/syntax-tree";
+} from "../packages/scripts/src/syntax-tree.ts";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 import { OWNERSHIP } from "./ownership.ts";
@@ -589,8 +590,8 @@ const dynamicBullMqImportReachesWorker = (
       if (element.type !== "Property") {
         return false;
       }
-      const name = propertyName(element.key);
-      return name !== null && name !== "Worker";
+      const name = staticPropertyName(element);
+      return name !== undefined && name !== "Worker";
     });
   }
   return true;
@@ -1706,6 +1707,7 @@ const selfTestWorkerConstructors = (): string[] => {
     'const { Worker: RawWorker } = await import("bullmq"); new RawWorker("q", async () => {});',
     'const queues = await import("bullmq"); new queues.Worker("q", async () => {});',
     'const { Worker: RawWorker } = require("bullmq"); new RawWorker("q", async () => {});',
+    'const key = "Worker"; const { [key]: RawWorker } = await import("bullmq");',
   ]) {
     const errors = rawWorkerImports("apps/api/src/lib/w.ts", source);
     if (errors.length !== 1) {

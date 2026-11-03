@@ -44,6 +44,51 @@ export const isOwnDistLoadFailure = ({
   );
 };
 
+// A string literal resolved against the module's own URL: worker entries and
+// binary assets a built module loads at runtime rather than imports.
+const IMPORT_META_URL_TARGET =
+  /new\s+URL\(\s*(?<quote>["'`])(?<target>[^"'`$\\]+)\k<quote>\s*,\s*import\.meta\.url\s*\)/gu;
+const URL_SCHEME = /^[a-z][a-z\d+.-]*:/iu;
+
+/**
+ * Package-relative paths a built module reaches through
+ * `new URL("<relative>", import.meta.url)`. Nothing imports these, so neither
+ * the export map nor a Node load proves they ship: a worker spawned this way
+ * fails only when the consumer first starts it. Absolute and scheme URLs are
+ * not package files and are skipped; a target ending in `/` names a directory.
+ */
+export const importMetaUrlTargets = ({
+  file,
+  contents,
+}: {
+  readonly file: string;
+  readonly contents: string;
+}): string[] =>
+  [...contents.matchAll(IMPORT_META_URL_TARGET)].flatMap((match) => {
+    const target = match.groups?.["target"];
+    if (
+      target === undefined ||
+      target.startsWith("/") ||
+      URL_SCHEME.test(target)
+    ) {
+      return [];
+    }
+    // posix.join keeps a trailing slash, so a directory target stays one.
+    return [path.posix.join(path.posix.dirname(file), target)];
+  });
+
+/** Whether a package-relative URL target ships in the tarball's file list. */
+export const isShippedUrlTarget = ({
+  target,
+  packed,
+}: {
+  readonly target: string;
+  readonly packed: ReadonlySet<string>;
+}): boolean =>
+  target.endsWith("/")
+    ? [...packed].some((file) => file.startsWith(target))
+    : packed.has(target);
+
 type PublishedExportEntry = string | { readonly import: string };
 
 export const isExpectedPublishedExportResolution = ({

@@ -52,6 +52,13 @@ const rejects = [
     source: "docker run -v ./data:/data image",
   },
   {
+    // A shell helper is no script: its quoted strings are still read.
+    id: "shell-quoted-mount",
+    inspect: inspectDockerHelper,
+    source:
+      'if [ -n "$data" ]; then\n  mount_args="-v $data:/data"\nfi\nrun_container "$mount_args"\n',
+  },
+  {
     id: "driver-option",
     inspect: inspectDockerHelper,
     source: "docker --context local volume create --opt type=none data",

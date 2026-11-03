@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type {
   Middleware,
   RouteDefinition,
   RouteEntry,
 } from "../../src/http/route";
+import { fileSchema } from "../../src/lib/custom-schema";
+import { FEATURE_REGISTRY } from "../../src/lib/feature-access/registry";
+import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import type { RouteGate } from "../../src/lib/route-gates";
 import {
   checkCapabilityRouteGates,
@@ -25,7 +29,9 @@ import {
   isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
   parseCapabilityTransport,
+  requiredDeploymentFeature,
   resolveAccess,
+  resolveCapabilityDeploymentFeature,
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
@@ -863,10 +869,10 @@ describe("serializeDispatchModule", () => {
       },
     ]);
     expect(out).toContain(
-      '"time-entries.create": { load: async () => await import("@/api/handlers/time-entries/create") },',
+      '"time-entries.create": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/time-entries/create") },',
     );
     expect(out).toContain(
-      '"views.export.read": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
+      '"views.export.read": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
     );
     expect(out).toContain("export const CAPABILITY_DISPATCH");
     expect(out.endsWith("\n")).toBe(true);
@@ -964,7 +970,7 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
       },
     ]);
     expect(out).toContain(
-      '"case-law.ingestion.get": { load: async () => await import("@/api/handlers/case-law/ingestion/get") },',
+      '"case-law.ingestion.get": { load: async (): Promise<Record<string, unknown>> => await import("@/api/handlers/case-law/ingestion/get") },',
     );
   });
 
@@ -1037,14 +1043,8 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
 });
 
 describe("schemaContainsBinaryFormat", () => {
-  test("detects a t.File-shaped field (format: binary) at any depth", () => {
-    // Exactly how t.File({ maxSize }) serializes.
-    const file = {
-      default: "File",
-      maxSize: "50m",
-      type: "string",
-      format: "binary",
-    };
+  test("detects a file field (format: binary) at any depth", () => {
+    const file = toRouteJsonSchema(fileSchema({ maxBytes: 50 * 1024 * 1024 }));
     expect(schemaContainsBinaryFormat(file)).toBe(true);
     expect(
       schemaContainsBinaryFormat({
@@ -1053,14 +1053,11 @@ describe("schemaContainsBinaryFormat", () => {
     ).toBe(true);
   });
 
-  test("detects t.Files (array items with format: binary)", () => {
-    // Exactly how t.Files() serializes.
+  test("detects a list of files (array items with format: binary)", () => {
     expect(
-      schemaContainsBinaryFormat({
-        elysiaMeta: "Files",
-        type: "array",
-        items: { default: "Files", type: "string", format: "binary" },
-      }),
+      schemaContainsBinaryFormat(
+        toRouteJsonSchema(v.array(fileSchema({ maxBytes: 1024 }))),
+      ),
     ).toBe(true);
   });
 
@@ -1478,6 +1475,73 @@ describe("scanFileResponseReturns", () => {
       flaggedIds: new Set(["gone.export"]),
     });
     expect(scan.staleFlags).toEqual(["gone.export"]);
+  });
+});
+
+describe("required handler deployment features", () => {
+  test("mixed-domain requirements fill missing metadata while existing tool and domain gates retain precedence", () => {
+    const options = {
+      registry: FEATURE_REGISTRY,
+      requirement: { featureId: "time-billing", type: "required" },
+      inheritedFeature: undefined,
+      domainFeature: undefined,
+    } as const;
+    expect(resolveCapabilityDeploymentFeature(options)).toBe(
+      "FEATURE_TIME_BILLING",
+    );
+    expect(
+      resolveCapabilityDeploymentFeature({
+        ...options,
+        domainFeature: "FEATURE_PUBLIC_LAW",
+      }),
+    ).toBe("FEATURE_PUBLIC_LAW");
+    expect(
+      resolveCapabilityDeploymentFeature({
+        ...options,
+        domainFeature: "FEATURE_PUBLIC_LAW",
+        inheritedFeature: "FEATURE_LEGAL_LISTS",
+      }),
+    ).toBe("FEATURE_LEGAL_LISTS");
+  });
+  test("an unregistered required feature fails instead of silently removing its gate", () => {
+    expect(() =>
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "unknown-feature",
+        type: "required",
+      }),
+    ).toThrow("Required capability feature must be registered");
+  });
+  test("required billing access derives its deployment tag inside a mixed capability domain", () => {
+    for (const featureId of ["time-billing", "legal-lists"]) {
+      expect(
+        requiredDeploymentFeature(FEATURE_REGISTRY, {
+          featureId,
+          type: "required",
+        }),
+      ).toBe(
+        featureId === "time-billing"
+          ? "FEATURE_TIME_BILLING"
+          : "FEATURE_LEGAL_LISTS",
+      );
+    }
+  });
+
+  test("conditional and absent requirements leave unrelated capability operations available", () => {
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "time-billing",
+        type: "conditional",
+      }),
+    ).toBeUndefined();
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, undefined),
+    ).toBeUndefined();
+    expect(
+      requiredDeploymentFeature(FEATURE_REGISTRY, {
+        featureId: "activity-timeline",
+        type: "required",
+      }),
+    ).toBeUndefined();
   });
 });
 

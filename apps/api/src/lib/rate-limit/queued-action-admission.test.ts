@@ -28,7 +28,12 @@ const periodPolicy = { periodMs: 86_400_000, limit: 10 };
 
 describe("queued action admission", () => {
   test("defers a busy or unavailable background job without running it even after repeated starts", async () => {
-    for (const reason of ["busy", "unavailable"] as const) {
+    for (const reason of [
+      "busy",
+      "store_unavailable",
+      "organization_state_unreadable",
+      "lease_lost",
+    ] as const) {
       for (const attemptsStarted of [1, 7, 21]) {
         let ran = false;
         const delays: { timestamp: number; token: string | undefined }[] = [];
@@ -401,7 +406,7 @@ describe("queued action admission", () => {
       send: async (_command: string, args: string[]) => {
         if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           return 1;

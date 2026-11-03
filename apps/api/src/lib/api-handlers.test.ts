@@ -7,6 +7,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -61,7 +62,6 @@ import {
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -79,6 +79,7 @@ test.each([
       });
       return new HandlerError({
         status: 503,
+        code: "internal_error",
         message: refusal.message,
         retryable: true,
         retryAfterMs: refusal.retryAfterMs,
@@ -129,6 +130,7 @@ test("a thrown retryable handler error sets Retry-After", async () => {
     async function* () {
       throw new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Work capacity is unavailable",
         retryable: true,
         retryAfterMs: 2000,
@@ -160,6 +162,7 @@ test("a retryable handler error sets a whole-second Retry-After", async () => {
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Work capacity is unavailable",
           retryable: true,
           retryAfterMs: 2000,
@@ -828,10 +831,9 @@ test("safe handlers preserve request scope through shared helpers and detached r
         new Error("Shared failure"),
         handlerErrorContext("test.sharedCapture"),
       );
-      detached(
-        Promise.reject(new Error("Detached failure")),
-        "test.shared-detached",
-      );
+      detached(async () => {
+        throw new Error("Detached failure");
+      }, "test.shared-detached");
       return Result.ok({ ok: true });
     },
   );
@@ -923,7 +925,9 @@ describe("request.failed severity", () => {
       return {
         response,
         failures: recordingLogger.records.filter(
-          (record) => record.message === "request.failed",
+          (record) =>
+            record.message === "request.failed" ||
+            record.message === "limiter_admission.unavailable",
         ),
         exceptions: analytics.exceptions(),
       };
@@ -988,19 +992,19 @@ describe("request.failed severity", () => {
     expect(exceptions).toEqual([]);
   });
 
-  test("an unavailable admission service remains a captured server fault", async () => {
+  test("an unavailable admission store is observed as a transient warning", async () => {
     const refusal =
-      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.storeUnavailable];
     const { response, failures, exceptions } = await runFailingHandler(
       new HandlerError({
         status: refusal.status,
-        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        code: ACTION_ADMISSION_CODES.storeUnavailable,
         message: refusal.message,
       }),
     );
     expect(response).toMatchObject({ code: 503 });
-    expect(failures.at(0)?.severityText).toBe("ERROR");
-    expect(exceptions).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toHaveLength(0);
   });
 
   test("grades a database failure as a server fault", async () => {
@@ -1053,7 +1057,7 @@ describe("a mapped status survives the transport wrapper", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,
@@ -1118,6 +1122,7 @@ describe("a mapped status survives the transport wrapper", () => {
   const upstreamRefusal = () =>
     new HandlerError({
       status: 503,
+      code: "internal_error",
       message: "Search is temporarily unavailable",
     });
 
@@ -1256,7 +1261,11 @@ describe("errorCauseChainAttributes", () => {
   });
 
   test("walks nested causes and omits the status of untyped levels", () => {
-    const root = new HandlerError({ status: 502, message: "upstream" });
+    const root = new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "upstream",
+    });
     const middle = new Error("adapter", { cause: root });
     const wrapper = new HandlerError({
       status: 500,

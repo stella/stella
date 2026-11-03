@@ -10,6 +10,7 @@ const ALL_OPEN = {
   memory: true,
   beta: true,
   timeBilling: true,
+  usage: true,
 } satisfies SettingsNavAccess;
 
 const paths = (access: SettingsNavAccess) =>
@@ -80,6 +81,7 @@ describe("settingsNavSections", () => {
       memory: false,
       beta: false,
       timeBilling: false,
+      usage: false,
     });
     const shown = sections.flatMap(({ items }) => items.map(({ to }) => to));
     for (const hidden of [
@@ -89,6 +91,7 @@ describe("settingsNavSections", () => {
       "/admin/number-series",
       "/admin/vat-rates",
       "/admin/billing",
+      "/admin/usage",
     ]) {
       expect(shown).not.toContain(hidden);
     }

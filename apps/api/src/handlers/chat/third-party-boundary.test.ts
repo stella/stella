@@ -6,7 +6,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
@@ -28,6 +28,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -47,6 +48,10 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+});
 
 const anonymizeTextFieldsMock = mock(
   async ({
@@ -1094,6 +1099,43 @@ describe("chat third-party anonymization boundary", () => {
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
+  });
+
+  test("anonymizes a live tool error before it reaches the model", async () => {
+    const boundary = createBoundary();
+    const tools = {
+      failing_lookup: applyChatToolPolicy(
+        toolDefinition({
+          name: "failing_lookup",
+          description: "Fail with a sensitive fixture.",
+        }).server(async () => {
+          throw new ChatToolError({
+            kind: "invalid-input",
+            message: "Jan Novák cannot access Secret notes",
+          });
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["failing_lookup"],
+    );
+    if (!executable?.execute) {
+      throw new TypeError("Expected an executable tool");
+    }
+
+    const failure = await rejectionOf(executable.execute(undefined));
+
+    expect(failure).toMatchObject({
+      _tag: "ChatToolError",
+      kind: "invalid-input",
+      message: "[PERSON_1] cannot access [CUSTOM_1] notes",
+    });
+    expect(JSON.stringify(failure)).not.toContain("Jan Novák");
   });
 
   test("returns anonymized external MCP source tool output values", async () => {
@@ -2146,7 +2188,8 @@ describe("anonymization placeholders across a thread's requests", () => {
   });
 
   test("one placeholder never names two originals in a thread", async () => {
-    await fc.assert(
+    await assertProperty(
+      "one placeholder never names two originals in a thread",
       fc.asyncProperty(
         // Each request mentions some of the people in some order.
         fc.array(fc.shuffledSubarray([...PEOPLE], { minLength: 1 }), {
@@ -2184,7 +2227,7 @@ describe("anonymization placeholders across a thread's requests", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });

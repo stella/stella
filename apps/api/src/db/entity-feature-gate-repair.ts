@@ -3,9 +3,9 @@ import { is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig } from "@stll/db-load-gate/health";
 
 import * as schema from "@/api/db/schema";
+import { loadGateHealthConfig } from "@/api/env-online-index";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -14,9 +14,9 @@ import { readConstraintValidated } from "./online-constraint-completion";
 import { analyzeTable, replacePolicy, validateConstraint } from "./online-ddl";
 import type { OnlineTableGate, PolicyDefinition } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "entity-feature-row-gates";
@@ -98,7 +98,7 @@ const backfillRelation = async (
     name: `${REPAIR_NAME}:${tableName}`,
     tableName,
     initialSize: BATCH_SIZE,
-    config: { ...defaultConfig, maxSize: MAX_BATCH_SIZE },
+    config: { ...loadGateHealthConfig(), maxSize: MAX_BATCH_SIZE },
     connection,
   });
   try {
@@ -239,7 +239,8 @@ const schemaPolicies = (): readonly PolicyDefinition[] =>
 
 export const createEntityFeatureGateRepair = ({
   readPolicies,
-}: EntityFeatureGateRepairOptions): OnlineRepair => ({
+}: EntityFeatureGateRepairOptions): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261009112500_entity_feature_row_gates",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const installed = (
@@ -329,5 +330,5 @@ export const createEntityFeatureGateRepair = ({
   },
 });
 
-export const ENTITY_FEATURE_GATE_REPAIR: OnlineRepair =
+export const ENTITY_FEATURE_GATE_REPAIR: MigrationOwnedOnlineRepair =
   createEntityFeatureGateRepair({ readPolicies: schemaPolicies });

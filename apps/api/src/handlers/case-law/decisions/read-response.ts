@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   TEXT_ABSENCE_REASONS,
@@ -78,6 +79,10 @@ const CURSOR_BYTES = 2048;
 const METADATA_KEY_BYTES = 512;
 const METADATA_DEPTH = 4;
 const METADATA_NODES = 32;
+/** A BCP 47 tag the corpus stores, with margin. */
+const SOURCE_LANGUAGE_TAG_BYTES = 32;
+/** More than any publisher's official-language count. */
+const SOURCE_LANGUAGES_MAX = 64;
 const JUDGES_MAX = 128;
 
 const metadataScalarSchema = v.union([
@@ -137,6 +142,28 @@ const languageAlternateSchema = v.object({
   v.GenericSchema
 >);
 
+const caseFileDocumentSchema = v.object({
+  id: resourceIdSchema("caseLawDecision"),
+  caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
+  country: boundedString(DECISION_READER_TEXT_BYTES.country),
+  court: boundedString(DECISION_READER_TEXT_BYTES.court),
+  decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
+  decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
+  ecli: nullableBoundedString(DECISION_READER_TEXT_BYTES.ecli),
+  language: boundedString(DECISION_READER_TEXT_BYTES.language),
+  languageGroupKey: nullableBoundedString(
+    DECISION_READER_TEXT_BYTES.languageGroupKey,
+  ),
+  slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
+  languageAlternates: v.pipe(
+    v.array(v.pick(languageAlternateSchema, ["language"])),
+    v.maxLength(LIMITS.caseLawLanguageAlternatesPerGroupMax),
+  ),
+} satisfies Record<
+  keyof ReadableDecision["caseFile"]["items"][number],
+  v.GenericSchema
+>);
+
 export const readDecisionSuccessResponseSchema = v.object({
   documentPending: v.boolean(),
   hasDocument: v.boolean(),
@@ -179,6 +206,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
   citationCount: v.number(),
+  extractionWarnings: extractionWarningsSchema,
   documentAst: v.unknown(),
   fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(
@@ -191,7 +219,7 @@ export const readDecisionSuccessResponseSchema = v.object({
         index: v.number(),
         type: v.picklist([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: v.string(),
+        blockIndices: v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
       }),
     ),
   ),
@@ -201,6 +229,16 @@ export const readDecisionSuccessResponseSchema = v.object({
   ),
   documentUrl: nullableBoundedString(DECISION_READER_TEXT_BYTES.documentUrl),
   metadata: metadataSchema,
+  /**
+   * Language tags the publisher lists for the decision's work, sorted; null
+   * when the source states no such list for this row.
+   */
+  sourceLanguages: v.nullable(
+    v.pipe(
+      v.array(boundedString(SOURCE_LANGUAGE_TAG_BYTES)),
+      v.maxLength(SOURCE_LANGUAGES_MAX),
+    ),
+  ),
   headnote: textFieldSchema,
   textFields: v.object({
     abstract: textFieldSchema,
@@ -255,6 +293,14 @@ export const readDecisionSuccessResponseSchema = v.object({
     v.maxLength(LIMITS.caseLawDecisionCitationPageSize),
   ),
   citationsNextCursor: nullableBoundedString(CURSOR_BYTES),
+  caseFile: v.object({
+    items: v.pipe(
+      v.array(caseFileDocumentSchema),
+      v.maxLength(LIMITS.caseLawCaseFilePageSize),
+    ),
+    nextCursor: nullableBoundedString(CURSOR_BYTES),
+    limit: v.pipe(v.number(), v.maxValue(LIMITS.caseLawCaseFilePageSize)),
+  }),
   languageAlternates: v.pipe(
     v.array(languageAlternateSchema),
     v.maxLength(LIMITS.caseLawLanguageAlternatesPerGroupMax),
@@ -407,7 +453,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
         index: section.index,
         type: section.type,
         title: nullableText(section.title, LABEL_BYTES),
-        text: section.text,
+        blockIndices: section.blockIndices,
       })) ?? null,
     sourceUrl: nullableText(decision.sourceUrl, text.sourceUrl),
     sourceAttributionUrl: nullableText(
@@ -416,6 +462,11 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     documentUrl: nullableText(decision.documentUrl, text.documentUrl),
     metadata: projectMetadata(decision.metadata),
+    sourceLanguages:
+      decision.sourceLanguages
+        ?.slice(0, SOURCE_LANGUAGES_MAX)
+        .map((tag) => truncateTextBytes(tag, SOURCE_LANGUAGE_TAG_BYTES)) ??
+      null,
     headnote: projectTextField(decision.headnote),
     textFields: {
       abstract: projectTextField(decision.textFields.abstract),
@@ -451,6 +502,27 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
       ...citation,
       citationText: truncateTextBytes(citation.citationText, PROSE_BYTES),
     })),
+    caseFile: {
+      ...decision.caseFile,
+      items: decision.caseFile.items.map((item) => ({
+        ...item,
+        caseNumber: truncateTextBytes(item.caseNumber, text.caseNumber),
+        country: truncateTextBytes(item.country, text.country),
+        court: truncateTextBytes(item.court, text.court),
+        decisionDate: nullableText(item.decisionDate, text.decisionDate),
+        decisionType: nullableText(item.decisionType, text.decisionType),
+        ecli: nullableText(item.ecli, text.ecli),
+        language: truncateTextBytes(item.language, text.language),
+        languageGroupKey: nullableText(
+          item.languageGroupKey,
+          text.languageGroupKey,
+        ),
+        slug: nullableText(item.slug, text.slug),
+        languageAlternates: item.languageAlternates.map(({ language }) => ({
+          language: truncateTextBytes(language, text.language),
+        })),
+      })),
+    },
     languageAlternates: decision.languageAlternates.map((alternate) => ({
       id: truncateTextBytes(alternate.id, 36),
       caseNumber: truncateTextBytes(alternate.caseNumber, text.caseNumber),

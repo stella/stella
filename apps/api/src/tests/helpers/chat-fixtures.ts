@@ -62,10 +62,14 @@ export const buildEngineSnapshot = (
 /** Native wire history uses the SDK serializer without interrupt-time splitting. */
 export const buildWireSnapshot = (
   history: readonly (ModelMessage | UIMessage)[],
+  options?: { includeActivity?: boolean },
 ): ValidChatFixture<MessagesSnapshotChunk> =>
   brand({
     type: EventType.MESSAGES_SNAPSHOT,
     messages: uiMessagesToWire([...history], {
+      ...(options?.includeActivity === undefined
+        ? {}
+        : { includeActivity: options.includeActivity }),
       includeSnapshotStructuredOutput: true,
     }),
   });

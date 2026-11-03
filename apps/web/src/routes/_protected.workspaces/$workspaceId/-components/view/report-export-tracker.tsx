@@ -7,15 +7,18 @@ import { useShallow } from "zustand/shallow";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   reportExportDetailOptions,
   reportExportsKeys,
 } from "@/lib/workspaces/queries/report-exports";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { downloadReportExport } from "./report-export-actions";
 import {
@@ -36,6 +39,12 @@ export const ReportExportTracker = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
+  // The toast is raised when the export settles and clicked later, so it
+  // reads the view on screen at the click.
+  const viewParamsAtClick = useLatestCallback((targetWorkspaceId: string) =>
+    resolveWorkspaceViewParams(targetWorkspaceId, currentView),
+  );
   const queryClient = useQueryClient();
   const requestedBy = useRouteContext({
     from: "/_protected",
@@ -88,7 +97,7 @@ export const ReportExportTracker = ({
       );
 
     if (settledDetail === undefined) {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: t("common.unexpectedError"),
       });
@@ -96,7 +105,7 @@ export const ReportExportTracker = ({
     }
 
     if (settledDetail.status === "failed") {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: settledDetail.error ?? t("common.unexpectedError"),
       });
@@ -184,10 +193,7 @@ export const ReportExportTracker = ({
           }
           await navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: {
-              workspaceId: settledExport.workspaceId,
-              viewId: "all",
-            },
+            params: viewParamsAtClick(settledExport.workspaceId),
             search: {
               entity: destination.entityId,
               field: destination.fieldId,
@@ -237,7 +243,7 @@ export const ReportExportTracker = ({
       return;
     }
 
-    notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+    notifyUserProblem(t("workspaces.views.reportExport.failed"), {
       toastId,
       description: t("common.unexpectedError"),
     });
@@ -250,6 +256,7 @@ export const ReportExportTracker = ({
     settledDetail,
     settledExport,
     settledIndex,
+    viewParamsAtClick,
   ]);
 
   return null;

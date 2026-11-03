@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
@@ -7,7 +7,7 @@ import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 import { entities, taskAssignees } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { entityQueryScopeCondition } from "@/api/lib/entities/query-scope";
-
+import { workTask } from "@/api/lib/tasks/work-task";
 /** Whose tasks a list returns: the caller's own assignments, or every task. */
 export const TASK_ASSIGNEE_FILTER = {
   ME: "me",
@@ -69,7 +69,7 @@ export const dueAssignedTaskCondition = ({
       { type: "organization", organizationId },
       entities.workspaceId,
     ),
-    eq(entities.kind, "task"),
+    workTask(entities),
     lte(entities.dueDate, asOf),
     or(
       isNull(entities.status),

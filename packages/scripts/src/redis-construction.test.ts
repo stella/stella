@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "./syntax-tree";
 
 const root = path.resolve(import.meta.dir, "../../..");
 const factories = new Set([
@@ -14,6 +15,17 @@ const factoryNames = new Set([
   "createCollabRedisClient",
 ]);
 
+// A non-computed key's decoded name: `connection` and "connection" are
+// both `connection`.
+const staticKeyName = (key: Node): string | null => {
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : null;
+};
+
 const inspectConstruction = (source: string, file: string) => {
   // Escaped source is always parsed, so a module or binding written with
   // Unicode escapes cannot bypass the fast path.
@@ -24,13 +36,7 @@ const inspectConstruction = (source: string, file: string) => {
   ) {
     return { violations: [], declarations: [], uses: 0 };
   }
-  const tree = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const tree = parseSource(file, source);
   const violations: string[] = [];
   let uses = 0;
   const declarations: {
@@ -45,13 +51,13 @@ const inspectConstruction = (source: string, file: string) => {
     "JobScheduler",
   ]);
   const queueAliases = new Map<string, string>();
-  const variables = new Map<string, ts.Expression>();
-  const resolveVariable = (expression: ts.Expression) => {
+  const variables = new Map<string, Node>();
+  const resolveVariable = (expression: Node) => {
     const seen = new Set<string>();
     let resolved = expression;
-    while (ts.isIdentifier(resolved) && !seen.has(resolved.text)) {
-      seen.add(resolved.text);
-      const initializer = variables.get(resolved.text);
+    while (resolved.type === "Identifier" && !seen.has(resolved.name)) {
+      seen.add(resolved.name);
+      const initializer = variables.get(resolved.name);
       if (initializer === undefined) {
         return resolved;
       }
@@ -60,37 +66,44 @@ const inspectConstruction = (source: string, file: string) => {
     return resolved;
   };
   const names = new Map([...factoryNames].map((name) => [name, name]));
-  const factoryName = (expression: ts.Expression) => {
-    if (ts.isIdentifier(expression)) {
-      return names.get(expression.text);
+  const factoryName = (expression: Node) => {
+    if (expression.type === "Identifier") {
+      return names.get(expression.name);
     }
-    if (
-      ts.isPropertyAccessExpression(expression) &&
-      factoryNames.has(expression.name.text)
+    if (expression.type !== "MemberExpression") {
+      return undefined;
+    }
+    let name: string | undefined;
+    if (!expression.computed && expression.property.type === "Identifier") {
+      name = expression.property.name;
+    } else if (
+      expression.computed &&
+      expression.property.type === "Literal" &&
+      typeof expression.property.value === "string"
     ) {
-      return expression.name.text;
+      name = expression.property.value;
     }
-    if (
-      ts.isElementAccessExpression(expression) &&
-      ts.isStringLiteral(expression.argumentExpression) &&
-      factoryNames.has(expression.argumentExpression.text)
-    ) {
-      return expression.argumentExpression.text;
-    }
-    return undefined;
+    return name !== undefined && factoryNames.has(name) ? name : undefined;
   };
-  const registerBindings = (binding: ts.BindingName) => {
-    if (!ts.isObjectBindingPattern(binding)) {
+  const registerBindings = (binding: Node) => {
+    if (binding.type !== "ObjectPattern") {
       return;
     }
-    for (const element of binding.elements) {
-      const imported = element.propertyName ?? element.name;
+    for (const element of binding.properties) {
+      if (element.type !== "Property") {
+        continue;
+      }
+      const local =
+        element.value.type === "AssignmentPattern"
+          ? element.value.left
+          : element.value;
       if (
-        ts.isIdentifier(imported) &&
-        factoryNames.has(imported.text) &&
-        ts.isIdentifier(element.name)
+        !element.computed &&
+        element.key.type === "Identifier" &&
+        factoryNames.has(element.key.name) &&
+        local.type === "Identifier"
       ) {
-        names.set(element.name.text, imported.text);
+        names.set(local.name, element.key.name);
       }
     }
   };
@@ -98,126 +111,117 @@ const inspectConstruction = (source: string, file: string) => {
   const forbiddenBinding = (name: string, module: string) =>
     module === "ioredis" ||
     module === "redis" ||
-    (module === "bun" &&
-      (name === "RedisClient" || name === "redis" || name === "*")) ||
-    (module === "bullmq" && (name === "createBunRedisClient" || name === "*"));
-  const inspectImports = (node: ts.Node) => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      const module = node.moduleSpecifier.text;
-      const clause = node.importClause;
-      if (
-        clause !== undefined &&
-        clause.phaseModifier !== ts.SyntaxKind.TypeKeyword
-      ) {
-        const bindings = clause.namedBindings;
-        if (
-          clause.name !== undefined &&
-          forbiddenBinding("*", module) &&
-          !owner
-        ) {
-          violations.push("raw-client-import");
-        }
-        if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+    (module === "bun" && ["RedisClient", "redis", "*"].includes(name)) ||
+    (module === "bullmq" && ["createBunRedisClient", "*"].includes(name));
+  const inspectImports = (node: Node) => {
+    if (node.type === "ImportDeclaration" && node.importKind !== "type") {
+      const module = node.source.value;
+      for (const binding of node.specifiers) {
+        if (binding.type !== "ImportSpecifier") {
           if (forbiddenBinding("*", module) && !owner) {
             violations.push("raw-client-import");
           }
-        } else if (bindings !== undefined) {
-          for (const binding of bindings.elements) {
-            if (binding.isTypeOnly) {
-              continue;
-            }
-            const imported = (binding.propertyName ?? binding.name).text;
-            if (module === "bullmq" && queueConstructors.has(imported)) {
-              queueAliases.set(binding.name.text, imported);
-            }
-            if (factoryNames.has(imported)) {
-              names.set(binding.name.text, imported);
-            }
-            if (forbiddenBinding(imported, module) && !owner) {
-              violations.push("raw-client-import");
-            }
-          }
+          continue;
+        }
+        if (binding.importKind === "type") {
+          continue;
+        }
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        if (module === "bullmq" && queueConstructors.has(imported)) {
+          queueAliases.set(binding.local.name, imported);
+        }
+        if (factoryNames.has(imported)) {
+          names.set(binding.local.name, imported);
+        }
+        if (forbiddenBinding(imported, module) && !owner) {
+          violations.push("raw-client-import");
         }
       }
     }
     if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      (node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      node.source &&
+      node.exportKind !== "type" &&
+      !owner
     ) {
-      const module = node.moduleSpecifier.text;
+      const module = node.source.value;
       if (
-        !node.isTypeOnly &&
-        !owner &&
-        ["bun", "bullmq", "ioredis", "redis"].includes(module)
-      ) {
-        const clause = node.exportClause;
-        if (
-          clause === undefined ||
-          !ts.isNamedExports(clause) ||
-          clause.elements.some(
+        ["bun", "bullmq", "ioredis", "redis"].includes(module) &&
+        (node.type === "ExportAllDeclaration" ||
+          node.specifiers.some(
             (binding) =>
-              !binding.isTypeOnly &&
+              binding.exportKind !== "type" &&
               forbiddenBinding(
-                (binding.propertyName ?? binding.name).text,
+                binding.local.type === "Identifier"
+                  ? binding.local.name
+                  : binding.local.value,
                 module,
               ),
-          )
-        ) {
-          violations.push("raw-client-export");
-        }
+          ))
+      ) {
+        violations.push("raw-client-export");
       }
     }
     if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "Bun" &&
-      ["RedisClient", "redis"].includes(node.name.text) &&
+      node.type === "MemberExpression" &&
+      !node.computed &&
+      node.object.type === "Identifier" &&
+      node.object.name === "Bun" &&
+      node.property.type === "Identifier" &&
+      ["RedisClient", "redis"].includes(node.property.name) &&
       !owner
     ) {
       violations.push("raw-client-global");
     }
   };
-  const inspectCall = (node: ts.CallExpression) => {
-    const expression = node.expression;
-    let name: string | undefined;
-    if (ts.isIdentifier(expression)) {
-      name = expression.text;
-    } else if (ts.isPropertyAccessExpression(expression)) {
-      name = expression.name.text;
+  const inspectCall = (node: Node, ancestors: readonly Node[]) => {
+    if (node.type !== "CallExpression" && node.type !== "ImportExpression") {
+      return;
     }
-    if (
-      (expression.kind === ts.SyntaxKind.ImportKeyword || name === "require") &&
-      !owner
+    const expression = node.type === "CallExpression" ? node.callee : undefined;
+    let name: string | undefined;
+    if (expression?.type === "Identifier") {
+      name = expression.name;
+    } else if (
+      expression?.type === "MemberExpression" &&
+      !expression.computed &&
+      expression.property.type === "Identifier"
     ) {
-      const specifier = node.arguments.at(0);
-      if (specifier !== undefined && ts.isStringLiteral(specifier)) {
-        const module = specifier.text;
+      name = expression.property.name;
+    }
+    if ((node.type === "ImportExpression" || name === "require") && !owner) {
+      const specifier =
+        node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+      if (
+        specifier?.type === "Literal" &&
+        typeof specifier.value === "string"
+      ) {
+        const module = specifier.value;
         if (["bun", "bullmq", "ioredis", "redis"].includes(module)) {
-          // Named destructuring of unrelated Bun utilities cannot expose a client.
+          const parent = ancestors.at(-1);
           const declaration =
-            expression.kind === ts.SyntaxKind.ImportKeyword &&
-            ts.isAwaitExpression(node.parent)
-              ? node.parent.parent
-              : node.parent;
-          const binding = ts.isVariableDeclaration(declaration)
-            ? declaration.name
-            : undefined;
+            node.type === "ImportExpression" &&
+            parent?.type === "AwaitExpression"
+              ? ancestors.at(-2)
+              : parent;
+          const binding =
+            declaration?.type === "VariableDeclarator"
+              ? declaration.id
+              : undefined;
           const safeBun =
             module === "bun" &&
-            binding !== undefined &&
-            ts.isObjectBindingPattern(binding) &&
-            binding.elements.every(
+            binding?.type === "ObjectPattern" &&
+            binding.properties.every(
               (element) =>
-                element.dotDotDotToken === undefined &&
-                ts.isIdentifier(element.propertyName ?? element.name) &&
-                !forbiddenBinding(
-                  (element.propertyName ?? element.name).getText(tree),
-                  module,
-                ),
+                element.type === "Property" &&
+                !element.computed &&
+                element.key.type === "Identifier" &&
+                // The decoded name: an escaped `RedisClient` is the same binding.
+                !forbiddenBinding(element.key.name, module),
             );
           if (!safeBun) {
             violations.push("raw-client-dynamic-import");
@@ -225,112 +229,110 @@ const inspectConstruction = (source: string, file: string) => {
         }
       }
     }
-    const canonical = factoryName(expression);
-    if (canonical !== undefined) {
-      if (!owner) {
-        uses += 1;
-      }
-      const options = node.arguments.at(0);
-      const field =
-        options !== undefined && ts.isObjectLiteralExpression(options)
-          ? options.properties.find(
-              (property) =>
-                ts.isPropertyAssignment(property) &&
-                property.name.getText(tree) === "storeClass",
-            )
-          : undefined;
-      if (
-        field !== undefined &&
-        ts.isPropertyAssignment(field) &&
-        ts.isStringLiteral(field.initializer) &&
-        (field.initializer.text === "durable-coordination" ||
-          field.initializer.text === "cache")
-      ) {
-        if (!owner) {
-          declarations.push({
-            storeClass: field.initializer.text,
-            factory: canonical,
-          });
-        }
-        if (
-          canonical === "createBullMqConnection" &&
-          field.initializer.text !== "durable-coordination"
-        ) {
-          violations.push("queue-store-class");
-        }
-      } else if (!owner) {
-        violations.push("undeclared-store-class");
-      }
-    }
-  };
-  const inspectQueueConstruction = (node: ts.NewExpression) => {
-    if (owner || !ts.isIdentifier(node.expression)) {
+    if (node.type !== "CallExpression") {
       return;
     }
-    const constructor = queueAliases.get(node.expression.text);
-    if (constructor === undefined) {
+    const canonical = factoryName(node.callee);
+    if (canonical === undefined) {
       return;
     }
-    const argument = node.arguments?.at(constructor === "Worker" ? 2 : 1);
-    const options =
-      argument === undefined ? undefined : resolveVariable(argument);
-    const connection =
-      options !== undefined && ts.isObjectLiteralExpression(options)
+    if (!owner) {
+      uses += 1;
+    }
+    const options = node.arguments.at(0);
+    const field =
+      options?.type === "ObjectExpression"
         ? options.properties.find(
             (property) =>
-              (ts.isPropertyAssignment(property) ||
-                ts.isShorthandPropertyAssignment(property)) &&
-              property.name.getText(tree) === "connection",
+              property.type === "Property" &&
+              !property.computed &&
+              property.kind === "init" &&
+              !property.method &&
+              !property.shorthand &&
+              staticKeyName(property.key) === "storeClass",
           )
         : undefined;
     if (
-      connection === undefined ||
-      !(
-        ts.isPropertyAssignment(connection) ||
-        ts.isShorthandPropertyAssignment(connection)
-      ) ||
-      ts.isObjectLiteralExpression(
-        resolveVariable(
-          ts.isShorthandPropertyAssignment(connection)
-            ? connection.name
-            : connection.initializer,
-        ),
-      )
+      field?.type === "Property" &&
+      field.value.type === "Literal" &&
+      (field.value.value === "durable-coordination" ||
+        field.value.value === "cache")
+    ) {
+      if (!owner) {
+        declarations.push({
+          storeClass: field.value.value,
+          factory: canonical,
+        });
+      }
+      if (
+        canonical === "createBullMqConnection" &&
+        field.value.value !== "durable-coordination"
+      ) {
+        violations.push("queue-store-class");
+      }
+    } else if (!owner) {
+      violations.push("undeclared-store-class");
+    }
+  };
+  const inspectQueueConstruction = (node: Node) => {
+    if (
+      node.type !== "NewExpression" ||
+      owner ||
+      node.callee.type !== "Identifier"
+    ) {
+      return;
+    }
+    const constructor = queueAliases.get(node.callee.name);
+    if (constructor === undefined) {
+      return;
+    }
+    const argument = node.arguments.at(constructor === "Worker" ? 2 : 1);
+    const options =
+      argument === undefined ? undefined : resolveVariable(argument);
+    const connection =
+      options?.type === "ObjectExpression"
+        ? options.properties.find(
+            (property) =>
+              property.type === "Property" &&
+              !property.computed &&
+              property.kind === "init" &&
+              !property.method &&
+              staticKeyName(property.key) === "connection",
+          )
+        : undefined;
+    if (
+      connection?.type !== "Property" ||
+      resolveVariable(connection.value).type === "ObjectExpression"
     ) {
       violations.push("unclassified-queue-connection");
     }
   };
-  const visit = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node)) {
-      registerBindings(node.name);
-      if (node.initializer !== undefined && ts.isIdentifier(node.name)) {
-        variables.set(node.name.text, node.initializer);
-        const canonical = factoryName(node.initializer);
+  walk(tree.program, (node, ancestors) => {
+    if (node.type === "VariableDeclarator") {
+      registerBindings(node.id);
+      if (node.init && node.id.type === "Identifier") {
+        variables.set(node.id.name, node.init);
+        const canonical = factoryName(node.init);
         if (canonical !== undefined) {
-          names.set(node.name.text, canonical);
+          names.set(node.id.name, canonical);
         }
       }
     }
     if (
-      ts.isBindingElement(node) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.name)
+      node.type === "AssignmentPattern" &&
+      node.left.type === "Identifier" &&
+      (ancestors.at(-1)?.type === "Property" ||
+        ancestors.at(-1)?.type === "ArrayPattern")
     ) {
-      const canonical = factoryName(node.initializer);
+      const canonical = factoryName(node.right);
       if (canonical !== undefined) {
-        names.set(node.name.text, canonical);
+        names.set(node.left.name, canonical);
       }
     }
     inspectImports(node);
-    if (ts.isCallExpression(node)) {
-      inspectCall(node);
-    }
-    if (ts.isNewExpression(node)) {
-      inspectQueueConstruction(node);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+    inspectCall(node, ancestors);
+    inspectQueueConstruction(node);
+  });
   return { violations, declarations, uses };
 };
 
@@ -388,6 +390,7 @@ for (const source of [
   "const make = createRedisClient; make();",
   'factory["createRedisClient"]();',
   'import { createBullMqConnection as make } from "@/api/lib/redis-client"; make({ storeClass: "cache" });',
+  'const { \\u0052edisClient } = await import("bun");',
 ]) {
   test(`the construction guard rejects an invalid declaration: ${source}`, () => {
     expect(
@@ -409,6 +412,22 @@ test("type imports and declared factory aliases remain available", () => {
   );
   expect(result.violations).toEqual([]);
   expect(result.declarations).toEqual([
+    { storeClass: "durable-coordination", factory: "createRedisClient" },
+  ]);
+});
+
+test("a quoted or escaped storeClass key declares the store class", () => {
+  const result = inspectConstruction(
+    [
+      'import { createRedisClient as create } from "@/api/lib/redis-client";',
+      'create({ "storeClass": "durable-coordination" });',
+      'create({ \\u0073toreClass: "durable-coordination" });',
+    ].join("\n"),
+    "apps/api/src/lib/example.ts",
+  );
+  expect(result.violations).toEqual([]);
+  expect(result.declarations).toEqual([
+    { storeClass: "durable-coordination", factory: "createRedisClient" },
     { storeClass: "durable-coordination", factory: "createRedisClient" },
   ]);
 });

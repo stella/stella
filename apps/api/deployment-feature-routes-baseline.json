@@ -104,10 +104,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:DELETE /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:DELETE /v1/document-types/:documentTypeId",
     "reason": "pending gate classification"
   },
@@ -205,14 +201,6 @@
   },
   {
     "key": "unclassified-route:DELETE /v1/style-sets/:styleSetId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:DELETE /v1/tasks/:workspaceId/assignees",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:DELETE /v1/tasks/:workspaceId/links",
     "reason": "pending gate classification"
   },
   {
@@ -505,38 +493,6 @@
   },
   {
     "key": "unclassified-route:GET /v1/clauses/template-slot-preview/:templateId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/:contactId/sanctions",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/business-registries",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/export",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/sanctions/events",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/sanctions/matches",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/search",
     "reason": "pending gate classification"
   },
   {
@@ -853,14 +809,6 @@
   },
   {
     "key": "unclassified-route:GET /v1/style-sets/editor/stella",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/tasks/:workspaceId/:taskId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/tasks/:workspaceId/:taskId/links",
     "reason": "pending gate classification"
   },
   {
@@ -1248,10 +1196,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:PATCH /v1/tasks/:workspaceId",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:PATCH /v1/templates/:templateId/clauses/:linkId",
     "reason": "pending gate classification"
   },
@@ -1477,42 +1421,6 @@
   },
   {
     "key": "unclassified-route:POST /v1/clauses/import",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/:contactId/sanctions/monitoring",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/:contactId/sanctions/reviews",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/business-registries/checks",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/extract-from-procuracao",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/inspect",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/preview",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/validate",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/procuracao-upload",
     "reason": "pending gate classification"
   },
   {
@@ -2000,22 +1908,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/assignees",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/assignees/move",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/calendar",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/tasks/:workspaceId/links",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:POST /v1/template-categories/:categoryId",
     "reason": "pending gate classification"
   },
@@ -2256,14 +2148,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:PUT /v1/contacts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PUT /v1/contacts/import",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:PUT /v1/docx-suggestions/:workspaceId/entity/:entityId",
     "reason": "pending gate classification"
   },
@@ -2317,10 +2201,6 @@
   },
   {
     "key": "unclassified-route:PUT /v1/style-sets/editor",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PUT /v1/tasks/:workspaceId",
     "reason": "pending gate classification"
   },
   {

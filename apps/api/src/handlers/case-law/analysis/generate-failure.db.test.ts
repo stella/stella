@@ -444,7 +444,7 @@ describe("a failed analysis run", () => {
       });
       expect(response).toMatchObject({
         status: "error",
-        code: "analysis_unavailable",
+        code: "analysis_disabled",
       });
       expect(starts).toBe(0);
     }
@@ -473,7 +473,7 @@ describe("a failed analysis run", () => {
       });
       expect(response).toMatchObject({
         status: "error",
-        code: "analysis_unavailable",
+        code: "analysis_disabled",
       });
       expect(starts).toBe(0);
     }

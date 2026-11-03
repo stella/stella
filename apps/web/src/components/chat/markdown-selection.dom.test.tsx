@@ -190,7 +190,7 @@ test("every generated rendered markdown leaf maps to the same stripped source te
     }),
     { numRuns: 40 },
   );
-}, 20_000);
+});
 
 test("refuses rendered replacements, stale source and cross-root selections", () => {
   const source = "**original**";

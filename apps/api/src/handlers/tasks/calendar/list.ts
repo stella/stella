@@ -18,6 +18,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandValidatedPropertyId } from "@/api/lib/safe-id-boundaries";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
@@ -291,7 +292,7 @@ const calendarTasks = createSafeHandler(
 
     const whereClause = and(
       eq(entities.workspaceId, workspaceId),
-      eq(entities.kind, "task"),
+      workTask(entities),
       ...buildFilterConditions(arrayOrEmpty(body.filters)),
       dateClause,
     );

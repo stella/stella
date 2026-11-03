@@ -36,6 +36,35 @@ test("rejects each owned mark class with and without the unicode flag", async ()
   ]);
 });
 
+test("rejects hand-rolled slug runs, ASCII and Unicode, either separator", async () => {
+  const source = [
+    'text.replace(/[^a-z0-9]+/gu, "-");',
+    'text.replaceAll(/[^a-z0-9]+/g, "-");',
+    'text.replace(/[^\\da-z]+/gu, "-");',
+    'text.replace(/[^a-z0-9-]+/gu, "-");',
+    'text.replace(/[^a-z0-9_]+/gu, "_");',
+    'text.replace(/[^\\p{L}\\p{N}]+/gu, "-");',
+  ].join("\n");
+  expect(await lintSingleRule("no-direct-unicode-normalize", source)).toEqual([
+    1, 2, 3, 4, 5, 6,
+  ]);
+});
+
+test("accepts other character classes, non-separator replacements and slugify", async () => {
+  const source = [
+    'slugify(text, { charset: "ascii", separator: "-", maxLength: 60, fallback: "" });',
+    'text.replace(/[^a-z0-9.]+/gu, "-");',
+    'text.replace(/[^a-z0-9]/gu, "-");',
+    'text.replace(/[^a-z0-9]+/gu, " ");',
+    'text.replace(/[^a-z0-9]+/gu, "");',
+    'text.replace(/[^\\p{L}\\p{N}.]+/gu, "_");',
+    "text.replace(/[^a-z0-9]+/gu, separator);",
+  ].join("\n");
+  expect(await lintSingleRule("no-direct-unicode-normalize", source)).toEqual(
+    [],
+  );
+});
+
 test("accepts owner calls, Node path normalization, and non-removal regex uses", async () => {
   const source = [
     'import path from "node:path";',

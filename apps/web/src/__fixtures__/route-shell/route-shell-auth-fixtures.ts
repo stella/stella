@@ -66,7 +66,7 @@ const capabilities = {
   localPassword: false,
   reviewPasswordSignIn: false,
   bootstrap: false,
-  social: { google: false, microsoft: false },
+  social: { google: false, microsoft: false, apple: false },
 } satisfies AuthCapabilities;
 
 const organizations = [

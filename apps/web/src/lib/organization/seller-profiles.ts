@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -62,9 +63,12 @@ export type SellerProfileCommand =
 
 export const sendSellerProfileCommand = async (
   command: SellerProfileCommand,
+  request: IdempotentRequest,
 ) => {
   if (command.type === "create") {
-    return unwrapApiResponse(await api["seller-profiles"].post(command.values));
+    return unwrapApiResponse(
+      await api["seller-profiles"].post(command.values, request),
+    );
   }
   const profile = api["seller-profiles"]({
     sellerProfileId: toSafeId<"sellerProfile">(command.id),

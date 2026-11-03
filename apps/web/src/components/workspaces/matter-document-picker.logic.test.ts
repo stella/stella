@@ -43,16 +43,17 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
@@ -113,9 +114,9 @@ describe("document picker search", () => {
   });
 });
 
-it("document picker filtering matches the previous folded substring behavior", () => {
+it("document picker filtering keeps the supported documents whose name matches", () => {
   assertProperty(
-    "document picker filtering matches the previous folded substring behavior",
+    "document picker filtering keeps the supported documents whose name matches",
     fc.property(
       fc.array(
         fc.record({
@@ -132,10 +133,7 @@ it("document picker filtering matches the previous folded substring behavior", (
           .filter(
             (file) =>
               (file.mimeType === DOCX_MIME || file.mimeType === PDF_MIME) &&
-              containsPreviousScalarSearchKey(
-                foldSearchMatchText(file.name ?? file.fileName),
-                foldSearchMatchText(query),
-              ),
+              matchesFolded(file.name ?? file.fileName, query),
           )
           .slice(0, EXPECTED_VISIBLE_DOCUMENT_LIMIT);
 

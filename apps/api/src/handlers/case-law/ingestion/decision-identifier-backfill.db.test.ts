@@ -23,7 +23,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_IDENTIFIER_BACKFILL_VERSION,
+  DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS,
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE,
+  reconcileDecisionIdentifiersStep,
   runDecisionIdentifierBackfill,
   verifyDecisionIdentifierBackfill,
 } from "@/api/handlers/case-law/ingestion/decision-identifier-backfill";
@@ -435,6 +437,34 @@ test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", asyn
   expect(outcome).toMatchObject({
     message:
       "Decision identifier backfill batch size must be an integer from 1 to 500",
+  });
+});
+
+test("a completed pass waits for its cooldown and then restarts", async () => {
+  await runDecisionIdentifierBackfill(rootDb(), { batchSize: 10 });
+  const completed = await checkpoint();
+  expect(completed?.completedAt).toBeInstanceOf(Date);
+  const completedAt = completed?.completedAt ?? new Date(0);
+
+  expect(
+    await reconcileDecisionIdentifiersStep(rootDb(), {
+      now: completedAt,
+      batchSize: 1,
+    }),
+  ).toMatchObject({ status: "cooldown" });
+
+  const afterCooldown = new Date(
+    completedAt.getTime() + DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS,
+  );
+  expect(
+    await reconcileDecisionIdentifiersStep(rootDb(), {
+      now: afterCooldown,
+      batchSize: 1,
+    }),
+  ).toEqual({ status: "advanced" });
+  expect(await checkpoint()).toMatchObject({
+    phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+    completedAt: null,
   });
 });
 

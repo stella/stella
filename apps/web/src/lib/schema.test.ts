@@ -81,7 +81,7 @@ const PASSWORD = "  keep password whitespace  ";
 const QUANTITY = " 42 ";
 
 const credentialsSchema = v.object({
-  email: emailSchema(),
+  email: emailSchema("Email must be valid"),
   password: v.string(),
   quantity: v.pipe(
     v.string(),

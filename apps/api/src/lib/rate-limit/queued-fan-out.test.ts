@@ -44,7 +44,7 @@ describe("queued fan-out admission ownership", () => {
             throw new Error("Expected lease ID in acquisition arguments");
           }
           if (organization.size >= 1 || user.size >= 1) {
-            return 0;
+            return [0, 1000];
           }
           organization.add(leaseId);
           user.add(leaseId);

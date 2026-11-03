@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "87ad8ede6abfa7cbb18a72c5dba52b7b835fed0867a3992fbb060a5085465d01",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-10-27T00:00:00.000Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"4acade4e-851e-4fc1-93e7-06ede3447a07\",\"docType\":\"USSR_DECISION_MK\"}; I. ÚS 618/2026, decoded XHTML re-encoded in the content envelope; capture date known, time not recorded."
+}

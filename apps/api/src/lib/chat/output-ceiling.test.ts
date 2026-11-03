@@ -1,7 +1,16 @@
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { compactChatMessagesForModel } from "@/api/handlers/chat/compaction";
@@ -21,8 +30,10 @@ import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // The output ceiling read through the production chain: the real OpenRouter
 // adapter (an organization's own key, and the deployment's managed key),
@@ -150,25 +161,32 @@ testState.beforeAll(() => {
   testState.setConfig("USE_MOCK_AI", false);
   testState.setConfig("OPENROUTER_API_KEY", "fixture-managed-key");
   testState.setConfig("FEATURE_MANAGED_PROVIDER_CHECKS", false);
-  globalThis.fetch = Object.assign(
-    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-      const request =
-        input instanceof Request ? input : new Request(input.toString(), init);
-      const url = new URL(request.url);
-      if (!OPENROUTER_HOSTS.has(url.hostname)) {
-        return panic(`Refused a request to ${url.hostname}`);
-      }
-      const body = asTestRaw<RequestBody>(await request.clone().json());
-      sent.push({ host: url.hostname, body });
-      const { chunks, usage } = script.answer(body);
-      return sse(chunks, usage.completionTokens);
-    },
-    { preconnect: originalFetch.preconnect },
+});
+
+testFetchState.beforeAll(() => {
+  testFetchState.set(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(input.toString(), init);
+        const url = new URL(request.url);
+        if (!OPENROUTER_HOSTS.has(url.hostname)) {
+          return panic(`Refused a request to ${url.hostname}`);
+        }
+        const body = asTestRaw<RequestBody>(await request.clone().json());
+        sent.push({ host: url.hostname, body });
+        const { chunks, usage } = script.answer(body);
+        return sse(chunks, usage.completionTokens);
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 });
 
 afterAll(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const generate = async (
@@ -210,6 +228,11 @@ const failureOf = (result: Result<string, { cause: unknown }>) => {
     finish: error instanceof ModelRunError ? error.finish : undefined,
   };
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("an answer cut at its output ceiling", () => {
   // The provider labels the stop `length`, with a reason no table lists, or

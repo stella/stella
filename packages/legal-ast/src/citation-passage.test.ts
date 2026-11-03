@@ -223,7 +223,6 @@ describe("the paragraph a citation is read from", () => {
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
     });
 
     expect(passage?.anchorId).toBe("p2");
@@ -244,15 +243,13 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks,
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       })?.anchorId,
     ).toBe("p9");
 
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText:
-        "K rozsudku 21 Cdo 500/2019 se senát přiklání. Další věta sekce.",
+      classifiedBlockIds: ["p7"],
     });
 
     expect(passage?.anchorId).toBe("p7");
@@ -268,7 +265,7 @@ describe("the paragraph a citation is read from", () => {
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText: "Sekce, kterou tento dokument nenese.",
+      classifiedBlockIds: [],
     });
 
     expect(passage?.anchorId).toBe("p9");
@@ -280,7 +277,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks: [paragraph("p1", "Nic k věci.")],
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       }),
     ).toBeNull();
   });
@@ -296,7 +292,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks: [paragraph("p3", blockText)],
         citationText,
-        sectionText: undefined,
       })?.anchorId,
     ).toBe("p3");
   });
@@ -316,7 +311,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks,
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       })?.mention,
     ).toBe("sole");
   });

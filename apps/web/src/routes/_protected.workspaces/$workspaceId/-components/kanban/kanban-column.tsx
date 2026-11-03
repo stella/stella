@@ -31,7 +31,13 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -46,6 +52,8 @@ import {
 
 import { InlineEdit } from "@/components/inline-edit";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
@@ -76,7 +84,9 @@ type KanbanColumnProps = {
   optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
-  onDrop: (entityId: string) => void;
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
+  /** The board's card selection; omit on a board without one. */
+  selection?: KanbanSelection | undefined;
   onFileUpload?: ((files: File[]) => void) | undefined;
   onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
@@ -125,6 +135,7 @@ export const KanbanColumn = ({
   onReorderColumn,
   taskOnly,
   calculations,
+  selection,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -136,6 +147,7 @@ export const KanbanColumn = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -145,6 +157,9 @@ export const KanbanColumn = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -304,7 +319,7 @@ export const KanbanColumn = ({
         dragHandle={
           isDraggable ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -378,6 +393,11 @@ export const KanbanColumn = ({
                   entity={entity}
                   onRename={onRenameEntity}
                   properties={properties}
+                  selection={
+                    selection
+                      ? { owner: selection, scope: entities }
+                      : undefined
+                  }
                   workspaceId={workspaceId}
                 />
               </div>
@@ -399,11 +419,11 @@ export const KanbanColumn = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}
@@ -609,13 +629,15 @@ export const KanbanColumnTitle = ({
   }
 
   return (
-    <button
-      className="overflow-hidden text-start text-sm font-medium text-ellipsis whitespace-pre"
+    <Button
+      className="flex min-w-0 shrink overflow-hidden"
       onClick={onStartEditing}
-      type="button"
+      variant="plain"
     >
-      {title}
-    </button>
+      <span className="min-w-0 overflow-hidden text-sm font-medium text-ellipsis whitespace-pre">
+        {title}
+      </span>
+    </Button>
   );
 };
 
@@ -655,16 +677,17 @@ export const KanbanColumnSwatch = ({
       side="bottom"
       value={optionColor}
     >
-      <button
+      <Button
         aria-label={t("common.changeColor")}
-        className="shrink-0 cursor-pointer"
-        type="button"
+        className="flex shrink-0"
+        shape="round"
+        variant="plain"
       >
         <span
           className="block size-2.5 rounded-full"
           style={{ backgroundColor: color }}
         />
-      </button>
+      </Button>
     </ColorPicker>
   );
 };
@@ -713,7 +736,7 @@ export const ColumnCalculations = ({
         />
       ))}
       {onChange && properties.length > 0 && (
-        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           <CalculationPicker
             labels={labels}
             onChange={onChange}

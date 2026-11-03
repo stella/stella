@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 // Rename-with-suggestion on a persisted thread: the breadcrumb opens the
 // inline editor, the wand fetches a suggestion into the draft, and a commit
@@ -15,7 +16,9 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   await page.goto("/chat", { waitUntil: "commit" });
 
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.click();
   await composer.pressSequentially("Draft a mutual NDA for a software vendor.");
   await page.getByRole("button", { name: "Send message" }).click();
@@ -23,7 +26,7 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   // Sending from /chat navigates to the freshly created thread.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
   const threadPath = new URL(page.url()).pathname;
   // "Copy" only renders under an assistant message with non-empty text, so
@@ -31,7 +34,7 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   // before the rename below.
   const transcript = page.getByRole("log");
   await expect(transcript.getByRole("button", { name: "Copy" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 
   // The thread crumb doubles as the rename affordance: clicking it swaps the
@@ -59,34 +62,38 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   await wand.press("Enter");
   await expect(
     breadcrumb.getByRole("button", { name: "Suggesting a title…" }),
-  ).toHaveCount(0, { timeout: 30_000 });
-  await expect(wand).toBeEnabled({ timeout: 30_000 });
+  ).toHaveCount(0, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
+  await expect(wand).toBeEnabled({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(renameInput).toHaveValue(suggestedTitle);
 
   // Commit a deterministic title on top of the suggestion so the
   // propagation assertions below cannot depend on mock-model output.
   const committedTitle = "Renamed by the e2e wand spec";
   await renameInput.fill(committedTitle);
+  // Tabbing onto the wand keeps the editor open; tabbing past it commits.
   await renameInput.press("Tab");
+  await expect(wand).toBeFocused();
+  await expect(renameInput).toHaveValue(committedTitle);
   await wand.press("Tab");
-  const done = breadcrumb.getByRole("button", { name: "Done" });
-  await expect(done).toBeFocused();
-  await done.press("Enter");
 
   // Breadcrumb reflects the committed title (the editor is gone).
   await expect(breadcrumb.getByRole("textbox")).toHaveCount(0);
   await expect(
     breadcrumb.getByRole("button", { name: committedTitle }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 
   // The history page lists this exact thread under the new title. Persistent
   // test data may contain duplicate titles, so target the thread's href.
   await page.getByRole("link", { name: "History", exact: true }).click();
-  await expect(page).toHaveURL(/\/chat\/history$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/history$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   const currentThreadLink = page.locator(
     `[data-slot="list"] a[href="${threadPath}"]`,
   );
   await expect(currentThreadLink).toContainText(committedTitle, {
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 });

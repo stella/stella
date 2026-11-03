@@ -288,6 +288,7 @@ test("every API code-quality graph task has an explicit budget entry", async () 
     repositoryPaths: changedPaths,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
+    pluginModulePaths: new Set(),
   });
   if (plan.type !== "scoped") {
     throw new Error("Expected API code-quality entry-point plan");

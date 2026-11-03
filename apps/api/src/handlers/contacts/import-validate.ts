@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
+import { validateContactImportCandidates } from "@/api/handlers/contacts/contact-import-file";
 import {
   contactImportCandidateSchema,
   taxIdSchemeSchema,
@@ -10,13 +10,23 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
-const importValidateBodySchema = v.object({
-  taxIdScheme: taxIdSchemeSchema,
-  rows: v.pipe(
-    v.array(contactImportCandidateSchema),
-    v.maxLength(LIMITS.contactsImportRowsMax),
+const importValidateBodySchema = v.pipe(
+  v.object({
+    taxIdScheme: taxIdSchemeSchema,
+    rows: v.pipe(
+      v.array(contactImportCandidateSchema),
+      v.maxLength(LIMITS.contactsImportRowsMax),
+    ),
+    rowNumbers: v.pipe(
+      v.array(v.pipe(v.number(), v.integer(), v.minValue(1))),
+      v.maxLength(LIMITS.contactsImportRowsMax),
+    ),
+  }),
+  v.check(
+    ({ rowNumbers, rows }) => rowNumbers.length === rows.length,
+    "Every import row needs a source row number",
   ),
-});
+);
 
 const config = {
   contract: "patch",
@@ -35,14 +45,11 @@ const config = {
 const validateContactImport = createSafeRootHandler(
   config,
   // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
-  async function* ({ body: { rows, taxIdScheme } }) {
-    const validated = rows.map((candidate, index) => {
-      const { contact, issues } = validateContactImportCandidate({
-        candidate,
-        taxIdScheme,
-        rowNumber: index + 1,
-      });
-      return { contact, issues, rowNumber: index + 1 };
+  async function* ({ body: { rowNumbers, rows, taxIdScheme } }) {
+    const validated = validateContactImportCandidates({
+      candidates: rows,
+      rowNumbers,
+      taxIdScheme,
     });
 
     return Result.ok({

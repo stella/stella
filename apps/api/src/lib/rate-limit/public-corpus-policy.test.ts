@@ -8,6 +8,7 @@ import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { mount, routes } from "@/api/http/route";
 import type { RouteDefinition, RouteEntry } from "@/api/http/route";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
   PUBLIC_READ_TIMEOUT_CODE,
   publicReadTimeoutError,
@@ -98,15 +99,25 @@ describe("public corpus admission policy", () => {
     const canceled = Object.assign(new Error("SQL diagnostics"), {
       code: PG_ERROR.QUERY_CANCELED,
     });
+    const observed = new PublicLawStatementError({
+      message: "Public-law statement failed",
+      cause: canceled,
+    });
     expect(publicReadTimeoutError(canceled)).toBeNull();
+    expect(publicReadTimeoutError(observed)).toBeNull();
     const request = new Request(
       `http://localhost${versioned("/law/statutes/search")}`,
     );
     runPublicReadRequest(
       { request, route: versioned("/law/statutes/search") },
       () => {
+        expect(publicReadTimeoutError(canceled)).toBeNull();
         const wrapped = new Error("query wrapper", { cause: canceled });
-        expect(publicReadTimeoutError(wrapped)).toMatchObject({
+        expect(publicReadTimeoutError(wrapped)).toBeNull();
+        const observedWrapped = new Error("query wrapper", {
+          cause: observed,
+        });
+        expect(publicReadTimeoutError(observedWrapped)).toMatchObject({
           status: 503,
           code: PUBLIC_READ_TIMEOUT_CODE,
           message: "Public read timed out. Please try again.",

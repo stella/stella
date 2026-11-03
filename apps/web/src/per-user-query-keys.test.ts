@@ -8,6 +8,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { documentAnnotationKeys } from "@/components/pdf/annotations/document-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
@@ -16,6 +17,7 @@ import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
 import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
 import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -32,8 +34,13 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -52,7 +59,12 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  timeApprovalPendingOptions,
+  timeApprovalQueueOptions,
+} from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -65,6 +77,7 @@ import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -118,11 +131,35 @@ const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
 
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
+
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
-  "account-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/get.ts": {
+    kind: "keyed",
+    calls: ['api.me["data-exports"].get'],
+    files: ["lib/account/account-data-export-queries.ts"],
+    keys: () => [accountDataExportLatestOptions(USER).queryKey],
+  },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
@@ -423,6 +460,20 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
   },
+  "entities/annotations/list.ts": {
+    kind: "keyed",
+    calls: ["api.entities().entity().field().annotations.get"],
+    files: ["components/pdf/annotations/document-annotations-query.ts"],
+    keys: () => [
+      documentAnnotationKeys.forFile({
+        entityId: "entity-probe",
+        fieldId: "field-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "documentAnnotationKeys.forFile(key)": KEY_TYPE_HAS_USER },
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -574,6 +625,24 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
+  },
   "sharepoint/list-drive-root.ts": {
     kind: "no-web-caller",
     calls: ["api.sharepoint.drive.root.get"],
@@ -609,6 +678,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
@@ -638,15 +708,48 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-entries"]["approval-queue"].get'],
+    files: ["lib/workspaces/queries/time-approvals.ts"],
+    keys: () => [
+      timeApprovalQueueOptions(ORG, USER, {}).queryKey,
+      timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
+  },
+  "time-entries/report/get.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].report.get'],
+    files: ["routes/_protected.time_.report/-components/report-query.ts"],
+    keys: () => [
+      timeReportOptions(ORG, USER, {
+        bucket: "day",
+        from: "2026-10-26",
+        groupBy: "member",
+        to: "2026-11-01",
+      }).queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
     calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
-      myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      myTimeEntriesInfiniteOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+      }).queryKey,
+    ],
+  },
+  "time-entries/me/suggestions/list.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].me.suggestions.get'],
+    files: ["lib/workspaces/queries/my-time-suggestions.ts"],
+    keys: () => [
+      myTimeSuggestionsOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+        timezoneId: "UTC",
+      }).queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {

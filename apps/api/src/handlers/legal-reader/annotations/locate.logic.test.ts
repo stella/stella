@@ -3,12 +3,13 @@ import fc from "fast-check";
 
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ANNOTATION_LOCATE_ISSUE,
   locatePassages,
 } from "@/api/handlers/legal-reader/annotations/locate.logic";
+import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 
 const paragraph = (anchorId: string, text: string): Block => ({
   anchorId,
@@ -61,6 +62,97 @@ describe("locatePassages", () => {
       [1, ANNOTATION_LOCATE_ISSUE.quoteAmbiguous],
       [2, ANNOTATION_LOCATE_ISSUE.quoteNotFound],
     ]);
+  });
+
+  test("a quote copied with its served footnote mark marks that note's words", () => {
+    // The served text prints a note's mark before it; the reader's text
+    // holds the mark as the note's label, not as its words.
+    const note: Block = {
+      anchorId: "p-3",
+      id: "id-p-3",
+      inlines: [{ text: "Zob.: pkt 2 wyjaśnień.", type: "text" }],
+      note: { type: "footnote", label: "[2]" },
+      plainText: "Zob.: pkt 2 wyjaśnień.",
+      type: "paragraph",
+    };
+    const blocks = [
+      paragraph("p-1", "Spółka wyjaśniła[2], że Zob.: pkt 2 wyjaśnień."),
+      paragraph("p-2", "Zob.: pkt 2 wyjaśnień."),
+      note,
+    ];
+    const served = servedBlockText(note, blocks[1]);
+    expect(served).toBe("[2] Zob.: pkt 2 wyjaśnień.");
+    const span = {
+      blockAnchorId: "p-3",
+      startOffset: 0,
+      endOffset: "Zob.: pkt 2".length,
+      quote: "Zob.: pkt 2",
+    };
+
+    expect(
+      locatePassages(blocks, [
+        { quote: "[2] Zob.: pkt 2" },
+        { anchor: "p-3", quote: "[2] Zob.: pkt 2" },
+      ]),
+    ).toEqual({ status: "located", spans: [span, span] });
+    // The mark names one note, and the words open it.
+    expect(
+      locatePassages(blocks, [
+        { quote: "[1] Zob.: pkt 2" },
+        { quote: "[2] pkt 2 wyjaśnień" },
+      ]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 0 },
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 1 },
+      ],
+    });
+  });
+
+  test("a quote copied with its served paragraph number marks that paragraph's words", () => {
+    // The served text prints a court's number before its paragraph; the
+    // reader's text does not hold it, so it names the paragraph instead.
+    const numbered: Block = {
+      anchorId: "p-2",
+      id: "id-p-2",
+      inlines: [{ text: "The applicant lodged an appeal.", type: "text" }],
+      number: 48,
+      plainText: "The applicant lodged an appeal.",
+      type: "paragraph",
+    };
+    const blocks = [
+      paragraph("p-1", "As in 48 The applicant lodged an appeal, so here."),
+      numbered,
+    ];
+    const served = servedBlockText(numbered);
+    const quote = served.slice(0, served.indexOf(" an appeal"));
+    expect(quote).toBe("¶ 48 The applicant lodged");
+    const span = {
+      blockAnchorId: "p-2",
+      startOffset: 0,
+      endOffset: "The applicant lodged".length,
+      quote: "The applicant lodged",
+    };
+
+    expect(
+      locatePassages(blocks, [{ quote }, { anchor: "p-2", quote }]),
+    ).toEqual({ status: "located", spans: [span, span] });
+    // The number names one paragraph, and the words open it.
+    expect(
+      locatePassages(blocks, [
+        { quote: "¶ 47 The applicant lodged" },
+        { quote: "¶ 48 lodged an appeal" },
+        { anchor: "p-1", quote },
+      ]),
+    ).toMatchObject({
+      status: "rejected",
+      issues: [
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 0 },
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 1 },
+        { code: ANNOTATION_LOCATE_ISSUE.quoteNotFound, passageIndex: 2 },
+      ],
+    });
   });
 
   test("anchors a table quote by the cell the reader renders it in", () => {
@@ -173,7 +265,8 @@ describe("locatePassages", () => {
   test("any unique substring round-trips to its raw offsets, however its spaces are typed", () => {
     const word = fc.stringMatching(/^[a-zčřžáé§0-9]{1,8}$/u);
     const gap = fc.constantFrom(" ", " ", "\n", "  ");
-    fc.assert(
+    assertProperty(
+      "any unique substring round-trips to its raw offsets, however its spaces are typed",
       fc.property(
         fc.array(fc.tuple(word, gap), { minLength: 2, maxLength: 12 }),
         fc.nat(),
@@ -206,7 +299,7 @@ describe("locatePassages", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

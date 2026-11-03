@@ -6,7 +6,9 @@
  * longer hash to what was signed. An appended update keeps those bytes, but a
  * validator still reports page content added after signing as a modification,
  * and no certification level permits it. So a signed PDF is never rewritten:
- * callers keep the stored original and put derived data somewhere else.
+ * callers keep the stored original and put derived data somewhere else. The
+ * one change appended to a signed file is a reader's marks, as annotations,
+ * which approval signatures and the annotation certification level allow.
  *
  * Encrypted input is left alone too: a rewrite would either need the password
  * or silently change the document's protection.
@@ -123,6 +125,38 @@ export const appendSigningRevision = async (
   // LibPDF quietly falls back to a full rewrite when it cannot append (a
   // pending encryption change, a linearized or repaired file). For a signed
   // file that rewrite is exactly what this helper exists to prevent.
+  const blocker = pdf.canSaveIncrementally();
+  if (blocker !== null) {
+    return Result.err(
+      new PdfRevisionAppendError({
+        blocker,
+        message: `This PDF cannot take an appended revision (${blocker}).`,
+      }),
+    );
+  }
+  return Result.ok(await pdf.save({ incremental: true }));
+};
+
+/**
+ * Appends a revision that adds only annotations: a reader's marks on a copy
+ * that is downloaded. The stored bytes stay a byte-for-byte prefix of the
+ * copy, so every signature keeps covering its revision. Whether a
+ * certification allows annotations is the caller's to decide first
+ * (`marked-pdf.ts`, the only caller); this helper refuses what no caller may
+ * do: rewrite instead of append, or touch an encrypted file.
+ */
+export const appendAnnotationRevision = async (
+  pdf: PDF,
+): Promise<Result<Uint8Array, PdfRevisionAppendError>> => {
+  if (pdf.isEncrypted) {
+    return Result.err(
+      new PdfRevisionAppendError({
+        blocker: "encrypted",
+        message: "An encrypted PDF is not given an appended revision.",
+      }),
+    );
+  }
+  // The same quiet rewrite fallback `appendSigningRevision` guards against.
   const blocker = pdf.canSaveIncrementally();
   if (blocker !== null) {
     return Result.err(

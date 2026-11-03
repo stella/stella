@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";

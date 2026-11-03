@@ -12,11 +12,10 @@ import {
   notFound,
   redirect,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
   createStatuteIndexPath,
@@ -49,8 +48,8 @@ import {
 } from "@/components/public-law-table/public-law-results-toolbar";
 import type { PublicLawFilterChip } from "@/components/public-law-table/public-law-results-toolbar";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
-import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import { StatuteSearchResults } from "@/features/statutes/components/statute-search-results";
@@ -67,7 +66,10 @@ import {
 } from "@/features/statutes/queries/statutes";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
-import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
+import {
+  activeStatuteFilterCount,
+  withStatuteFilter,
+} from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
@@ -76,6 +78,7 @@ import {
   type StatutesIndexSearch,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
+import { statuteColumnOrder } from "@/features/statutes/statute-order.logic";
 import {
   useStatuteColumnPreferences,
   useStatuteFind,
@@ -94,14 +97,21 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  PublicLawQueryFeedback,
+  PublicLawResultsBoundary,
+} from "@/routes/law/-components/public-law-list-failure";
 import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
 } from "@/routes/law/-statutes-index.logic";
+
+import { PublicStatutesIndexError } from "./-statutes-index-error";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
 const EMPTY_STATUTES: readonly StatuteListItem[] = [];
@@ -111,36 +121,8 @@ const NO_TYPES: readonly FacetSourceBucket[] = [];
 const FILTER_KIND_LABEL_KEYS = {
   type: "common.type",
   validity: "common.status",
+  year: "workspaces.views.calendar.year",
 } as const satisfies Record<StatuteFilterKey, TranslationKey>;
-
-/**
- * The URL with one facet set or unset. Written out per key rather than by a
- * computed property, so a filter key that is not in the search schema cannot
- * be navigated to.
- */
-const withFilter = (
-  previous: StatutesIndexSearch,
-  key: StatuteFilterKey,
-  value: string | undefined,
-): StatutesIndexSearch => {
-  switch (key) {
-    case "type":
-      return { ...previous, type: value };
-    case "validity":
-      return {
-        ...previous,
-        validity: LEGISLATION_LIST_VALIDITIES.find(
-          (validity) => validity === value,
-        ),
-      };
-    default:
-      key satisfies never;
-      return panic(`Unhandled statute filter: ${String(key)}`);
-  }
-};
-
-const activeStatuteFilterCount = (search: StatutesIndexSearch): number =>
-  STATUTE_FILTER_KEYS.filter((key) => search[key] !== undefined).length;
 
 const createStatutesIndexPath = (
   country: string,
@@ -218,7 +200,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
         kind: "statutes",
         items: loaderData
           ? loaderData.statutes.map((statute) => ({
-              name: statute.title,
+              name: statuteDisplayLabel(statute).text,
               url: createPublicLawCanonicalUrl(
                 createStatutePath(
                   createStatuteRouteParams({
@@ -239,6 +221,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       type: "website",
     });
   },
+  errorComponent: PublicStatutesIndexError,
   // One page, two states, as the case-law results: only a cold arrival
   // renders the pending one, and what waits there is the grid alone.
   component: () => <PublicStatutesIndex routeState="loaded" />,
@@ -309,12 +292,12 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
   const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
-  const facetsView = useQueryView(facetsQuery);
+  const facetsView = queryView(facetsQuery);
   useQueryViewError(facetsView, "PublicStatuteFullText:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
@@ -336,7 +319,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
       {hydrated && dataView.type !== "pending" && (
-        <QueryViewFeedback view={dataView} />
+        <PublicLawQueryFeedback view={dataView} />
       )}
       <h1 className="sr-only">{t("statutes.title")}</h1>
       <StatuteSearch
@@ -378,38 +361,43 @@ function PublicStatuteFullText({ query }: { query: string }) {
       />
       <ScrollArea className="min-h-0 flex-1">
         {dataView.type !== "error" && (
-          <StatuteSearchResults
-            hits={hits}
-            isLoading={isPending}
-            isFetchingNextPage={isFetchingNextPage}
-            hasNextPage={hasNextPage}
-            onLoadMore={() =>
-              detached(fetchNextPage(), "statutes.full-text-next-page")
-            }
-            titleLink={(hit) => {
-              const params = createStatuteRouteParams({
-                country: hit.country,
-                documentId: hit.documentId,
-                eli: hit.eli,
-                slug: hit.slug,
-                version: null,
-              });
-              return (
-                <Link
-                  to="/law/$country/statutes/$slug"
-                  params={{ country: params.country, slug: params.slug }}
-                  search={{ q: query }}
-                  onClick={openStatute.onLinkClick({
-                    ...hit,
-                    id: toSafeId<"legislationDocument">(hit.documentId),
-                    versionValidFrom: null,
-                  })}
-                >
-                  {hit.title}
-                </Link>
-              );
-            }}
-          />
+          <PublicLawResultsBoundary
+            searchKey={`${country}:${query}`}
+            resetOn={data}
+          >
+            <StatuteSearchResults
+              hits={hits}
+              isLoading={isPending}
+              isFetchingNextPage={isFetchingNextPage}
+              hasNextPage={hasNextPage}
+              onLoadMore={() =>
+                detached(fetchNextPage(), "statutes.full-text-next-page")
+              }
+              titleLink={(hit) => {
+                const params = createStatuteRouteParams({
+                  country: hit.country,
+                  documentId: hit.documentId,
+                  eli: hit.eli,
+                  slug: hit.slug,
+                  version: null,
+                });
+                return (
+                  <Link
+                    to="/law/$country/statutes/$slug"
+                    params={{ country: params.country, slug: params.slug }}
+                    search={{ q: query }}
+                    onClick={openStatute.onLinkClick({
+                      ...hit,
+                      id: toSafeId<"legislationDocument">(hit.documentId),
+                      versionValidFrom: null,
+                    })}
+                  >
+                    <StatuteDisplayLabel statute={hit} />
+                  </Link>
+                );
+              }}
+            />
+          </PublicLawResultsBoundary>
         )}
       </ScrollArea>
     </main>
@@ -430,7 +418,7 @@ const useStatuteListFilterChips = ({
   if (search.year !== undefined) {
     chips.push({
       id: "filter:year",
-      kind: t("workspaces.views.calendar.year"),
+      kind: t(FILTER_KIND_LABEL_KEYS.year),
       onRemove: () => onRemove("year"),
       value: search.year,
     });
@@ -455,6 +443,54 @@ const useStatuteListFilterChips = ({
   return chips;
 };
 
+/**
+ * The headers' part in the list's order. A header orders the list only while
+ * a year bounds it; the address keeps the order, and a new order starts again
+ * at page one, since the cursors were cut for the old one.
+ */
+const useStatuteListOrder = ({
+  order,
+  year,
+}: Pick<StatutesIndexSearch, "order" | "year">) => {
+  const t = useTranslations();
+  const navigate = Route.useNavigate();
+  return statuteColumnOrder({
+    sort: order,
+    year,
+    needsYearReason: t("statutes.sortNeedsYear"),
+    onSortChange: (next) => {
+      detached(
+        navigate({
+          search: (previous) => ({ ...previous, page: undefined, order: next }),
+        }),
+        "statutes.sort-navigate",
+      );
+    },
+  });
+};
+
+/** The rows phase of the statute walk, counting the rows its held pages carry. */
+const statuteRowsPhase = (
+  query: {
+    data: { pages: readonly { items: readonly unknown[] }[] } | undefined;
+    isLoading: boolean;
+    isPlaceholderData: boolean;
+  },
+  routeState: PublicLawRouteState,
+) =>
+  publicLawRowsPhase({
+    isLoading: query.isLoading,
+    isPlaceholderData: query.isPlaceholderData,
+    keptRowCount:
+      query.data === undefined
+        ? 0
+        : query.data.pages.reduce(
+            (count, page) => count + page.items.length,
+            0,
+          ),
+    routeState,
+  });
+
 function PublicStatuteList({
   routeState,
 }: {
@@ -464,10 +500,11 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, type, validity, year }) => ({
+    select: ({ page, pageSize, q, order, type, validity, year }) => ({
       page,
       pageSize,
       q,
+      order,
       type,
       validity,
       year,
@@ -523,19 +560,14 @@ function PublicStatuteList({
     // so stepping between pages never blanks the table.
     placeholderData: keepPreviousData,
   });
-  const {
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-    isPlaceholderData,
-  } = dataQuery;
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData } =
+    dataQuery;
   useSearchResultsTiming(
     "legislation",
     search.q ?? "",
     dataQuery.data !== undefined && !isPlaceholderData,
   );
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -543,10 +575,10 @@ function PublicStatuteList({
     ...statuteFacetsOptions(country.toUpperCase()),
     placeholderData: keepPreviousData,
   });
-  const facetsView = useQueryView(facetsQuery);
+  const facetsView = queryView(facetsQuery);
   useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
-  const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
+  const rows = statuteRowsPhase(dataQuery, routeState);
 
   const walkedPageCount = data?.pages.length ?? 0;
   const pager = publicLawPagerModel({
@@ -558,6 +590,7 @@ function PublicStatuteList({
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
   // A page the reader steps to brings them to its first row once it is drawn.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "first-result",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
@@ -568,6 +601,7 @@ function PublicStatuteList({
     surfaceKey: country,
   });
   const columnGroups = useStatuteColumnGroups();
+  const order = useStatuteListOrder(search);
 
   // A pending debounced query write holds text the URL has not seen yet;
   // it is folded in first so a filter change cannot drop the edit. Every such
@@ -590,7 +624,7 @@ function PublicStatuteList({
 
   const selectFacet = (key: StatuteFilterKey, value: string | undefined) => {
     detached(
-      searchNavigation((previous) => withFilter(previous, key, value)),
+      searchNavigation((previous) => withStatuteFilter(previous, key, value)),
       "statutes.filter-navigate",
     );
   };
@@ -687,7 +721,9 @@ function PublicStatuteList({
   // overflows here and the table owns the only scroll.
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {dataView.type !== "pending" && <QueryViewFeedback view={dataView} />}
+      {dataView.type !== "pending" && (
+        <PublicLawQueryFeedback view={dataView} />
+      )}
       {/*
         The breadcrumb already names the screen, so the heading is for the
         document outline and for a screen reader, not for the eye.
@@ -709,7 +745,7 @@ function PublicStatuteList({
             <StatuteFilterPopover
               activeFilterCount={activeStatuteFilterCount(search)}
               onSelect={selectFacet}
-              selection={{ type: search.type, validity: search.validity }}
+              selection={search}
               types={facets?.documentType ?? NO_TYPES}
             />
           }
@@ -742,21 +778,27 @@ function PublicStatuteList({
         />
 
         {dataView.type !== "error" && (
-          <StatuteTable
-            emptyState={
-              <p className="text-muted-foreground p-4 text-sm">
-                {t("statutes.emptyState")}
-              </p>
-            }
-            expectedRowCount={pageSize}
-            findHighlight={find.highlight}
-            firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
-            isLoading={rows === "skeleton"}
-            isRefreshing={rows === "stale"}
-            layout={layout}
-            onLayoutChange={setLayout}
-            statutes={find.rows}
-          />
+          <PublicLawResultsBoundary
+            resetOn={data}
+            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}:${search.order ?? ""}`}
+          >
+            <StatuteTable
+              emptyState={
+                <p className="text-muted-foreground p-4 text-sm">
+                  {t("statutes.emptyState")}
+                </p>
+              }
+              expectedRowCount={pageSize}
+              findHighlight={find.highlight}
+              firstRowNumber={(pager.currentPage - 1) * pageSize + 1}
+              isLoading={rows === "skeleton"}
+              isRefreshing={rows === "stale"}
+              layout={layout}
+              onLayoutChange={setLayout}
+              order={order}
+              statutes={find.rows}
+            />
+          </PublicLawResultsBoundary>
         )}
         <PublicLawPager
           navigation={{

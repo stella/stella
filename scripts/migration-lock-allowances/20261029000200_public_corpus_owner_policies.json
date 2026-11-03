@@ -1,0 +1,3 @@
+{
+  "create-policy": "The one policy adds only table-owner access to case-law decision aliases; catalog-only policy creation performs no row scan, with 1s lock_timeout and 5s statement_timeout."
+}

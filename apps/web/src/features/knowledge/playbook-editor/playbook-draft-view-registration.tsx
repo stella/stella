@@ -22,7 +22,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import type { PlaybookDraftViewPayload } from "@/lib/knowledge/playbook-draft-view";
 import { playbookDetailOptions } from "@/lib/knowledge/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 // The kind registers with the app shell, so a tab restored after a reload
 // renders on any page; the editor itself loads with the first pane opened.
@@ -43,7 +43,7 @@ const PlaybookDraftRailLabel = ({
   renderLabel,
 }: InspectorRailLabelProps<PlaybookDraftViewPayload>) => {
   const { activeOrganizationId } = useAuthenticatedUser();
-  const detailView = useQueryView(
+  const detailView = queryView(
     useQuery({
       ...playbookDetailOptions(activeOrganizationId, tab.payload.playbookId),
       enabled: false,

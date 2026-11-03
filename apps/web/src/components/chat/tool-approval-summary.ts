@@ -109,6 +109,63 @@ export const getReadableInputRows = ({
   return rows;
 };
 
+/**
+ * Approval rows for a credential-backed connector operation. These values
+ * are the exact payload sent after approval, so the review surface must not
+ * shorten a nested argument or omit a suffix the connector will receive.
+ */
+export const getCompleteConnectorInputRows = ({
+  emptyLabel,
+  input,
+  requestLabel,
+}: {
+  emptyLabel: string;
+  input: unknown;
+  requestLabel: string;
+}): ReadableInputRow[] => {
+  if (input === undefined || input === null) {
+    return [
+      {
+        key: "request",
+        label: requestLabel,
+        value: emptyLabel,
+      },
+    ];
+  }
+  if (typeof input !== "object") {
+    const value =
+      typeof input === "string" ||
+      typeof input === "number" ||
+      typeof input === "boolean" ||
+      typeof input === "bigint"
+        ? String(input)
+        : emptyLabel;
+    return [
+      {
+        key: "request",
+        label: requestLabel,
+        value,
+      },
+    ];
+  }
+
+  return Object.entries(input).map(([key, value]) => {
+    let readableValue: string;
+    if (value === undefined || value === null) {
+      readableValue = emptyLabel;
+    } else if (typeof value === "object") {
+      readableValue = JSON.stringify(value, null, 2);
+    } else {
+      readableValue = String(value);
+    }
+    return {
+      key,
+      label: humanizeIdentifier(key),
+      value: readableValue,
+    };
+  });
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

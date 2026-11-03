@@ -8,6 +8,7 @@ import {
 import {
   groupMatterOptions,
   isBrowsingMatters,
+  matchesMatterOption,
   MATTER_PICKER_RECENT_LIMIT,
 } from "./matter-combobox.logic";
 
@@ -118,6 +119,26 @@ describe("grouping picker options", () => {
       true,
     );
     expect(isBrowsingMatters({ query: "Nová", selectedName: "Novák" })).toBe(
+      false,
+    );
+  });
+});
+
+describe("matter option search", () => {
+  const matter = { clientName: "Dvořák & Straße s.r.o.", name: "Nájem Łódź" };
+
+  test("matches the name or the client name, ignoring case and accents", () => {
+    expect(matchesMatterOption(matter, "najem lodz")).toBe(true);
+    expect(matchesMatterOption(matter, "DVORAK")).toBe(true);
+    expect(matchesMatterOption(matter, "strasse")).toBe(true);
+    expect(matchesMatterOption(matter, "kupní")).toBe(false);
+  });
+
+  test("a matter without a client matches on its name only", () => {
+    expect(
+      matchesMatterOption({ clientName: null, name: "Lease" }, "lea"),
+    ).toBe(true);
+    expect(matchesMatterOption({ clientName: null, name: "Lease" }, "x")).toBe(
       false,
     );
   });

@@ -1,0 +1,218 @@
+name: Mobile Release Plan
+
+defaults:
+  run:
+    shell: bash
+
+# After each merge that can touch the mobile app, reports what each variant's
+# next release needs (apps/mobile/scripts/release-plan.ts): an over-the-air
+# update when this commit's native fingerprint matches the variant's latest
+# TestFlight build, or a new TestFlight build first when it does not.
+#
+# Preview releases itself: after a merge, the last job starts the preview
+# release the plan names, so internal testers run every merge. Nothing here
+# builds, publishes or holds a secret; it only dispatches Release Mobile iOS
+# or Publish Mobile Update on main, which hold the signing secrets in their
+# own environments. Production stays a manual, reviewed release, and the job
+# summary names the workflow to run for it.
+#
+# A merge that lands while a preview build runs is planned against the build
+# before it, so it may ask for a build too; each release workflow keeps one
+# run pending per variant, so that costs at most one more build, which
+# carries the newest commit.
+#
+# Each fingerprint is computed at its own commit with that commit's packages,
+# installed cold as in the release jobs, under its own variant (a variant's
+# name and identifier are part of it), on Linux; the pull request check proves
+# Linux and the macOS TestFlight build agree on iOS.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "bun.lock"
+      - "package.json"
+      - "patches/**"
+  workflow_dispatch:
+
+permissions: {}
+
+# Only the newest commit's plan matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  builds:
+    name: Latest TestFlight builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      builds: ${{ steps.builds.outputs.result }}
+    steps:
+      - id: builds
+        name: Find each variant's latest TestFlight build
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 3
+          script: |
+            const { owner, repo } = context.repo;
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: "release-mobile-ios.yml",
+              branch: "main",
+              status: "success",
+              per_page: 100,
+            });
+            // Newest first; the run name ends with the variant.
+            const builds = {};
+            for (const run of data.workflow_runs) {
+              const variant = run.display_title.split(" ").at(-1);
+              if (["preview", "production"].includes(variant) && !(variant in builds)) {
+                builds[variant] = { sha: run.head_sha, url: run.html_url };
+              }
+            }
+            return builds;
+
+  plan:
+    name: Release plan
+    needs: builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      preview: ${{ steps.plan.outputs.preview }}
+    env:
+      PREVIEW_SHA: ${{ fromJSON(needs.builds.outputs.builds).preview.sha }}
+      PREVIEW_URL: ${{ fromJSON(needs.builds.outputs.builds).preview.url }}
+      PRODUCTION_SHA: ${{ fromJSON(needs.builds.outputs.builds).production.sha }}
+      PRODUCTION_URL: ${{ fromJSON(needs.builds.outputs.builds).production.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every build's commit is on main.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Check out the preview build's commit
+        if: env.PREVIEW_SHA != ''
+        run: git checkout --quiet "$PREVIEW_SHA"
+
+      - name: Install the preview build's mobile dependencies
+        if: env.PREVIEW_SHA != ''
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
+
+      - name: Fingerprint the preview build
+        if: env.PREVIEW_SHA != ''
+        working-directory: apps/mobile
+        env:
+          APP_VARIANT: preview
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          fingerprint=null
+          if [ -f scripts/fingerprint.ts ]; then
+            fingerprint="$(bun scripts/fingerprint.ts ios --json)"
+          fi
+          jq -n --arg sha "$PREVIEW_SHA" --arg url "$PREVIEW_URL" --argjson fingerprint "$fingerprint" \
+            '{ sha: $sha, url: $url, fingerprint: $fingerprint }' > "$RUNNER_TEMP/plan/build-preview.json"
+
+      - name: Check out the production build's commit
+        if: env.PRODUCTION_SHA != ''
+        run: git checkout --quiet "$PRODUCTION_SHA"
+
+      - name: Install the production build's mobile dependencies
+        if: env.PRODUCTION_SHA != ''
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
+
+      - name: Fingerprint the production build
+        if: env.PRODUCTION_SHA != ''
+        working-directory: apps/mobile
+        env:
+          APP_VARIANT: production
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          fingerprint=null
+          if [ -f scripts/fingerprint.ts ]; then
+            fingerprint="$(bun scripts/fingerprint.ts ios --json)"
+          fi
+          jq -n --arg sha "$PRODUCTION_SHA" --arg url "$PRODUCTION_URL" --argjson fingerprint "$fingerprint" \
+            '{ sha: $sha, url: $url, fingerprint: $fingerprint }' > "$RUNNER_TEMP/plan/build-production.json"
+
+      - name: Check out this commit
+        run: git checkout --quiet "$GITHUB_SHA"
+
+      - name: Install this commit's mobile dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
+
+      - id: plan
+        name: Plan
+        working-directory: apps/mobile
+        run: |
+          mkdir -p "$RUNNER_TEMP/plan"
+          for variant in preview production; do
+            APP_VARIANT="$variant" bun scripts/fingerprint.ts ios --json > "$RUNNER_TEMP/plan/head-$variant.json"
+          done
+          bun scripts/release-plan.ts "$RUNNER_TEMP/plan" "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+
+  release-preview:
+    name: Release preview
+    needs: plan
+    # Merges only; a manual run of the plan just reports.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # dispatches the release workflow, nothing else
+    steps:
+      - name: Start the preview release this merge needs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PREVIEW_PLAN: ${{ needs.plan.outputs.preview }}
+        with:
+          retries: 3
+          script: |
+            // The plan proved the iOS fingerprint, so an update goes to iOS.
+            const releases = {
+              update: {
+                workflow_id: "publish-mobile-update.yml",
+                inputs: { variant: "preview", platform: "ios" },
+              },
+              build: {
+                workflow_id: "release-mobile-ios.yml",
+                inputs: { variant: "preview" },
+              },
+              "first-build": {
+                workflow_id: "release-mobile-ios.yml",
+                inputs: { variant: "preview" },
+              },
+            };
+            const plan = process.env.PREVIEW_PLAN;
+            const release = Object.hasOwn(releases, plan) ? releases[plan] : undefined;
+            if (release === undefined) {
+              core.setFailed(`The release plan named no preview release: "${plan}"`);
+              return;
+            }
+            const { owner, repo } = context.repo;
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              ref: "main",
+              ...release,
+            });
+            await core.summary
+              .addRaw(`Started ${release.workflow_id} (preview) on main.\n`)
+              .write();

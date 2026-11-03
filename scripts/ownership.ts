@@ -226,7 +226,7 @@ const renderOwnershipTable = (entries: readonly OwnershipEntry[]): string => {
     })
     .map(
       ({ id, capability, owner, summary, enforcement }) =>
-        `| \`${id}\` — ${capability} | ${owner.map((entryPath) => `\`${entryPath}\``).join(", ")} | ${enforcementCell(enforcement)}${allowedCell(enforcement)} | ${summary} |`,
+        `| \`${id}\` — ${capability} | ${owner.map((entryPath) => `\`${entryPath}\``).join(", ")} | ${enforcementCell(enforcement)}${allowedCell(enforcement)} | ${typeof summary === "function" ? summary() : summary} |`,
     );
   return `| Capability | Owner | Enforcement | Summary |
 | --- | --- | --- | --- |

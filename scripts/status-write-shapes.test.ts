@@ -162,6 +162,41 @@ describe("lifecycle write shapes", () => {
       unmanagedTransitionTables('export { TRANSITIONS } from "./elsewhere";'),
     ).toThrow("statically readable TRANSITIONS");
   });
+  test("transition declarations read literal computed names and reject dynamic keys", () => {
+    expect(
+      unmanagedTransitionTables(
+        'export const TRANSITIONS = { ["jobs"]: { [`unmanaged`]: "reason" } };',
+      ),
+    ).toEqual(["jobs"]);
+    expect(() =>
+      unmanagedTransitionTables(
+        'const table = "jobs"; export const TRANSITIONS = { [table]: { unmanaged: "reason" } };',
+      ),
+    ).toThrow("Transition spec table keys must be static");
+    expect(() =>
+      unmanagedTransitionTables(
+        'const unmanaged = "other"; export const TRANSITIONS = { jobs: { [unmanaged]: "reason" } };',
+      ),
+    ).toThrow("Transition spec option keys must be static");
+  });
+  test("transition option validation is independent of property order and spreads", () => {
+    for (const options of [
+      '{ unmanaged: "reason", [dynamic]: "value" }',
+      '{ [dynamic]: "value", unmanaged: "reason" }',
+      '{ ...legacy, [dynamic]: "value" }',
+      '{ [dynamic]: "value", ...legacy }',
+      '{ unmanaged: "reason", ...invalid }',
+      '{ ...invalid, unmanaged: "reason" }',
+      "{ ...legacy, ...invalid }",
+      "{ ...invalid, ...legacy }",
+    ]) {
+      expect(() =>
+        unmanagedTransitionTables(
+          `const legacy = { unmanaged: "reason" }; const invalid = { [dynamic]: "value" }; export const TRANSITIONS = { jobs: ${options} };`,
+        ),
+      ).toThrow("Transition spec option keys must be static");
+    }
+  });
   test("scoped transition state columns enter direct-write enforcement from the canonical registry", () => {
     expect(columns["contacts"]).toContain("sanctionsMonitoringMode");
     expect(columns["organizationSettings"]).toContain(

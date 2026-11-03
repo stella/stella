@@ -11,6 +11,11 @@ import {
   MCP_RESPONSE_DISPOSITION,
   mcpUserConnections,
 } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -149,6 +154,12 @@ type ConsumeChatSecretOptions = ChatSecretScope & {
   targetUrl: string;
   secretRef: string;
   targetConnectionId: string;
+  recordAuditEvent: AuditRecorder;
+  operation: {
+    connectorSlug: string;
+    id: string;
+    toolName: string;
+  };
 };
 
 export const consumeChatSecret = async ({
@@ -160,9 +171,13 @@ export const consumeChatSecret = async ({
   targetUrl,
   secretRef,
   targetConnectionId,
+  recordAuditEvent,
+  operation,
 }: ConsumeChatSecretOptions) => {
   const consumed = await safeDb(async (tx) => {
-    // audit: skip - Consuming a private reference updates ephemeral use bookkeeping only.
+    // The use decrement and durable dispatch intent commit together. If the
+    // later outbound call cannot settle its outcome, the pending intent
+    // remains as evidence of the external operation boundary crossing.
     const scope = and(
       eq(chatSecrets.organizationId, organizationId),
       eq(chatSecrets.userId, userId),
@@ -208,6 +223,20 @@ export const consumeChatSecret = async ({
           ...(remainingUses === 0 ? { ciphertext: null, iv: null } : {}),
         })
         .where(scope);
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.EXECUTE,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL,
+        resourceId: targetConnectionId,
+        workspaceId: null,
+        metadata: {
+          connectorSlug: operation.connectorSlug,
+          operationId: operation.id,
+          outcome: "pending",
+          phase: "intent",
+          toolKind: "chat_secret",
+          toolName: operation.toolName,
+        },
+      });
       return { ciphertext: row.ciphertext, iv: row.iv };
     }
     const existing = (

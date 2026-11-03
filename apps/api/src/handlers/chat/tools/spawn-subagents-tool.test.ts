@@ -652,7 +652,11 @@ describe("createSpawnSubagentsTool — thrown subagent failures", () => {
     },
     {
       name: "a server-side handler error",
-      error: new HandlerError({ status: 502, message: sentinel }),
+      error: new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: sentinel,
+      }),
       expected: SUBAGENT_FAILED_MESSAGE,
     },
     {

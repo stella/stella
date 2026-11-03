@@ -1,3 +1,6 @@
+// parser-output-unchanged: `findSearchMatchRanges` hands its scan to `findFoldedRanges` with the same folded content, query and budget; the ranges it returns are unchanged.
+// parser-output-unchanged: match-case, match-diacritics and whole-word options are opt-in; without them every fold and range is unchanged.
+
 /**
  * Diacritic-insensitive substring matching with original-index mapping.
  *
@@ -14,6 +17,10 @@
  * text the user actually sees. Folding changes string length (per-character
  * decomposition, mark removal, contextual lowercasing), so the folded form
  * carries a per-code-unit map back to the originating character's range.
+ *
+ * `SearchMatchOptions` narrow the match for a find field's toggles: keep
+ * letter case, keep accents (characters match as written, apart from case),
+ * or accept only matches that start and end on word boundaries.
  */
 
 import { applyArabicFolds } from "./arabic.js";
@@ -38,19 +45,58 @@ export type FoldedSearchText = {
   text: string;
 };
 
-const foldSearchMatchTextBeforeCase = (value: string): string =>
-  applyArabicFolds(
-    applyAsciiFolds(value.normalize("NFKD")).replace(COMBINING_MARKS, ""),
-  );
+export type SearchFoldOptions = {
+  /** Letters keep their case: `Čez` no longer matches `čez`. */
+  matchCase?: boolean;
+  /**
+   * Characters match as written apart from case: no accent, stroke (`ł`) or
+   * Arabic orthographic fold, so `cez` no longer matches `čez`. Both sides
+   * are still NFKD-decomposed, so composed and decomposed accents agree.
+   */
+  matchDiacritics?: boolean;
+};
 
-const caseFold = (value: string): string =>
-  value.toLowerCase().replace(FINAL_SIGMA, "σ");
+export type SearchMatchOptions = SearchFoldOptions & {
+  /**
+   * A match may not continue a word: a query edge that is a letter, digit or
+   * mark needs a non-word neighbour (or the text edge) on that side.
+   */
+  wholeWords?: boolean;
+};
+
+const foldSearchMatchTextBeforeCase = (
+  value: string,
+  { matchDiacritics = false }: SearchFoldOptions,
+): string =>
+  matchDiacritics
+    ? value.normalize("NFKD")
+    : applyArabicFolds(
+        applyAsciiFolds(value.normalize("NFKD")).replace(COMBINING_MARKS, ""),
+      );
+
+const caseFold = (
+  value: string,
+  { matchCase = false }: SearchFoldOptions,
+): string =>
+  matchCase ? value : value.toLowerCase().replace(FINAL_SIGMA, "σ");
+
+/**
+ * The fold under explicit options. A separate function rather than an
+ * optional parameter on `foldSearchMatchText`, which callers pass point-free
+ * to `.map`, where the index would arrive as options.
+ */
+export const foldSearchMatchTextWithOptions = (
+  value: string,
+  options: SearchFoldOptions,
+): string => caseFold(foldSearchMatchTextBeforeCase(value, options), options);
 
 export const foldSearchMatchText = (value: string): string =>
-  caseFold(foldSearchMatchTextBeforeCase(value));
+  foldSearchMatchTextWithOptions(value, {});
 
-export const foldSearchMatchTextWithOffsets = (
+/** `foldSearchMatchTextWithOffsets` under explicit options. */
+export const foldSearchMatchTextWithOffsetsAndOptions = (
   content: string,
+  options: SearchFoldOptions,
 ): FoldedSearchText => {
   const units: { range: SearchMatchRange; text: string }[] = [];
   let originalOffset = 0;
@@ -60,12 +106,12 @@ export const foldSearchMatchTextWithOffsets = (
     originalOffset += character.length;
     units.push({
       range: { start, end: originalOffset },
-      text: foldSearchMatchTextBeforeCase(character),
+      text: foldSearchMatchTextBeforeCase(character, options),
     });
   }
 
   const beforeCase = units.map(({ text }) => text).join("");
-  const contextualLowercase = caseFold(beforeCase);
+  const contextualLowercase = caseFold(beforeCase, options);
   if (contextualLowercase.length === beforeCase.length) {
     const originalRanges: SearchMatchRange[] = [];
     for (const unit of units) {
@@ -87,7 +133,7 @@ export const foldSearchMatchTextWithOffsets = (
   const loweredParts: string[] = [];
   const originalRanges: SearchMatchRange[] = [];
   for (const unit of units) {
-    const lowered = caseFold(unit.text);
+    const lowered = caseFold(unit.text, options);
     loweredParts.push(lowered);
     let codeUnit = 0;
     while (codeUnit < lowered.length) {
@@ -98,14 +144,157 @@ export const foldSearchMatchTextWithOffsets = (
   return { text: loweredParts.join(""), originalRanges };
 };
 
-type FindSearchMatchRangesOptions = {
+export const foldSearchMatchTextWithOffsets = (
+  content: string,
+): FoldedSearchText => foldSearchMatchTextWithOffsetsAndOptions(content, {});
+
+const WORD_CHARACTER = /^[\p{L}\p{N}\p{M}]$/u;
+const MARK_CHARACTER = /^\p{M}$/u;
+
+const codePointAt = (text: string, index: number) => {
+  const codePoint = text.codePointAt(index);
+  return codePoint === undefined ? "" : String.fromCodePoint(codePoint);
+};
+
+const codePointBefore = (text: string, index: number) => {
+  if (index <= 0) {
+    return "";
+  }
+  // Only a high surrogate can pair with the preceding low surrogate.
+  const previous = text.codePointAt(index - 1) ?? 0;
+  const pairStart =
+    previous >= 0xdc_00 &&
+    previous <= 0xdf_ff &&
+    index >= 2 &&
+    (text.codePointAt(index - 2) ?? 0) > 0xff_ff
+      ? index - 2
+      : index - 1;
+  return codePointAt(text, pairStart);
+};
+
+/**
+ * Whether a folded occurrence of the folded query at `start` satisfies the
+ * options. Folded text keeps marks only when diacritics must match; a match
+ * that stops in front of one would then claim `c` inside `č` (`c` + caron).
+ */
+const acceptsFoldedMatch = (
+  text: string,
+  query: string,
+  start: number,
+  { matchDiacritics = false, wholeWords = false }: SearchMatchOptions,
+) => {
+  const end = start + query.length;
+  const next = codePointAt(text, end);
+  if (matchDiacritics && MARK_CHARACTER.test(next)) {
+    return false;
+  }
+  if (!wholeWords) {
+    return true;
+  }
+  if (
+    WORD_CHARACTER.test(codePointAt(query, 0)) &&
+    WORD_CHARACTER.test(codePointBefore(text, start))
+  ) {
+    return false;
+  }
+  return !(
+    WORD_CHARACTER.test(codePointBefore(query, query.length)) &&
+    WORD_CHARACTER.test(next)
+  );
+};
+
+/**
+ * Whether the folded query occurs in folded text under the options. For
+ * callers that cache a folded string without offsets and only filter.
+ */
+export const hasFoldedSearchMatch = (
+  text: string,
+  query: string,
+  options: SearchMatchOptions = {},
+): boolean => {
+  if (query.length === 0) {
+    return false;
+  }
+  let from = text.indexOf(query);
+  while (from !== -1) {
+    if (acceptsFoldedMatch(text, query, from, options)) {
+      return true;
+    }
+    from = text.indexOf(query, from + 1);
+  }
+  return false;
+};
+
+type FindFoldedRangesOptions = {
+  content: FoldedSearchText;
+  maxMatches: number;
+  /** Already folded by the same fold as `content`. */
+  query: string;
+  match?: SearchMatchOptions;
+};
+
+/**
+ * Non-overlapping occurrences of a folded query in folded content, as ranges
+ * into the original string. Shared by every fold that carries
+ * `originalRanges`, so they agree on what "non-overlapping" means.
+ */
+export const findFoldedRanges = ({
+  content,
+  maxMatches,
+  query,
+  match,
+}: FindFoldedRangesOptions): SearchMatchRange[] => {
+  if (maxMatches <= 0 || query.length === 0) {
+    return [];
+  }
+
+  const matches: SearchMatchRange[] = [];
+  let searchFrom = 0;
+  while (searchFrom <= content.text.length - query.length) {
+    const foldedStart = content.text.indexOf(query, searchFrom);
+    if (foldedStart === -1) {
+      break;
+    }
+    if (
+      match !== undefined &&
+      !acceptsFoldedMatch(content.text, query, foldedStart, match)
+    ) {
+      searchFrom = foldedStart + 1;
+      continue;
+    }
+    const foldedEnd = foldedStart + query.length;
+    const firstRange = content.originalRanges.at(foldedStart);
+    const lastRange = content.originalRanges.at(foldedEnd - 1);
+    if (!firstRange || !lastRange) {
+      break;
+    }
+    matches.push({ start: firstRange.start, end: lastRange.end });
+    if (matches.length >= maxMatches) {
+      break;
+    }
+    // An expanding fold (ß → ss) maps several folded units to one original
+    // character; resume after the last unit inside the matched characters so
+    // that character is reported once and the budget reaches later hits.
+    searchFrom = foldedEnd;
+    while (
+      (content.originalRanges.at(searchFrom)?.start ?? Infinity) < lastRange.end
+    ) {
+      searchFrom += 1;
+    }
+  }
+
+  return matches;
+};
+
+type FindSearchMatchRangesOptions = SearchMatchOptions & {
   maxMatches?: number;
 };
 
 /**
  * Non-overlapping occurrences of the folded query in the content, as ranges
  * into the original string. Accepts pre-folded content so callers matching
- * many queries against the same text fold it once.
+ * many queries against the same text fold it once; pre-folded content must
+ * come from the same fold options.
  */
 export const findSearchMatchRanges = (
   content: string | FoldedSearchText,
@@ -120,43 +309,18 @@ export const findSearchMatchRanges = (
     return [];
   }
 
-  const foldedContent =
-    typeof content === "string"
-      ? foldSearchMatchTextWithOffsets(content)
-      : content;
-  const foldedQuery = foldSearchMatchText(query.trim());
-  if (foldedQuery.length === 0) {
-    return [];
-  }
-
-  const matches: SearchMatchRange[] = [];
-  let searchFrom = 0;
-  while (searchFrom <= foldedContent.text.length - foldedQuery.length) {
-    const foldedStart = foldedContent.text.indexOf(foldedQuery, searchFrom);
-    if (foldedStart === -1) {
-      break;
-    }
-    const foldedEnd = foldedStart + foldedQuery.length;
-    const firstRange = foldedContent.originalRanges.at(foldedStart);
-    const lastRange = foldedContent.originalRanges.at(foldedEnd - 1);
-    if (!firstRange || !lastRange) {
-      break;
-    }
-    matches.push({ start: firstRange.start, end: lastRange.end });
-    if (matches.length >= maxMatches) {
-      break;
-    }
-    // An expanding fold (ß → ss) maps several folded units to one original
-    // character; resume after the last unit inside the matched characters so
-    // that character is reported once and the budget reaches later hits.
-    searchFrom = foldedEnd;
-    while (
-      (foldedContent.originalRanges.at(searchFrom)?.start ?? Infinity) <
-      lastRange.end
-    ) {
-      searchFrom += 1;
-    }
-  }
-
-  return matches;
+  const match = {
+    matchCase: options.matchCase ?? false,
+    matchDiacritics: options.matchDiacritics ?? false,
+    wholeWords: options.wholeWords ?? false,
+  } satisfies SearchMatchOptions;
+  return findFoldedRanges({
+    content:
+      typeof content === "string"
+        ? foldSearchMatchTextWithOffsetsAndOptions(content, match)
+        : content,
+    maxMatches,
+    query: foldSearchMatchTextWithOptions(query.trim(), match),
+    match,
+  });
 };

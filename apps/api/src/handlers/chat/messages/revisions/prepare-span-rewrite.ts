@@ -4,12 +4,14 @@ import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions
 import type { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/read-message";
 import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const MAX_ANSWER_CONTEXT_LENGTH = 100_000;
 
 type PrepareSpanRewriteOptions = {
+  projection: WithdrawnCopyProjection;
   loaded: NonNullable<Awaited<ReturnType<typeof readEditableMessageOnTx>>>;
   body: {
     baseRevision: number;
@@ -28,12 +30,23 @@ type PreparedSpanRewrite = {
 };
 
 export const prepareSpanRewrite = ({
+  projection,
   loaded,
   body,
 }: PrepareSpanRewriteOptions): Result<
   PreparedSpanRewrite,
   HandlerError<400 | 403 | 409>
 > => {
+  const marker =
+    loaded.message.role === "assistant"
+      ? projection.marker(
+          loaded.message.content,
+          loaded.thread.subjectDecisionId,
+        )
+      : null;
+  if (marker !== null) {
+    return Result.err(new HandlerError({ status: 409, message: marker }));
+  }
   if (loaded.message.role !== "assistant") {
     return Result.err(
       new HandlerError({

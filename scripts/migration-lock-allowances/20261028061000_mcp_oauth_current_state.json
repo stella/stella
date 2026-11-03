@@ -1,0 +1,3 @@
+{
+  "lock-share-row-exclusive": "Pending OAuth attempt writes wait while duplicate rows are removed; reads continue, and the table holds only short-lived pending attempts, under 1s lock_timeout and 30s statement_timeout."
+}

@@ -18,9 +18,12 @@ export const accessResetProviders = (error: unknown): string[] | null => {
 
 export const socialProviderSchema = v.picklist(AUTH_SOCIAL_PROVIDER_IDS);
 export type SocialProvider = v.InferOutput<typeof socialProviderSchema>;
+export const isSocialProvider = (value: string): value is SocialProvider =>
+  v.is(socialProviderSchema, value);
 const SOCIAL_PROVIDER_NAMES = {
   google: "Google",
   microsoft: "Microsoft",
+  apple: "Apple",
 } as const satisfies Record<SocialProvider, string>;
 
 export const socialProviderName = (provider: SocialProvider): string =>

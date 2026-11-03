@@ -9,6 +9,7 @@ import {
   validateSkillPackage,
 } from "@stll/skills/format";
 
+import { assertOfflineCheckPreload } from "../../../scripts/offline-check-startup";
 import { type CatalogueLicense, catalogueLicensesMatch } from "../src/schema";
 import {
   assertCompleteGithubContentsListing,
@@ -209,6 +210,8 @@ export const validatePinnedSource = async (
 };
 
 if (import.meta.main) {
+  assertOfflineCheckPreload();
+
   const refresh = Bun.argv.includes("--refresh");
   const result = await Result.tryPromise({
     try: async () => {

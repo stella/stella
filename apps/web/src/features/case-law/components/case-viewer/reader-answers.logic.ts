@@ -11,7 +11,7 @@ import type {
 import { safeIdSchema } from "@stll/api-contract/safe-id";
 
 import { APIError } from "@/lib/errors/api";
-import { readSSEEvents } from "@/lib/sse-events";
+import { readSSEEventChunks } from "@/lib/sse-events";
 import type { SSEEvent } from "@/lib/sse-events";
 
 export class ReaderAnswerFailure extends TaggedError("ReaderAnswerFailure")<{
@@ -105,12 +105,12 @@ const parseReaderAnswerEvent = (frame: SSEEvent) => {
 };
 
 type ConsumeReaderAnswerStreamOptions = {
-  body: ReadableStream<Uint8Array>;
+  chunks: AsyncIterable<Uint8Array>;
   signal: AbortSignal;
   onEvent: (event: ReaderAnswerStreamEvent) => void;
 };
 export const consumeReaderAnswerStream = async ({
-  body,
+  chunks,
   signal,
   onEvent,
 }: ConsumeReaderAnswerStreamOptions) => {
@@ -120,7 +120,7 @@ export const consumeReaderAnswerStream = async ({
   };
   const read = await Result.tryPromise(
     async () =>
-      await readSSEEvents(body, (frame) => {
+      await readSSEEventChunks(chunks, (frame) => {
         if (signal.aborted) {
           return false;
         }
@@ -277,7 +277,10 @@ const READER_ANSWER_ERROR_KINDS = {
   [ACTION_ADMISSION_CODES.periodExhausted]: "budget",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "network",
   [ACTION_ADMISSION_CODES.notEnabled]: "network",
-  [ACTION_ADMISSION_CODES.admissionUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.storeUnavailable]: "network",
+  [ACTION_ADMISSION_CODES.configurationIncomplete]: "network",
+  [ACTION_ADMISSION_CODES.organizationStateUnreadable]: "network",
+  [ACTION_ADMISSION_CODES.leaseLost]: "network",
   [ACTION_ADMISSION_CODES.featureDisabled]: "network",
 } as const satisfies Record<ReaderAnswerErrorCode, string>;
 

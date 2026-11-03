@@ -21,6 +21,7 @@ import { resolveVatRate } from "@/api/lib/billing/vat-rates";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -64,6 +65,10 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
     }),
     route: "/v1/vat-rates" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+    scopedDb: createOrganizationScopedTestDb(testDb, {
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     memberRole: sessionMemberRole("owner"),
     user: { id: ids.userA1 },

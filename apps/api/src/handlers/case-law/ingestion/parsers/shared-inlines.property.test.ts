@@ -10,25 +10,18 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { Inline } from "@stll/legal-ast/document-ast";
+import { type Inline, plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   normalizeInlineLine,
   stripInlinePrefix,
 } from "@stll/legal-ast/inline-line";
-import {
-  assertProperty,
-  propertyConfig,
-  propertySeed,
-} from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
 // propertySeed in @stll/property-testing.
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Text fragments mixing letters with every whitespace encoding a court
@@ -46,6 +39,12 @@ const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
     { maxDepth: 3, depthSize: "small" },
     textContent.map((text): Inline => ({ type: "text", text })),
     fc.constant<Inline>({ type: "line-break" }),
+    fc
+      .array(fc.integer({ min: 0, max: 9 }), { minLength: 1, maxLength: 4 })
+      .map((digits): Inline => ({
+        type: "superscript",
+        children: [{ type: "text", text: digits.join("") }],
+      })),
     fc
       .array(tie("node"), { maxLength: 3 })
       .map((children): Inline => ({ type: "bold", children })),
@@ -67,8 +66,8 @@ test("normalized inline lines preserve a single text axis and reach a fixed poin
     "normalized inline lines preserve a single text axis and reach a fixed point",
     fc.property(inlines, (tree) => {
       const normalized = normalizeInlineLine(tree);
-      expect(normalized.plainText).toBe(inlinesToPlainText(tree).trim());
-      expect(inlinesToPlainText(normalized.inlines)).toBe(normalized.plainText);
+      expect(normalized.plainText).toBe(plainTextOf(tree).trim());
+      expect(plainTextOf(normalized.inlines)).toBe(normalized.plainText);
       expect(normalizeInlineLine(normalized.inlines).inlines).toEqual(
         normalized.inlines,
       );
@@ -80,24 +79,24 @@ test("normalized inline lines preserve a single text axis and reach a fixed poin
 const treeAndPrefix = inlines.chain((tree) =>
   fc.tuple(
     fc.constant(tree),
-    fc.integer({ min: 1, max: Math.max(1, inlinesToPlainText(tree).length) }),
+    fc.integer({ min: 1, max: Math.max(1, plainTextOf(tree).length) }),
   ),
 );
 
 describe("inlinesToPlainText (properties)", () => {
   /**
-   * Flattening is a homomorphism over concatenation: no node's text
-   * depends on what sits beside it. This is what lets a parser splice
-   * inline lists without re-deriving plain text.
+   * Rendered offsets distribute over concatenation. Search projection
+   * additionally reads a superscript's numeric base across list boundaries.
    */
-  test("distributes over concatenation", () => {
-    fc.assert(
+  test("rendered text distributes over concatenation", () => {
+    assertProperty(
+      "rendered text distributes over concatenation",
       fc.property(inlines, inlines, (left, right) => {
-        expect(inlinesToPlainText([...left, ...right])).toBe(
-          inlinesToPlainText(left) + inlinesToPlainText(right),
+        expect(plainTextOf([...left, ...right])).toBe(
+          plainTextOf(left) + plainTextOf(right),
         );
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -107,7 +106,8 @@ describe("inlinesToPlainText (properties)", () => {
    * text a reader or the search index sees.
    */
   test("is unchanged by wrapping in emphasis or a link", () => {
-    fc.assert(
+    assertProperty(
+      "is unchanged by wrapping in emphasis or a link",
       fc.property(inlines, (tree) => {
         const flat = inlinesToPlainText(tree);
 
@@ -123,7 +123,7 @@ describe("inlinesToPlainText (properties)", () => {
           ]),
         ).toBe(flat);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -137,39 +137,40 @@ describe("stripInlinePrefix (properties)", () => {
    * skipped property below for where it fails to.
    */
   test("removes exactly the first k characters of the plain text", () => {
-    fc.assert(
+    assertProperty(
+      "removes exactly the first k characters of the plain text",
       fc.property(treeAndPrefix, ([tree, k]) => {
-        const stripped = inlinesToPlainText(stripInlinePrefix(tree, k));
+        const stripped = plainTextOf(stripInlinePrefix(tree, k));
 
         expect(stripped.trimStart()).toBe(
-          inlinesToPlainText(tree).slice(k).trimStart(),
+          plainTextOf(tree).slice(k).trimStart(),
         );
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
   /** A non-positive prefix is documented to change nothing. */
   test("is a no-op for a non-positive prefix", () => {
-    fc.assert(
+    assertProperty(
+      "is a no-op for a non-positive prefix",
       fc.property(inlines, fc.integer({ min: -5, max: 0 }), (tree, k) => {
-        expect(inlinesToPlainText(stripInlinePrefix(tree, k))).toBe(
-          inlinesToPlainText(tree),
-        );
+        expect(plainTextOf(stripInlinePrefix(tree, k))).toBe(plainTextOf(tree));
       }),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   /** Stripping at least the whole text leaves nothing behind. */
   test("empties the tree when the prefix covers all of it", () => {
-    fc.assert(
+    assertProperty(
+      "empties the tree when the prefix covers all of it",
       fc.property(inlines, fc.nat({ max: 5 }), (tree, extra) => {
-        const all = inlinesToPlainText(tree).length + extra;
+        const all = plainTextOf(tree).length + extra;
 
-        expect(inlinesToPlainText(stripInlinePrefix(tree, all))).toBe("");
+        expect(plainTextOf(stripInlinePrefix(tree, all))).toBe("");
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -179,13 +180,14 @@ describe("stripInlinePrefix (properties)", () => {
    * depended on where the publisher opened an emphasis tag.
    */
   test("trims exposed leading whitespace regardless of nesting", () => {
-    fc.assert(
+    assertProperty(
+      "trims exposed leading whitespace regardless of nesting",
       fc.property(treeAndPrefix, ([tree, k]) => {
-        expect(inlinesToPlainText(stripInlinePrefix(tree, k))).toBe(
-          inlinesToPlainText(tree).slice(k).trimStart(),
+        expect(plainTextOf(stripInlinePrefix(tree, k))).toBe(
+          plainTextOf(tree).slice(k).trimStart(),
         );
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
@@ -213,7 +215,7 @@ describe("stripInlinePrefix (properties)", () => {
     ];
 
     for (const tree of [flat, behindBold, behindNestedLink]) {
-      expect(inlinesToPlainText(stripInlinePrefix(tree, 3))).toBe("Text");
+      expect(plainTextOf(stripInlinePrefix(tree, 3))).toBe("Text");
     }
   });
 
@@ -228,7 +230,7 @@ describe("stripInlinePrefix (properties)", () => {
       { type: "text", text: "Text" },
     ];
 
-    expect(inlinesToPlainText(stripInlinePrefix(tree, 3))).toBe("Text");
+    expect(plainTextOf(stripInlinePrefix(tree, 3))).toBe("Text");
   });
 
   /**
@@ -245,6 +247,6 @@ describe("stripInlinePrefix (properties)", () => {
       { type: "text", text: "cd" },
     ];
 
-    expect(inlinesToPlainText(stripInlinePrefix(tree, 2))).toBe("cd");
+    expect(plainTextOf(stripInlinePrefix(tree, 2))).toBe("cd");
   });
 });

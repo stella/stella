@@ -12,7 +12,10 @@ import type {
   RecordConflictResolution,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
-import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
+import {
+  AVT_CLAIM_REVIEW_DECISION,
+  CLAIM_STATE,
+} from "@/api/lib/lists/verification/contract";
 
 type ClaimReviewEvent = {
   payload: ClaimReviewEventPayload;
@@ -54,11 +57,15 @@ const applyEvent = (
   const decided = { decidedAt: createdAt, decidedBy: actorId };
   switch (payload.kind) {
     case "status": {
+      const decision =
+        payload.status === null
+          ? null
+          : AVT_CLAIM_REVIEW_DECISION[payload.status];
       return {
         ...review,
         ...decided,
         status: payload.status,
-        statusOrigin: payload.status === null ? null : payload.origin,
+        statusOrigin: decision === null ? null : payload.origin,
       };
     }
     case "override": {

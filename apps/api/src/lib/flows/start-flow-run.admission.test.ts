@@ -190,7 +190,7 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost at commit",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
         }
@@ -232,7 +232,7 @@ describe("flow kickoff acceptance", () => {
 
   test("manual admission refusals retain their original typed error and write nothing", async () => {
     await withAdmission(async () => {
-      for (const reason of ["busy", "unavailable"] as const) {
+      for (const reason of ["busy", "lease_lost"] as const) {
         let inserted = false;
         let enqueued = false;
         const error = new ActionAdmissionError({
@@ -326,7 +326,7 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost before insertion",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
           return await run(lease.signal, async () => undefined);
@@ -373,7 +373,7 @@ describe("flow kickoff acceptance", () => {
               lease.abort(
                 new ActionAdmissionError({
                   message: "Lease lost at commit",
-                  reason: "unavailable",
+                  reason: "lease_lost",
                 }),
               );
               return { outcome: "started" };
@@ -386,7 +386,7 @@ describe("flow kickoff acceptance", () => {
                 lease.abort(
                   new ActionAdmissionError({
                     message: "Lease lost before insertion",
-                    reason: "unavailable",
+                    reason: "lease_lost",
                   }),
                 );
               }

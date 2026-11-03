@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 19,
+  "reason": "Corpus redaction is audited once by its canonical index-job owner. Derived-row deletion, snapshot invalidation, source checkpoint CAS and durable removal retry bookkeeping share that audit; they do not create member activity records."
+}

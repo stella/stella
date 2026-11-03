@@ -266,7 +266,9 @@ mod tests {
   fn test_state() -> BridgeState {
     BridgeState {
       account: Arc::new(Mutex::new(crate::account::AccountStore::Memory(None))),
-      manager: Arc::new(Mutex::new(SessionManager::new())),
+      manager: Arc::new(Mutex::new(
+        SessionManager::new().expect("test data directory"),
+      )),
       static_allowed_origins: HashSet::from(["http://localhost:3000".to_string()]),
       bridge_port: 0,
     }
@@ -334,21 +336,17 @@ mod tests {
       assert_eq!(reply["status"], "pending");
       let timestamp = reply["timestamp"].as_str().unwrap();
       let signature = hex::decode(reply["proof"].as_str().unwrap()).unwrap();
-      assert!(
-        ring::hmac::verify(
-          &key,
-          format!("{}\npending\n{timestamp}", fixture.correlation_id).as_bytes(),
-          &signature
+      let signed = |status: &str| {
+        format!(
+          "{}\n{}\n{}\n{status}\n{timestamp}",
+          fixture.correlation_id, fixture.verifier_hash, fixture.device_jkt
         )
-        .is_ok()
+      };
+      assert!(
+        ring::hmac::verify(&key, signed("pending").as_bytes(), &signature).is_ok()
       );
       assert!(
-        ring::hmac::verify(
-          &key,
-          format!("{}\nconnected\n{timestamp}", fixture.correlation_id).as_bytes(),
-          &signature
-        )
-        .is_err()
+        ring::hmac::verify(&key, signed("connected").as_bytes(), &signature).is_err()
       );
     }
   }

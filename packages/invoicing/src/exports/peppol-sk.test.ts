@@ -37,7 +37,10 @@ const peppolRecord = (seed: Parameters<typeof exportRecord>[0]) =>
     currency: "EUR",
     seller,
     buyer,
-    matter: { id: "matter", name: "Advice", reference: null },
+    scope: {
+      type: "matter",
+      matter: { id: "matter", name: "Advice", reference: null },
+    },
     ...seed,
   });
 

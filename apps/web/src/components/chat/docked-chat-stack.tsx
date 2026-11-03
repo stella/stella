@@ -77,6 +77,43 @@ export const useDockedChatSlotRef = (
 export const useDockedChatSlot = (slot: DockedChatSlot): HTMLElement | null =>
   use(DockedChatStackContext)?.slots[slot] ?? null;
 
+/** Marks the composer column every docked surface renders into. */
+export const DOCKED_CHAT_COLUMN_SLOT = "docked-chat-column";
+
+/** The `<body>` child holding `node`: the app root, or a portalled layer. */
+const bodyLayerOf = (node: Node): Node | null => {
+  let current = node;
+  while (current.parentNode !== null) {
+    if (current.parentNode === current.ownerDocument?.body) {
+      return current;
+    }
+    current = current.parentNode;
+  }
+  return null;
+};
+
+/**
+ * Whether a press landed on the page the chat floats over (the document or
+ * reader text) rather than on the chat itself. A press anywhere in the
+ * composer column (thread card, chips, composer, status row) is the chat's,
+ * and so is one in a portalled layer such as a menu, a tooltip or a dialog:
+ * those sit beside the app root under `<body>`, opened from the chat or
+ * covering it.
+ */
+export const isPressOutsideDockedChat = ({
+  column,
+  target,
+}: {
+  column: Element;
+  target: EventTarget | null;
+}): boolean => {
+  if (!(target instanceof Node) || column.contains(target)) {
+    return false;
+  }
+  const layer = bodyLayerOf(target);
+  return layer !== null && layer === bodyLayerOf(column);
+};
+
 type DockedChatSurfaceProps = {
   slot: DockedChatSlot;
   children: ReactNode;

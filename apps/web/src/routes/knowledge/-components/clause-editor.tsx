@@ -59,7 +59,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 import {
   bodyKey,
@@ -464,7 +464,7 @@ export const ClauseEditor = ({
 
     const rewritten = rewrittenResult.value;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
-      notifyUserError(undefined, t("ai.editWithAI"), {
+      notifyUserProblem(t("ai.editWithAI"), {
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });

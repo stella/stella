@@ -9,7 +9,6 @@ import {
   planReleaseRefresh,
   publishReleaseRefresh,
   stageReleaseRefresh,
-  stagingBranch,
 } from "./release-pull-request-refresh";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -379,44 +378,19 @@ describe("moving the release branch to the versioned head", () => {
   });
 });
 
-describe("the refresh workflow", () => {
+test("the release workflow never refreshes or rewrites an open release branch", () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/release-pr.yml", import.meta.url),
       "utf-8",
     ),
   );
-  const steps = (job: string): Record<string, unknown>[] => {
-    assert.ok(isRecord(workflow) && isRecord(workflow["jobs"]));
-    const entry = workflow["jobs"][job];
-    assert.ok(isRecord(entry) && Array.isArray(entry["steps"]), job);
-    return entry["steps"].filter(isRecord);
-  };
-
-  test("commits the versioning to the staging branch and moves the release only after it", () => {
-    const version = steps("refresh-release-version");
-    const commit = version.findIndex(
-      (step) =>
-        typeof step["uses"] === "string" &&
-        step["uses"].includes("/actions/signed-commit@"),
-    );
-    const publish = version.findIndex(
-      (step) =>
-        step["run"] === "bun scripts/release-pull-request-refresh.ts publish",
-    );
-    const commitInputs = version[commit]?.["with"];
-    assert.ok(isRecord(commitInputs));
-
-    expect(stagingBranch(6777)).toBe("release-refresh/6777");
-    expect(commitInputs["branch"]).toBe(
-      `release-refresh/\${{ needs.refresh-release-plan.outputs.number }}`,
-    );
-    expect(publish).toBe(version.length - 1);
-    expect(publish).toBeGreaterThan(commit);
-    expect(
-      steps("refresh-release-stage").flatMap((step) =>
-        typeof step["run"] === "string" ? [step["run"]] : [],
-      ),
-    ).toEqual(["bun scripts/release-pull-request-refresh.ts stage"]);
-  });
+  assert.ok(isRecord(workflow) && isRecord(workflow["jobs"]));
+  for (const name of [
+    "refresh-release-plan",
+    "refresh-release-stage",
+    "refresh-release-version",
+  ]) {
+    expect(workflow["jobs"][name]).toBeUndefined();
+  }
 });

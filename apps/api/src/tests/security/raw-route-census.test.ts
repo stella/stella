@@ -99,6 +99,13 @@ const RAW_ROUTES: ReadonlyMap<ApiRouteKey, RawRouteReview> = new Map([
     },
   ],
   [
+    "GET /favicon.ico",
+    {
+      access: RAW_ROUTE_ACCESS.sessionless,
+      reason: "Public static host icon.",
+    },
+  ],
+  [
     "GET /dev-public/last-otp",
     {
       access: RAW_ROUTE_ACCESS.localDevelopment,

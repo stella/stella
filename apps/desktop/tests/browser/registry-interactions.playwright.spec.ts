@@ -126,11 +126,17 @@ type BoundaryOptions = {
 const SETTINGS_SNAPSHOT = {
   bridgePort: 45_901,
   bridgeVersion: BRIDGE_VERSION,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v6"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
     syncIssues: true,
+  },
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
   },
   runningSince: "2026-09-08T05:00:00.000Z",
   sessions: [],
@@ -296,6 +302,9 @@ const installNativeBoundary = async (
           }
           return null;
         },
+        // The Settings window asks whether to show its Activity tab; these
+        // accounts have no activity timeline.
+        is_activity_enabled: () => false,
         get_desktop_telemetry_enabled: () => telemetryEnabled,
         set_desktop_telemetry_enabled: (args) => {
           if (typeof args["enabled"] !== "boolean") {
@@ -312,12 +321,15 @@ const installNativeBoundary = async (
           welcomeStatus: "completed",
         }),
         get_state: () => settingsSnapshot,
+        dictation_get_snapshot: () => ({ available: false }),
         shortcut_get_snapshot: () => ({
           defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
           keys: { code: "KeyV", modifiers: ["shift", "super"] },
           registration: "active",
         }),
         permissions_get_snapshot: () => ({ rows: [] }),
+        // No connection status: the section stays hidden, as with local agents off.
+        chatgpt_auth_get_status: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;
@@ -518,6 +530,23 @@ test("highlights the first registry result and copies it with Enter from the sea
   await expect(result.locator("[data-registry-card]")).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(searchBox(page)).toBeFocused();
+});
+
+test("starts every registry result at the top of its card", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "Privileged");
+  const card = page.locator(
+    '[data-registry-result="company-1"] [data-registry-card]',
+  );
+  const name = card.getByRole("heading", { name: "Stella Example s.r.o." });
+  await expect(name).toBeVisible();
+  const cardBox = await card.boundingBox();
+  const nameBox = await name.boundingBox();
+  // A short result must not sink to the middle of a tall card, or names in
+  // neighbouring cards stop lining up. The card's own top padding is 12px.
+  expect((nameBox?.y ?? 0) - (cardBox?.y ?? 0)).toBeCloseTo(12, 0);
 });
 
 test("retains the explicitly requested query across browser sign-in and native focus return", async ({
@@ -1010,11 +1039,16 @@ for (const language of ["en", "ar"] as const) {
       browserName,
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
       await openClipboard(page);
       await searchBox(page).fill("Privileged");
       // WebKit follows macOS keyboard access: Option+Tab includes buttons.
       await searchBox(page).press(browserName === "webkit" ? "Alt+Tab" : "Tab");
-      // The scope icon stays out of the tab order; the groups rail follows.
+      const searchOptions = page.getByRole("button", {
+        name: messages.clipboard.searchOptions,
+      });
+      await expect(searchOptions).toBeFocused();
+      await searchOptions.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
       await expect(
         page.locator('[data-clipboard-group-id="__no_group__"]'),
       ).toBeFocused();

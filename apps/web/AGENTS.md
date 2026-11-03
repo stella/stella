@@ -9,33 +9,30 @@
 
 - Use semantic design tokens (for example, `bg-muted`, `text-foreground`, and
   `border`) instead of raw colour values.
-- Prefer semantic HTML elements (`<button>`, `<nav>`, `<main>`) over generic elements
-  with ARIA roles. Provide meaningful alternative text, a proper heading hierarchy,
-  labels for form controls, and keyboard behavior alongside pointer behavior.
-- Reuse the project's established components and primitives with local styling
-  overrides instead of recreating native controls. This preserves accessibility,
-  focus behavior, and sizing conventions.
+- Use the design system's primitives instead of native controls; where none exists,
+  prefer semantic elements over ARIA roles.
+- Use a component's variants and sizes; add a variant instead of restyling it
+  through `className`. Spacing around the component stays the caller's.
 - When using statically scanned utility CSS, do not construct class names dynamically
   (for example, `` `bg-${token}-200` ``). Use an explicit class map or a style backed
   by CSS custom properties.
 
 ### UI Architecture
 
-- Prefer explicit branches over nested ternaries. Extract complex conditional UI into
-  a small helper or component that returns early.
+- No nested ternaries (`no-nested-ternary`); extract conditional UI into a small
+  component that returns early.
 - Subscribe to the smallest state slice a view needs. Broad subscriptions cause
   unrelated state changes to rerender the view.
-- Do not add memoization or caches prophylactically. Keep them when an API contract
-  requires stable identity or profiling proves a benefit.
 - Return minimal data from endpoints and mutations. Response types should contain only
   what callers consume; do not add fields speculatively for completeness.
 
 ## React
 
 - Put the root or exported component at the top of the file after imports; types
-  and helpers follow below it. A helper below the component must be a function
-  declaration (hoisted, so `no-use-before-define` with `functions: false` allows
-  it) or live in its own module, not a `const` arrow.
+  and helpers follow below it. Components are `const` arrows
+  (`react/function-component-definition`); a helper below the root may be a
+  `const` arrow, because `no-use-before-define` runs with `variables: false` and
+  the reference sits inside a function body.
 - When React Compiler is enabled, prefer plain React over prophylactic `useMemo`,
   `useCallback`, and `React.memo`.
 - Clean up legacy memoization gradually when touching a file; do not run broad
@@ -52,17 +49,10 @@
   (`beforeLoad`) over firing a separate query. Extend the route context if needed.
 - When a route loader only primes a TanStack Query cache, return `void` so its return
   type stays out of the route tree and does not inflate type-inference cost.
-- Use `useSuspenseQuery` only in route or page content where the query is preloaded or
-  wrapped by an explicit local `Suspense` boundary. In shared chrome (breadcrumbs,
-  headers, toolbars, sidebar shell), prefer `useQuery` so a cache miss cannot suspend
-  the whole layout.
-- Always use `select` with `useParams`, `useSearch`, and `useRouteContext` to subscribe
-  only to the fields the component needs.
-- Pass `from` to `useParams`, `useSearch`, and `Link`. In shared chrome that spans
-  routes, pass `strict: false` to `useParams` or `useSearch`. This narrows the full
-  route union, improving precision and type-check performance.
-- Let inference flow through `useLoaderData`, `useQuery`, and other inference-driven
-  hooks. Do not pass explicit type arguments that can mask a broken inference chain.
+- Suspense queries only in preloaded route content, never in shared chrome
+  (`no-shared-suspense-query`); router reads use `select` and `from`
+  (`require-router-select`), and chrome spanning routes reads with `strict: false`
+  (`no-strict-route-read-in-chrome`).
 - Query option file ordering: key type, key helpers, input type
   (`QueryOptionsInput`), option factory, then hook.
 - Query option factories that use `QueryOptionsInput` with a `TContext` must define a
@@ -72,8 +62,7 @@
 - Define a separate key type (for example, `EntitiesPageKey`) and use it in both the
   `QueryOptionsInput` and key helper. The key helper must accept the key type, not the
   full options input.
-- Never spread input objects into query keys. Explicitly reconstruct the key object so
-  extra caller properties cannot leak into cache identity.
+- Never spread input objects into query keys (`no-spread-input-in-query-key`).
 - Key helpers must compose by spreading the parent key (for example,
   `...entitiesKeys.all(workspaceId)`), never by duplicating the parent's array
   literal.
@@ -84,19 +73,17 @@
   `/conventions-ux`.
 - Use coss (Base UI) components, registered as `@coss` in `components.json`. Prefer
   coss primitives over hand-rolled controls.
-- Use the shared `cn()` utility for conditional class names.
-- Use Zustand's `useShallow()` for selectors that return multiple state slices.
+- Compose class names with `cn()` (`require-cn-for-classname-composition`); Zustand
+  selectors returning several slices use `useShallow()` (`require-use-shallow`).
 - Use `useDebouncedCallback` from `use-debounce` instead of implementing debounce with
   `useRef<setTimeout>` and manual cleanup.
-- Call the API through the Eden treaty client in `apps/web/src/lib/api.ts`. The `api`
-  export is a typed proxy mirroring backend routes; use dot notation with HTTP verbs,
-  for example `api.workspaces({ workspaceId }).get()`. Unwrap responses with
-  `.data`/`.error` checks or `toAPIError()`.
-- Let inference flow through Eden calls. Do not pass explicit types that conceal a
-  mismatch at the producing handler or query.
-- Do not create a single-use mutation hook merely to wrap an API call. Inline the call
-  at its usage site and use `Result.tryPromise` for retries instead of React Query's
-  `retry` on throwaway mutations.
+- Call the API through the typed client in `apps/web/src/lib/api.ts`. The `api`
+  export is a typed proxy over the generated route table; use dot notation with HTTP
+  verbs, for example `api.workspaces({ workspaceId }).get()`. Unwrap responses with
+  `.data`/`.error` checks or `toAPIError()`; query functions read through
+  `readQueryResult`.
+- Do not create a single-use mutation hook merely to wrap an API call; inline the
+  call at its usage site. Mutations are never retried silently.
 
 ## Where Feature Code Lives
 

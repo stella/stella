@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { GITLEAKS_VERSION } from "./gitleaks-pins";
+
 const SCRIPT = fileURLToPath(
   new URL("check-staged-secrets.ts", import.meta.url),
 );
@@ -26,7 +28,10 @@ afterAll(() => {
 const baseEnv = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] =>
-      !entry[0].startsWith("GIT_") && entry[1] !== undefined,
+      !entry[0].startsWith("GIT_") &&
+      entry[0] !== "CLAUDE_CODE_REMOTE" &&
+      entry[0] !== "CODEX_CI" &&
+      entry[1] !== undefined,
   ),
 );
 
@@ -58,6 +63,7 @@ writeFileSync(
   `#!/usr/bin/env bun
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
+if (args[0] === "version") { console.log(${JSON.stringify(GITLEAKS_VERSION)}); process.exit(0); }
 appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(args) + "\\n");
 const behavior = JSON.parse(readFileSync(${JSON.stringify(fakeBehavior)}, "utf-8"));
 if (behavior.exit !== undefined) process.exit(behavior.exit);
@@ -90,21 +96,34 @@ process.exit(findings.length > 0 ? Number(option("--exit-code") ?? 1) : 0);
 );
 chmodSync(path.join(fakeBin, "gitleaks"), 0o755);
 
+// Inject only the scanner transport for staged-diff cases. Provisioning and
+// executable attestation are exercised by gitleaks.test.ts and the CLI cases.
+const fakeDriver = path.join(root, "fake-driver.ts");
+writeFileSync(
+  fakeDriver,
+  `import { checkStagedSecrets } from ${JSON.stringify(SCRIPT)};
+process.exit(checkStagedSecrets(${JSON.stringify(path.join(fakeBin, "gitleaks"))}));
+`,
+);
+
 type Scanner = "fake" | "real";
 
 const scan = (repo: string, scanner: Scanner, behavior: FakeBehavior = {}) => {
   writeFileSync(fakeBehavior, JSON.stringify(behavior));
-  const result = Bun.spawnSync([process.execPath, SCRIPT], {
-    cwd: repo,
-    env: {
-      ...baseEnv,
-      ...(scanner === "fake"
-        ? { PATH: `${fakeBin}:${baseEnv["PATH"] ?? ""}` }
-        : {}),
+  const result = Bun.spawnSync(
+    [process.execPath, scanner === "fake" ? fakeDriver : SCRIPT],
+    {
+      cwd: repo,
+      env: {
+        ...baseEnv,
+        ...(scanner === "fake"
+          ? { PATH: `${fakeBin}:${baseEnv["PATH"] ?? ""}` }
+          : {}),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
     },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  );
   return {
     exitCode: result.exitCode,
     output: `${result.stdout.toString()}${result.stderr.toString()}`,
@@ -128,6 +147,30 @@ const initRepo = (): string => {
   run(dir, ["git", "commit", "-q", "-m", "base"]);
   return dir;
 };
+
+test.each([{}, { CLAUDE_CODE_REMOTE: "true" }, { CODEX_CI: "1" }])(
+  "a corrupt scanner archive refuses on every host: %j",
+  (hostEnv) => {
+    const repo = initRepo();
+    const archive = path.join(
+      repo,
+      "stella",
+      "gitleaks",
+      GITLEAKS_VERSION,
+      `${process.platform}-${process.arch}`,
+    );
+    mkdirSync(archive, { recursive: true });
+    writeFileSync(path.join(archive, "archive.tar.gz"), "corrupted");
+    const result = Bun.spawnSync([process.execPath, SCRIPT], {
+      cwd: repo,
+      env: { ...baseEnv, ...hostEnv, XDG_CACHE_HOME: repo },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("checksum mismatch");
+  },
+);
 
 /**
  * A feature branch merging main, where main added a token line after the

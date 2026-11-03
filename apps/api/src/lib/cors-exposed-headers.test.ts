@@ -86,4 +86,5 @@ test("a download from another origin exposes nothing", async () => {
 test("cross-origin downloads expose undecided AI conditions", () => {
   expect(CORS_EXPOSED_HEADERS).toContain(UNDECIDED_CONDITIONS_HEADER);
   expect(CORS_EXPOSED_HEADERS).toContain("X-Ai-Field-Errors");
+  expect(CORS_EXPOSED_HEADERS).toContain("Idempotency-Replayed");
 });

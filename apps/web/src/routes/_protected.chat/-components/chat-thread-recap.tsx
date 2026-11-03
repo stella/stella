@@ -11,7 +11,8 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // Mirrors RECAP_STALENESS_THRESHOLD_MS in
 // apps/api/src/handlers/chat/thread-recap.ts. The server re-checks
@@ -82,7 +83,7 @@ export const ChatThreadRecap = ({
     }),
   );
   const { isFetching } = dataQuery;
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "ChatThreadRecap:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 

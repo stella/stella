@@ -1,8 +1,11 @@
+import type { AuthSocialProviderId } from "@stll/auth-model";
+
 import { env } from "@/api/env";
 import { createAuthMetadataPreflightHeaders } from "@/api/handlers/auth/metadata";
 import metadataHandler from "@/api/handlers/auth/read-authorization-server-metadata";
 import { routes } from "@/api/http/route";
 import { status } from "@/api/http/status";
+import { configuredAppleSignIn } from "@/api/lib/auth/apple-sign-in-env";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
@@ -43,14 +46,16 @@ export const authMetadataRoute = routes({
   },
 });
 
-const getSocialAuthCapabilities = () => ({
-  google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
-  microsoft: !!(
-    env.MICROSOFT_AUTH_CLIENT_ID &&
-    env.MICROSOFT_AUTH_CLIENT_SECRET &&
-    env.MICROSOFT_AUTH_TENANT_ID
-  ),
-});
+const getSocialAuthCapabilities = () =>
+  ({
+    google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
+    microsoft: !!(
+      env.MICROSOFT_AUTH_CLIENT_ID &&
+      env.MICROSOFT_AUTH_CLIENT_SECRET &&
+      env.MICROSOFT_AUTH_TENANT_ID
+    ),
+    apple: configuredAppleSignIn().type === "enabled",
+  }) satisfies Record<AuthSocialProviderId, boolean>;
 
 const authCapabilities = defineEndpoint.public({}, async () => {
   const firstUserRequired = await isSelfhostFirstUserRequired();

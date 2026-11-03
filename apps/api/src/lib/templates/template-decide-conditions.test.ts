@@ -462,7 +462,11 @@ describe("condition preview enters model gates only for open questions", () => {
         runDecisions: async ({ fields: planned }) => {
           expect(planned).toEqual(fields);
           return Result.err(
-            new HandlerError({ status, message: "Model work refused" }),
+            new HandlerError({
+              status,
+              code: "internal_error",
+              message: "Model work refused",
+            }),
           );
         },
       });

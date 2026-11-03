@@ -17,7 +17,8 @@ import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactOptions } from "@/lib/contacts/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -177,7 +178,7 @@ export const SkillAvailabilitySummary = ({
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   // Names are a nicety: a failed read falls back to the generic label and is
   // reported, never blocking the editor.
-  const navigationView = useQueryView(
+  const navigationView = queryView(
     useQuery({
       ...workspacesNavigationOptions({
         organizationId: activeOrganizationId,
@@ -187,7 +188,7 @@ export const SkillAvailabilitySummary = ({
     }),
   );
   useQueryViewError(navigationView, "SkillAvailabilitySummary:navigation");
-  const clientView = useQueryView(
+  const clientView = queryView(
     useQuery({
       ...contactOptions(activeOrganizationId, boundClientId ?? ""),
       enabled: boundClientId !== null,

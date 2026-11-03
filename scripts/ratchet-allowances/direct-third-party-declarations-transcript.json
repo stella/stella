@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 4,
+  "reason": "a new workspace package declares its own runtime and test dependencies; all four are already used in the workspace"
+}

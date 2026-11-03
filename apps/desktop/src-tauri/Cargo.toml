@@ -5,6 +5,10 @@ edition = "2024"
 description = "stella desktop — managed Office file editing for stella"
 license = "Apache-2.0"
 
+[[example]]
+name = "local_file_creation_guard"
+required-features = ["local-file-guard-probe"]
+
 [lib]
 name = "stella_desktop_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -98,6 +102,7 @@ clipboard-rs = { version = "0.3.5", default-features = false, features = [
 ] }
 csscolorparser = "=0.9.0"
 dirs = "7"
+flate2 = "1"
 futures-util = "0.3"
 hex = "0.4"
 image = { version = "0.25", default-features = false, features = [
@@ -124,6 +129,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
 sha2 = "0.11"
+tar = { version = "0.4", default-features = false }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
@@ -131,6 +137,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 zip = { version = "9.0.0", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "=1.1.4", features = ["fs", "process"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [
@@ -166,6 +175,11 @@ plist = "1.10"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-macos-signing = { path = "crates/macos-signing", version = "0.0.1" }
 
+# The targets `build.rs` marks with `cfg(dictation)`.
+[target.'cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "windows"))'.dependencies]
+cpal = "0.18"
+transcribe-cpp = "=0.4.1"
+
 [target.'cfg(target_os = "windows")'.dependencies]
 clipboard-win = "5.4.1"
 stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
@@ -177,6 +191,7 @@ winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]
 allocation-tests = []
+local-file-guard-probe = []
 
 [dev-dependencies]
 dhat = "=0.3.3"

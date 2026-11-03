@@ -35,6 +35,9 @@ test("every MCP refusal retains identical structured fields and renders through 
           ? metadata.hint
           : `${metadata.hint} Contact: ${contactUrl}`,
       retryable: metadata.retryable,
+      ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+        ? { retryAfterMs: 1250 }
+        : {}),
       ...(contactUrl === undefined ? {} : { contactUrl }),
     } satisfies ActionAdmissionRefusal;
     const mcp = serializeToolResult(structuredErrorResult(fixture));
@@ -58,6 +61,11 @@ test("every MCP refusal retains identical structured fields and renders through 
     expect(actionAdmissionRefusalLines(fromMcp)).toContain(
       `retryable: ${metadata.retryable}`,
     );
+    if (fixture.retryAfterMs !== undefined) {
+      expect(actionAdmissionRefusalLines(fromMcp)).toContain(
+        `retry-after-ms: ${fixture.retryAfterMs}`,
+      );
+    }
     if (contactUrl !== undefined) {
       expect(actionAdmissionRefusalLines(fromMcp)).toContain(
         `contact: ${contactUrl}`,

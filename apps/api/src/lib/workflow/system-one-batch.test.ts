@@ -315,24 +315,26 @@ describe("outputFromSystemOneOutcomes", () => {
   });
 
   test("a genuine refusal is null and only an unplanned property continues", () => {
-    const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
-      properties: [singleSelect, dateProperty],
-      outcomes: new Map<string, AnswerOutcome>([
-        [
-          singleSelect.id,
-          {
-            state: "undecided",
-            reason: "refusal",
-            source: "generative",
-            model: "test-generative",
-          },
-        ],
-      ]),
-      locators,
-    }).unwrap();
+    const { output, fallbackPropertyIds, refusedPropertyIds } =
+      outputFromSystemOneOutcomes({
+        properties: [singleSelect, dateProperty],
+        outcomes: new Map<string, AnswerOutcome>([
+          [
+            singleSelect.id,
+            {
+              state: "undecided",
+              reason: "refusal",
+              source: "generative",
+              model: "test-generative",
+            },
+          ],
+        ]),
+        locators,
+      }).unwrap();
 
     // The unplanned date question has no outcome at all, and falls back too.
     expect(fallbackPropertyIds).toEqual([dateProperty.id]);
+    expect(refusedPropertyIds).toEqual([singleSelect.id]);
     expect(output).toEqual({
       [singleSelect.id]: { answer: null, justification: [] },
     });

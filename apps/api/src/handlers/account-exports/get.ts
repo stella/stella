@@ -11,10 +11,18 @@ import {
 
 const latestPersonalDataExport = createSafeSessionHandler(
   {
+    accountScope: "stella:account_export_read",
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",
-    mcp: { type: "internal", reason: "auth_plumbing" },
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+      readClass: "tenant",
+    },
+    description:
+      "Read your most recent personal data export as latest, which is null before your first request. Use account-exports.create to request an export, account-exports.status.get to poll its ID, and account-exports.download.get when it is ready.",
   },
   async function* ({ user }) {
     const row = yield* Result.await(

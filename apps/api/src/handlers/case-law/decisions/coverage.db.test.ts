@@ -15,6 +15,7 @@ import {
   caseLawCoverageSlices,
   caseLawDecisions,
   caseLawSearchDocuments,
+  caseLawSourceArrivals,
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
@@ -34,6 +35,7 @@ import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
@@ -355,7 +357,9 @@ const loadCoverage = async (
     onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
-      await readAsReader(readCaseLawCoverageSourcesQuery),
+      await readAsReader(
+        async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+      ),
     readArrivals: async (sourceIds) =>
       await readAsReader(
         async (tx) =>
@@ -686,7 +690,7 @@ test(
         ),
       );
       const sources = await readAsReader(async (tx) =>
-        readCaseLawCoverageSourcesQuery(tx),
+        readCaseLawCoverageSourcesQuery(tx, []),
       );
       // Held, not searchable: the unindexed endpoints still bound the years,
       // while withdrawn and listing-only decisions never do.
@@ -770,7 +774,9 @@ test(
 test(
   "the reader role can run every statement the coverage page needs",
   async () => {
-    const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+    const sources = await readAsReader(
+      async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+    );
     // The withheld source is filtered in SQL, so it never reaches the loader.
     expect(sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual([
       ADAPTER_KEYS.AT_COURTS,
@@ -860,7 +866,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // A retired adapter leaves its row behind; the column is a varchar
         // and the registry is deployment state, so the two legitimately
         // disagree. Without a manifest there is no country to file it under.
@@ -924,6 +932,7 @@ test(
     // The two populations are reported apart and never summed, and the total
     // count states the oldest of the counts behind it.
     expect(coverage.value.totals).toEqual({
+      addedLastWeek: 2,
       searchable: 3,
       stored: {
         decisions: 5,
@@ -1002,7 +1011,82 @@ test(
       CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
     );
     expect(cze?.stored.decisions).toBe(4);
-    expect(coverage.value.totals.searchable).toBe(0);
+    expect(coverage.value.totals).toMatchObject({
+      searchable: null,
+      addedLastWeek: null,
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: exercise persisted coverage reads with an isolated source in the migrated database.
+test.each([
+  {
+    name: "complete facet reads give exact searchable totals",
+    unavailableCountries: [],
+    expected: { searchable: 8, addedLastWeek: 9 },
+  },
+  {
+    name: "partial facet reads leave searchable totals unknown",
+    unavailableCountries: ["CZE"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+  {
+    name: "partial facet reads after a known country leave searchable totals unknown",
+    unavailableCountries: ["EU"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+  {
+    name: "all facet reads failing leave searchable totals unknown",
+    unavailableCountries: ["CZE", "EU"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+])(
+  "$name",
+  async ({ unavailableCountries, expected }) => {
+    const db = drizzle({ client });
+    const sourceId = createSafeId<"caseLawSource">();
+    await db.insert(caseLawSources).values(
+      caseLawSourceRow({
+        id: sourceId,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        storedTotal: 5,
+        storedTotalAsOf: NOW,
+      }),
+    );
+    try {
+      await db
+        .insert(caseLawSourceArrivals)
+        .values({ sourceId, addedLastWeek: 7, countedAt: NOW });
+      const failedParts: string[] = [];
+      const coverage = await loadCoverage({
+        onPartialFailure: (part) => {
+          failedParts.push(part);
+        },
+        readFacets: async (country) =>
+          unavailableCountries.some((candidate) => candidate === country)
+            ? Result.err({ message: "Index unavailable" })
+            : Result.ok({
+                country: [{ value: country, count: country === "CZE" ? 3 : 5 }],
+                court: [],
+                year: [],
+              }),
+      });
+      expect(Result.isOk(coverage)).toBe(true);
+      if (Result.isError(coverage)) {
+        return;
+      }
+      expect(coverage.value.countries.map(({ country }) => country)).toEqual([
+        "AUT",
+        "CZE",
+        "EU",
+      ]);
+      expect(failedParts).toEqual(unavailableCountries.map(() => "facets"));
+      expect(coverage.value.totals).toMatchObject(expected);
+      expect(coverage.value.totals.stored.decisions).toBe(10);
+    } finally {
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -1025,6 +1109,7 @@ test(
       null,
     ]);
     expect(cze?.addedLastWeek).toBeNull();
+    expect(coverage.value.totals.addedLastWeek).toBeNull();
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -1057,7 +1142,9 @@ test(
   async () => {
     const coverage = await loadCoverage({
       readSources: async () => {
-        const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
+        const sources = await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
         // As a source looks before its first sync cycle stamps a count.
         for (const source of sources) {
           if (source.adapterKey === ADAPTER_KEYS.CZ_NS) {
@@ -1205,7 +1292,9 @@ test(
     const coverage = await loadCoverage({
       readSources: async () => {
         sourceReads += 1;
-        return await readAsReader(readCaseLawCoverageSourcesQuery);
+        return await readAsReader(
+          async (tx) => await readCaseLawCoverageSourcesQuery(tx, []),
+        );
       },
       readArrivals: async (sourceIds) => {
         arrivalsReads += 1;
@@ -1222,3 +1311,44 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("a fixed-snapshot source reports its release date, not a recent run, as its currency", async () => {
+  const db = drizzle({ client });
+  const snapshotSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: snapshotSourceId,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      name: "pl snapshot",
+      enabled: true,
+      // A run an hour ago would read as current for a live publisher.
+      lastSyncAt: new Date(NOW.getTime() - HOUR_IN_MS),
+    }),
+  );
+  try {
+    const coverage = await loadCoverage();
+    if (Result.isError(coverage)) {
+      throw coverage.error;
+    }
+    const poland = coverage.value.countries.find(
+      ({ country }) => country === "POL",
+    );
+    const source = poland?.sources.find(
+      ({ adapterKey }) => adapterKey === ADAPTER_KEYS.PL_NSA,
+    );
+    expect(source?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    expect(source?.edition).toEqual({
+      type: "snapshot",
+      snapshotDate: PL_NSA_SNAPSHOT.snapshotDate,
+    });
+    expect(poland?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    const czech = coverage.value.countries
+      .find(({ country }) => country === "CZE")
+      ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+    expect(czech?.edition).toEqual({ type: "live" });
+  } finally {
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, snapshotSourceId));
+  }
+});

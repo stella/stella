@@ -42,8 +42,36 @@ describe("search preview match navigation", () => {
         currentScrollTop: 200,
         matchHeight: 20,
         matchTop: 500,
+        obscuredBlockEnd: 0,
       }),
     ).toBe(410);
+  });
+
+  test("centres a match above an overlay covering the viewport's bottom", () => {
+    // 400px viewport, 160px under the composer: centre in the top 240px.
+    expect(
+      getCenteredSearchMatchScrollTop({
+        containerHeight: 400,
+        containerTop: 100,
+        currentScrollTop: 200,
+        matchHeight: 20,
+        matchTop: 500,
+        obscuredBlockEnd: 160,
+      }),
+    ).toBe(490);
+  });
+
+  test("aligns a match taller than the uncovered band to its top", () => {
+    expect(
+      getCenteredSearchMatchScrollTop({
+        containerHeight: 200,
+        containerTop: 0,
+        currentScrollTop: 100,
+        matchHeight: 80,
+        matchTop: 300,
+        obscuredBlockEnd: 160,
+      }),
+    ).toBe(400);
   });
 
   test("distinguishes a pending search from a settled search with no matches", () => {

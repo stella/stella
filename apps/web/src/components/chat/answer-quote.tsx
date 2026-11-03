@@ -15,6 +15,7 @@ import {
   CopyFromMenuIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import {
   locateQuoteInBlocks,
@@ -24,10 +25,10 @@ import {
 import type { LocatedQuote } from "@/components/chat/answer-quote.logic";
 import { openReadCaseLawDecision } from "@/components/chat/case-law-open";
 import { useAnswerCitedDecisions } from "@/components/chat/chat-decision-citation";
-import { decisionCitationMetadata } from "@/components/chat/chat-decision-citation-metadata.logic";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
+import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
@@ -112,14 +113,22 @@ const QuoteAttribution = ({
       <span aria-hidden="true" className="text-foreground-placeholder">
         ·
       </span>
-      <a
-        className="hover:text-foreground focus-visible:ring-ring rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
-        href={sanitizeHref(readerHref)}
-        onClick={openAtQuote}
-        title={t("chat.answerQuote.verifiedHint", { source: citation })}
-      >
-        <BidiText as="span">{source}</BidiText>
-      </a>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <a
+              className="hover:text-foreground focus-visible:ring-ring rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
+              href={sanitizeHref(readerHref)}
+              onClick={openAtQuote}
+            />
+          }
+        >
+          <BidiText as="span">{source}</BidiText>
+        </TooltipTrigger>
+        <TooltipPopup>
+          {t("chat.answerQuote.verifiedHint", { source: citation })}
+        </TooltipPopup>
+      </Tooltip>
       <Button
         className="-my-1"
         onClick={openAtQuote}

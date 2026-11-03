@@ -3,6 +3,8 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 const HELPER = path.resolve(import.meta.dir, "gh-retry.sh");
 // Delayed TERM completion exposes a parent that kills without waiting; the
 // process snapshot must not accidentally give that child time to finish.
@@ -126,15 +128,12 @@ const processRecord = async (filename: string) => {
 };
 
 const waitForFile = async (filename: string) => {
-  const expires = Date.now() + 3000;
-  while (!(await Bun.file(filename).exists())) {
-    if (Date.now() >= expires) {
-      throw new TypeError(
-        "Fixture process did not reach its readiness barrier",
-      );
-    }
-    await Bun.sleep(5);
-  }
+  await waitForExternalState({
+    description: `the fixture process writes ${filename}`,
+    intervalMs: 5,
+    timeoutMs: 3000,
+    read: async () => await Bun.file(filename).exists(),
+  });
 };
 
 const activePids = () => {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  availableShortcutGroups,
   formatHotkeyForPlatform,
   formatShortcutBinding,
   HOTKEYS,
@@ -31,6 +32,30 @@ const allShortcuts = SHORTCUT_GROUPS.flatMap((group) =>
 );
 
 describe("shortcut registry is the single source of truth", () => {
+  test("capability gates project the same registry for help and binding", () => {
+    for (const timeBilling of [false, true]) {
+      const projected = availableShortcutGroups(SHORTCUT_GROUPS, {
+        timeBilling,
+      });
+      const helpIds = projected.flatMap((group) =>
+        group.shortcuts.map((shortcut) => shortcut.id),
+      );
+      const bindingIds = projected.flatMap((group) =>
+        group.shortcuts
+          .filter((shortcut) => shortcut.binding.type === "hotkey")
+          .map((shortcut) => shortcut.id),
+      );
+      expect(helpIds.includes("logTime")).toBe(timeBilling);
+      expect(bindingIds.includes("logTime")).toBe(timeBilling);
+      for (const shortcut of allShortcuts) {
+        const available = !("capability" in shortcut) || timeBilling;
+        expect(helpIds.includes(shortcut.id)).toBe(available);
+        if (shortcut.binding.type === "hotkey") {
+          expect(bindingIds.includes(shortcut.id)).toBe(available);
+        }
+      }
+    }
+  });
   // Kills the drift bug class: the cheatsheet renders the full registry, so a
   // shortcut cannot exist without a unique, labelled row.
   test("every registry shortcut renders in the cheatsheet with a unique row", () => {

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -146,6 +152,83 @@ describe("tracked file size baseline", () => {
     });
   });
 
+  const generatorEntry = (maxBytes: number): SizeBaselineEntry => ({
+    generator: "hashed-cache",
+    maxBytes,
+    reason: "Fixture entry.",
+  });
+  const outputsOf = (id: string) =>
+    id === "hashed-cache" ? [".cache/**"] : undefined;
+
+  test("a generator entry covers its outputs under any content-hashed name", () => {
+    for (const name of ["0a1b", "9f8e"]) {
+      withRepo(
+        { [`.cache/${name}.json`]: LIMIT + 10, "small.json": 1 },
+        (root) => {
+          expect(
+            evaluateSizes(
+              trackedBlobs(root),
+              [generatorEntry(LIMIT + 10)],
+              outputsOf,
+            ),
+          ).toEqual({ errors: [], baselined: 1 });
+        },
+      );
+    }
+  });
+
+  test("a generator output past the ceiling, or another oversized file, fails", () => {
+    withRepo(
+      { ".cache/0a1b.json": LIMIT + 11, "other.bin": LIMIT + 1 },
+      (root) => {
+        const { errors } = evaluateSizes(
+          trackedBlobs(root),
+          [generatorEntry(LIMIT + 10)],
+          outputsOf,
+        );
+        expect(errors).toEqual([
+          expect.stringContaining(".cache/0a1b.json: "),
+          expect.stringContaining("other.bin: "),
+        ]);
+        expect(errors[0]).toContain("exceeds its baselined ceiling");
+        expect(errors[1]).toContain("exceeds the");
+      },
+    );
+  });
+
+  test("a generator entry with no oversized output or an unknown id fails", () => {
+    withRepo({ ".cache/0a1b.json": LIMIT }, (root) => {
+      expect(
+        evaluateSizes(
+          trackedBlobs(root),
+          [
+            generatorEntry(LIMIT + 10),
+            { ...generatorEntry(LIMIT + 10), generator: "gone" },
+          ],
+          outputsOf,
+        ).errors,
+      ).toEqual([
+        `${BASELINE_PATHS.trackedFileSizes}: entry names unknown generator gone; use an id from scripts/generated-files.ts`,
+        `${BASELINE_PATHS.trackedFileSizes}: stale entry for generator hashed-cache; none of its outputs exceeds the limit, so delete the entry`,
+      ]);
+    });
+  });
+
+  test("the committed baseline names only declared generators", () => {
+    const baseline = parseSizeBaseline(
+      readFileSync(
+        path.join(import.meta.dir, "..", BASELINE_PATHS.trackedFileSizes),
+        "utf-8",
+      ),
+      BASELINE_PATHS.trackedFileSizes,
+    );
+    expect(
+      evaluateSizes([], baseline).errors.filter((error) =>
+        error.includes("unknown generator"),
+      ),
+    ).toEqual([]);
+  });
+
   test("blank reasons, duplicate paths and ceilings within the limit are rejected", () => {
     const parse = (entries: unknown) =>
       parseSizeBaseline(JSON.stringify(entries), "fixture");
@@ -158,6 +241,12 @@ describe("tracked file size baseline", () => {
     expect(() => parse([entry("a", LIMIT)])).toThrow(
       "maxBytes must exceed the limit",
     );
+    expect(() =>
+      parse([
+        { generator: "g", maxBytes: LIMIT + 1, reason: "Fixture." },
+        { generator: "g", maxBytes: LIMIT + 2, reason: "Fixture." },
+      ]),
+    ).toThrow("duplicate entry generator g");
   });
 });
 

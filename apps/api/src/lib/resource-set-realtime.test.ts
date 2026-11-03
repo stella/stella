@@ -392,6 +392,7 @@ describe("an organization handler's declared resource sets", () => {
       async function* () {
         return Result.ok({ ok: true });
       },
+      { authorize: async () => Result.ok(undefined) },
     );
   });
 });

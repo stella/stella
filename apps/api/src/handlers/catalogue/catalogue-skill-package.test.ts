@@ -195,6 +195,7 @@ describe("github catalogue package cache", () => {
           ? Result.err(
               new HandlerError({
                 status: 503,
+                code: "internal_error",
                 message: "GitHub is temporarily unavailable",
               }),
             )

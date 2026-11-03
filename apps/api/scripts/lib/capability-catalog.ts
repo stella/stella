@@ -29,6 +29,7 @@ import {
   transportAlternative,
   transportFileInput,
 } from "../../src/lib/capability-transport";
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 
@@ -197,11 +198,13 @@ export const DOMAIN_ACTION_VERBS = [
   "suggest",
   "summarize",
   "sync",
+  "transcribe",
   "transition",
   "unarchive",
   "unlink",
   "upload",
   "upsert",
+  "void",
 ] as const;
 
 const ALLOWED_ACTION_VERBS: ReadonlySet<string> = new Set([
@@ -541,6 +544,43 @@ export type CapabilityDispatchRecord = {
     { featureId: string; type: "required" | "conditional" } | undefined;
 };
 
+/** Required feature access hides the entire capability; conditional access only narrows its input. */
+export const requiredDeploymentFeature = (
+  registry: FeatureRegistry,
+  requirement: CapabilityDispatchRecord["featureAccess"],
+) => {
+  if (requirement?.type !== "required") {
+    return undefined;
+  }
+  const definition = Object.hasOwn(registry, requirement.featureId)
+    ? registry[requirement.featureId]
+    : undefined;
+  if (definition === undefined) {
+    return panic("Required capability feature must be registered", {
+      featureId: requirement.featureId,
+    });
+  }
+  return definition.deploymentFeature;
+};
+
+type CapabilityDeploymentFeatureOptions = {
+  registry: FeatureRegistry;
+  requirement: CapabilityDispatchRecord["featureAccess"];
+  inheritedFeature: string | undefined;
+  domainFeature: string | undefined;
+};
+
+/** Existing tool and domain classifications retain precedence over a handler's derived flag. */
+export const resolveCapabilityDeploymentFeature = ({
+  registry,
+  requirement,
+  inheritedFeature,
+  domainFeature,
+}: CapabilityDeploymentFeatureOptions) => {
+  const requiredFeature = requiredDeploymentFeature(registry, requirement);
+  return inheritedFeature ?? domainFeature ?? requiredFeature;
+};
+
 /**
  * Per-segment allowlists for every value interpolated into the generated
  * dispatch module. Each derived value (id, import path, export name) is split
@@ -709,7 +749,9 @@ export const CAPABILITY_DISPATCH = {
               exportName: record.exportName,
               id: record.id,
             });
-      const loader = `load: async () => await import(${JSON.stringify(importPath)})`;
+      // The registry exposes opaque modules; retaining handler return types would
+      // pull runtime routes into consumers that only need capability ids.
+      const loader = `load: async (): Promise<Record<string, unknown>> => await import(${JSON.stringify(importPath)})`;
       const named =
         exportName === undefined
           ? ""
@@ -1366,6 +1408,7 @@ export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
  * there, and that is correct.
  */
 const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
+  "stella:account_export_write": "stella:account_export_read",
   "stella:admin_write": "stella:admin_read",
   "stella:billing_write": "stella:read",
   "stella:contacts_write": "stella:read",

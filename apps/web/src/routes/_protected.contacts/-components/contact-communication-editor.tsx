@@ -9,7 +9,7 @@ import { InboxIcon, MailIcon, PhoneIcon, Trash2Icon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 
 import { normalizeOptionalArray, optionalArray } from "@/lib/arrays";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { AddContactMethodForm } from "@/routes/_protected.contacts/-components/add-contact-method-form";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
@@ -43,7 +43,7 @@ export const ContactCommunicationEditor = ({
     }
 
     if (!v.safeParse(EMAIL_SCHEMA, address).success) {
-      notifyUserError(undefined, t("contacts.communication.invalidEmail"));
+      notifyUserProblem(t("contacts.communication.invalidEmail"));
       return;
     }
 
@@ -52,7 +52,7 @@ export const ContactCommunicationEditor = ({
         (email) => email.address.toLowerCase() === address.toLowerCase(),
       )
     ) {
-      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
+      notifyUserProblem(t("contacts.communication.alreadyExists"));
       return;
     }
 
@@ -79,7 +79,7 @@ export const ContactCommunicationEditor = ({
     }
 
     if (phones.some((phone) => phone.number === number)) {
-      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
+      notifyUserProblem(t("contacts.communication.alreadyExists"));
       return;
     }
 
@@ -106,12 +106,12 @@ export const ContactCommunicationEditor = ({
     }
 
     if (!DATA_BOX_ID_PATTERN.test(id)) {
-      notifyUserError(undefined, t("contacts.communication.invalidDataBox"));
+      notifyUserProblem(t("contacts.communication.invalidDataBox"));
       return;
     }
 
     if (dataBoxes.some((dataBox) => dataBox.id === id)) {
-      notifyUserError(undefined, t("contacts.communication.alreadyExists"));
+      notifyUserProblem(t("contacts.communication.alreadyExists"));
       return;
     }
 
@@ -268,7 +268,7 @@ const ContactMethodRow = ({
       <div className="flex min-w-0 flex-1 items-baseline gap-2">{children}</div>
       <Button
         aria-label={t("common.delete")}
-        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         disabled={disabled}
         onClick={onRemove}
         size="icon-xs"

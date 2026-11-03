@@ -54,6 +54,7 @@
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

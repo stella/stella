@@ -44,7 +44,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # `process.env.NODE_ENV` reads (dependencies included) at bundle time, and
 # inlines "development" when it is unset. Every bundle is also built with
 # `--define __STELLA_RELEASE__=true`, so a published artifact refuses local
-# development access whatever its runtime environment says.
+# development access whatever its runtime environment says. Every bundle is
+# minified with --keep-names: error tags and logs read class and function
+# names, which plain --minify renames.
 FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
@@ -66,6 +68,8 @@ RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/
 # mapping never reads.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --sourcemap=linked \
     --target bun \
     --outdir /app/bundles \
@@ -78,6 +82,8 @@ RUN bun build \
 # apps/api/docker/collab launcher.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -194,6 +200,8 @@ RUN bun build \
 # image-smoke-model-ingress.js exercises the model guard.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --splitting \
     --outdir /app/bundles \
@@ -234,6 +242,8 @@ RUN bun build \
 # in-image through the isolated local ONNX worker.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --sourcemap=linked \
     --outdir /app/bundles \
@@ -241,12 +251,27 @@ RUN bun build \
     --entry-naming document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts && \
     bun apps/api/scripts/strip-source-map-content.ts /app/bundles/document-processing-worker.js.map
+# Dedicated file-derivative worker (PDF previews and thumbnails). Deploy the
+# same image with command override ["bun", "/app/file-derivative-worker.js"].
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
+    --target bun \
+    --sourcemap=linked \
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming file-derivative-worker.js \
+    apps/api/src/scripts/file-derivative-worker.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/file-derivative-worker.js.map
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Mirror the source directory under the bundle tree
 # so its runtime `import.meta.dir`-relative migrationsFolder lookup resolves
 # to /app/apps/api/drizzle after the tree is copied to /app.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles/apps/api/src/db \
     --public-path /app/apps/api/src/db/ \
@@ -260,6 +285,8 @@ RUN bun build \
 RUN mkdir -p /app/bundles/runtime/workers && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -267,6 +294,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -274,6 +303,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -283,6 +314,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -290,6 +323,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -297,6 +332,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/office-evidence-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \

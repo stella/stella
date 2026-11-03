@@ -3,6 +3,7 @@ import path from "node:path";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_SHARD_COUNT, partitionRoundRobin } from "../execution-profile";
+import { pushRouterPath } from "../helpers/decision-reader";
 import {
   createDockedChatWorld,
   deleteDockedChatWorld,
@@ -18,6 +19,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { installDockedChatPageFixtures } from "../helpers/docked-chat-page-fixtures";
 import { expect, test as base } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS } from "../helpers/wait-budgets";
 
 const { hosts, providerSources } = readDockedChatHosts();
 const viewports = [
@@ -89,7 +91,9 @@ const expectDockGeometry = async (page: Page) => {
     .filter({
       has: page.getByRole("dialog", { name: messages.chat.aiThread }),
     });
-  await expect(thread).toHaveCount(1, { timeout: 45_000 });
+  await expect(thread).toHaveCount(1, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+  });
   const card = thread.getByRole("dialog", { name: messages.chat.aiThread });
   await expect(card).toContainText("Saved geometry test answer.");
   await expect
@@ -185,10 +189,10 @@ for (const host of partitionRoundRobin(hosts, E2E_SHARD_COUNT).flat()) {
               page.getByText("Saved geometry test answer.", { exact: true }),
             ).not.toBeVisible();
           }
-          await page.evaluate(
-            (url) => history.pushState(null, "", url),
-            destination,
-          );
+          // Host templates span decision, statute and research shells; the
+          // dock geometry below waits for the member chat thread, which only
+          // the authenticated workspace mounts.
+          await pushRouterPath(page, destination);
           await expect(
             page.locator('nav a[href="/law"]').first(),
           ).toBeAttached();

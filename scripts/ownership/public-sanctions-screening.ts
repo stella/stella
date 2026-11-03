@@ -13,8 +13,17 @@ export default {
     specifiers: ["@/api/lib/lists/sanctions/public-read-owner"],
     allowed: [
       {
+        path: "apps/api/src/handlers/health/routes.ts",
+        reason:
+          "Holds startup until anonymous sanctions matchers are terminal.",
+      },
+      {
         path: "apps/api/src/handlers/sanctions/search.ts",
         reason: "Screens anonymous subjects against the public corpus.",
+      },
+      {
+        path: "apps/api/src/server.ts",
+        reason: "Starts anonymous matcher warmup after the listener binds.",
       },
     ],
   },

@@ -3,11 +3,20 @@ import { useTranslations } from "use-intl";
 
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
+import { routePresentation } from "@/routes/-route-presentation";
 import { TimePolicyCard } from "@/routes/_protected.admin/-components/organization/time-policy-card";
 
 export const Route = createFileRoute("/_protected/admin/time-policy")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.organization.timePolicy.title",
+      to: "/admin/time-policy",
+    }),
+  },
   beforeLoad: async ({ context }) => {
     if (
       !(await isTimeBillingRouteEnabled(context.queryClient, {
@@ -31,6 +40,9 @@ export const Route = createFileRoute("/_protected/admin/time-policy")({
       }),
     );
   },
+  head: () => ({
+    meta: [{ title: pageTitle("settings.organization.timePolicy.title") }],
+  }),
   component: TimePolicyPage,
 });
 

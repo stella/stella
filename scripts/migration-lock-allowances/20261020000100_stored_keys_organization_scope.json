@@ -1,0 +1,4 @@
+{
+  "add-constraint": "CHECK constraints are added NOT VALID, avoiding a table scan while the 5s lock_timeout bounds lock acquisition.",
+  "create-trigger": "Creating the trigger is a metadata-only change with lock acquisition bounded by the 5s lock_timeout."
+}

@@ -26,6 +26,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -131,7 +132,7 @@ const readGroupCounts = createSafeHandler(
               count: sql<number>`count(*)::int`,
             })
             .from(entities)
-            .where(and(baseConditions, eq(entities.kind, "task")))
+            .where(and(baseConditions, workTask(entities)))
             .groupBy(statusBucketExpr),
         ),
       );

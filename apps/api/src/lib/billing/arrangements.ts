@@ -1,28 +1,10 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  getColumns,
-  getTableName,
-  inArray,
-  isNotNull,
-  sql,
-} from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 
-import {
-  INVOICE_LINE_SOURCE,
-  INVOICE_STATUS,
-  TIME_ENTRY_ACTIVITY_GROUP,
-} from "@stll/api-contract";
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  billingArrangements,
-  invoiceLines,
-  invoices,
-  timeEntries,
-} from "@/api/db/schema";
+import { billingArrangements, timeEntries } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -30,10 +12,11 @@ import {
   type AuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockBillingCapArrangements } from "@/api/lib/db/aggregate-lock";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
-  evaluateBillingCap,
+  evaluateBillingArrangementCaps,
   newBillingCapCrossings,
 } from "./arrangements.logic";
 
@@ -43,6 +26,7 @@ type BillingArrangementConfiguration = Pick<
   | "currency"
   | "flatFeeAmount"
   | "capAmount"
+  | "capMinutes"
   | "alertThresholdBps"
   | "revision"
 >;
@@ -58,32 +42,29 @@ export const billingArrangementResponse = (
       revision: row.revision,
     };
   }
-  if (row.capAmount === null) {
+  if (row.capAmount === null && row.capMinutes === null) {
     return { mode: row.mode, currency: row.currency, revision: row.revision };
+  }
+  const alertThresholdBps =
+    row.alertThresholdBps ?? panic("Capped arrangement has no threshold");
+  if (row.capMinutes !== null) {
+    return {
+      mode: row.mode,
+      currency: row.currency,
+      capMinutes: row.capMinutes,
+      ...(row.capAmount === null ? {} : { capAmount: row.capAmount }),
+      alertThresholdBps,
+      revision: row.revision,
+    };
   }
   return {
     mode: row.mode,
     currency: row.currency,
-    capAmount: row.capAmount,
-    alertThresholdBps:
-      row.alertThresholdBps ?? panic("Capped arrangement has no threshold"),
+    capAmount:
+      row.capAmount ?? panic("Capped arrangement has no amount or minute cap"),
+    alertThresholdBps,
     revision: row.revision,
   };
-};
-
-export const lockBillingArrangement = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-) => {
-  // Same matter lock as timer/invoice guards; it also serializes first-row creation.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
-  const rows = await tx
-    .select()
-    .from(billingArrangements)
-    .where(eq(billingArrangements.workspaceId, workspaceId))
-    .limit(1)
-    .for("update");
-  return rows.at(0);
 };
 
 type ReadBillingUsageOptions = {
@@ -113,17 +94,17 @@ const billingUsageProjection = ({
     typeof currencyValue === "string"
       ? currencyValue
       : sql`${sql.identifier(getTableName(billingArrangements))}.${sql.identifier(currencyValue.name)}`;
-  // PostgreSQL numeric arithmetic prevents intermediate product/sum overflow;
-  // half-up integer division matches prorateHourlyCents per entry, not after summing.
-  const legacyCondition = sql`e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.invoice_attachment = 'charged' AND i.workspace_id = ${workspaceId} AND i.status <> ${INVOICE_STATUS.VOID} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``} AND NOT EXISTS (SELECT 1 FROM ${invoiceLines} l WHERE l.invoice_id = i.id AND l.time_entry_id = e.id AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL)`;
-  const legacyAmount = sql`COALESCE((SELECT SUM(FLOOR((e.rate_at_entry::numeric * e.billed_minutes + 30) / 60)) FROM ${timeEntries} e JOIN ${invoices} i ON i.id = e.invoice_id AND i.organization_id = e.organization_id WHERE ${legacyCondition} AND i.currency = ${currency}), 0)`;
-  const legacyMismatch = sql`(SELECT COUNT(*) FROM ${timeEntries} e JOIN ${invoices} i ON i.id = e.invoice_id AND i.organization_id = e.organization_id WHERE ${legacyCondition} AND i.currency <> ${currency})`;
+  // Complete-invoice RLS hides shared invoices from partial members. The
+  // narrowly authorized aggregate still counts every charge against this matter's cap.
+  const reserved = sql`public.stella_matter_reserved_charges(${workspaceId},${currency},${excludeInvoiceId ?? null})`;
   return {
-    billedAmount: sql<string>`(${legacyAmount} + COALESCE((SELECT SUM(l.net_amount) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency = ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}), 0))::text`,
+    billedAmount: sql<string>`(SELECT amount::text FROM ${reserved})`,
+    billedMinutes: sql<string>`public.stella_matter_reserved_minutes(${workspaceId},${excludeInvoiceId ?? null})::text`,
+    approvedMinutes: sql<string>`COALESCE((SELECT SUM(e.billed_minutes) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge), 0)::text`,
     approvedAmount: sql<string>`COALESCE((SELECT SUM(FLOOR((e.rate_at_entry::numeric * e.billed_minutes + 30) / 60)) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency = ${currency}), 0)::text`,
     // Reserved invoice charges and approved unbilled work are counted apart:
     // an invoice is checked against what is reserved, the cap status against both.
-    billedMismatchCount: sql<string>`(${legacyMismatch} + (SELECT COUNT(*) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency <> ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}))::text`,
+    billedMismatchCount: sql<string>`(SELECT mismatches::text FROM ${reserved})`,
     approvedMismatchCount: sql<string>`(SELECT COUNT(*) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency <> ${currency})::text`,
   };
 };
@@ -143,6 +124,9 @@ export const readBillingUsage = async (
   return {
     billedAmount,
     approvedAmount,
+    billedMinutes: BigInt(row.billedMinutes),
+    approvedMinutes: BigInt(row.approvedMinutes),
+    totalMinutes: BigInt(row.billedMinutes) + BigInt(row.approvedMinutes),
     totalAmount: billedAmount + approvedAmount,
     mismatchCount,
     currencyMismatch: mismatchCount !== 0n,
@@ -169,37 +153,13 @@ export const recordBillingCapCrossingsForMatters = async (
   if (ids.length > LIMITS.timeEntriesApprovalBatchMax) {
     panic("Cap reconciliation exceeds the approval batch limit");
   }
-  // Match timer batch guards: sorted distinct advisory keys before arrangement rows.
-  await tx.execute(sql`
-    SELECT pg_advisory_xact_lock(matter_locks.lock_key)
-    FROM (SELECT DISTINCT hashtext(workspace_id) AS lock_key
-      FROM unnest(ARRAY[${sql.join(
-        ids.map((id) => sql`${id}`),
-        sql`, `,
-      )}]::text[]) AS matters(workspace_id)
-      ORDER BY lock_key) AS matter_locks
-    ORDER BY matter_locks.lock_key
-  `);
-  const rows = await tx
-    .select({
-      arrangement: getColumns(billingArrangements),
-      ...billingUsageProjection({
-        workspaceId: billingArrangements.workspaceId,
-        currency: billingArrangements.currency,
-      }),
-    })
-    .from(billingArrangements)
-    .where(
-      and(
-        inArray(billingArrangements.workspaceId, ids),
-        eq(billingArrangements.mode, "hourly"),
-        isNotNull(billingArrangements.capAmount),
-        isNotNull(billingArrangements.alertThresholdBps),
-      ),
-    )
-    .orderBy(asc(billingArrangements.workspaceId))
-    .limit(ids.length)
-    .for("update");
+  const rows = await lockBillingCapArrangements(tx, {
+    workspaceIds: ids,
+    usageProjection: billingUsageProjection({
+      workspaceId: billingArrangements.workspaceId,
+      currency: billingArrangements.currency,
+    }),
+  });
   const updates: (typeof billingArrangements.$inferInsert)[] = [];
   const events: AuditEvent[] = [];
   const now = new Date();
@@ -207,6 +167,8 @@ export const recordBillingCapCrossingsForMatters = async (
     arrangement,
     billedAmount,
     approvedAmount,
+    billedMinutes,
+    approvedMinutes,
     billedMismatchCount,
     approvedMismatchCount,
   } of rows) {
@@ -214,15 +176,11 @@ export const recordBillingCapCrossingsForMatters = async (
     const mismatchCount = (
       BigInt(billedMismatchCount) + BigInt(approvedMismatchCount)
     ).toString();
-    if (mismatchCount !== "0") {
-      if (arrangement.currencyState === "mismatch") {
-        continue;
-      }
-      updates.push({
-        ...arrangement,
-        currencyState: "mismatch",
-        updatedAt: now,
-      });
+    const currencyState = mismatchCount === "0" ? "matched" : "mismatch";
+    if (
+      currencyState === "mismatch" &&
+      arrangement.currencyState !== "mismatch"
+    ) {
       events.push({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
@@ -235,39 +193,60 @@ export const recordBillingCapCrossingsForMatters = async (
           revision: arrangement.revision,
         },
       });
-      continue;
     }
     const totalAmount = BigInt(billedAmount) + BigInt(approvedAmount);
-    const capAmount =
-      arrangement.capAmount ?? panic("Locked capped arrangement has no cap");
+    const capAmount = arrangement.capAmount;
+    const totalMinutes = BigInt(billedMinutes) + BigInt(approvedMinutes);
     const alertThresholdBps =
       arrangement.alertThresholdBps ??
       panic("Locked capped arrangement has no threshold");
-    const current = evaluateBillingCap({
+    const { amount, minutes } = evaluateBillingArrangementCaps({
       totalAmount,
-      capAmount: BigInt(capAmount),
+      totalMinutes,
+      capAmount,
+      capMinutes: arrangement.capMinutes,
       alertThresholdBps,
     });
-    const crossings = newBillingCapCrossings({
-      previous: arrangement,
-      current,
-    });
+    // Currency prevents amount comparisons; elapsed billable minutes remain exact.
+    const current =
+      currencyState === "mismatch"
+        ? {
+            thresholdState: arrangement.thresholdState,
+            capState: arrangement.capState,
+          }
+        : amount;
+    const crossings = [
+      ...newBillingCapCrossings({ previous: arrangement, current }).map(
+        (boundary) => ({ boundary, unit: "amount" as const }),
+      ),
+      ...newBillingCapCrossings({
+        previous: {
+          thresholdState: arrangement.minuteThresholdState ?? "below",
+          capState: arrangement.minuteCapState ?? "below",
+        },
+        current: minutes,
+      }).map((boundary) => ({ boundary, unit: "minutes" as const })),
+    ];
     if (
       crossings.length === 0 &&
-      arrangement.currencyState === "matched" &&
+      arrangement.currencyState === currencyState &&
       arrangement.thresholdState === current.thresholdState &&
-      arrangement.capState === current.capState
+      arrangement.capState === current.capState &&
+      arrangement.minuteThresholdState === minutes.thresholdState &&
+      arrangement.minuteCapState === minutes.capState
     ) {
       continue;
     }
     updates.push({
       ...arrangement,
       ...current,
-      currencyState: "matched",
+      minuteThresholdState: minutes.thresholdState,
+      minuteCapState: minutes.capState,
+      currencyState,
       crossingSequence: arrangement.crossingSequence + crossings.length,
       updatedAt: now,
     });
-    for (const [index, boundary] of crossings.entries()) {
+    for (const [index, { boundary, unit }] of crossings.entries()) {
       events.push({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
@@ -276,9 +255,12 @@ export const recordBillingCapCrossingsForMatters = async (
         metadata: {
           event: "billing_cap_crossed",
           boundary,
+          unit,
+          usedMinutes: totalMinutes.toString(),
+          capMinutes: arrangement.capMinutes,
           currency: arrangement.currency,
           usedAmount: totalAmount.toString(),
-          capAmount: String(capAmount),
+          capAmount: capAmount?.toString() ?? null,
           revision: arrangement.revision,
           sequence: arrangement.crossingSequence + index + 1,
         },
@@ -297,6 +279,8 @@ export const recordBillingCapCrossingsForMatters = async (
       set: {
         thresholdState: sql`excluded.threshold_state`,
         capState: sql`excluded.cap_state`,
+        minuteThresholdState: sql`excluded.minute_threshold_state`,
+        minuteCapState: sql`excluded.minute_cap_state`,
         currencyState: sql`excluded.currency_state`,
         crossingSequence: sql`excluded.crossing_sequence`,
         updatedAt: now,

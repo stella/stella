@@ -14,6 +14,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 
 const PROVIDER_CHECK_FAILURE_SINK = failureSink({
   event: "ai.managed_provider_check.failed",
@@ -49,7 +50,8 @@ export const startManagedProviderChecks = async (
   }
   const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
-    getCredential: getManagedOpenRouterCredential,
+    getCredential: async () =>
+      await getManagedOpenRouterCredential(MANAGED_MODEL_TIER.standard),
     intervalMs,
     timeoutMs,
     signal: controller.signal,

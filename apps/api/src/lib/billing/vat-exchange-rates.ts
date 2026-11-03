@@ -8,8 +8,8 @@ import {
 } from "@stll/invoicing";
 import { Temporal } from "@stll/time";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 export class VatRateUnavailableError extends TaggedError(
   "VatRateUnavailableError",

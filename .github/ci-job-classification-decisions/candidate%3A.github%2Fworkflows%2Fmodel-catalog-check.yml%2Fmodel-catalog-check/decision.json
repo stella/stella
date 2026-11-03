@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes refreshed model catalog snapshots as a signed-commit pull request."
+}

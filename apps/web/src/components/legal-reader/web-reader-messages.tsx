@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
 
@@ -45,10 +44,7 @@ export const useWebReaderMessages = (): ReaderMessages => {
     provisionEffectiveFrom: (date) =>
       t("statutes.provisionEffectiveFrom", { date }),
     formatValidityDate: (date) => formatValidityDate(date, format),
-    provisionActText: ({ eli, statuteTitle }) => {
-      const act = statuteActLabel({ eli, title: statuteTitle });
-      return [act.number, act.name].filter((part) => part !== null).join(", ");
-    },
+    provisionActText: ({ statuteTitle }) => statuteTitle,
     formatLabelList: (labels) =>
       format.list([...labels], { style: "short", type: "unit" }),
   };

@@ -24,9 +24,9 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  corpusIndexBudgetExpiry,
   CorpusIndexError,
   getCorpusIndexClient,
-  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusAppliedProjection,
@@ -46,8 +46,9 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeout } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -62,22 +63,45 @@ import { LIMITS } from "@/api/lib/limits";
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
  * An engine that could not be reached at all, or that does not hold the
- * index, answers with the typed `search_index_unavailable` refusal, which
- * every search route and tool maps to the same actionable answer.
+ * index, answers with the typed `search_index_unavailable` refusal, and a
+ * request whose latency budget ran out with the public read timeout
+ * (`corpusIndexReadRefusal`), which every search route and tool maps to the
+ * same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  isCorpusIndexUnavailable(error)
-    ? searchIndexUnavailableError(error)
-    : new HandlerError({
+  corpusIndexReadRefusal(
+    error,
+    (answered) =>
+      new HandlerError({
+        code: "internal_error",
         status:
-          error.status === undefined ||
-          error.status === 429 ||
-          error.status >= 500
+          answered.status === undefined ||
+          answered.status === 429 ||
+          answered.status >= 500
             ? 503
             : 502,
         message: "Search is temporarily unavailable",
-        cause: error,
-      });
+        cause: answered,
+      }),
+  );
+
+/**
+ * Highlighting ran out of the window its searches share: the request's latency
+ * budget when that window ends with the request, else its own.
+ */
+const highlightWindowSpent = (
+  endsAtRequestDeadline: boolean,
+): CorpusIndexError => {
+  const spent = new CorpusIndexError({
+    message: "Corpus page highlighting exhausted its shared search budget.",
+    reach: "unreachable",
+  });
+  return (
+    (endsAtRequestDeadline
+      ? corpusIndexBudgetExpiry({ label: "page highlighting", cause: spent })
+      : undefined) ?? spent
+  );
+};
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -201,6 +225,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** Caller-owned counters join this page's counts to the request's existing observation. */
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -461,6 +486,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 type ReadPageSnippetsOptions = {
   hitDispositions: CorpusHitDispositionCounter;
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   /** Scan-selected passages and document fallbacks, both revision-filtered. */
   clauses: readonly { id: string; passage: string | null; document: string }[];
   cluster: QuickwitCluster;
@@ -485,6 +511,7 @@ type PageSnippets = {
 const readPageSnippets = async ({
   hitDispositions,
   observer,
+  signal,
   clauses,
   cluster,
   extractId,
@@ -501,20 +528,18 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const highlightWindow = requestBoundedTimeout(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
+  const deadline = startedAt + highlightWindow.timeoutMs;
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =
       remainingMs <= 0
         ? Result.err(
-            new CorpusIndexError({
-              message:
-                "Corpus page highlighting exhausted its shared search budget.",
-              reach: "unreachable",
-            }),
+            highlightWindowSpent(highlightWindow.endsAtRequestDeadline),
           )
         : await getCorpusIndexClient(cluster).search({
             observer,
+            signal,
             indexId,
             query: `(${query}) AND (${clause})`,
             maxHits,
@@ -681,6 +706,7 @@ type ScanRound = {
 
 type ReadScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -697,6 +723,7 @@ type ReadScanRoundOptions = {
  */
 const readScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -709,6 +736,7 @@ const readScanRound = async ({
     case "native": {
       const result = await getCorpusIndexClient(cluster).search({
         observer,
+        signal,
         indexId,
         query,
         maxHits,
@@ -730,6 +758,7 @@ const readScanRound = async ({
       }
       const result = await readScoredScanRound({
         observer,
+        signal,
         cluster,
         indexId,
         query,
@@ -781,6 +810,7 @@ const scanScoreRecorder = (bestScoreById: ReadonlyMap<string, number>) => {
 
 type ReadScoredScanRoundOptions = {
   observer: RegistryRequestObservation;
+  signal?: AbortSignal | undefined;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -794,6 +824,7 @@ type ReadScoredScanRoundOptions = {
  */
 const readScoredScanRound = async ({
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -802,6 +833,7 @@ const readScoredScanRound = async ({
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
     observer,
+    signal,
     indexId,
     query,
     from,
@@ -1074,6 +1106,7 @@ const appliedPassages = () => {
 const readWindowPage = async <TContext>({
   hitDispositions,
   observer,
+  signal,
   cluster,
   indexId,
   query,
@@ -1157,6 +1190,7 @@ const readWindowPage = async <TContext>({
     const roundStartedAt = performance.now();
     const round = await readScanRound({
       observer,
+      signal,
       cluster,
       indexId,
       query,
@@ -1249,6 +1283,7 @@ const readWindowPage = async <TContext>({
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,
@@ -1383,6 +1418,7 @@ const readOffsetChainPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions: options.hitDispositions,
     observer: options.observer,
+    signal: options.signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById,
@@ -1476,6 +1512,7 @@ const readBm25SearchPage = async <TContext>(
   const {
     hitDispositions,
     observer,
+    signal,
     cluster,
     indexId,
     query,
@@ -1500,6 +1537,7 @@ const readBm25SearchPage = async <TContext>(
   const startedAt = performance.now();
   const round = await readScoredScanRound({
     observer,
+    signal,
     cluster,
     indexId,
     query,
@@ -1603,6 +1641,7 @@ const readBm25SearchPage = async <TContext>(
   const snippets = await readPageSnippets({
     hitDispositions,
     observer,
+    signal,
     clauses: pageRevisionClauses({
       pageRanked,
       revisionById: ranking.revisionById,

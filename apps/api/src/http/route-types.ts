@@ -137,12 +137,19 @@ type RouteResponses<TDeclared, TAnswer> = {
     : AnswerAt<TAnswer, TCode>;
 };
 
+type ReplayHeaders<TConfig> = TConfig extends {
+  readonly idempotency: { readonly type: "replay" };
+}
+  ? { readonly "Idempotency-Key"?: string }
+  : { readonly "Idempotency-Key"?: never };
+
 /** What one route takes and answers, as the browser client is typed from it. */
 type RouteIO<TDefinition> = {
   body: Slot<ConfigOf<TDefinition>, "body">;
   params: Slot<ConfigOf<TDefinition>, "params">;
   query: Slot<ConfigOf<TDefinition>, "query">;
-  headers: Slot<ConfigOf<TDefinition>, "headers">;
+  headers: Slot<ConfigOf<TDefinition>, "headers"> &
+    ReplayHeaders<ConfigOf<TDefinition>>;
   response: RouteResponses<
     DeclaredResponses<ConfigOf<TDefinition>>,
     AnswerOf<TDefinition>

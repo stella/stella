@@ -97,6 +97,7 @@ const updateDeepLKey = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not reach DeepL to validate the key",
         }),
       );

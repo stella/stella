@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The native fingerprint that decides between an over-the-air update and a new store build comes from Expo's own fingerprint library, the one Expo's tooling uses for the same decision."
+}

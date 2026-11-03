@@ -5,6 +5,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
 
 import {
+  defaultInviteRole,
   hasOrganizationManagementAccess,
   inviteMemberSchema,
   roleAssignmentOptions,
@@ -23,7 +24,7 @@ describe("membership role control policy", () => {
         options.length,
       );
 
-      const schema = inviteMemberSchema(actorRole);
+      const schema = inviteMemberSchema(actorRole, "Invalid email");
       const accepted = ORGANIZATION_ROLE_NAMES.filter(
         (role) =>
           v.safeParse(schema, { email: "member@example.com", role }).success,
@@ -54,11 +55,27 @@ describe("membership role control policy", () => {
     expect(roleAssignmentOptions(undefined)).toEqual([]);
     for (const role of ORGANIZATION_ROLE_NAMES) {
       expect(
-        v.safeParse(inviteMemberSchema(undefined), {
+        v.safeParse(inviteMemberSchema(undefined, "Invalid email"), {
           email: "member@example.com",
           role,
         }).success,
       ).toBe(false);
     }
+  });
+});
+
+describe("default invitation role", () => {
+  test("is the standard member for every actor who may assign it", () => {
+    for (const actorRole of ORGANIZATION_ROLE_NAMES) {
+      const roles = assignableRoles(actorRole);
+      if (roles.length > 0) {
+        expect(defaultInviteRole(roles)).toBe("member");
+      }
+    }
+  });
+
+  test("falls back to the last role when member is not on offer", () => {
+    expect(defaultInviteRole(["admin", "external"])).toBe("external");
+    expect(defaultInviteRole([])).toBeUndefined();
   });
 });

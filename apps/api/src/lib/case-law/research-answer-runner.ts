@@ -4,7 +4,6 @@ import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
@@ -27,6 +26,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerCell,
@@ -78,6 +78,7 @@ import {
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
@@ -720,20 +721,27 @@ const readStoredPayload = async <T>({
   read: (key: string) => Promise<T>;
   fallback: () => T | null;
 }): Promise<T | null> => {
-  if (key === null || decision.contentHash === null) {
-    return fallback();
-  }
   const stored = await Result.tryPromise(
     async () =>
-      await readCorpusPayloadOrFallback({
+      await readCorpusForRecovery({
         documentId: decision.id,
-        key,
-        step,
-        read: async () => await read(key),
-        fallback: async () => await Promise.resolve(fallback()),
+        read: async () => {
+          if (key === null || decision.contentHash === null) {
+            return fallback();
+          }
+          return await readCorpusPayloadOrFallback({
+            documentId: decision.id,
+            key,
+            step,
+            read: async () => await read(key),
+            fallback: async () => await Promise.resolve(fallback()),
+          });
+        },
       }),
   );
-  return Result.isOk(stored) ? stored.value : null;
+  return Result.isOk(stored)
+    ? stored.value.match({ ok: (payload) => payload, err: () => null })
+    : null;
 };
 
 const readDecisionBlocks = async (
@@ -746,7 +754,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
+  const ast = stored === null ? null : parseCachedDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 

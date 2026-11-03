@@ -5,12 +5,10 @@ import { Temporal } from "@stll/time";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
 import type { LinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  parseSafeOutboundUrl,
-  safeOutboundFetchBytes,
-} from "@/api/lib/safe-outbound-fetch";
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 const LINK_ICON_MAX_BYTES = 64 * 1024;
 const ORIGIN_DEADLINE_MS = 3000;

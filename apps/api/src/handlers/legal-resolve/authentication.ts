@@ -9,6 +9,7 @@ import {
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
 import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import {
   authenticateMcpRequest,
   classifyMcpTokenVerificationError,
@@ -33,7 +34,10 @@ export const authenticateLegalResolveToken = async (
   }: LegalResolveAuthenticationDependencies = {},
 ): Promise<Result<LegalResolveSession, McpAuthenticationFailure>> => {
   if (isMachineApiKeyCredential(bearerToken)) {
-    return await authenticateMcpRequest(bearerToken, { mode });
+    return await authenticateMcpRequest(bearerToken, {
+      mode,
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
   }
   const verified = await verifyMcpAccessToken(bearerToken, {
     mode,

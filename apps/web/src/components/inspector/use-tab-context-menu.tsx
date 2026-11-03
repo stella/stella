@@ -2,6 +2,7 @@ import { useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   ListXIcon,
   Maximize2Icon,
@@ -27,15 +28,20 @@ import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
  * a "Move to main view" item; tabs without one (today: tasks) omit
  * it. The leading "Hide pane" mirrors the rail's top button so the
  * gesture is reachable from either entry point.
+ *
+ * The close items name what they close: this tab by its label, the
+ * others and all by count, so no item leaves the reader guessing.
  */
 export const useTabContextMenu = ({
   canRename = true,
   tabId,
+  tabLabel,
   onClose,
   onMaximize,
 }: {
   canRename?: boolean;
   tabId: string;
+  tabLabel: string;
   onClose: () => void;
   onMaximize?: (() => void) | undefined;
 }) => {
@@ -73,18 +79,29 @@ export const useTabContextMenu = ({
         )}
         <MenuItem onClick={onClose}>
           <XIcon />
-          {t("common.close")}
+          {/* One span, so the rich chunks stay one flex item and keep
+              their word spacing; a long label truncates, not the verb. */}
+          <span className="min-w-0 truncate">
+            {t.rich("inspector.closeTab", {
+              bdi: (chunks) => (
+                <BidiText className="inline-block max-w-56 truncate align-bottom">
+                  {chunks}
+                </BidiText>
+              ),
+              name: tabLabel,
+            })}
+          </span>
         </MenuItem>
         {hasOthers && (
           <MenuItem onClick={() => closeOthers(tabId)}>
             <ListXIcon />
-            {t("common.closeOthers")}
+            {t("inspector.closeOtherTabs", { count: tabsCount - 1 })}
           </MenuItem>
         )}
         {hasOthers && (
           <MenuItem onClick={closeAll}>
             <XSquareIcon />
-            {t("common.closeAll")}
+            {t("inspector.closeAllTabs", { count: tabsCount })}
           </MenuItem>
         )}
       </>

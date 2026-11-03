@@ -680,10 +680,10 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   });
 
 const ERROR_COMMAND = "##[error]";
-// Typed infrastructure annotations: installer stalls and signals, and an E2E
-// stack whose image pulls were rate limited.
+// Typed infrastructure annotations: detector crashes, installer stalls and
+// signals, and an E2E stack whose image pulls were rate limited.
 const INSTALL_INFRA_FAILURE =
-  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
+  /^kind=infra\s+class=(?:scope-detector|install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
 const GENERIC_PROCESS_EXIT =
   /^(?:Error:\s*)?Process completed with exit code \d+\.?$/u;
 // The installer prints this status after its typed signal/stall annotation.
@@ -1499,6 +1499,39 @@ export const renderTail = (rawLines: readonly string[]): string => {
       "----",
     ].join("\n");
   }
+  const grouped = new Map<string, Map<string, TestFailure[]>>();
+  for (const failure of failures) {
+    const scope = failure.scope === "" ? "(unscoped)" : failure.scope;
+    const file = failure.source ?? failure.file ?? "(unknown file)";
+    let files = grouped.get(scope);
+    if (files === undefined) {
+      files = new Map();
+      grouped.set(scope, files);
+    }
+    const fileFailures = files.get(file);
+    if (fileFailures === undefined) {
+      files.set(file, [failure]);
+    } else {
+      fileFailures.push(failure);
+    }
+  }
+  const names = [...grouped].flatMap(([scope, files]) => {
+    const count = [...files.values()].reduce(
+      (total, fileFailures) => total + fileFailures.length,
+      0,
+    );
+    return [
+      inert(
+        truncate(`${scope} (${count} ${count === 1 ? "failure" : "failures"})`),
+      ),
+      ...[...files].flatMap(([file, fileFailures]) => [
+        inert(`  ${truncate(file)}`),
+        ...fileFailures.map(({ name }) =>
+          inert(`    (fail) ${truncate(name)}`),
+        ),
+      ]),
+    ];
+  });
   const shown = failures.slice(0, MAX_TAIL_TESTS);
   const blocks = shown.flatMap((failure) => {
     const prefix = failure.scope === "" ? "" : `${failure.scope}: `;
@@ -1510,7 +1543,9 @@ export const renderTail = (rawLines: readonly string[]): string => {
     ];
   });
   return [
-    `---- failing tests (${shown.length} of ${failures.length}) ----`,
+    `---- failing test names (${failures.length}) ----`,
+    ...names,
+    `---- failure details (${shown.length} of ${failures.length}) ----`,
     ...blocks,
     "----",
   ].join("\n");

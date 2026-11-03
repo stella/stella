@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 const BASE_URL = "http://127.0.0.1:4176";
 const IS_CI = process.env["CI"] !== undefined;

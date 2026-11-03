@@ -38,6 +38,8 @@ export type ReaderDecisionLinkProps = {
   decision: CitedDecisionTarget;
   citation: CitationAnchorSource;
   treatment: ReaderCitationTreatment;
+  /** The block whose text names the decision at this link. */
+  blockId: string;
 };
 
 export type ReaderStatuteLinkProps =

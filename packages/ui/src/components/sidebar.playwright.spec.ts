@@ -3,6 +3,27 @@ import { expect, type Page, test } from "@playwright/test";
 const fixturePath = "/src/components/fixtures/sidebar.fixture.html";
 const VIEWPORT = { width: 844, height: 390 };
 
+test("the mobile popup owns surface props and exposes its inner panel", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(
+    `${fixturePath}?dir=ltr&side=left&variant=sidebar&inset=zero`,
+  );
+  await page.addStyleTag({
+    content: ".isolate [data-slot=sidebar-inner] { outline-style: dashed; }",
+  });
+  await page.getByRole("button", { name: "Toggle fixture sidebar" }).click();
+  const popup = page.getByRole("dialog");
+  await expect(popup).toHaveAttribute("data-surface", "matter");
+  await expect(popup).toHaveCSS("opacity", "0.9");
+  await expect(popup).toHaveCSS("isolation", "isolate");
+  await expect(popup.locator('[data-slot="sidebar-inner"]')).toHaveCSS(
+    "outline-style",
+    "dashed",
+  );
+});
+
 type Direction = "ltr" | "rtl";
 type Side = "left" | "right";
 type Variant = "sidebar" | "floating" | "inset";

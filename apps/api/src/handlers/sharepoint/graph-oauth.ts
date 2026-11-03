@@ -179,6 +179,7 @@ const requestToken = async ({
       if (!response.ok) {
         throw new HandlerError({
           status: 502,
+          code: "internal_error",
           message: `Microsoft token endpoint returned HTTP ${response.status}`,
         });
       }
@@ -191,6 +192,7 @@ const requestToken = async ({
     catch: (cause): HandlerError<502> =>
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: HandlerError.is(cause)
           ? cause.message
           : "Failed to reach the Microsoft token endpoint",

@@ -56,16 +56,34 @@ export const refetchFirstNotificationsPage = async ({
 }: NotificationsKey & {
   queryClient: QueryClient;
 }): Promise<void> => {
-  const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
-  queryClient.setQueryData(queryKey, (cached) =>
-    cached === undefined
-      ? cached
-      : {
-          pages: cached.pages.slice(0, 1),
-          pageParams: cached.pageParams.slice(0, 1),
-        },
-  );
+  const { prepare, queryKey } = firstNotificationsPageRefresh({
+    organizationId,
+    queryClient,
+    userId,
+  });
+  prepare();
   await queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+};
+
+export const firstNotificationsPageRefresh = ({
+  organizationId,
+  queryClient,
+  userId,
+}: NotificationsKey & { queryClient: QueryClient }) => {
+  const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
+  return {
+    queryKey,
+    prepare: () => {
+      queryClient.setQueryData(queryKey, (cached) =>
+        cached === undefined
+          ? cached
+          : {
+              pages: cached.pages.slice(0, 1),
+              pageParams: cached.pageParams.slice(0, 1),
+            },
+      );
+    },
+  };
 };
 
 type NotificationsQueryFn = NonNullable<

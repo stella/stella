@@ -71,6 +71,13 @@ const RUNTIME_ASSET_CONTRACTS = [
     pattern: "dist/client/assets/render-worker-????????-????????.js",
   },
   {
+    expectedCount: 2,
+    // The PPTX and XLSX model workers ship inline and start from a blob URL,
+    // so they inherit the cross-origin-isolated document's policy.
+    label: "Office inline model workers",
+    pattern: "dist/client/assets/worker-source-????????-????????.js",
+  },
+  {
     expectedCount: 1,
     label: "Office font metrics worker",
     pattern: "dist/client/assets/font-metrics.worker-????????.js",
@@ -109,6 +116,21 @@ const RUNTIME_ASSET_CONTRACTS = [
     expectedCount: 1,
     label: "RegexSet search WASM",
     pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // @stll/scan-engine starts its own module worker with
+    // `new URL("scan-engine.worker.ts", import.meta.url)` the first time the
+    // page editor cleans a scan.
+    label: "scan cleanup engine worker",
+    pattern: "dist/client/assets/scan-engine.worker-????????.js",
+  },
+  {
+    expectedCount: 1,
+    // Fetched by that worker (and the engine's in-thread fallback) through
+    // `new URL("../generated/scan_engine_bg.wasm", import.meta.url)`.
+    label: "scan cleanup engine WASM",
+    pattern: "dist/client/assets/scan_engine_bg-????????.wasm",
   },
   {
     expectedCount: 1,

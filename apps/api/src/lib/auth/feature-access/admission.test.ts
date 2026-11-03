@@ -7,6 +7,7 @@ import { decodeRequestInput } from "@/api/http/input";
 import { routes } from "@/api/http/route";
 import type { RouteRequest } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -115,7 +116,7 @@ describe("feature access safe-handler admission", () => {
             usesFeature: () => false,
             projectInputSchema: (schemas) => schemas,
           },
-        },
+        } satisfies HandlerConfig,
         async function* ({ featureAccessSnapshot }) {
           return Result.ok({
             snapshot:

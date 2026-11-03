@@ -137,6 +137,7 @@ runs:
           echo "STELLA_WEB_BUILD_ARGS"
           echo "posthog-name=$posthog_arg"
           echo "version=$version"
+          echo "configuration=$(jq -c .variables "${SOURCE_PATH}/apps/web/build-env/${TARGET_ENV}.json")"
           echo "previous-image-arg=$previous_image_arg"
         } >>"$GITHUB_OUTPUT"
 
@@ -194,6 +195,8 @@ runs:
         tags: ghcr.io/${{ github.repository_owner }}/stella-web:candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-environment }}
         cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }}
         cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }},mode=max
+        labels: |
+          app.stella.web-configuration=${{ steps.args.outputs.configuration }}
         secrets: |
           posthog_cli_api_key=${{ inputs.posthog-cli-api-key }}
         build-args: |

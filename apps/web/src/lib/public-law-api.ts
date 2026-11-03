@@ -2,8 +2,10 @@ import { TaggedError } from "better-result";
 
 import { parseApiErrorValue } from "@stll/api-contract";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { isConnectionFailure } from "@stll/fetch";
 
 import { APIError, toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 const PUBLIC_LAW_DISABLED_STATUS = 404;
@@ -18,27 +20,15 @@ const PUBLIC_LAW_AREA = "public-law";
  */
 export const SEARCH_UNAVAILABLE_STATUS = 503;
 
+/** Bound background reads as well as loader reads, including the response body. */
+export const PUBLIC_LAW_READ_TIMEOUT_MS = 10_000;
+
 /**
  * What the API answers when the public corpus is at its concurrency limit:
  * the request was admitted nowhere, so asking again shortly is the fix, the
  * same as an unreachable index.
  */
 const CORPUS_BUSY_STATUS = 429;
-
-/**
- * Whether a failed public-law read is the search backend being unreachable,
- * busy or too slow to answer rather than a real answer. Read from the typed
- * error's status, never from its message, so the surface that degrades cannot
- * drift from what the API grades as retryable. A read the page stopped
- * waiting for is the same missing answer: the API grades its own wait as 503
- * only after the page has given up, so the timeout must not reach the error
- * boundary as a crash of the whole page.
- */
-export const isSearchUnavailableError = (error: unknown): boolean =>
-  CriticalQueryTimeoutError.is(error) ||
-  (APIError.is(error) &&
-    (error.status === SEARCH_UNAVAILABLE_STATUS ||
-      error.status === CORPUS_BUSY_STATUS));
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.
@@ -52,6 +42,49 @@ export class PublicLawUnavailableError extends TaggedError(
   area: typeof PUBLIC_LAW_AREA;
   message: string;
 }> {}
+
+/** The disposition for a failed public-law read. */
+export type PublicLawFailureDisposition = "retryable" | "rejected" | "render";
+
+const isTimeoutError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "name" in error &&
+  error.name === "TimeoutError";
+
+/**
+ * Separates transient public-law read failures from deliberate API answers
+ * and failures that indicate the route itself cannot render safely.
+ */
+export const publicLawFailureDisposition = (
+  error: unknown,
+): PublicLawFailureDisposition => {
+  if (
+    CriticalQueryTimeoutError.is(error) ||
+    isTimeoutError(error) ||
+    isConnectionFailure(error) ||
+    (APIError.is(error) &&
+      (error.transportKind === "network" || error.transportKind === "timeout"))
+  ) {
+    return "retryable";
+  }
+  if (PublicLawUnavailableError.is(error)) {
+    return "rejected";
+  }
+  if (APIError.is(error)) {
+    if (error.status === CORPUS_BUSY_STATUS || error.status >= 500) {
+      return "retryable";
+    }
+    if (error.status >= 400 && error.status < 500) {
+      return "rejected";
+    }
+  }
+  return "render";
+};
+
+/** Whether a failed public-law read can recover by retrying the read. */
+export const isSearchUnavailableError = (error: unknown): boolean =>
+  publicLawFailureDisposition(error) === "retryable";
 
 /**
  * The body the public route groups answer from their gate when the surface
@@ -91,10 +124,7 @@ const isPublicLawData = <T>(
 // The gate answers with status 404, so the API client files the marker under
 // `error`; a missing resource on an enabled surface carries a different body,
 // so the marker is unambiguous.
-type PublicLawErrorInput = {
-  status: number;
-  value: unknown;
-};
+type PublicLawErrorInput = ToAPIErrorProps;
 
 type PublicLawApiResponse<T> =
   { data: T; error: null } | { data: null; error: PublicLawErrorInput };
@@ -126,7 +156,7 @@ export const toPublicLawError = (
   }
 
   return toAPIError({
-    status: error.status,
+    ...error,
     value: parseApiErrorValue(error.value),
   });
 };

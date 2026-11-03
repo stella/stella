@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterMentionItems } from "@/components/workspaces/properties/property-input/custom-mention.logic";
 
@@ -29,21 +30,22 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
 describe("property mention search", () => {
-  it("matches labels case-insensitively, preserves order, and remains accent-sensitive", () => {
+  it("matches labels regardless of case and accents, preserving order", () => {
     const items = [
       { id: "second", label: "CASE" },
       { id: "accent", label: "Café" },
@@ -54,17 +56,22 @@ describe("property mention search", () => {
       "second",
       "first",
     ]);
-    expect(filterMentionItems(items, "cafe")).toEqual([]);
+    expect(filterMentionItems(items, "cafe").map(({ id }) => id)).toEqual([
+      "accent",
+    ]);
+    expect(
+      filterMentionItems([{ id: "fr", label: "Élise Dupré" }], "elise"),
+    ).toHaveLength(1);
   });
 
-  it("returns every option for an empty query", () => {
+  it("returns every option for a blank query", () => {
     const items = [
       { id: "b", label: "B" },
       { id: "a", label: "A" },
     ];
 
     expect(filterMentionItems(items, "")).toEqual(items);
-    expect(filterMentionItems(items, " ")).toEqual([]);
+    expect(filterMentionItems(items, " ")).toEqual(items);
   });
 
   it("matches malformed mention labels by replacement scalar without matching emoji", () => {
@@ -78,9 +85,9 @@ describe("property mention search", () => {
   });
 });
 
-it("property mention filtering matches the previous label substring behavior", () => {
+it("property mention filtering keeps exactly the options whose label matches", () => {
   assertProperty(
-    "property mention filtering matches the previous label substring behavior",
+    "property mention filtering keeps exactly the options whose label matches",
     fc.property(
       fc.array(fc.record({ id: fc.string(), label: searchText }), {
         maxLength: GENERATED_MENTION_ITEMS_MAX_COUNT,
@@ -88,10 +95,7 @@ it("property mention filtering matches the previous label substring behavior", (
       searchText,
       (items, query) => {
         const expected = items.filter((item) =>
-          containsPreviousScalarSearchKey(
-            item.label.toLowerCase(),
-            query.toLowerCase(),
-          ),
+          matchesFolded(item.label, query),
         );
 
         expect(filterMentionItems(items, query)).toEqual(expected);

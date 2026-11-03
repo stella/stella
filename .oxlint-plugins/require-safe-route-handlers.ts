@@ -37,11 +37,10 @@
 // `defineEndpoint` disable this rule in oxlint.config.ts with a short
 // justification.
 //
-// `no-direct-handler-config` stays on in those files too. Elysia normalised
-// route options in place, which could delete a retained endpoint's
-// permissions; the HTTP core takes the definition itself and never writes to
-// it, and `RouteDefinition.config` is readonly, so an assignment or `delete`
-// is a type error. What the types still accept is a write through a
+// `no-direct-handler-config` stays on in those files too: a write to a
+// retained endpoint's config could drop its permissions. The HTTP core takes
+// the definition itself and never writes to it, and `RouteDefinition.config`
+// is readonly, so an assignment or `delete` is a type error. What the types still accept is a write through a
 // function: `Object.assign(endpoint.config, ...)`, `Reflect.set(...)`,
 // `Object.defineProperty(...)` and their siblings with a `.config` target.
 // The rule reports those, and any assignment, update or `delete` whose target

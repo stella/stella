@@ -12,9 +12,10 @@ import { panic } from "better-result";
  */
 
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
 // parser-output-unchanged: imports the same snapshot row shape from its pure parser module.
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type FormatInput,
@@ -153,16 +154,11 @@ type CandidateValidation =
   | { status: "accepted"; sourceDefects: PublishedTextDefect[] }
   | { status: "refused"; reason: TextCandidateUnusable };
 
-const validateCandidate = (
-  row: OpinionRow,
-  text: ParsedOpinionText,
-): CandidateValidation => {
-  const result = validateAndLog(
-    {
-      parser: "courtlistener",
-      caseNumber: `cl-opinion:${row.id}`,
-      language: "en",
-    },
+const validateCandidate = (text: ParsedOpinionText): CandidateValidation => {
+  // Measured, not logged: the verdict decides whether this column is used or
+  // the next one tried, a refusal is recorded in the attempts, and the
+  // pipeline reports retention for the document it stores.
+  const result = validateAst(
     text.validationHtml,
     text.units.flatMap(({ blocks }) => [...blocks]),
     { sourcePolicy: courtListenerValidationPolicy },
@@ -220,7 +216,7 @@ export const selectOpinionText = ({
           attempts.push({ format, structure, reason: usability });
           break;
         }
-        const validation = validateCandidate(row, parsed.text);
+        const validation = validateCandidate(parsed.text);
         switch (validation.status) {
           case "accepted":
             budget.blocks += parsed.text.units.reduce(

@@ -1,8 +1,6 @@
-import { SQSClient } from "@aws-sdk/client-sqs";
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
-import { envBase } from "@/api/env-base";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { receiveSesInboundMail } from "@/api/lib/email/inbound/runtime";
 import {
@@ -10,6 +8,7 @@ import {
   createSesS3ObjectReader,
 } from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
+import { sqsClientFor } from "@/api/lib/email/sns-queue-drain";
 import { getFreshAbortableS3 } from "@/api/lib/s3";
 import {
   type SchedulerTask,
@@ -17,14 +16,6 @@ import {
 } from "@/api/lib/scheduler/types";
 
 export const RECEIVE_INBOUND_MAIL_TASK = "inboundMail.receive" as const;
-
-// The queue shares the object store's region; credentials come from the SDK's
-// default chain (the task role in a deployment).
-let sqsClient: SQSClient | null = null;
-const getSqsClient = () => {
-  sqsClient ??= new SQSClient({ region: envBase.S3_REGION });
-  return sqsClient;
-};
 
 export const receiveInboundMail: SchedulerTask = async ({
   dueAt,
@@ -58,8 +49,8 @@ export const receiveInboundMail: SchedulerTask = async ({
     bucket: config.bucket,
   });
   const drained = await drainInboundMailQueue({
-    client: getSqsClient(),
-    queueUrl: config.queueUrl,
+    client: sqsClientFor(config.queue),
+    queueUrl: config.queue.url,
     topicArn: config.topicArn,
     signal,
     logger,

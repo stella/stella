@@ -78,7 +78,7 @@ const call = async ({
     },
     listMcpTools: async (context, mode, scopes) =>
       await listWireMcpTools(context, mode, scopes),
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () => {

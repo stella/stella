@@ -3,7 +3,12 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
+import {
+  checkCiEventPolicies,
+  WHOLE_CONTEXT_ENV_BUDGET_CASES,
+  wholeContextConsumers,
+  workflowSchema,
+} from "./check-ci-event-policy";
 
 const directory = new URL("../.github/workflows/", import.meta.url);
 const workflows = Object.fromEntries(
@@ -21,11 +26,8 @@ const policy = JSON.parse(
   ),
 );
 
-test("compiler parity and seeded probes require dispatch-only policy in every workflow", () => {
+test("seeded compiler probes require dispatch-only policy in every workflow", () => {
   for (const command of [
-    "bun run check:typecheck-parity",
-    "bun scripts/typecheck-parity.ts",
-    "bunx --no-install stll-typecheck-parity --project=tsconfig.json",
     "bash scripts/typecheck-command-probe.sh",
     "probe=packages/sha256/src/typecheck-command-probe.ts",
   ]) {
@@ -39,7 +41,7 @@ test("compiler parity and seeded probes require dispatch-only policy in every wo
         policy: { jobs: { "fixture.yml/proof": "main" } },
       }),
     ).toContain(
-      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+      "fixture.yml/proof: compiler probes require dispatch-only policy",
     );
     expect(
       checkCiEventPolicies({
@@ -52,7 +54,7 @@ test("compiler parity and seeded probes require dispatch-only policy in every wo
         policy: { jobs: { "fixture.yml/proof": "main" } },
       }),
     ).toContain(
-      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+      "fixture.yml/proof: compiler probes require dispatch-only policy",
     );
     const declared = { jobs: { "fixture.yml/proof": "dispatch-only" } };
     expect(
@@ -94,28 +96,76 @@ test("moving compiler proofs into an automatic workflow fails the real policy ce
     if (!job?.steps) {
       panic("Missing workflow steps fixture");
     }
-    for (const command of [
-      "bun run check:typecheck-parity",
-      "bash scripts/typecheck-command-probe.sh",
-    ]) {
-      job.steps.push({ run: command });
-      expect(
-        checkCiEventPolicies({
-          workflows: { ...workflows, [file]: workflow },
-          policy,
-        }),
-      ).toContainEqual(
-        expect.stringContaining(
-          "compiler parity and probes require dispatch-only policy",
-        ),
-      );
-      job.steps.pop();
-    }
+    job.steps.push({ run: "bash scripts/typecheck-command-probe.sh" });
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, [file]: workflow },
+        policy,
+      }),
+    ).toContainEqual(
+      expect.stringContaining("compiler probes require dispatch-only policy"),
+    );
+    job.steps.pop();
   }
 });
 
 test("every real workflow job has an event policy and the fast gate follows it", () => {
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
+});
+
+test("whole-context environment values require an exact budget-test allowlist entry", () => {
+  const changed = structuredClone(workflows);
+  const workflow = v.parse(workflowSchema, changed["ci.yml"]);
+  const job = workflow.jobs["ci-checks-rest"] ?? panic("Missing check job");
+  job.steps?.push({
+    name: "Unbudgeted context",
+    env: { EVERYTHING: ["$", "{{ toJSON(needs) }}"].join("") },
+  });
+  expect(
+    checkCiEventPolicies({
+      workflows: { ...changed, "ci.yml": workflow },
+      policy,
+    }),
+  ).toContain(
+    "ci.yml/ci-checks-rest/Unbudgeted context/EVERYTHING: whole-context env is not covered by whole workflow contexts stay below the per-variable environment budget",
+  );
+});
+
+test("whole-context detection covers spelling, job env and the declared context", () => {
+  const changed = structuredClone(workflows);
+  const workflow = v.parse(workflowSchema, changed["ci.yml"]);
+  const job = workflow.jobs["ci-checks-rest"] ?? panic("Missing check job");
+  job["env"] = {
+    PLAN: ["$", "{{ toJson( needs.ci-plan.outputs ) }}"].join(""),
+  };
+  const pool =
+    job.steps?.find((step) => step["name"] === "Run repository checks") ??
+    panic("Missing pool step");
+  pool.env = {
+    ...pool.env,
+    CI_CHECK_POOL_INPUTS: ["$", "{{ toJSON(needs) }}"].join(""),
+  };
+  const problems = checkCiEventPolicies({
+    workflows: { ...changed, "ci.yml": workflow },
+    policy,
+  });
+  expect(problems).toContain(
+    "ci.yml/ci-checks-rest/<job env>/PLAN: whole-context env is not covered by whole workflow contexts stay below the per-variable environment budget",
+  );
+  expect(problems).toContain(
+    "ci.yml/ci-checks-rest/Run repository checks/CI_CHECK_POOL_INPUTS: serializes toJSON(needs), but whole workflow contexts stay below the per-variable environment budget measures toJSON(inputs)",
+  );
+});
+
+test("every whole-context allowlist entry names a live workflow consumer", () => {
+  const live = Object.entries(workflows).flatMap(([file, raw]) =>
+    wholeContextConsumers(file, v.parse(workflowSchema, raw)).map(
+      ({ consumer }) => consumer,
+    ),
+  );
+  expect(Object.keys(WHOLE_CONTEXT_ENV_BUDGET_CASES).toSorted()).toEqual(
+    [...new Set(live)].toSorted(),
+  );
 });
 
 test("duplicate raw event-policy job keys fail before JSON key collapse", () => {

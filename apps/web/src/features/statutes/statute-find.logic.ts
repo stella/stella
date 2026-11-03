@@ -4,7 +4,7 @@
  * screen; the search box already narrowed the corpus.
  */
 
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
@@ -21,7 +21,7 @@ type StatuteFindText = (statute: StatuteListItem) => string;
 const STATUTE_FIND_TEXT = {
   // Both lines of the cell, each marked on its own.
   act: (statute) => {
-    const { name, number } = statuteActLabel(statute);
+    const { subject: name, identity: number } = statuteDisplayLabel(statute);
     return [number, name].filter((part) => part !== null).join("\n");
   },
   type: (statute) => statute.documentType ?? "",

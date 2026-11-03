@@ -1,9 +1,14 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 import { requeueDeterministicJob } from "./bullmq-requeue";
 import type { RequeueableQueue } from "./bullmq-requeue";
+
+beforeEach(() => {
+  pending.mockClear();
+  settled.mockClear();
+});
 
 type Data = { id: string };
 

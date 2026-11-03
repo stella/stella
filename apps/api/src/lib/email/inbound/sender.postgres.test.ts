@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -27,6 +29,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -287,22 +290,25 @@ if (!databaseUrl || !runPostgresTests) {
           }).then((result) => result.unwrap());
           activeDeliveries.push(second);
           const secondPid = await secondTransactionStarted.promise;
-          let secondBlocked = false;
+          // The second delivery either reaches its candidate here or waits on
+          // the first one's lock, which only the server's lock graph shows.
           let secondReachedCandidate = false;
-          for (let attempt = 0; attempt < 100; attempt += 1) {
-            const [wait] = await observerDb.execute<{ blocked: boolean }>(sql`
-              SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
-            `);
-            secondBlocked = wait?.blocked ?? false;
-            secondReachedCandidate = await Promise.race([
-              secondAtCandidate.promise.then(() => true),
-              Bun.sleep(20).then(() => false),
-            ]);
-            if (secondBlocked || secondReachedCandidate) {
-              break;
-            }
-          }
-          expect(secondBlocked || secondReachedCandidate).toBe(true);
+          void secondAtCandidate.promise.then(() => {
+            secondReachedCandidate = true;
+            return undefined;
+          });
+          await waitForExternalState({
+            description:
+              "the second delivery waits on a lock or reaches its candidate",
+            intervalMs: 20,
+            read: async () =>
+              secondReachedCandidate ||
+              (
+                await observerDb.execute<{ blocked: boolean }>(sql`
+                  SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
+                `)
+              ).at(0)?.blocked === true,
+          });
           releaseCandidates.resolve(undefined);
           const outcomes = await Promise.allSettled([first, second]);
           expect(
@@ -329,9 +335,7 @@ if (!databaseUrl || !runPostgresTests) {
         } finally {
           releaseCandidates.resolve(undefined);
           await Promise.allSettled(activeDeliveries);
-          await setupDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setupDb, [organizationId]);
           await setupDb.delete(user).where(eq(user.id, adminId));
         }
       });

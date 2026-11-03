@@ -1,5 +1,6 @@
 import type {
   AgendaItemWireFields,
+  AiCellSettlement,
   EntityPriority,
   OcrExportStatus,
   ReviewFlag,
@@ -41,7 +42,6 @@ export type {
 } from "@/lib/api-contract";
 
 export type RouterToPath = FileRouteTypes["to"];
-export type RouterFullPath = FileRouteTypes["fullPaths"];
 
 export type WorkspaceId = SafeId<"workspace">;
 export type EntityId = SafeId<"entity">;
@@ -191,6 +191,7 @@ export type WorkspaceField = {
   id: FieldId;
   propertyId: PropertyId;
   content: WorkspaceFieldContent;
+  aiSettlement?: AiCellSettlement | null;
   ocrExportStatus?: OcrExportStatus;
 };
 

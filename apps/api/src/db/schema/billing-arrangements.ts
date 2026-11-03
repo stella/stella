@@ -34,6 +34,14 @@ export const billingArrangements = p.pgTable(
     // PostgreSQL bigint; centsColumn preserves the bounded CentsAmount JSON number boundary.
     flatFeeAmount: centsColumn("flat_fee_amount"),
     capAmount: centsColumn("cap_amount"),
+    // Maximum reserved billable time, independent of the monetary cap.
+    capMinutes: p.integer("cap_minutes"),
+    minuteThresholdState: p
+      .text("minute_threshold_state", { enum: BILLING_CAP_BOUNDARY_STATES })
+      .default("below"),
+    minuteCapState: p
+      .text("minute_cap_state", { enum: BILLING_CAP_BOUNDARY_STATES })
+      .default("below"),
     alertThresholdBps: p.integer("alert_threshold_bps"),
     thresholdState: p
       .text("threshold_state", { enum: BILLING_CAP_BOUNDARY_STATES })
@@ -60,14 +68,21 @@ export const billingArrangements = p.pgTable(
       })
       .onDelete("cascade"),
     p.check(
-      "billing_arrangements_mode_check",
+      "billing_arrangements_mode_caps_check",
       sql`(
-      (${table.mode} = 'flat_fee' AND ${table.flatFeeAmount} IS NOT NULL AND ${table.flatFeeAmount} >= 0 AND ${table.capAmount} IS NULL AND ${table.alertThresholdBps} IS NULL)
+      (${table.mode} = 'flat_fee' AND ${table.flatFeeAmount} IS NOT NULL AND ${table.flatFeeAmount} >= 0 AND ${table.capAmount} IS NULL AND ${table.capMinutes} IS NULL AND ${table.alertThresholdBps} IS NULL)
       OR (${table.mode} = 'hourly' AND ${table.flatFeeAmount} IS NULL AND (
-        (${table.capAmount} IS NULL AND ${table.alertThresholdBps} IS NULL)
-        OR (${table.capAmount} IS NOT NULL AND ${table.alertThresholdBps} IS NOT NULL AND ${table.capAmount} > 0 AND ${table.alertThresholdBps} BETWEEN 1 AND 10000)
+        (${table.capAmount} IS NULL AND ${table.capMinutes} IS NULL AND ${table.alertThresholdBps} IS NULL)
+        OR ((${table.capAmount} IS NOT NULL OR ${table.capMinutes} IS NOT NULL)
+          AND (${table.capAmount} IS NULL OR ${table.capAmount} > 0)
+          AND (${table.capMinutes} IS NULL OR ${table.capMinutes} > 0)
+          AND ${table.alertThresholdBps} IS NOT NULL AND ${table.alertThresholdBps} BETWEEN 1 AND 10000)
       ))
     )`,
+    ),
+    p.check(
+      "billing_arrangements_minute_crossing_check",
+      sql`(${table.minuteThresholdState} IS NULL OR ${table.minuteThresholdState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)})) AND (${table.minuteCapState} IS NULL OR ${table.minuteCapState} IN (${sql.join(BILLING_CAP_BOUNDARY_STATE_SQL_VALUES, sql`, `)}))`,
     ),
     p.check(
       "billing_arrangements_currency_check",

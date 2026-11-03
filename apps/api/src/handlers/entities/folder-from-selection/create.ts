@@ -167,11 +167,11 @@ export const createFolderFromSelectionHandler = async function* ({
   const entityId = yield* attempt;
 
   detached(
-    flushSearchRepairs([entityId]),
+    async () => flushSearchRepairs([entityId]),
     "folder-from-selection.flush-search-repairs",
   );
   detached(
-    syncSearchActivity(workspaceId),
+    async () => syncSearchActivity(workspaceId),
     "folder-from-selection.sync-search-activity",
   );
 
@@ -180,6 +180,7 @@ export const createFolderFromSelectionHandler = async function* ({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a folder and move the given documents, folders, or tasks into " +
     "it in one step. The folder is created under parentId, or at the matter " +

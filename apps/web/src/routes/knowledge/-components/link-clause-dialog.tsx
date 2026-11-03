@@ -36,15 +36,16 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseCategoriesOptions,
   clausesOptions,
   templateClausesOptions,
   templatePreviewOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
 import { filterClauseLinkCandidates } from "@/routes/knowledge/-components/link-clause-dialog.logic";
 
@@ -81,6 +82,7 @@ export const LinkClauseDialog = ({
   defaultSlotName,
   reservedSlotNames,
 }: LinkClauseDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -102,7 +104,7 @@ export const LinkClauseDialog = ({
     ...clauseCategoriesOptions(activeOrganizationId),
     enabled: open,
   });
-  const catDataView = useQueryView(catDataQuery);
+  const catDataView = queryView(catDataQuery);
   const catData = catDataView.type === "items" ? catDataView.items : undefined;
   const {
     data: clauseData,
@@ -119,14 +121,14 @@ export const LinkClauseDialog = ({
     ...templatePreviewOptions(activeOrganizationId, templateId),
     enabled: open,
   });
-  const previewDataView = useQueryView(previewDataQuery);
+  const previewDataView = queryView(previewDataQuery);
   const previewData =
     previewDataView.type === "items" ? previewDataView.items : undefined;
   const linksDataQuery = useQuery({
     ...templateClausesOptions(activeOrganizationId, templateId),
     enabled: open,
   });
-  const linksDataView = useQueryView(linksDataQuery);
+  const linksDataView = queryView(linksDataQuery);
   const linksData =
     linksDataView.type === "items" ? linksDataView.items : undefined;
 
@@ -197,7 +199,7 @@ export const LinkClauseDialog = ({
     },
     enabled: open && selectedClauseId !== null,
   });
-  const variantsResultView = useQueryView(variantsResultQuery);
+  const variantsResultView = queryView(variantsResultQuery);
   const variantsResult =
     variantsResultView.type === "items" ? variantsResultView.items : undefined;
   const variants =
@@ -258,9 +260,14 @@ export const LinkClauseDialog = ({
       body.slotName = slotName;
     }
 
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put(body);
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body,
+      send: async (payload) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(payload),
+    });
 
     setLinking(false);
 

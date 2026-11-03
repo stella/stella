@@ -3,11 +3,11 @@ import * as v from "valibot";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type { AcceptingDocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
-import { fetchWithTimeout } from "@stll/fetch";
 
 import type { TranslationKey } from "@/i18n/types";
-import { apiUrl } from "@/lib/api-url";
-import { toAPIError } from "@/lib/errors/api";
+import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -23,6 +23,8 @@ const manualOcrResponseSchema = v.variant("outcome", [
   }),
 ]);
 
+type ManualOcrResponse = v.InferOutput<typeof manualOcrResponseSchema>;
+
 type RequestManualOcrOptions = {
   entityId: string;
   fieldId: string;
@@ -33,32 +35,26 @@ export const requestManualOcr = async ({
   entityId,
   fieldId,
   workspaceId,
-}: RequestManualOcrOptions) => {
-  const response = await fetchWithTimeout(
-    apiUrl(
-      `/entities/${encodeURIComponent(workspaceId)}/entity/${encodeURIComponent(entityId)}/ocr`,
-    ),
-    {
-      body: JSON.stringify({ fieldId }),
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      timeoutMs: REQUEST_TIMEOUT_MS,
-    },
+}: RequestManualOcrOptions): Promise<ManualOcrResponse> => {
+  const payload = await invokeCapability(
+    "entities.ocr.create",
+    async (request) =>
+      unwrapApiResponse(
+        await api
+          .entities({ workspaceId })
+          .entity({ entityId })
+          .ocr.post(
+            { fieldId },
+            { ...request, fetch: { timeoutMs: REQUEST_TIMEOUT_MS } },
+          ),
+      ),
   );
-  if (!response.ok) {
-    throw toAPIError({ status: response.status, value: null });
-  }
-
-  const payload: unknown = await response.json();
   const parsed = v.safeParse(manualOcrResponseSchema, payload);
   if (!parsed.success) {
-    throw toAPIError({ status: 502, value: null });
+    return await Promise.reject(toAPIError({ status: 502, value: null }));
   }
   return parsed.output;
 };
-
-type ManualOcrResponse = v.InferOutput<typeof manualOcrResponseSchema>;
 
 const QUEUED_OCR_TOAST_KEYS = {
   live: "workspaces.files.ocrQueued",

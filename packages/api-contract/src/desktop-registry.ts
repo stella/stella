@@ -1,4 +1,7 @@
-import type { BusinessRegistrySlug } from "./business-registries";
+import type {
+  BusinessRegistrySearchCapabilities,
+  BusinessRegistrySlug,
+} from "./business-registries";
 import desktopAccountPolicy from "./desktop-account-policy.json";
 
 export const DESKTOP_ACCOUNT_POLICY = desktopAccountPolicy;
@@ -11,6 +14,8 @@ export type DesktopRegistryConfig = {
     name: string;
     /** Absent only when a newer desktop is connected to an older API. */
     formatType?: "company-specification" | "registry-reference";
+    /** Absent only when a newer desktop is connected to an older API. */
+    searchCapabilities?: BusinessRegistrySearchCapabilities;
   }[];
   defaultRegistryId: BusinessRegistrySlug | null;
 };

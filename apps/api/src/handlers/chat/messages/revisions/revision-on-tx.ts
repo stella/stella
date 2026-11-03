@@ -17,6 +17,7 @@ import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
 import { hasUnsettledRevisionContent } from "@/api/handlers/chat/messages/revisions/revision-settlement";
 import { isRevisionEditSpanValid } from "@/api/handlers/chat/messages/revisions/revision-span";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
 import { findAnchoredSpan } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type { PersistedChatMessageContentV3 } from "@/api/handlers/chat/types";
@@ -146,6 +147,7 @@ export const writeChatMessageRevisionOnTx = async ({
     content = target.content;
   } else {
     const candidate = change.content;
+    const visibleOriginal = serializeRevisionSnapshot(original);
     if (
       !deepEquals(candidate.metadata, original.metadata) ||
       candidate.data.length !== original.data.length
@@ -159,10 +161,10 @@ export const writeChatMessageRevisionOnTx = async ({
         if (!isChatPart(part) || part.type !== "text") {
           return { type: "invalid-content" } as const;
         }
-        data.push(part);
+        data.push({ ...old, content: part.content });
         continue;
       }
-      if (!old || !deepEquals(part, old)) {
+      if (!old || !deepEquals(part, visibleOriginal.data.at(index))) {
         return { type: "invalid-content" } as const;
       }
       data.push(old);

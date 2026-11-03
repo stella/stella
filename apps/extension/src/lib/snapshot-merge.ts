@@ -3,6 +3,8 @@ import * as v from "valibot";
 import {
   BROWSER_CONTROL_LIMITS,
   type BrowserControlElement,
+  browserControlTargetContextSchema,
+  browserControlTargetHrefSchema,
   formatElementReference,
 } from "@stll/api-contract/browser-control";
 
@@ -12,8 +14,8 @@ import { isControllableFrame } from "./origin-policy";
 export const frameSnapshotSchema = v.strictObject({
   elements: v.array(
     v.strictObject({
-      context: v.optional(v.string()),
-      href: v.optional(v.string()),
+      context: browserControlTargetContextSchema,
+      href: browserControlTargetHrefSchema,
       name: v.string(),
       path: v.string(),
       role: v.string(),
@@ -78,11 +80,11 @@ export const mergeFrameSnapshots = ({
         break;
       }
       elements.push({
+        context: element.context,
+        href: element.href,
         name: element.name,
         ref: formatElementReference({ frameId, path: element.path }),
         role: element.role,
-        ...(element.context === undefined ? {} : { context: element.context }),
-        ...(element.href === undefined ? {} : { href: element.href }),
         ...(element.value === undefined ? {} : { value: element.value }),
       });
     }

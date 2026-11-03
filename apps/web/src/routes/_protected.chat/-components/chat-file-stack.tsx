@@ -74,6 +74,7 @@ export const ChatThreadFilesButton = ({
       <PopoverTrigger
         aria-label={t("chat.threadFiles.title")}
         className={cn(buttonVariants({ size: "xs", variant: "ghost" }))}
+        tooltip={t("chat.threadFiles.title")}
       >
         <FileTiles layout={layout} />
       </PopoverTrigger>

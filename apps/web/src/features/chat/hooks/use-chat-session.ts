@@ -9,10 +9,16 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
@@ -33,8 +39,8 @@ import type { ChatTableChartProps } from "@/components/chat/chat-table-chart";
 import type {
   ApprovalToolName,
   AskUserOutput,
-  ChatPart,
   ChatUITools,
+  PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
@@ -78,7 +84,13 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
+import type {
+  UserMessageEdit,
+  UserMessageEditOutcome,
+} from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
@@ -89,7 +101,9 @@ import {
   type ChatUserMessageInput,
   isChatMessageStartError,
   sendThreadChatMessage,
+  sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
+import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -97,6 +111,11 @@ import {
   storeChatToolGrant,
 } from "@/features/chat/chat-tool-grants";
 import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
+import {
+  planTruncatedReplay,
+  userMessageEditFailure,
+} from "@/features/chat/hooks/edit-user-message";
+import type { TruncatedReplayTarget } from "@/features/chat/hooks/edit-user-message";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
@@ -113,6 +132,7 @@ import {
 import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
+  canSendWithoutQueueing,
   createInitialSendQueueState,
   describeQueuedMessage,
   type QueuedChatEntry,
@@ -132,7 +152,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatTimingSurface } from "@/lib/analytics/types";
-import { api } from "@/lib/api";
+import { api, chatConnectorReceipt } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type {
   ChatEditApplyMode,
@@ -157,7 +177,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -166,6 +186,10 @@ import {
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -262,14 +286,32 @@ const prepareCreateDocumentDraft = async (
   }
 };
 
+const downloadCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+) =>
+  Result.tryPromise(async () => {
+    const draft = await prepareCreateDocumentDraft(toolCallId, input);
+    if (draft === null) {
+      return { status: "invalid-source" } as const;
+    }
+    downloadFile(
+      new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+      draft.fileName,
+    );
+    return { status: "downloaded", fileName: draft.fileName } as const;
+  });
+
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
+  documentOnScreen: CurrentWorkspaceDocument,
 ) => {
-  await openEntityInInspector(
-    output.entityId,
-    output.fileName,
-    output.workspaceId,
-  );
+  await openEntityInInspector({
+    documentOnScreen,
+    entityId: output.entityId,
+    label: output.fileName,
+    workspaceId: output.workspaceId,
+  });
   const tab = useInspectorTabsStore
     .getState()
     .tabs.find(
@@ -286,18 +328,6 @@ const openCreatedDocumentInInspector = async (
 // reducer) lives in the sibling `.logic.ts` file. Re-exported here so
 // existing consumers keep importing it from this hook.
 export type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-
-type AskUserToolCallPart = Extract<
-  ChatPart,
-  { name: "ask-user"; type: "tool-call" }
->;
-
-const resetAskUserToolCall = (
-  part: AskUserToolCallPart,
-): AskUserToolCallPart => {
-  const { output: _discardedOutput, ...partWithoutOutput } = part;
-  return { ...partWithoutOutput, state: "input-complete" };
-};
 
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
@@ -320,6 +350,7 @@ export const useChatSession = ({
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const chatToolGrantsQuery = useQuery(
     chatToolGrantsOptions({
       activeOrganizationId: organizationId,
@@ -327,7 +358,7 @@ export const useChatSession = ({
       userId,
     }),
   );
-  const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
   useQueryViewError(chatToolGrantsView, "useChatSession:query");
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
@@ -348,6 +379,7 @@ export const useChatSession = ({
   );
   const {
     error: runtimeError,
+    isLoading: clientLoading,
     sessionGenerating,
     reconnecting,
     status,
@@ -794,7 +826,7 @@ export const useChatSession = ({
       }
 
       const requestOptions = withRequestSnapshots(options);
-      if (sendQueueRef.current.isGenerating) {
+      if (!canSendWithoutQueueing(sendQueueRef.current)) {
         enqueueMessage(message, requestOptions);
         return;
       }
@@ -1005,6 +1037,30 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  // Same two steps as private input: the server confirms the connection and
+  // returns the receipt, then the chat continues with it.
+  const handleConnectConnector = useCallback(
+    async (
+      toolCallId: string,
+      decision: ConnectConnectorDecision,
+    ): Promise<ConnectConnectorOutput> =>
+      chatConnectorReceipt.submit({
+        threadId: toSafeId<"chatThread">(conversationId),
+        toolCallId,
+        decision,
+      }),
+    [conversationId],
+  );
+  const continueConnectConnector = useCallback(
+    async (toolCallId: string, receipt: ConnectConnectorOutput) => {
+      await addToolResult({
+        tool: "connect_connector",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
   const resolveSecretTarget = useCallback(
     async (
       connectorSlug: string,
@@ -1023,102 +1079,150 @@ export const useChatSession = ({
   );
 
   /**
-   * Edit an already-answered ask-user card and replay the model
-   * from that point. TanStack ChatClient does not expose a
-   * rewind-to-tool-call primitive, so this is a truncate-and-replay:
+   * The one truncate-and-replay path. TanStack ChatClient has no rewind
+   * primitive, so the page drops every message after the target
+   * (`planTruncatedReplay`) and the replay request names the same target
+   * (`truncateAfterMessageId`), so the server drops the same persisted turns
+   * before the model runs again.
    *
-   *   1. Find the assistant message that owns the ask-user part.
-   *   2. Drop every message after it locally; the backend receives
-   *      the same truncation target for persisted history.
-   *   3. Reset the ask-user `tool-call` to `input-complete` and
-   *      remove its paired `tool-result` so `addToolResult` writes
-   *      a fresh output and TanStack's continuation logic drives the
-   *      next turn.
-   *
-   * The replay request also carries `truncateAfterMessageId`, so the
-   * backend drops persisted downstream turns before preparing the next
-   * model context.
+   * The plan reads the runtime's messages when the replay starts, not the
+   * rendered ones, so the callbacks built on it keep their identity while a
+   * turn streams and the transcript's edit actions do not re-render.
+   */
+  const replayFromTruncation = useCallback(
+    async <TReplayed>(
+      target: TruncatedReplayTarget,
+      replay: (
+        options: ChatSendMessageOptions | undefined,
+        /** The page's messages before the replay rewound them. */
+        rewoundFrom: PersistedChatMessage[],
+      ) => Promise<TReplayed>,
+    ): Promise<TReplayed | null> => {
+      const rewoundFrom = projectCanonicalChatUIMessages(
+        chat.getSnapshot().messages,
+      );
+      const plan = planTruncatedReplay(rewoundFrom, target);
+      if (plan === null) {
+        return null;
+      }
+      setMessages(plan.messages);
+      return await replay(
+        snapshotChatRequestOptions({
+          docxEditRepresentation: undefined,
+          editApplyMode: undefined,
+          options: { body: plan.body },
+          sendMode: getSendMode?.(),
+        }),
+        rewoundFrom,
+      );
+    },
+    [chat, getSendMode, setMessages],
+  );
+
+  /**
+   * Answer an answered ask-user card again: its card goes back to awaiting
+   * the answer, and `addToolResult` writes the new one, which drives the
+   * next turn.
    */
   const handleAskUserEditAndRerun = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {
-      let targetIndex = -1;
-      for (let i = 0; i < messages.length; i += 1) {
-        const candidate = messages[i];
-        if (!candidate || candidate.role !== "assistant") {
-          continue;
-        }
-        const hasPart = candidate.parts.some(
-          (part) =>
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId,
-        );
-        if (hasPart) {
-          targetIndex = i;
-          break;
-        }
-      }
-      if (targetIndex === -1) {
-        return;
-      }
-      const targetMessage = messages[targetIndex];
-      if (!targetMessage || targetMessage.role !== "assistant") {
-        return;
-      }
-
-      // slice's elements are shared refs with the original `messages`
-      // array; mutating in place would corrupt the SDK's history, so the
-      // spread builds a new message object that owns the rewritten parts.
-      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
-        if (message.role !== "assistant") {
-          return message;
-        }
-        // Reset the matching ask-user part so `addToolResult` can
-        // overwrite its output. Keeping `input` on the tool-call
-        // keeps the card body stable during the brief frame between
-        // truncation and the next tool-result write.
-        const nextParts: ChatPart[] = [];
-        for (const part of message.parts) {
-          if (part.type === "tool-result" && part.toolCallId === toolCallId) {
-            continue;
-          }
-          if (
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId &&
-            part.state === "complete"
-          ) {
-            nextParts.push(resetAskUserToolCall(part));
-            continue;
-          }
-          nextParts.push(part);
-        }
-        return { ...message, parts: nextParts };
-      });
-      setMessages(truncated);
-      const replayOptions = snapshotChatRequestOptions({
-        docxEditRepresentation: undefined,
-        editApplyMode: undefined,
-        options: {
-          body: {
-            truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
-          },
+      await replayFromTruncation(
+        { type: "ask-user-answer", toolCallId },
+        async (options) => {
+          await addToolResult(
+            {
+              tool: "ask-user",
+              toolCallId,
+              output,
+            },
+            options,
+          );
         },
-        sendMode: getSendMode?.(),
-      });
-      await addToolResult(
-        {
-          tool: "ask-user",
-          toolCallId,
-          output,
-        },
-        replayOptions,
       );
     },
-    [addToolResult, getSendMode, messages, setMessages],
+    [addToolResult, replayFromTruncation],
   );
 
-  const createDocumentMattersView = useQueryView(
+  /**
+   * Opening the editor of a sent message while a turn runs stops that turn
+   * through the composer's Stop, so the edit can be sent once it settled.
+   */
+  const startUserMessageEdit = useCallback(() => {
+    if (sendQueueRef.current.isGenerating) {
+      stop();
+    }
+  }, [stop]);
+
+  /**
+   * An open edit form holds the queue: nothing queued is sent while it is
+   * open, since the edit would drop the turn such a prompt starts. The hold
+   * belongs to the edit session that opened it (`sessionId`); its release
+   * runs when that form closes, and lifts only that session's hold.
+   */
+  const holdQueueForMessageEdit = useCallback(
+    (sessionId: string) => {
+      applySendQueueEvent({ type: "message-edit-opened", sessionId });
+      return () => {
+        const dispatched = applySendQueueEvent({
+          type: "message-edit-closed",
+          sessionId,
+        });
+        if (dispatched) {
+          detached(
+            dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+            "use-chat-session.dispatch-after-message-edit",
+          );
+        }
+      };
+    },
+    [applySendQueueEvent, dispatchQueuedMessage],
+  );
+
+  /**
+   * Replace one of the user's own messages and run the assistant again from
+   * there: the message and every later turn leave the thread, and the edited
+   * message is sent under the same id. Resolves once the server accepted the
+   * edit's turn or did not; when it did not, the page shows the thread as the
+   * server stores it again. Should that thread no longer hold the edited
+   * message, the page's edit sessions hand the edit on, as they do for a
+   * message that leaves the thread any other way.
+   */
+  const editUserMessage = useCallback(
+    async (
+      messageId: string,
+      edit: UserMessageEdit,
+      /** The edit session that sent it, whose queue hold the accepted
+       *  edit's turn takes over. */
+      sessionId: string,
+    ): Promise<UserMessageEditOutcome> => {
+      const replayed = await replayFromTruncation(
+        { type: "user-message", messageId },
+        async (options, rewoundFrom): Promise<UserMessageEditOutcome> => {
+          const acceptance = await sendThreadChatMessageUntilAccepted(
+            chat,
+            buildEditedUserMessage({ edit, messageId }),
+            { ...options, timingSurface },
+          );
+          if (acceptance.status === "accepted") {
+            applySendQueueEvent({ type: "message-edit-accepted", sessionId });
+            return { type: "accepted" };
+          }
+          await showStoredChatThread(chat, rewoundFrom);
+          return userMessageEditFailure(acceptance.error);
+        },
+      );
+      // A message the page no longer holds cannot be edited from it.
+      return (
+        replayed ?? {
+          type: "edit-refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+        }
+      );
+    },
+    [applySendQueueEvent, chat, replayFromTruncation, timingSurface],
+  );
+
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
@@ -1357,33 +1461,24 @@ export const useChatSession = ({
       input: CreateDocumentInput,
     ) => {
       if (destination.type === "download") {
-        const downloadResult = await Result.tryPromise(async () => {
-          const draft = await prepareCreateDocumentDraft(toolCallId, input);
-          if (draft === null) {
-            return { status: "invalid-source" } as const;
-          }
-          downloadFile(
-            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
-            draft.fileName,
-          );
-          return { status: "downloaded", fileName: draft.fileName } as const;
-        });
-
+        const downloadResult = await downloadCreateDocumentDraft(
+          toolCallId,
+          input,
+        );
+        if (Result.isError(downloadResult)) {
+          getAnalytics().captureError(downloadResult.error, {
+            fingerprintKey: "useChatSession:failure-3",
+            scope: { type: "handler", handlerId: exceptionHandlerId },
+          });
+        }
         if (
           Result.isError(downloadResult) ||
           downloadResult.value.status === "invalid-source"
         ) {
-          if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error, {
-              fingerprintKey: "useChatSession:failure-3",
-              scope: { type: "handler", handlerId: exceptionHandlerId },
-            });
-          }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
             t("chat.createDocument.failedHeader"),
           );
-          return;
         }
         return;
       }
@@ -1567,17 +1662,23 @@ export const useChatSession = ({
       );
 
       if (!promotedDraftInPlace) {
-        await openCreatedDocumentInInspector(output);
+        await openCreatedDocumentInInspector(
+          output,
+          getCurrentWorkspaceDocument(router.state.matches),
+        );
       }
     },
-    [chat, queryClient, setMessages, t, threadRef, exceptionHandlerId],
+    [chat, queryClient, router, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentMatterSuccess) => {
-      await openCreatedDocumentInInspector(output);
+      await openCreatedDocumentInInspector(
+        output,
+        getCurrentWorkspaceDocument(router.state.matches),
+      );
     },
-    [],
+    [router],
   );
   const streamdownComponents = useMemo(
     () => ({
@@ -1621,9 +1722,16 @@ export const useChatSession = ({
       stopState.status,
     ],
   );
+  // The queue sends its next prompt only once the client's request has
+  // ended: TanStack can report a turn ready while it still loads, and a send
+  // then would be refused as busy with no later turn end to retry it on.
+  const queueTurnRunning = isGenerating || clientLoading;
   useExternalSyncEffect(() => {
-    applySendQueueEvent({ type: "generation-status-synced", isGenerating });
-  }, [applySendQueueEvent, isGenerating]);
+    applySendQueueEvent({
+      type: "generation-status-synced",
+      isGenerating: queueTurnRunning,
+    });
+  }, [applySendQueueEvent, queueTurnRunning]);
   useChatTurnNotifications({
     conversationId,
     phase: getChatTurnPhase({
@@ -1690,7 +1798,7 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     const dispatched = applySendQueueEvent({
       type: "turn-boundary-checked",
-      isGenerating,
+      isGenerating: queueTurnRunning,
       status,
     });
     if (!dispatched) {
@@ -1709,7 +1817,7 @@ export const useChatSession = ({
   }, [
     applySendQueueEvent,
     dispatchQueuedMessage,
-    isGenerating,
+    queueTurnRunning,
     // Not read in the body — `sendQueueRef` is always current — but kept
     // as a dependency so this effect still re-runs on every queue change,
     // matching the original effect's re-run cadence 1:1.
@@ -1745,9 +1853,14 @@ export const useChatSession = ({
     handleAskUserSubmit,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     confirmStoredApprovalGrant,
     handleCreateDocumentResolve,

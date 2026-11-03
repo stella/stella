@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -37,12 +38,16 @@ const unusedScopedDb: ScopedDb = async () => {
 const { safeDb: auditOnlySafeDb } = createScopedDbMock({});
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
-const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
-  getChatTools({
-    featureAccessSnapshot: enrolledTimeBillingSnapshot({
-      organizationId,
-      userId,
-    }),
+const chatToolsFor = (
+  turnWorkspaceIds: SafeId<"workspace">[],
+  currentWorkspaceIds = turnWorkspaceIds,
+) => {
+  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+    organizationId,
+    userId,
+  });
+  return getChatTools({
+    featureAccessSnapshot,
     docxSuggestionSurface: "file-overlay",
     hasActiveDocxEditClient: false,
     hasActiveDocxFileClient: false,
@@ -56,14 +61,29 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     refRegistry: createChatRefRegistry(),
     registryDispatch: BUSINESS_REGISTRY_DISPATCH,
     requestWorkspaceId: null,
-    resolveCurrentMembership: async () => ({ role: "owner" }),
+    resolveCurrentExecutionContext: async () =>
+      await Promise.resolve(
+        Result.ok({
+          accessibleWorkspaces: currentWorkspaceIds.map((id) => ({
+            id,
+            status: "active" as const,
+          })),
+          featureAccessSnapshot,
+          pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+            currentWorkspaceIds.includes(id),
+          role: "owner",
+          safeDb: auditOnlySafeDb,
+          scopedDb: unusedScopedDb,
+          userEmail: "standard@example.test",
+        }),
+      ),
     safeDb: auditOnlySafeDb,
     scopedDb: unusedScopedDb,
     thirdPartyBoundary: { type: "raw" },
     threadId,
     toolDefectMemo: createChatToolDefectMemo(),
     toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
+      accessibleWorkspaceIds: turnWorkspaceIds,
       pinnedIds: [],
     }),
     userId,
@@ -71,10 +91,9 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
     webSearchEnabled: false,
     webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     workspaceId: null,
-    workspaceStatusById: new Map(
-      accessibleWorkspaceIds.map((id) => [id, "active"]),
-    ),
+    workspaceStatusById: new Map(turnWorkspaceIds.map((id) => [id, "active"])),
   });
+};
 
 const projectedWriteToolNames = Object.entries(WRITE_TOOL_REF_FIELD_MAP)
   .filter(([, entry]) => entry.chatProjectable)
@@ -119,6 +138,23 @@ describe("chat write tools and the caller's matter count", () => {
           hint: expect.stringContaining("save_matter"),
         },
       });
+    }
+  });
+
+  test("refuses a matter-scoped write after current matter access is removed", async () => {
+    const saveTask = chatToolsFor([workspaceId], [])["save_task"];
+    if (saveTask?.execute === undefined) {
+      throw new Error("save_task must be executable before access changes");
+    }
+    const failure = await Promise.resolve(
+      saveTask.execute({ name: "Draft the NDA" }),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(ChatToolError);
+    if (failure instanceof ChatToolError) {
+      expect(failure.kind).toBe("not-found");
     }
   });
 });

@@ -1,5 +1,199 @@
 [
   {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24087,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "21 meaningful words missing: ustálenou, judikaturu, soudů, založit, ojedinělý, navíc, vzápětí, zrušen, pravomocný, doby",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 23507,
+        "retainedPct": 96.6,
+        "blockCount": 59,
+        "missingWords": [
+          "ustálenou",
+          "judikaturu",
+          "soudů",
+          "založit",
+          "ojedinělý",
+          "navíc",
+          "vzápětí",
+          "zrušen",
+          "pravomocný",
+          "doby",
+          "svého",
+          "zrušení",
+          "závazný",
+          "výlučně",
+          "týkal",
+          "kasačním",
+          "jediném",
+          "představovat",
+          "obecnějších",
+          "dopadů",
+          "případy"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 45,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24667,
+        "retainedPct": 101.4,
+        "blockCount": 61,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 47,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24086,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": ["ustálenou", "judikaturu"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-afs-36-2026.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 24333,
+        "astLength": 24087,
+        "retainedPct": 99,
+        "blockCount": 60,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 126,
+          "textCharacters": 48604,
+          "ancestorChecks": 125
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/cz-nss-10-as-124-2025.html.gz#current",
     "result": {
       "ok": true,
@@ -12,9 +206,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 128,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -37,17 +232,16 @@
       "issues": [],
       "stats": {
         "originalLength": 68844,
-        "astLength": 68312,
-        "retainedPct": 99.2,
+        "astLength": 68330,
+        "retainedPct": 99.3,
         "blockCount": 138,
-        "missingWords": [
-          "https://upmb.brno.cz/uzemni-plan-mesta-brna/historie-uzemniho-planovani-mesta-brna"
-        ],
+        "missingWords": ["rozmístění"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 127,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 125,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -76,15 +270,16 @@
       ],
       "stats": {
         "originalLength": 68844,
-        "astLength": 68518,
+        "astLength": 68500,
         "retainedPct": 99.5,
         "blockCount": 140,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 129,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 127,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -110,12 +305,13 @@
         "astLength": 68414,
         "retainedPct": 99.4,
         "blockCount": 139,
-        "missingWords": [],
+        "missingWords": ["rozmístění"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 128,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -144,9 +340,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 128,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 126,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -178,9 +375,10 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 4,
-          "paragraph": 127,
+          "heading": 3,
+          "paragraph-intro": 3,
           "paragraph-holding": 4,
+          "paragraph": 125,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -192,6 +390,172 @@
           "textComputations": 258,
           "textCharacters": 137529,
           "ancestorChecks": 253
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-226-2019.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 20452,
+        "astLength": 20215,
+        "retainedPct": 98.8,
+        "blockCount": 53,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 43,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 118,
+          "textCharacters": 40847,
+          "ancestorChecks": 117
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-226-2019.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 20452,
+        "astLength": 20112,
+        "retainedPct": 98.3,
+        "blockCount": 52,
+        "missingWords": ["stanoveno", "vypuštěn"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 42,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 118,
+          "textCharacters": 40847,
+          "ancestorChecks": 117
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-226-2019.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 20452,
+        "astLength": 20318,
+        "retainedPct": 99.3,
+        "blockCount": 54,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 44,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 118,
+          "textCharacters": 40847,
+          "ancestorChecks": 117
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-226-2019.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 20452,
+        "astLength": 20214,
+        "retainedPct": 98.8,
+        "blockCount": 53,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 43,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 118,
+          "textCharacters": 40847,
+          "ancestorChecks": 117
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-10-as-226-2019.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 20452,
+        "astLength": 20215,
+        "retainedPct": 98.8,
+        "blockCount": 53,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 43,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 118,
+          "textCharacters": 40847,
+          "ancestorChecks": 117
         }
       }
     }
@@ -209,9 +573,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -234,58 +599,73 @@
       "issues": [
         {
           "code": "MISSING_WORDS",
-          "message": "36 meaningful words missing: dostupným, informacím, naplňují, dovozené, maximální, míře, důvěryhodné, vyvážené, aktuální, ověřené",
+          "message": "50 meaningful words missing: uvedl, vycházet, skutkového, stavu, nicméně, opřel, tvrdí, nezjistil, skutkový, nepatřičně",
           "severity": "error"
         }
       ],
       "stats": {
         "originalLength": 16231,
-        "astLength": 15053,
-        "retainedPct": 92.7,
+        "astLength": 14647,
+        "retainedPct": 90.2,
         "blockCount": 27,
         "missingWords": [
-          "dostupným",
-          "informacím",
-          "naplňují",
-          "dovozené",
-          "maximální",
-          "míře",
-          "důvěryhodné",
-          "vyvážené",
-          "aktuální",
-          "ověřené",
-          "různých",
-          "zdrojů",
-          "transparentní",
-          "opírá",
-          "velké",
-          "množství",
-          "podkladů",
-          "seznatelné",
-          "považoval",
-          "jakými",
-          "úvahami",
-          "řídil",
-          "žalobní",
-          "body",
-          "spisu",
-          "neučinil",
-          "následků",
-          "účasti",
-          "srozumitelně",
-          "vysvětlil",
-          "proč",
-          "uplatňování",
-          "politických",
-          "práv",
-          "uzavřít",
-          "přezkoumatelný"
+          "uvedl",
+          "vycházet",
+          "skutkového",
+          "stavu",
+          "nicméně",
+          "opřel",
+          "tvrdí",
+          "nezjistil",
+          "skutkový",
+          "nepatřičně",
+          "zlehčoval",
+          "jakož",
+          "nesprávnému",
+          "zločinech",
+          "páchaných",
+          "ukrajiny",
+          "těmto",
+          "závěrům",
+          "přisvědčil",
+          "vysíláni",
+          "evropského",
+          "parlamentu",
+          "rady",
+          "normách",
+          "splňovat",
+          "státní",
+          "příslušníci",
+          "třetích",
+          "zemí",
+          "bez",
+          "aby",
+          "mohli",
+          "požívat",
+          "jednotném",
+          "statusu",
+          "uprchlíky",
+          "mají",
+          "nárok",
+          "doplňkovou",
+          "poskytnuté",
+          "navíc",
+          "nepřihlédli",
+          "dojít",
+          "nezávisle",
+          "vůli",
+          "odvodům",
+          "využívány",
+          "násilné",
+          "nelegální",
+          "praktiky"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 19,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 18,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -314,15 +694,16 @@
       ],
       "stats": {
         "originalLength": 16231,
-        "astLength": 17261,
-        "retainedPct": 106.3,
+        "astLength": 17667,
+        "retainedPct": 108.8,
         "blockCount": 29,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 21,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 20,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -351,9 +732,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -382,9 +764,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -396,6 +779,591 @@
           "textComputations": 50,
           "textCharacters": 32429,
           "ancestorChecks": 49
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-154-2005.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 31273,
+        "astLength": 31190,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 2,
+          "paragraph-holding": 2,
+          "paragraph": 45,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 119,
+          "textCharacters": 62487,
+          "ancestorChecks": 118
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-154-2005.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "27 meaningful words missing: prokazování, problematické, jedná, výstupem, hmotný, hmatatelný, výstup, kobík, šperl, aspi",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 31273,
+        "astLength": 30403,
+        "retainedPct": 97.2,
+        "blockCount": 54,
+        "missingWords": [
+          "prokazování",
+          "problematické",
+          "jedná",
+          "výstupem",
+          "hmotný",
+          "hmatatelný",
+          "výstup",
+          "kobík",
+          "šperl",
+          "aspi",
+          "publishing",
+          "praha",
+          "smluvní",
+          "typy",
+          "často",
+          "využívány",
+          "krácení",
+          "zkoumat",
+          "nad",
+          "běžných",
+          "potřeb",
+          "shromažďoval",
+          "mohou",
+          "předmětným",
+          "zprostředkováním",
+          "realizace",
+          "něž"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 2,
+          "paragraph-holding": 2,
+          "paragraph": 44,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 119,
+          "textCharacters": 62487,
+          "ancestorChecks": 118
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-154-2005.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 31273,
+        "astLength": 31977,
+        "retainedPct": 102.3,
+        "blockCount": 56,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 2,
+          "paragraph-holding": 2,
+          "paragraph": 46,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 119,
+          "textCharacters": 62487,
+          "ancestorChecks": 118
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-154-2005.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 31273,
+        "astLength": 31189,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": ["prokazování"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 2,
+          "paragraph-holding": 2,
+          "paragraph": 45,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 119,
+          "textCharacters": 62487,
+          "ancestorChecks": 118
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-154-2005.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 31273,
+        "astLength": 31190,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 2,
+          "paragraph-holding": 2,
+          "paragraph": 45,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 119,
+          "textCharacters": 62487,
+          "ancestorChecks": 118
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-180-2004.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 23005,
+        "astLength": 22920,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 39,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 100,
+          "textCharacters": 45953,
+          "ancestorChecks": 98
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-180-2004.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "37 meaningful words missing: afs, kdo, právech, zkrácen, přímo, porušení, předcházejícím, úkonem, orgánu, jímž",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 23005,
+        "astLength": 22006,
+        "retainedPct": 95.7,
+        "blockCount": 46,
+        "missingWords": [
+          "afs",
+          "kdo",
+          "právech",
+          "zkrácen",
+          "přímo",
+          "porušení",
+          "předcházejícím",
+          "úkonem",
+          "orgánu",
+          "jímž",
+          "zakládají",
+          "mění",
+          "ruší",
+          "závazně",
+          "určují",
+          "domáhat",
+          "takového",
+          "popř",
+          "vyslovení",
+          "nicotnosti",
+          "nestanoví-li",
+          "zvláštní",
+          "všechna",
+          "jimiž",
+          "zasahuje",
+          "sféry",
+          "dána",
+          "výslovná",
+          "kompetenční",
+          "výluka",
+          "soudním",
+          "řádem",
+          "emancipováno",
+          "omezení",
+          "správních",
+          "opětovně",
+          "vyloučena"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 38,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 100,
+          "textCharacters": 45953,
+          "ancestorChecks": 98
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-180-2004.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 23005,
+        "astLength": 23834,
+        "retainedPct": 103.6,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 40,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 100,
+          "textCharacters": 45953,
+          "ancestorChecks": 98
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-180-2004.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 23005,
+        "astLength": 22919,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 39,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 100,
+          "textCharacters": 45953,
+          "ancestorChecks": 98
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-afs-180-2004.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 23005,
+        "astLength": 22920,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-intro": 3,
+          "paragraph-holding": 1,
+          "paragraph": 39,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 4,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 100,
+          "textCharacters": 45953,
+          "ancestorChecks": 98
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-as-98-2026.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 28174,
+        "astLength": 28053,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 29,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 107,
+          "textCharacters": 56301,
+          "ancestorChecks": 106
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-as-98-2026.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 28174,
+        "astLength": 27761,
+        "retainedPct": 98.5,
+        "blockCount": 46,
+        "missingWords": [
+          "kasinem",
+          "rozumí",
+          "samostatný",
+          "stavebně",
+          "oddělený",
+          "kterém",
+          "provozována",
+          "hlavní"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 28,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 107,
+          "textCharacters": 56301,
+          "ancestorChecks": 106
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-as-98-2026.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 28174,
+        "astLength": 28345,
+        "retainedPct": 100.6,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 30,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 107,
+          "textCharacters": 56301,
+          "ancestorChecks": 106
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-as-98-2026.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 28174,
+        "astLength": 28052,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 29,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 107,
+          "textCharacters": 56301,
+          "ancestorChecks": 106
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-2-as-98-2026.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 28174,
+        "astLength": 28053,
+        "retainedPct": 99.6,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 29,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 107,
+          "textCharacters": 56301,
+          "ancestorChecks": 106
         }
       }
     }
@@ -413,9 +1381,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -434,28 +1403,57 @@
   {
     "name": "parsers/cz-nss-22-as-35-2026.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "30 meaningful words missing: institut, mimořádnou, povahu, soudnictví, není, řádným, opravným, prostředkem, něhož, možno",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 11012,
-        "astLength": 10609,
-        "retainedPct": 96.3,
+        "astLength": 10355,
+        "retainedPct": 94,
         "blockCount": 27,
         "missingWords": [
-          "žalobou",
-          "kterou",
-          "zamítl",
-          "rozsudkem",
-          "brojí",
-          "stížností",
-          "součástí",
-          "této"
+          "institut",
+          "mimořádnou",
+          "povahu",
+          "soudnictví",
+          "není",
+          "řádným",
+          "opravným",
+          "prostředkem",
+          "něhož",
+          "možno",
+          "dalšího",
+          "očekávat",
+          "odnímá",
+          "vlastním",
+          "pravomocného",
+          "třeba",
+          "hledět",
+          "jako",
+          "zákonné",
+          "věcně",
+          "správné",
+          "není-li",
+          "zákonným",
+          "postupem",
+          "zrušeno",
+          "vyhrazeno",
+          "ojedinělé",
+          "případy",
+          "zákonodárce",
+          "vyjádřil"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 19,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 18,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -484,15 +1482,16 @@
       ],
       "stats": {
         "originalLength": 11012,
-        "astLength": 11307,
-        "retainedPct": 102.7,
+        "astLength": 11561,
+        "retainedPct": 105,
         "blockCount": 29,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 21,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 20,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -518,12 +1517,13 @@
         "astLength": 10957,
         "retainedPct": 99.5,
         "blockCount": 28,
-        "missingWords": [],
+        "missingWords": ["institut"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -552,9 +1552,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 3,
-          "paragraph": 20,
+          "heading": 2,
+          "paragraph-intro": 2,
           "paragraph-holding": 2,
+          "paragraph": 19,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -566,6 +1567,760 @@
           "textComputations": 68,
           "textCharacters": 21995,
           "ancestorChecks": 67
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-52-a-35-2012.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 22762,
+        "astLength": 22597,
+        "retainedPct": 99.3,
+        "blockCount": 35,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 3,
+          "paragraph-holding": 2,
+          "paragraph": 23,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 94,
+          "textCharacters": 45497,
+          "ancestorChecks": 93
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-52-a-35-2012.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 22762,
+        "astLength": 22458,
+        "retainedPct": 98.7,
+        "blockCount": 34,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 3,
+          "paragraph-holding": 2,
+          "paragraph": 22,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 94,
+          "textCharacters": 45497,
+          "ancestorChecks": 93
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-52-a-35-2012.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 22762,
+        "astLength": 22736,
+        "retainedPct": 99.9,
+        "blockCount": 36,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 3,
+          "paragraph-holding": 2,
+          "paragraph": 24,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 94,
+          "textCharacters": 45497,
+          "ancestorChecks": 93
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-52-a-35-2012.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 22762,
+        "astLength": 22596,
+        "retainedPct": 99.3,
+        "blockCount": 35,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 3,
+          "paragraph-holding": 2,
+          "paragraph": 23,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 94,
+          "textCharacters": 45497,
+          "ancestorChecks": 93
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-52-a-35-2012.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 22762,
+        "astLength": 22597,
+        "retainedPct": 99.3,
+        "blockCount": 35,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-intro": 4,
+          "heading": 3,
+          "paragraph-holding": 2,
+          "paragraph": 23,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 94,
+          "textCharacters": 45497,
+          "ancestorChecks": 93
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27116,
+        "retainedPct": 99.9,
+        "blockCount": 91,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 76,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27092,
+        "retainedPct": 99.9,
+        "blockCount": 90,
+        "missingWords": ["lukáš", "pišvejc", "v.r"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 76,
+          "paragraph-closing": 1,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27140,
+        "retainedPct": 100,
+        "blockCount": 92,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 76,
+          "paragraph-closing": 1,
+          "paragraph-signature": 3
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27115,
+        "retainedPct": 99.9,
+        "blockCount": 91,
+        "missingWords": ["lukáš"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 76,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27116,
+        "retainedPct": 99.9,
+        "blockCount": 91,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 76,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-57-af-17-2023.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 27131,
+        "astLength": 27065,
+        "retainedPct": 99.8,
+        "blockCount": 90,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 3,
+          "paragraph-intro": 7,
+          "paragraph-holding": 2,
+          "paragraph": 75,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 71,
+          "textCharacters": 54226,
+          "ancestorChecks": 115
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 34941,
+        "astLength": 34780,
+        "retainedPct": 99.5,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 38,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 90,
+          "textCharacters": 69806,
+          "ancestorChecks": 89
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#dropped-paragraph",
+    "result": {
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "19 meaningful words missing: týče, dotčeného, žáka, jakožto, nahlížet, přípustná, napadá-li, jednotlivec, chybí, individualizovaný",
+          "severity": "error"
+        }
+      ],
+      "stats": {
+        "originalLength": 34941,
+        "astLength": 33673,
+        "retainedPct": 96.4,
+        "blockCount": 54,
+        "missingWords": [
+          "týče",
+          "dotčeného",
+          "žáka",
+          "jakožto",
+          "nahlížet",
+          "přípustná",
+          "napadá-li",
+          "jednotlivec",
+          "chybí",
+          "individualizovaný",
+          "aktivně",
+          "legitimován",
+          "podání",
+          "domáhat",
+          "vyslovení",
+          "konstatujícího",
+          "rozpor",
+          "pakliže",
+          "spatřován"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 37,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 90,
+          "textCharacters": 69806,
+          "ancestorChecks": 89
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 34941,
+        "astLength": 35887,
+        "retainedPct": 102.7,
+        "blockCount": 56,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 39,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 90,
+          "textCharacters": 69806,
+          "ancestorChecks": 89
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 34941,
+        "astLength": 34779,
+        "retainedPct": 99.5,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 38,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 90,
+          "textCharacters": 69806,
+          "ancestorChecks": 89
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-29.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 34941,
+        "astLength": 34780,
+        "retainedPct": 99.5,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 11,
+          "paragraph-intro": 2,
+          "paragraph-holding": 1,
+          "paragraph": 38,
+          "paragraph-closing": 1,
+          "paragraph-signature": 2
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 90,
+          "textCharacters": 69806,
+          "ancestorChecks": 89
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 104234,
+        "retainedPct": 99.4,
+        "blockCount": 170,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 94,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 103936,
+        "retainedPct": 99.2,
+        "blockCount": 169,
+        "missingWords": ["systematiky", "pramenů", "odmítnout", "naposledy"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 93,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 104532,
+        "retainedPct": 99.7,
+        "blockCount": 171,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 95,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 104233,
+        "retainedPct": 99.4,
+        "blockCount": 170,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 94,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 104234,
+        "retainedPct": 99.4,
+        "blockCount": 170,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 94,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/cz-nss-9-as-264-2020-51.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 104813,
+        "astLength": 103980,
+        "retainedPct": 99.2,
+        "blockCount": 169,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 3,
+          "paragraph-holding": 2,
+          "paragraph": 93,
+          "paragraph-closing": 3,
+          "paragraph-dissent": 47
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 315,
+          "textCharacters": 209546,
+          "ancestorChecks": 312
         }
       }
     }
@@ -584,7 +2339,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -628,7 +2384,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 44,
+          "paragraph": 43,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -664,7 +2421,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 46,
+          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -694,7 +2452,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -724,7 +2483,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 2,
-          "paragraph": 45,
+          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -754,7 +2514,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -797,7 +2558,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 21,
+          "paragraph": 20,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -833,7 +2595,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 23,
+          "paragraph": 22,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -863,7 +2626,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -893,7 +2657,8 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 6,
-          "paragraph": 22,
+          "paragraph": 21,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 1
         },
@@ -923,8 +2688,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -952,8 +2718,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 25,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 24
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -987,8 +2754,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 27,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 26
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -1016,8 +2784,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -1045,8 +2814,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 5,
-          "paragraph": 26,
-          "paragraph-holding": 3
+          "paragraph-intro": 1,
+          "paragraph-holding": 3,
+          "paragraph": 25
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -1074,8 +2844,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1133,8 +2904,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 30,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 29,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1170,8 +2942,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 32,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 31,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1201,8 +2974,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1232,8 +3006,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 10,
-          "paragraph": 31,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 30,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1263,8 +3038,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -1295,8 +3071,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 44,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 43,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -1333,8 +3110,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 46,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 45,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -1365,8 +3143,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -1397,8 +3176,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 9,
-          "paragraph": 45,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
+          "paragraph": 44,
           "paragraph-closing": 2,
           "paragraph-signature": 2,
           "paragraph-dissent": 12
@@ -1429,8 +3209,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1548,8 +3329,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 123,
+          "paragraph-intro": 2,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1579,8 +3361,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1610,8 +3393,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 19,
-          "paragraph": 122,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 121,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1641,8 +3425,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1684,8 +3469,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 23,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 22,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1721,8 +3507,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 25,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 24,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1752,8 +3539,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1783,8 +3571,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 8,
-          "paragraph": 24,
+          "paragraph-intro": 1,
           "paragraph-holding": 2,
+          "paragraph": 23,
           "paragraph-closing": 1,
           "paragraph-signature": 2
         },
@@ -1822,8 +3611,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -1843,30 +3633,90 @@
   {
     "name": "parsers/cz-us-pl-us-36-93.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "64 meaningful words missing: pl.ús, sbnu, charakteristika, dis, kriminaci, novelizací, jednoznačně, preferoval, umožněno, prakticky",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 42332,
-        "astLength": 41968,
-        "retainedPct": 99.1,
+        "astLength": 40097,
+        "retainedPct": 94.7,
         "blockCount": 78,
         "missingWords": [
           "pl.ús",
           "sbnu",
           "charakteristika",
-          "mého",
-          "napadená",
-          "zrušena",
           "dis",
           "kriminaci",
+          "novelizací",
+          "jednoznačně",
+          "preferoval",
+          "umožněno",
+          "prakticky",
+          "volné",
+          "termínovaných",
+          "respektoval",
+          "specifičnost",
+          "typů",
+          "vylučoval",
+          "nedomnívám",
+          "specifika",
+          "významná",
+          "odlišovala",
+          "zmíněná",
+          "nezbytně",
+          "direktivně",
+          "určit",
+          "uzavírány",
+          "současném",
+          "určení",
+          "akademickými",
+          "svobodami",
+          "vymezeny",
+          "relativně",
+          "krátkodobé",
+          "nedávaly",
+          "plného",
+          "využívání",
+          "akademických",
+          "činily",
+          "značně",
+          "závislými",
+          "vedení",
+          "fakult",
+          "mají-li",
+          "samostatnými",
+          "jisté",
+          "autonomními",
+          "vzdělávacími",
+          "pracovišti",
+          "ponechat",
+          "uvážení",
+          "pracovníkem",
+          "jaký",
+          "typ",
+          "zakotvují",
+          "připouštějí",
           "sta",
           "novených",
-          "sou"
+          "souvislosti",
+          "poskytoval",
+          "uveřejněný",
+          "sou",
+          "těmito",
+          "hledisky",
+          "dost",
+          "problematice"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 13
@@ -1896,8 +3746,8 @@
       ],
       "stats": {
         "originalLength": 42332,
-        "astLength": 42150,
-        "retainedPct": 99.6,
+        "astLength": 44021,
+        "retainedPct": 104,
         "blockCount": 80,
         "missingWords": [
           "pl.ús",
@@ -1911,8 +3761,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 15
@@ -1943,7 +3794,6 @@
           "pl.ús",
           "sbnu",
           "charakteristika",
-          "mého",
           "dis",
           "kriminaci",
           "sta",
@@ -1952,8 +3802,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -1992,8 +3843,9 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 12,
           "paragraph": 48,
+          "paragraph-intro": 1,
           "paragraph-holding": 1,
           "paragraph-closing": 3,
           "paragraph-dissent": 14
@@ -2024,8 +3876,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -2068,8 +3921,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 72
         },
@@ -2105,8 +3959,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 74
         },
@@ -2136,8 +3991,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -2167,8 +4023,9 @@
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 16,
-          "paragraph": 79,
+          "paragraph-intro": 1,
           "paragraph-holding": 3,
+          "paragraph": 78,
           "paragraph-closing": 7,
           "paragraph-dissent": 73
         },
@@ -2191,15 +4048,16 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84146,
+        "astLength": 84095,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -2221,15 +4079,16 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84041,
+        "astLength": 83990,
         "retainedPct": 99.1,
         "blockCount": 203,
         "missingWords": ["pl.ús", "sterilizace", "opatrovníka", "dotčeno"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 151,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 150,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -2257,15 +4116,16 @@
       ],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84251,
-        "retainedPct": 99.4,
+        "astLength": 84200,
+        "retainedPct": 99.3,
         "blockCount": 205,
         "missingWords": ["pl.ús", "sterilizace"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 153,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 152,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -2287,15 +4147,16 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84145,
+        "astLength": 84094,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -2317,15 +4178,16 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84146,
+        "astLength": 84095,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
           "heading": 28,
-          "paragraph": 152,
+          "paragraph-intro": 1,
           "paragraph-holding": 4,
+          "paragraph": 151,
           "paragraph-dissent": 20
         },
         "tinyBlocks": 1,
@@ -2341,20 +4203,794 @@
     }
   },
   {
+    "name": "parsers/eu-ecj/61955CJ0008.da.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 4467,
+        "astLength": 4488,
+        "retainedPct": 100.5,
+        "blockCount": 27,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph-intro": 19
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 35,
+          "textCharacters": 4455,
+          "ancestorChecks": 26
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.da.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 4467,
+        "astLength": 4415,
+        "retainedPct": 98.8,
+        "blockCount": 26,
+        "missingWords": ["overgangsperiode"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph-intro": 18
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 35,
+          "textCharacters": 4455,
+          "ancestorChecks": 26
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.da.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 4467,
+        "astLength": 4561,
+        "retainedPct": 102.1,
+        "blockCount": 28,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph-intro": 20
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 35,
+          "textCharacters": 4455,
+          "ancestorChecks": 26
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.da.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 4467,
+        "astLength": 4487,
+        "retainedPct": 100.4,
+        "blockCount": 27,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph-intro": 19
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 35,
+          "textCharacters": 4455,
+          "ancestorChecks": 26
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.da.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 4467,
+        "astLength": 4488,
+        "retainedPct": 100.5,
+        "blockCount": 27,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 8,
+          "paragraph-intro": 19
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 35,
+          "textCharacters": 4455,
+          "ancestorChecks": 26
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 14467,
+        "astLength": 14427,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 7,
+          "paragraph-intro": 5,
+          "paragraph": 39,
+          "paragraph-holding": 4
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 58,
+          "textCharacters": 43474,
+          "ancestorChecks": 112
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 14467,
+        "astLength": 14099,
+        "retainedPct": 97.5,
+        "blockCount": 54,
+        "missingWords": [
+          "considering",
+          "relating",
+          "particular",
+          "ask",
+          "empowered",
+          "selling",
+          "complaint"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 7,
+          "paragraph-intro": 5,
+          "paragraph": 38,
+          "paragraph-holding": 4
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 58,
+          "textCharacters": 43474,
+          "ancestorChecks": 112
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 14467,
+        "astLength": 14755,
+        "retainedPct": 102,
+        "blockCount": 56,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 7,
+          "paragraph-intro": 5,
+          "paragraph": 40,
+          "paragraph-holding": 4
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 58,
+          "textCharacters": 43474,
+          "ancestorChecks": 112
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 14467,
+        "astLength": 14426,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": ["considering"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 7,
+          "paragraph-intro": 5,
+          "paragraph": 39,
+          "paragraph-holding": 4
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 58,
+          "textCharacters": 43474,
+          "ancestorChecks": 112
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61955CJ0008.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 14467,
+        "astLength": 14427,
+        "retainedPct": 99.7,
+        "blockCount": 55,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 7,
+          "paragraph-intro": 5,
+          "paragraph": 39,
+          "paragraph-holding": 4
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 58,
+          "textCharacters": 43474,
+          "ancestorChecks": 112
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61978CJ0120.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 12168,
+        "astLength": 12145,
+        "retainedPct": 99.8,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 6,
+          "paragraph": 35,
+          "paragraph-holding": 1
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 82,
+          "textCharacters": 36599,
+          "ancestorChecks": 160
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61978CJ0120.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 12168,
+        "astLength": 11924,
+        "retainedPct": 98,
+        "blockCount": 47,
+        "missingWords": ["intra-community", "examined", "solely"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 6,
+          "paragraph": 34,
+          "paragraph-holding": 1
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 82,
+          "textCharacters": 36599,
+          "ancestorChecks": 160
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61978CJ0120.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 12168,
+        "astLength": 12366,
+        "retainedPct": 101.6,
+        "blockCount": 49,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 6,
+          "paragraph": 36,
+          "paragraph-holding": 1
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 82,
+          "textCharacters": 36599,
+          "ancestorChecks": 160
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61978CJ0120.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 12168,
+        "astLength": 12144,
+        "retainedPct": 99.8,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 6,
+          "paragraph": 35,
+          "paragraph-holding": 1
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 82,
+          "textCharacters": 36599,
+          "ancestorChecks": 160
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61978CJ0120.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 12168,
+        "astLength": 12145,
+        "retainedPct": 99.8,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 6,
+          "paragraph-intro": 6,
+          "paragraph": 35,
+          "paragraph-holding": 1
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 82,
+          "textCharacters": 36599,
+          "ancestorChecks": 160
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61990CJ0006.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 26685,
+        "astLength": 26582,
+        "retainedPct": 99.6,
+        "blockCount": 94,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph-intro": 24,
+          "paragraph": 58,
+          "paragraph-holding": 2
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 93,
+          "textCharacters": 80159,
+          "ancestorChecks": 182
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61990CJ0006.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 26685,
+        "astLength": 26158,
+        "retainedPct": 98,
+        "blockCount": 93,
+        "missingWords": ["will", "some", "establishing", "restriction"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph-intro": 24,
+          "paragraph": 57,
+          "paragraph-holding": 2
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 93,
+          "textCharacters": 80159,
+          "ancestorChecks": 182
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61990CJ0006.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 26685,
+        "astLength": 27006,
+        "retainedPct": 101.2,
+        "blockCount": 95,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph-intro": 24,
+          "paragraph": 59,
+          "paragraph-holding": 2
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 93,
+          "textCharacters": 80159,
+          "ancestorChecks": 182
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61990CJ0006.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 26685,
+        "astLength": 26581,
+        "retainedPct": 99.6,
+        "blockCount": 94,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph-intro": 24,
+          "paragraph": 58,
+          "paragraph-holding": 2
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 93,
+          "textCharacters": 80159,
+          "ancestorChecks": 182
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/61990CJ0006.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 26685,
+        "astLength": 26582,
+        "retainedPct": 99.6,
+        "blockCount": 94,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 10,
+          "paragraph-intro": 24,
+          "paragraph": 58,
+          "paragraph-holding": 2
+        },
+        "tinyBlocks": 2,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 93,
+          "textCharacters": 80159,
+          "ancestorChecks": 182
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62004CJ0144.hu.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44382,
+        "astLength": 44092,
+        "retainedPct": 99.3,
+        "blockCount": 173,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 136,
+          "paragraph-holding": 3
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 173,
+          "textCharacters": 133111,
+          "ancestorChecks": 342
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62004CJ0144.hu.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44382,
+        "astLength": 44088,
+        "retainedPct": 99.3,
+        "blockCount": 172,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 135,
+          "paragraph-holding": 3
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 173,
+          "textCharacters": 133111,
+          "ancestorChecks": 342
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62004CJ0144.hu.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44382,
+        "astLength": 44096,
+        "retainedPct": 99.4,
+        "blockCount": 174,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 137,
+          "paragraph-holding": 3
+        },
+        "tinyBlocks": 8,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 173,
+          "textCharacters": 133111,
+          "ancestorChecks": 342
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62004CJ0144.hu.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44382,
+        "astLength": 44092,
+        "retainedPct": 99.3,
+        "blockCount": 173,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 136,
+          "paragraph-holding": 3
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 173,
+          "textCharacters": 133111,
+          "ancestorChecks": 342
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62004CJ0144.hu.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 44382,
+        "astLength": 44092,
+        "retainedPct": 99.3,
+        "blockCount": 173,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 136,
+          "paragraph-holding": 3
+        },
+        "tinyBlocks": 7,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 173,
+          "textCharacters": 133111,
+          "ancestorChecks": 342
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/eu-ecj/62013TO0488.cs.html.gz#current",
     "result": {
       "ok": true,
       "issues": [],
       "stats": {
         "originalLength": 18358,
-        "astLength": 18401,
-        "retainedPct": 100.2,
-        "blockCount": 78,
+        "astLength": 18203,
+        "retainedPct": 99.2,
+        "blockCount": 77,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 75,
-          "heading": 3
+          "heading": 8,
+          "paragraph-intro": 17,
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2375,14 +5011,16 @@
       "issues": [],
       "stats": {
         "originalLength": 18358,
-        "astLength": 18383,
-        "retainedPct": 100.1,
-        "blockCount": 77,
-        "missingWords": [],
+        "astLength": 18051,
+        "retainedPct": 98.3,
+        "blockCount": 76,
+        "missingWords": ["nedozvěděla", "odvolacím", "doplňující"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 74,
-          "heading": 3
+          "heading": 8,
+          "paragraph-intro": 17,
+          "paragraph": 48,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2409,14 +5047,16 @@
       ],
       "stats": {
         "originalLength": 18358,
-        "astLength": 18419,
-        "retainedPct": 100.3,
-        "blockCount": 79,
+        "astLength": 18355,
+        "retainedPct": 100,
+        "blockCount": 78,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 76,
-          "heading": 3
+          "heading": 8,
+          "paragraph-intro": 17,
+          "paragraph": 50,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2437,14 +5077,16 @@
       "issues": [],
       "stats": {
         "originalLength": 18358,
-        "astLength": 18400,
-        "retainedPct": 100.2,
-        "blockCount": 78,
+        "astLength": 18202,
+        "retainedPct": 99.2,
+        "blockCount": 77,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 75,
-          "heading": 3
+          "heading": 8,
+          "paragraph-intro": 17,
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2465,14 +5107,16 @@
       "issues": [],
       "stats": {
         "originalLength": 18358,
-        "astLength": 18401,
-        "retainedPct": 100.2,
-        "blockCount": 78,
+        "astLength": 18203,
+        "retainedPct": 99.2,
+        "blockCount": 77,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "paragraph-intro": 75,
-          "heading": 3
+          "heading": 8,
+          "paragraph-intro": 17,
+          "paragraph": 49,
+          "paragraph-holding": 3
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
@@ -2499,10 +5143,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 14,
           "paragraph-intro": 18,
           "paragraph": 112,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 4,
@@ -2520,27 +5164,49 @@
   {
     "name": "parsers/eu-ecj/62017CJ0258.pl.html.gz#dropped-paragraph",
     "result": {
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "code": "MISSING_WORDS",
+          "message": "22 meaningful words missing: składzie, lenaerts, prezes, silva, lapuerta, wiceprezes, prechal, vilaras, regan, von",
+          "severity": "error"
+        }
+      ],
       "stats": {
         "originalLength": 37824,
-        "astLength": 37441,
-        "retainedPct": 99,
+        "astLength": 37384,
+        "retainedPct": 98.8,
         "blockCount": 146,
         "missingWords": [
-          "postanowił",
-          "zawiesić",
-          "zwrócić",
-          "następującymi",
-          "pytaniami",
-          "prejudycjalnymi"
+          "składzie",
+          "lenaerts",
+          "prezes",
+          "silva",
+          "lapuerta",
+          "wiceprezes",
+          "prechal",
+          "vilaras",
+          "regan",
+          "von",
+          "danwitz",
+          "jürimäe",
+          "lycourgos",
+          "prezesi",
+          "izb",
+          "juhász",
+          "ilešič",
+          "malenovský",
+          "safjan",
+          "sprawozdawca",
+          "šváby",
+          "sędziowie"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 18,
-          "paragraph": 111,
-          "paragraph-holding": 3,
+          "heading": 14,
+          "paragraph-intro": 17,
+          "paragraph": 112,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 4,
@@ -2568,16 +5234,16 @@
       ],
       "stats": {
         "originalLength": 37824,
-        "astLength": 37811,
-        "retainedPct": 100,
+        "astLength": 37868,
+        "retainedPct": 100.1,
         "blockCount": 148,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
-          "paragraph-intro": 18,
-          "paragraph": 113,
-          "paragraph-holding": 3,
+          "heading": 14,
+          "paragraph-intro": 19,
+          "paragraph": 112,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 4,
@@ -2602,13 +5268,13 @@
         "astLength": 37625,
         "retainedPct": 99.5,
         "blockCount": 147,
-        "missingWords": [],
+        "missingWords": ["składzie"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 14,
           "paragraph-intro": 18,
           "paragraph": 112,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 4,
@@ -2636,10 +5302,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 13,
+          "heading": 14,
           "paragraph-intro": 18,
           "paragraph": 112,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 4,
@@ -2827,10 +5493,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 18
         },
         "tinyBlocks": 41,
@@ -2852,19 +5518,19 @@
       "issues": [],
       "stats": {
         "originalLength": 171593,
-        "astLength": 170952,
+        "astLength": 170887,
         "retainedPct": 99.6,
         "blockCount": 505,
-        "missingWords": [],
+        "missingWords": ["admissible"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 422,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 18
         },
-        "tinyBlocks": 40,
+        "tinyBlocks": 41,
         "hugeBlocks": 0,
         "duplicateBlocks": 0,
         "markupResidue": [],
@@ -2880,24 +5546,30 @@
     "name": "parsers/eu-ecj/62018CJ0311.en.html.gz#duplicated-paragraph",
     "result": {
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
       "stats": {
         "originalLength": 171593,
-        "astLength": 170958,
-        "retainedPct": 99.6,
+        "astLength": 171023,
+        "retainedPct": 99.7,
         "blockCount": 507,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 424,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 18
         },
-        "tinyBlocks": 42,
+        "tinyBlocks": 41,
         "hugeBlocks": 0,
-        "duplicateBlocks": 0,
+        "duplicateBlocks": 1,
         "markupResidue": [],
         "work": {
           "textComputations": 760,
@@ -2914,16 +5586,16 @@
       "issues": [],
       "stats": {
         "originalLength": 171593,
-        "astLength": 170955,
+        "astLength": 170954,
         "retainedPct": 99.6,
         "blockCount": 506,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 18
         },
         "tinyBlocks": 41,
@@ -2951,10 +5623,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 18
         },
         "tinyBlocks": 41,
@@ -2982,10 +5654,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 1
         },
         "tinyBlocks": 30,
@@ -3007,19 +5679,29 @@
       "issues": [],
       "stats": {
         "originalLength": 158919,
-        "astLength": 158248,
-        "retainedPct": 99.6,
+        "astLength": 157360,
+        "retainedPct": 99,
         "blockCount": 488,
-        "missingWords": [],
+        "missingWords": [
+          "nekādā",
+          "neizriet",
+          "ārējās",
+          "potenciāli",
+          "interpretēts",
+          "atgādinātajā",
+          "judikatūrā",
+          "principam",
+          "minimālās"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 422,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 1
         },
-        "tinyBlocks": 29,
+        "tinyBlocks": 30,
         "hugeBlocks": 0,
         "duplicateBlocks": 0,
         "markupResidue": [],
@@ -3035,24 +5717,30 @@
     "name": "parsers/eu-ecj/62018CJ0311.lv.html.gz#duplicated-paragraph",
     "result": {
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
       "stats": {
         "originalLength": 158919,
-        "astLength": 158258,
-        "retainedPct": 99.6,
+        "astLength": 159146,
+        "retainedPct": 100.1,
         "blockCount": 490,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 424,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 1
         },
-        "tinyBlocks": 31,
+        "tinyBlocks": 30,
         "hugeBlocks": 0,
-        "duplicateBlocks": 0,
+        "duplicateBlocks": 1,
         "markupResidue": [],
         "work": {
           "textComputations": 740,
@@ -3069,16 +5757,16 @@
       "issues": [],
       "stats": {
         "originalLength": 158919,
-        "astLength": 158253,
+        "astLength": 158252,
         "retainedPct": 99.6,
         "blockCount": 489,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 1
         },
         "tinyBlocks": 30,
@@ -3106,10 +5794,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 19,
+          "heading": 20,
           "paragraph-intro": 40,
           "paragraph": 423,
-          "paragraph-holding": 6,
+          "paragraph-holding": 5,
           "paragraph-signature": 1
         },
         "tinyBlocks": 30,
@@ -3120,6 +5808,167 @@
           "textComputations": 740,
           "textCharacters": 201236,
           "ancestorChecks": 1329
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62019CO0791.en.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63706,
+        "astLength": 63358,
+        "retainedPct": 99.5,
+        "blockCount": 214,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 19,
+          "paragraph": 168,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 357,
+          "textCharacters": 78182,
+          "ancestorChecks": 556
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62019CO0791.en.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63706,
+        "astLength": 63322,
+        "retainedPct": 99.4,
+        "blockCount": 213,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 19,
+          "paragraph": 167,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 357,
+          "textCharacters": 78182,
+          "ancestorChecks": 556
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62019CO0791.en.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 63706,
+        "astLength": 63394,
+        "retainedPct": 99.5,
+        "blockCount": 215,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 19,
+          "paragraph": 169,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 357,
+          "textCharacters": 78182,
+          "ancestorChecks": 556
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62019CO0791.en.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63706,
+        "astLength": 63357,
+        "retainedPct": 99.5,
+        "blockCount": 214,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 19,
+          "paragraph": 168,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 357,
+          "textCharacters": 78182,
+          "ancestorChecks": 556
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/eu-ecj/62019CO0791.en.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 63706,
+        "astLength": 63358,
+        "retainedPct": 99.5,
+        "blockCount": 214,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 21,
+          "paragraph-intro": 19,
+          "paragraph": 168,
+          "paragraph-holding": 5,
+          "paragraph-signature": 1
+        },
+        "tinyBlocks": 6,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 357,
+          "textCharacters": 78182,
+          "ancestorChecks": 556
         }
       }
     }
@@ -3137,10 +5986,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 11,
@@ -3162,32 +6011,23 @@
       "issues": [],
       "stats": {
         "originalLength": 107566,
-        "astLength": 106252,
-        "retainedPct": 98.8,
+        "astLength": 107038,
+        "retainedPct": 99.5,
         "blockCount": 272,
         "missingWords": [
-          "επιδημιολογική",
-          "επιβάρυνσης",
-          "ανεξέλεγκτης",
-          "δραστικής",
-          "επανεξάπλωσης",
-          "μολύνσεων",
-          "ελλείψει",
-          "φορείς",
-          "ασυμπτωματικά",
-          "εμφανίζουν",
-          "στοχευθούν",
-          "περισσότερα",
-          "ανασχεθεί",
-          "απομονωθούν",
-          "μνημονευόμενα"
+          "νορβηγική",
+          "hauan",
+          "hjetland",
+          "leming",
+          "thue",
+          "wennerås"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
-          "paragraph-intro": 20,
-          "paragraph": 230,
-          "paragraph-holding": 7,
+          "heading": 15,
+          "paragraph-intro": 19,
+          "paragraph": 231,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 11,
@@ -3215,16 +6055,16 @@
       ],
       "stats": {
         "originalLength": 107566,
-        "astLength": 108076,
-        "retainedPct": 100.5,
+        "astLength": 107290,
+        "retainedPct": 99.7,
         "blockCount": 274,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
-          "paragraph-intro": 20,
-          "paragraph": 232,
-          "paragraph-holding": 7,
+          "heading": 15,
+          "paragraph-intro": 21,
+          "paragraph": 231,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 11,
@@ -3252,10 +6092,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 11,
@@ -3283,10 +6123,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 11,
@@ -3314,10 +6154,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3339,28 +6179,16 @@
       "issues": [],
       "stats": {
         "originalLength": 99134,
-        "astLength": 98187,
-        "retainedPct": 99,
+        "astLength": 98651,
+        "retainedPct": 99.5,
         "blockCount": 270,
-        "missingWords": [
-          "acted",
-          "wrongly",
-          "drawing",
-          "seeking",
-          "introduction",
-          "subsequent",
-          "amendment",
-          "codes",
-          "contended",
-          "dismissed",
-          "unfounded"
-        ],
+        "missingWords": ["professionals", "researchers", "elderly"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 230,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3388,16 +6216,16 @@
       ],
       "stats": {
         "originalLength": 99134,
-        "astLength": 99277,
-        "retainedPct": 100.1,
+        "astLength": 98813,
+        "retainedPct": 99.7,
         "blockCount": 272,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 232,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3425,10 +6253,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3456,10 +6284,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3818,10 +6646,10 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -3843,19 +6671,19 @@
       "issues": [
         {
           "code": "CONTENT_LOSS",
-          "message": "Only 87.7% of text retained (threshold: 90%)",
+          "message": "Only 89.0% of text retained (threshold: 90%)",
           "severity": "error"
         },
         {
           "code": "MISSING_WORDS",
-          "message": "332 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
           "severity": "error"
         }
       ],
       "stats": {
         "originalLength": 110990,
-        "astLength": 97316,
-        "retainedPct": 87.7,
+        "astLength": 98730,
+        "retainedPct": 89,
         "blockCount": 270,
         "missingWords": [
           "eur-lex",
@@ -3919,7 +6747,6 @@
           "titles",
           "replaces",
           "clickable",
-          "treaties",
           "visualisation",
           "relationships",
           "displays",
@@ -4124,18 +6951,6 @@
           "swedish",
           "please",
           "choose",
-          "reconciled",
-          "disadvantages",
-          "caused",
-          "aims",
-          "limitation",
-          "teu",
-          "assessed",
-          "measuring",
-          "verifying",
-          "luxembourg",
-          "registers",
-          "poland",
           "timeline",
           "legend",
           "initial",
@@ -4193,13 +7008,13 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 230,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
-        "tinyBlocks": 13,
+        "tinyBlocks": 12,
         "hugeBlocks": 0,
         "duplicateBlocks": 0,
         "markupResidue": [],
@@ -4217,20 +7032,20 @@
       "ok": false,
       "issues": [
         {
-          "code": "MISSING_WORDS",
-          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "code": "CONTENT_LOSS",
+          "message": "Only 89.0% of text retained (threshold: 90%)",
           "severity": "error"
         },
         {
-          "code": "DUPLICATE_BLOCKS",
-          "message": "1 consecutive duplicate blocks",
-          "severity": "warning"
+          "code": "MISSING_WORDS",
+          "message": "319 meaningful words missing: eur-lex, sign, register, recent, searches, select, your, languages, bgбългарски, esespañol",
+          "severity": "error"
         }
       ],
       "stats": {
         "originalLength": 110990,
-        "astLength": 100148,
-        "retainedPct": 90.2,
+        "astLength": 98734,
+        "retainedPct": 89,
         "blockCount": 272,
         "missingWords": [
           "eur-lex",
@@ -4555,15 +7370,15 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 232,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
-        "tinyBlocks": 13,
+        "tinyBlocks": 14,
         "hugeBlocks": 0,
-        "duplicateBlocks": 1,
+        "duplicateBlocks": 0,
         "markupResidue": [],
         "work": {
           "textComputations": 903,
@@ -4591,7 +7406,7 @@
       ],
       "stats": {
         "originalLength": 110990,
-        "astLength": 98731,
+        "astLength": 98732,
         "retainedPct": 89,
         "blockCount": 271,
         "missingWords": [
@@ -4917,10 +7732,10 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -5279,10 +8094,10 @@
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -5310,10 +8125,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 11,
+          "heading": 12,
           "paragraph-intro": 14,
           "paragraph": 39,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 0,
@@ -5335,16 +8150,24 @@
       "issues": [],
       "stats": {
         "originalLength": 16902,
-        "astLength": 16779,
-        "retainedPct": 99.3,
+        "astLength": 16420,
+        "retainedPct": 97.1,
         "blockCount": 67,
-        "missingWords": [],
+        "missingWords": [
+          "according",
+          "recognised",
+          "exhaustively",
+          "commission",
+          "thus",
+          "held",
+          "granted"
+        ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 11,
-          "paragraph-intro": 13,
-          "paragraph": 39,
-          "paragraph-holding": 3,
+          "heading": 12,
+          "paragraph-intro": 14,
+          "paragraph": 38,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 0,
@@ -5372,16 +8195,16 @@
       ],
       "stats": {
         "originalLength": 16902,
-        "astLength": 16833,
-        "retainedPct": 99.6,
+        "astLength": 17192,
+        "retainedPct": 101.7,
         "blockCount": 69,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 11,
-          "paragraph-intro": 15,
-          "paragraph": 39,
-          "paragraph-holding": 3,
+          "heading": 12,
+          "paragraph-intro": 14,
+          "paragraph": 40,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 0,
@@ -5409,10 +8232,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 11,
+          "heading": 12,
           "paragraph-intro": 14,
           "paragraph": 39,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 0,
@@ -5440,10 +8263,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 11,
+          "heading": 12,
           "paragraph-intro": 14,
           "paragraph": 39,
-          "paragraph-holding": 3,
+          "paragraph-holding": 2,
           "paragraph-signature": 1
         },
         "tinyBlocks": 0,
@@ -5471,10 +8294,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 5,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -5496,26 +8319,21 @@
       "issues": [],
       "stats": {
         "originalLength": 77768,
-        "astLength": 76869,
-        "retainedPct": 98.8,
+        "astLength": 77000,
+        "retainedPct": 99,
         "blockCount": 193,
         "missingWords": [
-          "section",
-          "input",
-          "parameters",
-          "method",
-          "output",
-          "response",
-          "classification",
-          "requested",
-          "composition"
+          "corroborate",
+          "come",
+          "topor-gilka",
+          "technopromexport"
         ],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 156,
-          "paragraph-holding": 5,
+          "paragraph": 158,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -5543,16 +8361,16 @@
       ],
       "stats": {
         "originalLength": 77768,
-        "astLength": 77951,
-        "retainedPct": 100.2,
+        "astLength": 77820,
+        "retainedPct": 100.1,
         "blockCount": 195,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 158,
-          "paragraph-holding": 5,
+          "paragraph": 160,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -5580,10 +8398,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 5,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -5611,10 +8429,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 13,
-          "paragraph": 157,
-          "paragraph-holding": 5,
+          "paragraph": 159,
+          "paragraph-holding": 2,
           "paragraph-signature": 5
         },
         "tinyBlocks": 1,
@@ -6496,10 +9314,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 12,
@@ -6521,29 +9339,16 @@
       "issues": [],
       "stats": {
         "originalLength": 93128,
-        "astLength": 92241,
+        "astLength": 92234,
         "retainedPct": 99,
         "blockCount": 272,
-        "missingWords": [
-          "dopustil",
-          "pochybení",
-          "podala",
-          "zavedení",
-          "následné",
-          "změny",
-          "barevných",
-          "vyhlášce",
-          "navrhl",
-          "žaloba",
-          "zamítnuta",
-          "neopodstatněná"
-        ],
+        "missingWords": ["dovodit", "upraven", "samostatně"],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 230,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 12,
@@ -6571,16 +9376,16 @@
       ],
       "stats": {
         "originalLength": 93128,
-        "astLength": 93211,
+        "astLength": 93218,
         "retainedPct": 100.1,
         "blockCount": 274,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 232,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 12,
@@ -6608,10 +9413,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 12,
@@ -6639,10 +9444,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 7,
+          "paragraph-holding": 6,
           "paragraph-signature": 1
         },
         "tinyBlocks": 12,
@@ -6670,10 +9475,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -6695,16 +9500,16 @@
       "issues": [],
       "stats": {
         "originalLength": 99134,
-        "astLength": 98710,
-        "retainedPct": 99.6,
+        "astLength": 98089,
+        "retainedPct": 98.9,
         "blockCount": 270,
-        "missingWords": ["frontier"],
+        "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 230,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -6732,16 +9537,16 @@
       ],
       "stats": {
         "originalLength": 99134,
-        "astLength": 98754,
-        "retainedPct": 99.6,
+        "astLength": 99375,
+        "retainedPct": 100.2,
         "blockCount": 272,
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 232,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -6766,13 +9571,13 @@
         "astLength": 98731,
         "retainedPct": 99.6,
         "blockCount": 271,
-        "missingWords": ["frontier"],
+        "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -6800,10 +9605,10 @@
         "missingWords": [],
         "boundaryWhitespaceWords": [],
         "blockTypeCounts": {
-          "heading": 14,
+          "heading": 15,
           "paragraph-intro": 20,
           "paragraph": 231,
-          "paragraph-holding": 5,
+          "paragraph-holding": 4,
           "paragraph-signature": 1
         },
         "tinyBlocks": 13,
@@ -6814,6 +9619,198 @@
           "textComputations": 404,
           "textCharacters": 111853,
           "ancestorChecks": 646
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166133,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 165386,
+        "retainedPct": 100,
+        "blockCount": 262,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 232,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166880,
+        "retainedPct": 100,
+        "blockCount": 264,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 234,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166132,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166133,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166084,
+        "retainedPct": 100,
+        "blockCount": 262,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 232,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
         }
       }
     }
@@ -7167,13 +10164,169 @@
     }
   },
   {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20672,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20545,
+        "retainedPct": 100,
+        "blockCount": 46,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 40
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20799,
+        "retainedPct": 100,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 42
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20671,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20672,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/pl-tk-case-k-2-26.html.gz#current",
     "result": {
       "ok": true,
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165293,
+        "astLength": 165328,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -7207,7 +10360,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165117,
+        "astLength": 165152,
         "retainedPct": 99.3,
         "blockCount": 315,
         "missingWords": [],
@@ -7247,7 +10400,7 @@
       ],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165469,
+        "astLength": 165504,
         "retainedPct": 99.5,
         "blockCount": 317,
         "missingWords": [],
@@ -7281,7 +10434,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165292,
+        "astLength": 165327,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -7315,7 +10468,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165293,
+        "astLength": 165328,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -7343,13 +10496,234 @@
     }
   },
   {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68514,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68357,
+        "retainedPct": 99.6,
+        "blockCount": 120,
+        "missingWords": [
+          "oczywiście",
+          "lettre",
+          "rekonstruować",
+          "kilku",
+          "wtedy"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 28,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68671,
+        "retainedPct": 100.1,
+        "blockCount": 122,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 30,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68513,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68514,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68615,
+        "astLength": 68434,
+        "retainedPct": 99.7,
+        "blockCount": 120,
+        "missingWords": ["sentencja", "ogłoszona"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259562,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/pl-tk-case-k-44-16.html.gz#current",
     "result": {
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62023,
+        "originalLength": 62231,
+        "astLength": 62029,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -7370,7 +10744,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7382,8 +10756,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 61407,
+        "originalLength": 62231,
+        "astLength": 61413,
         "retainedPct": 98.7,
         "blockCount": 96,
         "missingWords": [
@@ -7420,7 +10794,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7438,8 +10812,8 @@
         }
       ],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62639,
+        "originalLength": 62231,
+        "astLength": 62645,
         "retainedPct": 100.7,
         "blockCount": 98,
         "missingWords": [],
@@ -7460,7 +10834,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7472,8 +10846,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62022,
+        "originalLength": 62231,
+        "astLength": 62028,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -7494,7 +10868,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7506,8 +10880,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62023,
+        "originalLength": 62231,
+        "astLength": 62029,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -7528,7 +10902,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7540,8 +10914,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 61738,
+        "originalLength": 62231,
+        "astLength": 61744,
         "retainedPct": 99.2,
         "blockCount": 96,
         "missingWords": [
@@ -7571,7 +10945,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7744,6 +11118,211 @@
           "textComputations": 36,
           "textCharacters": 11202,
           "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135557,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135279,
+        "retainedPct": 100.9,
+        "blockCount": 250,
+        "missingWords": ["europejskich", "sporu", "inicjowanych"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 126,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135835,
+        "retainedPct": 101.3,
+        "blockCount": 252,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 128,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135556,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135557,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
         }
       }
     }
@@ -8115,8 +11694,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44393,
+        "originalLength": 44573,
+        "astLength": 44396,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -8136,7 +11715,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -8148,8 +11727,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 43593,
+        "originalLength": 44573,
+        "astLength": 43596,
         "retainedPct": 97.8,
         "blockCount": 86,
         "missingWords": ["odnosząc", "drugiego"],
@@ -8169,7 +11748,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -8187,8 +11766,8 @@
         }
       ],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 45193,
+        "originalLength": 44573,
+        "astLength": 45196,
         "retainedPct": 101.4,
         "blockCount": 88,
         "missingWords": [],
@@ -8208,7 +11787,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -8220,8 +11799,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44392,
+        "originalLength": 44573,
+        "astLength": 44395,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": ["odnosząc"],
@@ -8241,7 +11820,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -8253,8 +11832,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44393,
+        "originalLength": 44573,
+        "astLength": 44396,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -8274,7 +11853,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -8286,8 +11865,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44341,
+        "originalLength": 44573,
+        "astLength": 44344,
         "retainedPct": 99.5,
         "blockCount": 86,
         "missingWords": [],
@@ -8306,7 +11885,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }

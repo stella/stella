@@ -1,0 +1,3 @@
+{
+  "add-column": "The nullable, default-free validation timestamp is a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout."
+}

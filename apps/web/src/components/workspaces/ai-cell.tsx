@@ -42,6 +42,15 @@ export const AiCell = ({
           {t("caseLaw.research.answers.notRun")}
         </span>
       );
+    case "not_stated":
+      return (
+        <span
+          data-ai-cell-state="not_stated"
+          className="text-foreground-placeholder text-xs"
+        >
+          {t("aiColumns.nothingFound")}
+        </span>
+      );
     case "queued":
     case "running":
       return (
@@ -71,6 +80,7 @@ export const AiCell = ({
         </span>
       );
     case "failed":
+    case "refused":
     case "refused_budget":
       return (
         <span
@@ -78,12 +88,14 @@ export const AiCell = ({
           className="flex min-w-0 items-start gap-1"
         >
           <span className="text-destructive min-w-0 text-xs">
-            {failure ??
-              t(
-                state.type === "refused_budget"
-                  ? "aiColumns.refusedBudget"
-                  : "workspaces.fields.errored",
-              )}
+            {state.type === "refused"
+              ? t("aiColumns.modelRefused")
+              : (failure ??
+                t(
+                  state.type === "refused_budget"
+                    ? "aiColumns.refusedBudget"
+                    : "workspaces.fields.errored",
+                ))}
           </span>
           {onRetry !== undefined && (
             <Button

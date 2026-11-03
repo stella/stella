@@ -1,10 +1,16 @@
+import { Result } from "better-result";
+
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import type {
+  SoftLawAdapterConfiguration,
   SoftLawAuthority,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 
+import { bfdiAdapter } from "./bfdi";
 import { edpbAdapter } from "./edpb";
+import { uoouSkAdapter } from "./uoou-sk";
 import { wp29Adapter } from "./wp29";
 
 type SourceRegistration<Authority extends SoftLawAuthority> = {
@@ -72,7 +78,17 @@ export const SOFT_LAW_ADMISSIONS = {
   "ee-aki": unverified,
   "fi-ombudsman": unverified,
   "fr-cnil": held,
-  "de-bfdi": held,
+  "de-bfdi": {
+    state: "registered",
+    adapter: bfdiAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "BfDI; https://www.bfdi.bund.de",
+      allowsRedistribution: false,
+      allowsDerivedAi: false,
+    },
+    reuseNotice: "https://www.bfdi.bund.de",
+  },
   "el-hdpa": unverified,
   "hu-naih": unverified,
   "is-personuvernd": unverified,
@@ -88,7 +104,20 @@ export const SOFT_LAW_ADMISSIONS = {
   "pl-uodo": unverified,
   "pt-cnpd": unverified,
   "ro-anspdcp": unverified,
-  "sk-uoou": unverified,
+  "sk-uoou": {
+    state: "registered",
+    adapter: uoouSkAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Úrad na ochranu osobných údajov Slovenskej republiky; https://dataprotection.gov.sk",
+      allowsRedistribution: false,
+      allowsDerivedAi: false,
+    },
+    // The site states no reuse terms; its home page asks reusers of
+    // published documents to limit any personal data they contain.
+    reuseNotice: "https://dataprotection.gov.sk/sk/",
+  },
   "si-ip": unverified,
   "es-aepd": held,
   "se-imy": unverified,
@@ -132,3 +161,23 @@ export type RegisteredSoftLawAuthority = {
     ? Authority
     : never;
 }[SoftLawAuthority];
+
+type RegisteredSoftLawAdapter =
+  (typeof SOFT_LAW_ADMISSIONS)[RegisteredSoftLawAuthority]["adapter"];
+
+export const configureSoftLawAdapter = async (
+  adapter: RegisteredSoftLawAdapter,
+  configuration: SoftLawAdapterConfiguration,
+) => {
+  if ("configure" in adapter) {
+    return await adapter.configure(configuration);
+  }
+  if (configuration.type === "default") {
+    return Result.ok(adapter);
+  }
+  return Result.err(
+    new SoftLawIngestionError({
+      message: "This source does not accept an admission file",
+    }),
+  );
+};

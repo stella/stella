@@ -8,11 +8,12 @@ import {
   parityGoldenUrl,
   parserParityOutput,
 } from "@/api/tests/helpers/case-law-parity";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 for (const entry of PARSER_PARITY_MANIFEST) {
@@ -25,8 +26,17 @@ for (const entry of PARSER_PARITY_MANIFEST) {
       );
     }
     const expected: unknown = await golden.json();
-    const actual: unknown = await parserParityOutput(entry);
-    expect(actual).toEqual(expected);
+    const actual = await parserParityOutput(entry);
+    expect(expected).toEqual(actual);
+    if ("identity" in entry) {
+      expect(actual.documentAst).toMatchObject({
+        metadata: {
+          caseNumber: entry.identity.caseNumber,
+          ecli: entry.identity.ecli,
+          decisionDate: entry.identity.decisionDate,
+        },
+      });
+    }
   });
 }
 

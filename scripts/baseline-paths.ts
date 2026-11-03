@@ -61,8 +61,8 @@ export const BASELINE_PATHS = {
   testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
-  /** apps/api/src/tests/query-perf/query-perf.test.ts */
-  queryPerf: "apps/api/src/tests/query-perf/baseline.json",
+  /** scripts/render-phase-update-baseline.ts */
+  renderPhaseUpdate: ".oxlint-plugins/no-render-phase-update-baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
@@ -84,6 +84,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
   caseLawReadFault:
     "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
+  /** apps/api/scripts/update-structure-fidelity-baseline.ts */
+  caseLawStructureFidelity:
+    "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
   /** apps/api/src/lib/legal-search/parsers/validate-ast-defaults.test.ts */
   validateAstDefaults:
     "apps/api/src/lib/legal-search/parsers/validate-ast-defaults.baseline.json",
@@ -96,9 +99,11 @@ export const BASELINE_PATHS = {
   queueAuthority: "scripts/queue-authority-baseline.json",
   /** scripts/queue-authority.ts */
   schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
-  // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
-  // messages directory it is given, so the package holds the file name and
-  // each app contributes the directory. Both committed pairs are listed.
+  // The i18n baselines and source locks are produced by
+  // `packages/scripts/src/i18n-*.ts` against the messages directory it is
+  // given, so the package holds the file name and each catalog contributes the
+  // directory. Every committed one is listed. A source lock records which
+  // English the translations follow; only `--sync` and `--accept` may write it.
   /** packages/scripts/src/i18n-check.ts, apps/web */
   webI18nCheck: "apps/web/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/web */
@@ -107,6 +112,13 @@ export const BASELINE_PATHS = {
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */
   landingI18nLint: "apps/landing/src/i18n/i18n-lint-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/web */
+  webI18nSourceLock: "apps/web/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/landing */
+  landingI18nSourceLock: "apps/landing/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, packages/transactional */
+  transactionalI18nSourceLock:
+    "packages/transactional/i18n/i18n-source-lock.json",
 } as const satisfies Record<string, string>;
 
 export const isSeededBaselineFile = (file: string): boolean =>
