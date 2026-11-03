@@ -2545,13 +2545,18 @@ for (const language of ["en", "ar"] as const) {
     await expect(card).toBeFocused();
     await card.getByRole("button", { name: acceptName(messages) }).click();
     await expect(page.getByRole("status")).toBeVisible();
+    // The selected range is the entry: the whole hour the drag snapped to, not
+    // only the half hour recorded inside it.
     expect(batchRequests(await tauriInvocations(page))).toEqual([
       expect.objectContaining({
         items: [
           expect.objectContaining({
-            entry: expect.objectContaining({ matterId: "matter-1" }),
+            entry: expect.objectContaining({
+              durationMinutes: 60,
+              matterId: "matter-1",
+            }),
             ranges: [
-              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T10:00:00Z" },
             ],
           }),
         ],
