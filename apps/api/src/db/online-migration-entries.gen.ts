@@ -29,6 +29,7 @@ export { default as indexes_agent_skill_resources_path_billing_trgm_idx } from "
 export { default as indexes_agent_skills_bound_client_idx } from "./online-migration-entries/indexes-agent-skills-bound-client-idx";
 export { default as indexes_agent_skills_bound_workspace_idx } from "./online-migration-entries/indexes-agent-skills-bound-workspace-idx";
 export { default as indexes_apikey_personal_owner_keyset_idx } from "./online-migration-entries/indexes-apikey-personal-owner-keyset-idx";
+export { default as indexes_audit_logs_org_people_created_id_idx } from "./online-migration-entries/indexes-audit-logs-org-people-created-id-idx";
 export { default as indexes_case_law_citations_doctrine_cited_idx } from "./online-migration-entries/indexes-case-law-citations-doctrine-cited-idx";
 export { default as indexes_case_law_court_date_published_index } from "./online-migration-entries/indexes-case-law-court-date-published-index";
 export { default as indexes_case_law_coverage_index } from "./online-migration-entries/indexes-case-law-coverage-index";

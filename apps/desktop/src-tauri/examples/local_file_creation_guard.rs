@@ -242,3 +242,25 @@ async fn probe_39() {
   // guard: tokio::fs::copy
   let _ = tokio::fs::copy("unused", "unused").await;
 }
+
+#[cfg(unix)]
+fn probe_rename_with(directory: &std::fs::File) {
+  // guard: rustix::fs::renameat_with
+  let _ = rustix::fs::renameat_with(
+    directory,
+    "unused",
+    directory,
+    "unused",
+    rustix::fs::RenameFlags::NOREPLACE,
+  );
+}
+
+#[cfg(windows)]
+fn probe_windows_move() {
+  // guard: winsafe::MoveFileEx
+  let _ = winsafe::MoveFileEx(
+    "unused",
+    Some("unused"),
+    winsafe::co::MOVEFILE::WRITE_THROUGH,
+  );
+}
