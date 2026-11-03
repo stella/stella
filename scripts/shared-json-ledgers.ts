@@ -9,6 +9,7 @@ export const SHARED_LEDGER_PATHS = [
   "apps/api/src/tests/export-dropping-mock-ledger.json",
   "apps/api/src/tests/read-scaling/api-scaling-ledger.json",
   "apps/api/src/tests/read-scaling/mcp-scaling-ledger.json",
+  "apps/api/src/tests/security/contacts-owner-scope-census.allowlist.json",
   "apps/api/src/tests/security/matter-access-census.allowlist.json",
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
   "packages/property-testing/property-seeds.json",
