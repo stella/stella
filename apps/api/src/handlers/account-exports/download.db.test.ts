@@ -30,6 +30,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const oauthCredential = await admittedOAuthCredentialForTest("cli");
@@ -117,6 +118,11 @@ const createFixture = async () => {
       return {
         id,
         userId,
+        kind: "account",
+        organizationId: null,
+        auditRowCount: null,
+        auditCoveredThrough: null,
+        downloadedAt: null,
         status: "ready",
         attemptCount: 1,
         claimToken: null,
@@ -159,7 +165,7 @@ const createFixture = async () => {
     download,
     async [Symbol.asyncDispose]() {
       await server[Symbol.asyncDispose]();
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(inArray(user.id, [ownerId, otherId]));
     },
   };

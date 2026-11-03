@@ -1094,10 +1094,10 @@ export const assemblePlTkDecision = ({
       ? ruling.wordDocumentUrl
       : undefined;
 
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const parsed =
-    ruling?.textHtml === undefined
-      ? null
-      : Result.try({
+    ruling?.textHtml !== undefined
+      ? Result.try({
           try: () =>
             parsePlTkText({
               page:
@@ -1113,7 +1113,8 @@ export const assemblePlTkDecision = ({
               textHtml: ruling.textHtml ?? "",
             }),
           catch: errorTag,
-        });
+        })
+      : null;
   if (parsed !== null && Result.isError(parsed)) {
     // The case page is stored verbatim below, so the text is recoverable by
     // re-parsing it rather than by asking the portal again.

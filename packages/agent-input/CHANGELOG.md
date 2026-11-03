@@ -1,5 +1,18 @@
 # @stll/agent-input
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
+## 0.4.0
+
+### Minor Changes
+
+- Share JSON Schema optional-value handling through the agent-input package.
+
 ## 0.3.0
 
 ### Minor Changes

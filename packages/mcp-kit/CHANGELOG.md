@@ -1,5 +1,12 @@
 # @stll/mcp-kit
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/agent-input@0.4.0
+
 ## 0.2.5
 
 ### Patch Changes

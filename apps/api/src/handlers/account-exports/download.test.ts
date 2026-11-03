@@ -102,6 +102,11 @@ const createDownloadRoute = (membership: { currentId: string | null }) =>
       return {
         id,
         userId,
+        kind: "account",
+        organizationId: null,
+        auditRowCount: null,
+        auditCoveredThrough: null,
+        downloadedAt: null,
         status: "ready",
         attemptCount: 1,
         claimToken: null,
