@@ -151,7 +151,7 @@ const ResultTableRow = ({
               kind: "decision",
               courtAbbreviation: row.courtAbbreviation,
             }}
-            title={`${row.caseNumber} — ${row.court}`}
+            title={`${row.caseNumber}: ${row.court}`}
           />
           <PreviewCard>
             <PreviewCardTrigger

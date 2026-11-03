@@ -191,6 +191,7 @@
       "openFailed": "Šio dokumento dabar negalima redaguoti",
       "takenOver": "Šį dokumentą dabar redaguoja kažkas kitas. Jūsų pakeitimai po paskutinio išsaugojimo nebuvo išlaikyti.",
       "finishFailed": "Jūsų pakeitimai išsaugoti, bet iš jų dar nesukurta nauja versija. Dar kartą bakstelėkite Atlikta arba išeikite: kitas redagavimas tęsis nuo jų.",
+      "notStored": "Paskutinių pakeitimų išsaugoti nepavyko. Likite ir bandykite dar kartą arba išeikite be jų.",
       "stay": "Likti",
       "leave": "Išeiti"
     }
