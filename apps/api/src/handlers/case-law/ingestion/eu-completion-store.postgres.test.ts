@@ -1136,7 +1136,10 @@ if (!databaseUrl || !enabled) {
           one.reserveRequest({ sourceId: state.sourceId, hour }),
           two.reserveRequest({ sourceId: state.sourceId, hour }),
         ]);
-        expect(results.toSorted()).toEqual([false, true]);
+        expect(results.toSorted((a, b) => Number(a) - Number(b))).toEqual([
+          false,
+          true,
+        ]);
         expect(
           (
             await db
