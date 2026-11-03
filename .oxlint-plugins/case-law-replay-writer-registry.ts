@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 664,
+    line: 716,
     kind: "pending",
   },
   {
@@ -293,47 +293,47 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 367,
+    line: 370,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 401,
+    line: 404,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 551,
+    line: 554,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 642,
+    line: 645,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1217,
+    line: 1220,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1753,
+    line: 1756,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1827,
+    line: 1830,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1864,
+    line: 1867,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1912,
+    line: 1915,
     kind: "pending",
   },
   {
