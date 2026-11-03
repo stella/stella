@@ -764,7 +764,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {
@@ -934,6 +934,20 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutDelegatedGeneratorChecks)
     .map(withoutStepTimeout)
     .map(withoutStepId)
+    // The generated-files contract owns this derived-output inventory. Keep
+    // partition migration checks focused on the guard around that inventory.
+    .map((step) =>
+      step.name === "MCP app derived outputs guard" &&
+      typeof step["run"] === "string"
+        ? {
+            ...step,
+            run: step["run"].replace(
+              /outputs=\(\n[\s\S]*?\n\s*\)/u,
+              "outputs=(\n    <generated-output-inventory>\n  )",
+            ),
+          }
+        : step,
+    )
     .map((step) =>
       typeof step["run"] === "string"
         ? { ...step, run: normalizeGuardPathLines(step["run"], trackedFiles) }

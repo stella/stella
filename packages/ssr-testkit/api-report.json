@@ -1,0 +1,24 @@
+{
+  "package": "@stll/ssr-testkit",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/assert-document.d.ts",
+      "exports": [
+        {
+          "name": "SsrDocumentAssertionError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "assertSsrDocument",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/assert-document.d.ts": "declare const SsrDocumentAssertionError_base: import(\"better-result\").TaggedErrorClass<\"SsrDocumentAssertionError\">;\nexport declare class SsrDocumentAssertionError extends SsrDocumentAssertionError_base<{\n    code: \"forbidden-content\" | \"invalid-content-type\" | \"missing-content\" | \"unexpected-status\";\n    marker?: string | undefined;\n    message: string;\n}> {\n}\ntype AssertSsrDocumentOptions = {\n    contentType: string | null;\n    expectedStatus?: number | undefined;\n    forbiddenContent?: readonly string[] | undefined;\n    html: string;\n    requiredContent: readonly string[];\n    status: number;\n};\nexport declare const assertSsrDocument: ({ contentType, expectedStatus, forbiddenContent, html, requiredContent, status, }: AssertSsrDocumentOptions) => void;\nexport {};\n"
+  }
+}
