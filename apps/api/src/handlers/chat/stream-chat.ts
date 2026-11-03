@@ -41,6 +41,8 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import { NO_ANSWER_QUOTE_CHECKER } from "@/api/handlers/chat/answer-quote-checks";
+import type { AnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
   chunkCarriesAnswer,
@@ -363,6 +365,12 @@ type StreamChatProps = {
    * wrote is still dropped.
    */
   decisionPassageStamper?: DecisionPassageStamper | undefined;
+  /**
+   * Checks the finished answer's quotations against the decisions it cites,
+   * before the turn is stored or its end is shown, so the live answer and
+   * every reload carry the same result. Without one, the renderer checks.
+   */
+  answerQuoteChecker?: AnswerQuoteChecker | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -604,6 +612,7 @@ export const streamChat = async ({
   decisionPassageStamper = knownDecisionPassageStamper(
     NO_DECISION_PASSAGE_NUMBERS,
   ),
+  answerQuoteChecker = NO_ANSWER_QUOTE_CHECKER,
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -1013,6 +1022,28 @@ export const streamChat = async ({
           continue;
         }
         yield chunk;
+      }
+    }
+    if (settlement.event !== undefined) {
+      const { outcome, responseMessage } = settlement.event;
+      const quoteCheck = await answerQuoteChecker(responseMessage);
+      if (quoteCheck.type === "checked") {
+        const answerQuotes = quoteCheck.checks;
+        settlement.event = {
+          outcome,
+          responseMessage: attachTerminalTurnOutcome({
+            message: toPersistableChatMessage({
+              ...responseMessage,
+              metadata: { ...responseMessage.metadata, answerQuotes },
+            }),
+            turnOutcome: outcome,
+          }),
+        };
+        yield {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: responseMessage.id,
+          metadata: { answerQuotes },
+        } as const satisfies PublicStreamChunk;
       }
     }
     const terminalEvent = settlement.event;

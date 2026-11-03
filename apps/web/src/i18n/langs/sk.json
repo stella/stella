@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
+      "unverified": "Citáciu sa nepodarilo overiť",
+      "unverifiedHint": "Citované rozhodnutia tento text doslovne neobsahujú",
       "verified": "Overená citácia",
       "verifiedHint": "Doslovne v {source}"
     },

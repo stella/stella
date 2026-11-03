@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
+      "unverified": "Citatos patikrinti nepavyko",
+      "unverifiedHint": "Cituojamuose sprendimuose šio teksto pažodžiui nėra",
       "verified": "Patikrinta citata",
       "verifiedHint": "Pažodžiui: {source}"
     },

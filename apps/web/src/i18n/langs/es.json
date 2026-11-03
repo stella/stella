@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
+      "unverified": "Cita no verificada",
+      "unverifiedHint": "Las resoluciones citadas no contienen este texto palabra por palabra",
       "verified": "Cita verificada",
       "verifiedHint": "Palabra por palabra en {source}"
     },

@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
+      "unverified": "Zitat nicht verifiziert",
+      "unverifiedHint": "Die zitierten Entscheidungen enthalten diesen Text nicht wörtlich",
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
     },

@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
+      "unverified": "Cytat niezweryfikowany",
+      "unverifiedHint": "Cytowane orzeczenia nie zawierają tego tekstu dosłownie",
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
     },

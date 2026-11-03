@@ -31,6 +31,10 @@
       "types": "./src/analysis.ts",
       "import": "./src/analysis.ts"
     },
+    "./answer-quote": {
+      "types": "./src/answer-quote.ts",
+      "import": "./src/answer-quote.ts"
+    },
     "./case-law-heading": {
       "types": "./src/case-law-heading.ts",
       "import": "./src/case-law-heading.ts"

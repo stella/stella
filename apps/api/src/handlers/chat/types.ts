@@ -186,7 +186,35 @@ export type ChatTurnOutcome =
       reason: ChatTurnInterruptionReason;
     };
 
+/**
+ * What the server found for one quotation (a Markdown blockquote) of an
+ * answer, checked against the case-law decisions the answer cites by id
+ * (`answer-quote-checks.ts`).
+ *
+ * - `verified`: a cited decision holds it word for word, at this block.
+ * - `unverified`: every cited decision was read and none holds it.
+ * - `unchecked`: there was nothing to check it against: the answer cites no
+ *   decision, or a cited decision could not be read.
+ *
+ * `key` is `answerQuoteKey` of the quotation's displayed text, which the
+ * answer renderer computes from the rendered blockquote to find its result.
+ */
+export type ChatAnswerQuoteCheck =
+  | {
+      type: "verified";
+      key: string;
+      decisionId: SafeId<"caseLawDecision">;
+      anchorId: string;
+      paragraph: number | null;
+    }
+  | { type: "unverified"; key: string }
+  | { type: "unchecked"; key: string };
+
 export type ChatMessageMetadata = {
+  /** Server-owned: the answer's quotations as checked once it completed.
+   * Absent when the answer quotes nothing or the check could not run.
+   * Incoming client metadata deliberately does not accept this field. */
+  answerQuotes?: ChatAnswerQuoteCheck[] | undefined;
   /** Server-owned active execution time; human interaction waits are excluded. */
   turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata

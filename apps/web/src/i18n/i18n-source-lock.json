@@ -1141,6 +1141,8 @@
   "chat.answerEdit.unorderedList": "Bulleted list",
   "chat.answerEdit.wholeBlockRequired": "Select a whole paragraph or list to change its style.",
   "chat.answerQuote.showInDecision": "Show in decision",
+  "chat.answerQuote.unverified": "Citation not verified",
+  "chat.answerQuote.unverifiedHint": "The cited decisions do not contain this text word for word",
   "chat.answerQuote.verified": "Verified citation",
   "chat.answerQuote.verifiedHint": "Word for word in {source}",
   "chat.applyMode.description": "Word stores who made each change. We'll remember your choice.",

@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Näita lahendis",
+      "unverified": "Tsitaati ei õnnestunud kontrollida",
+      "unverifiedHint": "Viidatud lahendid ei sisalda seda teksti sõna-sõnalt",
       "verified": "Kontrollitud tsitaat",
       "verifiedHint": "Sõna-sõnalt: {source}"
     },

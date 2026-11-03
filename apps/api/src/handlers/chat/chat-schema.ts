@@ -1526,6 +1526,7 @@ const parseUsageMetadata = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&

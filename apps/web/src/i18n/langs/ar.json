@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "عرض في القرار",
+      "unverified": "تعذّر التحقق من الاقتباس",
+      "unverifiedHint": "لا تتضمن القرارات المستشهد بها هذا النص حرفيًا",
       "verified": "اقتباس موثَّق",
       "verifiedHint": "حرفيًا في {source}"
     },

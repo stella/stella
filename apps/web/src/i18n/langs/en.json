@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Show in decision",
+      "unverified": "Citation not verified",
+      "unverifiedHint": "The cited decisions do not contain this text word for word",
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },

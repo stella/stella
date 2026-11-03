@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
+      "unverified": "Az idézet nem ellenőrizhető",
+      "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },

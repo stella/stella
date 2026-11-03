@@ -1449,6 +1449,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
+      "unverified": "Citātu neizdevās pārbaudīt",
+      "unverifiedHint": "Citētajos nolēmumos šis teksts vārds vārdā nav atrodams",
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
     },
