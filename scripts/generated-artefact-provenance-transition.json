@@ -4,7 +4,7 @@
   "apps/api/src/handlers/case-law/analysis/significance-run.ts": 1,
   "apps/api/src/handlers/case-law/decisions/search-expand.ts": 1,
   "apps/api/src/handlers/case-law/decisions/search-refine.ts": 1,
-  "apps/api/src/handlers/desktop-time-entries/drafting-model.ts": 2,
+  "apps/api/src/handlers/desktop-time-entries/drafting-model.ts": 1,
   "apps/api/src/handlers/chat/compaction.ts": 2,
   "apps/api/src/handlers/chat/generate-thread-title.ts": 1,
   "apps/api/src/handlers/chat/get-suggested-prompts.ts": 1,

@@ -1,7 +1,7 @@
 {
   "release": null,
   "sourceCommit": "4101febc13c02b34e1bed6c004d72fc9f85eea6e",
-  "newestMigration": "20261101221534_generated_artefact_provenance",
+  "newestMigration": "20261103055405_generated_artefact_provenance",
   "shape": "Adds nullable generation_provenance to chat_threads.",
   "actors": {
     "organizationId": "YMmzAWeeprDq81TIo0s6sqajm60bGMXs",

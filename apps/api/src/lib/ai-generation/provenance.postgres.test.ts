@@ -23,6 +23,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -151,14 +152,14 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     await db
       .delete(chatThreads)
       .where(eq(chatThreads.organizationId, foreignOrganizationId));
-    await db
-      .delete(organization)
-      .where(eq(organization.id, foreignOrganizationId));
     await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, sourceId));
     await db
       .delete(caseLawSources)
       .where(eq(caseLawSources.id, sourceRegistryId));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [
+      organizationId,
+      foreignOrganizationId,
+    ]);
     await db.delete(user).where(eq(user.id, userId));
   });
   test("the owned write binds value, origin and source without changing legacy rows", async () => {
