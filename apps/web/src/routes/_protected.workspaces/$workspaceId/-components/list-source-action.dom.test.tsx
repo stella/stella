@@ -14,6 +14,7 @@ import {
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -22,7 +23,6 @@ import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import slovak from "@/i18n/langs/sk.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {
