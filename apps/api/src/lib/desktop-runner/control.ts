@@ -21,14 +21,20 @@ import {
   type DesktopRunnerTiming,
 } from "@/api/lib/desktop-runner/protocol";
 import {
+  type ChatRunForRequest,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
   insertAssignedRun,
   type InsertedCommand,
   insertRunCommand,
+  type MemberRunner,
+  readChatRunForRequest,
+  readChatRunSession,
   readConnectedRunners,
+  readMemberRunners,
   readRun,
   readStoredRunEvents,
+  recordChatReadSeq,
   type RunOwner,
   type StoredRunEvent,
 } from "@/api/lib/desktop-runner/store";
@@ -85,6 +91,8 @@ export type StartLocalRunInput = {
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
   workspaceIds: readonly SafeId<"workspace">[];
+  /** The chat thread whose turn starts the run, when one does. */
+  chatThreadId?: SafeId<"chatThread"> | null;
 };
 
 export type StartLocalRunOutcome =
@@ -238,6 +246,7 @@ const startRun = async (
         harnessVersion: input.harnessVersion,
         model: input.model,
         workspaceIds: input.workspaceIds,
+        chatThreadId: input.chatThreadId ?? null,
         payload: message,
         now: deps.now(),
         leaseMs: deps.timing.leaseMs,
@@ -431,6 +440,58 @@ export const createDesktopRunnerControl = ({
     /** The run's stored messages after `afterSeq`, in sequence order. */
     readEvents: async (options: ReadEventsOptions) =>
       await readEvents(deps, options),
+    /**
+     * The member's computers and what their harnesses last reported. A
+     * computer counts as connected only while its socket is fresh, the same
+     * rule `pickDesktop` routes by.
+     */
+    readMemberRunners: async ({
+      owner,
+    }: {
+      owner: RunOwner;
+    }): Promise<Result<MemberRunner[], DatabaseError>> => {
+      const freshSince = seenSince(deps);
+      const read = await Result.tryPromise({
+        try: async () =>
+          await readMemberRunners(db, {
+            owner,
+            limit: deps.limits.maxRunnersPerAccount,
+          }),
+        catch: toDatabaseError,
+      });
+      return read.map((items) =>
+        items.map((item) => ({
+          ...item,
+          connected: item.connected && item.lastSeenAt >= freshSince,
+        })),
+      );
+    },
+    /** The harness session a thread's next turn on this computer resumes. */
+    readChatRunSession: async (
+      options: Parameters<typeof readChatRunSession>[1],
+    ): Promise<Result<string | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readChatRunSession(db, options),
+        catch: toDatabaseError,
+      }),
+    /** The thread's run that asked for approval `requestId`. */
+    readChatRunForRequest: async (
+      options: Parameters<typeof readChatRunForRequest>[1],
+    ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readChatRunForRequest(db, options),
+        catch: toDatabaseError,
+      }),
+    /** Record how far a chat turn read the run; it only moves forward. */
+    recordChatReadSeq: async (
+      options: Parameters<typeof recordChatReadSeq>[1],
+    ): Promise<Result<void, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => {
+          await recordChatReadSeq(db, options);
+        },
+        catch: toDatabaseError,
+      }),
   };
 };
 

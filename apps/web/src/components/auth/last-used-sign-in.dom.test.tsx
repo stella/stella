@@ -50,7 +50,9 @@ const browserCookie = (read: () => string) => {
   Object.defineProperty(document, "cookie", {
     configurable: true,
     get: read,
-    set: () => undefined,
+    set: () => {
+      // The fixture exposes the server cookie without persisting client writes.
+    },
   });
 };
 
@@ -104,7 +106,7 @@ const isFilled = (button: HTMLElement) =>
 const emailFieldOf = (submit: HTMLElement) => {
   const field = submit.closest("form")?.querySelector('input[type="email"]');
   if (!(field instanceof HTMLInputElement)) {
-    throw new Error("the submit button's form has no email field");
+    throw new TypeError("the submit button's form has no email field");
   }
   return field;
 };
