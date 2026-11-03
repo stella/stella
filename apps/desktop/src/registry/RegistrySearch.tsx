@@ -710,7 +710,9 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="block min-h-0 flex-1 overflow-y-auto"
+                // A button centres its content vertically; a column pinned to
+                // the start keeps a short result at the top of a tall card.
+                className="flex min-h-0 flex-1 flex-col justify-start overflow-y-auto"
                 // The card clips its overflow; an outside ring would be cut
                 // off.
                 focusRing="inside"
