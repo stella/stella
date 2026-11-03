@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/desktop-runner/session.ts",
+  "delta": 1,
+  "reason": "A runner socket delivers its queued commands one keyset page of COMMAND_PAGE_SIZE at a time; each iteration reads the next page, so the page is the batch and the loop ends at the first short page."
+}

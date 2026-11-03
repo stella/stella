@@ -21,6 +21,7 @@ import type { Identity as DefinitionCapIdentity } from "./definitionCap";
 import type { Identity as DesktopBatchIdentity } from "./desktopBatch";
 import type { Identity as DesktopCredentialIdentity } from "./desktopCredential";
 import type { Identity as DesktopMembershipIdentity } from "./desktopMembership";
+import type { Identity as DesktopRunnerCapacityIdentity } from "./desktopRunnerCapacity";
 import type { Identity as EntityIdentity } from "./entity";
 import type { Identity as EntityVersionIdentity } from "./entityVersion";
 import type { Identity as ExpenseCapacityIdentity } from "./expenseCapacity";
@@ -78,6 +79,7 @@ export type AggregateIdentities = {
   "desktopBatch": DesktopBatchIdentity;
   "desktopCredential": DesktopCredentialIdentity;
   "desktopMembership": DesktopMembershipIdentity;
+  "desktopRunnerCapacity": DesktopRunnerCapacityIdentity;
   "entity": EntityIdentity;
   "entityVersion": EntityVersionIdentity;
   "expenseCapacity": ExpenseCapacityIdentity;
