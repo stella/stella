@@ -650,6 +650,7 @@ describe("public corpus statement budgets", () => {
           resolveAnnotationTarget: async () => ({
             status: "available",
             readBlocks: async () => [],
+            readTextPieces: async () => [],
           }),
         },
       },
