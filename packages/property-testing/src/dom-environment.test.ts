@@ -1,9 +1,39 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { expect, test } from "bun:test";
 
 import {
   drainReactScheduler,
   loadReactScheduler,
-} from "@/lib/react-scheduler-drain";
+  unregisterDomEnvironment,
+} from "./dom-environment";
+
+const domGlobals = () =>
+  `${String("window" in globalThis)}:${String("document" in globalThis)}`;
+
+test("teardown runs queued React work while the DOM globals still exist, then removes them", async () => {
+  GlobalRegistrator.register();
+  const scheduler = loadReactScheduler();
+  const seen: string[] = [];
+  // A passive effect left behind by a commit outside act() that reads the DOM.
+  scheduler.unstable_scheduleCallback(scheduler.unstable_NormalPriority, () => {
+    seen.push(domGlobals());
+    // Idle work a promise continuation leaves behind expires after any
+    // barrier already queued.
+    queueMicrotask(() => {
+      scheduler.unstable_scheduleCallback(
+        scheduler.unstable_IdlePriority,
+        () => {
+          seen.push(domGlobals());
+        },
+      );
+    });
+  });
+
+  await unregisterDomEnvironment();
+
+  expect(seen).toEqual(["true:true", "true:true"]);
+  expect(domGlobals()).toBe("false:false");
+});
 
 test("the drain resolves only after queued React work and the work it enqueues", async () => {
   const scheduler = loadReactScheduler();

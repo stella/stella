@@ -1,11 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 
 const { writeScrollEdgeFade } = await import("./scroll-edge-fade");
 
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => unregisterDomEnvironment());
 
 type ScrollerOptions = {
   direction: "ltr" | "rtl";
