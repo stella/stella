@@ -121,6 +121,8 @@ backgrounds get a subtle `outline: 1px solid rgb(0 0 0 / 0.06)` edge.
   links and selected text keep the native menu, and the desktop app
   shows no browser menu elsewhere. `no-raw-context-menu` rejects a
   hand-written `onContextMenu` or `contextmenu` listener.
+  [test: packages/ui/src/components/entity-actions.dom.test.tsx,
+  packages/ui/src/lib/native-context-menu.dom.test.ts]
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged
