@@ -453,10 +453,15 @@ type ReadRunOptions = {
  * means for a run nobody reads any more. The run stays open for a later turn.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
-  await context.control.interruptRun({
+  const stopped = await context.control.interruptRun({
     owner: context.owner,
     runId: runnerRunId,
   });
+  // The turn ends either way; a stop that could not be queued is observed,
+  // and the gateway ends a run nobody reads once it is abandoned.
+  if (stopped.isErr()) {
+    observeFailure(stopped.error, { sink: LOCAL_RUN_STORE_SINK });
+  }
 };
 
 /**
