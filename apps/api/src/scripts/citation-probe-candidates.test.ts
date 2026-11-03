@@ -15,7 +15,7 @@ describe("citation probe candidates", () => {
   });
 
   test("an authority file number joined by non-breaking hyphens is benign", () => {
-    const nb = "\u2011";
+    const nb = "‑";
     expect(
       residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
     ).toBe(false);
@@ -87,5 +87,13 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn.XV/2 Gn 45/09")).toBe(false);
     expect(residual("sp. zn. VI/2 Pz 123/07-5")).toBe(true);
     expect(residual("sp. zn. 2 Tdo 123/2007")).toBe(true);
+  });
+
+  test("a multi-segment authority file after sp. zn. is benign, a docket is not", () => {
+    expect(residual("sp. zn. IV/12/345/2000/AB zo dňa")).toBe(false);
+    expect(residual("sp. zn. 123/4567/12345/01/Ab-C/12")).toBe(false);
+    expect(residual("sp. zn. 8 C/18/2008")).toBe(true);
+    expect(residual("sp. zn. 36Co/52/53/2023")).toBe(true);
+    expect(residual("sp. zn. 5Sžf/14/2010")).toBe(true);
   });
 });
