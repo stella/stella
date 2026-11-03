@@ -14,6 +14,7 @@ import {
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import {
   WORKSPACE_DELETION_RETAINED_STAGES,
   WORKSPACE_DELETION_RETAINED_TABLES,
@@ -333,13 +334,12 @@ export const sweepReviewOrganization = async (
     )
     .returning({ id: userFiles.id });
   removed.set("user_files", attachments.length);
-  await tx.execute(
-    sql`SELECT set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
-  );
-  // One statement shares the catalog and workspace snapshot while saving a
-  // round trip in the reset's fixed statement budget.
+  // One statement opens the correspondence reset fence and shares the catalog
+  // and workspace snapshot, saving round trips in the reset's fixed statement
+  // budget. The fence names the organization before any delete below runs.
   const [census] = await tx
     .select({
+      correspondenceResetFence: sql<string>`pg_catalog.set_config(${CORRESPONDENCE_REVIEW_RESET_SETTING.organizationId}, ${organizationId}, true)`,
       workspaceIds: sql<SafeId<"workspace">[]>`ARRAY(
         SELECT ${workspaces.id}
         FROM ${workspaces}
@@ -363,13 +363,34 @@ export const sweepReviewOrganization = async (
               AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0
           )
       )`,
+      organizationScopedOwnerTableNames: sql<string[]>`ARRAY(
+        SELECT DISTINCT c.relname::text
+        FROM pg_catalog.pg_class c
+        INNER JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        INNER JOIN pg_catalog.pg_policy policy ON policy.polrelid = c.oid
+        WHERE n.nspname = current_schema()
+          AND c.relforcerowsecurity
+          AND policy.polcmd IN ('*', 'd')
+          AND policy.polpermissive
+          AND 0 = ANY(policy.polroles)
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'CURRENT_USER') > 0
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'pg_get_userbyid') > 0
+          AND strpos(pg_catalog.pg_get_expr(policy.polqual, policy.polrelid), 'app.organization_id') > 0
+      )`,
     })
     .from(sql`(SELECT 1) AS census`);
   if (census === undefined) {
     return panic("Reset table census returned no result");
   }
-  const { applicationTableNames, workspaceIds } = census;
+  const {
+    applicationTableNames,
+    organizationScopedOwnerTableNames,
+    workspaceIds,
+  } = census;
   const applicationTables = new Set(applicationTableNames);
+  const organizationScopedOwnerTables = new Set(
+    organizationScopedOwnerTableNames,
+  );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
     const clear = async (deleteTx: Transaction) => {
       const rows = await removeOrganizationRows(deleteTx, organizationId, [
@@ -390,6 +411,12 @@ export const sweepReviewOrganization = async (
         },
         fn: clear,
       });
+      return Result.ok(undefined);
+    }
+    // An owner policy that names the organization (contacts) admits the
+    // owner inside that organization only.
+    if (organizationScopedOwnerTables.has(name)) {
+      await withOwnerOrganizationScope(tx, organizationId, clear);
       return Result.ok(undefined);
     }
     await clear(tx);

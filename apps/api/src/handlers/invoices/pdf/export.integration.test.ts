@@ -40,10 +40,14 @@ import {
 
 // Selected by the STELLA_RUN_POSTGRES_TESTS gate because the fixture exercises RLS.
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
+// A setup that fails before the fixture arrives reports once; teardown then
+// only releases the fixture reference instead of failing on its rows.
+let fixtureAcquired = false;
 const invoiceId = createSafeId<"invoice">();
 const settlementInvoiceIds: SafeId<"invoice">[] = [];
 beforeAll(async () => {
   fixture = await getRlsFixture();
+  fixtureAcquired = true;
 
   await fixture.testDb
     .update(authUser)
@@ -94,6 +98,10 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => {
+  if (!fixtureAcquired) {
+    await releaseRlsFixture();
+    return;
+  }
   if (settlementInvoiceIds.length > 0) {
     await fixture.testDb
       .delete(invoicePayments)
