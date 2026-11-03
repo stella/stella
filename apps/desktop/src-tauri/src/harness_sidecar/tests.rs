@@ -44,6 +44,12 @@ while read -r line; do
           exit 3 ;;
         *'"model":"garbage"'*) echo 'not json' ;;
         *'"model":"wait"'*) ;;
+        *'"model":"flood"'*)
+          i=0
+          while [ "$i" -lt 300 ]; do
+            printf '{"type":"run.event","runId":"%s","chunk":{"type":"RUN_STARTED"}}\n' "$id"
+            i=$((i + 1))
+          done ;;
         *)
           printf '{"type":"run.event","runId":"%s","chunk":{"type":"RUN_STARTED","runId":"%s"}}\n' "$id" "$id"
           printf '{"type":"run.approval_request","runId":"%s","requestId":"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f","kind":"command","summary":"Deletes a file"}\n' "$id"
@@ -269,6 +275,13 @@ fn commands_for_a_run_reach_the_sidecar() {
         decision: crate::runner_protocol::ApprovalDecision::Deny,
       })
       .unwrap();
+    sidecar
+      .answer(RunAnswer {
+        run_id: run_id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+      })
+      .unwrap();
     sidecar.interrupt(&run_id).unwrap();
     sidecar.cancel(&run_id).unwrap();
     assert_eq!(
@@ -292,10 +305,50 @@ fn commands_for_a_run_reach_the_sidecar() {
       "run.start",
       "run.token",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "shutdown"
     ]
+  );
+}
+
+#[test]
+fn a_run_nobody_drains_ends_failed_without_stalling_the_supervisor() {
+  let fixture = Fixture::new();
+  let start = run_start("flood");
+  let run_id = start.run_id.clone();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    // Nothing reads this run while the sidecar writes more than it can queue.
+    let mut flooded = sidecar.start_run(start).unwrap();
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert_eq!(finish(&mut after).await.len(), 3);
+    let probed = tokio::time::timeout(
+      WAIT,
+      sidecar.probe(HarnessProbe {
+        request_id: REQUEST_ID.to_owned(),
+        harness: Harness::Codex,
+        executable: "/data/harness/codex/0.165.0/codex".to_owned(),
+        config_dir: "/data/harness-home/codex".to_owned(),
+      }),
+    )
+    .await
+    .expect("a probe is answered while a run's outputs wait");
+    assert!(probed.is_ok());
+    let outputs = finish(&mut flooded).await;
+    assert_eq!(outputs.len(), RUN_OUTPUT_QUEUE);
+    assert_eq!(outputs.last(), Some(&failed()));
+    sidecar.shutdown().await;
+  });
+  let cancels: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| message["type"] == "run.cancel")
+    .collect();
+  assert_eq!(
+    cancels,
+    vec![json!({ "type": "run.cancel", "runId": run_id })]
   );
 }
 
