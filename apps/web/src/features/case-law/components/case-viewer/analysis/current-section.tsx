@@ -120,6 +120,7 @@ export const CurrentSection = ({
     <div className="sticky top-0 z-10 h-0">
       <div
         aria-hidden={current === null}
+        data-slot="reader-current-section"
         className={cn(
           "bg-background absolute inset-x-0 top-0 pb-2 transition-opacity duration-150",
           current === null ? "pointer-events-none opacity-0" : "opacity-100",
