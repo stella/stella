@@ -5687,6 +5687,7 @@
     "citingDecisionsSortCitations": "Wzmianki o tym przepisie",
     "citingDecisionsSortDate": "Data orzeczenia",
     "citingDecisionsYear": "Rok orzeczenia",
+    "citingDecisionsYearOutOfRange": "Wpisz rok od {min} do {max}.",
     "citingDecisionsYearPlaceholder": "Wszystkie lata",
     "columns": {
       "act": "Akt",

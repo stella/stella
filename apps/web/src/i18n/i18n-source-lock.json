@@ -4756,6 +4756,7 @@
   "statutes.citingDecisionsSortCitations": "Mentions of this provision",
   "statutes.citingDecisionsSortDate": "Decision date",
   "statutes.citingDecisionsYear": "Decision year",
+  "statutes.citingDecisionsYearOutOfRange": "Enter a year from {min} to {max}.",
   "statutes.citingDecisionsYearPlaceholder": "All years",
   "statutes.columns.act": "Act",
   "statutes.columns.amendments": "Amendments",
