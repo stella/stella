@@ -78,6 +78,9 @@ export const PROVIDER_CALL_FAILURE_REASON = {
   deadline_exceeded: "model_deadline_exceeded",
   loop_detected: "chat_loop_detected",
   empty_completion: "chat_empty_completion",
+  local_runner_needs_login: "provider_credentials_rejected",
+  local_runner_limit_reached: "quota_exhausted",
+  local_runner_unavailable: "provider_unavailable",
   unknown: "unclassified",
 } as const satisfies Record<AIErrorKind, FailureReason>;
 

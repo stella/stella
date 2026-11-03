@@ -22,7 +22,7 @@ const schema = new Schema({
 const inlineSpans = (decorations: readonly Decoration[]) =>
   decorations.map((decoration) => {
     if (!(decoration instanceof InlineDecoration)) {
-      throw new Error("chat anon decorations must be inline");
+      throw new TypeError("chat anon decorations must be inline");
     }
     return {
       from: decoration.from,

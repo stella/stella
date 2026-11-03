@@ -22,7 +22,7 @@ test.each([
   host.innerHTML = markup;
   const element = host.firstElementChild;
   if (!(element instanceof HTMLElement)) {
-    throw new Error("expected an element");
+    throw new TypeError("expected an element");
   }
 
   expect(Object.hasOwn(element.dataset, "copyExclude")).toBe(true);
