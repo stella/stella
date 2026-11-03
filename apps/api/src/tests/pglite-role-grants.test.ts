@@ -69,6 +69,8 @@ const INGESTION_ROLE_HELPER_EXEMPTIONS = {
     "Postgres fixture uses production createIngestionDb",
   "handlers/case-law/ingestion/supplement-fold.db.test.ts":
     "supplement-fold fixture belongs to a separate suite owner",
+  "lib/case-law/replay-write-contracts.postgres.test.ts":
+    "Postgres replay contract fixture owns its transaction boundary",
   "lib/legal-search/deferred-document-source-ownership.db.test.ts":
     "Postgres ownership fixture owns its transaction boundary",
   "scripts/eu-completion-tick.postgres.test.ts":

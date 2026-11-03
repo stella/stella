@@ -3386,6 +3386,47 @@
         }
       ]
     },
+    "./animated-preview": {
+      "type": "module",
+      "file": "./src/components/animated-preview.d.ts",
+      "exports": [
+        {
+          "name": "ANIMATED_PREVIEW_CARD_DELAY_MS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewCard",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewMotion",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewPace",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AnimatedPreviewPlayback",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AnimatedPreviewStage",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
     "./application-rail": {
       "type": "module",
       "file": "./src/components/application-rail.d.ts",
@@ -4081,6 +4122,47 @@
           "name": "AlertDialogViewport",
           "kind": "variable",
           "space": "value"
+        }
+      ]
+    },
+    "./components/animated-preview": {
+      "type": "module",
+      "file": "./src/components/animated-preview.d.ts",
+      "exports": [
+        {
+          "name": "ANIMATED_PREVIEW_CARD_DELAY_MS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewCard",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewMotion",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AnimatedPreviewPace",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AnimatedPreviewPlayback",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AnimatedPreviewStage",
+          "kind": "type",
+          "space": "type"
         }
       ]
     },
@@ -7166,6 +7248,17 @@
         {
           "name": "useIsMobile",
           "kind": "function",
+          "space": "value"
+        }
+      ]
+    },
+    "./hooks/use-prefers-reduced-motion": {
+      "type": "module",
+      "file": "./src/hooks/use-prefers-reduced-motion.d.ts",
+      "exports": [
+        {
+          "name": "usePrefersReducedMotion",
+          "kind": "variable",
           "space": "value"
         }
       ]
@@ -11802,6 +11895,17 @@
         }
       ]
     },
+    "./use-prefers-reduced-motion": {
+      "type": "module",
+      "file": "./src/hooks/use-prefers-reduced-motion.d.ts",
+      "exports": [
+        {
+          "name": "usePrefersReducedMotion",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./use-viewport-width": {
       "type": "module",
       "file": "./src/hooks/use-viewport-width.d.ts",
@@ -11928,6 +12032,7 @@
     "./src/components/ai-label.d.ts": "type AiLabelProps = {\n    label: string;\n    disclosure: string;\n    className?: string | undefined;\n};\nexport declare const AiLabel: ({ label, disclosure, className }: AiLabelProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/alert-dialog.d.ts": "import type * as React from \"react\";\nimport { AlertDialog as AlertDialogPrimitive } from \"@base-ui/react/alert-dialog\";\nimport { type OverlayLayer } from \"../lib/overlay-layer\";\ndeclare const AlertDialogCreateHandle: typeof AlertDialogPrimitive.createHandle;\ndeclare const AlertDialog: typeof AlertDialogPrimitive.Root;\ndeclare const AlertDialogPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function AlertDialogTrigger({ tooltip, ...props }: AlertDialogPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const AlertDialogBackdrop: ({ className, layer, ...props }: AlertDialogPrimitive.Backdrop.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const AlertDialogViewport: ({ className, layer, ...props }: AlertDialogPrimitive.Viewport.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const AlertDialogPopup: ({ className, bottomStickOnMobile, layer, ...props }: AlertDialogPrimitive.Popup.Props & {\n    bottomStickOnMobile?: boolean;\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const AlertDialogHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const AlertDialogFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const AlertDialogPanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const AlertDialogTitle: ({ className, ...props }: AlertDialogPrimitive.Title.Props) => React.JSX.Element;\ndeclare const AlertDialogDescription: ({ className, ...props }: AlertDialogPrimitive.Description.Props) => React.JSX.Element;\ndeclare function AlertDialogClose({ tooltip, ...props }: AlertDialogPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\nexport { AlertDialogCreateHandle, AlertDialog, AlertDialogPortal, AlertDialogBackdrop, AlertDialogBackdrop as AlertDialogOverlay, AlertDialogTrigger, AlertDialogPopup, AlertDialogPopup as AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogPanel, AlertDialogTitle, AlertDialogDescription, AlertDialogClose, AlertDialogViewport, };\n",
     "./src/components/animated-count.d.ts": "declare const AnimatedCount: ({ className, value, }: {\n    className?: string;\n    value: string;\n}) => import(\"react\").JSX.Element;\nexport { AnimatedCount };\n",
+    "./src/components/animated-preview.d.ts": "import * as React from \"react\";\nexport type AnimatedPreviewPlayback = \"once\" | \"loop\";\nexport type AnimatedPreviewPace = \"glance\" | \"read\" | \"beat\";\nexport type AnimatedPreviewStage = {\n    id: string;\n    content: React.ReactNode;\n};\ntype AnimatedPreviewProps = {\n    stages: readonly [\n        AnimatedPreviewStage,\n        ...AnimatedPreviewStage[]\n    ];\n    playback?: AnimatedPreviewPlayback;\n    pace?: AnimatedPreviewPace;\n    stagger?: number;\n    inline?: boolean;\n    className?: string;\n};\nexport declare const AnimatedPreview: ({ stages, playback, pace, stagger, inline, className, }: AnimatedPreviewProps) => React.JSX.Element;\ntype AnimatedPreviewMotionProps = React.ComponentProps<\"div\"> & {\n    pace?: AnimatedPreviewPace;\n};\nexport declare const AnimatedPreviewMotion: ({ className, pace, ...props }: AnimatedPreviewMotionProps) => React.JSX.Element;\nexport declare const ANIMATED_PREVIEW_CARD_DELAY_MS = 400;\ntype AnimatedPreviewCardProps = React.PropsWithChildren<{\n    trigger: React.ReactElement;\n    description: React.ReactNode;\n    className?: string;\n}>;\nexport declare const AnimatedPreviewCard: ({ trigger, description, className, children, }: AnimatedPreviewCardProps) => React.JSX.Element;\nexport {};\n",
     "./src/components/application-rail.d.ts": "import type * as React from \"react\";\nexport declare const APPLICATION_RAIL_WIDTH: \"w-12\";\nexport declare const APPLICATION_RAIL_BUTTON_SIZE: \"size-11\";\nexport declare const APPLICATION_RAIL_ICON_SIZE: \"size-4\";\nexport declare const ApplicationRail: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\nexport declare const ApplicationRailHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailMenu: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailButton: ({ className, ...props }: React.ComponentProps<\"button\">) => React.JSX.Element;\nexport declare const ApplicationRailSeparator: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const ApplicationRailFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\n",
     "./src/components/avatar.d.ts": "import { Avatar as AvatarPrimitive } from \"@base-ui/react/avatar\";\ndeclare const Avatar: ({ className, ...props }: AvatarPrimitive.Root.Props) => import(\"react\").JSX.Element;\ndeclare const AvatarImage: ({ className, ...props }: AvatarPrimitive.Image.Props) => import(\"react\").JSX.Element;\ndeclare const AvatarFallback: ({ className, ...props }: AvatarPrimitive.Fallback.Props) => import(\"react\").JSX.Element;\nexport { Avatar, AvatarImage, AvatarFallback };\n",
     "./src/components/badge.d.ts": "import { useRender } from \"@base-ui/react/use-render\";\nimport type { StatusTone } from \"./list\";\ndeclare function Badge({ className, tone, size, dot, children, render, ...props }: BadgeProps): import(\"react\").ReactElement<unknown, string | import(\"react\").JSXElementConstructor<any>>;\ntype BadgeTone = StatusTone | \"info\";\ntype BadgeSize = \"xs\" | \"sm\";\ntype BadgeProps = useRender.ComponentProps<\"span\"> & {\n    tone?: BadgeTone;\n    size?: BadgeSize;\n    dot?: boolean;\n};\ndeclare const badgeVariants: (props?: ({\n    size?: \"sm\" | \"xs\" | null | undefined;\n    tone?: \"neutral\" | \"warning\" | \"destructive\" | \"success\" | \"info\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\nexport { Badge, badgeVariants };\nexport type { BadgeProps, BadgeSize, BadgeTone };\n",
@@ -12041,6 +12146,7 @@
     "./src/hooks/use-content-dir.d.ts": "type FieldValue = string | number | readonly string[] | undefined;\ntype UseContentDirArgs = {\n    dir: string | undefined;\n    value: FieldValue;\n    defaultValue: FieldValue;\n};\ntype UseContentDirResult = {\n    dir: \"ltr\" | \"rtl\" | \"auto\" | undefined;\n    trackValue: (text: string) => void;\n};\nexport declare const isStructuredInputType: (type: string | undefined) => boolean;\nexport declare const contentDir: (value: FieldValue) => \"auto\" | undefined;\nexport declare const useContentDir: ({ dir, value, defaultValue, }: UseContentDirArgs) => UseContentDirResult;\nexport {};\n",
     "./src/hooks/use-latest.d.ts": "import type { RefObject } from \"react\";\nexport declare const useLatest: <T>(value: T) => RefObject<T>;\n",
     "./src/hooks/use-mobile.d.ts": "export declare function useIsMobile(): boolean;\n",
+    "./src/hooks/use-prefers-reduced-motion.d.ts": "export declare const usePrefersReducedMotion: () => boolean;\n",
     "./src/hooks/use-viewport-width.d.ts": "export declare function useViewportWidth(): number;\n",
     "./src/icons.d.ts": "export { BookOpenIcon as SkillIcon } from \"lucide-react\";\nexport { WandSparklesIcon as AiActionIcon } from \"lucide-react\";\nexport { BookOpenIcon as CaseLawIcon } from \"lucide-react\";\nexport { MessageSquarePlusIcon as NewChatIcon } from \"lucide-react\";\nexport { AppWindowMacIcon as BrowserControlIcon } from \"lucide-react\";\nexport { MessageSquareQuoteIcon as AddCommentIcon } from \"lucide-react\";\nexport { CopyIcon as CopyToClipboardIcon } from \"lucide-react\";\nexport { CopyIcon as CopyFromMenuIcon } from \"lucide-react\";\nexport { CopyIcon as DuplicateIcon } from \"lucide-react\";\nexport { MicIcon as DictateIcon } from \"lucide-react\";\nexport type { LucideIcon } from \"lucide-react\";\nexport { ActivityIcon, AlarmClockIcon, AlertCircleIcon, AlertTriangleIcon, AlignJustifyIcon, AlignLeftIcon, ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpDownIcon, ArrowUpIcon, AtSignIcon, BanIcon, BanknoteIcon, BellIcon, BlocksIcon, BoldIcon, BookOpenCheckIcon, BookTextIcon, BookmarkIcon, BookmarkPlusIcon, BracesIcon, BrainIcon, Building2Icon, BuildingIcon, CableIcon, CalendarClockIcon, CalendarIcon, CheckCheckIcon, CheckCircle2Icon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronsUpDownIcon, CircleAlertIcon, CircleCheckIcon, CircleDashedIcon, CircleDotIcon, CircleHelpIcon, CircleIcon, CircleOffIcon, CircleUserRoundIcon, ClipboardCheckIcon, ClipboardCopyIcon, ClipboardIcon, ClipboardListIcon, Clock3Icon, ClockIcon, CogIcon, Columns2Icon, Columns3Icon, ColumnsIcon, CommandIcon, CompassIcon, CopyPlusIcon, CornerDownLeftIcon, CpuIcon, CropIcon, DatabaseIcon, DollarSignIcon, DownloadIcon, EditIcon, EllipsisIcon, EllipsisVerticalIcon, EqualIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, FileBadgeIcon, FileCheckIcon, FileCodeIcon, FileDiffIcon, FileDigitIcon, FileDownIcon, FileIcon, FileImageIcon, FileOutputIcon, FilePenLineIcon, FilePlus2Icon, FilePlusIcon, FileQuestionIcon, FileSearchIcon, FileSpreadsheetIcon, FileTextIcon, FileUpIcon, FilterIcon, FilterXIcon, FlagIcon, FlaskConicalIcon, FoldHorizontalIcon, FolderIcon, FolderInputIcon, FolderOpenIcon, FolderPlusIcon, FolderSyncIcon, FolderTreeIcon, FunctionSquareIcon, GanttChartIcon, GaugeIcon, GitBranchIcon, GitCommitHorizontalIcon, GitPullRequestIcon, GlobeIcon, GraduationCapIcon, GripVerticalIcon, HashIcon, Heading1Icon, Heading2Icon, Heading3Icon, HelpCircleIcon, HighlighterIcon, HistoryIcon, ImageIcon, ImageOffIcon, InboxIcon, InfoIcon, ItalicIcon, KanbanIcon, KeyRoundIcon, KeyboardIcon, LandmarkIcon, LanguagesIcon, LaptopIcon, LayersIcon, LayoutDashboardIcon, LayoutGridIcon, LayoutTemplateIcon, LibraryBigIcon, LibraryIcon, Link2Icon, LinkIcon, ListChecksIcon, ListFilterIcon, ListIcon, ListMinusIcon, ListOrderedIcon, ListTodoIcon, ListTreeIcon, ListXIcon, LoaderCircleIcon, LockIcon, LockKeyholeIcon, LockOpenIcon, LogOutIcon, MailIcon, Maximize2Icon, MegaphoneIcon, MessageCircleQuestionIcon, MessageSquareIcon, MessageSquareTextIcon, MessageSquareWarningIcon, MessagesSquareIcon, Minimize2Icon, MinusIcon, MonitorIcon, MoonIcon, MoreHorizontalIcon, PackageIcon, PaletteIcon, PanelLeftIcon, PanelRightIcon, PaperclipIcon, PauseIcon, PenIcon, PenLineIcon, PencilIcon, PencilLineIcon, PhoneIcon, PinIcon, PinOffIcon, PlayIcon, PlugIcon, PlusIcon, PowerIcon, PrinterIcon, QuoteIcon, Redo2Icon, RefreshCcwIcon, RefreshCwIcon, RepeatIcon, RotateCcwIcon, RotateCwIcon, RouteIcon, Rows2Icon, Rows3Icon, SaveIcon, ScanSearchIcon, ScanTextIcon, ScissorsIcon, ScrollTextIcon, SearchIcon, SearchXIcon, SendIcon, ServerIcon, Settings2Icon, ShapesIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldIcon, SigmaIcon, SignatureIcon, SlashIcon, SlidersHorizontalIcon, SparklesIcon, SplitIcon, SquareCheckIcon, SquareIcon, SquareMinusIcon, SquarePenIcon, StarIcon, StarOffIcon, StickyNoteIcon, StrikethroughIcon, SunIcon, TableIcon, TagIcon, TagsIcon, TerminalIcon, TextIcon, TextQuoteIcon, ToggleLeftIcon, Trash2Icon, TrashIcon, TriangleAlertIcon, UnderlineIcon, Undo2Icon, UndoIcon, UnfoldHorizontalIcon, UngroupIcon, UploadIcon, UserCheckIcon, UserIcon, UserPlusIcon, UserRoundIcon, UsersIcon, VideoIcon, WavesIcon, WindIcon, WorkflowIcon, WrapTextIcon, WrenchIcon, XCircleIcon, XIcon, XSquareIcon, ZapIcon, } from \"lucide-react\";\n",
     "./src/index.d.ts": "export * from \"./components/accordion\";\nexport * from \"./components/application-rail\";\nexport * from \"./components/alert-dialog\";\nexport * from \"./components/workspace-shell\";\nexport * from \"./components/avatar\";\nexport * from \"./components/badge\";\nexport * from \"./components/bidi-text\";\nexport * from \"./components/brand-icons\";\nexport * from \"./components/breadcrumb\";\nexport * from \"./components/button\";\nexport * from \"./components/checkbox\";\nexport * from \"./components/collapsible\";\nexport * from \"./components/color-picker\";\nexport * from \"./components/combobox\";\nexport * from \"./components/command\";\nexport * from \"./components/copy-button\";\nexport * from \"./calendar/primitives\";\nexport * from \"./calendar/resource-calendar\";\nexport * from \"./calendar/resource-calendar.logic\";\nexport * from \"./components/date-picker-popover\";\nexport * from \"./components/details-grid\";\nexport * from \"./components/destructive-action-confirmation\";\nexport * from \"./components/destructive-confirm-dialog\";\nexport * from \"./components/dialog\";\nexport * from \"./components/directional-icon\";\nexport * from \"./components/field\";\nexport * from \"./components/file-input\";\nexport * from \"./components/form\";\nexport * from \"./components/frame\";\nexport * from \"./components/hex-color-picker\";\nexport * from \"./components/input\";\nexport * from \"./components/inline-rename\";\nexport * from \"./components/input-group\";\nexport * from \"./components/list\";\nexport * from \"./components/search-field\";\nexport * from \"./components/input-otp\";\nexport * from \"./components/label\";\nexport * from \"./components/menu\";\nexport * from \"./components/menu-section\";\nexport * from \"./components/outline-rail\";\nexport * from \"./components/pagination\";\nexport * from \"./components/popover\";\nexport * from \"./components/preview-card\";\nexport * from \"./components/preview-pane\";\nexport * from \"./components/prose\";\nexport * from \"./components/scroll-area\";\nexport * from \"./components/scroll-to-top\";\nexport * from \"./components/secret-input\";\nexport * from \"./components/segmented-icon-toggle\";\nexport * from \"./components/select\";\nexport * from \"./components/separator\";\nexport * from \"./components/sheet\";\nexport * from \"./components/sidebar\";\nexport * from \"./components/skeleton\";\nexport * from \"./components/stella-mark\";\nexport * from \"./components/stella-wordmark\";\nexport * from \"./components/table\";\nexport * from \"./components/tabs\";\nexport * from \"./components/textarea\";\nexport * from \"./components/toast\";\nexport * from \"./components/toggle\";\nexport * from \"./components/toggle-group\";\nexport * from \"./components/tooltip\";\nexport * from \"./components/truncated-text\";\nexport * from \"./data-table\";\nexport * from \"./hooks/use-contained-handler\";\nexport * from \"./hooks/use-content-dir\";\nexport * from \"./hooks/use-latest\";\nexport * from \"./hooks/use-mobile\";\nexport * from \"./hooks/use-viewport-width\";\nexport * from \"./inspector\";\nexport * from \"./kanban\";\nexport * from \"./lib/control-size\";\nexport * from \"./lib/initials\";\nexport * from \"./lib/option-color\";\nexport * from \"./lib/overlay-layer\";\nexport * from \"./lib/typed-character\";\nexport * from \"./lib/utils\";\nexport * from \"./lib/week\";\nexport * from \"./review/review-author-avatar\";\nexport * from \"./review/review-comment-card\";\nexport * from \"./review/review-decision-actions\";\nexport * from \"./review/review-diff-text\";\nexport * from \"./review/review-out-of-date-notice\";\nexport * from \"./review/review-severity-dot\";\nexport * from \"./review/review-status-badge\";\n",

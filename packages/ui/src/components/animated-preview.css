@@ -1,0 +1,148 @@
+/*
+ * AnimatedPreview (animated-preview.tsx): the one animation system for
+ * previews that explain a feature by playing it.
+ *
+ * A frame stacks its stages in one grid cell. Stage `i` comes in at
+ * `i * hold` after the frame starts and goes out one hold later, cross-fading
+ * with its neighbour. A frame starts with the stage that holds it (plus its
+ * own stagger), so nested frames play inside their stage. Everything runs on
+ * CSS time; only a looping frame restarts itself, from JavaScript, once its
+ * last stage has gone out. With reduced motion nothing animates and the
+ * component renders only the final stage.
+ */
+
+[data-slot="animated-preview"] {
+  --animated-preview-crossfade: 208ms;
+  --animated-preview-frame-start: calc(
+    var(--animated-preview-stage-start, 0ms) +
+      var(--animated-preview-stagger, 0) * 160ms
+  );
+
+  display: grid;
+}
+
+span[data-slot="animated-preview"] {
+  display: inline-grid;
+  justify-items: start;
+}
+
+[data-slot="animated-preview-stage"] {
+  --animated-preview-stage-start: calc(
+    var(--animated-preview-frame-start) + var(--animated-preview-stage-index) *
+      var(--animated-preview-hold)
+  );
+
+  grid-area: 1 / 1;
+}
+
+[data-pace="glance"] {
+  --animated-preview-hold: 1664ms;
+}
+
+[data-pace="read"] {
+  --animated-preview-hold: 2600ms;
+}
+
+[data-pace="beat"] {
+  --animated-preview-hold: 640ms;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="animated-preview-stage"][data-incoming] {
+    animation: animated-preview-fade-in var(--animated-preview-crossfade) linear
+      var(--animated-preview-stage-start) both;
+  }
+
+  /* `forwards` only: a backwards fill would hold the stage visible before
+     it has come in. */
+  [data-slot="animated-preview-stage"][data-outgoing] {
+    animation: animated-preview-fade-out var(--animated-preview-crossfade)
+      linear
+      calc(var(--animated-preview-stage-start) + var(--animated-preview-hold))
+      forwards;
+  }
+
+  [data-slot="animated-preview-stage"][data-incoming][data-outgoing] {
+    animation:
+      animated-preview-fade-in var(--animated-preview-crossfade) linear
+        var(--animated-preview-stage-start) both,
+      animated-preview-fade-out var(--animated-preview-crossfade) linear
+        calc(var(--animated-preview-stage-start) + var(--animated-preview-hold))
+        forwards;
+  }
+
+  /* The carry lands as the frame inside crosses from its first stage to its
+     second: that crossover sits at 64% of the gesture. */
+  [data-slot="animated-preview-motion"][data-motion="full"] {
+    animation: animated-preview-carry calc(var(--animated-preview-hold) / 0.64)
+      ease-in-out var(--animated-preview-stage-start, 0ms) forwards;
+  }
+}
+
+[data-slot="animated-preview-motion"][data-motion="reduced"] {
+  transform: translate(
+    var(--animated-preview-carry-x),
+    var(--animated-preview-carry-y)
+  );
+}
+
+@keyframes animated-preview-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes animated-preview-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+/*
+ * Picked up (a small nudge, a 0.375rem lift, tilt and shadow), carried to the
+ * caller's target, and put down there. The caller sets
+ * `--animated-preview-carry-x` and `--animated-preview-carry-y`.
+ */
+@keyframes animated-preview-carry {
+  0%,
+  28% {
+    transform: none;
+    filter: none;
+  }
+
+  38% {
+    transform: translate(
+        0.25rem,
+        calc(var(--animated-preview-carry-y) - 0.375rem)
+      )
+      rotate(2.5deg) scale(1.05);
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+  }
+
+  64% {
+    transform: translate(
+        var(--animated-preview-carry-x),
+        calc(var(--animated-preview-carry-y) - 0.375rem)
+      )
+      rotate(2.5deg) scale(1.05);
+    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+  }
+
+  74%,
+  100% {
+    transform: translate(
+        var(--animated-preview-carry-x),
+        var(--animated-preview-carry-y)
+      )
+      rotate(0deg) scale(1);
+    filter: none;
+  }
+}
