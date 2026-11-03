@@ -2268,7 +2268,8 @@ jobs:
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/api-contract/src/mcp-tool-names.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP app derived outputs guard
@@ -6391,9 +6392,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6565,9 +6566,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6683,9 +6684,9 @@ jobs:
 
       - &desktop_rust_toolchain
         name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
           components: clippy
 

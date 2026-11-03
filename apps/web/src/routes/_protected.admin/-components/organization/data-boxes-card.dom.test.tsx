@@ -4,9 +4,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import type { OrganizationDataBoxesResponse } from "@stll/api-contract/data-box";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

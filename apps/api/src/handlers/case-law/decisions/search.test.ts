@@ -292,3 +292,108 @@ test.each(SERVING_TARGET_REFUSALS)(
     });
   },
 );
+
+describe("a caller that keeps only the page", () => {
+  afterEach(() => {
+    testFetchState.restore();
+  });
+
+  test.each([
+    { describeResultSet: undefined, aggregations: 1 },
+    { describeResultSet: false, aggregations: 0 },
+  ] as const)(
+    "asks the engine for $aggregations result-set aggregations (describeResultSet: $describeResultSet)",
+    async ({ describeResultSet, aggregations }) => {
+      const originalFetch = globalThis.fetch;
+      const bodies: Record<string, unknown>[] = [];
+      // The scan answers once the facet arm has sent its aggregation (or at
+      // once when none is expected), then fails so no row is read.
+      const aggregationSent = Promise.withResolvers<undefined>();
+      if (aggregations === 0) {
+        aggregationSent.resolve(undefined);
+      }
+      testFetchState.set(
+        Object.assign(
+          async (
+            _input: string | URL | Request,
+            init?: Parameters<typeof fetch>[1],
+          ) => {
+            const body: Record<string, unknown> =
+              typeof init?.body === "string" ? JSON.parse(init.body) : {};
+            bodies.push(body);
+            if (body["aggs"] === undefined) {
+              await aggregationSent.promise;
+            } else {
+              aggregationSent.resolve(undefined);
+            }
+            return Response.json(
+              { message: "could not find indexes matching the IDs" },
+              { status: 404 },
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
+      );
+      const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+      const resolution = corpusIndexReadTarget({
+        manifest,
+        jurisdiction: "CZE",
+        attestedGroups: new Set(),
+        enrolledGroups: new Set(),
+      });
+      if (resolution.type !== "ready") {
+        panic("Expected the base Czech corpus group to be ready");
+      }
+      const target = {
+        ...resolution.target,
+        manifest,
+        serving: {
+          family: "case_law",
+          generation: manifest.generation,
+          cluster: manifest.cluster,
+        },
+      } as const satisfies ServingCorpusIndexTarget;
+      let registryReads = 0;
+      const unreadableDb = Object.assign(
+        async () => panic("A failed scan must not read decision rows"),
+        caseLawPublicReadDb,
+      );
+
+      await searchCorpusIndexDecisions({
+        body: {
+          // A query no other test caches an aggregation for.
+          query: `describe result set ${String(describeResultSet)}`,
+          country: "CZE",
+          limit: 1,
+          strict: true,
+          ...(describeResultSet === undefined ? {} : { describeResultSet }),
+        },
+        caseLawDb: unreadableDb,
+        observer: "unobserved",
+        dependencies: {
+          loadCourtWeights: async () =>
+            await Promise.resolve(courtWeightMapFromSeed()),
+          readServingTarget: async () =>
+            await Promise.resolve(Result.ok(target)),
+          readSourceRegistry: async () => {
+            registryReads += 1;
+            return await Promise.resolve(
+              Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+            );
+          },
+        },
+      }).then(
+        () => panic("Expected the search to fail against a missing index"),
+        (error: unknown) => error,
+      );
+
+      expect(bodies.filter((body) => body["aggs"] !== undefined)).toHaveLength(
+        aggregations,
+      );
+      // The facet arm's source-policy read goes with its aggregations, so
+      // none under the opt-out also proves no aggregation can follow.
+      expect(registryReads).toBe(aggregations);
+      expect(bodies.some((body) => body["aggs"] === undefined)).toBe(true);
+    },
+  );
+});

@@ -6,12 +6,12 @@ import { immer } from "zustand/middleware/immer";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
 import type { api } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type PlaybookDetailData = Exclude<
   NonNullable<

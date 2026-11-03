@@ -1412,6 +1412,18 @@
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
+    "anonymizationPreview": {
+      "answer": "<person1>Mari Tamm</person1> võib nõuda <person2>Jüri Saarelt</person2> võla tasumist koos viivisega.",
+      "off": "Anonüümitud AI režiim on väljas: AI saab teksti nii, nagu sa selle kirjutasid, koos isikuandmetega.",
+      "on": "Anonüümitud AI režiim on sees: isikuandmed asendatakse enne saatmist kohatäidetega ja taastatakse vastuses.",
+      "prompt": "Koosta vastus <person1>Mari Tammele</person1> (isikukood <nationalId>48512124219</nationalId>, <address>Pärnu mnt 14, Tartu</address>) <person2>Jüri Saarelt</person2> sissenõutava võla kohta.",
+      "steps": {
+        "answered": "AI vastab",
+        "restored": "Sina loed",
+        "sent": "AI saab",
+        "written": "Sina kirjutad"
+      }
+    },
     "anonymizedMode": "Anonüümitud AI režiim",
     "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
@@ -1518,7 +1530,7 @@
       "updatingDescription": "Sinu stella laiendus on vanem versioon. Chrome uuendab selle automaatselt, tavaliselt mõne tunni jooksul; siis saab stella sinu eest jälle veebilehti avada ja lugeda."
     },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
-    "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
+    "caseLawGreeting": "Esita küsimusi selle otsuse kohta; täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
     "commandsSection": "Käsud",
@@ -1668,6 +1680,11 @@
     "loadEarlierMessages": "Laadi varasemad sõnumid",
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
+    "localRun": {
+      "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
+      "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
+      "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti."
+    },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# veel} other {+# veel}}",
@@ -1765,7 +1782,7 @@
       "tryOne": "Alusta ühe nendest"
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
-    "queuedNotice": "Järjekorras — saadetakse, kui praegune vastus on valmis",
+    "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
     "reasoning": "Arutlus",
     "reasoningTokens": "{count, plural, one {# arutlustoken} other {# arutlustokenit}}",
     "recapLoading": "Vestlus võetakse kokku…",
@@ -1974,7 +1991,7 @@
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "consoleLogs": "Konsooli väljund",
       "exactCall": "Täpne kutse",
-      "failed": "See samm ebaõnnestus — stella jätkab teisiti.",
+      "failed": "See samm ebaõnnestus; stella jätkab teisiti.",
       "field": "Väli",
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
@@ -1994,7 +2011,7 @@
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
-    "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
+    "usageFallbackNotice": "Päevane AI-maht on täis; vastused jätkuvad tavamudeliga.",
     "videoContent": "Loodud video",
     "webSearch": {
       "answer": "Veebiotsingu kokkuvõte",
@@ -4308,7 +4325,7 @@
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
       "descriptionPlaceholder": "Mida see playbook kontrollib?",
-      "disabledBadge": "Väljas — jäetakse ülevaatustel vahele",
+      "disabledBadge": "Väljas: jäetakse ülevaatustel vahele",
       "discardChanges": "Loobu muudatustest",
       "duplicatePosition": "Dubleeri seisukoht",
       "empty": "Playbooke veel pole",
@@ -4323,7 +4340,7 @@
         "restricted": "Vastus peab puuduma"
       },
       "extractOnlyBadge": "Ainult väljavõte",
-      "extractOnlyDescription": "Hindamiseta — salvestab väärtuse tabelisse.",
+      "extractOnlyDescription": "Hindamiseta; salvestab väärtuse tabelisse.",
       "extraction": "Ekstraktsioon",
       "extractionAuto": "Automaatne",
       "extractionManual": "Käsitsi",
@@ -4725,7 +4742,7 @@
     "continue": "Jätka",
     "enterTeamName": "Sisestage ülal meeskonna nimi",
     "getStarted": "Alusta",
-    "inviteExternal": "Väline kasutaja — saab juurdepääsu teie dokumentidele",
+    "inviteExternal": "Väline kasutaja: saab juurdepääsu teie dokumentidele",
     "inviteHint": "Eraldage mitu aadressi komadega või kleepige nimekiri.",
     "inviteInvalidEmail": "Kehtetu e-post: {value}",
     "inviteSubtitle": "Nad saavad e-kirja liitumislingiga.",
@@ -5556,7 +5573,7 @@
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
       "promptCaching": {
-        "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
+        "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada; ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
         "title": "Promptide vahemällu salvestamine",
         "toggleLabel": "Luba promptide vahemällu salvestamine AI teenusepakkujatel"
       },
@@ -6197,7 +6214,7 @@
       "fieldSettingBrackets": "Malli märgend ei tohi sisaldada loogsulge. Eemalda need välja „{fieldPath}“ sätetest.",
       "fieldWithoutMarker": "Väljal „{fieldPath}“ pole dokumendis märgendit, seetõttu selle sätteid ei salvestatud.",
       "fillFormPreview": "Nii kuvatakse see vormis",
-      "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
+      "fillStale": "Salvestamata muudatused; salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",
       "formulaExampleLabel": "Näide",
       "formulaNoFields": "Lisage esmalt arvuväli, et valemil oleks midagi arvutada.",
@@ -6960,7 +6977,7 @@
       "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
       "personalLabel": "Isiklik",
       "promoteCta": "Eduta kliendile",
-      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
+      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline: edutatud toimikuid ei saa tagasi isiklikuks muuta.",
       "promoteToClientConfirm": "Toimik <bdi>{matterName}</bdi> määratakse kliendile <bdi>{clientName}</bdi> ja jagatakse meeskonnaga. Seda ei saa enam isiklikuks muuta.",
       "promotedSuccess": "Toimik edutatud",
       "recentClients": "Hiljutised kliendid",
@@ -7180,7 +7197,7 @@
       "optionsLabel": "Valikud",
       "person": "Isik",
       "previewEmpty": "AI ei tagastanud väärtust.",
-      "previewMockNotice": "Mock-eelvaade — taustasüsteem pole veel ühendatud.",
+      "previewMockNotice": "Mock-eelvaade: taustasüsteem pole veel ühendatud.",
       "previewOnFirst": "Eelvaade: {document}",
       "previewSkipped": "Sellel dokumendil pole sobivat sisendit.",
       "previewSubject": "Proovi näidisel",

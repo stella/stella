@@ -348,7 +348,7 @@ const readStamp = async (bytes: Uint8Array) => {
     !(appearance instanceof PdfStream) ||
     !(appearanceRef instanceof PdfRef)
   ) {
-    throw new Error("no stamp appearance");
+    throw new TypeError("no stamp appearance");
   }
   return { appearance, appearanceRef, page, pdf, resolve, widget };
 };
@@ -370,7 +370,7 @@ const readStampRows = async (bytes: Uint8Array) => {
     const cmapRef = font instanceof PdfDict ? font.get("ToUnicode") : undefined;
     const cmap = cmapRef instanceof PdfRef ? pdf.getObject(cmapRef) : undefined;
     if (!(cmap instanceof PdfStream)) {
-      throw new Error(`font ${name} has no ToUnicode map`);
+      throw new TypeError(`font ${name} has no ToUnicode map`);
     }
     toUnicode.set(
       name,

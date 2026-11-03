@@ -31,7 +31,7 @@ import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
