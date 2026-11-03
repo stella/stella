@@ -323,7 +323,11 @@ export const validateCompatibility = (
   const minimum =
     minimumVersion === undefined ? undefined : parseSemver(minimumVersion);
   const current = parseSemver(packageJson.version);
-  if (minimum === undefined || current === undefined) {
+  if (
+    minimumVersion === undefined ||
+    minimum === undefined ||
+    current === undefined
+  ) {
     return Result.err(
       new CompatibilityCheckError({
         message:

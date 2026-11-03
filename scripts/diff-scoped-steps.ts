@@ -312,6 +312,9 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
+  "ci.yml:ci-checks-rest#Action commit pins": diffComplete(
+    "Concerns only action pins new against the base; an unchanged pin was verified when it was added.",
+  ),
   "ci.yml:ci-checks-rest#Bridge-version guard": expands(
     "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),
