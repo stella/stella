@@ -966,26 +966,30 @@ export const streamChat = async ({
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
-      settlement.event = {
-        outcome: event.outcome,
-        responseMessage: attachTerminalTurnOutcome({
-          message: toPersistableChatMessage(
-            stampReasoningProvenance({
+      const metadata = {
+        ...event.responseMessage.metadata,
+        ...contextNotice.metadata(),
+      };
+      // A turn on the member's computer was answered by its harness, not by a
+      // cloud model: it names no turn model and its reasoning no provenance.
+      const finished =
+        localRun === undefined
+          ? stampReasoningProvenance({
               message: {
                 ...event.responseMessage,
-                metadata: {
-                  ...event.responseMessage.metadata,
-                  ...contextNotice.metadata(),
-                  turnModel: servedTurnModel,
-                },
+                metadata: { ...metadata, turnModel: servedTurnModel },
               },
               model: {
                 provider: servedTurnModel.provider,
                 modelId: servedTurnModel.model,
               },
               initialMessages: rawMessages,
-            }),
-          ),
+            })
+          : { ...event.responseMessage, metadata };
+      settlement.event = {
+        outcome: event.outcome,
+        responseMessage: attachTerminalTurnOutcome({
+          message: toPersistableChatMessage(finished),
           turnOutcome: event.outcome,
         }),
       };

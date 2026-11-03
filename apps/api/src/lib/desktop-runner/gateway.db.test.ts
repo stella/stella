@@ -1,5 +1,5 @@
 import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
@@ -83,6 +83,7 @@ import {
   type DesktopRunnerDb,
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -2439,6 +2440,37 @@ describe("chat turns on a computer", () => {
     );
     stop.abort(RUN_CANCEL_REASON);
     await turn.done;
+    expect(
+      (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
+    ).toBe(start.runId);
+  });
+
+  test("a run whose events cannot be read fails the turn and stops the computer", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const unreadable: LocalRunContext = {
+      ...contextFor(chatThreadId),
+      control: {
+        ...control,
+        readEvents: async () =>
+          Result.err(new DatabaseError({ message: "connection reset" })),
+      },
+    };
+    const { done } = collect(
+      createLocalChatRun(unreadable, startPlan(desktopId)).stream({
+        chatRunId: "chat-run-unreadable",
+        messages: [{ role: "user", content: "Summarize" }],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      }),
+    );
+    const start = await desktop.receive("run.start");
+    const chunks = await done;
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_unavailable,
+    });
     expect(
       (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
     ).toBe(start.runId);

@@ -529,6 +529,8 @@ async function* readRunChunks({
         limit: EVENT_PAGE,
       });
       if (page.isErr()) {
+        // Nobody reads this turn any more; stop the computer before reporting.
+        await interruptRun(context, runnerRunId);
         yield* start();
         yield* storeUnavailable(page.error, rewrite);
         return;
