@@ -15,6 +15,7 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
+import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatLocalRunnersScalingScenario } from "./chat-local-runners";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
@@ -67,6 +68,7 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   desktopRunnerUpgradeScalingScenario,
   chatLocalRunnersScalingScenario,
+  chatActiveRunsScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...dataBoxSettingsScalingScenarios,
