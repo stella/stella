@@ -2727,18 +2727,16 @@ const runCaseLawPhrasing = async (
   if (subCursor === null) {
     return { type: "exhausted" };
   }
-  const answered = await Result.tryPromise({
-    try: run,
-    catch: (cause) => cause,
-  });
-  if (Result.isOk(answered)) {
-    return { type: "answered", subCursor, result: answered.value };
+  try {
+    return { type: "answered", subCursor, result: await run() };
+  } catch (error) {
+    const timeout = caseLawSearchTimeoutResult(error);
+    if (timeout === null) {
+      // Not this phrasing's alone: the call fails as it always did.
+      throw error;
+    }
+    return { type: "timed_out", subCursor, result: timeout };
   }
-  const timeout = caseLawSearchTimeoutResult(answered.error);
-  if (timeout === null) {
-    throw answered.error;
-  }
-  return { type: "timed_out", subCursor, result: timeout };
 };
 
 /** The `searches[]` entry of a phrasing the time budget stopped. */
