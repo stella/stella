@@ -11,6 +11,12 @@ import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
+// The reader's first paragraph arrives after a client-side route transition
+// that loads the reader chunk and its fixture-backed loader data.
+const LEGAL_READER_PAINT_TIMEOUT_MS = 30_000;
+// pdf.js loads its worker and renders the first page canvas and text layer.
+const PDF_FIRST_PAGE_PAINT_TIMEOUT_MS = 45_000;
+
 test.describe("authenticated content security policy", () => {
   test.use({ locale: "en-US" });
 
@@ -56,7 +62,7 @@ test.describe("public legal reader content security policy", () => {
       await pushRouterPath(page, destination);
       await expect(page.getByText(firstParagraph, { exact: true })).toBeVisible(
         {
-          timeout: 30_000,
+          timeout: LEGAL_READER_PAINT_TIMEOUT_MS,
         },
       );
       await expect(page).toHaveURL((url) => url.pathname === destination);
@@ -84,7 +90,9 @@ test("PDF viewer paints its first page without policy violations", async ({
     // The viewer appends the canvas and text layer only after both pdf.js
     // rendering promises resolve, so a pending shell cannot satisfy this.
     const firstPage = page.locator("[data-page-id]").first();
-    await expect(firstPage.locator("canvas")).toBeVisible({ timeout: 45_000 });
+    await expect(firstPage.locator("canvas")).toBeVisible({
+      timeout: PDF_FIRST_PAGE_PAINT_TIMEOUT_MS,
+    });
     await expect(firstPage.locator("[data-text-layer]")).toContainText(
       "Native text page one",
     );
