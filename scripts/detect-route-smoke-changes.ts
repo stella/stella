@@ -57,6 +57,9 @@ const RUNTIME_PREFIXES = [
   // Helpers read these from disk (e.g. the uploaded document), so the import
   // graph cannot see them.
   "apps/web/e2e/fixtures/",
+  // Every spec here runs in the route-smoke job's phone suite, including a
+  // new one no entry point imports yet.
+  "apps/web/e2e/phone/",
   "apps/web/e2e/network-budgets/",
   ".github/actions/prepare-network-baseline/",
   ".github/actions/setup-e2e-stack/",
