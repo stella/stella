@@ -161,6 +161,7 @@ import type {
 } from "@/api/lib/auth/member-caller";
 import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -1643,7 +1644,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
