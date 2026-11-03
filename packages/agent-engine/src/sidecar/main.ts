@@ -19,12 +19,13 @@ const log = (line: string) => {
   process.stderr.write(`${line}\n`);
 };
 const send = (message: SidecarMessage) => {
-  const line = encodeSidecarMessage(message);
-  if (line === null) {
-    log(`dropped an oversized ${message.type} message`);
-    return;
+  const encoded = encodeSidecarMessage(message);
+  if (encoded.type === "refused") {
+    log(`could not write a ${message.type} message: ${encoded.reason}`);
+    return false;
   }
-  process.stdout.write(line);
+  process.stdout.write(encoded.line);
+  return true;
 };
 
 const host = new SidecarHost({
