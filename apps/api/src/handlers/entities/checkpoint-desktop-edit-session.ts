@@ -30,9 +30,16 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+const CHECKPOINT_WRITE_FAILED = failureSink({
+  event: "desktop_edit.checkpoint_write_failed",
+  expected: [],
+});
 
 export const hashDesktopEditCheckpoint = (buffer: ArrayBuffer): string =>
   hashSha256Hex(new Uint8Array(buffer));
@@ -284,7 +291,11 @@ export const checkpointDesktopEditSessionHandler = async ({
         ) {
           responseStatus = 409;
         }
-        return status(responseStatus, { message: fileWrite.error.message });
+        return observedStatus(
+          { sink: CHECKPOINT_WRITE_FAILED, cause: fileWrite.error },
+          responseStatus,
+          { message: fileWrite.error.message },
+        );
       }
     }
 

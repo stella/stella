@@ -1,7 +1,7 @@
 use std::{
   fs,
-  io::{ErrorKind, Write},
-  os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt},
+  io::ErrorKind,
+  os::unix::fs::PermissionsExt,
   path::{Path, PathBuf},
 };
 
@@ -47,17 +47,7 @@ impl ClipboardImageExports {
     let url = Url::from_file_path(&path)
       .map_err(|()| "clipboard export path is invalid".to_string())?;
     let write = (|| {
-      let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&path)
-        .map_err(|error| {
-          format!("clipboard image export could not be created: {error}")
-        })?;
-      file
-        .write_all(png)
-        .map_err(|error| format!("clipboard image export failed: {error}"))?;
+      crate::local_store::write_private_atomic(&path, png)?;
       publish(&url)
     })();
     if let Err(error) = write {
@@ -133,16 +123,15 @@ fn private_directory_exists(path: &Path) -> Result<bool, String> {
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), String> {
-  if private_directory_exists(path)? {
-    return Ok(());
+  match fs::symlink_metadata(path) {
+    Ok(metadata) if !metadata.file_type().is_dir() => {
+      return Err("clipboard export directory is not private".to_string());
+    }
+    Err(error) if error.kind() != ErrorKind::NotFound => return Err(error.to_string()),
+    _ => {}
   }
-  fs::DirBuilder::new()
-    .recursive(true)
-    .mode(0o700)
-    .create(path)
-    .map_err(|error| {
-      format!("clipboard export directory could not be created: {error}")
-    })?;
+  crate::local_store::create_private_dir(path)
+    .map_err(|error| format!("clipboard export directory failed: {error}"))?;
   private_directory_exists(path)?;
   Ok(())
 }
@@ -160,9 +149,17 @@ fn remove_export_file(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
-  use std::{os::unix::fs::symlink, process::Command};
+  use std::io::Write;
+  use std::{
+    os::unix::fs::{DirBuilderExt, OpenOptionsExt, symlink},
+    process::Command,
+  };
 
   const CONSTRUCTOR_CHILD_ENV: &str = "STELLA_CLIPBOARD_EXPORT_CONSTRUCTOR_CHILD";
 
@@ -292,7 +289,12 @@ mod tests {
   }
 
   #[test]
-  fn published_directories_and_files_are_private() {
+  fn local_file_creation_keeps_clipboard_exports() {
+    if crate::local_store::local_file_creation_child(
+      "clipboard_image_export::tests::local_file_creation_keeps_clipboard_exports",
+    ) {
+      return;
+    }
     let sandbox = TestDirectory::new();
     let root = sandbox.export_root();
     let mut exports = exports_at(&root);

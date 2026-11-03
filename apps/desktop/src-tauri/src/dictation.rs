@@ -344,13 +344,18 @@ fn hex(bytes: &[u8]) -> String {
 async fn download_model(app: &AppHandle) -> Result<(), String> {
   let target = model_path().ok_or("app data directory is unavailable")?;
   let parent = target.parent().ok_or("model path is invalid")?;
-  tokio::fs::create_dir_all(parent)
-    .await
+  crate::local_store::create_private_dir(parent)
     .map_err(|error| format!("model directory failed: {error}"))?;
   let partial = target.with_extension("part");
+  // A download an earlier run did not finish leaves its partial file behind;
+  // the new one is created fresh beside the target.
+  match tokio::fs::remove_file(&partial).await {
+    Ok(()) => {}
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+    Err(error) => return Err(format!("stale partial model failed: {error}")),
+  }
   match stream_model(app, &partial).await {
-    Ok(()) => tokio::fs::rename(&partial, &target)
-      .await
+    Ok(()) => crate::local_store::rename_private(&partial, &target)
       .map_err(|error| format!("model rename failed: {error}")),
     Err(error) => {
       if let Err(remove) = tokio::fs::remove_file(&partial).await {
@@ -373,9 +378,10 @@ async fn stream_model(app: &AppHandle, partial: &Path) -> Result<(), String> {
     .await
     .and_then(reqwest::Response::error_for_status)
     .map_err(|error| format!("model request failed: {error}"))?;
-  let mut file = tokio::fs::File::create(partial)
-    .await
-    .map_err(|error| format!("model file failed: {error}"))?;
+  let mut file = tokio::fs::File::from_std(
+    crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, partial)
+      .map_err(|error| format!("model file failed: {error}"))?,
+  );
   let mut digest = Sha256::new();
   let mut received = 0_u64;
   let mut reported = 0_u64;

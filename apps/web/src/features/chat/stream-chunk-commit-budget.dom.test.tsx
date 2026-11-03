@@ -525,7 +525,7 @@ const Composer = ({
 }) => {
   const controller = useChatEditor({ threadRef: COMPOSER_THREAD_REF });
   const onSubmit = useLatestCallback(async (draft: ChatInputDraft) => {
-    await sendMessage(await buildChatRequestMessage(draft));
+    await sendMessage((await buildChatRequestMessage(draft)).unwrap());
     return CHAT_SEND_SENT;
   });
   return (

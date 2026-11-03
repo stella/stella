@@ -10,7 +10,7 @@ import {
   extractPlPdfLetterheadContent,
   extractPlPdfSeparatedContent,
   extractPlSnLines,
-  parsePlSnDecisionPdf,
+  parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf,
   PL_PDF_PARAGRAPH_START,
   plSnParagraphsToHtml,
   withoutRaisedReferenceMarkers,
@@ -18,6 +18,9 @@ import {
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { readPdfTextPages } from "@/api/lib/legal-search/parsers/libpdf-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 
 type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
 

@@ -26,6 +26,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 type SeedVocabularyOptions = { db: GatedTestDb; size: number };
 
@@ -200,7 +201,7 @@ export const seedMatterVocabulary = async ({
       for (const id of [organizationId, otherOrganizationId]) {
         await db.delete(workspaces).where(eq(workspaces.organizationId, id));
         await db.delete(contacts).where(eq(contacts.organizationId, id));
-        await db.delete(organization).where(eq(organization.id, id));
+        await deleteOrganizationsForTest(db, [id]);
       }
       await db.delete(user).where(eq(user.id, userId));
     },

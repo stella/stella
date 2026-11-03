@@ -70,10 +70,11 @@ export default createSafeRootHandler(
       }),
     );
     detached(
-      publishMcpToolProjectionChange({
-        organizationId: session.activeOrganizationId,
-        userId: user.id,
-      }),
+      async () =>
+        await publishMcpToolProjectionChange({
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
       "mcp.feature-unenrolment-tool-projection",
     );
     return Result.ok({ featureId: params.featureId, enrolled: false });

@@ -3,6 +3,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { MODEL_CATALOG_INPUTS } from "../packages/scripts/src/generated-files";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
 import {
@@ -207,25 +208,7 @@ export const LEGAL_ATLAS_IMAGE_INPUTS = [
   ".github/workflows/ci.yml",
 ] as const;
 
-export const MODEL_CATALOG_DRIFT_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-defaults-ledger.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/ai-catalog/src/reasoning-capabilities.ts",
-  "packages/fetch/src/connection-failure.ts",
-  "packages/fetch/src/index.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-  "packages/scripts/src/model-catalog-snapshot.ts",
-] as const;
+export const MODEL_CATALOG_DRIFT_INPUTS = MODEL_CATALOG_INPUTS;
 
 export const ROUTE_TREE_INPUTS = [
   "apps/web/src/routes/*",
