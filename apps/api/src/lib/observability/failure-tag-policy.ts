@@ -187,7 +187,7 @@ export const TAGGED_FAILURE_REASON = {
   DocumentBuildError: "tagged_failure",
   DocumentDeadlineScoutError: "tagged_failure",
   DocumentOcrError: "tagged_failure",
-  DocumentPacingOutcome: "tagged_failure",
+  DocumentPacingOutcome: "work_capacity_unavailable",
   DocumentProcessingJobError: "tagged_failure",
   DocumentProcessingRunSettledError: "tagged_failure",
   DocumentPropertiesParseError: "tagged_failure",
