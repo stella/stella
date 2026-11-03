@@ -412,6 +412,7 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       unresolvedCandidateDecisionRowsStatement(tx, {
+        admission: "indexed",
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -446,6 +447,7 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       unresolvedPageDecisionRowsStatement(tx, {
+        admission: "indexed",
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,

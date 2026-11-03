@@ -202,12 +202,12 @@ shapes to look for:
 - **A dependency escaped its `manualChunks` bucket** and landed in `entry`
   (paid on every cold visit) instead of a lazy route chunk or `vendor-*`
   group. Dynamic-`import()` it, or fix the `manualChunks` rule in
-  `apps/web/vite.config.ts`.
+  `apps/web/vite.config.ts`. [review]
 - **`vendor-anonymize-data` or `wasm-vendor` show up nonzero.** These are
   tracked at 0 because they should only ever load inside a web worker, never
   the main client bundle. A nonzero value means a worker-only dependency
   leaked into the client graph; keep it worker-only instead of widening the
-  baseline.
+  baseline. [review]
 
 ### `require-loader-prefetch` lint failure
 

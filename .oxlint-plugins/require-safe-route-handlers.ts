@@ -197,7 +197,12 @@ export default eslintCompatPlugin({
             "Route {{method}} must mount an endpoint built by a safe-handler " +
             "factory (createSafeHandler, createSafeRootHandler, ... in " +
             "@/api/lib/api-handlers), defined in its own module and imported " +
-            "here. defineEndpoint and hand-built definitions belong only in " +
+            "here. Use createSafeHandler for workspace routes, " +
+            "createSafeSessionHandler for session-scoped routes, " +
+            "createSafeTokenHandler for routes authorizing their own token, " +
+            "createSafePublicHandler for intentionally public routes without " +
+            "workspace or root context, and createSafeRootHandler for system " +
+            "routes. defineEndpoint and hand-built definitions belong only in " +
             "the protocol/public/dev route files listed as exceptions in " +
             "oxlint.config.ts.",
           unreadableTable:
