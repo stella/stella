@@ -191,6 +191,7 @@
       "openFailed": "Tento dokument sa teraz nedá upraviť",
       "takenOver": "Tento dokument teraz upravuje niekto iný. Zmeny od posledného uloženia sa nezachovali.",
       "finishFailed": "Zmeny sú uložené, ale zatiaľ z nich nevznikla nová verzia. Ťuknite znova na Hotovo alebo odíďte: ďalšia úprava na ne nadviaže.",
+      "notStored": "Posledné zmeny sa nepodarilo uložiť. Zostaňte a skúste to znova, alebo odíďte bez nich.",
       "stay": "Zostať",
       "leave": "Odísť"
     }

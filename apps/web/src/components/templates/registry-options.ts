@@ -27,46 +27,46 @@ export type LookupRegistryOption = {
 };
 
 export const LOOKUP_REGISTRY_OPTIONS = [
-  { slug: "ares", name: "ARES", label: "Czechia — ARES", country: "CZ" },
-  { slug: "orsr", name: "ORSR", label: "Slovakia — ORSR", country: "SK" },
-  { slug: "rpo", name: "RPO", label: "Slovakia — RPO", country: "SK" },
-  { slug: "krs", name: "KRS", label: "Poland — KRS", country: "PL" },
+  { slug: "ares", name: "ARES", label: "Czechia: ARES", country: "CZ" },
+  { slug: "orsr", name: "ORSR", label: "Slovakia: ORSR", country: "SK" },
+  { slug: "rpo", name: "RPO", label: "Slovakia: RPO", country: "SK" },
+  { slug: "krs", name: "KRS", label: "Poland: KRS", country: "PL" },
   {
     slug: "companies-house",
     name: "Companies House",
-    label: "United Kingdom — Companies House",
+    label: "United Kingdom: Companies House",
     country: "GB",
   },
   {
     slug: "denue",
     name: "INEGI DENUE",
-    label: "Mexico — INEGI DENUE",
+    label: "Mexico: INEGI DENUE",
     country: "MX",
   },
   {
     slug: "brreg",
     name: "Brønnøysund (BRREG)",
-    label: "Norway — Brønnøysund (BRREG)",
+    label: "Norway: Brønnøysund (BRREG)",
     country: "NO",
   },
-  { slug: "prh", name: "PRH", label: "Finland — PRH", country: "FI" },
+  { slug: "prh", name: "PRH", label: "Finland: PRH", country: "FI" },
   {
     slug: "recherche-entreprises",
     name: "RNE",
-    label: "France — RNE",
+    label: "France: RNE",
     country: "FR",
   },
   {
     slug: "edgar",
     name: "SEC EDGAR",
-    label: "United States — SEC EDGAR",
+    label: "United States: SEC EDGAR",
     country: "US",
   },
-  { slug: "gcis", name: "GCIS", label: "Taiwan — GCIS", country: "TW" },
+  { slug: "gcis", name: "GCIS", label: "Taiwan: GCIS", country: "TW" },
   {
     slug: "vies",
     name: "VIES (VAT)",
-    label: "European Union — VIES (VAT)",
+    label: "European Union: VIES (VAT)",
     country: "EU",
   },
 ] as const satisfies readonly LookupRegistryOption[];

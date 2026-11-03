@@ -384,6 +384,16 @@ describe("local harness chunks", () => {
         content: JSON.stringify({ status: "interrupted" }),
       }),
     );
+    // Stored as the cloud engine stores a cancelled call: an error, never
+    // a completed result.
+    expect(fold(chunks).flatMap(({ parts }) => parts)).toContainEqual(
+      expect.objectContaining({
+        type: "tool-result",
+        toolCallId: commandCall.id,
+        state: "error",
+        outcome: "cancelled",
+      }),
+    );
   });
 
   test("each failure kind ends the run with its own error code", async () => {
