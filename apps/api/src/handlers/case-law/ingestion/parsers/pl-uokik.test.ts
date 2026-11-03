@@ -769,6 +769,17 @@ describe("a court ruling's header", () => {
     });
   });
 
+  test("a ruling's text reads through its font's letter substitution too", async () => {
+    const supreme = await parsedOf(RULING_FIXTURES.supreme);
+    const appeal = await parsedOf(RULING_FIXTURES.appeal);
+    expect(supreme.fulltext).toContain("Sąd Najwyższy");
+    expect(appeal.fulltext).toContain("Wielobranżowego");
+    for (const { fulltext, blocks } of [supreme, appeal]) {
+      expect(fulltext).not.toContain("Ŝ");
+      expect(JSON.stringify(blocks)).not.toContain("Ŝ");
+    }
+  });
+
   test("a scan states nothing, and says so", async () => {
     expect(await headerOf(RULING_FIXTURES.scan)).toEqual({
       type: "unread",
