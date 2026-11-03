@@ -37,7 +37,7 @@ type FakeStep =
   | { sleep: number }
   | { exit: number };
 
-const USER_AGENT = "stella/0.165.0 (Mac OS 27.0; arm64) test";
+const USER_AGENT = "stella/0.166.0 (Mac OS 27.0; arm64) test";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
