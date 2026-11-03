@@ -34,6 +34,8 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Whether a source change should select consumers of the derived outputs. */
+  selectsConsumers?: boolean;
   /** Ignored, disposable paths that `write` may populate as execution caches. */
   cacheOutputs?: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
@@ -83,6 +85,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/migration-alias-inventory.json",
     "apps/api/src/lib/db/migration-history.ts",
     "apps/api/src/lib/db/service-client-contract.ts",
+    "apps/api/src/lib/desktop-runner/states.ts",
     "apps/api/src/lib/document-review/contract.ts",
     "apps/api/src/lib/document-review/run-contract.ts",
     "apps/api/src/lib/document-translation/contract.ts",
@@ -292,6 +295,9 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/operator-activity/calendar.ts",
     "apps/api/src/lib/db/operator-activity/read.ts",
     "apps/api/src/lib/db/operator-registrations/read.ts",
+    "apps/api/src/lib/desktop-runner/run-transitions.ts",
+    "apps/api/src/lib/desktop-runner/states.ts",
+    "apps/api/src/lib/desktop-runner/store.ts",
     "apps/api/src/lib/document-review/*",
     "apps/api/src/lib/document-translation/contract.ts",
     "apps/api/src/lib/document-translation/docx-language.ts",
@@ -697,6 +703,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/migration-alias-inventory.json",
     "apps/api/src/lib/db/migration-history.ts",
     "apps/api/src/lib/db/service-client-contract.ts",
+    "apps/api/src/lib/desktop-runner/states.ts",
     "apps/api/src/lib/document-review/contract.ts",
     "apps/api/src/lib/document-review/run-contract.ts",
     "apps/api/src/lib/document-translation/contract.ts",
@@ -807,6 +814,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/migration-history.ts",
     "apps/api/src/lib/db/service-client-contract.ts",
     "apps/api/src/lib/db/transitions.ts",
+    "apps/api/src/lib/desktop-runner/run-transitions.ts",
+    "apps/api/src/lib/desktop-runner/states.ts",
     "apps/api/src/lib/document-review/contract.ts",
     "apps/api/src/lib/document-review/run-contract.ts",
     "apps/api/src/lib/document-translation/contract.ts",
@@ -980,8 +989,10 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "tailwind-class-cache",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [".tailwind-cache/**"],
+    // Lint consumes this through its Turbo dependency, not as package source.
+    selectsConsumers: false,
     inputs: [
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
       // sources and package versions (chat and workspace-ui use the web
@@ -1019,8 +1030,9 @@ const GENERATOR_DECLARATIONS = [
       ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
     ],
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
-    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
-    autofix: true,
+    check: null,
+    unchecked: "Derived cache is generated before lint and is never committed",
+    autofix: false,
     after: [],
   },
   {
@@ -1472,6 +1484,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
+      "packages/api-contract/src/mcp-tool-names.gen.ts",
     ],
     cacheOutputs: [
       ".turbo/**",
@@ -1896,6 +1909,51 @@ const GENERATOR_DECLARATIONS = [
     check: null,
     checkedBy: "Published package lists match the release policy",
     autofix: true,
+    after: [],
+  },
+  {
+    id: "package-api-reports",
+    outputKind: "committed",
+    outputs: ["packages/*/api-report.json"],
+    inputs: [
+      ".changeset/config.json",
+      "packages/*/package.json",
+      "packages/*/src/**",
+      "packages/cli/capabilities/*.json",
+      "packages/*/tsconfig*.json",
+      "scripts/package-api-report.ts",
+      "scripts/package-api-report-write.ts",
+      "scripts/offline-check-startup.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "bunfig.toml",
+      "scripts/package-api-compatibility.ts",
+      "scripts/package-api-export-space.ts",
+      "scripts/publish-packages.ts",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      "scripts/changeset-entry.ts",
+      "scripts/offline-network-preload.ts",
+      "scripts/package-api-base.sh",
+      ".changeset/*.md",
+    ],
+    write: ["bun", "scripts/package-api-report-write.ts"],
+    check: null,
+    checkedBy: "Published package API reports",
+    // The check compares against the pull request's Git base, which
+    // scripts/package-api-base.sh materialises before the offline check runs.
+    checkedWith: [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/package-api-report.ts",
+      "--check",
+      "--base-dir",
+      '"$base_dir"',
+    ],
+    // API changes require explicit review and release intent.
+    autofix: false,
     after: [],
   },
   {

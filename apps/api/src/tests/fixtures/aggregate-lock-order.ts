@@ -244,6 +244,10 @@ export const aggregateFences = () => {
       aggregate: "billingDraftSettings",
       id: { organizationId },
     },
+    desktopRunnerCapacity: {
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
     fileComparisonCapacity: {
       aggregate: "fileComparisonCapacity",
       id: { organizationId },

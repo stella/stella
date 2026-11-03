@@ -20,6 +20,7 @@ import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import { dictationScalingScenario } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
@@ -63,6 +64,7 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
+  desktopRunnerUpgradeScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   ...dataBoxSettingsScalingScenarios,

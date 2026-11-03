@@ -102,9 +102,10 @@ export const DocxPages = ({
   onEditRequest: () => void;
   /**
    * One save: the whole document, or null when nothing changed since the
-   * last save. The next save waits for this one.
+   * last save. The next save waits for this one. Whether it was stored comes
+   * back; edits that were not stay for the next save.
    */
-  onSaved: (bytes: Uint8Array | null, final: boolean) => Promise<void>;
+  onSaved: (bytes: Uint8Array | null, final: boolean) => Promise<boolean>;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -130,7 +131,9 @@ export const DocxPages = ({
       await onSaved(null, final);
       return;
     }
-    await onSaved(new Uint8Array(buffer), final);
+    if (!(await onSaved(new Uint8Array(buffer), final))) {
+      dirty.current = true;
+    }
   };
 
   // Saves wait for one another; a failed one leaves the edits to the next.

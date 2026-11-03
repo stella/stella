@@ -662,7 +662,7 @@ const measureRouteTarget = async ({
     // with its own top border on that line doubles it into a 2px rule.
     expect(
       await findChromeDividerProblems(page),
-      `${route.template} must show exactly one divider under the app chrome`,
+      `${route.template} must show exactly one divider under the app chrome: the chrome owns it, so a page root or a nested layout's first pane draws no top border (border-t, border-y, border) on that line`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Capture at the settled route boundary; awaiting the document's CSP
