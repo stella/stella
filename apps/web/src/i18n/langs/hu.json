@@ -6353,6 +6353,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ez az ügy archivált és csak olvasható.",
     "calculations": {
       "choose": "Számítás",
       "kinds": {
@@ -7210,6 +7211,7 @@
       "aiModel": "AI modell",
       "manualInput": "Kézzel"
     },
+    "unarchiveBeforeDelete": "Az ügy törlése előtt szüntesse meg az archiválását.",
     "unarchiveMatter": "Visszaállítás",
     "uploadDocuments": "Dokumentumok feltöltése",
     "views": {
