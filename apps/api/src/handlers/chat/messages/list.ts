@@ -33,11 +33,11 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   decodeChatRunTarget,
   localRunTargetField,
-} from "@/api/lib/chat-run-target";
-import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
+} from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

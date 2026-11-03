@@ -19,7 +19,7 @@ import {
 import {
   decodeChatRunTarget,
   encodeChatRunTarget,
-} from "@/api/lib/chat-run-target";
+} from "@/api/lib/chat/run-target";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

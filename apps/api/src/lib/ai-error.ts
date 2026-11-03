@@ -715,30 +715,11 @@ const aiKindHandlerError = (
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
+    // A computer's run ends a chat turn, never a request this maps; its
+    // code still names the reason for whoever reads one.
     case "local_runner_needs_login":
-      return new HandlerError({
-        code,
-        status: 502,
-        message:
-          "The coding agent on your computer needs a new sign-in. Sign in through stella desktop, then try again.",
-        cause: error,
-      });
     case "local_runner_limit_reached":
-      return new HandlerError({
-        code,
-        status: 502,
-        message:
-          "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
-        cause: error,
-      });
     case "local_runner_unavailable":
-      return new HandlerError({
-        code,
-        status: 502,
-        message:
-          "Your computer stopped running this request. Make sure stella desktop is open and connected, then try again.",
-        cause: error,
-      });
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

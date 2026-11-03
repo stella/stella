@@ -17,7 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   decodeChatRunTarget,
   encodeChatRunTarget,
-} from "@/api/lib/chat-run-target";
+} from "@/api/lib/chat/run-target";
 import type {
   DesktopRunnerControl,
   PickedDesktop,
