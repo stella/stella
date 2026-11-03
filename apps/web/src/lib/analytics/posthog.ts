@@ -392,9 +392,7 @@ const sanitizeExceptionEntry = (
 
 // The same finite dimensions the fingerprint carries, kept readable so an
 // issue's events can be filtered by them.
-const exceptionFieldsProperty = (
-  fields: Record<string, string>,
-): { exception_fields: Record<string, string> } | undefined =>
+const exceptionFieldsProperty = (fields: Record<string, string>) =>
   Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
 
 type RouteTemplateHistory = Map<string, string>;
