@@ -11,6 +11,7 @@ import {
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
+import { chatThreads } from "./chat";
 import {
   jsonb,
   organization,
@@ -142,11 +143,35 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .notNull()
       .default(0),
     leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
+    /**
+     * The chat thread whose turn started the run; null for runs started
+     * outside chat. The run and its messages go with the thread.
+     */
+    chatThreadId: p.uuid("chat_thread_id"),
+    /**
+     * Last position of the run's messages a chat turn consumed. A turn that
+     * paused for an approval continues reading after it.
+     */
+    chatReadSeq: p
+      .bigint("chat_read_seq", { mode: "number" })
+      .notNull()
+      .default(0),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.primaryKey({ name: "desktop_runner_runs_pkey", columns: [table.runId] }),
+    p
+      .foreignKey({
+        name: "desktop_runner_runs_chat_thread_fk",
+        columns: [table.chatThreadId],
+        foreignColumns: [chatThreads.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("desktop_runner_runs_chat_thread_idx")
+      .on(table.chatThreadId, table.desktopId, table.harness)
+      .where(sql`${table.chatThreadId} IS NOT NULL`),
     p
       .foreignKey({
         name: "desktop_runner_runs_runner_fk",
@@ -196,6 +221,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_message_bytes_check",
       sql`${table.messageBytes} >= 0`,
+    ),
+    p.check(
+      "desktop_runner_runs_chat_read_seq_check",
+      sql`${table.chatReadSeq} BETWEEN 0 AND 4294967295`,
     ),
     ...ownerOnlyPolicies("desktop_runner_runs"),
   ],

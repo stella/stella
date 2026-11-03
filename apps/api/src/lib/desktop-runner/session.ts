@@ -88,6 +88,8 @@ type RunnerSessionContext = {
   readonly isRunnerEnabled: RunnerFeatureAccess;
   /** Tell the socket a newer one replaced that it is no longer current. */
   readonly ringPrevious: (holder: RunHolder) => void;
+  /** Wake the readers of a run whose stored messages or state changed. */
+  readonly ringRun: (runId: string) => void;
 };
 
 type RunnerSessionOptions = {
@@ -404,6 +406,7 @@ const storeSequenced = async (
       if (message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished) {
         state.tokens.delete(message.runId);
       }
+      state.context.ringRun(message.runId);
       send(state, {
         type: DESKTOP_RUNNER_SERVER_MESSAGE.ack,
         runId: message.runId,
@@ -618,6 +621,7 @@ const handleMessage = async (
       });
       if (rejected.type === "applied") {
         state.tokens.delete(message.runId);
+        state.context.ringRun(message.runId);
       }
       closeForTransition(state, rejected);
       return;
