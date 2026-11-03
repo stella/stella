@@ -43,11 +43,12 @@ export const LOCAL_ONLY_FEATURES = [
     callerType: "ActivityCaller",
     commandOwners: [
       { module: "src/activity_commands.rs", prefixes: ["activity_"] },
-      // The confirmation boundary also owns the one command that sends a
-      // suggestion's approved titles out for a stella AI description.
+      { module: "src/time_entry_commands.rs", prefixes: ["time_entry_"] },
+      // The one command that sends a selected entry out for a stella AI
+      // draft, only with the user's consent on the server.
       {
-        module: "src/time_entry_commands.rs",
-        prefixes: ["time_entry_", "activity_generate_narrative"],
+        module: "src/billing_draft_commands.rs",
+        prefixes: ["billing_draft_create_"],
       },
     ],
     id: "activity",
@@ -66,6 +67,9 @@ export const LOCAL_ONLY_FEATURES = [
         "src/activity/ActivitySuggestionCard.tsx",
         "src/activity/MatterPicker.tsx",
         "src/activity/activity-calendar-logic.ts",
+        "src/activity/billing-draft-logic.ts",
+        "src/activity/billing-draft-settings.ts",
+        "src/activity/billing-draft-transport.ts",
         "src/activity/day-review-logic.ts",
       ],
     },
@@ -77,6 +81,11 @@ export const LOCAL_ONLY_FEATURES = [
     callerType: "ActivitySettingsCaller",
     commandOwners: [
       { module: "src/activity_settings.rs", prefixes: ["activity_"] },
+      // Consent to stella AI drafts, which the user withdraws in Settings.
+      {
+        module: "src/billing_draft_settings.rs",
+        prefixes: ["billing_draft_"],
+      },
     ],
     id: "activity_settings",
     telemetry: "fixedCodes",
@@ -85,6 +94,7 @@ export const LOCAL_ONLY_FEATURES = [
       "src-tauri/capabilities/default.json": [
         "src/activity/ActivitySettings.tsx",
         "src/activity/ActivityCaptureDetails.tsx",
+        "src/activity/billing-draft-settings.ts",
       ],
     },
     windows: ["activity", "main"],
@@ -118,4 +128,5 @@ export const isFeatureModule = (
 /** Network owners accepting explicit confirmation, never recorded activity. */
 export const CONFIRMED_ENTRY_NETWORK_MODULES = [
   "time_entry_submit.rs",
+  "billing_draft_submit.rs",
 ] as const;

@@ -34,6 +34,14 @@
     "composerPlaceholder": "Opýtajte sa stelly",
     "send": "Odoslať",
     "stop": "Zastaviť",
+    "dictate": "Diktovať",
+    "dictationCancel": "Zrušiť diktovanie",
+    "dictationFinish": "Dokončiť diktovanie",
+    "dictationListening": "Počúvam… {elapsed} z {limit}",
+    "dictationTranscribing": "Prepisujem…",
+    "dictationDenied": "Diktovanie potrebuje mikrofón. Povoľte ho pre stella v Nastaveniach.",
+    "dictationFailed": "Nahrávku sa nepodarilo prepísať. Skúste to znova.",
+    "dictationSilent": "Nezachytila sa žiadna reč.",
     "sendFailed": "Správu sa nepodarilo odoslať. Skúste to znova.",
     "answerWorking": "Pracujem…",
     "answerStopped": "Zastavené.",
@@ -174,6 +182,17 @@
       "system": "Vzhľad: automaticky",
       "light": "Vzhľad: svetlý",
       "dark": "Vzhľad: tmavý"
+    },
+    "edit": {
+      "saved": "Uložené",
+      "saving": "Ukladá sa…",
+      "notSaved": "Zatiaľ neuložené",
+      "done": "Hotovo",
+      "openFailed": "Tento dokument sa teraz nedá upraviť",
+      "takenOver": "Tento dokument teraz upravuje niekto iný. Zmeny od posledného uloženia sa nezachovali.",
+      "finishFailed": "Zmeny sú uložené, ale zatiaľ z nich nevznikla nová verzia. Ťuknite znova na Hotovo alebo odíďte: ďalšia úprava na ne nadviaže.",
+      "stay": "Zostať",
+      "leave": "Odísť"
     }
   },
   "signIn": {
@@ -222,9 +241,7 @@
     "share": "Zdieľať"
   },
   "more": {
-    "soon": "Čoskoro",
-    "timers": "Časovače",
-    "voiceInput": "Hlasové zadávanie"
+    "timers": "Časovače"
   },
   "writes": {
     "consentNeeded": "Aby aplikácia mohla robiť zmeny, stella potrebuje vaše povolenie. Prihláste sa znova a udeľte ho.",

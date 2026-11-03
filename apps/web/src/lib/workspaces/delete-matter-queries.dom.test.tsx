@@ -41,7 +41,10 @@ describe("deleted entity query ownership", () => {
     queryClient.setQueryData(propertiesOptions(WORKSPACE_ID).queryKey, []);
     queryClient.setQueryData(viewsOptions(WORKSPACE_ID).queryKey, []);
     const listKey = workspacesOptions(ORGANIZATION_ID).queryKey;
-    queryClient.setQueryData(listKey, { workspaces: [] });
+    queryClient.setQueryData(listKey, {
+      creationCapacity: { canCreate: true, limit: 1000 },
+      workspaces: [],
+    });
 
     await deleteMatterQueries({
       activeOrganizationId: ORGANIZATION_ID,

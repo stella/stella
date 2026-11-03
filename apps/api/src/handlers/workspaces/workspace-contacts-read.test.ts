@@ -8,6 +8,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -43,7 +44,7 @@ beforeAll(
   { timeout: 30_000 },
 );
 afterAll(async () => {
-  await db.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(db, [organizationId]);
   await releaseTestDb();
 });
 const read = async () =>
