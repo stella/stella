@@ -82,13 +82,24 @@ export const startAppServer = ({
   const pending = new Map<CodexRequestId, Pending>();
   const state = { nextId: 1, closed: false };
 
+  /**
+   * Stdin is the only way to reach the server. Once an operation on it throws,
+   * nothing more can be sent, so the process is ended and its exit settles
+   * every pending request; a throw racing an exit already under way changes
+   * nothing, because that exit is reported through `handlers.exit` anyway.
+   */
+  const onInput = (operation: () => void) => {
+    const done = Result.try(operation);
+    if (Result.isError(done) && !state.closed) {
+      child.kill();
+    }
+  };
+
   const write = (message: object) => {
     if (state.closed) {
       return;
     }
-    // A write racing the process's exit fails; the exit itself is reported
-    // through `handlers.exit`, so the failed write carries no extra news.
-    Result.try(() => {
+    onInput(() => {
       detached(
         child.stdin.write(`${JSON.stringify(message)}\n`),
         "codex-app-server.write",
@@ -213,7 +224,7 @@ export const startAppServer = ({
     exited,
     closeInput: () => {
       if (!state.closed) {
-        Result.try(() => {
+        onInput(() => {
           detached(child.stdin.end(), "codex-app-server.close");
         });
       }
