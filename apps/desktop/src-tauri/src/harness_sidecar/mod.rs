@@ -37,6 +37,10 @@
 mod endpoint;
 mod protocol;
 #[cfg(all(test, unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 pub(crate) mod tests;
 
 use std::collections::{HashMap, HashSet};
@@ -588,13 +592,10 @@ fn read_secret(dir: &Path) -> Option<HolderSecret> {
 
 /// Create the folder for the user alone, or refuse one others can reach.
 fn private_dir(dir: &Path) -> std::io::Result<()> {
+  crate::local_store::create_private_dir(dir)?;
   #[cfg(unix)]
   {
-    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-    std::fs::DirBuilder::new()
-      .recursive(true)
-      .mode(0o700)
-      .create(dir)?;
+    use std::os::unix::fs::PermissionsExt;
     let mode = std::fs::metadata(dir)?.permissions().mode();
     if mode & 0o077 != 0 {
       return Err(std::io::Error::new(
@@ -606,7 +607,7 @@ fn private_dir(dir: &Path) -> std::io::Result<()> {
   }
   #[cfg(not(unix))]
   {
-    std::fs::create_dir_all(dir)
+    Ok(())
   }
 }
 
@@ -624,7 +625,7 @@ fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<Path
   }
   let temporary = dir.join(format!(".{BUNDLED_NAME}.{}.tmp", uuid::Uuid::new_v4()));
   let copied = copy_bytes(&launch.program, &temporary)
-    .and_then(|()| std::fs::rename(&temporary, &target));
+    .and_then(|()| crate::local_store::rename_private(&temporary, &target));
   if copied.is_err() {
     let _removed = std::fs::remove_file(&temporary);
   }
@@ -635,11 +636,7 @@ fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<Path
 /// the binary travels with it.
 fn copy_bytes(source: &Path, target: &Path) -> std::io::Result<()> {
   let mut source = std::fs::File::open(source)?;
-  let mut options = std::fs::OpenOptions::new();
-  options.write(true).create_new(true);
-  #[cfg(unix)]
-  std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o700);
-  let mut copy = options.open(target)?;
+  let mut copy = crate::local_store::create_harness_file(target, true)?;
   std::io::copy(&mut source, &mut copy)?;
   copy.sync_all()
 }

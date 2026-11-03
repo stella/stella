@@ -14,6 +14,10 @@ mod harness;
 mod journal;
 mod sidecar_host;
 #[cfg(all(test, unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod sidecar_host_tests;
 mod state;
 #[cfg(test)]

@@ -83,7 +83,7 @@ impl Endpoints {
     #[cfg(windows)]
     {
       let _unused = socket_dir;
-      std::fs::create_dir_all(holder_root)?;
+      crate::local_store::create_private_dir(holder_root)?;
       Ok(Self {})
     }
   }
@@ -187,6 +187,11 @@ fn user_runtime_dir() -> Option<PathBuf> {
 /// The preferred folder when it is private to `uid`, else
 /// `<fallback_base>/stella-<uid>`, created 0700 and checked the same way.
 #[cfg(unix)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the socket folder sits in the shared temporary folder, outside the \
+            app's data roots; it is created 0700 and checked owner-only before use"
+)]
 pub(super) fn runtime_dir(
   preferred: Option<&Path>,
   fallback_base: &Path,
@@ -223,22 +228,21 @@ pub(super) fn checked(dir: &Path, uid: u32) -> Result<(), EndpointError> {
 /// `unsafe` system call.
 #[cfg(unix)]
 pub(super) fn own_uid(scratch: &Path) -> Result<u32, EndpointError> {
-  use std::os::unix::fs::{DirBuilderExt, MetadataExt};
-  std::fs::DirBuilder::new()
-    .recursive(true)
-    .mode(0o700)
-    .create(scratch)?;
+  use std::os::unix::fs::MetadataExt;
+  crate::local_store::create_private_dir(scratch)?;
   let probe = scratch.join(format!(".uid-{}", uuid::Uuid::new_v4().simple()));
-  let created = std::fs::OpenOptions::new()
-    .write(true)
-    .create_new(true)
-    .open(&probe)
-    .and_then(|file| file.metadata());
+  let created =
+    crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, &probe)
+      .and_then(|file| file.metadata());
   let _removed = std::fs::remove_file(&probe);
   Ok(created?.uid())
 }
 
 #[cfg(all(test, unix))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use std::fs;
   use std::os::unix::fs::PermissionsExt;
