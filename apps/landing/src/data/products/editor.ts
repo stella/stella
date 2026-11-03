@@ -4,7 +4,7 @@ export const editor = {
   slug: "editor",
   hero: {
     type: "live-editor",
-    alt: "stella · Editor — live demo",
+    alt: "stella · Editor: live demo",
     aspect: "16 / 11",
   },
   heroFrameVariant: "bloom",
