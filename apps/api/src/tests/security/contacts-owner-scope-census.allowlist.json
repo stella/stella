@@ -44,6 +44,12 @@
       "INVOICE_LANGUAGE_CONSTRAINTS.tableName": 1
     }
   },
+  "apps/api/src/db/online-migration-entries/indexes-contacts-data-box-ids-idx.ts::names-contacts-table": {
+    "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
+    "sites": {
+      "values.tableName": 1
+    }
+  },
   "apps/api/src/db/online-unique-indexes.ts::names-contacts-table": {
     "reason": "Migration-time DDL catalog: names the table for a constraint or index the online migration phase validates; it reads and writes no contact row.",
     "sites": {
@@ -67,6 +73,12 @@
     "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
     "sites": {
       "prefillClientInvoice.result.client": 1
+    }
+  },
+  "apps/api/src/handlers/contacts/bulk/delete.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only. Its locking read is `lockOwnedContactsForBulkDelete` on that same transaction.",
+    "sites": {
+      "bulkDeleteContacts.txResult.deletedContacts": 1
     }
   },
   "apps/api/src/handlers/contacts/create.ts::names-contacts-table": {
@@ -174,6 +186,12 @@
       "createWorkspaceContactHandler.txResult.contact": 1
     }
   },
+  "apps/api/src/handlers/workspaces/correspondence/get.ts::names-contacts-table": {
+    "reason": "Request handler: `matchDataBoxContacts` reads contacts on the transaction of the request's organization-scoped application handle (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "matchDataBoxContacts.page": 1
+    }
+  },
   "apps/api/src/handlers/workspaces/get.ts::names-contacts-table": {
     "reason": "Request handler: the matter read follows its client relation inside the request's organization-scoped application transaction (`scopedDb`), whose row policies admit the request's organization only.",
     "sites": {
@@ -230,9 +248,10 @@
     }
   },
   "apps/api/src/lib/db/aggregate-lock.ts::names-contacts-table": {
-    "reason": "Matter creation client lock: its only caller, matter creation, holds the request's organization-scoped `safeDb` transaction.",
+    "reason": "Matter creation client lock: its only caller, matter creation, holds the request's organization-scoped `safeDb` transaction. Bulk contact delete lock: its only caller, the bulk contact delete handler, holds the request's organization-scoped `safeDb` transaction.",
     "sites": {
-      "lockMatterCreationClient": 1
+      "lockMatterCreationClient": 1,
+      "lockOwnedContactsForBulkDelete": 1
     }
   },
   "apps/api/src/lib/imports/upsert-by-external-id.ts::names-contacts-table": {
