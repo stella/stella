@@ -209,8 +209,14 @@ export const documentFormat = (
   if (media === "text/plain") {
     return formatOf(PLAIN_TEXT);
   }
-  return {
-    kind: media.startsWith("text/") ? "text" : "file",
-    label: extensionLabel(fileName),
-  };
+  // A type outside the table still names its family: an image/heic photo is
+  // an image, as an unlisted text/ type is text.
+  const label = extensionLabel(fileName);
+  if (media.startsWith("image/")) {
+    return { kind: "image", label };
+  }
+  if (media.startsWith("text/")) {
+    return { kind: "text", label };
+  }
+  return { kind: "file", label };
 };

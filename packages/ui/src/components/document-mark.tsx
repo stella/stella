@@ -14,30 +14,6 @@ export {
   type DocumentMarkKind,
 } from "./document-mark.shared";
 
-/** A gradient id or paint reference, namespaced to one drawn mark. */
-const scoped = (
-  attrs: Readonly<Record<string, string>>,
-  scope: string,
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(attrs).map(([name, value]) => {
-      const id = GRADIENT_REFERENCE.exec(value)?.[1];
-      return [name, id === undefined ? value : `url(#${scope}-${id})`];
-    }),
-  );
-
-// Children are passed as arguments, in paint order, so the fixed artwork
-// needs no keys.
-const draw = (shape: MarkShape, scope: string): ReactElement =>
-  createElement(
-    shape.tag,
-    scoped(shape.attrs, scope),
-    ...(shape.children ?? []).map((child) => draw(child, scope)),
-  );
-
-type DocumentMarkProps = DocumentMarkContract &
-  Omit<SVGProps<SVGSVGElement>, "children" | "viewBox">;
-
 /**
  * A file format's mark (the Word, Excel or PDF page), drawn from the artwork
  * the apps share. Decorative: the file's name says what it is.
@@ -69,3 +45,27 @@ export const DocumentMark = ({ kind, ...props }: DocumentMarkProps) => {
     ...mark.shapes.map((shape) => draw(shape, scope)),
   );
 };
+
+type DocumentMarkProps = DocumentMarkContract &
+  Omit<SVGProps<SVGSVGElement>, "children" | "viewBox">;
+
+/** A gradient id or paint reference, namespaced to one drawn mark. */
+const scoped = (
+  attrs: Readonly<Record<string, string>>,
+  scope: string,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(attrs).map(([name, value]) => {
+      const id = GRADIENT_REFERENCE.exec(value)?.[1];
+      return [name, id === undefined ? value : `url(#${scope}-${id})`];
+    }),
+  );
+
+// Children are passed as arguments, in paint order, so the fixed artwork
+// needs no keys.
+const draw = (shape: MarkShape, scope: string): ReactElement =>
+  createElement(
+    shape.tag,
+    scoped(shape.attrs, scope),
+    ...(shape.children ?? []).map((child) => draw(child, scope)),
+  );

@@ -24,34 +24,6 @@ export {
   type DocumentMarkKind,
 } from "./document-mark.shared";
 
-// The shared artwork's attributes are SVG's own, which react-native-svg's
-// elements take by the same names.
-const ELEMENTS: Record<
-  MarkShape["tag"],
-  ComponentType<Record<string, unknown>>
-> = { g: G, path: Path, polygon: Polygon, rect: Rect };
-
-/** A gradient id or paint reference, namespaced to one drawn mark. */
-const scoped = (
-  attrs: Readonly<Record<string, string>>,
-  scope: string,
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(attrs).map(([name, value]) => {
-      const id = GRADIENT_REFERENCE.exec(value)?.[1];
-      return [name, id === undefined ? value : `url(#${scope}-${id})`];
-    }),
-  );
-
-// Children are passed as arguments, in paint order, so the fixed artwork
-// needs no keys.
-const draw = (shape: MarkShape, scope: string): ReactElement =>
-  createElement(
-    ELEMENTS[shape.tag],
-    scoped(shape.attrs, scope),
-    ...(shape.children ?? []).map((child) => draw(child, scope)),
-  );
-
 /**
  * A file format's mark (the Word, Excel or PDF page), drawn from the artwork
  * the web shares. `color` paints a mark drawn in the text colour (Markdown).
@@ -89,3 +61,31 @@ export const DocumentMark = ({
     ...mark.shapes.map((shape) => draw(shape, scope)),
   );
 };
+
+// The shared artwork's attributes are SVG's own, which react-native-svg's
+// elements take by the same names.
+const ELEMENTS: Record<
+  MarkShape["tag"],
+  ComponentType<Record<string, unknown>>
+> = { g: G, path: Path, polygon: Polygon, rect: Rect };
+
+/** A gradient id or paint reference, namespaced to one drawn mark. */
+const scoped = (
+  attrs: Readonly<Record<string, string>>,
+  scope: string,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(attrs).map(([name, value]) => {
+      const id = GRADIENT_REFERENCE.exec(value)?.[1];
+      return [name, id === undefined ? value : `url(#${scope}-${id})`];
+    }),
+  );
+
+// Children are passed as arguments, in paint order, so the fixed artwork
+// needs no keys.
+const draw = (shape: MarkShape, scope: string): ReactElement =>
+  createElement(
+    ELEMENTS[shape.tag],
+    scoped(shape.attrs, scope),
+    ...(shape.children ?? []).map((child) => draw(child, scope)),
+  );

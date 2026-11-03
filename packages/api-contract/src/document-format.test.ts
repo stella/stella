@@ -51,6 +51,16 @@ describe("documentFormat", () => {
     }
   });
 
+  test("names an unlisted image or text type by its family", () => {
+    expect(documentFormat("image/heic", "IMG_0042.HEIC")).toEqual({
+      kind: "image",
+      label: "HEIC",
+    });
+    expect(kindOf("image/tiff")).toBe("image");
+    expect(kindOf("text/html")).toBe("text");
+    expect(kindOf("application/zip", "bundle")).toBe("file");
+  });
+
   // text/csv also starts with text/, so it must win over the text fallback.
   test("separates CSV from workbooks and plain text", () => {
     expect(kindOf("text/csv")).toBe("csv");
