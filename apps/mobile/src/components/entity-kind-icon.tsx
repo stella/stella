@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { DocumentFormat } from "@stll/api-contract/document-format";
 import { DocumentMark, isDocumentMarkKind } from "@stll/ui/document-mark";
 
@@ -37,8 +39,11 @@ const DocumentFormatIcon = ({
       return <MailIcon color={color} size={size} />;
     case "text":
       return <FileTextIcon color={color} size={size} />;
-    default:
+    case "file":
       return <FileIcon color={color} size={size} />;
+    default:
+      kind satisfies never;
+      return panic("Unhandled document format kind");
   }
 };
 
