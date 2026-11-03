@@ -11,6 +11,10 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+} from "@/api/db/corpus-schema-lane";
+import {
   caseLawDecisions,
   caseLawSitemapChanges,
   caseLawSitemapCountryGenerations,
@@ -755,7 +759,7 @@ test(
  * `execute` recorded, and `onExecute` called before it runs.
  */
 const recordingRefreshDb = (
-  onExecute: (statement: string) => void = () => {},
+  onExecute: (statement: string) => unknown = () => undefined,
 ) => {
   const dialect = new PgDialect();
   const transactions: { sql: string; params: unknown[] }[][] = [];
@@ -768,12 +772,17 @@ const recordingRefreshDb = (
           new Proxy(tx, {
             get: (target, property, receiver) =>
               property === "execute"
-                ? async (query: SQL) => {
-                    const rendered = dialect.sqlToQuery(query);
+                ? async (query: SQL | string) => {
+                    const rendered =
+                      typeof query === "string"
+                        ? { sql: query, params: [] }
+                        : dialect.sqlToQuery(query);
                     const statement = rendered.sql.trim();
                     sent.push({ sql: statement, params: rendered.params });
-                    onExecute(statement);
-                    return await target.execute(query);
+                    // An answer from `onExecute` stands in for the database's.
+                    return (
+                      onExecute(statement) ?? (await target.execute(query))
+                    );
                   }
                 : Reflect.get(target, property, receiver),
           }),
@@ -821,6 +830,8 @@ test(
     await refreshCaseLawSitemapShards(recorded.db, { poolIdleTimeoutS: 20 });
     expect(recorded.transactions.length).toBeGreaterThan(2);
     for (const sent of recorded.transactions) {
+      // The lane comes first; its try cannot wait, so it needs no budget.
+      expect(sent.at(0)?.sql).toBe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL);
       const budgetAt = sent.findIndex(({ sql: statement }) =>
         statement.includes("set_config('statement_timeout'"),
       );
@@ -828,7 +839,7 @@ test(
       expect(sent[budgetAt]?.params).toContain("10000ms");
       expect(
         sent
-          .slice(0, budgetAt)
+          .slice(1, budgetAt)
           .every(
             ({ sql: statement }) =>
               statement.startsWith("SET ") ||
@@ -836,6 +847,46 @@ test(
           ),
       ).toBe(true);
     }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a refresh yields to a schema upgrade holding the lane and leaves the log for a later run",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const before = await snapshot();
+    await insertOne({ decisionDate: "2009-01-01" });
+    // An upgrade holds the lane exclusive: every try is refused.
+    const refused = recordingRefreshDb((statement) =>
+      statement === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL
+        ? [{ granted: false }]
+        : undefined,
+    );
+    const sleeps: number[] = [];
+    const outcome = await refreshCaseLawSitemapShards(refused.db, {
+      laneSleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    expect(outcome).toEqual({ type: "pending", months: 0, retry: "delayed" });
+    // Each refused try ended its transaction having sent nothing else.
+    expect(refused.transactions.length).toBeGreaterThan(1);
+    expect(
+      refused.transactions.every(
+        (sent) =>
+          sent.length === 1 &&
+          sent[0]?.sql === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+      ),
+    ).toBe(true);
+    // It paused between tries, outside any transaction, until its budget ran out.
+    expect(sleeps).toHaveLength(refused.transactions.length - 1);
+    expect(sleeps.every((ms) => ms <= CORPUS_SCHEMA_LANE_RETRY_MS)).toBe(true);
+    expect(await snapshot()).toEqual(before);
+    expect(await loggedMonths()).toEqual(["CZE/2009/01"]);
+    // Once the lane is free the next run picks the month up.
+    await refreshUntilDone(refreshDb);
+    await expectMatchesFullRecount();
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );

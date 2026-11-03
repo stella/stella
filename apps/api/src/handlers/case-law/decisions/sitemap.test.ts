@@ -1,19 +1,40 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
+import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+} from "@/api/db/corpus-schema-lane";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
-import { listSitemapShardDecisionsHandler } from "@/api/handlers/case-law/decisions/sitemap";
+import {
+  listSitemapShardDecisionsHandler,
+  sitemapShardDecisionsQuerySchema,
+} from "@/api/handlers/case-law/decisions/sitemap";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  CASE_LAW_PUBLIC_READ_LANE_WAIT_MS,
+  CORPUS_MAINTENANCE_CODE,
+} from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -162,4 +183,121 @@ test("sitemap bounds every language group even within a larger batch", async () 
       LIMITS.caseLawLanguageAlternatesPerGroupMax,
     );
   }
+});
+
+/**
+ * The public reader while a schema upgrade holds the corpus schema lane:
+ * every lane try is refused, and every statement each transaction sends is
+ * recorded.
+ */
+const laneHeldReader = () => {
+  const transactions: string[][] = [];
+  const reader = async <T>(
+    read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+  ) =>
+    await caseLawDb(async (tx) => {
+      const sent: string[] = [];
+      transactions.push(sent);
+      return await read(
+        new Proxy(tx, {
+          get: (target, property, receiver) => {
+            if (property === "execute") {
+              return async (query: Parameters<typeof target.execute>[0]) => {
+                sent.push(typeof query === "string" ? query : "execute");
+                return query === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL
+                  ? [{ granted: false }]
+                  : await target.execute(query);
+              };
+            }
+            if (property === "select") {
+              sent.push("select");
+            }
+            const value: unknown = Reflect.get(target, property, receiver);
+            return value;
+          },
+        }),
+      );
+    });
+  // SAFETY: brand-only wrapper around the recording read transaction.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test database carries the production read boundary
+  return { db: reader as unknown as CaseLawPublicReadDb, transactions };
+};
+
+const CZE_SHARD = { bucket: "all", country: "cze", month: "03", year: "2020" };
+
+test("a shard read the schema lane refuses ends each try's transaction and answers unavailable instead of waiting", async () => {
+  const held = laneHeldReader();
+  const sleeps: number[] = [];
+  const rejection: unknown = await listSitemapShardDecisionsHandler(
+    CZE_SHARD,
+    held.db,
+    {
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(HandlerError);
+  expect(rejection).toMatchObject({
+    status: 503,
+    code: CORPUS_MAINTENANCE_CODE,
+    retryable: true,
+  });
+  // Each try was its own transaction, which sent the try and nothing else.
+  expect(held.transactions.length).toBeGreaterThan(1);
+  for (const sent of held.transactions) {
+    expect(sent).toEqual([CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL]);
+  }
+  // It paused between tries, outside any transaction, within its short budget.
+  expect(sleeps).toHaveLength(held.transactions.length - 1);
+  expect(sleeps.every((ms) => ms <= CORPUS_SCHEMA_LANE_RETRY_MS)).toBe(true);
+  expect(sleeps.reduce((total, ms) => total + ms, 0)).toBeLessThanOrEqual(
+    CASE_LAW_PUBLIC_READ_LANE_WAIT_MS,
+  );
+});
+
+test("a shard read refused by the schema lane answers 503 with Retry-After", async () => {
+  const held = laneHeldReader();
+  // The route's composition: the handler under the bounded public factory.
+  const shard = createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "public_indexing" },
+      cache: { kind: "none" },
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        v.object({ ok: v.boolean() }),
+      ),
+      query: sitemapShardDecisionsQuerySchema,
+    },
+    async function* ({ query }) {
+      yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await listSitemapShardDecisionsHandler(query, held.db, {
+              sleep: async () => {},
+            }),
+        ),
+      );
+      return Result.ok({ ok: true });
+    },
+  );
+  await using server = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({ "/shard": { GET: shard } }),
+    }),
+  );
+  const response = await server.fetch(
+    `http://localhost/shard?${new URLSearchParams(CZE_SHARD).toString()}`,
+  );
+  expect(response.status).toBe(503);
+  expect(Number(response.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
+  expect(await response.json()).toMatchObject({
+    code: CORPUS_MAINTENANCE_CODE,
+    retryable: true,
+  });
 });
