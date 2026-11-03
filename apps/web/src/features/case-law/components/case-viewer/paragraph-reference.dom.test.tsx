@@ -4,11 +4,11 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import english from "@/i18n/langs/en.json";
 import { noopAnalytics } from "@/lib/analytics/noop";
 import type { Analytics } from "@/lib/analytics/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { PARAGRAPH_PREVIEW_CHARACTER_LIMIT } from "./paragraph-reference.logic";
 

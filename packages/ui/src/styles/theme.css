@@ -15,6 +15,7 @@
  * is already in scope (the palettes derive from `--color-*-500`).
  */
 @import "./inline-rename.css";
+@import "../components/animated-preview.css";
 
 @custom-variant dark (&:is(.dark *));
 
