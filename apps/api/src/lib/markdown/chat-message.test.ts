@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
@@ -192,7 +192,8 @@ describe("chat message markdown serializer", () => {
   test("keeps distinct opaque mention identity tuples", () => {
     const segment = fc.stringMatching(/^[a-z0-9]{1,12}$/u);
 
-    fc.assert(
+    assertProperty(
+      "keeps distinct opaque mention identity tuples",
       fc.property(segment, segment, segment, (a, b, c) => {
         const firstWorkspaceId = a;
         const secondWorkspaceId = `${a}:${b}`;
@@ -223,7 +224,7 @@ describe("chat message markdown serializer", () => {
           [secondWorkspaceId, secondEntityId],
         ]);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 });

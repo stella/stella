@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
@@ -18,9 +18,10 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
-import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+import { assertProperty, drawPropertySamples } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import {
   POSTGRES_MAX_SHARDS,
   POSTGRES_MIN_SHARDS,
@@ -32,8 +33,15 @@ import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json" with { type: "json" };
 import { selectApiTestImpact } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
+import {
+  WHOLE_CONTEXT_ENV_BUDGET_CASES,
+  workflowSchema as ciWorkflowSchema,
+} from "./check-ci-event-policy";
 import { readSelectionGraph } from "./ci-affected-selection";
-import { planCiApiTests } from "./ci-api-test-plan";
+import {
+  planCiApiTests,
+  serializeApiTestFilesOutput,
+} from "./ci-api-test-plan";
 import {
   CANONICAL_CANCEL_STEP,
   PR_CODE_QUALITY_CANCEL_IF,
@@ -80,6 +88,10 @@ import {
   queueAdmittedJobs,
   thinJobs,
 } from "./main-heavy-plan";
+import {
+  encodePlanFileList,
+  encodePostgresTestSelection,
+} from "./plan-output-codec";
 import { unlistedTests } from "./run-unlisted-script-tests";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
@@ -101,9 +113,142 @@ const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
+
+const PLAN_ENV_BUDGET_BYTES = 64 * 1024;
 // The immutable repository census is shared fixture setup. Property budgets
 // measure selector cases rather than charging its cold scan to the first case.
 markdownReaders();
+
+const publishReleaseSummaryNeeds = () => {
+  const publish = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          needs: v.optional(v.union([v.string(), v.array(v.string())])),
+          outputs: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const needs = [
+    publish.jobs["release-summary"]?.needs ?? panic("Missing release summary"),
+  ].flat();
+  const packages = needs
+    .filter((job) => job.startsWith("release-"))
+    .map((job) => job.slice("release-".length));
+  const worstCase: Record<string, string> = {
+    packages: JSON.stringify(packages),
+    package_files: packages
+      .map((name) => `packages/${name}/package.json`)
+      .join("\n"),
+    source_sha: "0".repeat(40),
+  };
+  return Object.fromEntries(
+    needs.map((job) => [
+      job,
+      {
+        result: "success",
+        outputs: Object.fromEntries(
+          Object.keys(publish.jobs[job]?.outputs ?? {}).map((name) => [
+            name,
+            worstCase[name] ?? "0".repeat(64),
+          ]),
+        ),
+      },
+    ]),
+  );
+};
+
+test("whole workflow contexts stay below the per-variable environment budget", () => {
+  const root = realpathSync(new URL("..", import.meta.url));
+  const apiRoot = nodePath.join(root, "apps/api");
+  const apiFiles = listApiTestPaths(apiRoot);
+  const postgresFiles = apiFiles.filter((file) =>
+    readFileSync(nodePath.join(apiRoot, file), "utf-8").includes(
+      "STELLA_RUN_POSTGRES_TESTS",
+    ),
+  );
+  expect(apiFiles.length).toBeGreaterThan(0);
+  expect(postgresFiles.length).toBeGreaterThan(0);
+
+  const parsed = v.parse(ciWorkflowSchema, Bun.YAML.parse(workflow));
+  const declaredOutputs = parsed.jobs["ci-plan"]?.outputs ?? {};
+  const plan = Object.fromEntries(
+    Object.keys(declaredOutputs).map((name) => [name, "true"]),
+  );
+  plan["api_test_files_encoded"] = serializeApiTestFilesOutput(apiFiles);
+  plan["postgres_test_selection_encoded"] = encodePostgresTestSelection({
+    mode: "selected",
+    files: postgresFiles,
+  });
+
+  const contexts: Record<string, unknown> = {
+    "ci-checks-policy needs": {
+      "ci-plan": { result: "success", outputs: plan },
+      "generated-sources": { result: "success", outputs: {} },
+      "pr-heavy-gate": { result: "success", outputs: {} },
+    },
+    "ci-checks-rest needs": {
+      "ci-plan": { result: "success", outputs: plan },
+      "generated-sources": { result: "success", outputs: {} },
+      "pr-heavy-gate": { result: "success", outputs: {} },
+    },
+    "ci-result needs": Object.fromEntries(
+      Object.keys(parsed.jobs).map((name) => [
+        name,
+        {
+          result: "success",
+          outputs: name === "ci-plan" ? plan : {},
+        },
+      ]),
+    ),
+    "ci-result plan": plan,
+    "pool steps": Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [
+        `step-${index}`,
+        { outcome: "success", outputs: {} },
+      ]),
+    ),
+    "pool inputs": {
+      sha: "0".repeat(40),
+      heavy_only: false,
+      pr_depth_only: false,
+    },
+    "main-heavy needs": Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `job-${index}`,
+        { result: "success", outputs: {} },
+      ]),
+    ),
+    "main-pr-depth needs": Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `job-${index}`,
+        { result: "success", outputs: {} },
+      ]),
+    ),
+    // Every release job of the npm workflow, with pack selecting every one.
+    "publish-npm release-summary needs": publishReleaseSummaryNeeds(),
+    API_TEST_FILES_ENCODED: plan["api_test_files_encoded"],
+  };
+  for (const name of new Set(
+    Object.values(WHOLE_CONTEXT_ENV_BUDGET_CASES).map(({ budget }) => budget),
+  )) {
+    expect(Object.keys(contexts), `${name} is measured`).toContain(name);
+  }
+  for (const [name, value] of Object.entries(contexts)) {
+    const bytes = Buffer.byteLength(JSON.stringify(value));
+    expect(bytes, `${name}: ${bytes} bytes`).toBeLessThan(
+      PLAN_ENV_BUDGET_BYTES,
+    );
+  }
+});
 
 type BashCase = {
   flags: readonly string[];
@@ -1933,7 +2078,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       },
     },
     {
-      // Arming a pull request reruns CI only to hand validation to the queue.
+      // A queue entry retains the evaluated run's identity for this head.
       label: "pull-request-enqueued",
       options: {
         event: EVENT.pullRequest,
@@ -2073,6 +2218,7 @@ test("the required-jobs record names every workflow job once and carries the ver
     verdict: "success",
     basis: "pass_through",
     pass_through_reason: "enqueued",
+    reused_from_run_id: 100,
   });
 });
 
@@ -3745,6 +3891,16 @@ test("an API image step that tees its log keeps the command's exit status", () =
 const annotateStep = jobSteps(apiImageJob).find(
   ({ name }) => name === "Annotate image failure",
 );
+const annotateScript = readFileSync(
+  new URL("annotate-api-image-failure.sh", import.meta.url),
+  "utf-8",
+);
+
+test("the API image job annotates failures through its script", () => {
+  expect(annotateStep?.run?.trim()).toBe(
+    "bash scripts/annotate-api-image-failure.sh",
+  );
+});
 
 const annotate = (logs: { build?: string; smoke?: string }) => {
   const runnerTemp = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-annotate-"));
@@ -3762,7 +3918,7 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
       );
     }
     const run = Bun.spawnSync({
-      cmd: ["bash", "-e", "-c", annotateStep?.run ?? "exit 1"],
+      cmd: ["bash", "-e", "-c", annotateScript],
       env: {
         PATH: process.env["PATH"] ?? "",
         PLATFORM: "linux/arm64",
@@ -5656,51 +5812,80 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
   );
 }, 30_000);
 
-test("drawn property samples are the inputs fc.assert would run", () => {
-  // Both sides share one explicit seed: the exploratory tier leaves the
-  // default seed unset, which would give each draw an independent one.
+describe("drawn property samples match the shared runner", () => {
+  // Compare both consumers under one seed, including the exploratory tier.
   const seed = 20_261_003;
   const drawSamples = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) =>
     drawPropertySamples(arbitrary, { numRuns, seed }).map(({ value }) => value);
-  const draws = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) => {
+
+  type DrawsOptions<T> = {
+    id: string;
+    arbitrary: fc.Arbitrary<T>;
+    numRuns: number;
+  };
+  const expectDraws = <T>({ id, arbitrary, numRuns }: DrawsOptions<T>) => {
     const asserted: T[] = [];
-    fc.assert(
+    assertProperty(
+      id,
       fc.property(arbitrary, (value) => {
         asserted.push(value);
       }),
-      propertyConfig({ numRuns, seed }),
+      { numRuns, seed },
     );
-    return asserted;
+    expect(drawSamples(arbitrary, numRuns)).toEqual(asserted);
   };
-  expect(drawSamples(releaseExtraFiles, 30)).toEqual(
-    draws(releaseExtraFiles, 30),
-  );
-  expect(drawSamples(unrelatedDocNames, 30)).toEqual(
-    draws(unrelatedDocNames, 30),
-  );
-  expect(drawSamples(apiSourceSiblings, 10)).toEqual(
-    draws(apiSourceSiblings, 10),
-  );
-  expect(drawSamples(failedGatedJobs, 100)).toEqual(
-    draws(failedGatedJobs, 100),
-  );
-  expect(drawSamples(unsuccessfulFullDepthJobs, 100)).toEqual(
-    draws(unsuccessfulFullDepthJobs, 100),
-  );
-  // A tuple draws what the same arbitraries passed to fc.property separately do.
-  const separate: unknown[] = [];
-  fc.assert(
-    fc.property(
-      fc.constantFrom(...gatedJobs),
-      fc.constantFrom("failure", "timed_out", ""),
-      fc.constantFrom(...Object.values(EVENT)),
-      (job, result, event) => {
-        separate.push([job, result, event]);
-      },
-    ),
-    propertyConfig({ numRuns: 100, seed }),
-  );
-  expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
+
+  test("release files", () => {
+    expectDraws({
+      id: "release files",
+      arbitrary: releaseExtraFiles,
+      numRuns: 30,
+    });
+  });
+  test("document names", () => {
+    expectDraws({
+      id: "document names",
+      arbitrary: unrelatedDocNames,
+      numRuns: 30,
+    });
+  });
+  test("API siblings", () => {
+    expectDraws({
+      id: "API siblings",
+      arbitrary: apiSourceSiblings,
+      numRuns: 10,
+    });
+  });
+  test("failed jobs", () => {
+    expectDraws({
+      id: "failed jobs",
+      arbitrary: failedGatedJobs,
+      numRuns: 100,
+    });
+  });
+  test("full-depth jobs", () => {
+    expectDraws({
+      id: "full-depth jobs",
+      arbitrary: unsuccessfulFullDepthJobs,
+      numRuns: 100,
+    });
+  });
+  test("tuple arguments", () => {
+    const separate: unknown[] = [];
+    assertProperty(
+      "tuple arguments",
+      fc.property(
+        fc.constantFrom(...gatedJobs),
+        fc.constantFrom("failure", "timed_out", ""),
+        fc.constantFrom(...Object.values(EVENT)),
+        (job, result, event) => {
+          separate.push([job, result, event]);
+        },
+      ),
+      { numRuns: 100, seed },
+    );
+    expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
+  });
 });
 
 test("image scopes remain planned while pull requests skip execution", () => {
@@ -6918,8 +7103,8 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   const runner = jobSteps(ciJobs["ci-tests"]).find(
     (step) => step.name === "Test API or rest",
   );
-  expect(runner?.env?.["API_TEST_FILES"]).toBe(
-    `\${{ needs.ci-plan.outputs.api_test_files }}`,
+  expect(runner?.env?.["API_TEST_FILES_ENCODED"]).toBe(
+    `\${{ needs.ci-plan.outputs.api_test_files_encoded }}`,
   );
   expect(runner?.env?.["TEST_SCOPE"]).toBe(
     `\${{ needs.ci-plan.outputs.test_scope }}`,
@@ -6983,7 +7168,7 @@ test("a crashed API planner widens the real workflow outputs", () => {
       'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
     );
     expect(values).toContain("api_test_shards=6");
-    expect(values).toContain("api_test_files=\n");
+    expect(values).toContain("api_test_files_encoded=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -7260,7 +7445,7 @@ test("nightly full tests use the shared full-depth shard plan and selection ente
     (step) => step.name === "Plan full test shards",
   );
   expect(planner?.run).toContain("scripts/api-test-shard-plan.ts");
-  expect(nightly).not.toContain("API_TEST_FILES:");
+  expect(nightly).not.toContain("API_TEST_FILES_ENCODED:");
   const turbo = readFileSync(
     new URL("../turbo.json", import.meta.url),
     "utf-8",
@@ -7275,7 +7460,7 @@ test("nightly full tests use the shared full-depth shard plan and selection ente
     Bun.JSONC.parse(turbo),
   ).tasks;
   expect(tasks["@stll/api#test"]?.env).toEqual(
-    expect.arrayContaining(["API_TEST_SHARD", "API_TEST_FILES"]),
+    expect.arrayContaining(["API_TEST_SHARD", "API_TEST_FILES_ENCODED"]),
   );
 });
 
@@ -7346,7 +7531,7 @@ test("API planning only loads dependencies after installation and emits install-
       const selectedFiles = nodePath.join(directory, "api-test-files");
       writeFileSync(
         selectedFiles,
-        selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+        selected ? encodePlanFileList(["src/a.test.ts", "src/b.test.ts"]) : "",
       );
       const result = Bun.spawnSync(
         ["bash", "-e", "-c", plan?.run ?? panic("Missing output planner")],
@@ -7373,7 +7558,7 @@ test("API planning only loads dependencies after installation and emits install-
         expect(values).toContain(`ci_tests_required=${selectedRequired}\n`);
         expect(values).toContain(`ci_tests_matrix=${String(selected)}\n`);
         expect(values).toContain(
-          "api_test_files<<API_TEST_FILES_END\nsrc/a.test.ts\nsrc/b.test.ts\nAPI_TEST_FILES_END\n",
+          `api_test_files_encoded=${encodePlanFileList(["src/a.test.ts", "src/b.test.ts"])}\n`,
         );
       } else if (packages !== "true") {
         expect(values).toContain("ci_tests_required=false\n");
@@ -7399,7 +7584,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
     (step) => step.name === "Run Postgres-gated API suites",
   );
   const runnerSelection =
-    runner?.env?.["CI_POSTGRES_TEST_SELECTION"] ??
+    runner?.env?.["CI_POSTGRES_TEST_SELECTION_ENCODED"] ??
     panic("Missing Postgres selection wiring");
   const jobCondition = jobIf(ciJobs["postgres-service-suites"]);
   const plan = v.parse(
@@ -7410,7 +7595,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
     plan.outputs["postgres_service_suites_required"] ??
     panic("Missing Postgres service eligibility output");
   for (const mode of ["selected", "all", "none"] as const) {
-    const selection = JSON.stringify(
+    const selection = encodePostgresTestSelection(
       mode === "selected"
         ? { mode, files: ["src/synthetic.db.test.ts"] }
         : { mode },
@@ -7441,7 +7626,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           "needs.ci-plan.outputs.suite_depth":
             event === EVENT.pullRequest ? "fast" : "full",
           "needs.ci-plan.outputs.postgres_pr_required": String(enabled),
-          "needs.ci-plan.outputs.postgres_test_selection": selection,
+          "needs.ci-plan.outputs.postgres_test_selection_encoded": selection,
         };
         const eligible = evaluate(eligibility, {
           values: {
@@ -7492,20 +7677,20 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
           }),
         ).toBe(event !== EVENT.pullRequest || prSwitch === "on");
         expect(evaluate(runnerSelection, { values })).toBe(
-          event === EVENT.mergeGroup || enabled ? selection : '{"mode":"all"}',
+          event === EVENT.mergeGroup || enabled ? selection : "",
         );
         expect(
           evaluate(runnerSelection, {
             values: {
               ...values,
-              "needs.ci-plan.outputs.postgres_test_selection": "",
+              "needs.ci-plan.outputs.postgres_test_selection_encoded": "",
             },
           }),
-        ).toBe('{"mode":"all"}');
+        ).toBe("");
       }
     }
   }
-  expect(planner?.run).toContain('postgres_test_selection={"mode":"all"}');
+  expect(planner?.run).toContain("echo 'postgres_test_selection_encoded='");
   // The opt-in requires the suites on the armed run; an unarmed push may
   // skip them with the other queue-only suites.
   for (const armed of [true, false]) {
@@ -7553,7 +7738,7 @@ bun() {
   printf '%s\\n' "$*" >> "$TRACE"
   if [[ "$*" == "$FAILED_COMMAND" ]]; then return 1; fi
   if [[ "$*" == scripts/ci-postgres-test-plan.ts ]]; then
-    printf '%s\\n' 'postgres_test_selection={"mode":"selected","files":["src/db.test.ts"]}' >> "$GITHUB_OUTPUT"
+    printf '%s\\n' 'postgres_test_selection_encoded=selected-fixture' >> "$GITHUB_OUTPUT"
   fi
 }
 ${planner?.run ?? panic("Missing Postgres planner")}`,
@@ -7575,7 +7760,9 @@ ${planner?.run ?? panic("Missing Postgres planner")}`,
           : commands.slice(0, commands.indexOf(failedCommand) + 1),
       );
       expect(readFileSync(output, "utf-8")).toContain(
-        failedCommand === "" ? '"mode":"selected"' : '"mode":"all"',
+        failedCommand === ""
+          ? "postgres_test_selection_encoded=selected-fixture"
+          : "postgres_test_selection_encoded=\n",
       );
     }
   } finally {
@@ -7618,8 +7805,8 @@ test("full Postgres failures trigger selector replay only on main-heavy", () => 
   );
   expect(summary?.run).toContain("GITHUB_STEP_SUMMARY");
   expect(summary?.run).toContain('"full"');
-  expect(summary?.env?.["SELECTION"]).toContain(
-    "steps.postgres-test-plan.outputs.postgres_test_selection",
+  expect(summary?.env?.["CI_POSTGRES_TEST_SELECTION_ENCODED"]).toContain(
+    "steps.postgres-test-plan.outputs.postgres_test_selection_encoded",
   );
   expect(summary?.env?.["REASON"]).toContain(
     "steps.postgres-test-plan.outputs.postgres_selection_reason",

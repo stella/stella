@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 
 import { Result, TaggedError } from "better-result";
@@ -87,6 +87,11 @@ const writeStoredScale = (
       }),
   });
 
+type ChosenReaderTextScale = {
+  scale: number;
+  storage: ReaderTextScaleStorage | null;
+};
+
 /**
  * How large this browser reads legal text, and how to change it. One size for
  * every reader in the pane: a lawyer who sizes a decision to their screen has
@@ -100,20 +105,26 @@ export const useReaderTextScale = ({
   storage = null,
 }: ReaderTextScaleOptions = {}): ReaderTextScale => {
   // Hosts supply storage after hydration so server and client markup agree.
-  const [storedScale, setStoredScale] = useState<number | null>(null);
-  const [readFrom, setReadFrom] = useState<ReaderTextScaleStorage | null>(null);
-  if (storage !== null && readFrom !== storage) {
-    setReadFrom(storage);
+  // A choice belongs to the storage it was made under: a newly supplied
+  // storage shows what it holds until the reader zooms again.
+  const [chosen, setChosen] = useState<ChosenReaderTextScale | null>(null);
+  const storedScale = useMemo(() => {
+    if (storage === null) {
+      return null;
+    }
     const read = readStoredScale(storage);
     if (Result.isError(read)) {
       analytics?.captureError(read.error, "read");
     }
-    setStoredScale(read.unwrapOr(READER_TEXT_SCALE_DEFAULT));
-  }
+    return read.unwrapOr(READER_TEXT_SCALE_DEFAULT);
+  }, [analytics, storage]);
 
-  const scale = storedScale ?? READER_TEXT_SCALE_DEFAULT;
+  const scale =
+    chosen?.storage === storage
+      ? chosen.scale
+      : (storedScale ?? READER_TEXT_SCALE_DEFAULT);
   const applyScale = (next: number) => {
-    setStoredScale(next);
+    setChosen({ scale: next, storage });
     if (storage === null) {
       return;
     }

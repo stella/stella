@@ -44,6 +44,7 @@ import {
   installPgliteChatTurnRunIdLookup,
   installPgliteCitationDoctrineRls,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteCorrespondenceSources,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
   installPgliteDecisionDocketFilingYear,
@@ -54,6 +55,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
+  installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
@@ -339,20 +341,16 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set([
-    "case_law_decisions.docket_family_key",
-    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+  new Set(
+    [DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
-  ]);
+  );
 
 const decisionColumnNames = new Set(
   Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
 );
-const decisionRelationNames = new Set<string>([
-  getTableName(schema.caseLawDecisions),
-  ...CASE_LAW_DECISION_VIEWS,
-]);
+const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
 const grantedPublicLawColumns = (
   relation: string,
@@ -825,6 +823,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(
     sql.raw(
+      "CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
+  await db.execute(
+    sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
     ),
   );
@@ -891,6 +894,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
+  await installPgliteOrganizationDeleteOwnerGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
@@ -900,6 +904,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
+  });
 
   return client;
 };

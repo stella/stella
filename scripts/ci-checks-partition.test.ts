@@ -1177,6 +1177,26 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Bridge-version guard" &&
+    fields.if?.includes("github.event_name == 'pull_request'") &&
+    (!v.is(v.record(v.string(), v.unknown()), fields.env) ||
+      fields.env["BRIDGE_BASE_SHA"] === undefined)
+  ) {
+    const env = v.is(v.record(v.string(), v.unknown()), fields.env)
+      ? fields.env
+      : {};
+    // The event gate moved to the root-check plan, which selects the guard
+    // only for pull requests and merge groups.
+    const { if: _eventGate, ...unconditional } = step;
+    return {
+      ...unconditional,
+      env: {
+        ...env,
+        BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+      },
+    };
+  }
   if (step.name === "MCP app derived outputs guard") {
     let run = v.parse(v.string(), fields.run);
     if (run.includes("bun scripts/check-mcp-app-outputs.ts\n")) {

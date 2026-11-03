@@ -180,6 +180,9 @@ const cliLogin = async (browser: Browser) => {
         redirectUri: "http://127.0.0.1:43123/callback",
         waitForCallback: async () =>
           delivered ?? { kind: "error", error: "no_callback" },
+        finish: async () => {
+          // The test browser reads no finish page.
+        },
         close: () => {},
       }),
     },
@@ -337,7 +340,7 @@ describe("stella CLI client document", () => {
     expect(details.status).toBe(200);
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      client: { type: "verified", brand: "stella" },
+      client: { type: "verified", brand: "stella_cli" },
     });
   });
 
@@ -370,7 +373,10 @@ describe("stella CLI client document", () => {
     );
     expect(details.status).toBe(200);
     expect(await details.json()).toMatchObject({
-      client: { type: "unverified", name: "stella-cli" },
+      client: {
+        type: "unverified",
+        name: buildCliClientMetadataDocument(CLI_CLIENT_ID).client_name,
+      },
     });
   });
 

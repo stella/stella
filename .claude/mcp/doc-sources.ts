@@ -147,11 +147,14 @@ export const DOC_SOURCES = {
       "@expo/ui",
       "@expo/vector-icons",
       "expo",
+      "expo-asset",
+      "expo-audio",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
       "expo-document-picker",
       "expo-doctor",
+      "expo-file-system",
       "expo-font",
       "expo-glass-effect",
       "expo-notifications",
@@ -684,6 +687,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "use-debounce",
     ["https://raw.githubusercontent.com/xnimorz/use-debounce/HEAD/llms.txt"],
+  ],
+  [
+    "icu-minify",
+    [
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/llms.txt",
+      "https://raw.githubusercontent.com/amannn/next-intl/HEAD/packages/icu-minify/llms.txt",
+    ],
   ],
   [
     "use-intl",

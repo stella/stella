@@ -1028,6 +1028,10 @@ fn remove_file_if_present(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use chrono::{TimeZone, Utc};

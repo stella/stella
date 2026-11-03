@@ -63,6 +63,7 @@ import {
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
+  disabledFeatureCapabilityIds,
   featureOmittedCapabilityIds,
   invokedCapabilityConsumesServices,
 } from "@/api/mcp/capability-tools";
@@ -948,22 +949,19 @@ const monitorLegacyStream = ({
     await teardown();
   };
   const abortExchange = () => {
-    detached(
-      (async () => {
-        try {
-          await reader.cancel(request.signal.reason);
-        } catch (error) {
-          reportLegacyTransportError(error, {
-            captureError,
-            mode,
-            operation: "cancel_stream",
-          });
-        } finally {
-          await completeExchange();
-        }
-      })(),
-      "mcp.legacy-stream-teardown",
-    );
+    detached(async () => {
+      try {
+        await reader.cancel(request.signal.reason);
+      } catch (error) {
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "cancel_stream",
+        });
+      } finally {
+        await completeExchange();
+      }
+    }, "mcp.legacy-stream-teardown");
   };
   request.signal.addEventListener("abort", abortExchange, {
     once: true,
@@ -1316,6 +1314,21 @@ export const createMcpHttpRequestHandler = ({
         _meta: {
           featureAccess: {
             capabilities: await accessibleFeatureCapabilityIds(context),
+            disabled: {
+              capabilities: await disabledFeatureCapabilityIds(context),
+              tools: listStaticMcpToolDefinitions(mode)
+                .filter(
+                  (definition) =>
+                    !isMcpDescriptorFeatureEnabled({
+                      context,
+                      kind: "tools",
+                      id: definition.name,
+                      featureId: definition.featureId,
+                    }),
+                )
+                .map(({ name }) => name)
+                .toSorted(),
+            },
             tools: tools
               .filter((tool) => typeof tool._meta?.["featureId"] === "string")
               .map(({ name }) => name),

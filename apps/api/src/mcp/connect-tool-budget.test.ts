@@ -9,9 +9,12 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 
 import committedWeights from "../../mcp-connect-tool-weights.json" with { type: "json" };
 
-// Full contact writes expose their shared validation and nested input readers.
+// Full contact writes expose their shared validation and nested input readers,
+// the template list takes a limit and cursor like every other list, and the
+// reader annotation list says how it reports passages it can no longer place,
+// and the audit log takes a performer filter.
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 132_997;
+const TOTAL_CONNECT_CHAR_BUDGET = 133_071;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

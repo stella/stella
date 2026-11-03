@@ -14,6 +14,12 @@ const fn default_persisted_file_type() -> DesktopEditFileType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedDesktopSession {
+  #[serde(default)]
+  pub editor_state: crate::document_sessions::EditorState,
+  #[serde(default)]
+  pub account_owner: Option<crate::document_sessions::AccountOwner>,
+  #[serde(default)]
+  pub download_sha: Option<String>,
   pub api_base_url: String,
   pub base_version_number: i64,
   pub entity_id: String,
@@ -39,6 +45,8 @@ pub struct PersistedDesktopSession {
 #[serde(rename_all = "camelCase")]
 pub struct SessionStorePayload {
   #[serde(default)]
+  pub retired_sessions: Vec<crate::document_sessions::RetiredSession>,
+  #[serde(default)]
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   #[serde(default)]
@@ -58,6 +66,7 @@ pub enum StoreLoadIssue {
 }
 
 pub struct LoadedSessionStore {
+  pub retired_sessions: Vec<crate::document_sessions::RetiredSession>,
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub linked_account_web_origin: Option<String>,
@@ -70,6 +79,7 @@ pub struct LoadedSessionStore {
 
 pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
   let empty = LoadedSessionStore {
+    retired_sessions: Vec::new(),
     cleanup_paths: Vec::new(),
     linked_account: None,
     linked_account_web_origin: None,
@@ -93,6 +103,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
 
   match serde_json::from_str::<SessionStorePayload>(&raw) {
     Ok(payload) => LoadedSessionStore {
+      retired_sessions: payload.retired_sessions,
       cleanup_paths: payload.cleanup_paths,
       linked_account: payload.linked_account,
       linked_account_web_origin: payload.linked_account_web_origin,
@@ -116,47 +127,71 @@ pub async fn persist_session_store(
   store_path: &Path,
   payload: &SessionStorePayload,
 ) -> Result<(), String> {
-  if let Some(parent) = store_path.parent() {
-    fs::create_dir_all(parent)
-      .await
-      .map_err(|e| format!("mkdir failed: {e}"))?;
-  }
-
-  let json = serde_json::to_string_pretty(payload)
-    .map_err(|e| format!("serialize failed: {e}"))?;
-
-  let temp_path = format!(
-    "{}.{}.{}.tmp",
-    store_path.display(),
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  );
-
-  fs::write(&temp_path, &json)
-    .await
-    .map_err(|e| format!("write failed: {e}"))?;
-
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    let _ =
-      fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o600)).await;
-  }
-
-  fs::rename(&temp_path, store_path)
-    .await
-    .map_err(|e| format!("rename failed: {e}"))?;
-
-  Ok(())
+  let path = store_path.to_path_buf();
+  let json = serde_json::to_vec_pretty(payload)
+    .map_err(|error| format!("serialize failed: {error}"))?;
+  tokio::task::spawn_blocking(move || {
+    if let Some(parent) = path.parent() {
+      crate::local_store::create_private_dir(parent)
+        .map_err(|error| format!("mkdir failed: {error}"))?;
+    }
+    crate::local_store::write_private_atomic(&path, &json)
+  })
+  .await
+  .map_err(|error| format!("store task failed: {error}"))?
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
   use std::path::PathBuf;
 
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn local_file_creation_keeps_session_state() {
+    use std::os::unix::fs::PermissionsExt;
+    if crate::local_store::local_file_creation_child(
+      "session_store::tests::local_file_creation_keeps_session_state",
+    ) {
+      return;
+    }
+    let path = unique_path("local-file");
+    persist_session_store(&path, &make_payload()).await.unwrap();
+    assert_eq!(
+      std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+      0o600
+    );
+    assert_eq!(
+      std::fs::metadata(path.parent().unwrap())
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777,
+      0o700
+    );
+    assert_eq!(
+      std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+      1
+    );
+    let blocked = path.join("sessions.json");
+    assert!(
+      persist_session_store(&blocked, &make_payload())
+        .await
+        .unwrap_err()
+        .contains("mkdir failed")
+    );
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
   fn make_session() -> PersistedDesktopSession {
     PersistedDesktopSession {
+      editor_state: crate::document_sessions::EditorState::Unknown,
+      account_owner: None,
+      download_sha: None,
       api_base_url: "https://api.example.com".into(),
       base_version_number: 1,
       entity_id: "ent-1".into(),
@@ -179,6 +214,7 @@ mod tests {
 
   fn make_payload() -> SessionStorePayload {
     SessionStorePayload {
+      retired_sessions: Vec::new(),
       cleanup_paths: vec!["/tmp/old.docx".into()],
       linked_account: Some(LinkedAccountSnapshot {
         email: "user@example.com".into(),
@@ -198,11 +234,10 @@ mod tests {
   }
 
   fn unique_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-      "stella-test-{}-{}.json",
-      name,
-      uuid::Uuid::new_v4()
-    ))
+    let directory =
+      std::env::temp_dir().join(format!("stella-test-{name}-{}", uuid::Uuid::new_v4()));
+    crate::local_store::create_private_dir(&directory).unwrap();
+    directory.join("sessions.json")
   }
 
   // -- Serde round-trip --
@@ -298,6 +333,7 @@ mod tests {
     persist_session_store(
       &path,
       &SessionStorePayload {
+        retired_sessions: Vec::new(),
         cleanup_paths: vec!["/tmp/cleanup.docx".into()],
         linked_account: linked,
         linked_account_web_origin: Some("https://selfhost.example".into()),

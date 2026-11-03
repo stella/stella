@@ -26,14 +26,17 @@ const durationMs = (value: unknown): number | undefined => {
     return undefined;
   }
   const match = DURATION.exec(value.trim());
-  return match?.[1] === undefined
-    ? undefined
-    : Math.ceil(Number(match[1]) * 1000);
+  return match?.[1] !== undefined
+    ? Math.ceil(Number(match[1]) * 1000)
+    : undefined;
 };
 
 const proseDelayMs = (text: string): number | undefined => {
   const match = PROSE_DELAY.exec(text);
-  if (match?.[1] === undefined || match[2] === undefined) {
+  if (match === null) {
+    return undefined;
+  }
+  if (match[1] === undefined || match[2] === undefined) {
     return undefined;
   }
   const amount = Number(match[1]);

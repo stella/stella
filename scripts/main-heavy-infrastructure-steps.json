@@ -168,18 +168,17 @@
       "Checkout",
       "Configure flaky-test quarantine",
       "Download generated sources",
-      "Fetch and scan engine published export map guard",
       "Generated API type review diff",
       "Generated route tree review diff",
       "Install dependencies",
       "Load merge base measurement",
       "MCP app derived outputs guard",
-      "MCP kit published export map guard",
       "Prepare environment",
       "Rebuild every npm package to verify identical tarball bytes",
       "Restore generated sources",
       "Route tree drift guard",
       "Setup Bun",
+      "Standalone package published export map guard",
       "Turbo remote cache",
       "Typecheck-cost baseline guard",
       "Upload generated API type review diff",
@@ -518,6 +517,7 @@
       "Login to GitHub Container Registry",
       "Pull the promoted release's API image",
       "Rehearse the upgrade from the promoted release at scale",
+      "Remove workflow tooling",
       "Resolve the promoted release",
       "Setup Bun"
     ],
@@ -1097,10 +1097,8 @@
       "Setup Bun for the failure digest",
       "Upload failure digest",
       "Upload required-jobs record",
-      "Upload required-violations record",
       "Write CI outcome inputs",
-      "Write required-jobs record",
-      "Write required-violations record"
+      "Write required-jobs record"
     ],
     "steps": ["Fetch GitHub API tooling", "Post Fetch GitHub API tooling"]
   }

@@ -5,6 +5,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -21,6 +22,8 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
+import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
@@ -41,6 +44,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
+import { INVOICE_ISSUE_ERROR_KEYS } from "@/lib/errors/invoice-issue";
 import {
   ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
@@ -238,12 +242,20 @@ const CODE_ERROR_KEYS = {
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
+    "errors.apiCodes.correspondenceSourceChanged",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.organizationDataBoxLimitReached",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
+    "errors.apiCodes.organizationDataBoxesChanged",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",

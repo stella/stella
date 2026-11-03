@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+
 /**
  * A decision per enrolled case-law adapter, built from payloads shaped like
  * the ones its publisher serves.
@@ -17,7 +18,7 @@ import { panic, Result } from "better-result";
  * Each build scopes its publisher fetch replacement to the operation and
  * restores it before returning.
  */
-import * as cheerio from "cheerio";
+import { load } from "@stll/html";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -55,7 +56,7 @@ import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vw
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { buildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { buildCzNssDecision as uncheckedBuildCzNssDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import {
   buildCzRegionalDecision,
   czRegionalAdapter,
@@ -64,7 +65,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { buildCzUsListedRecord } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
@@ -84,12 +85,12 @@ import {
   buildPlDecision,
   normalizeSaosDumpItem,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
-import { assemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { assemblePlKioDecision as uncheckedAssemblePlKioDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import {
-  assemblePlKisDecision,
+  assemblePlKisDecision as uncheckedAssemblePlKisDecision,
   plKisRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { assemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { assemblePlNcourtDecision as uncheckedAssemblePlNcourtDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
@@ -109,7 +110,7 @@ import {
   plUodoRawPartsOf,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import {
-  assemblePlUokikDecision,
+  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   assemblePlUokikRuling,
   parsePlUokikDetail,
   PL_UOKIK_FILE_STATUS,
@@ -142,8 +143,17 @@ import {
   sourceBinaryRef,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
+const assemblePlKisDecision = guardParser(uncheckedAssemblePlKisDecision);
+const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
+
+const assemblePlKioDecision = guardParser(uncheckedAssemblePlKioDecision);
+const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
 
 /** What a guard has to drive one adapter with. */
 export type EnrolledAdapterFixture = {
@@ -2679,7 +2689,7 @@ const PL_UOKIK_FILELESS_DETAIL = new URL(
 
 /** The rows of a captured page's table other than the back link, as markup. */
 const plUokikTableRows = (html: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return $("div.ck-content table")
     .first()
     .find("tr")

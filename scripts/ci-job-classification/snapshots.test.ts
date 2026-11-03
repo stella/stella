@@ -84,6 +84,8 @@ const createFixture = (
   for (const file of callers) {
     write(root, file, caller(oldSha));
   }
+  // The generator records this manifest as an input; its content is unused.
+  write(root, ".github/global-rule-inputs.json", "{}\n");
   write(
     root,
     ".github/ci-job-classification-sources.json",
@@ -220,6 +222,8 @@ test("a bump of one of two workflows from one source moves only that job's decis
     );
   write(root, ".github/workflows/caller.yml", caller(oldSha));
   write(root, ".github/workflows/other.yml", lintCaller(oldSha));
+  // The generator records this manifest as an input; its content is unused.
+  write(root, ".github/global-rule-inputs.json", "{}\n");
   write(
     root,
     ".github/ci-job-classification-sources.json",
@@ -362,6 +366,8 @@ const createConvergingFixture = (
     origin: { type: "git", owner: "acme", repo: "shared", sha },
     documents: { ".github/workflows/shared.yml": reusable() },
   });
+  // The generator records this manifest as an input; its content is unused.
+  write(root, ".github/global-rule-inputs.json", "{}\n");
   write(
     root,
     ".github/ci-job-classification-sources.json",

@@ -17,6 +17,7 @@ import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
+import { dataBoxSettingsScalingScenarios } from "./data-box-settings";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { dictationScalingScenario } from "./dictation";
@@ -33,6 +34,7 @@ import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
+import { organizationAuditExportScalingScenario } from "./organization-audit-export";
 import { organizationCreateScalingScenario } from "./organization-create";
 import { organizationSlugScalingScenario } from "./organization-slug";
 import {
@@ -63,6 +65,7 @@ const measuredApiScenarios = [
   accountExportDownloadScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
   mobileClientMetadataScalingScenario,
@@ -74,6 +77,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   organizationSlugScalingScenario,
+  organizationAuditExportScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

@@ -5,6 +5,7 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   AUDIT_CHANGES_STATUS,
+  AUDIT_PERFORMER_FILTER,
   AUDIT_RESOURCE_TYPE,
 } from "@stll/api-contract/audit-log";
 import {
@@ -42,6 +43,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpToolDefinition,
@@ -52,15 +58,12 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
   legalCitationLinkFields,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
@@ -127,9 +130,7 @@ const widenDateOnlyBound = (bound: string, edge: "start" | "end"): string =>
 const listAuditLogArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      matter_id: v.optional(
-        uuidInputSchema("Only entries scoped to this matter."),
-      ),
+      matter_id: v.optional(uuidInputSchema("Matter ID")),
       action: v.optional(
         v.pipe(v.string(), v.minLength(1), v.description("Audit action")),
       ),
@@ -145,6 +146,12 @@ const listAuditLogArgsSchema = nullAsAbsent(
       ),
       user_id: v.optional(
         v.pipe(v.string(), v.minLength(1), v.description("Actor user id")),
+      ),
+      performer: v.optional(
+        v.pipe(
+          v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
+          v.description("Members and their agents, or services"),
+        ),
       ),
       from: v.optional(
         v.pipe(
@@ -167,12 +174,12 @@ const listAuditLogArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.auditLogPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max entries to return"),
         ),
       ),
       cursor: cursorInput({
-        description: "Next-page cursor from list_audit_log",
+        description: "Next-page cursor",
       }),
     }),
     v.forward(
@@ -197,8 +204,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   },
   description:
     "Read organization audits newest first. Change detail is null unless " +
-    'changesStatus is "visible". Filter and paginate with the fields below. ' +
-    "Requires audit-log access.",
+    'changesStatus is "visible". Requires audit-log access.',
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
@@ -654,6 +660,7 @@ const handleListAuditLogTool: McpToolHandler<
     ...(input.user_id === undefined
       ? {}
       : { userId: brandPersistedUserId(input.user_id) }),
+    ...(input.performer === undefined ? {} : { performer: input.performer }),
     ...(input.from === undefined
       ? {}
       : { from: widenDateOnlyBound(input.from, "start") }),
