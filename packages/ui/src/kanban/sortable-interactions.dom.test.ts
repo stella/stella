@@ -6,13 +6,17 @@ import type {
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import {
   getKanbanKeyboardTargetState,
   kanbanKeyboardCoordinates,
 } from "./sortable-interactions.logic";
 
 GlobalRegistrator.register();
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
 
 test("retries the pending virtual row after navigating away from the dragged item", () => {
   const active = {
