@@ -294,14 +294,16 @@ const GenericExternalReferencePanel = ({
   const storedSource = useExternalSourceStore((state) =>
     safeHref === undefined ? undefined : state.sourcesByUrl[safeHref],
   );
+  // No stored source counts as no stored text.
   const shouldFetchPreview =
-    canPreview &&
-    tab.text === undefined &&
-    storedSource?.text === undefined &&
-    (tab.connectorSlug !== undefined ||
-      tab.sourceToolName !== undefined ||
-      storedSource?.connectorSlug !== undefined ||
-      storedSource?.sourceToolName !== undefined);
+    storedSource?.text !== undefined
+      ? false
+      : canPreview &&
+        tab.text === undefined &&
+        (tab.connectorSlug !== undefined ||
+          tab.sourceToolName !== undefined ||
+          storedSource?.connectorSlug !== undefined ||
+          storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
   const fetchedPreviewQuery = useQuery({
     ...externalReferencePreviewOptions({

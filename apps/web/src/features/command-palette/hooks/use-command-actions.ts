@@ -11,7 +11,7 @@ import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 import { queryView } from "@/lib/query-view.logic";
@@ -45,7 +45,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   const t = useTranslations();
   const { capabilities, role } = useActionCapabilities("ai");
   const user = useAuthenticatedUser();
-  const previewEnabled = useTimeBillingPreviewEnabled();
+  const previewEnabled = useTimeBillingChromeEnabled();
   const canCreateTimeEntry = usePermissions({ timeEntry: ["create"] });
   const canLogTime = previewEnabled && canCreateTimeEntry;
   const openQuickEntry = useQuickEntryStore((state) => state.openDialog);

@@ -1642,31 +1642,11 @@
   {
     "schema": "public",
     "table": "case_law_decisions",
-    "policy": "case_law_reader_access",
-    "command": "SELECT",
-    "roles": ["stella_caselaw_reader"],
-    "permissive": "PERMISSIVE",
-    "using": "true",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "case_law_decisions",
     "policy": "corpus_sample_reader_read",
     "command": "SELECT",
     "roles": ["stella_corpus_sample_reader"],
     "permissive": "PERMISSIVE",
     "using": "(redacted_at IS NULL)",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "case_law_decisions",
-    "policy": "public_law_reader_access",
-    "command": "SELECT",
-    "roles": ["stella_public_law_reader"],
-    "permissive": "PERMISSIVE",
-    "using": "true",
     "withCheck": null
   },
   {
@@ -6318,6 +6298,26 @@
     "permissive": "PERMISSIVE",
     "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_checkout_claims'::regclass)::oid)))",
     "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_checkout_claims'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "hosted_customer_erasures",
+    "policy": "hosted_customer_erasures_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "hosted_customer_erasures",
+    "policy": "hosted_customer_erasures_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_customer_erasures'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_customer_erasures'::regclass)::oid)))"
   },
   {
     "schema": "public",

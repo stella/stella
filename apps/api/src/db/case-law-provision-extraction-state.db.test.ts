@@ -21,7 +21,7 @@ import fc from "fast-check";
 import { readFileSync } from "node:fs";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -54,9 +54,6 @@ beforeAll(async () => {
   `);
 }, propertyTestTimeout(120_000));
 afterAll(async () => await client.close());
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const rows = async (query: SQL): Promise<Record<string, unknown>[]> =>
   (await db.execute(query)).rows;
@@ -416,7 +413,8 @@ describe("input digest", () => {
    * and TimeZone a session may carry.
    */
   test("is injective on its inputs and independent of session settings", async () => {
-    await fc.assert(
+    await assertProperty(
+      "is injective on its inputs and independent of session settings",
       fc.asyncProperty(
         fc.array(inputVariant, { minLength: 2, maxLength: 8 }),
         fc.constantFrom(...SESSION_SETTINGS),
@@ -437,7 +435,7 @@ describe("input digest", () => {
           }
         },
       ),
-      config(40),
+      { numRuns: 40, seed: propertySeed() },
     );
   });
 
@@ -627,7 +625,8 @@ describe("enqueue trigger", () => {
       );
     await setScope("CZE", "sk", "active");
     await setScope("SVK", "cs", "active");
-    await fc.assert(
+    await assertProperty(
+      "makes the state due iff the input digest changed",
       fc.asyncProperty(plans, async (plan) => {
         const id = await insertDecision({ contentHash: null });
         await settle(id);
@@ -653,7 +652,7 @@ describe("enqueue trigger", () => {
         expect(state?.dueAt !== null).toBe(digestChanged);
         expect(state?.digestIsCurrent).toBe(true);
       }),
-      config(60),
+      { numRuns: 60, seed: propertySeed() },
     );
   });
 

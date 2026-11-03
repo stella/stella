@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   applyOmittedOptionalPlaceholderDefaults,
@@ -14,7 +14,8 @@ const fieldPath = fc.stringMatching(/^[a-z][a-z0-9_]{0,15}$/u);
 
 describe("optional template placeholder defaults", () => {
   test("defaults exactly omitted optional placeholders and is idempotent", () => {
-    fc.assert(
+    assertProperty(
+      "defaults exactly omitted optional placeholders and is idempotent",
       fc.property(
         fc.uniqueArray(fieldPath, { maxLength: 30 }),
         fc.dictionary(fieldPath, fc.string()),
@@ -69,7 +70,7 @@ describe("optional template placeholder defaults", () => {
           ).toEqual({ defaultedPaths: [], values: first.values });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -164,7 +165,8 @@ describe("isMissingRequiredFieldValue", () => {
   });
 
   test("property: matches required && user-entered && !aiFillable && (absent || empty)", () => {
-    fc.assert(
+    assertProperty(
+      "property: matches required && user-entered && !aiFillable && (absent || empty)",
       fc.property(
         fieldPath,
         fc.boolean(),
@@ -192,7 +194,7 @@ describe("isMissingRequiredFieldValue", () => {
           expect(isMissingRequiredFieldValue({ field, values })).toBe(expected);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

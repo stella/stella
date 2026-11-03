@@ -48,3 +48,15 @@ test("startup argument scanning stops at the first positional terminator", () =>
   expect(argumentsBeforeTerminator(["update"])).toEqual(["update"]);
   expect(argumentsBeforeTerminator([])).toEqual([]);
 });
+
+test("server overrides preserve command locality", () => {
+  expect(
+    commandNeedsRegistry(["--server", "https://example.com", "matter", "list"]),
+  ).toBe(true);
+  expect(
+    commandNeedsRegistry(["--server=https://example.com", "matter", "list"]),
+  ).toBe(true);
+  expect(
+    commandNeedsRegistry(["--server", "https://example.com", "auth", "whoami"]),
+  ).toBe(false);
+});

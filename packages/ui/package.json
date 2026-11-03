@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.62.0",
+  "version": "0.65.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -57,9 +57,11 @@
     "./context-menu": "./src/components/context-menu.tsx",
     "./document-identity-badge": "./src/components/document-identity-badge.tsx",
     "./document-identity-badge.logic": "./src/components/document-identity-badge.logic.ts",
+    "./court-filter": "./src/components/court-filter.tsx",
     "./court-badge": "./src/components/court-badge.tsx",
     "./ai-label": "./src/components/ai-label.tsx",
     "./control-size": "./src/lib/control-size.ts",
+    "./field-trigger": "./src/lib/field-trigger.ts",
     "./animated-count": "./src/components/animated-count.tsx",
     "./copy-button": "./src/components/copy-button.tsx",
     "./calendar-primitives": "./src/calendar/primitives.tsx",
@@ -148,6 +150,7 @@
       "react-native": "./src/components/loader.native.tsx",
       "default": "./src/components/loader.tsx"
     },
+    "./middle-truncate": "./src/components/middle-truncate.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
@@ -313,6 +316,7 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",

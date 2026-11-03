@@ -5,7 +5,7 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 const normalizationCaseArbitrary = fc.record({
   requiredText: fc.string(),
@@ -17,7 +17,8 @@ const normalizationCaseArbitrary = fc.record({
 test(
   "OpenAI and Mistral remove only provider-synthesized nulls across nested shapes",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "OpenAI and Mistral remove only provider-synthesized nulls across nested shapes",
       fc.asyncProperty(
         normalizationCaseArbitrary,
         async (normalizationCase) => {
@@ -63,7 +64,7 @@ test(
           );
         },
       ),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   },
   propertyTestTimeout(15_000),

@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -90,9 +91,7 @@ if (!databaseUrl || !runPostgresTests) {
         if (deleting) {
           await Promise.allSettled([deleting]);
         }
-        await deletion
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(deletion, [organizationId]);
         await deletion.delete(user).where(eq(user.id, userId));
       }
     });

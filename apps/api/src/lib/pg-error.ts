@@ -75,6 +75,7 @@ export const isTransientPgConnectionError = (error: unknown): boolean =>
   );
 
 export const PG_ERROR = {
+  SYNTAX_ERROR: "42601",
   DEADLOCK_DETECTED: "40P01",
   /** A statement gave up waiting for a lock it asked for with `lock_timeout`. */
   LOCK_NOT_AVAILABLE: "55P03",

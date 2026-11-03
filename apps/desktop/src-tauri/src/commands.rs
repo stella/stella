@@ -57,9 +57,55 @@ pub(crate) fn browser_connect_server(manager: &SessionManager) -> String {
 }
 
 #[tauri::command]
-pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
+pub async fn get_state(
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<AppSnapshot, String> {
+  let crate::account::SessionAccountRead {
+    manager: mut mgr,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  mgr
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(mgr);
+  SessionManager::attach_pending_listeners(state.inner()).await;
   let mgr = state.lock().await;
   Ok(mgr.get_snapshot())
+}
+
+#[tauri::command]
+pub async fn open_recovery_folder(
+  target: crate::types::RecoveryTarget,
+  window: tauri::WebviewWindow,
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<(), String> {
+  if window.label() != "main" {
+    return Err("document recovery is unavailable in this window".into());
+  }
+  let crate::account::SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  manager
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(manager);
+  SessionManager::attach_pending_listeners(state.inner()).await;
+  state.lock().await.open_recovery_folder(target)
 }
 
 #[tauri::command]
@@ -98,7 +144,7 @@ pub async fn open_session_file(
   session_id: String,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
+  let mut mgr = state.lock().await;
   Ok(mgr.open_session_file(&session_id))
 }
 
@@ -291,14 +337,10 @@ pub async fn set_autostart(
   enabled: bool,
   app: tauri::AppHandle,
 ) -> Result<bool, String> {
-  use tauri_plugin_autostart::ManagerExt;
   if enabled {
     crate::autostart::enable(&app)?;
   } else {
-    app
-      .autolaunch()
-      .disable()
-      .map_err(|e| format!("autostart disable failed: {e}"))?;
+    crate::local_store::disable_autostart(&app)?;
   }
   Ok(enabled)
 }

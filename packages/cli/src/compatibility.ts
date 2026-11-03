@@ -17,6 +17,7 @@ import {
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "./generated/api-contract.js";
 import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "./generated/mcp-contract.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
@@ -189,14 +190,20 @@ const validateContract = (
   if (!supportsProtocol(contract.protocol)) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server API protocol ${contract.protocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server API protocol ${contract.protocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        }),
       }),
     );
   }
   if (contract.revision < CLI_MINIMUM_SERVER_REVISION) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server contract revision ${contract.revision} is too old; this CLI requires revision ${CLI_MINIMUM_SERVER_REVISION} or newer.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server contract revision ${contract.revision} is too old; this CLI requires revision ${CLI_MINIMUM_SERVER_REVISION} or newer.`,
+        }),
       }),
     );
   }
@@ -210,7 +217,10 @@ const validateContract = (
   if (missingCapabilities.length > 0) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server contract is missing required ${missingCapabilities.length === 1 ? "capability" : "capabilities"}: ${missingCapabilities.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server contract is missing required ${missingCapabilities.length === 1 ? "capability" : "capabilities"}: ${missingCapabilities.join(", ")}.`,
+        }),
       }),
     );
   }
@@ -228,7 +238,10 @@ const validateLegacyCompatibility = (
   if (!supportsProtocol(compatibility.api_contract_version)) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        }),
       }),
     );
   }
@@ -260,7 +273,10 @@ const validateLegacyCompatibility = (
   ) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `CLI ${packageJson.version} is incompatible with this legacy server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `CLI ${packageJson.version} is incompatible with this legacy server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
+        }),
       }),
     );
   }

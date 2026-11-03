@@ -1819,9 +1819,7 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       await server.stop();
       expect(server.discoveries).toHaveLength(1);
       expect(result.exitCode).toBe(
-        deploymentEvidence === "available"
-          ? EXIT_CODES.ok
-          : EXIT_CODES.validation,
+        deploymentEvidence === "available" ? EXIT_CODES.ok : EXIT_CODES.server,
       );
       expect(server.requests).toHaveLength(
         deploymentEvidence === "available" ? 1 : 0,
@@ -1831,6 +1829,12 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
           method: "tools/call",
           params: { name: "list_time_entries" },
         });
+      } else {
+        expect(result.stderr).toContain("unknown to this server");
+        expect(result.stderr).not.toContain(
+          "not enabled for this organization",
+        );
+        expect(result.stderr).not.toContain("too old");
       }
     },
   );

@@ -47,6 +47,7 @@ import {
   type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import { deleteTestOrganization } from "../helpers/organization";
 import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import {
@@ -62,6 +63,7 @@ import {
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -436,11 +438,10 @@ const declareRouteSmokeGroup = ({
           } finally {
             try {
               if (negativeOrganizationId !== null) {
-                const deleted = await negativeRequest.post(
-                  `${E2E_API_ORIGIN}/api/auth/organization/delete`,
-                  { data: { organizationId: negativeOrganizationId } },
+                await deleteTestOrganization(
+                  negativeRequest,
+                  negativeOrganizationId,
                 );
-                expect(deleted.ok(), await deleted.text()).toBe(true);
               }
             } finally {
               await negativeRequest.dispose();
@@ -503,17 +504,17 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
 }
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
-  const contactId = randomUUID();
+  const contact = v.parse(
+    v.object({ id: v.string() }),
+    await apiPut(request, "/contacts", {
+      type: "person",
+      displayName: `Route Smoke ${randomUUID().slice(0, 8)}`,
+      firstName: "Route",
+      lastName: "Smoke",
+    }),
+  );
 
-  await apiPut(request, "/contacts", {
-    id: contactId,
-    type: "person",
-    displayName: `Route Smoke ${contactId.slice(0, 8)}`,
-    firstName: "Route",
-    lastName: "Smoke",
-  });
-
-  return contactId;
+  return contact.id;
 };
 
 const smokeRoute = async ({
@@ -763,7 +764,7 @@ const renderSmokeRoute = async ({
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
   await expect(page.locator("main").first(), route.template).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 };
 
@@ -828,7 +829,7 @@ const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
 
   await expect(page, `${route.template} reached redirect target`).toHaveURL(
     (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 };
 

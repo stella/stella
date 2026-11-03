@@ -78,6 +78,7 @@ import {
   type TestHandlerContextOverrides,
 } from "@/api/tests/helpers/handler-context";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
@@ -115,7 +116,7 @@ if (!databaseUrl || !runPostgres) {
         await db
           .delete(workspaces)
           .where(inArray(workspaces.organizationId, orgIds));
-        await db.delete(organization).where(inArray(organization.id, orgIds));
+        await deleteOrganizationsForTest(db, orgIds);
       }
       if (userIds.length > 0) {
         await db.delete(user).where(inArray(user.id, userIds));
@@ -760,11 +761,13 @@ if (!databaseUrl || !runPostgres) {
         db.delete(contacts).where(eq(contacts.id, scenario.clientId)),
         "23001",
       );
-      const deleted = await db
-        .delete(organization)
-        .where(eq(organization.id, scenario.orgId))
-        .returning({ id: organization.id });
-      expect(deleted).toEqual([{ id: scenario.orgId }]);
+      await deleteOrganizationsForTest(db, [scenario.orgId]);
+      expect(
+        await db
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, scenario.orgId)),
+      ).toEqual([]);
       expect(
         await db
           .select({ id: contacts.id })

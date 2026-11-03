@@ -232,6 +232,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -302,6 +303,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -532,6 +534,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -609,6 +612,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -677,6 +681,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -739,6 +744,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -874,6 +880,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -898,7 +905,8 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/landing/public/install.sh",
         "$TURBO_ROOT$/apps/landing/public/install.ps1",
-        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts"
+        "$TURBO_ROOT$/packages/api-contract/src/mcp-tool-name.ts",
+        "$TURBO_ROOT$/apps/api/**"
       ]
     },
     "@stll/agent-engine#test": {
@@ -906,7 +914,10 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
-        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
+        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
+        // The compatibility test binds the policy to the pinned releases.
+        "$TURBO_ROOT$/apps/desktop/package.json",
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has
@@ -1055,6 +1066,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -1174,6 +1186,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1256,6 +1269,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1330,11 +1344,13 @@
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
+        "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
         "$TURBO_ROOT$/packages/money/**",
@@ -1404,6 +1420,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1431,6 +1448,7 @@
         "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/transactional/**",
+        "$TURBO_ROOT$/packages/ui/**",
         "$TURBO_ROOT$/packages/user-agent/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "$TURBO_ROOT$/scripts/**",
@@ -1487,6 +1505,7 @@
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1543,9 +1562,12 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
+        "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/errors/**",
+        "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
+        "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
@@ -1636,6 +1658,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
         "$TURBO_ROOT$/scripts/test-timing-ledger.json",
@@ -1658,13 +1681,20 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
     },
+    "@stll/html#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
+    },
     "@stll/api#test": {
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime"
       ],
-      "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
+      "env": [
+        "API_TEST_DURATIONS_HASH",
+        "API_TEST_SHARD",
+        "API_TEST_FILES_ENCODED"
+      ],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
@@ -1674,6 +1704,7 @@
         "API_TEST_DURATIONS_FILE"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/scripts/generate-online-migration-entries.ts",
         "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
@@ -1760,6 +1791,7 @@
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-request.fixture.json",
+        "$TURBO_ROOT$/packages/api-contract/src/desktop-runner.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-edit-file-types.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-registry.ts",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-rpc.gen.ts"

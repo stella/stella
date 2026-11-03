@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Deleting the organization also deletes its activity log. Export the activity log first and download the archive; it stays available to you for one hour.",
+    "auditArchiveDownloadFirst": "Download the activity log archive before you delete the organization.",
+    "auditArchiveFailed": "The activity log archive could not be prepared.",
+    "auditArchiveOutdated": "The activity log has new entries since this archive. Export it again before you delete the organization.",
+    "auditArchiveReady": "The activity log archive is ready. You can now delete the organization.",
+    "auditArchiveRequest": "Export activity log",
+    "auditArchiveRequestNew": "Export activity log again",
+    "auditArchiveWorking": "Preparing the activity log archive…",
     "billingProfiles": "Billing profiles",
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
     "deleteOrganization": "Delete organization",
+    "deleteRefusedAuditArchive": "Export the organization's activity log before you delete the organization.",
     "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.",
     "deleteTypeToConfirm": "Type {name} to confirm.",
     "firmSetup": "Firm setup",
@@ -649,6 +658,8 @@
       "noExpenses": "No approved, unbilled expenses on this matter.",
       "noTime": "No approved, unbilled time on this matter.",
       "noVat": "No VAT",
+      "notReadyDescription": "You can save a draft now and issue it once this is set up.",
+      "notReadyTitle": "Not ready to issue",
       "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.",
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
@@ -818,12 +829,14 @@
       "effectiveFrom": "Effective from",
       "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
+      "firstTableIsDefault": "The matter's first rate table is its default.",
       "hourlyRate": "Hourly rate",
       "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
       "ongoing": "Ongoing",
+      "onlyDefaultApplies": "Rates apply only from the matter's default table.",
       "override": "Override",
       "perHour": "/hr",
       "rateCount": "{count, plural, one {# rate} other {# rates}}",
@@ -1801,6 +1814,7 @@
     "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
+    "sendErrorMessageEmpty": "This message has no text to send. Type your question or attach a file, then send it.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
     "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.",
     "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.",
@@ -2592,9 +2606,16 @@
       "value": "Field value"
     },
     "datePrecision": "Date precision",
+    "deleteBlockedByMattersCount": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
+    "deleteBlockedCount": "Contacts not removed: {count}",
     "deleteContact": "Delete contact",
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.",
+    "deleteNotFoundCount": "Contacts not found: {count}.",
+    "deleteSelected": "Delete {count, plural, one {# contact} other {# contacts}}",
+    "deleteSelectedConfirm": "Permanently delete {count, plural, one {this contact} other {these # contacts}}? This action cannot be undone.",
+    "deleteSelectedLimit": "Select no more than {limit} contacts to delete at once.",
+    "deletedCount": "Deleted {count, plural, one {# contact} other {# contacts}}",
     "editContact": "Edit contact",
     "emailTypes": {
       "other": "Other",
@@ -2725,6 +2746,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
+      "undoImport": "Undo import ({count})",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
         "ignored_populated_column": "Column “{column}” contains data but is ignored.",
@@ -2754,6 +2776,7 @@
     "saved": "Contact details saved.",
     "search": "Search contacts...",
     "searchCountries": "Search nationalities",
+    "selectContact": "Select {name}",
     "title": "Clients",
     "type": {
       "organization": "Organization",
@@ -2957,6 +2980,8 @@
       "invitationLimitReached": "This organization has reached its invitation limit. Cancel a pending invitation first.",
       "invitationOtherRecipient": "This invitation was sent to a different email address.",
       "invitationRoleNotAllowed": "You cannot invite someone with this role. Choose another role.",
+      "invoiceNumberSeriesMissing": "Set up a default invoice number series under Number series in organization settings, then issue the invoice.",
+      "invoiceSellerProfileMissing": "Add a seller profile under Billing profiles in organization settings, then issue the invoice.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
@@ -5334,11 +5359,16 @@
       "auditLogsActionDownload": "Download",
       "auditLogsActionExecute": "Execute",
       "auditLogsActionUpdate": "Update",
-      "auditLogsAllActions": "All Actions",
+      "auditLogsActorId": "Actor ID",
+      "auditLogsAfter": "After",
+      "auditLogsAllActions": "All actions",
+      "auditLogsAnyone": "Anyone",
+      "auditLogsBefore": "Before",
       "auditLogsChanges": "Changes",
       "auditLogsDeletedResource": "deleted {kind}",
       "auditLogsDescription": "Who did what in this organization, and when.",
       "auditLogsEmpty": "No activity yet.",
+      "auditLogsEmptyValue": "(empty)",
       "auditLogsError": "Couldn't load the activity log.",
       "auditLogsExport": "Export logs",
       "auditLogsExportFailed": "Couldn't export the activity log.",
@@ -5346,9 +5376,16 @@
       "auditLogsExporting": "Exporting...",
       "auditLogsFrom": "From date",
       "auditLogsLoading": "Loading logs...",
+      "auditLogsMoreChanges": "+{count, plural, one {# more} other {# more}}",
+      "auditLogsNoChanges": "No field changes recorded.",
+      "auditLogsPerformer": "Activity by",
+      "auditLogsPerformerAll": "People and automations",
+      "auditLogsPerformerAutomations": "Automations",
+      "auditLogsPerformerPeople": "People",
+      "auditLogsPersonPlaceholder": "Search by name or email",
       "auditLogsResourceId": "Resource ID",
       "auditLogsResourceIdentifier": "Resource ID: {id}",
-      "auditLogsResourceType": "Resource Type",
+      "auditLogsResourceType": "Resource type",
       "auditLogsResourceTypePlaceholder": "e.g. workspace",
       "auditLogsSentenceAccess": "Opened {resource}.",
       "auditLogsSentenceActivity": "Recorded activity for {resource}.",
@@ -5368,8 +5405,6 @@
       "auditLogsTo": "To date",
       "auditLogsUnavailableResource": "{kind} (not available)",
       "auditLogsUnknownResource": "unknown item",
-      "auditLogsUserId": "User ID",
-      "auditLogsUserIdPlaceholder": "Filter by user ID",
       "auditResourceKinds": {
         "agent_skill": "skill",
         "agent_skill_comment": "skill comment",
@@ -5454,7 +5489,7 @@
         "workspace_member": "matter member"
       },
       "billingDrafts": {
-        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Attach firm guidelines before enabling drafts.",
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Drafts are checked against the guidelines once firm guidelines are attached.",
         "firm": "Firm guidelines",
         "ledes": "Electronic billing (LEDES)",
         "title": "AI billing drafts"
@@ -6337,6 +6372,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "This matter is archived and read-only.",
     "calculations": {
       "choose": "Calculate",
       "kinds": {
@@ -6398,6 +6434,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentSwitcher": {
+      "searchPlaceholder": "Find a document…",
+      "trigger": "Switch document"
+    },
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Drop to upload files",
     "duplicateMatter": "Duplicate matter",
@@ -6420,7 +6460,8 @@
       "errored": "Errored",
       "formatNotSupported": "Format not supported",
       "selectAValue": "Select a value",
-      "selectValues": "Select values"
+      "selectValues": "Select values",
+      "wholeNumberOnly": "Enter a whole number"
     },
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",
@@ -7038,7 +7079,7 @@
         "addAnother": "Add another column",
         "createFailed": "Couldn't create columns",
         "createMany": "Create {count} columns",
-        "createdMany": "Created {count} columns",
+        "createdMany": "{count, plural, one {Created # column} other {Created # columns}}",
         "createdOne": "Column created",
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.",
         "title": "Add columns"
@@ -7189,6 +7230,7 @@
       "aiModel": "AI Model",
       "manualInput": "Manually"
     },
+    "unarchiveBeforeDelete": "Unarchive this matter before deleting it.",
     "unarchiveMatter": "Unarchive",
     "uploadDocuments": "Upload documents",
     "views": {

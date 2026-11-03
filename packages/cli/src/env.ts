@@ -34,3 +34,6 @@ export const HOME: string | undefined = process.env["HOME"];
 export const UPDATE_CHECK_ENABLED: boolean = backgroundUpdateCheckEnabled(
   process.env,
 );
+
+/** Opt-in phase durations on stderr. */
+export const STELLA_TIMING: string | undefined = process.env["STELLA_TIMING"];

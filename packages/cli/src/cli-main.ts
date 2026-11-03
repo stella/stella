@@ -15,6 +15,7 @@ import {
   actionAdmissionRefusalOutput,
   type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { defaultConfigDir } from "./auth/config-dir.js";
 import {
   findDefaultCredential,
@@ -33,12 +34,7 @@ import {
   argumentsBeforeTerminator,
   commandNeedsRegistry,
 } from "./command-locality.js";
-import {
-  HOME,
-  STELLA_API_KEY,
-  UPDATE_CHECK_ENABLED,
-  XDG_CACHE_HOME,
-} from "./env.js";
+import { HOME, STELLA_API_KEY, XDG_CACHE_HOME } from "./env.js";
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
@@ -48,12 +44,15 @@ import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
 import { cachePathFor, readCacheFile } from "./registry-cache.js";
 import { removedCommandError } from "./registry-drift.js";
+import { refreshRegistryWithDiagnostics } from "./registry-refresh-output.js";
 import type { CurrentRegistry } from "./registry-refresh.js";
+import { resolveCommandTree } from "./registry-refresh.js";
+import { timingEnd } from "./timing.js";
 import {
-  refreshRegistryCache,
-  requiresFeatureAccessRefresh,
-  resolveCommandTree,
-} from "./registry-refresh.js";
+  commandUnavailableExitCode,
+  commandUnavailableMessage,
+  resolveCommandUnavailableCause,
+} from "./unavailable-command.js";
 
 const resolvePreamble = async (
   serverFlag: string | undefined,
@@ -119,7 +118,9 @@ const resolvePreamble = async (
   // so the command path's established "Not signed in" / exit-`auth` contract
   // still applies, and the startup registry refresh below is skipped rather
   // than firing a doomed request that 401-warns on a stale token.
+  const tokenStarted = performance.now();
   const resolved = await resolveAccessToken({ configDir, serverUrl });
+  timingEnd("token-load-refresh", tokenStarted);
   if (resolved.status === "refresh-failed") {
     // Surface the specific reason (e.g. "no refresh token, run `stella auth
     // login` again") instead of letting the command path's generic "Not
@@ -201,18 +202,6 @@ const cachedUnsupportedLine = async ({
   return policy.unsupported === true ? policy.line : undefined;
 };
 
-const printVersionNudge = ({
-  nudge,
-  unsupported,
-}: {
-  nudge?: string;
-  unsupported?: boolean;
-}): void => {
-  if (nudge !== undefined && (unsupported === true || UPDATE_CHECK_ENABLED)) {
-    process.stderr.write(`${nudge}\n`);
-  }
-};
-
 /** A local `batch --dry-run` validates offline: it resolves no server or credential. */
 const resolveLaunchPreamble = async (
   serverFlag: ReturnType<typeof preparseServerFlag>,
@@ -223,6 +212,10 @@ const resolveLaunchPreamble = async (
     : await resolvePreamble(serverFlag);
 
 const main = async (): Promise<void> => {
+  timingEnd(
+    "process-start-to-main",
+    performance.now() - process.uptime() * 1000,
+  );
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
   // Purely local commands (`--help`, `auth whoami`, `tools list`, ...) read no
@@ -257,24 +250,20 @@ const main = async (): Promise<void> => {
   const versionExempt = isVersionAdmissionExempt(argv);
   let unsupportedLine: string | undefined;
 
-  // Keep an EXISTING per-origin cache current before building the tree; a
-  // missing cache stays offline-instant (seeded at `auth login` below). Any
-  // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  const requiresFeatureSnapshot = requiresFeatureAccessRefresh();
+  // Use a trusted caller projection within its short TTL; fetch on a cache
+  // miss. Transport or trust failures warn and fall back to the built-in tree.
   let currentRegistry: CurrentRegistry | undefined;
   let featureAccess: CallerFeatureAccess | undefined;
-  if (
-    serverUrl !== undefined &&
-    token !== undefined &&
-    (needsRegistry || requiresFeatureSnapshot)
-  ) {
-    const outcome = await refreshRegistryCache({
+  if (serverUrl !== undefined && token !== undefined && needsRegistry) {
+    const registryStarted = performance.now();
+    const outcome = await refreshRegistryWithDiagnostics({
       updateCommand,
       serverOrigin: serverUrl,
       token,
       env: cacheEnv,
-      force: requiresFeatureSnapshot,
+      configDir,
     });
+    timingEnd("registry-load-refresh", registryStarted);
     if (outcome.status === "refreshed") {
       featureAccess = outcome.featureAccess;
       currentRegistry = outcome.registry;
@@ -282,18 +271,18 @@ const main = async (): Promise<void> => {
         unsupportedLine = outcome.nudge;
       }
     }
+    if (outcome.status === "incompatible") {
+      process.stderr.write(`${commandUnavailableMessage(outcome.cause)}\n`);
+      process.exitCode = EXIT_CODES.server;
+      return;
+    }
     if (outcome.status === "admission-refused") {
       refuseAdmission(outcome.refusal, argv);
       return;
     }
-    if (outcome.status === "failed") {
-      process.stderr.write(`${outcome.warning}\n`);
-    } else if (outcome.status === "refreshed") {
-      printVersionNudge(outcome);
-    }
   }
 
-  if (serverUrl !== undefined && unsupportedLine === undefined) {
+  if (serverUrl !== undefined && currentRegistry === undefined) {
     unsupportedLine = await cachedUnsupportedLine({
       serverUrl,
       cacheEnv,
@@ -301,13 +290,15 @@ const main = async (): Promise<void> => {
     });
   }
   if (!versionExempt && unsupportedLine !== undefined) {
-    process.stderr.write(`${unsupportedLine}\n`);
+    process.stderr.write(
+      `${commandUnavailableMessage({ type: "protocol-incompatible", message: unsupportedLine })}\n`,
+    );
     process.exitCode = EXIT_CODES.validation;
     return;
   }
 
-  // Only this invocation's validated response can project caller commands.
-  // Disk supplies deployment metadata; resolution itself performs no network.
+  // Projection resolution itself performs no network; registry trust applies
+  // equally to a fresh response and a restored caller projection.
   const { tree, drift } = localBatchValidation
     ? { tree: generatedRouteMap, drift: undefined }
     : await resolveCommandTree({
@@ -316,6 +307,24 @@ const main = async (): Promise<void> => {
         ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
         ...(featureAccess === undefined ? {} : { featureAccess }),
       });
+  const effectiveGrants = resolveEffectiveGrants({
+    token,
+    registry: currentRegistry,
+  });
+  const unavailable = resolveCommandUnavailableCause({
+    argv,
+    baked: generatedRouteMap,
+    current: tree,
+    effectiveGrants,
+    serverUrl,
+    evidence: currentRegistry,
+    featureAccess,
+  });
+  if (unavailable !== undefined) {
+    process.stderr.write(`${commandUnavailableMessage(unavailable)}\n`);
+    process.exitCode = commandUnavailableExitCode(unavailable);
+    return;
+  }
   if (drift !== undefined) {
     // The one place the drift is reported, so "once per process" is structural
     // rather than a latch. Always stderr: a `--json` caller pipes stdout into a
@@ -337,7 +346,13 @@ const main = async (): Promise<void> => {
   }
 
   await run(buildApp(tree), argv, {
-    forCommand: () => ({ configDir, process, serverUrl, token }),
+    forCommand: () => ({
+      configDir,
+      process,
+      serverUrl,
+      token,
+      effectiveGrants,
+    }),
     process: stricliProcess,
   });
   // stricli reports its own parse failures (unknown command, bad flag) with
@@ -350,21 +365,22 @@ const main = async (): Promise<void> => {
   if (isAuthLogin) {
     const refreshed = await resolvePreamble(serverFlag);
     if (refreshed.serverUrl !== undefined && refreshed.token !== undefined) {
-      const outcome = await refreshRegistryCache({
+      const outcome = await refreshRegistryWithDiagnostics({
         updateCommand,
         serverOrigin: refreshed.serverUrl,
         token: refreshed.token,
         env: cacheEnv,
         force: true,
+        configDir,
       });
+      if (outcome.status === "incompatible") {
+        process.stderr.write(`${commandUnavailableMessage(outcome.cause)}\n`);
+        process.exitCode = EXIT_CODES.server;
+        return;
+      }
       if (outcome.status === "admission-refused") {
         refuseAdmission(outcome.refusal, argv);
         return;
-      }
-      if (outcome.status === "failed") {
-        process.stderr.write(`${outcome.warning}\n`);
-      } else if (outcome.status === "refreshed") {
-        printVersionNudge(outcome);
       }
     }
   }
