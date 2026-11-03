@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -34,6 +35,7 @@ import type {
   ModelPickerEntry,
   ModelRecommendation,
 } from "@/components/chat/chat-model-options-menu.logic";
+import { ChatRunTargetMenu } from "@/components/chat/chat-run-target-menu";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
@@ -73,6 +75,14 @@ export type ComposerModelsMenuProps = {
     model: string | null;
     reasoningEffort: ReasoningEffort | null;
   }) => void;
+  /**
+   * Where the thread's turns run. Absent on surfaces whose turns always run
+   * on stella's own models; the menu then offers no Run on choice.
+   */
+  runTarget?: {
+    selected: ChatRunTarget;
+    select: (target: ChatRunTarget) => void;
+  };
 };
 
 type ModelOption = {
@@ -258,6 +268,14 @@ export const ChatModelOptionsMenu = ({
 
   return (
     <>
+      {models.runTarget && (
+        <ChatRunTargetMenu
+          activeOrganizationId={activeOrganizationId}
+          enabled={enabled}
+          onSelect={models.runTarget.select}
+          selected={models.runTarget.selected}
+        />
+      )}
       <ComposerSubmenuSearch
         onChange={setSearch}
         placeholder={t("organization.aiConfig.modelIdPlaceholder")}
