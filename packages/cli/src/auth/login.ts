@@ -155,7 +155,9 @@ type AuthorizationCode = {
   readonly answerBrowser: (outcome: SignInOutcome) => Promise<void>;
 };
 
-const noBrowserWaiting = (): Promise<void> => Promise.resolve();
+const noBrowserWaiting = async (): Promise<void> => {
+  // A pasted code has no browser waiting for the outcome.
+};
 
 const awaitManualCode = async (
   io: Io,

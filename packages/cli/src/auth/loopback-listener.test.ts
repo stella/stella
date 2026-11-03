@@ -269,8 +269,8 @@ describe("browser sign-in completion", () => {
 });
 
 /** Follows a verified redirect the way the browser does after consent. */
-const followVerifiedRedirect = (redirectUri: string) =>
-  fetch(`${redirectUri}?code=authorization-code&state=expected-state`, {
+const followVerifiedRedirect = async (redirectUri: string) =>
+  await fetch(`${redirectUri}?code=authorization-code&state=expected-state`, {
     signal: AbortSignal.timeout(5000),
   });
 
