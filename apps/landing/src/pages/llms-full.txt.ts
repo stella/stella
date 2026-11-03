@@ -19,7 +19,7 @@ export const GET: APIRoute = async () => {
     );
 
   const sections: string[] = [
-    "# stella — full content",
+    "# stella: full content",
     "",
     `> ${aiTagline}`,
     "",

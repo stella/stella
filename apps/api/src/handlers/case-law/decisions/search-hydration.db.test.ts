@@ -114,11 +114,13 @@ const foreignId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
 const projectedId = createSafeId<"caseLawDecision">();
 const queuedId = createSafeId<"caseLawDecision">();
+const erasingId = createSafeId<"caseLawDecision">();
 const czechIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const slovakIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const closedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const projectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const queuedIntentId = createSafeId<"corpusIndexProjectionIntent">();
+const erasingIntentId = createSafeId<"corpusIndexProjectionIntent">();
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -323,6 +325,16 @@ beforeAll(
         languageGroupKey: "queued-group",
         contentHash: "hash-queued",
       },
+      {
+        id: erasingId,
+        sourceId,
+        caseNumber: "30 Cdo 5/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        languageGroupKey: "erasing-group",
+        contentHash: "hash-erasing",
+      },
     ]);
 
     const link = (
@@ -439,11 +451,25 @@ beforeAll(
         expectedDocumentCount: 1,
         appliedAt: queuedAt,
       },
+      {
+        id: erasingIntentId,
+        family: "case_law",
+        generation: OTHER_GENERATION,
+        entityId: erasingId,
+        epoch: 1n,
+        fingerprint: APPLIED_FINGERPRINT,
+        indexId: OTHER_INDEX_ID,
+        status: "applied",
+        appendStartedAt: queuedAt,
+        appendCommittedAt: queuedAt,
+        expectedDocumentCount: 1,
+        appliedAt: queuedAt,
+      },
     ]);
     await db.insert(corpusIndexProjectionStates).values([
       ...held.map(({ state }) => state),
-      // The applied revision is behind a queued content change, so what the
-      // engine holds for this decision is not what the generation wants.
+      // The applied revision is behind a queued content change: the engine
+      // still holds the applied copy, and it answers until the new one lands.
       {
         family: "case_law",
         generation: OTHER_GENERATION,
@@ -455,6 +481,23 @@ beforeAll(
         appliedAction: "upsert",
         appliedEpoch: 1n,
         appliedRevision: queuedIntentId,
+        appliedFingerprint: APPLIED_FINGERPRINT,
+        appliedIndexId: OTHER_INDEX_ID,
+        appliedAt: queuedAt,
+      },
+      // The applied copy is still in the index, but the generation has
+      // queued its erasure: nothing may stand on it any more.
+      {
+        family: "case_law",
+        generation: OTHER_GENERATION,
+        entityId: erasingId,
+        desiredAction: "erase",
+        desiredEpoch: 2n,
+        desiredFingerprint: null,
+        desiredIndexId: null,
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: erasingIntentId,
         appliedFingerprint: APPLIED_FINGERPRINT,
         appliedIndexId: OTHER_INDEX_ID,
         appliedAt: queuedAt,
@@ -1424,7 +1467,7 @@ test("Postgres relaxes an empty six-term question using whole-document term cove
   }
 });
 
-test("a generation admits exactly what its projection state holds", async () => {
+test("a generation admits every decision it holds an applied copy of", async () => {
   const scoped = {
     body: SEARCH_BODY,
     caseLawDb,
@@ -1434,19 +1477,24 @@ test("a generation admits exactly what its projection state holds", async () => 
 
   const ranking = await rehydrateCaseLawCandidates({
     ...scoped,
-    candidates: candidatesOf(projectedId, queuedId, czechId),
+    candidates: candidatesOf(projectedId, queuedId, czechId, erasingId),
   });
-  // Applied equals desired for the first decision. The second still owes the
-  // index a mutation, and the third has no state row in this generation.
-  expect(ranking.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  // Applied equals desired for the first decision. The second owes the index
+  // a content change, so its applied copy answers until that lands. The third
+  // has no state row in this generation, and the fourth is queued for erasure.
+  expect(ranking.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
 
   const rows = await readCaseLawPageDecisionRows({
     body: scoped.body,
     caseLawDb,
     generation: OTHER_GENERATION,
-    ids: [projectedId, queuedId, czechId],
+    ids: [projectedId, queuedId, czechId, erasingId],
   });
-  expect([...rows.keys()]).toEqual([projectedId]);
+  expect([...rows.keys()].toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
 });
 
 test("a decision an identifier names answers from its published row, whatever the index holds", async () => {
@@ -1479,12 +1527,14 @@ test("a decision an identifier names answers from its published row, whatever th
     [projectedId, queuedId, czechId].toSorted(),
   );
 
-  // The same ids as search hits still stand only on the applied copy.
+  // The same ids as search hits stand only on a copy the index holds.
   const hits = await rehydrateCaseLawCandidates({
     ...scoped,
     candidates: candidatesOf(...named),
   });
-  expect(hits.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  expect(hits.ranked.map((hit) => hit.id).toSorted()).toEqual(
+    [projectedId, queuedId].toSorted(),
+  );
 });
 
 test("a generation admits nothing another generation holds", async () => {
