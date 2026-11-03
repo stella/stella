@@ -203,7 +203,6 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
 
 /// What the desktop runner adds to a managed Codex app-server launch to run
 /// it on the user's ChatGPT plan.
-#[allow(dead_code, reason = "the desktop runner's harness host calls this")]
 pub async fn codex_chatgpt_launch(
   app: &AppHandle,
 ) -> Result<CodexChatGptLaunch, CodexLaunchError> {

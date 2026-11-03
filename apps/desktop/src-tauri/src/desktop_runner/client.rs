@@ -33,16 +33,16 @@ use tokio_tungstenite::{
 use uuid::Uuid;
 
 use super::harness::{
-  EmitError, HarnessHost, HarnessReports, RunOutput, RunSink, SinkRequest,
+  EmitError, HarnessHost, HarnessReports, JournaledRun, RunOutput, RunSink, SinkRequest,
 };
 use super::journal::{Decision, Journal, RunRecord};
 use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
-  ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT, Hello,
-  MAX_FRAME_BYTES, PATH, PING_INTERVAL, POLICY_VIOLATION_CODE, PROTOCOL,
-  RunApprovalRequest, RunEvent, RunFinished, RunRef, RunRejected, ServerMessage,
-  Welcome,
+  ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
+  HarnessReport, HarnessStatus, Hello, MAX_FRAME_BYTES, PATH, PING_INTERVAL,
+  POLICY_VIOLATION_CODE, PROTOCOL, RunApprovalRequest, RunEvent, RunFinished, RunRef,
+  RunRejected, ServerMessage, Welcome,
 };
 
 /// `hello` lists at most this many runs; the contract refuses more.
@@ -169,6 +169,10 @@ pub(crate) struct Runner {
   /// The expiry of the newest MCP token each run was handed.
   tokens: HashMap<String, chrono::DateTime<chrono::Utc>>,
   backoff: Backoff,
+  /// Changes when a harness report may have changed.
+  report_changes: Option<watch::Receiver<u64>>,
+  /// The reports the API last received, in `hello` or `harness.status`.
+  sent_reports: Vec<HarnessReport>,
 }
 
 impl Runner {
@@ -178,7 +182,10 @@ impl Runner {
       parts.config.timing.backoff_base,
       parts.config.timing.backoff_cap,
     );
+    let report_changes = parts.reports.changes();
     Self {
+      report_changes,
+      sent_reports: Vec::new(),
       config: parts.config,
       auth: parts.auth,
       journals: parts.journals,
@@ -274,6 +281,18 @@ impl Runner {
     drop(stop.wait_for(|stopped| *stopped).await);
   }
 
+  /// Resolves when a harness report may have changed.
+  async fn next_report_change(changes: &mut Option<watch::Receiver<u64>>) {
+    let changed = match changes.as_mut() {
+      Some(receiver) => receiver.changed().await.is_ok(),
+      None => false,
+    };
+    if !changed {
+      *changes = None;
+      std::future::pending::<()>().await;
+    }
+  }
+
   /// Wait out `delay`, still journaling what hosts produce.
   async fn wait(&mut self, delay: Duration) -> Waited {
     let deadline = tokio::time::sleep(delay);
@@ -334,6 +353,8 @@ impl Runner {
       }
     };
     self.ensure_journal(&authorized.namespace).await;
+    self.host.connecting(&authorized.api_base_url);
+    self.reattach();
     let (request, secure) = match upgrade_request(&authorized, self.config.desktop_id) {
       Ok(request) => request,
       Err(_invalid) => {
@@ -383,7 +404,13 @@ impl Runner {
         return Ended::Failed;
       }
     };
-    let hello = DesktopMessage::Hello(self.hello());
+    // Reports from here on are newer than the ones `hello` carries.
+    if let Some(changes) = self.report_changes.as_mut() {
+      changes.borrow_and_update();
+    }
+    let hello = self.hello();
+    self.sent_reports.clone_from(&hello.harnesses);
+    let hello = DesktopMessage::Hello(hello);
     if send(&mut socket, &hello).await.is_err() {
       return Ended::Failed;
     }
@@ -424,6 +451,38 @@ impl Runner {
       harnesses: self.reports.reports(),
       active_runs,
     }
+  }
+
+  /// Hand the host every run the journal holds as running, so it can pick
+  /// up the ones it does not run yet from where the journal stops.
+  fn reattach(&self) {
+    let runs: Vec<JournaledRun> = self
+      .records()
+      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .map(|record| JournaledRun {
+        run_id: record.run_id.clone(),
+        source_seq: record.source_seq,
+        sink: RunSink::new(record.run_id.clone(), self.sink_tx.clone()),
+      })
+      .collect();
+    if !runs.is_empty() {
+      self.host.reattach(runs);
+    }
+  }
+
+  /// Send each harness report that changed since the API last received it.
+  async fn send_changed_reports(&mut self, socket: &mut Socket) -> Result<(), ()> {
+    let reports = self.reports.reports();
+    for report in &reports {
+      if !self.sent_reports.contains(report) {
+        let status = DesktopMessage::HarnessStatus(HarnessStatus {
+          harness: report.clone(),
+        });
+        send(socket, &status).await?;
+      }
+    }
+    self.sent_reports = reports;
+    Ok(())
   }
 
   fn records(&self) -> impl Iterator<Item = &RunRecord> {
@@ -564,6 +623,11 @@ impl Runner {
           if let Some(message) = self.record_output(request)
             && send(socket, &message).await.is_err()
           {
+            return Ended::Failed;
+          }
+        }
+        () = Self::next_report_change(&mut self.report_changes) => {
+          if self.send_changed_reports(socket).await.is_err() {
             return Ended::Failed;
           }
         }
@@ -747,9 +811,10 @@ impl Runner {
     let SinkRequest {
       run_id,
       output,
+      source_seq,
       reply,
     } = request;
-    let recorded = self.journal_output(run_id, output);
+    let recorded = self.journal_output(run_id, output, source_seq);
     let (answer, message) = match recorded {
       Ok((seq, message)) => (Ok(seq), Some(message)),
       Err(error) => (Err(error), None),
@@ -763,6 +828,7 @@ impl Runner {
     &mut self,
     run_id: String,
     output: RunOutput,
+    source_seq: Option<NonZeroU32>,
   ) -> Result<(NonZeroU32, DesktopMessage), EmitError> {
     let mut record = self.accepted(&run_id).ok_or(EmitError::RunClosed)?;
     let seq = record
@@ -801,6 +867,9 @@ impl Runner {
     }
     record.outbox.push(message.clone());
     record.last_seq = seq.get();
+    if let Some(source_seq) = source_seq {
+      record.source_seq = record.source_seq.max(source_seq.get());
+    }
     record.finished = finished;
     self.store(record).map_err(|()| EmitError::Storage)?;
     Ok((seq, message))

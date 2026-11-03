@@ -33,7 +33,8 @@ use super::client::{
   RunnerTiming,
 };
 use super::harness::{
-  EmitError, HarnessHost, NoHarnessReports, RunOutput, RunSink, UnavailableHarnessHost,
+  EmitError, HarnessHost, HarnessReports, NoHarnessReports, RunOutput, RunSink,
+  UnavailableHarnessHost,
 };
 use super::journal::{Journal, JournalBacking};
 use super::state::RunnerState;
@@ -47,7 +48,7 @@ const WAIT: Duration = Duration::from_secs(10);
 const BEARER: &str = "stella_desktop_fixture_bearer";
 const RUN: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000a1";
 
-fn timing() -> RunnerTiming {
+pub(super) fn timing() -> RunnerTiming {
   RunnerTiming {
     connect_timeout: Duration::from_secs(5),
     welcome_timeout: Duration::from_secs(5),
@@ -59,18 +60,18 @@ fn timing() -> RunnerTiming {
 }
 
 /// A gateway as the desktop sees it: accepts upgrades, records each one.
-struct Gateway {
+pub(super) struct Gateway {
   listener: TcpListener,
 }
 
-struct Connection {
+pub(super) struct Connection {
   socket: WebSocketStream<TcpStream>,
   headers: HeaderMap,
   path: String,
 }
 
 impl Gateway {
-  async fn bind() -> Self {
+  pub(super) async fn bind() -> Self {
     Self {
       listener: TcpListener::bind("127.0.0.1:0").await.unwrap(),
     }
@@ -84,7 +85,7 @@ impl Gateway {
     clippy::result_large_err,
     reason = "tungstenite fixes the handshake callback's error type"
   )]
-  async fn accept(&self) -> Connection {
+  pub(super) async fn accept(&self) -> Connection {
     let (stream, _) = tokio::time::timeout(WAIT, self.listener.accept())
       .await
       .expect("the runner connects")
@@ -122,7 +123,7 @@ impl Gateway {
 
 impl Connection {
   /// The next text frame, as JSON.
-  async fn receive(&mut self) -> Value {
+  pub(super) async fn receive(&mut self) -> Value {
     loop {
       let frame = tokio::time::timeout(WAIT, self.socket.next())
         .await
@@ -137,13 +138,13 @@ impl Connection {
     }
   }
 
-  async fn receive_type(&mut self, kind: &str) -> Value {
+  pub(super) async fn receive_type(&mut self, kind: &str) -> Value {
     let message = self.receive().await;
     assert_eq!(message["type"], kind, "{message}");
     message
   }
 
-  async fn send(&mut self, message: Value) {
+  pub(super) async fn send(&mut self, message: Value) {
     self
       .socket
       .send(Message::text(message.to_string()))
@@ -151,11 +152,11 @@ impl Connection {
       .unwrap();
   }
 
-  async fn hello(&mut self) -> Value {
+  pub(super) async fn hello(&mut self) -> Value {
     self.receive_type("hello").await
   }
 
-  async fn welcome(&mut self, resume: &[(&str, u32)]) {
+  pub(super) async fn welcome(&mut self, resume: &[(&str, u32)]) {
     let resume: Vec<Value> = resume
       .iter()
       .map(|(run_id, ack_seq)| json!({"runId": run_id, "ackSeq": ack_seq}))
@@ -313,7 +314,7 @@ impl JournalOpener for DirectoryJournals {
   }
 }
 
-struct Started {
+pub(super) struct Started {
   state: watch::Receiver<RunnerState>,
   stop: watch::Sender<bool>,
   wake: watch::Sender<u64>,
@@ -329,7 +330,7 @@ impl Started {
       .clone()
   }
 
-  async fn stop(self) {
+  pub(super) async fn stop(self) {
     self.stop.send_replace(true);
     tokio::time::timeout(WAIT, self.task)
       .await
@@ -338,19 +339,21 @@ impl Started {
   }
 }
 
-struct Setup {
-  host: Arc<dyn HarnessHost>,
-  journal_dir: PathBuf,
-  timing: RunnerTiming,
-  device_key: DeviceKey,
-  desktop_id: Uuid,
-  signed_in: bool,
+pub(super) struct Setup {
+  pub(super) host: Arc<dyn HarnessHost>,
+  pub(super) reports: Arc<dyn HarnessReports>,
+  pub(super) journal_dir: PathBuf,
+  pub(super) timing: RunnerTiming,
+  pub(super) device_key: DeviceKey,
+  pub(super) desktop_id: Uuid,
+  pub(super) signed_in: bool,
 }
 
 impl Setup {
-  fn new(host: Arc<dyn HarnessHost>) -> Self {
+  pub(super) fn new(host: Arc<dyn HarnessHost>) -> Self {
     Self {
       host,
+      reports: Arc::new(NoHarnessReports),
       journal_dir: std::env::temp_dir()
         .join(format!("stella-runner-test-{}", Uuid::new_v4())),
       timing: timing(),
@@ -360,7 +363,7 @@ impl Setup {
     }
   }
 
-  fn start(&self, gateway: &Gateway) -> Started {
+  pub(super) fn start(&self, gateway: &Gateway) -> Started {
     let state = Arc::new(watch::channel(RunnerState::Off).0);
     let observed = state.subscribe();
     let (stop, stopped) = watch::channel(false);
@@ -379,7 +382,7 @@ impl Setup {
       }),
       journals: Arc::new(DirectoryJournals(self.journal_dir.clone())),
       host: Arc::clone(&self.host),
-      reports: Arc::new(NoHarnessReports),
+      reports: Arc::clone(&self.reports),
       state,
       wakes,
       stop: stopped,
@@ -431,10 +434,9 @@ async fn the_upgrade_carries_bearer_fresh_device_proof_and_installation_and_hell
       format!("{}{PATH}", gateway.base_url()).parse().unwrap(),
     );
     checked.headers_mut().insert("dpop", proof.parse().unwrap());
-    checked.headers_mut().insert(
-      "authorization",
-      connection.headers["authorization"].clone(),
-    );
+    checked
+      .headers_mut()
+      .insert("authorization", connection.headers["authorization"].clone());
     crate::device_proof::tests::verify_request(
       &checked,
       &setup.device_key.thumbprint().unwrap(),
@@ -547,6 +549,7 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   let restarted_host = Arc::new(RecordingHost::default());
   let restarted = Setup {
     host: Arc::clone(&restarted_host) as Arc<dyn HarnessHost>,
+    reports: Arc::new(NoHarnessReports),
     journal_dir: setup.journal_dir.clone(),
     timing: timing(),
     device_key: setup.device_key.clone(),
@@ -727,6 +730,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
   let restarted_host = Arc::new(RecordingHost::default());
   let restarted = Setup {
     host: Arc::clone(&restarted_host) as Arc<dyn HarnessHost>,
+    reports: Arc::new(NoHarnessReports),
     journal_dir: setup.journal_dir.clone(),
     timing: timing(),
     device_key: setup.device_key.clone(),

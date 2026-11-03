@@ -57,9 +57,6 @@ mod harness_archive;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
-// Runs once the desktop runner's harness host lands; the runner protocol it
-// shares types with is test-only until then too.
-#[cfg(test)]
 mod harness_sidecar;
 mod http_client;
 mod i18n;

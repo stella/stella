@@ -46,6 +46,10 @@ pub(crate) struct RunRecord {
   pub(crate) cancelled: bool,
   /// The last position this desktop produced; 0 before the first.
   pub(crate) last_seq: u32,
+  /// The last position of the harness host's own source (the holder's
+  /// `seq`) whose output this record holds; 0 before the first. It is not
+  /// `last_seq`: the host also emits outputs no source numbered.
+  pub(crate) source_seq: u32,
   /// The last position the API acknowledged.
   pub(crate) ack_seq: u32,
   pub(crate) finished: bool,
@@ -64,6 +68,7 @@ impl RunRecord {
       interrupted: false,
       cancelled: false,
       last_seq: 0,
+      source_seq: 0,
       ack_seq: 0,
       finished: false,
       outbox: Vec::new(),

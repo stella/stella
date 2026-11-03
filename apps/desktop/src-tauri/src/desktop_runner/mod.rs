@@ -1,19 +1,26 @@
 //! Stella Desktop as a runner: one outbound WebSocket to the API that
-//! receives run commands and hands them to a local harness host.
+//! receives run commands and hands them to the local harness host
+//! (`sidecar_host.rs`), which runs Codex or Claude Code through the harness
+//! sidecar's holder.
 //!
 //! The runner exists only while the `local-agents` feature is on for the
-//! linked account. Until a harness host is installed every run is refused
-//! with `harness_not_installed`, through the same journal and socket path a
-//! host will use.
+//! linked account. The host lives as long as the app, so runs keep their
+//! holder connection while the runner reconnects or the feature toggles.
+//! Without a data folder no host runs, and every run is refused with
+//! `harness_not_installed` through the same journal and socket path.
 
 mod client;
 mod harness;
 mod journal;
+mod sidecar_host;
+#[cfg(all(test, unix))]
+mod sidecar_host_tests;
 mod state;
 #[cfg(test)]
 mod tests;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use futures_util::future::BoxFuture;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -22,11 +29,23 @@ use tokio::sync::watch;
 use self::client::{
   Authorized, JournalOpener, Runner, RunnerAuth, RunnerConfig, RunnerParts,
 };
-use self::harness::{NoHarnessReports, UnavailableHarnessHost};
+use self::harness::{
+  HarnessHost, HarnessReports, NoHarnessReports, UnavailableHarnessHost,
+};
 use self::journal::{Journal, JournalBacking};
+use self::sidecar_host::{
+  HarnessCredentials, HostSettings, InstalledHarness, LocalHarnesses,
+  SidecarHarnessHost,
+};
 pub(crate) use self::state::RunnerState;
+use crate::harness_installation::HarnessInstallation;
+use crate::harness_release::ManagedHarness;
+use crate::harness_sidecar::{
+  HarnessLaunchSettings, ReconnectBackoff, SidecarLaunch, SidecarSettings,
+};
 use crate::keychain::LocalDataKey;
 use crate::local_store::{self, StoreKey};
+use crate::runner_protocol::Harness;
 
 /// Announces a state change; the window reads it with `desktop_runner_get_state`.
 pub(crate) const STATE_EVENT: &str = "desktop-runner-state-changed";
@@ -37,6 +56,9 @@ const JOURNAL_DIRECTORY: &str = "desktop-runner";
 pub(crate) struct DesktopRunnerControl {
   state: Arc<watch::Sender<RunnerState>>,
   tasks: Mutex<Tasks>,
+  /// The harness host, made by the first runner task; `None` inside when
+  /// this computer has no data folder for it.
+  host: Arc<OnceLock<Option<SidecarHarnessHost>>>,
 }
 
 #[derive(Default)]
@@ -53,6 +75,7 @@ impl Default for DesktopRunnerControl {
     Self {
       state: Arc::new(watch::channel(RunnerState::Off).0),
       tasks: Mutex::new(Tasks::default()),
+      host: Arc::new(OnceLock::new()),
     }
   }
 }
@@ -70,6 +93,7 @@ impl DesktopRunnerControl {
     let previous = tasks.latest.take();
     let app = app.clone();
     let state = Arc::clone(&self.state);
+    let host_slot = Arc::clone(&self.host);
     tasks.latest = Some(tauri::async_runtime::spawn(async move {
       if let Some(previous) = previous
         && previous.await.is_err()
@@ -83,17 +107,25 @@ impl DesktopRunnerControl {
         return;
       };
       let app_version = app.package_info().version.to_string();
+      let (host, reports): (Arc<dyn HarnessHost>, Arc<dyn HarnessReports>) =
+        match host_slot.get_or_init(|| sidecar_host(&app)) {
+          Some(host) => (Arc::new(host.clone()), Arc::new(host.clone())),
+          None => (
+            Arc::new(UnavailableHarnessHost::new(app_version.clone())),
+            Arc::new(NoHarnessReports),
+          ),
+        };
       let runner = Runner::new(RunnerParts {
         config: RunnerConfig {
           desktop_id,
-          app_version: app_version.clone(),
+          app_version,
           timing: client::RunnerTiming::default(),
           random: unit_random,
         },
         auth: Arc::new(AccountAuth { app: app.clone() }),
         journals: Arc::new(EncryptedJournals),
-        host: Arc::new(UnavailableHarnessHost::new(app_version)),
-        reports: Arc::new(NoHarnessReports),
+        host,
+        reports,
         state,
         wakes: crate::presence::subscribe_wakes(),
         stop: stopped,
@@ -194,6 +226,111 @@ fn journal_backing(namespace: &str) -> JournalBacking {
     StoreKey::Key(key) => JournalBacking::Encrypted { directory, key },
     // Unreadable records stay on disk; the API drops the runs they held.
     StoreKey::MemoryOnly | StoreKey::DeletionOnly => JournalBacking::Memory,
+  }
+}
+
+/// Where the host keeps its holders and run folders, under the app's data.
+const HOLDER_DIRECTORY: &str = "agent-holder";
+const RUNS_DIRECTORY: &str = "agent-runs";
+
+/// The app's harness host: the bundled sidecar, the managed CLIs and the
+/// ChatGPT connection. `None` without a data folder.
+fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
+  let Some(data) = dirs::data_dir() else {
+    tracing::warn!("the harness host has no data directory");
+    return None;
+  };
+  let data = data.join(crate::config::APP_DATA_DIR_NAME);
+  let launch = std::env::current_exe()
+    .ok()
+    .and_then(|executable| SidecarLaunch::for_app(&executable))?;
+  let version = app.package_info().version.to_string();
+  Some(SidecarHarnessHost::new(
+    HostSettings {
+      sidecar: SidecarSettings {
+        launch,
+        holder_root: data.join(HOLDER_DIRECTORY),
+        socket_dir: None,
+        sidecar_version: version.clone(),
+        app_version: version,
+        // Set from the account the runner connects for.
+        api_origin: String::new(),
+        hello_timeout: Duration::from_secs(10),
+        start_timeout: Duration::from_secs(20),
+        shutdown_grace: Duration::from_secs(10),
+        backoff: ReconnectBackoff::DEFAULT,
+      },
+      workspaces: data.join(RUNS_DIRECTORY),
+      probe_interval: sidecar_host::PROBE_INTERVAL,
+    },
+    Arc::new(ManagedHarnesses { app: app.clone() }),
+  ))
+}
+
+/// The CLIs the installer manages, and Codex on the user's ChatGPT plan when
+/// it is connected.
+struct ManagedHarnesses {
+  app: AppHandle,
+}
+
+impl LocalHarnesses for ManagedHarnesses {
+  fn installed(&self, harness: Harness) -> Option<InstalledHarness> {
+    let managed = match harness {
+      Harness::Codex => ManagedHarness::Codex,
+      Harness::ClaudeCode => ManagedHarness::ClaudeCode,
+      Harness::Opencode => return None,
+    };
+    let installation = self.app.try_state::<HarnessInstallation>()?;
+    let lease = installation.acquire(managed).ok()?;
+    let (_variable, config_dir) = lease.config_env();
+    Some(InstalledHarness {
+      version: lease.version().to_owned(),
+      executable: lease.executable().to_path_buf(),
+      config_dir: config_dir.to_path_buf(),
+      lease: Box::new(lease),
+    })
+  }
+
+  fn credentials(&self, harness: Harness) -> BoxFuture<'_, Option<HarnessCredentials>> {
+    Box::pin(async move {
+      if harness != Harness::Codex {
+        // Claude Code uses its own sign-in in its stella-owned home.
+        return None;
+      }
+      let launch =
+        match crate::chatgpt_auth_commands::codex_chatgpt_launch(&self.app).await {
+          Ok(launch) => launch,
+          // Not connected: Codex runs on its own home's sign-in, if any.
+          Err(crate::codex_managed_token_broker::CodexLaunchError::Access(_)) => {
+            return None;
+          }
+          Err(crate::codex_managed_token_broker::CodexLaunchError::Broker) => {
+            tracing::warn!("the ChatGPT token broker is unavailable");
+            return None;
+          }
+        };
+      let settings = HarnessLaunchSettings {
+        config_overrides: launch.config_overrides.clone(),
+        environment: launch
+          .environment
+          .iter()
+          .map(|(name, value)| ((*name).to_owned(), value.clone()))
+          .collect(),
+        removed_environment: launch
+          .removed_environment
+          .iter()
+          .map(|name| (*name).to_owned())
+          .collect(),
+        client_name: Some(launch.client_name.to_owned()),
+        process_grant: true,
+      };
+      Some(HarnessCredentials {
+        settings,
+        grant: Some(Arc::new(move |pid| {
+          Box::new(launch.authorize(pid)) as Box<dyn Send + Sync>
+        })),
+      })
+    })
   }
 }
 

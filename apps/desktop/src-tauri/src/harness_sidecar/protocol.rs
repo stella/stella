@@ -6,6 +6,7 @@
 //! host relays them without a translation table. The tests round-trip every
 //! message in the sidecar's fixture file and compare each closed list with it.
 
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use crate::runner_protocol::{
   RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 2;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// Runs one `hello` may resume or list.
@@ -115,6 +116,39 @@ pub(crate) struct HostHello {
   pub(crate) resume: Vec<ResumePoint>,
 }
 
+/// What the desktop adds to a harness process's launch beyond its managed
+/// home, such as Codex on the user's ChatGPT plan. `Debug` names the
+/// variables, never their values: they may name a private channel.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HarnessLaunchSettings {
+  /// Passed to Codex as `-c <override>`, in order.
+  pub(crate) config_overrides: Vec<String>,
+  /// Set in the harness's environment.
+  pub(crate) environment: BTreeMap<String, String>,
+  /// Removed from the environment the harness inherits.
+  pub(crate) removed_environment: Vec<String>,
+  /// The client name a credential was registered under; `None` keeps the
+  /// adapter's own.
+  pub(crate) client_name: Option<String>,
+  /// The holder reports the harness process (`harness.process`) and waits
+  /// for [`HostMessage::HarnessProcessGranted`] before using it.
+  pub(crate) process_grant: bool,
+}
+
+impl std::fmt::Debug for HarnessLaunchSettings {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("HarnessLaunchSettings")
+      .field("config_overrides", &self.config_overrides.len())
+      .field("environment", &self.environment.keys().collect::<Vec<_>>())
+      .field("removed_environment", &self.removed_environment)
+      .field("client_name", &self.client_name)
+      .field("process_grant", &self.process_grant)
+      .finish()
+  }
+}
+
 /// Which managed CLI to run and the stella-owned home it runs with.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,6 +157,21 @@ pub(crate) struct HarnessProbe {
   pub(crate) harness: Harness,
   pub(crate) executable: String,
   pub(crate) config_dir: String,
+  pub(crate) launch: HarnessLaunchSettings,
+}
+
+/// A run id or probe request id whose harness process the desktop granted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ProcessRef {
+  pub(crate) id: String,
+}
+
+/// A harness process that waits for the desktop's grant: `id` is its run id
+/// or probe request id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct HarnessProcess {
+  pub(crate) id: String,
+  pub(crate) pid: NonZeroU32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -133,6 +182,7 @@ pub(crate) struct SidecarRunStart {
   pub(crate) harness: Harness,
   pub(crate) executable: String,
   pub(crate) config_dir: String,
+  pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
   pub(crate) model: String,
   pub(crate) instructions: String,
@@ -165,6 +215,8 @@ pub(crate) enum HostMessage {
   Ack(Ack),
   #[serde(rename = "resume")]
   Resume(ResumePoint),
+  #[serde(rename = "harness.process_granted")]
+  HarnessProcessGranted(ProcessRef),
   #[serde(rename = "drain")]
   Drain,
   #[serde(rename = "shutdown")]
@@ -183,6 +235,7 @@ impl HostMessage {
     "run.token",
     "ack",
     "resume",
+    "harness.process_granted",
     "drain",
     "shutdown",
   ];
@@ -314,6 +367,8 @@ pub(crate) enum SidecarMessage {
   Hello(SidecarHello),
   #[serde(rename = "harness.probed")]
   HarnessProbed(HarnessProbed),
+  #[serde(rename = "harness.process")]
+  HarnessProcess(HarnessProcess),
   #[serde(rename = "run.event")]
   RunEvent(SidecarRunEvent),
   #[serde(rename = "run.approval_request")]
@@ -329,6 +384,7 @@ impl SidecarMessage {
   pub(crate) const TAGS: &[&str] = &[
     "hello",
     "harness.probed",
+    "harness.process",
     "run.event",
     "run.approval_request",
     "run.finished",
