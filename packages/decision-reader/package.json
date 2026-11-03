@@ -34,6 +34,7 @@
     "./reader-message-types": "./src/reader-message-types.ts",
     "./reader-outline": "./src/reader-outline.ts",
     "./reader-search": "./src/reader-search.ts",
+    "./reader-text-pieces.logic": "./src/reader-text-pieces.logic.ts",
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
     "./reader-types": "./src/reader-types.ts",
     "./reader.css": "./src/reader.css",

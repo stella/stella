@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/auth.ts",
+    "from": "2d59cd60923baad0ea90f75f1fcae797532a019cef742a59f369511bf735c273",
+    "to": "315611668cb62502c22cbac5030a927c4d43bc519c31b4fc14d08018a56a450f",
+    "reason": "The organization deletion transaction now passes the deleting owner to the teardown owner, which requires the audit archive before writing; same transaction, same count."
+  }
+]
