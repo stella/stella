@@ -1235,7 +1235,7 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
       total +
       countMatches(
         code,
-        new RegExp("title=\\{" + escapeRegExp(binding) + "\\s*\\(", "gu"),
+        new RegExp(`title=\\{${escapeRegExp(binding)}\\s*\\(`, "gu"),
       ),
     0,
   );
