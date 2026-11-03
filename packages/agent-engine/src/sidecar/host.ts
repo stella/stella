@@ -52,6 +52,12 @@ type RunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
 
 /** How long an interrupt or a shutdown waits before a harness is killed. */
 const HARNESS_GRACE_MS = 5000;
+/**
+ * How long one request to a harness waits for its answer. Requests return
+ * once the harness accepts them (a turn streams afterwards), so this only
+ * catches a harness that stopped answering.
+ */
+const HARNESS_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_SUMMARY_CHARS = 4000;
 const MAX_PROBED_MODELS = 100;
 
@@ -92,6 +98,7 @@ const ADAPTERS = {
       environment: options.environment,
       clientVersion: launch.clientVersion,
       gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
     }),
   "claude-code": null,
