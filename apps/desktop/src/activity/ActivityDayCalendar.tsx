@@ -639,23 +639,22 @@ function useCalendarColumns({
           0,
         ),
       );
-      const onlyApp = block.apps.length === 1 ? block.sources.at(0) : undefined;
-      const onCall =
-        onlyApp !== undefined && block.sources.every(({ call }) => call);
-      // A block on one app names the app and shows its icon; one that moved
-      // between apps lists them under its topic.
+      // A block is named by the topic that sets its colour: the app its topic
+      // was held in, with its icon, or a call there; time it took in from
+      // other apps is listed under it, never named.
+      const { topicApp } = block;
       let appName: string | null = null;
       let appIcon: ReactNode = null;
-      if (onlyApp !== undefined && onCall) {
-        appName = t("callIn", { app: onlyApp.appName });
+      if (topicApp?.call === true) {
+        appName = t("callIn", { app: topicApp.appName });
         appIcon = (
           <PhoneIcon aria-hidden="true" className="size-3.5 shrink-0" />
         );
-      } else if (onlyApp !== undefined) {
-        appName = onlyApp.appName;
+      } else if (topicApp !== null) {
+        appName = topicApp.appName;
         appIcon = (
           <ActivitySourceIcon
-            appIdentifier={onlyApp.appIdentifier}
+            appIdentifier={topicApp.appIdentifier}
             sourceAppVisuals={sourceAppVisuals}
           />
         );
@@ -667,9 +666,10 @@ function useCalendarColumns({
       const label = [topic, duration, detail]
         .filter((part) => part !== null)
         .join(" · ");
-      const switching = block.matter === null && onlyApp === undefined;
+      const switching = block.matter === null && block.topic === null;
       // The apps are the caption unless the block is named by its one app.
-      const namedByApp = block.matter === null && onlyApp !== undefined;
+      const namedByApp =
+        block.matter === null && topicApp !== null && block.apps.length === 1;
       return {
         accessibleLabel: switching
           ? t("mixedActivityLabel", { apps, range })

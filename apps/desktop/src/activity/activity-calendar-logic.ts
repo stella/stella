@@ -98,12 +98,23 @@ export type ActivityBlock = DayCalendarRange & {
   matter: DesktopTimeEntryMatterCandidate | null;
   /** Every recorded segment in the block, in time order. */
   sources: MatchedSegment[];
-  /** The title the block spent longest on; `null` when none was recorded. */
+  /** The title the block's topic spent longest on; `null` when its topic
+   * recorded none, or the block has no topic. The block is named by the same
+   * topic that sets its colour, never by another stretch it took in. */
   title: string | null;
   /** The topic holding at least half the block's recorded time: its matter,
    * call, document or window title, or app. `null` when no topic does, as in
    * quick switching between unrelated windows. */
   topic: string | null;
+  /** The one app the topic was held in, and whether all of it was a call
+   * there; `null` when the topic spans apps or the block has none. */
+  topicApp: ActivityTopicApp | null;
+};
+
+export type ActivityTopicApp = {
+  appIdentifier: string;
+  appName: string;
+  call: boolean;
 };
 
 type TopicDraft = DayCalendarRange & {
@@ -312,8 +323,13 @@ export const activityBlocks = (
   }
   const blocks = joinSameTopic(placed);
   return blocks.map((draft, index) => {
+    const topic = majorityTopic(draft, topicOf);
+    const topicSources =
+      topic === null
+        ? []
+        : draft.sources.filter((segment) => topicOf(segment) === topic);
     const titleTotals = new Map<string, number>();
-    for (const segment of draft.sources) {
+    for (const segment of topicSources) {
       const title = titleOf(segment);
       if (title !== null) {
         titleTotals.set(
@@ -347,9 +363,30 @@ export const activityBlocks = (
       sources: draft.sources,
       startMs: draft.startMs,
       title,
-      topic: majorityTopic(draft, topicOf),
+      topic,
+      topicApp: topicAppOf(topicSources),
     };
   });
+};
+
+/** The app a topic's segments were all in, if one. */
+const topicAppOf = (
+  topicSources: readonly MatchedSegment[],
+): ActivityTopicApp | null => {
+  const first = topicSources.at(0);
+  if (
+    first === undefined ||
+    topicSources.some(
+      ({ appIdentifier }) => appIdentifier !== first.appIdentifier,
+    )
+  ) {
+    return null;
+  }
+  return {
+    appIdentifier: first.appIdentifier,
+    appName: first.appName,
+    call: topicSources.every(({ call }) => call),
+  };
 };
 
 /** The topic holding at least half a stretch's recorded time, if any. */

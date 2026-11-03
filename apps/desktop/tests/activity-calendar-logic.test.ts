@@ -51,6 +51,12 @@ type SegmentOptions = {
   app?: string | undefined;
   title?: string | undefined;
   matterId?: string | undefined;
+  call?: boolean | undefined;
+};
+const APP_NAMES: Record<string, string> = {
+  browser: "Example Browser",
+  editor: "Example Editor",
+  meetings: "Example Meetings",
 };
 const segment = ({
   from,
@@ -58,9 +64,11 @@ const segment = ({
   app = "editor",
   title,
   matterId,
+  call,
 }: SegmentOptions): ActivitySegment => ({
   appIdentifier: `com.example.${app}`,
-  appName: app === "browser" ? "Example Browser" : "Example Editor",
+  appName: APP_NAMES[app] ?? app,
+  ...(call === undefined ? {} : { call }),
   start: at(from),
   end: at(to),
   matterId: matterId ?? null,
@@ -345,6 +353,43 @@ describe("activity blocks", () => {
       [ms(0), "title:board minutes.docx"],
       [ms(60), null],
       [ms(90), "matter:lease"],
+    ]);
+  });
+
+  test("a block is named by the topic that sets its colour, never by time it took in", () => {
+    const { segments } = day([
+      // Brief stretches joined into one: mostly an untitled call, with a
+      // titled document in between.
+      segment({ from: 0, to: 3, app: "meetings", call: true }),
+      segment({ from: 3, to: 5, title: "Draft.docx" }),
+      segment({ from: 5, to: 8, app: "meetings", call: true }),
+      // Quick switching between four unrelated windows: no topic, no name.
+      segment({ from: 60, to: 62, title: "Inbox" }),
+      segment({ from: 62, to: 64, app: "browser", title: "News" }),
+      segment({ from: 64, to: 66, title: "Calendar" }),
+      segment({ from: 66, to: 68, app: "browser", title: "Weather" }),
+    ]);
+    expect(
+      activityBlocks(segments, 15).map(
+        ({ topic, title, topicApp, sources }) => ({
+          topic,
+          title,
+          topicApp,
+          sources: sources.length,
+        }),
+      ),
+    ).toEqual([
+      {
+        topic: "call:com.example.meetings",
+        title: null,
+        topicApp: {
+          appIdentifier: "com.example.meetings",
+          appName: "Example Meetings",
+          call: true,
+        },
+        sources: 3,
+      },
+      { topic: null, title: null, topicApp: null, sources: 4 },
     ]);
   });
 
