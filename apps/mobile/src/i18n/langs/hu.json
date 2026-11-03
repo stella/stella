@@ -191,6 +191,7 @@
       "openFailed": "Ez a dokumentum most nem szerkeszthető",
       "takenOver": "Valaki más szerkeszti most ezt a dokumentumot. A legutóbbi mentés óta végzett módosításai nem maradtak meg.",
       "finishFailed": "A módosításai mentve vannak, de még nem lett belőlük új verzió. Koppintson újra a Kész gombra, vagy lépjen ki: a következő szerkesztés innen folytatódik.",
+      "notStored": "A legutóbbi módosításokat nem sikerült menteni. Maradjon, és próbálja újra, vagy lépjen ki nélkülük.",
       "stay": "Maradok",
       "leave": "Kilépés"
     }

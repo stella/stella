@@ -60,7 +60,7 @@ pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  SidecarRunStart,
+  RunAnswer, SidecarRunStart,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProcessRef,
@@ -76,7 +76,9 @@ use crate::runner_protocol::{
 const LOG_TARGET: &str = "harness_sidecar";
 /// Bound on queued commands; beyond it a command is refused as busy.
 const COMMAND_QUEUE: usize = 256;
-/// Bound on a run's undelivered outputs before the holder's lines wait.
+/// Bound on a run's undelivered outputs. The last slot is kept for the run's
+/// final message: a run whose consumer lets the others fill up ends `failed`
+/// in it and is cancelled, so no consumer can stall the supervisor.
 const RUN_OUTPUT_QUEUE: usize = 256;
 const LINK_EVENT_QUEUE: usize = 256;
 /// What the sidecar is named next to the app executable in a bundle.
@@ -417,6 +419,11 @@ impl HarnessSidecar {
     approval: RunApproval,
   ) -> Result<(), SidecarUnavailable> {
     self.forward(approval.run_id.clone(), HostMessage::RunApproval(approval))
+  }
+
+  /// Answers to a blocking question the run asked.
+  pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
+    self.forward(answer.run_id.clone(), HostMessage::RunAnswer(answer))
   }
 
   pub(crate) fn interrupt(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
@@ -765,6 +772,9 @@ struct Run {
   finished: Option<NonZeroU32>,
   /// `None` for a run a holder listed that no caller resumed yet.
   claim: Option<Claim>,
+  /// Cancelled because its consumer stopped draining it: never routed or
+  /// resumed again.
+  abandoned: bool,
 }
 
 struct Supervisor {
@@ -995,6 +1005,7 @@ impl Supervisor {
         last_seq: 0,
         finished: None,
         claim: None,
+        abandoned: false,
       });
       run.last_seq = run.last_seq.max(held.last_seq);
     }
@@ -1085,6 +1096,7 @@ impl Supervisor {
           outputs: Some(outputs),
           delivered: 0,
         }),
+        abandoned: false,
       },
     );
     self.write(&dir, &HostMessage::RunStart(start)).await;
@@ -1098,6 +1110,8 @@ impl Supervisor {
   ) {
     let claimed = match self.runs.get_mut(&point.run_id) {
       None => Err(ResumeError::UnknownRun),
+      // Cancelled for an undrained channel: it ends, nobody takes it over.
+      Some(run) if run.abandoned => Err(ResumeError::UnknownRun),
       Some(run) if run.claim.is_some() => Err(ResumeError::AlreadyClaimed),
       Some(run) => {
         run.claim = Some(Claim {
@@ -1122,6 +1136,7 @@ impl Supervisor {
     self
       .runs
       .iter()
+      .filter(|(_run_id, run)| !run.abandoned)
       .map(|(run_id, run)| HeldRun {
         run_id: run_id.clone(),
         harness: run.harness,
@@ -1325,7 +1340,13 @@ impl Supervisor {
   }
 
   /// Hand one numbered output to the run's channel, exactly once and in
-  /// order. A gap means the holder lost messages: the run fails here.
+  /// order, without waiting on its consumer. A gap means the holder lost
+  /// messages: the run fails here.
+  ///
+  /// The channel's last slot is kept for the run's final message. When only
+  /// that slot is left, the run ends `failed` in it, is cancelled in the
+  /// holder and is never routed or resumed again; its own end is acked here
+  /// so the holder forgets it.
   async fn deliver(&mut self, run_id: &str, seq: NonZeroU32, output: SidecarRunOutput) {
     let Some(run) = self.runs.get_mut(run_id) else {
       return;
@@ -1334,6 +1355,18 @@ impl Supervisor {
     let last = matches!(output, SidecarRunOutput::Finished { .. });
     if last {
       run.finished = Some(seq);
+    }
+    if run.abandoned {
+      if last {
+        let dir = run.holder.clone();
+        self.runs.remove(run_id);
+        let ack = Ack {
+          run_id: run_id.to_owned(),
+          seq,
+        };
+        self.write(&dir, &HostMessage::Ack(ack)).await;
+      }
+      return;
     }
     let Some(claim) = run.claim.as_mut() else {
       return;
@@ -1349,20 +1382,48 @@ impl Supervisor {
       return;
     }
     claim.delivered = seq.get();
-    let outputs = if last {
-      claim.outputs.take()
-    } else {
-      claim.outputs.clone()
-    };
-    if let Some(outputs) = outputs {
-      // A dropped receiver means nobody waits for the run any more.
-      let _delivered = outputs
-        .send(SidecarDelivery {
+    if last {
+      if let Some(outputs) = claim.outputs.take() {
+        // The reserved slot always holds the final message; a dropped
+        // receiver means nobody waits for the run any more.
+        let _queued = outputs.try_send(SidecarDelivery {
           holder_seq: Some(seq),
           output,
-        })
-        .await;
+        });
+      }
+      return;
     }
+    let Some(outputs) = claim.outputs.as_ref() else {
+      return;
+    };
+    if outputs.capacity() > 1 {
+      // A dropped receiver means nobody waits for the run any more.
+      let _queued = outputs.try_send(SidecarDelivery {
+        holder_seq: Some(seq),
+        output,
+      });
+      return;
+    }
+    tracing::warn!(
+      target: LOG_TARGET,
+      "a run's outputs were not drained; cancelling the run"
+    );
+    if let Some(outputs) = claim.outputs.take() {
+      let _queued = outputs.try_send(SidecarDelivery {
+        holder_seq: None,
+        output: SidecarRunOutput::Finished {
+          outcome: RunOutcome::Failed,
+          harness_session_id: None,
+        },
+      });
+    }
+    run.claim = None;
+    run.abandoned = true;
+    let dir = run.holder.clone();
+    let cancel = HostMessage::RunCancel(RunRef {
+      run_id: run_id.to_owned(),
+    });
+    self.write(&dir, &cancel).await;
   }
 
   fn fail_run(&mut self, run_id: &str) {

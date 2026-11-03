@@ -61,6 +61,7 @@ export const SIDECAR_HOST_MESSAGE = {
   harnessProbe: "harness.probe",
   runStart: "run.start",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -120,6 +121,9 @@ const MAX_RUN_MESSAGES = 1000;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
+const MAX_ANSWERED_QUESTIONS = 32;
+const MAX_ANSWERS_PER_QUESTION = 64;
+const MAX_ANSWER_LENGTH = 16_384;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -302,6 +306,29 @@ export const sidecarHostMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; the request id is the one
+   * its chunk's interrupt carries. Answers name an option by its label or
+   * hold free text, keyed by question id.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: v.pipe(
+      v.record(
+        v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+        v.pipe(
+          v.array(v.pipe(v.string(), v.maxLength(MAX_ANSWER_LENGTH))),
+          v.maxLength(MAX_ANSWERS_PER_QUESTION),
+        ),
+      ),
+      v.check(
+        (answers) => Object.keys(answers).length <= MAX_ANSWERED_QUESTIONS,
+        "At most 32 questions are answered at once",
+      ),
+    ),
   }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runInterrupt),

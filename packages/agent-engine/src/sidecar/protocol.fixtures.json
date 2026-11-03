@@ -8,6 +8,7 @@
       "harness.probe",
       "run.start",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "run.token",
@@ -176,6 +177,15 @@
         "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "decision": "approve_for_session"
+      },
+      {
+        "type": "run.answer",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "answers": {
+          "scope": ["Only this matter"],
+          "note": ["Use the signed version."]
+        }
       },
       {
         "type": "run.interrupt",
@@ -403,6 +413,16 @@
       {
         "name": "unknown decision",
         "line": "{\"type\":\"run.approval\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"decision\":\"maybe\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "answer with a non-list value",
+        "line": "{\"type\":\"run.answer\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"answers\":{\"scope\":\"Only this matter\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "answer naming a non-UUID request",
+        "line": "{\"type\":\"run.answer\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"requestId\":\"q-1\",\"answers\":{}}",
         "reason": "invalid"
       },
       {

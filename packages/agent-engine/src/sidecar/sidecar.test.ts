@@ -832,6 +832,54 @@ describe("harness holder over its socket", () => {
     expect(answer?.result).toEqual({ decision: "decline" });
   });
 
+  test("answers a blocking question under the request id its pause carries", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "blocking_question");
+    const pause = await client.waitFor(
+      (message): message is Extract<SidecarMessage, { type: "run.event" }> =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "RUN_FINISHED",
+    );
+    const outcome = v.parse(
+      v.object({
+        type: v.literal("interrupt"),
+        interrupts: v.tuple([
+          v.object({ id: v.string(), toolCallId: v.string() }),
+        ]),
+      }),
+      pause.chunk["outcome"],
+    );
+    const [{ id: requestId, toolCallId }] = outcome.interrupts;
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(toolCallId).toBe("ask-1");
+    // A response to a request the run does not hold changes nothing.
+    client.send({
+      type: "run.answer",
+      runId,
+      requestId: crypto.randomUUID(),
+      answers: { law: ["Slovak"] },
+    });
+    client.send({
+      type: "run.answer",
+      runId,
+      requestId,
+      answers: { law: ["Czech"] },
+    });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+    const replies = holder
+      .received()
+      .filter(
+        (message) =>
+          message.method === undefined && message.result !== undefined,
+      )
+      .map(({ result }) => result);
+    expect(replies).toEqual([{ answers: { law: { answers: ["Czech"] } } }]);
+  });
+
   test("interrupt finishes as interrupted, cancel as cancelled", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);

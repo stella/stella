@@ -38,8 +38,11 @@ type DocumentViewProps = {
    * bridge the call answers asynchronously, so each slice is awaited.
    */
   writeEdit: (offset: number, base64: string) => Promise<void> | void;
-  /** A save is complete: its size, or null when nothing changed. */
-  onEditSaved: (size: number | null, final: boolean) => Promise<void>;
+  /**
+   * A save is complete: its size, or null when nothing changed. Whether the
+   * app stored it comes back; edits it did not store go with the next save.
+   */
+  onEditSaved: (size: number | null, final: boolean) => Promise<boolean>;
   /**
    * The first page is on screen. The app's handlers only set state, so the
    * DOM side does not wait on the bridge's reply.
@@ -137,7 +140,10 @@ const DocumentView = ({
     onFailed(message);
   };
   // A save goes back to the app as the file came: in slices, then its end.
-  const saved = async (edited: Uint8Array | null, final: boolean) => {
+  const saved = async (
+    edited: Uint8Array | null,
+    final: boolean,
+  ): Promise<boolean> => {
     if (edited !== null) {
       for (const [offset, length] of chunksOf(edited.length)) {
         await writeEdit(
@@ -146,7 +152,7 @@ const DocumentView = ({
         );
       }
     }
-    await onEditSaved(edited === null ? null : edited.length, final);
+    return await onEditSaved(edited === null ? null : edited.length, final);
   };
 
   let pages = null;
