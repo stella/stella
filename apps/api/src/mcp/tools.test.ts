@@ -3839,11 +3839,15 @@ describe("OpenAI-compatible MCP tools", () => {
       queryUsed: query,
       warnings: [],
     });
+    // The time-budget outcome is the agent tool's own, wider than the
+    // contract's HTTP pagination outcome, so the page reads it as sent.
+    type PaginationOutcomeAsSent =
+      SearchPaginationOutcome | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
     type PartialPage = MergedSearchPage & {
-      paginationOutcome: SearchPaginationOutcome;
+      paginationOutcome: PaginationOutcomeAsSent;
       searches: {
         query: string;
-        paginationOutcome: SearchPaginationOutcome;
+        paginationOutcome: PaginationOutcomeAsSent;
         warnings: { code: string; hint: string }[];
       }[];
     };
