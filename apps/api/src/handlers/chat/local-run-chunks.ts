@@ -28,6 +28,9 @@ import type {
   DesktopRunnerRunView,
   RunOwner,
 } from "@/api/lib/desktop-runner/store";
+import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -402,6 +405,26 @@ const questionReplyChunks = (
   ...runFinishedChunks(rewrite, false),
 ];
 
+/**
+ * A run store that cannot be read ends the turn as a computer that stopped
+ * running it: the member retries, and nothing the run produced is lost.
+ */
+const LOCAL_RUN_STORE_SINK = failureSink({
+  event: "chat.local_run_store_failed",
+  expected: [],
+});
+
+const storeUnavailable = (
+  error: DatabaseError,
+  rewrite: Pick<RewriteContext, "chatRunId" | "threadId">,
+): PublicStreamChunk[] => {
+  observeFailure(error, { sink: LOCAL_RUN_STORE_SINK });
+  return runErrorChunks(
+    failureOf(AI_FAILURE_CODES.local_runner_unavailable),
+    rewrite,
+  );
+};
+
 type ReadRunOptions = {
   context: LocalRunContext;
   runnerRunId: string;
@@ -465,16 +488,13 @@ async function* readRunChunks({
     yield* start();
     yield* runErrorChunks(failureOf(code, message), rewrite);
   };
-  const pause = async () => {
-    const recorded = await control.recordChatReadSeq({
+  /** Record the read position; the resumed turn continues after it. */
+  const pause = async () =>
+    await control.recordChatReadSeq({
       owner,
       runId: runnerRunId,
       seq: position,
     });
-    if (recorded.isErr()) {
-      throw recorded.error;
-    }
-  };
   const listener = context.runBell.listen(runnerRunId);
   try {
     for (;;) {
@@ -489,7 +509,9 @@ async function* readRunChunks({
         limit: EVENT_PAGE,
       });
       if (page.isErr()) {
-        throw page.error;
+        yield* start();
+        yield* storeUnavailable(page.error, rewrite);
+        return;
       }
       for (const item of page.value.items) {
         position = item.seq;
@@ -531,15 +553,21 @@ async function* readRunChunks({
                 { ...question, toolCallId: question.toolCallId },
                 rewrite,
               );
-              await pause();
               await interruptRun(context, runnerRunId);
               return;
             }
-            yield chunk;
             if (chunk.outcome?.type === "interrupt") {
-              await pause();
+              // The position is stored before the pause is handed out, so an
+              // answer always continues after it.
+              const recorded = await pause();
+              if (recorded.isErr()) {
+                yield* storeUnavailable(recorded.error, rewrite);
+                return;
+              }
+              yield chunk;
               return;
             }
+            yield chunk;
             finished = true;
             continue;
           }
@@ -547,7 +575,6 @@ async function* readRunChunks({
             // The chunk stream carries the interrupt the member answers.
             continue;
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished: {
-            await pause();
             const ending = finishedRunChunks({
               outcome: message.outcome,
               finishSent: finished,
@@ -575,7 +602,9 @@ async function* readRunChunks({
       }
       const run = await control.readRun({ owner, runId: runnerRunId });
       if (run.isErr()) {
-        throw run.error;
+        yield* start();
+        yield* storeUnavailable(run.error, rewrite);
+        return;
       }
       const step = caughtUpStep(run.value);
       switch (step.type) {
@@ -643,8 +672,20 @@ async function* startLocalRun({
     desktopId: destination.desktopId,
     harness: destination.harness,
   });
+  const rewrite = {
+    chatRunId: input.chatRunId,
+    threadId: context.chatThreadId,
+  };
+  const opened = {
+    type: EventType.RUN_STARTED,
+    runId: input.chatRunId,
+    threadId: context.chatThreadId,
+    timestamp: nowMs(),
+  } as const satisfies PublicStreamChunk;
   if (session.isErr()) {
-    throw session.error;
+    yield opened;
+    yield* storeUnavailable(session.error, rewrite);
+    return;
   }
   const harnessSessionId = session.value;
   const start = async (messages: readonly ModelMessage[]) =>
@@ -678,22 +719,15 @@ async function* startLocalRun({
     // The resumed session already holds the history.
     started = await start([latest]);
   }
-  const rewrite = {
-    chatRunId: input.chatRunId,
-    threadId: context.chatThreadId,
-  };
   const refuse = function* (code: LocalRunFailure) {
-    yield {
-      type: EventType.RUN_STARTED,
-      runId: input.chatRunId,
-      threadId: context.chatThreadId,
-      timestamp: nowMs(),
-    } as const satisfies PublicStreamChunk;
+    yield opened;
     yield* runErrorChunks(failureOf(code), rewrite);
   };
   if (started.isErr()) {
     if (started.error._tag === "DatabaseError") {
-      throw started.error;
+      yield opened;
+      yield* storeUnavailable(started.error, rewrite);
+      return;
     }
     // A command the wire contract refuses: the prompt or history is out of
     // what one run may carry.
@@ -748,6 +782,16 @@ async function* resumeLocalRun({
   let runnerRunId: string | null = null;
   let afterSeq = 0;
   let failure: ResumeFailure = null;
+  const rewrite = {
+    chatRunId: input.chatRunId,
+    threadId: context.chatThreadId,
+  };
+  const opened = {
+    type: EventType.RUN_STARTED,
+    runId: input.chatRunId,
+    threadId: context.chatThreadId,
+    timestamp: nowMs(),
+  } as const satisfies PublicStreamChunk;
   for (const item of input.resume) {
     // Approval request ids are minted as UUIDs by the runner protocol.
     if (!v.is(uuid, item.interruptId)) {
@@ -761,7 +805,9 @@ async function* resumeLocalRun({
       requestId: item.interruptId,
     });
     if (found.isErr()) {
-      throw found.error;
+      yield opened;
+      yield* storeUnavailable(found.error, rewrite);
+      return;
     }
     const run = found.value;
     if (run === null || (runnerRunId !== null && run.runId !== runnerRunId)) {
@@ -779,7 +825,9 @@ async function* resumeLocalRun({
     });
     if (answered.isErr()) {
       if (answered.error._tag === "DatabaseError") {
-        throw answered.error;
+        yield opened;
+        yield* storeUnavailable(answered.error, rewrite);
+        return;
       }
       failure = AI_FAILURE_CODES.local_runner_unavailable;
       break;
