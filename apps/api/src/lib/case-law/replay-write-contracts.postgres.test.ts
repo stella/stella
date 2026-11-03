@@ -666,13 +666,11 @@ if (!databaseUrl || !enabled) {
           tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
         ) => Promise<T>,
       ) => await db.transaction(run);
-      const lease = await acquireCaseLawSourceIngestionLease({
-        scopedDb,
-        sourceId,
-      });
-      if (lease === null) {
-        return panic("Available lease was not acquired");
-      }
+      const lease =
+        (await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId,
+        })) ?? panic("Available lease was not acquired");
       expect(before.ingestionLeaseToken).toBeNull();
       expect(lease.source.ingestionLeaseToken).toBe(lease.leaseToken);
       expect(lease.source.ingestionLeaseExpiresAt?.getTime()).toBeGreaterThan(
@@ -713,13 +711,11 @@ if (!databaseUrl || !enabled) {
           ingestionLeaseExpiresAt: expiredAt,
         })
         .where(eq(caseLawSources.id, sourceId));
-      const replacement = await acquireCaseLawSourceIngestionLease({
-        scopedDb,
-        sourceId,
-      });
-      if (replacement === null) {
-        return panic("Expired ownership was not replaced");
-      }
+      const replacement =
+        (await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId,
+        })) ?? panic("Expired ownership was not replaced");
       expect(
         replacement.source.ingestionLeaseExpiresAt?.getTime(),
       ).toBeGreaterThan(expiredAt.getTime());
