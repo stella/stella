@@ -191,6 +191,7 @@
       "openFailed": "Seda dokumenti ei saa praegu muuta",
       "takenOver": "Seda dokumenti muudab nüüd keegi teine. Teie muudatusi pärast viimast salvestamist ei säilitatud.",
       "finishFailed": "Teie muudatused on salvestatud, kuid neist ei saanud veel uut versiooni. Puudutage uuesti Valmis või lahkuge: järgmine muutmine jätkab neist.",
+      "notStored": "Viimaseid muudatusi ei õnnestunud salvestada. Jää ja proovi uuesti või lahku ilma nendeta.",
       "stay": "Jää",
       "leave": "Lahku"
     }

@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/desktop-runner/runtime.ts",
+  "delta": 1,
+  "reason": "The desktop runner gateway is a declared root-connection door: a runner socket outlives the request that opened it and run leases are swept across organizations, so no member-scoped connection fits; every query names the account, organization and device key it acts for."
+}
