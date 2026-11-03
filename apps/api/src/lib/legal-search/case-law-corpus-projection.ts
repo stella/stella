@@ -71,6 +71,11 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
  * recorded here, and the published view has already decided whether the
  * decision may be shown at all. Index lag can make a snippet one parse old,
  * never hide a decision.
+ *
+ * An applied upsert always names its revision (the states table's
+ * `applied_shape` check), so the predicate does not repeat that: restating
+ * it would match the partial census index and steer the planner off the
+ * primary key this lookup is registered on.
  */
 const acceptedCaseLawProjectionStateAt = (
   resolvedGeneration: SQLWrapper,
@@ -80,7 +85,6 @@ const acceptedCaseLawProjectionStateAt = (
         AND ${corpusIndexProjectionStates.entityId} = ${publishedCaseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
-        AND ${corpusIndexProjectionStates.appliedRevision} IS NOT NULL
         AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, publishedCaseLawDecisions.country)})`;
 
 /** The jurisdiction-serving pointer row of the decision's country. */
