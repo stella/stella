@@ -29,6 +29,7 @@ import {
   caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
   caseLawCorpusServingGeneration,
+  currentCaseLawCorpusProjection,
   servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
@@ -263,6 +264,17 @@ const acceptedBy = async (generation: string) =>
       .select({ id: publishedCaseLawDecisions.id })
       .from(publishedCaseLawDecisions)
       .where(servedCaseLawCorpusProjection(generation))
+  )
+    .map(({ id }) => id)
+    .toSorted();
+
+/** The decisions a read pairing the copy with the current AST may use. */
+const currentFor = async (generation: string) =>
+  (
+    await db
+      .select({ id: publishedCaseLawDecisions.id })
+      .from(publishedCaseLawDecisions)
+      .where(currentCaseLawCorpusProjection(generation))
   )
     .map(({ id }) => id)
     .toSorted();
@@ -645,6 +657,7 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
     .where(eq(publishedCaseLawDecisions.id, CZE_DECISION_ID));
   expect(acceptedRevision).toEqual([{ revision: V9_REVISION }]);
   expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
+  expect(await currentFor("case_law_v8")).toEqual([CZE_DECISION_ID]);
   const v9State = and(
     eq(corpusIndexProjectionStates.generation, "case_law_v9"),
     eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID),
@@ -655,6 +668,8 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
     .set({ desiredEpoch: sql`${corpusIndexProjectionStates.desiredEpoch} + 1` })
     .where(v9State);
   expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
+  // A read pairing the copy with the current AST waits for the new copy.
+  expect(await currentFor("case_law_v8")).toEqual([]);
   // A queued erasure in v9 withdraws it, though v8 still holds a copy.
   await db
     .update(corpusIndexProjectionStates)

@@ -134,8 +134,10 @@ test("the SQL acceptance of an indexed hit resolves its generation through the p
   // And the callers hand it the serving generation, never a route of their own.
   expect(modulesMatching(/\bservedCaseLawCorpusProjection\(/u)).toEqual([
     "handlers/case-law/decisions/search.ts",
-    "lib/case-law/research-answer-runner.ts",
     "lib/legal-search/corpus-index-provider.ts",
+  ]);
+  expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
+    "lib/case-law/research-answer-runner.ts",
   ]);
 });
 
