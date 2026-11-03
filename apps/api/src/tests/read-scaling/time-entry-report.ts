@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
-  contacts,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   timeEntries,
@@ -27,6 +26,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 export const seedTimeEntryReportScaling = async (
@@ -62,12 +62,14 @@ export const seedTimeEntryReportScaling = async (
     role: "owner",
     createdAt: new Date("2020-01-01"),
   });
-  await db.insert(contacts).values({
-    id: clientId,
-    organizationId,
-    type: "person",
-    displayName: "Report client",
-  });
+  await insertOwnerContacts(db, [
+    {
+      id: clientId,
+      organizationId,
+      type: "person",
+      displayName: "Report client",
+    },
+  ]);
   await db.insert(workspaces).values({
     id: workspaceId,
     organizationId,

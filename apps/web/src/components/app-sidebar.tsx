@@ -1501,7 +1501,7 @@ export const MatterItem = ({
             showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
-            .join(" — ")}
+            .join(" · ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
             {pinFlashSequence !== null && (

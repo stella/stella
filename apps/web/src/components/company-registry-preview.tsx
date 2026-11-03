@@ -75,7 +75,7 @@ export const CompanyRegistryPreview = ({
             <li className="text-sm" key={candidate.id}>
               <bdi className="font-medium tabular-nums">{candidate.id}</bdi>
               <span className="text-muted-foreground">
-                {" — "}
+                {" · "}
                 {candidate.reason === "name-mismatch"
                   ? t("search.registryCandidateNameMismatch", {
                       officialName: candidate.officialName ?? candidate.id,
