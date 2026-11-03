@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "Recording how far a chat turn read its desktop runner run is read-position bookkeeping on the runner store, like the gateway's other run writes; the chat turn the run serves is audited by the chat pipeline."
+}

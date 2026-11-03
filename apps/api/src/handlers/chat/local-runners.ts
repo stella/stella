@@ -12,7 +12,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 
 const config = {
@@ -37,9 +36,7 @@ type LocalRunnersDependencies = {
  * installed). `hidden` when the member cannot run chat turns on a computer,
  * so the composer offers nothing.
  */
-export const createLocalRunnersEndpoint = (
-  dependencies?: LocalRunnersDependencies,
-) =>
+const createLocalRunnersEndpoint = (dependencies?: LocalRunnersDependencies) =>
   createSafeRootHandler(config, async function* ({ safeDb, session, user }) {
     const owner = {
       userId: user.id,
@@ -55,14 +52,7 @@ export const createLocalRunnersEndpoint = (
       dependencies?.control() ?? getDesktopRunnerControl().control;
     const runners = await control.readMemberRunners({ owner });
     if (runners.isErr()) {
-      return Result.err(
-        new HandlerError({
-          status: 503,
-          code: "internal_error",
-          message: "Computers are unavailable right now.",
-          cause: runners.error,
-        }),
-      );
+      return Result.err(runners.error);
     }
     const enabled: ChatLocalRunReadiness = {
       status: "enabled",

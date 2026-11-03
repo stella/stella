@@ -17,7 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  type DatabaseError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   type FeatureAccessSnapshot,
   isFeatureEnabled,
@@ -65,7 +68,7 @@ export const resolveChatLocalRun = async ({
   workspaceIds,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
-  Result<LocalChatRun | undefined, HandlerError>
+  Result<LocalChatRun | undefined, HandlerError | DatabaseError>
 > => {
   if (
     runTarget === undefined ||
@@ -114,14 +117,7 @@ export const resolveChatLocalRun = async ({
     harness: runTarget.harness,
   });
   if (picked.isErr()) {
-    return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "internal_error",
-        message: "Computers are unavailable right now.",
-        cause: picked.error,
-      }),
-    );
+    return Result.err(picked.error);
   }
   const desktop = picked.value;
   switch (desktop.type) {

@@ -99,13 +99,14 @@ const READY: PickedDesktop = {
 };
 
 const resolve = async ({
-  runTarget = LOCAL,
+  runTarget,
   picked = READY,
   granted = true,
   agentSandboxRequested = false,
   resumesPausedRun = false,
 }: {
-  runTarget?: ChatRunTarget | undefined;
+  /** The send's target; a local one unless the case says otherwise. */
+  runTarget?: ChatRunTarget | "none";
   picked?: PickedDesktop;
   granted?: boolean;
   agentSandboxRequested?: boolean;
@@ -113,7 +114,7 @@ const resolve = async ({
 } = {}) => {
   const { control, picks } = pickingControl(picked);
   const resolved = await resolveChatLocalRun({
-    runTarget,
+    runTarget: runTarget === "none" ? undefined : (runTarget ?? LOCAL),
     agentSandboxRequested,
     resumesPausedRun,
     featureAccessSnapshot: snapshotWith(granted),
@@ -138,7 +139,7 @@ const refusalCodeOf = (
 
 describe("routing a chat turn to the member's computer", () => {
   test("a turn without a local target stays on stella's own path", async () => {
-    for (const runTarget of [undefined, { kind: "cloud" } as const]) {
+    for (const runTarget of ["none", { kind: "cloud" }] as const) {
       const { resolved, picks } = await resolve({ runTarget, granted: false });
       expect(resolved.isOk() && resolved.value).toBeUndefined();
       expect(picks).toEqual([]);

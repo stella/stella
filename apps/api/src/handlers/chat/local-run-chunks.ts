@@ -22,7 +22,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
-import type { DesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import type {
+  DesktopRunnerControl,
+  QueueCommandOutcome,
+} from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import type {
   DesktopRunnerRunView,
@@ -45,7 +48,7 @@ import { isRecord } from "@/api/lib/type-guards";
 type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 
 /** What the chunk source reads and commands through. */
-export type LocalRunControl = Pick<
+type LocalRunControl = Pick<
   DesktopRunnerControl,
   | "answerApproval"
   | "interruptRun"
@@ -58,7 +61,7 @@ export type LocalRunControl = Pick<
 >;
 
 /** The computer and harness a new turn was routed to before it started. */
-export type LocalRunDestination = {
+type LocalRunDestination = {
   desktopId: string;
   harness: ChatLocalRunHarness;
   harnessVersion: string;
@@ -77,7 +80,7 @@ export type LocalRunContext = {
   pollMs?: number;
 };
 
-export type LocalRunStreamInput = {
+type LocalRunStreamInput = {
   /** The chat run this attempt answers; every run event carries it. */
   chatRunId: string;
   /** The thread history, as the cloud model would receive it. */
@@ -126,7 +129,7 @@ type StoredOutcome = Extract<
  * How a finished run ends the chat turn. A failure the member can act on
  * keeps its own code; an interruption ends the turn as stopped.
  */
-export const LOCAL_RUN_OUTCOME = {
+const LOCAL_RUN_OUTCOME = {
   completed: { type: "completed" },
   interrupted: { type: "stopped" },
   cancelled: { type: "stopped" },
@@ -152,7 +155,7 @@ type RejectReason = Extract<
 >["reason"];
 
 /** Why the computer refused the run, as the turn's failure. */
-export const LOCAL_RUN_REJECTION = {
+const LOCAL_RUN_REJECTION = {
   harness_needs_login: AI_FAILURE_CODES.local_runner_needs_login,
   harness_limited: AI_FAILURE_CODES.local_runner_limit_reached,
   harness_not_installed: AI_FAILURE_CODES.local_runner_unavailable,
@@ -759,8 +762,26 @@ async function* startLocalRun({
   }
 }
 
-/** Why answering the paused run failed, or `null` once every answer is queued. */
+/** Why answering the paused run failed, or `null` once the answer is queued. */
 type ResumeFailure = LocalRunFailure | null;
+
+/** Whether a queued approval answer lets the paused run go on. */
+const approvalAnswerFailure = (answer: QueueCommandOutcome): ResumeFailure => {
+  switch (answer.type) {
+    case "queued":
+    case "duplicate":
+      return null;
+    case "run_ended":
+    case "run_not_found":
+    case "approval_not_requested":
+    case "command_limit":
+    case "too_large":
+      return AI_FAILURE_CODES.local_runner_unavailable;
+    default:
+      answer satisfies never;
+      return panic("Unknown approval answer outcome");
+  }
+};
 
 type ResumeOptions = {
   context: LocalRunContext;
@@ -781,7 +802,7 @@ async function* resumeLocalRun({
   const uuid = v.pipe(v.string(), v.uuid());
   let runnerRunId: string | null = null;
   let afterSeq = 0;
-  let failure: ResumeFailure = null;
+  let failure: ResumeFailure;
   const rewrite = {
     chatRunId: input.chatRunId,
     threadId: context.chatThreadId,
@@ -792,13 +813,14 @@ async function* resumeLocalRun({
     threadId: context.chatThreadId,
     timestamp: nowMs(),
   } as const satisfies PublicStreamChunk;
-  for (const item of input.resume) {
+  // The harness pauses for one approval at a time, so a resume answers one.
+  const [item, ...rest] = input.resume;
+  if (item === undefined || rest.length > 0) {
+    failure = AI_FAILURE_CODES.local_runner_unavailable;
+  } else if (!v.is(uuid, item.interruptId)) {
     // Approval request ids are minted as UUIDs by the runner protocol.
-    if (!v.is(uuid, item.interruptId)) {
-      failure = AI_FAILURE_CODES.local_runner_unavailable;
-      break;
-    }
-    // db-await-in-loop: one answer per paused approval, each its own command
+    failure = AI_FAILURE_CODES.local_runner_unavailable;
+  } else {
     const found = await control.readChatRunForRequest({
       owner,
       chatThreadId: context.chatThreadId,
@@ -810,45 +832,27 @@ async function* resumeLocalRun({
       return;
     }
     const run = found.value;
-    if (run === null || (runnerRunId !== null && run.runId !== runnerRunId)) {
+    if (run === null) {
       failure = AI_FAILURE_CODES.local_runner_unavailable;
-      break;
-    }
-    runnerRunId = run.runId;
-    afterSeq = run.chatReadSeq;
-    // db-await-in-loop: one answer per paused approval, each its own command
-    const answered = await control.answerApproval({
-      owner,
-      runId: run.runId,
-      requestId: item.interruptId,
-      decision: approvalDecisionOf(item),
-    });
-    if (answered.isErr()) {
-      if (answered.error._tag === "DatabaseError") {
-        yield opened;
-        yield* storeUnavailable(answered.error, rewrite);
-        return;
-      }
-      failure = AI_FAILURE_CODES.local_runner_unavailable;
-      break;
-    }
-    switch (answered.value.type) {
-      case "queued":
-      case "duplicate":
-        continue;
-      case "run_ended":
-      case "run_not_found":
-      case "approval_not_requested":
-      case "command_limit":
-      case "too_large":
+    } else {
+      const answered = await control.answerApproval({
+        owner,
+        runId: run.runId,
+        requestId: item.interruptId,
+        decision: approvalDecisionOf(item),
+      });
+      if (answered.isErr()) {
+        if (answered.error._tag === "DatabaseError") {
+          yield opened;
+          yield* storeUnavailable(answered.error, rewrite);
+          return;
+        }
         failure = AI_FAILURE_CODES.local_runner_unavailable;
-        break;
-      default:
-        answered.value satisfies never;
-        return panic("Unknown approval answer outcome");
-    }
-    if (failure !== null) {
-      break;
+      } else {
+        failure = approvalAnswerFailure(answered.value);
+        runnerRunId = run.runId;
+        afterSeq = run.chatReadSeq;
+      }
     }
   }
   if (failure !== null || runnerRunId === null) {

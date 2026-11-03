@@ -220,7 +220,7 @@ export const createRedisDoorbell = ({
 };
 
 /** One reader's subscription to a run's bell. */
-export type DesktopRunnerRunListener = {
+type DesktopRunnerRunListener = {
   /**
    * Resolve once the run rang since the previous wait, `timeoutMs` passed or
    * `signal` aborted, whichever comes first. A ring between two waits is kept,
@@ -249,7 +249,11 @@ type RunWaiter = { rang: boolean; wake: (() => void) | null };
 const createRunWaiters = () => {
   const waiters = new Map<string, Set<RunWaiter>>();
   const deliver = (runId: string) => {
-    for (const waiter of waiters.get(runId) ?? []) {
+    const forRun = waiters.get(runId);
+    if (forRun === undefined) {
+      return;
+    }
+    for (const waiter of forRun) {
       waiter.rang = true;
       waiter.wake?.();
     }

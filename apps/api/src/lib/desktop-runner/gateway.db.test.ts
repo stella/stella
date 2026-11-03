@@ -1851,8 +1851,10 @@ describe("chat turns on a computer", () => {
   let chatInstance: Instance;
 
   beforeAll(async () => {
+    // Every test here pairs a new computer with the same account.
     chatInstance = await startInstance("api-chat", sharedDoorbell, {
       runBell,
+      limits: { maxRunnersPerAccount: 1000 },
     });
   });
 
