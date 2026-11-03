@@ -57,6 +57,22 @@ const qualifyFileFootnotes = (line: PlSnLine, file: number): PlSnLine => {
   };
 };
 
+/**
+ * `Ŝ` stands for `ż` in the text layer of documents typeset with a common
+ * Polish font encoding (`NajwyŜszy`, `moŜe`); Polish writes no `Ŝ`, so every
+ * line, body, note and ruling header alike, reads as what the page prints.
+ */
+const asPrinted = (line: PlSnLine): PlSnLine =>
+  line.type === "blank"
+    ? line
+    : {
+        ...line,
+        runs: line.runs.map((run) => ({
+          ...run,
+          text: run.text.replaceAll("Ŝ", "ż"),
+        })),
+      };
+
 export type ParsePlUokikDocumentInput = {
   /** Every decision file the record attaches, in the order it lists them. */
   pdfs: readonly Uint8Array[];
@@ -95,9 +111,15 @@ const plUokikDocumentContent = async (
       pdf,
       PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
     );
-    body.push(...content.body.map((line) => qualifyFileFootnotes(line, file)));
+    body.push(
+      ...content.body.map((line) =>
+        qualifyFileFootnotes(asPrinted(line), file),
+      ),
+    );
     notes.push(
-      ...content.notes.map((line) => qualifyFileFootnotes(line, file)),
+      ...content.notes.map((line) =>
+        qualifyFileFootnotes(asPrinted(line), file),
+      ),
     );
   }
   return { body, notes };
@@ -310,13 +332,6 @@ const KNOWN_COURTS: readonly string[] = [
   ...new Set([...Object.values(PL_NCOURT_COURT_NAMES), SUPREME_COURT]),
 ].toSorted((left, right) => right.length - left.length);
 
-/**
- * `Ŝ` stands for `ż` in the text layer of documents typeset with a common
- * Polish font encoding (`NajwyŜszy`, `nałoŜenie`); read as what it prints.
- */
-const decodePrintedLetters = (text: string): string =>
-  text.replaceAll("Ŝ", "ż");
-
 const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
 const dayOf = (line: string): string | undefined => {
@@ -364,7 +379,7 @@ const trimEdges = (text: string): string => {
 
 /** The first court the text names, where its name is one the index knows. */
 const courtOf = (text: string): CourtRead | undefined => {
-  const region = collapse(decodePrintedLetters(text));
+  const region = collapse(text);
   const start = region.indexOf("Sąd ");
   if (start === -1) {
     return undefined;
