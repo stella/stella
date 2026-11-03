@@ -84,6 +84,30 @@ export type HarnessApprovalRequest = {
   options: readonly HarnessApprovalOption[];
 };
 
+/**
+ * What an approval asks the user to allow. A command approval names the
+ * command itself, since that is what runs, not the harness's summary of it
+ * (as t3code, MIT, shows command approvals); anything else uses the
+ * harness's reason, or names the tool.
+ */
+export const approvalMessage = (request: HarnessApprovalRequest): string => {
+  const { input } = request.toolCall;
+  if (
+    request.kind === "command" &&
+    typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    input.command.trim() !== ""
+  ) {
+    return input.command;
+  }
+  if (request.reason !== null && request.reason.trim() !== "") {
+    return request.reason;
+  }
+  return `Approval required to run ${request.toolCall.name}`;
+};
+
 export type HarnessQuestion = {
   id: string;
   header: string;
