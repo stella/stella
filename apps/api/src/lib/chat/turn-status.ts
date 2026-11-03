@@ -22,3 +22,23 @@ export const CHAT_TURN_TIMING_DISPOSITION = {
 export const CHAT_TURN_TIMING_ACTIVE_STATUSES = CHAT_TURN_STATUSES.filter(
   (status) => CHAT_TURN_TIMING_DISPOSITION[status] !== "finished",
 );
+
+/**
+ * Whether a turn in this status still holds the run on the member's computer
+ * it reads. A turn holds its run while it runs and while it waits on an
+ * answer the run can still take; every other status ends the run.
+ */
+export const CHAT_TURN_HOLDS_LOCAL_RUN = {
+  accepted: true,
+  running: true,
+  "awaiting-user": true,
+  completed: false,
+  failed: false,
+  cancelled: false,
+  interrupted: false,
+} as const satisfies Record<ChatTurnStatus, boolean>;
+
+/** Statuses of a turn that no longer holds its run; see above. */
+export const CHAT_TURN_RUN_ENDING_STATUSES = CHAT_TURN_STATUSES.filter(
+  (status) => !CHAT_TURN_HOLDS_LOCAL_RUN[status],
+);

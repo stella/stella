@@ -90,6 +90,7 @@ import {
   parseMessage,
   requireUserMessageContent,
   resolveBrowserExtensionCapability,
+  toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -1930,6 +1931,7 @@ const prepareValidatedIncomingMessage = async ({
       resume,
       safeDb,
       threadId: body.threadId,
+      toolCallOwnership: toolCallOwnershipOf(body.runTarget),
       tools: validationTools,
       userId,
     });
@@ -3388,6 +3390,8 @@ export const createSendMessage = (
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
                     allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
+                    // A turn on a computer carries only what its harness ran.
+                    ownership: localRun === undefined ? "cloud" : "harness",
                     tools: streamingTools,
                   });
                   if (Result.isError(validatedToolParts)) {
