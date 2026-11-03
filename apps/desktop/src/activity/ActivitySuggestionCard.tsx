@@ -30,7 +30,7 @@ import { diffWords } from "@stll/ui/review-word-diff";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
-import { TimeField } from "@stll/ui/time-field";
+import { TimeField, TimeFieldGroup } from "@stll/ui/time-field";
 
 import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
@@ -405,9 +405,8 @@ const SelectedRangeFields = ({
     onRangeChange(withMovedEdge({ date, edge, range, time, timeZone }));
   return (
     <div className="flex flex-col gap-1.5" data-activity-entry-times="">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <TimeFieldGroup>
         <TimeField
-          className="min-w-0 flex-1 basis-44"
           disabled={!editable}
           label={t("entryStart")}
           locale={locale}
@@ -415,7 +414,6 @@ const SelectedRangeFields = ({
           time={wallClockTime(range.startMs, timeZone)}
         />
         <TimeField
-          className="min-w-0 flex-1 basis-44"
           describedBy={backwards ? errorId : undefined}
           disabled={!editable}
           invalid={backwards}
@@ -424,7 +422,7 @@ const SelectedRangeFields = ({
           onChange={move("end")}
           time={wallClockTime(range.endMs, timeZone)}
         />
-      </div>
+      </TimeFieldGroup>
       {backwards ? (
         <p className="text-destructive text-xs" id={errorId}>
           {t("rangeEndBeforeStart")}

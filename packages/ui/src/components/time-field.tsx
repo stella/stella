@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { createContext, useContext, useId, useMemo } from "react";
+import type * as React from "react";
 
 import { cn } from "../lib/utils";
 import {
@@ -19,8 +20,37 @@ import {
   SelectValue,
 } from "./select";
 
+/**
+ * Label, hour, colon, minute. The time tracks never shrink below their value,
+ * so a 12-hour `10 AM` is never clipped. Below 13rem, too narrow for the
+ * longest label beside its selects, each label takes its own line above them.
+ */
+const TIME_FIELD_GRID_CLASS_NAME =
+  "grid items-center gap-x-1.5 gap-y-1.5 " +
+  "grid-cols-[auto_minmax(max-content,1fr)_auto_minmax(max-content,1fr)] " +
+  "@max-[13rem]/time-fields:grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)]";
+
+/** Set inside a TimeFieldGroup, whose grid every field's row shares. */
+const TimeFieldGroupContext = createContext(false);
+
+/**
+ * Stacks time fields on one grid, so their labels, hours and minutes line up
+ * whatever each label's length. A lone TimeField makes its own group.
+ */
+const TimeFieldGroup = ({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"div">) => (
+  <TimeFieldGroupContext.Provider value={true}>
+    <div className={cn("@container/time-fields min-w-0", className)} {...props}>
+      <div className={TIME_FIELD_GRID_CLASS_NAME}>{children}</div>
+    </div>
+  </TimeFieldGroupContext.Provider>
+);
+
 type TimeFieldProps = {
-  className?: string;
+  className?: string | undefined;
   disabled: boolean;
   /** Ties the field to an error or hint shown next to it. */
   describedBy?: string | undefined;
@@ -36,7 +66,18 @@ type TimeFieldProps = {
  * A wall-clock time to the minute: hour and minute selects in the locale's
  * own clock and numerals, so `2 PM` and `14` read as each locale writes them.
  */
-const TimeField = ({
+const TimeField = ({ className, ...props }: TimeFieldProps) => {
+  const grouped = useContext(TimeFieldGroupContext);
+  return grouped ? (
+    <TimeFieldRow className={className} {...props} />
+  ) : (
+    <TimeFieldGroup className={className}>
+      <TimeFieldRow {...props} />
+    </TimeFieldGroup>
+  );
+};
+
+const TimeFieldRow = ({
   className,
   describedBy,
   disabled,
@@ -56,10 +97,16 @@ const TimeField = ({
     <div
       aria-describedby={describedBy}
       aria-labelledby={labelId}
-      className={cn("flex items-center gap-1.5", className)}
+      className={cn(
+        "col-span-full grid grid-cols-subgrid items-center",
+        className,
+      )}
       role="group"
     >
-      <span className="text-foreground-label shrink-0 text-xs" id={labelId}>
+      <span
+        className="text-foreground-label text-xs @max-[13rem]/time-fields:col-span-full"
+        id={labelId}
+      >
         {label}
       </span>
       <TimePartSelect
@@ -112,7 +159,9 @@ const TimePartSelect = ({
     <SelectTrigger
       aria-invalid={invalid || undefined}
       aria-label={label}
-      className="min-w-0 flex-1"
+      // The shared trigger minimum would push the minutes past a narrow card;
+      // the grid track sizes each select to its value instead.
+      className="w-full min-w-0 tabular-nums"
       size="sm"
     >
       <SelectValue placeholder={"—"} />
@@ -127,5 +176,5 @@ const TimePartSelect = ({
   </Select>
 );
 
-export { TimeField };
+export { TimeField, TimeFieldGroup };
 export type { TimeFieldProps };
