@@ -189,6 +189,7 @@
       "notSaved": "Not saved yet",
       "done": "Done",
       "openFailed": "This document cannot be edited right now",
+      "resumed": "You have an unfinished edit of this document, so it continues from there. What you typed just now was not kept.",
       "takenOver": "Someone else is now editing this document. Your changes since the last save were not kept.",
       "finishFailed": "Your changes are saved, but they could not become a new version yet. Tap Done again, or leave: the next edit continues from them.",
       "notStored": "Your latest changes could not be saved. Stay to try again, or leave without them.",

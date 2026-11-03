@@ -117,6 +117,7 @@ describe("opening a document for editing", () => {
     expect(result.unwrap()).toEqual({
       ...EDITING,
       downloadUrl: "https://storage.example.com/working-copy?signature=abc",
+      resumedFromCheckpoint: false,
     });
     expect(sent.map(({ url, method }) => [method, url])).toEqual([
       [

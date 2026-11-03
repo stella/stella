@@ -189,6 +189,7 @@
       "notSaved": "Ainda não salvo",
       "done": "Concluído",
       "openFailed": "Este documento não pode ser editado agora",
+      "resumed": "Você tem uma edição não concluída deste documento, então ela continua de onde parou. O que você acabou de digitar não foi mantido.",
       "takenOver": "Outra pessoa está editando este documento agora. Suas alterações desde o último salvamento não foram mantidas.",
       "finishFailed": "Suas alterações estão salvas, mas ainda não viraram uma nova versão. Toque em Concluído de novo ou saia: a próxima edição continua a partir delas.",
       "notStored": "Não foi possível salvar suas últimas alterações. Fique para tentar de novo ou saia sem elas.",

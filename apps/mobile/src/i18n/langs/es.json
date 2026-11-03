@@ -189,6 +189,7 @@
       "notSaved": "Aún sin guardar",
       "done": "Listo",
       "openFailed": "Ahora no se puede editar este documento",
+      "resumed": "Tienes una edición sin terminar de este documento, así que continúa desde ahí. Lo que acabas de escribir no se ha guardado.",
       "takenOver": "Otra persona está editando ahora este documento. Sus cambios desde el último guardado no se conservaron.",
       "finishFailed": "Sus cambios están guardados, pero aún no se han convertido en una nueva versión. Vuelva a tocar Listo o salga: la próxima edición continuará desde ellos.",
       "notStored": "No se pudieron guardar tus últimos cambios. Quédate para intentarlo de nuevo o sal sin ellos.",
