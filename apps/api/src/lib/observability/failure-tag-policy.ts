@@ -27,6 +27,7 @@ export const TAGGED_FAILURE_REASON = {
   AggregateLockUpgradeRefused: "tagged_failure",
   AnonymizedFieldBoundaryError: "tagged_failure",
   ApiAccessTokenError: "tagged_failure",
+  AppServerRequestError: "tagged_failure",
   ApnsProviderTokenError: "tagged_failure",
   ApnsTransportError: "upstream_unavailable",
   AppleSignInConfigError: "tagged_failure",

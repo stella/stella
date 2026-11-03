@@ -336,4 +336,10 @@ describe("manifest validation", () => {
     const { updatedAt: _omitted, ...withoutTimestamp } = base;
     expect(accepted(withoutTimestamp)).toBe(false);
   });
+
+  test("rejects a timestamp on a day its month does not have, without throwing", () => {
+    expect(accepted({ ...base, updatedAt: "2030-06-31T00:00:00Z" })).toBe(
+      false,
+    );
+  });
 });
