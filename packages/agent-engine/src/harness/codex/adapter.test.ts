@@ -88,6 +88,7 @@ const harnessFor = (scenario: FakeScenario) => {
     environment: { FAKE_CODEX_LOG: logPath, PATH: process.env["PATH"] ?? "" },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
+    requestTimeoutMs: 10_000,
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
@@ -436,6 +437,81 @@ describe("Codex adapter over a stdio app-server", () => {
     expect(terminal(events)?.type).toBe("turn.completed");
   });
 
+  test('questions under ids 7 and "7" stay apart, and a secret answer reaches only the harness', async () => {
+    const secret = "registry-token-value";
+    const requestIds: string[] = [];
+    const { events, received } = await run("twin_id_questions", {
+      onEvent: async (event, turn) => {
+        if (event.type !== "question.requested") {
+          return;
+        }
+        const { requestId, questions } = event.request;
+        requestIds.push(requestId);
+        const answered = await turn.respond({
+          type: "answers",
+          requestId,
+          answers:
+            questions[0]?.id === "token"
+              ? { token: [secret] }
+              : { law: ["Czech"] },
+        });
+        expect(Result.isOk(answered)).toBe(true);
+      },
+    });
+    expect(new Set(requestIds).size).toBe(2);
+    const replies = received().filter(({ method }) => method === undefined);
+    expect(replies).toContainEqual({
+      id: 7,
+      result: { answers: { token: { answers: [secret] } } },
+    });
+    expect(replies).toContainEqual({
+      id: "7",
+      result: { answers: { law: { answers: ["Czech"] } } },
+    });
+    expect(JSON.stringify(events)).not.toContain(secret);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("a harness that never answers is ended by the request deadline, and SIGKILL follows an ignored SIGTERM", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-codex-silent-"));
+    cleanups.push(() => rmSync(root, { recursive: true, force: true }));
+    const log = path.join(root, "fake.log");
+    const exits: { exitCode: number | null; signal: string | null }[] = [];
+    const ready = Promise.withResolvers<undefined>();
+    const client = startAppServer({
+      launch: {
+        executable: process.execPath,
+        args: [FAKE_SERVER, "unresponsive"],
+      },
+      detached: createDetached((error) => {
+        backgroundErrors.push(error);
+      }),
+      deadlines: { requestMs: 300, terminateMs: 300 },
+      cwd: root,
+      env: { FAKE_CODEX_LOG: log, PATH: process.env["PATH"] ?? "" },
+      handlers: {
+        notification: (method) => {
+          if (method === "fake/ready") {
+            ready.resolve(undefined);
+          }
+        },
+        request: () => undefined,
+        violation: () => undefined,
+        exit: (exit) => {
+          exits.push(exit);
+        },
+      },
+    });
+    // The deadline runs from the request: wait until the server is up, so a
+    // slow start is never mistaken for silence.
+    await ready.promise;
+    const answered = await client.request("initialize", {});
+    expect(Result.isError(answered) && answered.error.reason).toBe("timed_out");
+    expect(await client.exited).toEqual({ exitCode: null, signal: "SIGKILL" });
+    expect(exits).toHaveLength(1);
+    expect(readFileSync(log, "utf-8")).toContain('"ignored":"SIGTERM"');
+  });
+
   test("an async question completes the turn and is answered by the next message, not a response", async () => {
     const { events } = await run("async_question", {
       onEvent: async (event, turn) => {
@@ -657,6 +733,7 @@ describe("Codex adapter over a stdio app-server", () => {
         environment: {},
         clientVersion: "0.0.1",
         gracePeriodMs: 10,
+        requestTimeoutMs: 10,
         onBackgroundError: () => undefined,
       }),
     ).toThrow("CODEX_HOME must be stella's");
@@ -991,6 +1068,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
       detached: createDetached((error) => {
         cliErrors.push(error);
       }),
+      deadlines: { requestMs: 30_000, terminateMs: 5000 },
       cwd: root,
       env: {
         PATH: process.env["PATH"] ?? "",

@@ -53,7 +53,9 @@ const usageLimitResetsAt = (limits: CodexRateLimits | null): string | null => {
   if (resets.length === 0) {
     return null;
   }
-  return new Date(Math.max(...resets) * 1000).toISOString();
+  const resetsAt = new Date(Math.max(...resets) * 1000);
+  // A reset time past the representable range is as good as unknown.
+  return Number.isNaN(resetsAt.getTime()) ? null : resetsAt.toISOString();
 };
 
 /** The upstream error code: a string variant, or the key of an object one. */
