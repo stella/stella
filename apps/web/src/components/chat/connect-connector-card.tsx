@@ -390,9 +390,9 @@ export const ConnectConnectorCard = ({
           <CheckIcon aria-hidden="true" className="size-4" />
         ) : (
           <CatalogueEntryIcon
-            className="text-muted-foreground"
             iconUrl={connector.iconUrl}
             size={16}
+            tone="muted"
             {...(connectorSlug === undefined ? {} : { slug: connectorSlug })}
           />
         )}

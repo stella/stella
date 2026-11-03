@@ -27,6 +27,226 @@ export type DocumentMarkArtwork = {
 /** A paint reference to one of the mark's gradients. */
 export const GRADIENT_REFERENCE = /^url\(#([a-z0-9]+)\)$/u;
 
+// The OpenDocument marks are one page in two colourways: the same sheet,
+// ruled lines, arrows and sheen, around a badge of the format's colour and
+// letter. Only the badge's highlight and shadow layers differ in order.
+
+/** The sheen over the page: a diagonal fade, the fold's shade and its edge. */
+const OPEN_DOCUMENT_SHEEN: readonly MarkGradient[] = [
+  {
+    id: "g1",
+    attrs: {
+      gradientUnits: "userSpaceOnUse",
+      x1: "8.5867",
+      x2: "42.4893",
+      y1: "5.8641",
+      y2: "46.2676",
+    },
+    stops: [
+      { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
+      { offset: "0.2264", stopColor: "#FCFCFC", stopOpacity: "0.0226" },
+      { offset: "0.3626", stopColor: "#F4F4F4", stopOpacity: "0.0363" },
+      { offset: "0.475", stopColor: "#E6E6E6", stopOpacity: "0.0475" },
+      { offset: "0.5744", stopColor: "#D1D1D1", stopOpacity: "0.0574" },
+      { offset: "0.6652", stopColor: "#B7B7B7", stopOpacity: "0.0665" },
+      { offset: "0.7498", stopColor: "#979797", stopOpacity: "0.075" },
+      { offset: "0.8297", stopColor: "#707070", stopOpacity: "0.083" },
+      { offset: "0.9057", stopColor: "#444444", stopOpacity: "0.0906" },
+      { offset: "0.9761", stopColor: "#121212", stopOpacity: "0.0976" },
+      { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
+    ],
+  },
+  {
+    id: "g2",
+    attrs: {
+      gradientUnits: "userSpaceOnUse",
+      x1: "38",
+      x2: "38",
+      y1: "16.9063",
+      y2: "14.0875",
+    },
+    stops: [
+      { offset: "0", stopColor: "#828282", stopOpacity: "0" },
+      { offset: "0.2812", stopColor: "#7F7F7F", stopOpacity: "0.0281" },
+      { offset: "0.4503", stopColor: "#777777", stopOpacity: "0.045" },
+      { offset: "0.5899", stopColor: "#696969", stopOpacity: "0.059" },
+      { offset: "0.7133", stopColor: "#545454", stopOpacity: "0.0713" },
+      { offset: "0.8259", stopColor: "#3A3A3A", stopOpacity: "0.0826" },
+      { offset: "0.9294", stopColor: "#1A1A1A", stopOpacity: "0.0929" },
+      { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
+    ],
+  },
+  {
+    id: "g3",
+    attrs: {
+      gradientUnits: "userSpaceOnUse",
+      x1: "31.27",
+      x2: "37.2361",
+      y1: "12.23",
+      y2: "6.2639",
+    },
+    stops: [
+      { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
+      { offset: "0.8537", stopColor: "#FFFFFF", stopOpacity: "0.2134" },
+      { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.25" },
+    ],
+  },
+];
+
+type BadgeLayer = "highlight" | "shadow";
+
+/** The badge's gloss, and the shadow it casts on the page below it. */
+const BADGE_LAYERS: Readonly<
+  Record<
+    BadgeLayer,
+    Pick<MarkGradient, "attrs" | "stops"> & { readonly points: string }
+  >
+> = {
+  highlight: {
+    attrs: {
+      gradientUnits: "userSpaceOnUse",
+      x1: "14",
+      x2: "14",
+      y1: "39.1875",
+      y2: "14.7584",
+    },
+    stops: [
+      { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
+      { offset: "0.8587", stopColor: "#FFFFFF", stopOpacity: "0.1546" },
+      { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.18" },
+    ],
+    points: "24,14 4,17 4,37 24,40",
+  },
+  shadow: {
+    attrs: {
+      gradientUnits: "userSpaceOnUse",
+      x1: "17.7538",
+      x2: "18.1773",
+      y1: "42.9183",
+      y2: "38.93",
+    },
+    stops: [
+      { offset: "0", stopColor: "#828282", stopOpacity: "0" },
+      { offset: "0.1699", stopColor: "#7E7E7E", stopOpacity: "0.0341" },
+      { offset: "0.346", stopColor: "#717171", stopOpacity: "0.0694" },
+      { offset: "0.5248", stopColor: "#5D5D5D", stopOpacity: "0.1053" },
+      { offset: "0.7057", stopColor: "#404040", stopOpacity: "0.1415" },
+      { offset: "0.8863", stopColor: "#1B1B1B", stopOpacity: "0.1778" },
+      { offset: "0.9972", stopColor: "#000000", stopOpacity: "0.2" },
+    ],
+    points: "24,43 12,43 12,38.2 24,40",
+  },
+};
+
+const ruledLine = (y: string): MarkShape => ({
+  tag: "rect",
+  attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y },
+});
+
+const openDocumentMark = ({
+  badge,
+  letter,
+  arrows,
+  layers,
+}: {
+  /** The badge's fill, the format's colour. */
+  readonly badge: string;
+  /** The badge's white letter. */
+  readonly letter: string;
+  /** The arrows' fill, a pale tint of the badge. */
+  readonly arrows: string;
+  /** The badge's gloss and shadow layers, bottom first. */
+  readonly layers: readonly BadgeLayer[];
+}): DocumentMarkArtwork => {
+  // Numbered after the sheen's, in paint order.
+  const layerId = (index: number) =>
+    `g${OPEN_DOCUMENT_SHEEN.length + index + 1}`;
+  return {
+    viewBox: "0 0 48 48",
+    gradients: [
+      ...OPEN_DOCUMENT_SHEEN,
+      ...layers.map((layer, index) => ({
+        id: layerId(index),
+        attrs: BADGE_LAYERS[layer].attrs,
+        stops: BADGE_LAYERS[layer].stops,
+      })),
+    ],
+    shapes: [
+      {
+        tag: "g",
+        attrs: {},
+        children: [
+          {
+            tag: "polygon",
+            attrs: { fill: "#FFFFFF", points: "43,44 13,44 13,4 34,4 43,13" },
+          },
+          {
+            tag: "path",
+            attrs: {
+              d: "M34.0005,3H12v42h32V13L34.0005,3z M34,4.5l8.5,8.5H34V4.5z M43,44H13V4h20v10h10V44z",
+              fill: "#949494",
+            },
+          },
+        ],
+      },
+      ruledLine("35"),
+      ruledLine("32"),
+      ruledLine("38"),
+      {
+        tag: "polygon",
+        attrs: { fill: badge, points: "4,17 24,14 24,40 4,37" },
+      },
+      {
+        tag: "g",
+        attrs: {},
+        children: [{ tag: "path", attrs: { d: letter, fill: "#FFFFFF" } }],
+      },
+      {
+        tag: "g",
+        attrs: {},
+        children: [
+          {
+            tag: "path",
+            attrs: {
+              d: "M33.0381,18c1.0137,0,1.6631,0.5059,2.0293,0.9307c0.6475,0.7505,0.9502,1.8481,0.9063,3.0693h2.0161 c0.0923-3.3911-1.9761-6-4.9517-6s-5.8179,2.6089-6.7314,6h2.0923C29.2051,19.7324,31.1221,18,33.0381,18z",
+              fill: arrows,
+            },
+          },
+          {
+            tag: "path",
+            attrs: {
+              d: "M30.9619,28c-1.0137,0-1.6631-0.5059-2.0293-0.9307c-0.6475-0.7505-0.9502-1.8481-0.9063-3.0693h-2.0161 c-0.0923,3.3911,1.9761,6,4.9517,6s5.8179-2.6089,6.7314-6h-2.0923C34.7949,26.2676,32.8779,28,30.9619,28z",
+              fill: arrows,
+            },
+          },
+        ],
+      },
+      {
+        tag: "path",
+        attrs: { d: "M44,13L34,3H12v42h32V13z", fill: "url(#g1)" },
+      },
+      {
+        tag: "rect",
+        attrs: { fill: "url(#g2)", height: "3", width: "10", x: "33", y: "14" },
+      },
+      {
+        tag: "polygon",
+        attrs: {
+          fill: "url(#g3)",
+          points: "12,3 12,4 33,4 33,14 43,14 43,28 44,28 44,13 34,3",
+        },
+      },
+      ...layers.map((layer, index): MarkShape => ({
+        tag: "polygon",
+        attrs: {
+          fill: `url(#${layerId(index)})`,
+          points: BADGE_LAYERS[layer].points,
+        },
+      })),
+    ],
+  };
+};
+
 export const DOCUMENT_MARKS = {
   pdf: {
     viewBox: "0 0 75.320129 92.604164",
@@ -191,213 +411,13 @@ export const DOCUMENT_MARKS = {
       },
     ],
   },
-  openDocumentText: {
-    viewBox: "0 0 48 48",
-    gradients: [
-      {
-        id: "g1",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "8.5867",
-          x2: "42.4893",
-          y1: "5.8641",
-          y2: "46.2676",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.2264", stopColor: "#FCFCFC", stopOpacity: "0.0226" },
-          { offset: "0.3626", stopColor: "#F4F4F4", stopOpacity: "0.0363" },
-          { offset: "0.475", stopColor: "#E6E6E6", stopOpacity: "0.0475" },
-          { offset: "0.5744", stopColor: "#D1D1D1", stopOpacity: "0.0574" },
-          { offset: "0.6652", stopColor: "#B7B7B7", stopOpacity: "0.0665" },
-          { offset: "0.7498", stopColor: "#979797", stopOpacity: "0.075" },
-          { offset: "0.8297", stopColor: "#707070", stopOpacity: "0.083" },
-          { offset: "0.9057", stopColor: "#444444", stopOpacity: "0.0906" },
-          { offset: "0.9761", stopColor: "#121212", stopOpacity: "0.0976" },
-          { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
-        ],
-      },
-      {
-        id: "g2",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "38",
-          x2: "38",
-          y1: "16.9063",
-          y2: "14.0875",
-        },
-        stops: [
-          { offset: "0", stopColor: "#828282", stopOpacity: "0" },
-          { offset: "0.2812", stopColor: "#7F7F7F", stopOpacity: "0.0281" },
-          { offset: "0.4503", stopColor: "#777777", stopOpacity: "0.045" },
-          { offset: "0.5899", stopColor: "#696969", stopOpacity: "0.059" },
-          { offset: "0.7133", stopColor: "#545454", stopOpacity: "0.0713" },
-          { offset: "0.8259", stopColor: "#3A3A3A", stopOpacity: "0.0826" },
-          { offset: "0.9294", stopColor: "#1A1A1A", stopOpacity: "0.0929" },
-          { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
-        ],
-      },
-      {
-        id: "g3",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "31.27",
-          x2: "37.2361",
-          y1: "12.23",
-          y2: "6.2639",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.8537", stopColor: "#FFFFFF", stopOpacity: "0.2134" },
-          { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.25" },
-        ],
-      },
-      {
-        id: "g4",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "14",
-          x2: "14",
-          y1: "39.1875",
-          y2: "14.7584",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.8587", stopColor: "#FFFFFF", stopOpacity: "0.1546" },
-          { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.18" },
-        ],
-      },
-      {
-        id: "g5",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "17.7538",
-          x2: "18.1773",
-          y1: "42.9183",
-          y2: "38.93",
-        },
-        stops: [
-          { offset: "0", stopColor: "#828282", stopOpacity: "0" },
-          { offset: "0.1699", stopColor: "#7E7E7E", stopOpacity: "0.0341" },
-          { offset: "0.346", stopColor: "#717171", stopOpacity: "0.0694" },
-          { offset: "0.5248", stopColor: "#5D5D5D", stopOpacity: "0.1053" },
-          { offset: "0.7057", stopColor: "#404040", stopOpacity: "0.1415" },
-          { offset: "0.8863", stopColor: "#1B1B1B", stopOpacity: "0.1778" },
-          { offset: "0.9972", stopColor: "#000000", stopOpacity: "0.2" },
-        ],
-      },
-      {
-        id: "g6",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "14",
-          x2: "14",
-          y1: "39.1875",
-          y2: "14.7584",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.8587", stopColor: "#FFFFFF", stopOpacity: "0.1546" },
-          { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.18" },
-        ],
-      },
-    ],
-    shapes: [
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "polygon",
-            attrs: { fill: "#FFFFFF", points: "43,44 13,44 13,4 34,4 43,13" },
-          },
-          {
-            tag: "path",
-            attrs: {
-              d: "M34.0005,3H12v42h32V13L34.0005,3z M34,4.5l8.5,8.5H34V4.5z M43,44H13V4h20v10h10V44z",
-              fill: "#949494",
-            },
-          },
-        ],
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "35" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "32" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "38" },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "#2B579A", points: "4,17 24,14 24,40 4,37" },
-      },
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "path",
-            attrs: {
-              d: "M21,22l-2.6241,10h-2.4787l-1.6479-6.4156c-0.0878-0.3347-0.1409-0.7088-0.1592-1.1227h-0.0277 c-0.0415,0.4558-0.1016,0.8298-0.18,1.1227L12.1929,32H9.6103L7,22h2.4441l1.3986,6.6597 c0.0598,0.2837,0.1039,0.665,0.1316,1.1437h0.0415c0.0183-0.3579,0.0853-0.7484,0.2008-1.1715L13.0168,22h2.3956l1.6271,6.7155 c0.0598,0.2466,0.113,0.6045,0.1592,1.0739h0.0277c0.0183-0.3671,0.0668-0.7392,0.1454-1.1158L18.7428,22H21z",
-              fill: "#FFFFFF",
-            },
-          },
-        ],
-      },
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "path",
-            attrs: {
-              d: "M33.0381,18c1.0137,0,1.6631,0.5059,2.0293,0.9307c0.6475,0.7505,0.9502,1.8481,0.9063,3.0693h2.0161 c0.0923-3.3911-1.9761-6-4.9517-6s-5.8179,2.6089-6.7314,6h2.0923C29.2051,19.7324,31.1221,18,33.0381,18z",
-              fill: "#ACBBE3",
-            },
-          },
-          {
-            tag: "path",
-            attrs: {
-              d: "M30.9619,28c-1.0137,0-1.6631-0.5059-2.0293-0.9307c-0.6475-0.7505-0.9502-1.8481-0.9063-3.0693h-2.0161 c-0.0923,3.3911,1.9761,6,4.9517,6s5.8179-2.6089,6.7314-6h-2.0923C34.7949,26.2676,32.8779,28,30.9619,28z",
-              fill: "#ACBBE3",
-            },
-          },
-        ],
-      },
-      {
-        tag: "path",
-        attrs: { d: "M44,13L34,3H12v42h32V13z", fill: "url(#g1)" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "url(#g2)", height: "3", width: "10", x: "33", y: "14" },
-      },
-      {
-        tag: "polygon",
-        attrs: {
-          fill: "url(#g3)",
-          points: "12,3 12,4 33,4 33,14 43,14 43,28 44,28 44,13 34,3",
-        },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "url(#g4)", points: "24,14 4,17 4,37 24,40" },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "url(#g5)", points: "24,43 12,43 12,38.2 24,40" },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "url(#g6)", points: "24,14 4,17 4,37 24,40" },
-      },
-    ],
-  },
+  openDocumentText: openDocumentMark({
+    badge: "#2B579A",
+    letter:
+      "M21,22l-2.6241,10h-2.4787l-1.6479-6.4156c-0.0878-0.3347-0.1409-0.7088-0.1592-1.1227h-0.0277 c-0.0415,0.4558-0.1016,0.8298-0.18,1.1227L12.1929,32H9.6103L7,22h2.4441l1.3986,6.6597 c0.0598,0.2837,0.1039,0.665,0.1316,1.1437h0.0415c0.0183-0.3579,0.0853-0.7484,0.2008-1.1715L13.0168,22h2.3956l1.6271,6.7155 c0.0598,0.2466,0.113,0.6045,0.1592,1.0739h0.0277c0.0183-0.3671,0.0668-0.7392,0.1454-1.1158L18.7428,22H21z",
+    arrows: "#ACBBE3",
+    layers: ["highlight", "shadow", "highlight"],
+  }),
   excel: {
     viewBox: "0 0 48 48",
     gradients: [],
@@ -527,194 +547,13 @@ export const DOCUMENT_MARKS = {
       },
     ],
   },
-  openDocumentSheet: {
-    viewBox: "0 0 48 48",
-    gradients: [
-      {
-        id: "g1",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "8.5867",
-          x2: "42.4893",
-          y1: "5.8641",
-          y2: "46.2676",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.2264", stopColor: "#FCFCFC", stopOpacity: "0.0226" },
-          { offset: "0.3626", stopColor: "#F4F4F4", stopOpacity: "0.0363" },
-          { offset: "0.475", stopColor: "#E6E6E6", stopOpacity: "0.0475" },
-          { offset: "0.5744", stopColor: "#D1D1D1", stopOpacity: "0.0574" },
-          { offset: "0.6652", stopColor: "#B7B7B7", stopOpacity: "0.0665" },
-          { offset: "0.7498", stopColor: "#979797", stopOpacity: "0.075" },
-          { offset: "0.8297", stopColor: "#707070", stopOpacity: "0.083" },
-          { offset: "0.9057", stopColor: "#444444", stopOpacity: "0.0906" },
-          { offset: "0.9761", stopColor: "#121212", stopOpacity: "0.0976" },
-          { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
-        ],
-      },
-      {
-        id: "g2",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "38",
-          x2: "38",
-          y1: "16.9063",
-          y2: "14.0875",
-        },
-        stops: [
-          { offset: "0", stopColor: "#828282", stopOpacity: "0" },
-          { offset: "0.2812", stopColor: "#7F7F7F", stopOpacity: "0.0281" },
-          { offset: "0.4503", stopColor: "#777777", stopOpacity: "0.045" },
-          { offset: "0.5899", stopColor: "#696969", stopOpacity: "0.059" },
-          { offset: "0.7133", stopColor: "#545454", stopOpacity: "0.0713" },
-          { offset: "0.8259", stopColor: "#3A3A3A", stopOpacity: "0.0826" },
-          { offset: "0.9294", stopColor: "#1A1A1A", stopOpacity: "0.0929" },
-          { offset: "1", stopColor: "#000000", stopOpacity: "0.1" },
-        ],
-      },
-      {
-        id: "g3",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "31.27",
-          x2: "37.2361",
-          y1: "12.23",
-          y2: "6.2639",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.8537", stopColor: "#FFFFFF", stopOpacity: "0.2134" },
-          { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.25" },
-        ],
-      },
-      {
-        id: "g4",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "17.7538",
-          x2: "18.1773",
-          y1: "42.9183",
-          y2: "38.93",
-        },
-        stops: [
-          { offset: "0", stopColor: "#828282", stopOpacity: "0" },
-          { offset: "0.1699", stopColor: "#7E7E7E", stopOpacity: "0.0341" },
-          { offset: "0.346", stopColor: "#717171", stopOpacity: "0.0694" },
-          { offset: "0.5248", stopColor: "#5D5D5D", stopOpacity: "0.1053" },
-          { offset: "0.7057", stopColor: "#404040", stopOpacity: "0.1415" },
-          { offset: "0.8863", stopColor: "#1B1B1B", stopOpacity: "0.1778" },
-          { offset: "0.9972", stopColor: "#000000", stopOpacity: "0.2" },
-        ],
-      },
-      {
-        id: "g5",
-        attrs: {
-          gradientUnits: "userSpaceOnUse",
-          x1: "14",
-          x2: "14",
-          y1: "39.1875",
-          y2: "14.7584",
-        },
-        stops: [
-          { offset: "0", stopColor: "#FFFFFF", stopOpacity: "0" },
-          { offset: "0.8587", stopColor: "#FFFFFF", stopOpacity: "0.1546" },
-          { offset: "1", stopColor: "#FFFFFF", stopOpacity: "0.18" },
-        ],
-      },
-    ],
-    shapes: [
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "polygon",
-            attrs: { fill: "#FFFFFF", points: "43,44 13,44 13,4 34,4 43,13" },
-          },
-          {
-            tag: "path",
-            attrs: {
-              d: "M34.0005,3H12v42h32V13L34.0005,3z M34,4.5l8.5,8.5H34V4.5z M43,44H13V4h20v10h10V44z",
-              fill: "#949494",
-            },
-          },
-        ],
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "35" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "32" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "#C8C8C8", height: "1", width: "16", x: "24", y: "38" },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "#217346", points: "4,17 24,14 24,40 4,37" },
-      },
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "path",
-            attrs: {
-              d: "M19,33h-2.8819l-1.8585-3.9079c-0.0703-0.1449-0.143-0.4127-0.2182-0.8033h-0.0301 c-0.0353,0.1841-0.118,0.4631-0.2483,0.8368L11.8969,33H9l3.4387-6l-3.1452-6h2.9571l1.5425,3.5983 c0.1204,0.2845,0.2281,0.6221,0.3236,1.0126h0.0301c0.0602-0.2343,0.1731-0.5829,0.3386-1.046L16.2009,21h2.7088l-3.2355,5.9498 L19,33z",
-              fill: "#FFFFFF",
-            },
-          },
-        ],
-      },
-      {
-        tag: "g",
-        attrs: {},
-        children: [
-          {
-            tag: "path",
-            attrs: {
-              d: "M33.0381,18c1.0137,0,1.6631,0.5059,2.0293,0.9307c0.6475,0.7505,0.9502,1.8481,0.9063,3.0693h2.0161 c0.0923-3.3911-1.9761-6-4.9517-6s-5.8179,2.6089-6.7314,6h2.0923C29.2051,19.7324,31.1221,18,33.0381,18z",
-              fill: "#8BBF8A",
-            },
-          },
-          {
-            tag: "path",
-            attrs: {
-              d: "M30.9619,28c-1.0137,0-1.6631-0.5059-2.0293-0.9307c-0.6475-0.7505-0.9502-1.8481-0.9063-3.0693h-2.0161 c-0.0923,3.3911,1.9761,6,4.9517,6s5.8179-2.6089,6.7314-6h-2.0923C34.7949,26.2676,32.8779,28,30.9619,28z",
-              fill: "#8BBF8A",
-            },
-          },
-        ],
-      },
-      {
-        tag: "path",
-        attrs: { d: "M44,13L34,3H12v42h32V13z", fill: "url(#g1)" },
-      },
-      {
-        tag: "rect",
-        attrs: { fill: "url(#g2)", height: "3", width: "10", x: "33", y: "14" },
-      },
-      {
-        tag: "polygon",
-        attrs: {
-          fill: "url(#g3)",
-          points: "12,3 12,4 33,4 33,14 43,14 43,28 44,28 44,13 34,3",
-        },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "url(#g4)", points: "24,43 12,43 12,38.2 24,40" },
-      },
-      {
-        tag: "polygon",
-        attrs: { fill: "url(#g5)", points: "24,14 4,17 4,37 24,40" },
-      },
-    ],
-  },
+  openDocumentSheet: openDocumentMark({
+    badge: "#217346",
+    letter:
+      "M19,33h-2.8819l-1.8585-3.9079c-0.0703-0.1449-0.143-0.4127-0.2182-0.8033h-0.0301 c-0.0353,0.1841-0.118,0.4631-0.2483,0.8368L11.8969,33H9l3.4387-6l-3.1452-6h2.9571l1.5425,3.5983 c0.1204,0.2845,0.2281,0.6221,0.3236,1.0126h0.0301c0.0602-0.2343,0.1731-0.5829,0.3386-1.046L16.2009,21h2.7088l-3.2355,5.9498 L19,33z",
+    arrows: "#8BBF8A",
+    layers: ["shadow", "highlight"],
+  }),
   csv: {
     viewBox: "0 0 48 48",
     gradients: [],

@@ -109,11 +109,12 @@ export const CatalogueRow = ({
         tabIndex={0}
       >
         <CatalogueEntryIcon
-          className="text-muted-foreground mt-0.5 shrink-0"
+          className="mt-0.5 shrink-0"
           icon={display.icon}
           iconUrl={display.iconUrl ?? null}
           size={24}
           slug={display.slug}
+          tone="muted"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
