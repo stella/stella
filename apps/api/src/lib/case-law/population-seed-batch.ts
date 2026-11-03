@@ -56,23 +56,24 @@ export const readCaseLawPopulationSeedBatch = (
   return { cursor: row["cursor"], done: row["done"], value: row["processed"] };
 };
 
-/** A refused batch rolled back whole, so running it again replays nothing. */
+/**
+ * A refused batch rolled back whole, so running it again replays nothing.
+ * Any other failure, or a refusal past the retries, is the caller's.
+ */
 export const retryLockRefusal = async <Value>(
   step: () => Promise<Value>,
   attempt = 1,
-): Promise<Value> => {
+): Promise<Result<Value, unknown>> => {
   const outcome = await Result.tryPromise({
     try: step,
     catch: (cause: unknown) => cause,
   });
-  if (outcome.isOk()) {
-    return outcome.value;
-  }
   if (
+    outcome.isOk() ||
     attempt > LOCK_REFUSAL_RETRIES ||
     !isPgError(outcome.error, PG_ERROR.LOCK_NOT_AVAILABLE)
   ) {
-    throw outcome.error;
+    return outcome;
   }
   await Bun.sleep(LOCK_REFUSAL_BACKOFF_MS * attempt);
   return await retryLockRefusal(step, attempt + 1);

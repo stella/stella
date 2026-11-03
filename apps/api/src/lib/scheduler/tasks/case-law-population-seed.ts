@@ -83,53 +83,62 @@ export const createCaseLawPopulationSeedTask =
       reporting: "changes",
       statementTimeoutPolicy: "fail",
     });
-    const outcome = await Result.tryPromise({
-      try: async (): Promise<"complete" | "continued"> => {
-        try {
-          while (clock() + BATCH_START_RESERVE_MS < deadline) {
-            signal.throwIfAborted();
-            // db-await-in-loop: one governed batch at a time; the seed function serializes its callers.
-            const result = await retryLockRefusal(
-              async () =>
-                await runtime.step(async ({ tx, size }) => {
-                  signal.throwIfAborted();
-                  const batch = readCaseLawPopulationSeedBatch(
-                    executedRows(
-                      await tx.execute(
-                        sql`SELECT cursor, processed, done FROM public.seed_case_law_population_counts(${caseLawPopulationSeedBatchSize(size)})`,
-                      ),
-                    ).at(0),
-                  );
-                  await recordSystemAudit(
-                    tx,
-                    "system:case-law-population-seed",
-                    {
-                      subject: runId,
-                      counts: { projectedDecisions: batch.value },
-                    },
-                  );
-                  return batch;
-                }),
-            );
-            logger.info("scheduler.case_law_population_seeded", {
-              "caseLawPopulation.projected": result.value,
-            });
-            if (result.done) {
-              return "complete";
+    const outcome = Result.flatten(
+      await Result.tryPromise({
+        try: async (): Promise<Result<"complete" | "continued", unknown>> => {
+          try {
+            while (clock() + BATCH_START_RESERVE_MS < deadline) {
+              signal.throwIfAborted();
+              // db-await-in-loop: one governed batch at a time; the seed function serializes its callers.
+              const seeded = await retryLockRefusal(
+                async () =>
+                  await runtime.step(async ({ tx, size }) => {
+                    signal.throwIfAborted();
+                    const batch = readCaseLawPopulationSeedBatch(
+                      executedRows(
+                        await tx.execute(
+                          sql`SELECT cursor, processed, done FROM public.seed_case_law_population_counts(${caseLawPopulationSeedBatchSize(size)})`,
+                        ),
+                      ).at(0),
+                    );
+                    await recordSystemAudit(
+                      tx,
+                      "system:case-law-population-seed",
+                      {
+                        subject: runId,
+                        counts: { projectedDecisions: batch.value },
+                      },
+                    );
+                    return batch;
+                  }),
+              );
+              if (seeded.isErr()) {
+                return Result.err(seeded.error);
+              }
+              const result = seeded.value;
+              logger.info("scheduler.case_law_population_seeded", {
+                "caseLawPopulation.projected": result.value,
+              });
+              if (result.done) {
+                return Result.ok("complete");
+              }
+              if (
+                clock() + result.sleepMs + BATCH_START_RESERVE_MS >=
+                deadline
+              ) {
+                break;
+              }
+              await sleep(result.sleepMs, undefined, { signal });
             }
-            if (clock() + result.sleepMs + BATCH_START_RESERVE_MS >= deadline) {
-              break;
-            }
-            await sleep(result.sleepMs, undefined, { signal });
+            scheduleContinuation(dueAt.claimedAtDate());
+            return Result.ok("continued");
+          } finally {
+            await runtime.close();
           }
-          scheduleContinuation(dueAt.claimedAtDate());
-          return "continued";
-        } finally {
-          await runtime.close();
-        }
-      },
-      catch: (cause: unknown) => cause,
-    });
+        },
+        catch: (cause: unknown) => cause,
+      }),
+    );
     if (outcome.isErr()) {
       if (outcome.error instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_population_seed_held");

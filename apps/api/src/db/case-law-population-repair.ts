@@ -87,8 +87,8 @@ export const CASE_LAW_POPULATION_REPAIR = {
       const pass = await runBackfillPass({
         holdPolicy: "propagate",
         sleep: Bun.sleep,
-        step: async () =>
-          await retryLockRefusal(
+        step: async () => {
+          const batch = await retryLockRefusal(
             async () =>
               await runtime.step(async ({ tx, size }) =>
                 readCaseLawPopulationSeedBatch(
@@ -100,7 +100,12 @@ export const CASE_LAW_POPULATION_REPAIR = {
                   ).at(0),
                 ),
               ),
-          ),
+          );
+          if (batch.isErr()) {
+            throw batch.error;
+          }
+          return batch.value;
+        },
       });
       if (pass.isErr()) {
         if (!(pass.error instanceof BackfillHeldError)) {
