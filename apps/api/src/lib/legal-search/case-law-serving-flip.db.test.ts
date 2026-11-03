@@ -29,7 +29,7 @@ import {
   caseLawAppliedProjections,
   caseLawCorpusAppliedRevision,
   caseLawCorpusServingGeneration,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   type CaseLawServingFlipContext,
@@ -262,7 +262,7 @@ const acceptedBy = async (generation: string) =>
     await db
       .select({ id: publishedCaseLawDecisions.id })
       .from(publishedCaseLawDecisions)
-      .where(currentCaseLawCorpusProjection(generation))
+      .where(servedCaseLawCorpusProjection(generation))
   )
     .map(({ id }) => id)
     .toSorted();
@@ -645,15 +645,25 @@ test("the flip moves Czech readers and the acceptance to v9, and only the flip d
     .where(eq(publishedCaseLawDecisions.id, CZE_DECISION_ID));
   expect(acceptedRevision).toEqual([{ revision: V9_REVISION }]);
   expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
+  const v9State = and(
+    eq(corpusIndexProjectionStates.generation, "case_law_v9"),
+    eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID),
+  );
+  // A queued content change in v9 keeps v9's applied copy answering.
   await db
     .update(corpusIndexProjectionStates)
     .set({ desiredEpoch: sql`${corpusIndexProjectionStates.desiredEpoch} + 1` })
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.generation, "case_law_v9"),
-        eq(corpusIndexProjectionStates.entityId, CZE_DECISION_ID),
-      ),
-    );
+    .where(v9State);
+  expect(await acceptedBy("case_law_v8")).toEqual([CZE_DECISION_ID]);
+  // A queued erasure in v9 withdraws it, though v8 still holds a copy.
+  await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredAction: "erase",
+      desiredFingerprint: null,
+      desiredIndexId: null,
+    })
+    .where(v9State);
   expect(await acceptedBy("case_law_v8")).toEqual([]);
 
   // Replays converge.
@@ -928,7 +938,7 @@ test.each([
                   publishedCaseLawDecisions.id,
                   candidates.map(({ id }) => toSafeId<"caseLawDecision">(id)),
                 ),
-                currentCaseLawCorpusProjection(global.serving.generation),
+                servedCaseLawCorpusProjection(global.serving.generation),
               ),
             );
           const appliedById = caseLawAppliedProjections(rows);

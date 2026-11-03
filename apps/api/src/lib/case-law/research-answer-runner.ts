@@ -54,7 +54,7 @@ import {
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   caseLawCorpusAppliedRevision,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -786,8 +786,9 @@ type CurrentResearchRevisionOptions = {
 
 /**
  * The revision the serving generation records as applied for the decision,
- * or null when it holds no current copy (pending, queued for erasure, or
- * never projected). Passages are read from that revision's copy only.
+ * or null when it holds no copy to serve (queued for erasure, or never
+ * projected). A queued upsert still answers from the applied copy. Passages
+ * are read from that revision's copy only.
  */
 const readCurrentResearchRevisionTx = async (
   tx: CaseLawPublicReadTransaction,
@@ -801,7 +802,7 @@ const readCurrentResearchRevisionTx = async (
     .where(
       and(
         eq(publishedCaseLawDecisions.id, decisionId),
-        currentCaseLawCorpusProjection(generation),
+        servedCaseLawCorpusProjection(generation),
       ),
     )
     .limit(1);
