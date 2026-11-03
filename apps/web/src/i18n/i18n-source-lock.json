@@ -1483,7 +1483,7 @@
   "chat.tableChart.summary": "Values shown: {n, number}.",
   "chat.tableChart.unavailable": "A chart could not be selected. The table is shown.",
   "chat.tableChart.values": "{label}: {value, number}",
-  "chat.thinking": "Working with context",
+  "chat.thinking": "Thinking",
   "chat.threadFiles.title": "Files in this chat",
   "chat.tool.add_comment": "Adding comment",
   "chat.tool.add_matter_member": "Add matter member",
