@@ -3134,6 +3134,33 @@ export const lockBillingCode = async (
       .for("update")
   ).at(0);
 
+/** Fence matter-client assignments while a bulk delete classifies contacts. */
+export const lockOwnedContactsForBulkDelete = async ({
+  tx,
+  organizationId,
+  contactIds,
+  cap,
+}: {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  contactIds: readonly SafeId<"contact">[];
+  cap: number;
+}) =>
+  await readBounded(
+    tx
+      .select({ id: contacts.id, displayName: contacts.displayName })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.organizationId, organizationId),
+          inArray(contacts.id, [...contactIds]),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .for("update"),
+    cap,
+  );
+
 /**
  * The time entries a batch action locks before it checks and updates them;
  * the caller holds the matter/timer guards. The action then updates these

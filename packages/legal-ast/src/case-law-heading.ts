@@ -92,5 +92,6 @@ export const caseLawSectionHeading = (
   if (!isHeadingTitleShape(text.slice(text.indexOf(".") + 1).trim())) {
     return null;
   }
-  return { level: match.groups?.["subsection"] === undefined ? 3 : 4 };
+  // parser-output-unchanged: the same levels with the comparison flipped and the branches swapped.
+  return { level: match.groups?.["subsection"] !== undefined ? 4 : 3 };
 };
