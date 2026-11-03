@@ -1,1 +1,0 @@
-{"@min-[10rem]:flex":{"valid":true,"declarations":[["@","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"bg-card/80":{"valid":true,"declarations":[["","background-color","color-mix(in oklab, var(--card) 80%, transparent)"]],"values":{"color-mix(in oklab, var(--card) 80%, transparent)":{"p":["--card"],"f":[],"u":false}}}}
