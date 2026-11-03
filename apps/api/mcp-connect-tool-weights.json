@@ -168,10 +168,10 @@
     {
       "name": "list_audit_log",
       "nameChars": 14,
-      "descriptionChars": 165,
-      "inputSchemaChars": 1052,
-      "totalChars": 1231,
-      "estimatedTokens": 499
+      "descriptionChars": 122,
+      "inputSchemaChars": 1122,
+      "totalChars": 1258,
+      "estimatedTokens": 513
     },
     {
       "name": "list_capabilities",
@@ -577,9 +577,9 @@
       "name": "set_field_value",
       "nameChars": 15,
       "descriptionChars": 297,
-      "inputSchemaChars": 2771,
-      "totalChars": 3083,
-      "estimatedTokens": 1259
+      "inputSchemaChars": 2759,
+      "totalChars": 3071,
+      "estimatedTokens": 1254
     },
     {
       "name": "set_practice_jurisdictions",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 133010,
-    "estimatedTokens": 52869
+    "characters": 133025,
+    "estimatedTokens": 52878
   }
 }

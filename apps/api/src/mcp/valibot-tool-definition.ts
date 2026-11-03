@@ -176,11 +176,10 @@ const withConventionalNormalization = (
 ): Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined => {
   const conventional = CONVENTIONAL_PROPERTY_NORMALIZATION.filter((rule) => {
     const property = schema.properties?.[rule.property];
-    return (
-      plan?.[rule.property] === undefined &&
-      isSchemaRecord(property) &&
-      rule.applies(property)
-    );
+    if (plan?.[rule.property] !== undefined) {
+      return false;
+    }
+    return isSchemaRecord(property) && rule.applies(property);
   });
   return conventional.length === 0
     ? plan

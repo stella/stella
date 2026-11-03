@@ -116,6 +116,7 @@ import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
   canRetryChatRequest,
+  finalChatRefusalKey,
   isChatMessageEditRefusal,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
@@ -143,7 +144,7 @@ import type { UserMessageEditActions } from "@/components/chat/user-message-edit
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { DocumentIcon } from "@/components/document-icon";
-import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
@@ -377,7 +378,7 @@ export const ChatThreadMessages = ({
     if (
       message.role === "assistant" &&
       index !== messages.length - 1 &&
-      message.metadata?.contextNotice === undefined &&
+      !carriesContextNotice(message) &&
       !hasVisibleAssistantParts(message.parts)
     ) {
       return null;
@@ -470,9 +471,6 @@ export const ChatThreadMessages = ({
                             workspaceId={workspaceId}
                             threadRef={threadRef}
                           />
-                          <ChatTurnDuration
-                            timing={message.metadata?.turnTiming}
-                          />
                           <div
                             className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
                             data-chat-answer-footer
@@ -489,6 +487,9 @@ export const ChatThreadMessages = ({
                               message={message}
                               onResend={onResend}
                               threadRef={threadRef}
+                            />
+                            <ChatTurnDuration
+                              timing={message.metadata?.turnTiming}
                             />
                             <AssistantAnswerMetadata
                               message={message}
@@ -1179,7 +1180,10 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
-  const diagnostic = providerDiagnosticFromThrown(error);
+  const finalRefusalKey = finalChatRefusalKey(error);
+  // A provider refusal shows its typed message and, for a known setup
+  // problem, the fix; the provider's own wording is never shown.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const rejectedInput =
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
@@ -1187,8 +1191,8 @@ export const ChatErrorMessage = ({
   let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
   if (isChatMessageEditRefusal(error)) {
     errorMessage = t("chat.editMessageRefused");
-  } else if (!canRetryChatRequest(error)) {
-    errorMessage = t("chat.sendErrorContinuationRejected");
+  } else if (finalRefusalKey !== undefined) {
+    errorMessage = t(finalRefusalKey);
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
@@ -1216,11 +1220,8 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        {diagnostic !== undefined ? (
-          <ProviderDiagnosticMessage diagnostic={diagnostic} />
-        ) : (
-          <p className="text-sm">{errorMessage}</p>
-        )}
+        <p className="text-sm">{errorMessage}</p>
+        <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1817,6 +1818,10 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
  * answer text, or a finished web search or fetch, which shows in the sources
  * tray instead of as a step.
  */
+/** A message without metadata carries no context notice. */
+const carriesContextNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined;
+
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
     if (entry.type !== "standard") {

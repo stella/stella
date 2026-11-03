@@ -946,8 +946,8 @@
       "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
       "status": "active",
       "file": "src/handlers/chat/provider-history.ts",
-      "search": "      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),",
-      "replace": "      messages: withoutRepeatedCalls(messages),",
+      "search": "      messages: answerHistoryCallsInTheirStep(\n        withoutRepeatedCalls(withoutContentlessUserTurns(messages)),\n      ),",
+      "replace": "      messages: withoutRepeatedCalls(withoutContentlessUserTurns(messages)),",
       "scenario": {
         "file": "src/handlers/chat/approval-answer-order.test.ts",
         "test": "keeps a denial ahead of the approved call it was answered with"
