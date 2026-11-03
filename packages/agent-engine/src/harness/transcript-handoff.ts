@@ -27,15 +27,13 @@ const truncateBytes = (text: string, maxBytes: number): string => {
   if (byteLength(text) <= maxBytes) {
     return text;
   }
+  // Streaming decode holds back a character the cut split, instead of
+  // replacing it with U+FFFD; a U+FFFD already in the text is kept.
   const kept = new TextDecoder().decode(
-    encoder.encode(text).slice(0, maxBytes),
+    encoder.encode(text).subarray(0, maxBytes),
+    { stream: true },
   );
-  // A cut inside a multi-byte character decodes to U+FFFD; drop it.
-  let end = kept.length;
-  while (end > 0 && kept[end - 1] === "\uFFFD") {
-    end -= 1;
-  }
-  return `${kept.slice(0, end)} [truncated]`;
+  return `${kept} [truncated]`;
 };
 
 /** Attachments are named but not transferred; the prompt is text only. */
@@ -62,6 +60,19 @@ const contentText = (content: ModelMessage["content"]): string => {
     return content;
   }
   return content.map(contentPartText).join("\n");
+};
+
+/** Only what the user typed, without the attachment placeholders. */
+const typedText = (content: ModelMessage["content"]): string => {
+  if (content === null) {
+    return "";
+  }
+  if (typeof content === "string") {
+    return content;
+  }
+  return content
+    .flatMap((part) => (part.type === "text" ? [part.content] : []))
+    .join("\n");
 };
 
 /**
@@ -92,8 +103,16 @@ const messageBlock = (message: ModelMessage): string | null => {
   }
 };
 
+const BLOCK_SEPARATOR = "\n\n";
+const OMITTED_MARKER = "[earlier messages omitted]";
+
+/** The history, newest kept first; the whole string fits the budget. */
 const renderHistory = (history: readonly ModelMessage[]): string | null => {
   const blocks: string[] = [];
+  const separatorBytes = byteLength(BLOCK_SEPARATOR);
+  // Reserved up front, so the marker fits whenever it is needed.
+  const budget =
+    HANDOFF_MAX_BYTES - byteLength(OMITTED_MARKER) - separatorBytes;
   let used = 0;
   let omitted = false;
   for (const message of history.toReversed()) {
@@ -102,8 +121,9 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
       continue;
     }
     const bounded = truncateBytes(block, MESSAGE_MAX_BYTES);
-    const size = byteLength(bounded);
-    if (used + size > HANDOFF_MAX_BYTES) {
+    const size =
+      byteLength(bounded) + (blocks.length === 0 ? 0 : separatorBytes);
+    if (used + size > budget) {
       omitted = true;
       break;
     }
@@ -114,9 +134,9 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
     return null;
   }
   if (omitted) {
-    blocks.push("[earlier messages omitted]");
+    blocks.push(OMITTED_MARKER);
   }
-  return blocks.toReversed().join("\n\n");
+  return blocks.toReversed().join(BLOCK_SEPARATOR);
 };
 
 /**
@@ -135,8 +155,8 @@ export const buildTurnPrompt = ({
   mode,
 }: BuildTurnPromptOptions): Result<string, HarnessStartError> => {
   const last = transcript.at(-1);
-  const request = last?.role === "user" ? contentText(last.content).trim() : "";
-  if (request === "") {
+  // Attachments are only named in the prompt, so they cannot be the request.
+  if (last?.role !== "user" || typedText(last.content).trim() === "") {
     return Result.err(
       new HarnessStartError({
         reason: "invalid_transcript",
@@ -145,6 +165,7 @@ export const buildTurnPrompt = ({
       }),
     );
   }
+  const request = contentText(last.content).trim();
   if (mode === "resumed") {
     return Result.ok(request);
   }

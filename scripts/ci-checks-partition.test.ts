@@ -764,7 +764,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {
@@ -1259,8 +1259,20 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     return { ...step, run };
   }
   if (step.name === "CLI sharded registry and derived runtime guard") {
-    const run = v.parse(v.string(), fields.run);
     const continuation = " \\";
+    // The generated chat tool names joined the guard after the policy file.
+    const policy = "  packages/api-contract/src/mcp-chat-tool-policy.gen.ts";
+    const toolNames = "  packages/api-contract/src/mcp-tool-names.gen.ts";
+    const listed = v.parse(v.string(), fields.run);
+    const run = listed.includes(toolNames)
+      ? listed
+      : listed.replace(
+          `${policy}\n`,
+          () => `${policy}${continuation}\n${toolNames}\n`,
+        );
+    if (run !== listed) {
+      Object.assign(step, { run });
+    }
     const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
     const additions = CI_GENERATED_OUTPUTS.cliRegistry
       .filter((output) => !run.includes(`  ${output}${continuation}`))

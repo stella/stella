@@ -2268,7 +2268,8 @@ jobs:
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/api-contract/src/mcp-tool-names.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP app derived outputs guard
@@ -4157,6 +4158,13 @@ jobs:
         # A 1s DDL deadline races the default 1s autovacuum cancellation grace.
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
+
+      - name: Verify shared worker Postgres history and cleanup
+        if: matrix.shard == 1
+        timeout-minutes: 5
+        env:
+          STELLA_RUN_SHARED_POSTGRES_TESTS: "true"
+        run: bun --filter @stll/api test scripts/shared-test-postgres.postgres.test.ts
 
       - name: Run Postgres-gated API suites
         id: postgres-tests

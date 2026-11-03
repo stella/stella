@@ -2,11 +2,16 @@ import { panic } from "better-result";
 
 import {
   E_SBIRKA_ANCHORS,
+  EU_CITATION_ANCHORS,
   SLOV_LEX_ANCHORS,
+  statuteAnchorNesting,
   US_CODE_ANCHORS,
   wholeStatuteAnchors,
 } from "@stll/legal-ast/statute-anchor-scheme";
-import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import type {
+  StatuteAnchorNesting,
+  StatuteAnchorScheme,
+} from "@stll/legal-ast/statute-anchor-scheme";
 
 import { isPublicCountry } from "./public-country-capability";
 import type { PublicCountry } from "./public-country-capability";
@@ -25,9 +30,7 @@ const UNVERIFIED_ANCHORS = wholeStatuteAnchors(
 export const STATUTE_ANCHOR_SCHEMES = {
   AUT: UNVERIFIED_ANCHORS,
   CZE: E_SBIRKA_ANCHORS,
-  EU: wholeStatuteAnchors(
-    "EU acts open at EUR-Lex, not in the statute reader.",
-  ),
+  EU: EU_CITATION_ANCHORS,
   GBR: UNVERIFIED_ANCHORS,
   HUN: UNVERIFIED_ANCHORS,
   POL: UNVERIFIED_ANCHORS,
@@ -48,3 +51,9 @@ export const statuteAnchorSchemeFor = (
     ? STATUTE_ANCHOR_SCHEMES[canonical]
     : panic(`No statute anchor scheme for country "${country}".`);
 };
+
+/** How a country's provision anchors nest; a country outside the public list panics. */
+export const statuteAnchorNestingFor = (
+  country: string,
+): StatuteAnchorNesting =>
+  statuteAnchorNesting(statuteAnchorSchemeFor(country));
