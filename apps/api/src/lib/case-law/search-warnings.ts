@@ -222,8 +222,9 @@ export const phrasingTimedOutWarning = ({
   retriedByCursor: boolean;
 }): AgentCaseLawSearchWarning => ({
   code: "phrasing_timed_out",
-  message:
-    "This phrasing ran out of the search's time budget, so the page holds none of its hits; the other phrasings finished.",
+  // The phrasing is named: two phrasings can time out on one page, and the
+  // call keeps each distinct note once, so identical wording would merge them.
+  message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
   hint: retriedByCursor
     ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
     : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,

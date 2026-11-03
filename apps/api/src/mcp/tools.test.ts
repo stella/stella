@@ -3956,6 +3956,55 @@ describe("OpenAI-compatible MCP tools", () => {
 
       expect(result.isError).toBe(true);
     });
+
+    test("a thrown failure that is not the time budget still fails the call", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) => {
+          if (query === "broken") {
+            throw new Error("private failure detail");
+          }
+          return answered(query, null);
+        },
+      );
+
+      const result = await handleMcpToolCall({
+        args: { country: "CZE", queries: ["fast", "broken"] },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(validationEnvelope(result)["code"]).toBe("internal_error");
+      expect(JSON.stringify(result)).not.toContain("private failure detail");
+    });
+
+    test("two timed-out continuations each keep their own note", async () => {
+      searchDecisionsHandlerMock.mockImplementation(
+        async ({ body: { query } }: { body: { query: string } }) =>
+          query === "fast" ? answered(query, null) : timedOut(),
+      );
+
+      const page = asTestRaw<PartialPage>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            args: {
+              country: "CZE",
+              cursor: encodePaginationCursor(["engine-fast-1", "a-2", "b-2"]),
+              queries: ["fast", "slow a", "slow b"],
+            },
+            context: createContext(),
+            toolName: "search_case_law",
+          }),
+        ),
+      );
+
+      // The call keeps each distinct note once, so each names its phrasing.
+      for (const query of ["slow a", "slow b"]) {
+        const search = page.searches.find((entry) => entry.query === query);
+        expect(search?.warnings.map(({ code }) => code)).toEqual([
+          "phrasing_timed_out",
+        ]);
+      }
+    });
   });
 
   test("search_case_law reports what an exhausted phrasing required", async () => {

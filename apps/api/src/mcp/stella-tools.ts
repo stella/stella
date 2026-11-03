@@ -2657,6 +2657,11 @@ type CaseLawSearchCallOutcome =
       type: "timed_out";
       subCursor: string | undefined;
       result: InternalToolErrorResult;
+    }
+  | {
+      /** The search threw for any other reason: the call fails with it. */
+      type: "failed";
+      result: InternalToolErrorResult;
     };
 
 /**
@@ -2683,6 +2688,8 @@ const readCaseLawQueryPages = (
       case "exhausted":
         pages.push({ type: "exhausted" });
         break;
+      case "failed":
+        return { type: "failed", result: outcome.result };
       case "timed_out":
         timeout ??= outcome.result;
         pages.push({ type: "timed_out", subCursor: outcome.subCursor });
@@ -2717,8 +2724,9 @@ const readCaseLawQueryPages = (
 };
 /**
  * Run one phrasing's search. A statement the time budget cancelled throws
- * rather than answers; only that failure is this phrasing's alone, and any
- * other still fails the call.
+ * rather than answers. Only a failure the tool's one time-budget recognizer
+ * (`caseLawSearchTimeoutResult`) claims is this phrasing's alone; any other
+ * fails the call, read as every tool reads an unexpected failure.
  */
 const runCaseLawPhrasing = async (
   subCursor: string | null | undefined,
@@ -2727,16 +2735,23 @@ const runCaseLawPhrasing = async (
   if (subCursor === null) {
     return { type: "exhausted" };
   }
-  try {
-    return { type: "answered", subCursor, result: await run() };
-  } catch (error) {
-    const timeout = caseLawSearchTimeoutResult(error);
-    if (timeout === null) {
-      // Not this phrasing's alone: the call fails as it always did.
-      throw error;
-    }
-    return { type: "timed_out", subCursor, result: timeout };
+  const answered = await Result.tryPromise({
+    try: run,
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(answered)) {
+    return { type: "answered", subCursor, result: answered.value };
   }
+  const timeout = caseLawSearchTimeoutResult(answered.error);
+  return timeout === null
+    ? {
+        type: "failed",
+        result: internalFailureResult(
+          answered.error,
+          "mcp.searchCaseLaw.phrasing",
+        ),
+      }
+    : { type: "timed_out", subCursor, result: timeout };
 };
 
 /** The `searches[]` entry of a phrasing the time budget stopped. */
