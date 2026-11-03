@@ -433,7 +433,8 @@
       "Setup Bun",
       "Upload Postgres test timings",
       "Upload failed Bun install logs",
-      "Verify planned Postgres test durations"
+      "Verify planned Postgres test durations",
+      "Verify shared worker Postgres history and cleanup"
     ],
     "steps": ["Checkout", "Post Checkout", "Post Setup Bun", "Setup Bun"]
   },
@@ -1082,10 +1083,8 @@
       "Setup Bun for the failure digest",
       "Upload failure digest",
       "Upload required-jobs record",
-      "Upload required-violations record",
       "Write CI outcome inputs",
-      "Write required-jobs record",
-      "Write required-violations record"
+      "Write required-jobs record"
     ],
     "steps": ["Fetch GitHub API tooling", "Post Fetch GitHub API tooling"]
   }

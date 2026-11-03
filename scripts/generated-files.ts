@@ -34,6 +34,8 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Whether a source change should select consumers of the derived outputs. */
+  selectsConsumers?: boolean;
   /** Ignored, disposable paths that `write` may populate as execution caches. */
   cacheOutputs?: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
@@ -201,7 +203,9 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/docx-authoring/from-legal-source.ts",
     "apps/api/src/lib/email/correspondence/access.ts",
     "apps/api/src/lib/email/correspondence/create.ts",
+    "apps/api/src/lib/email/correspondence/uploaded-content.ts",
     "apps/api/src/lib/email/correspondence/provenance.ts",
+    "apps/api/src/lib/email/correspondence/data-box/*",
     "apps/api/src/lib/email/inbound/*",
     "apps/api/src/lib/hosted-usage-provider/client.ts",
     "apps/api/src/lib/hosted-usage-provider/config.ts",
@@ -256,6 +260,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/business-registries/src/cpf/index.ts",
     "packages/business-registries/src/cpf/validation.ts",
     "packages/db-load-gate/src/*",
+    "packages/decision-reader/src/reader-text-pieces.logic.ts",
     "packages/infosoud/src/*",
     "packages/template-packs/src/*",
     "apps/api/package.json",
@@ -977,8 +982,10 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "tailwind-class-cache",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [".tailwind-cache/**"],
+    // Lint consumes this through its Turbo dependency, not as package source.
+    selectsConsumers: false,
     inputs: [
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
       // sources and package versions (chat and workspace-ui use the web
@@ -1016,8 +1023,9 @@ const GENERATOR_DECLARATIONS = [
       ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
     ],
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
-    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
-    autofix: true,
+    check: null,
+    unchecked: "Derived cache is generated before lint and is never committed",
+    autofix: false,
     after: [],
   },
   {
@@ -1653,6 +1661,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
+      "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1892,6 +1901,51 @@ const GENERATOR_DECLARATIONS = [
     check: null,
     checkedBy: "Published package lists match the release policy",
     autofix: true,
+    after: [],
+  },
+  {
+    id: "package-api-reports",
+    outputKind: "committed",
+    outputs: ["packages/*/api-report.json"],
+    inputs: [
+      ".changeset/config.json",
+      "packages/*/package.json",
+      "packages/*/src/**",
+      "packages/cli/capabilities/*.json",
+      "packages/*/tsconfig*.json",
+      "scripts/package-api-report.ts",
+      "scripts/package-api-report-write.ts",
+      "scripts/offline-check-startup.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "bunfig.toml",
+      "scripts/package-api-compatibility.ts",
+      "scripts/package-api-export-space.ts",
+      "scripts/publish-packages.ts",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      "scripts/changeset-entry.ts",
+      "scripts/offline-network-preload.ts",
+      "scripts/package-api-base.sh",
+      ".changeset/*.md",
+    ],
+    write: ["bun", "scripts/package-api-report-write.ts"],
+    check: null,
+    checkedBy: "Published package API reports",
+    // The check compares against the pull request's Git base, which
+    // scripts/package-api-base.sh materialises before the offline check runs.
+    checkedWith: [
+      "bun",
+      "--preload",
+      "./scripts/offline-network-preload.ts",
+      "scripts/package-api-report.ts",
+      "--check",
+      "--base-dir",
+      '"$base_dir"',
+    ],
+    // API changes require explicit review and release intent.
+    autofix: false,
     after: [],
   },
   {

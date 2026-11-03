@@ -18,6 +18,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "../eu-vat-id-format";
+import {
   importProvenanceColumns,
   importProvenanceConstraints,
 } from "../import-provenance-columns";
@@ -51,6 +55,8 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+const contactsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.contacts'::regclass)`;
 
 export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
@@ -149,6 +155,14 @@ export const contacts = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // An EU VAT number lives in vat_id: tax_id holds one only beside a vat_id
+    // (migration 20261103061500_contact_vat_id_check, validated online).
+    p.check(
+      "contacts_vat_id_check",
+      sql`${table.vatId} IS NOT NULL OR ${table.taxId} IS NULL OR ${sql.raw(
+        EU_VAT_ID_SQL_COMPACT('"tax_id"'),
+      )} !~ ${sql.raw(`'${EU_VAT_ID_SQL_PATTERN}'`)}`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
@@ -180,6 +194,10 @@ export const contacts = p.pgTable(
         "gin",
         sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
       ),
+    // Matches a data-box message's box IDs to contacts.
+    p
+      .index("contacts_data_box_ids_idx")
+      .using("gin", sql`(${table.metadata} -> 'dataBoxes') jsonb_path_ops`),
     p.check(
       "contacts_person_details_check",
       sql`(${table.type} = 'person' OR (${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL AND cardinality(${table.nationalityCodes}) = 0))`,
@@ -200,6 +218,12 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+    p.pgPolicy("contacts_owner_organization_access", {
+      for: "all",
+      to: "public",
+      using: sql`${contactsOwner} AND ${organizationCheck}`,
+      withCheck: sql`${contactsOwner} AND ${organizationCheck}`,
+    }),
   ],
 );
 
