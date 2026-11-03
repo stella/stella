@@ -3,9 +3,11 @@
 //! reports what it produces through the run's [`RunSink`].
 
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::watch;
 
+use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
   ApprovalKind, Harness, HarnessReport, JsonObject, MissingHarness, RejectReason,
   RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
@@ -32,10 +34,9 @@ pub(crate) trait HarnessHost: Send + Sync + 'static {
   /// `api_base_url`; called before every connection attempt.
   fn connecting(&self, _api_base_url: &str) {}
   /// Every run the runner's journal holds as accepted and not finished, each
-  /// with the sink it reports through, after [`Self::connecting`]. A host
-  /// picks up the runs it does not run yet (after an app restart, say) from
-  /// each one's journaled position on, and reports through the new sink for
-  /// the ones it does.
+  /// with a sink into that journal, after [`Self::connecting`]. A host picks
+  /// up the runs it does not run yet (after an app restart, say) from each
+  /// one's journaled position on.
   fn reattach(&self, _runs: Vec<JournaledRun>) {}
 }
 
@@ -43,7 +44,7 @@ pub(crate) trait HarnessHost: Send + Sync + 'static {
 pub(crate) struct JournaledRun {
   pub(crate) run_id: String,
   /// The last position of the host's own source the journal holds an
-  /// output for (see [`RunSink::relay`]); 0 before the first.
+  /// output for (see [`RunSink::relay_all`]); 0 before the first.
   pub(crate) source_seq: u32,
   pub(crate) sink: RunSink,
 }
@@ -82,65 +83,41 @@ pub(crate) enum EmitError {
   RunClosed,
   /// The journal could not record it.
   Storage,
-  /// The runner stopped.
-  Stopped,
-}
-
-pub(crate) struct SinkRequest {
-  pub(crate) run_id: String,
-  pub(crate) output: RunOutput,
-  /// Where the host's own source numbered the output, journaled with it.
-  pub(crate) source_seq: Option<NonZeroU32>,
-  pub(crate) reply: oneshot::Sender<Result<NonZeroU32, EmitError>>,
+  /// The run reached the API's per-run storage limit; only its final
+  /// message is still taken.
+  Full,
 }
 
 /// A run's way back to the API. Each output gets the next position in the
-/// run's stream once the journal holds it.
+/// run's stream once the journal holds it, whether or not a runner socket is
+/// up: the socket sends what the journal holds.
 #[derive(Clone)]
 pub(crate) struct RunSink {
   run_id: String,
-  requests: mpsc::Sender<SinkRequest>,
+  journal: Arc<SharedJournal>,
 }
 
 impl RunSink {
-  pub(crate) fn new(run_id: String, requests: mpsc::Sender<SinkRequest>) -> Self {
-    Self { run_id, requests }
+  pub(crate) fn new(run_id: String, journal: Arc<SharedJournal>) -> Self {
+    Self { run_id, journal }
   }
 
-  /// Journal and send an output the host made up itself.
-  pub(crate) async fn emit(&self, output: RunOutput) -> Result<NonZeroU32, EmitError> {
-    self.send(output, None).await
+  /// Journal an output the host made up itself.
+  pub(crate) fn emit(&self, output: RunOutput) -> Result<NonZeroU32, EmitError> {
+    self.journal.record_output(&self.run_id, output, None)
   }
 
-  /// Journal and send an output a source numbered `source_seq` (the harness
-  /// holder's own position). The journal keeps the last such position with
-  /// the output in one write, so a host that comes back after a restart
-  /// resumes its source after exactly what the journal holds.
-  pub(crate) async fn relay(
+  /// Journal outputs in order in one write, each with the position its
+  /// source numbered it (the harness holder's own `seq`), if any. The
+  /// journal keeps the last such position with the outputs, so a host that
+  /// comes back after a restart resumes its source after exactly what the
+  /// journal holds. `Err` only when the write failed and nothing was
+  /// journaled.
+  pub(crate) fn relay_all(
     &self,
-    output: RunOutput,
-    source_seq: NonZeroU32,
-  ) -> Result<NonZeroU32, EmitError> {
-    self.send(output, Some(source_seq)).await
-  }
-
-  async fn send(
-    &self,
-    output: RunOutput,
-    source_seq: Option<NonZeroU32>,
-  ) -> Result<NonZeroU32, EmitError> {
-    let (reply, recorded) = oneshot::channel();
-    self
-      .requests
-      .send(SinkRequest {
-        run_id: self.run_id.clone(),
-        output,
-        source_seq,
-        reply,
-      })
-      .await
-      .map_err(|_runner_gone| EmitError::Stopped)?;
-    recorded.await.map_err(|_runner_gone| EmitError::Stopped)?
+    outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
+  ) -> Result<Recorded, EmitError> {
+    self.journal.record_outputs(&self.run_id, outputs)
   }
 }
 

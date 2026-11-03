@@ -2,13 +2,13 @@
 //! command handling, resending what the API has not acknowledged, and when
 //! to reconnect.
 //!
-//! One task owns the socket, the journal and the run positions; harness hosts
-//! reach it through [`RunSink`]s, so every message is journaled, numbered and
-//! sent in one order.
+//! One task owns the socket. Harness hosts journal what runs produce through
+//! [`RunSink`]s into the shared journal, which numbers each message, whether
+//! or not a socket is up; the socket sends what the journal hands it while
+//! connected and resends the journal's outbox after each `welcome`.
 
 use std::{
   collections::HashMap,
-  num::NonZeroU32,
   sync::{Arc, OnceLock},
   time::Duration,
 };
@@ -32,23 +32,18 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-use super::harness::{
-  EmitError, HarnessHost, HarnessReports, JournaledRun, RunOutput, RunSink, SinkRequest,
-};
-use super::journal::{Decision, Journal, RunRecord};
+use super::harness::{HarnessHost, HarnessReports, JournaledRun, RunSink};
+use super::journal::{Change, Decision, Journal, RunRecord, SharedJournal, seq_of};
 use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ActiveRun, CloseCode, DESKTOP_ID_HEADER, DesktopMessage, HELLO_TIMEOUT,
   HarnessReport, HarnessStatus, Hello, MAX_FRAME_BYTES, PATH, PING_INTERVAL,
-  POLICY_VIOLATION_CODE, PROTOCOL, RunApprovalRequest, RunEvent, RunFinished, RunRef,
-  RunRejected, ServerMessage, Welcome,
+  POLICY_VIOLATION_CODE, PROTOCOL, RunRef, RunRejected, ServerMessage, Welcome,
 };
 
 /// `hello` lists at most this many runs; the contract refuses more.
 const MAX_ACTIVE_RUNS: usize = 64;
-/// Outputs a host may queue before `emit` waits for the runner.
-const SINK_CAPACITY: usize = 256;
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -114,6 +109,8 @@ pub(crate) struct RunnerParts {
   pub(crate) config: RunnerConfig,
   pub(crate) auth: Arc<dyn RunnerAuth>,
   pub(crate) journals: Arc<dyn JournalOpener>,
+  /// Outlives the runner, so hosts journal while no runner runs.
+  pub(crate) journal: Arc<SharedJournal>,
   pub(crate) host: Arc<dyn HarnessHost>,
   pub(crate) reports: Arc<dyn HarnessReports>,
   pub(crate) state: Arc<watch::Sender<RunnerState>>,
@@ -163,9 +160,12 @@ pub(crate) struct Runner {
   wakes: watch::Receiver<u64>,
   wakes_closed: bool,
   stop: watch::Receiver<bool>,
-  sink_tx: mpsc::Sender<SinkRequest>,
-  sink_rx: mpsc::Receiver<SinkRequest>,
-  journal: Option<(String, Journal)>,
+  journal: Arc<SharedJournal>,
+  /// What the journal took since this runner started, to send while a
+  /// socket is up; dropped otherwise, since `welcome` resends the outbox.
+  live: mpsc::UnboundedReceiver<DesktopMessage>,
+  /// Per run, the last position the current socket sent.
+  sent: HashMap<String, u32>,
   /// The expiry of the newest MCP token each run was handed.
   tokens: HashMap<String, chrono::DateTime<chrono::Utc>>,
   backoff: Backoff,
@@ -177,7 +177,8 @@ pub(crate) struct Runner {
 
 impl Runner {
   pub(crate) fn new(parts: RunnerParts) -> Self {
-    let (sink_tx, sink_rx) = mpsc::channel(SINK_CAPACITY);
+    let (live_tx, live) = mpsc::unbounded_channel();
+    parts.journal.set_live(live_tx);
     let backoff = Backoff::new(
       parts.config.timing.backoff_base,
       parts.config.timing.backoff_cap,
@@ -195,9 +196,9 @@ impl Runner {
       wakes: parts.wakes,
       wakes_closed: false,
       stop: parts.stop,
-      sink_tx,
-      sink_rx,
-      journal: None,
+      journal: parts.journal,
+      live,
+      sent: HashMap::new(),
       tokens: HashMap::new(),
       backoff,
     }
@@ -302,9 +303,8 @@ impl Runner {
         () = &mut deadline => return Waited::Elapsed,
         () = Self::next_wake(&mut self.wakes, &mut self.wakes_closed) => return Waited::Woke,
         () = Self::next_stop(&mut self.stop) => return Waited::Stopped,
-        Some(request) = self.sink_rx.recv() => {
+        Some(_journaled) = self.live.recv() => {
           // Nothing to send to without a socket; the journal keeps it.
-          let _unsent = self.record_output(request);
         }
       }
     }
@@ -315,19 +315,13 @@ impl Runner {
     loop {
       tokio::select! {
         () = Self::next_stop(&mut self.stop) => return,
-        Some(request) = self.sink_rx.recv() => {
-          let _unsent = self.record_output(request);
-        }
+        Some(_journaled) = self.live.recv() => {}
       }
     }
   }
 
   async fn ensure_journal(&mut self, namespace: &str) {
-    if self
-      .journal
-      .as_ref()
-      .is_some_and(|(current, _)| current == namespace)
-    {
+    if self.journal.holds_namespace(namespace) {
       return;
     }
     let opener = Arc::clone(&self.journals);
@@ -340,7 +334,7 @@ impl Runner {
       }
     };
     self.tokens.clear();
-    self.journal = Some((namespace.to_owned(), journal));
+    self.journal.replace(namespace.to_owned(), journal);
   }
 
   async fn connect_once(&mut self) -> Ended {
@@ -385,9 +379,8 @@ impl Runner {
       tokio::select! {
         connected = &mut connect => break connected,
         () = Self::next_stop(&mut self.stop) => return Ended::Stopped,
-        Some(request) = self.sink_rx.recv() => {
+        Some(_journaled) = self.live.recv() => {
           // Listed in `hello` and resent after `welcome`.
-          let _unsent = self.record_output(request);
         }
       }
     };
@@ -430,7 +423,9 @@ impl Runner {
 
   fn hello(&self) -> Hello {
     let mut active_runs: Vec<ActiveRun> = self
+      .journal
       .records()
+      .iter()
       .filter(|record| record.is_held())
       .map(|record| ActiveRun {
         run_id: record.run_id.clone(),
@@ -457,12 +452,14 @@ impl Runner {
   /// up the ones it does not run yet from where the journal stops.
   fn reattach(&self) {
     let runs: Vec<JournaledRun> = self
+      .journal
       .records()
+      .into_iter()
       .filter(|record| record.decision == Decision::Accepted && !record.finished)
       .map(|record| JournaledRun {
-        run_id: record.run_id.clone(),
+        sink: RunSink::new(record.run_id.clone(), Arc::clone(&self.journal)),
         source_seq: record.source_seq,
-        sink: RunSink::new(record.run_id.clone(), self.sink_tx.clone()),
+        run_id: record.run_id,
       })
       .collect();
     if !runs.is_empty() {
@@ -485,11 +482,25 @@ impl Runner {
     Ok(())
   }
 
-  fn records(&self) -> impl Iterator<Item = &RunRecord> {
-    self
-      .journal
-      .iter()
-      .flat_map(|(_, journal)| journal.records())
+  /// Send a message the journal took while connected, unless this socket
+  /// sent it already with the outbox `welcome` asked for.
+  async fn send_live(
+    &mut self,
+    socket: &mut Socket,
+    message: &DesktopMessage,
+  ) -> Result<(), ()> {
+    let Some(seq) = seq_of(message) else {
+      return send(socket, message).await;
+    };
+    let Some(run_id) = run_of(message) else {
+      return Ok(());
+    };
+    let sent = self.sent.entry(run_id.to_owned()).or_default();
+    if seq <= *sent {
+      return Ok(());
+    }
+    *sent = seq;
+    send(socket, message).await
   }
 
   async fn await_welcome(
@@ -534,9 +545,8 @@ impl Runner {
           Some(Err(error)) => return Err(read_failed(socket, &error).await),
           None => return Err(Ended::Failed),
         },
-        Some(request) = self.sink_rx.recv() => {
+        Some(_journaled) = self.live.recv() => {
           // Sent with the rest of the outbox once `welcome` says where from.
-          let _unsent = self.record_output(request);
         }
         () = Self::next_stop(&mut self.stop) => {
           close(socket, WireCloseCode::Normal).await;
@@ -554,29 +564,46 @@ impl Runner {
       .into_iter()
       .map(|point| (point.run_id, point.ack_seq))
       .collect();
+    // Whatever the journal took so far is resent from its outbox below;
+    // what it takes from here on comes through `live`.
+    while self.live.try_recv().is_ok() {}
+    self.sent.clear();
     let held: Vec<RunRecord> = self
+      .journal
       .records()
-      .filter(|record| record.is_held())
-      .cloned()
+      .into_iter()
+      .filter(RunRecord::is_held)
       .collect();
     let mut resend = Vec::new();
-    for mut record in held {
-      let Some(&ack_seq) = resume.get(&record.run_id) else {
+    for record in held {
+      let run_id = record.run_id;
+      let Some(&ack_seq) = resume.get(&run_id) else {
         // The API dropped the run: stop it here too and forget it.
         if !record.cancelled {
-          self.host.cancel(&record.run_id);
+          self.host.cancel(&run_id);
         }
-        self.tokens.remove(&record.run_id);
-        self.forget(&record.run_id);
+        self.tokens.remove(&run_id);
+        self.forget(&run_id);
         continue;
       };
-      record.acknowledge(ack_seq);
-      if record.is_done() {
-        self.forget(&record.run_id);
-        continue;
+      let kept = self
+        .journal
+        .update(&run_id, |record| {
+          record.acknowledge(ack_seq);
+          if record.is_done() {
+            (Change::Forget, None)
+          } else {
+            (
+              Change::Store,
+              Some((record.outbox.clone(), record.last_seq)),
+            )
+          }
+        })
+        .map_err(log_journal_error)?;
+      if let Some(Some((outbox, last_seq))) = kept {
+        resend.extend(outbox);
+        self.sent.insert(run_id, last_seq);
       }
-      resend.extend(record.outbox.iter().cloned());
-      self.store(record)?;
     }
     for message in resend {
       send(socket, &message).await?;
@@ -619,10 +646,8 @@ impl Runner {
             None => return Ended::Failed,
           }
         }
-        Some(request) = self.sink_rx.recv() => {
-          if let Some(message) = self.record_output(request)
-            && send(socket, &message).await.is_err()
-          {
+        Some(message) = self.live.recv() => {
+          if self.send_live(socket, &message).await.is_err() {
             return Ended::Failed;
           }
         }
@@ -658,24 +683,30 @@ impl Runner {
     match message {
       ServerMessage::RunStart(start) => {
         let run_id = start.run_id.clone();
-        let decision = match self.journal_get(&run_id) {
+        let decision = match self.journal.get(&run_id) {
           // Answered before (maybe before a restart): answer the same again.
           Some(record) => record.decision,
           None => {
             let expires_at = parse_instant(&start.mcp.expires_at);
-            let sink = RunSink::new(run_id.clone(), self.sink_tx.clone());
+            // Held as accepted before the host starts, so its first output
+            // finds the run in the journal.
+            self
+              .journal
+              .put(RunRecord::new(run_id.clone(), Decision::Accepted, now_ms()))
+              .map_err(log_journal_error)?;
+            let sink = RunSink::new(run_id.clone(), Arc::clone(&self.journal));
             let decision = match self.host.start(start, sink) {
               Ok(()) => Decision::Accepted,
               Err(reason) => Decision::Rejected { reason },
             };
-            if self
-              .store(RunRecord::new(run_id.clone(), decision, now_ms()))
-              .is_err()
-            {
-              if decision == Decision::Accepted {
-                self.host.cancel(&run_id);
-              }
-              return Err(());
+            if decision != Decision::Accepted {
+              self
+                .journal
+                .update(&run_id, |record| {
+                  record.decision = decision;
+                  (Change::Store, ())
+                })
+                .map_err(log_journal_error)?;
             }
             if let (Decision::Accepted, Some(expires_at)) = (decision, expires_at) {
               self.tokens.insert(run_id.clone(), expires_at);
@@ -692,49 +723,35 @@ impl Runner {
         send(socket, &answer).await
       }
       ServerMessage::RunInput(input) => {
-        let Some(mut record) = self.accepted(&input.run_id) else {
-          return Ok(());
-        };
-        if !record.inputs.insert(input.input_id.clone()) {
-          return Ok(());
+        let input_id = input.input_id.clone();
+        if self.first_time(&input.run_id, |record| record.inputs.insert(input_id))? {
+          self.host.input(input);
         }
-        self.store(record)?;
-        self.host.input(input);
         Ok(())
       }
       ServerMessage::RunApproval(approval) => {
-        let Some(mut record) = self.accepted(&approval.run_id) else {
-          return Ok(());
-        };
-        if !record.approvals.insert(approval.request_id.clone()) {
-          return Ok(());
+        let request_id = approval.request_id.clone();
+        if self.first_time(&approval.run_id, |record| {
+          record.approvals.insert(request_id)
+        })? {
+          self.host.approval(approval);
         }
-        self.store(record)?;
-        self.host.approval(approval);
         Ok(())
       }
       ServerMessage::RunInterrupt(RunRef { run_id }) => {
-        let Some(mut record) = self.accepted(&run_id) else {
-          return Ok(());
-        };
-        if record.interrupted {
-          return Ok(());
+        if self.first_time(&run_id, |record| {
+          !std::mem::replace(&mut record.interrupted, true)
+        })? {
+          self.host.interrupt(&run_id);
         }
-        record.interrupted = true;
-        self.store(record)?;
-        self.host.interrupt(&run_id);
         Ok(())
       }
       ServerMessage::RunCancel(RunRef { run_id }) => {
-        let Some(mut record) = self.accepted(&run_id) else {
-          return Ok(());
-        };
-        if record.cancelled {
-          return Ok(());
+        if self.first_time(&run_id, |record| {
+          !std::mem::replace(&mut record.cancelled, true)
+        })? {
+          self.host.cancel(&run_id);
         }
-        record.cancelled = true;
-        self.store(record)?;
-        self.host.cancel(&run_id);
         Ok(())
       }
       ServerMessage::RunToken(refresh) => {
@@ -756,16 +773,21 @@ impl Runner {
         Ok(())
       }
       ServerMessage::Ack(ack) => {
-        let Some(mut record) = self.journal_get(&ack.run_id).cloned() else {
-          return Ok(());
-        };
-        record.acknowledge(ack.seq.get());
-        if record.is_done() {
-          self.tokens.remove(&record.run_id);
-          self.forget(&record.run_id);
-          return Ok(());
+        let done = self
+          .journal
+          .update(&ack.run_id, |record| {
+            record.acknowledge(ack.seq.get());
+            if record.is_done() {
+              (Change::Forget, true)
+            } else {
+              (Change::Store, false)
+            }
+          })
+          .map_err(log_journal_error)?;
+        if done == Some(true) {
+          self.tokens.remove(&ack.run_id);
         }
-        self.store(record)
+        Ok(())
       }
       // Answered by the caller; a second `welcome` never comes.
       ServerMessage::Welcome(_)
@@ -774,105 +796,54 @@ impl Runner {
     }
   }
 
-  fn journal_get(&self, run_id: &str) -> Option<&RunRecord> {
-    self
-      .journal
-      .as_ref()
-      .and_then(|(_, journal)| journal.get(run_id))
-  }
-
   /// A run this desktop accepted and has not finished.
   fn accepted(&self, run_id: &str) -> Option<RunRecord> {
     self
-      .journal_get(run_id)
+      .journal
+      .get(run_id)
       .filter(|record| record.decision == Decision::Accepted && !record.finished)
-      .cloned()
   }
 
-  fn store(&mut self, record: RunRecord) -> Result<(), ()> {
-    let Some((_, journal)) = self.journal.as_mut() else {
-      return Err(());
-    };
-    journal.put(record).map_err(|error| {
-      tracing::warn!(error = %error, "desktop runner journal write failed");
-    })
+  /// Record a command on a running run; whether it is new and goes to the
+  /// host. `mark` returns `false` for a command the record already holds.
+  fn first_time(
+    &self,
+    run_id: &str,
+    mark: impl FnOnce(&mut RunRecord) -> bool,
+  ) -> Result<bool, ()> {
+    let marked = self
+      .journal
+      .update(run_id, |record| {
+        if record.decision != Decision::Accepted || record.finished || !mark(record) {
+          return (Change::Unchanged, false);
+        }
+        (Change::Store, true)
+      })
+      .map_err(log_journal_error)?;
+    Ok(marked == Some(true))
   }
 
-  fn forget(&mut self, run_id: &str) {
-    if let Some((_, journal)) = self.journal.as_mut()
-      && let Err(error) = journal.remove(run_id)
-    {
+  fn forget(&self, run_id: &str) {
+    if let Err(error) = self.journal.remove(run_id) {
       tracing::warn!(error = %error, "desktop runner journal removal failed");
     }
   }
+}
 
-  /// Number, journal and answer one output; the message to send, if any.
-  fn record_output(&mut self, request: SinkRequest) -> Option<DesktopMessage> {
-    let SinkRequest {
-      run_id,
-      output,
-      source_seq,
-      reply,
-    } = request;
-    let recorded = self.journal_output(run_id, output, source_seq);
-    let (answer, message) = match recorded {
-      Ok((seq, message)) => (Ok(seq), Some(message)),
-      Err(error) => (Err(error), None),
-    };
-    // A host that stopped waiting no longer needs the position.
-    let _unwaited = reply.send(answer);
-    message
-  }
+fn log_journal_error(error: String) {
+  tracing::warn!(error = %error, "desktop runner journal write failed");
+}
 
-  fn journal_output(
-    &mut self,
-    run_id: String,
-    output: RunOutput,
-    source_seq: Option<NonZeroU32>,
-  ) -> Result<(NonZeroU32, DesktopMessage), EmitError> {
-    let mut record = self.accepted(&run_id).ok_or(EmitError::RunClosed)?;
-    let seq = record
-      .last_seq
-      .checked_add(1)
-      .and_then(NonZeroU32::new)
-      .ok_or(EmitError::RunClosed)?;
-    let finished = matches!(output, RunOutput::Finished { .. });
-    let message = match output {
-      RunOutput::Event(chunk) => {
-        DesktopMessage::RunEvent(RunEvent { run_id, seq, chunk })
-      }
-      RunOutput::ApprovalRequest {
-        request_id,
-        kind,
-        summary,
-      } => DesktopMessage::RunApprovalRequest(RunApprovalRequest {
-        run_id,
-        seq,
-        request_id,
-        kind,
-        summary,
-      }),
-      RunOutput::Finished {
-        outcome,
-        harness_session_id,
-      } => DesktopMessage::RunFinished(RunFinished {
-        run_id,
-        seq,
-        outcome,
-        harness_session_id,
-      }),
-    };
-    if encode(&message).is_none() {
-      return Err(EmitError::TooLarge);
-    }
-    record.outbox.push(message.clone());
-    record.last_seq = seq.get();
-    if let Some(source_seq) = source_seq {
-      record.source_seq = record.source_seq.max(source_seq.get());
-    }
-    record.finished = finished;
-    self.store(record).map_err(|()| EmitError::Storage)?;
-    Ok((seq, message))
+/// The run a sequenced message belongs to.
+fn run_of(message: &DesktopMessage) -> Option<&str> {
+  match message {
+    DesktopMessage::RunEvent(event) => Some(&event.run_id),
+    DesktopMessage::RunApprovalRequest(request) => Some(&request.run_id),
+    DesktopMessage::RunFinished(finished) => Some(&finished.run_id),
+    DesktopMessage::Hello(_)
+    | DesktopMessage::HarnessStatus(_)
+    | DesktopMessage::RunAccepted(_)
+    | DesktopMessage::RunRejected(_) => None,
   }
 }
 
@@ -933,7 +904,7 @@ fn parse(text: &str) -> Option<ServerMessage> {
 }
 
 /// The frame for `message`, or `None` above the frame limit.
-fn encode(message: &DesktopMessage) -> Option<String> {
+pub(super) fn encode(message: &DesktopMessage) -> Option<String> {
   serde_json::to_string(message)
     .ok()
     .filter(|text| text.len() <= MAX_FRAME_BYTES)

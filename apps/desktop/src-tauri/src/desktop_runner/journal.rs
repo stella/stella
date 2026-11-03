@@ -10,14 +10,22 @@
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
+  num::NonZeroU32,
   path::PathBuf,
+  sync::{Mutex, MutexGuard, PoisonError},
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
+use super::client::encode;
+use super::harness::{EmitError, RunOutput};
 use crate::local_store::EncryptedJsonFile;
-use crate::runner_protocol::{DesktopMessage, RejectReason};
+use crate::runner_protocol::{
+  DesktopMessage, MAX_MESSAGE_BYTES_PER_RUN, MAX_MESSAGES_PER_RUN, RejectReason,
+  RunApprovalRequest, RunEvent, RunFinished,
+};
 
 const RECORD_LABEL: &str = "desktop runner journal";
 const RECORD_EXTENSION: &str = "json";
@@ -50,6 +58,9 @@ pub(crate) struct RunRecord {
   /// `seq`) whose output this record holds; 0 before the first. It is not
   /// `last_seq`: the host also emits outputs no source numbered.
   pub(crate) source_seq: u32,
+  /// UTF-8 bytes of every message this desktop produced for the run, the
+  /// measure of the API's per-run storage limit.
+  pub(crate) produced_bytes: u64,
   /// The last position the API acknowledged.
   pub(crate) ack_seq: u32,
   pub(crate) finished: bool,
@@ -69,6 +80,7 @@ impl RunRecord {
       cancelled: false,
       last_seq: 0,
       source_seq: 0,
+      produced_bytes: 0,
       ack_seq: 0,
       finished: false,
       outbox: Vec::new(),
@@ -234,6 +246,251 @@ fn record_file(
 ) -> EncryptedJsonFile {
   EncryptedJsonFile::new(key, record_path(directory, run_id), RECORD_LABEL)
     .with_associated_data(format!("desktop-runner-run:{run_id}"))
+}
+
+/// What [`SharedJournal::update`] does with the changed record.
+pub(crate) enum Change {
+  Unchanged,
+  Store,
+  Forget,
+}
+
+struct SharedState {
+  journal: Option<(String, Journal)>,
+  /// Where newly journaled messages go to be sent while a socket is up.
+  live: Option<mpsc::UnboundedSender<DesktopMessage>>,
+}
+
+/// The journal of the account the runner connects for, shared by the runner
+/// and every [`RunSink`](super::harness::RunSink). A run's outputs are journaled the moment the host
+/// relays them, whether or not a runner socket is up or a runner runs at
+/// all; a socket only sends what the journal holds. It lives as long as the
+/// app, so a runner that stops and starts again finds every output.
+pub(crate) struct SharedJournal(Mutex<SharedState>);
+
+impl Default for SharedJournal {
+  fn default() -> Self {
+    Self(Mutex::new(SharedState {
+      journal: None,
+      live: None,
+    }))
+  }
+}
+
+impl SharedJournal {
+  fn state(&self) -> MutexGuard<'_, SharedState> {
+    self.0.lock().unwrap_or_else(PoisonError::into_inner)
+  }
+
+  /// Whether the open journal is the account's.
+  pub(crate) fn holds_namespace(&self, namespace: &str) -> bool {
+    self
+      .state()
+      .journal
+      .as_ref()
+      .is_some_and(|(current, _)| current == namespace)
+  }
+
+  pub(crate) fn replace(&self, namespace: String, journal: Journal) {
+    self.state().journal = Some((namespace, journal));
+  }
+
+  /// The channel newly journaled messages are sent on, until replaced.
+  pub(crate) fn set_live(&self, live: mpsc::UnboundedSender<DesktopMessage>) {
+    self.state().live = Some(live);
+  }
+
+  pub(crate) fn get(&self, run_id: &str) -> Option<RunRecord> {
+    self
+      .state()
+      .journal
+      .as_ref()
+      .and_then(|(_, journal)| journal.get(run_id).cloned())
+  }
+
+  pub(crate) fn records(&self) -> Vec<RunRecord> {
+    self
+      .state()
+      .journal
+      .as_ref()
+      .map(|(_, journal)| journal.records().cloned().collect())
+      .unwrap_or_default()
+  }
+
+  /// Write `record`, then hold it.
+  pub(crate) fn put(&self, record: RunRecord) -> Result<(), String> {
+    match self.state().journal.as_mut() {
+      Some((_, journal)) => journal.put(record),
+      None => Err(format!("{RECORD_LABEL} is not open")),
+    }
+  }
+
+  pub(crate) fn remove(&self, run_id: &str) -> Result<(), String> {
+    match self.state().journal.as_mut() {
+      Some((_, journal)) => journal.remove(run_id),
+      None => Ok(()),
+    }
+  }
+
+  /// Change one record in place, so no output a host journals meanwhile is
+  /// lost; `Ok(None)` when the journal holds no such record.
+  pub(crate) fn update<R>(
+    &self,
+    run_id: &str,
+    change: impl FnOnce(&mut RunRecord) -> (Change, R),
+  ) -> Result<Option<R>, String> {
+    let mut state = self.state();
+    let Some((_, journal)) = state.journal.as_mut() else {
+      return Ok(None);
+    };
+    let Some(mut record) = journal.get(run_id).cloned() else {
+      return Ok(None);
+    };
+    let (write, result) = change(&mut record);
+    match write {
+      Change::Unchanged => {}
+      Change::Store => journal.put(record)?,
+      Change::Forget => journal.remove(run_id)?,
+    }
+    drop(state);
+    Ok(Some(result))
+  }
+
+  /// Number and journal one output of a running run, then hand it to the
+  /// live socket, if any; see [`Self::record_outputs`].
+  pub(crate) fn record_output(
+    &self,
+    run_id: &str,
+    output: RunOutput,
+    source_seq: Option<NonZeroU32>,
+  ) -> Result<NonZeroU32, EmitError> {
+    let recorded = self.record_outputs(run_id, vec![(output, source_seq)])?;
+    match recorded.outcomes.first() {
+      Some(Ok(seq)) => Ok(*seq),
+      Some(Err(error)) => Err(*error),
+      None => Err(EmitError::RunClosed),
+    }
+  }
+
+  /// Number and journal outputs of a running run in one write, then hand
+  /// them to the live socket, if any. Each output's `source_seq` is
+  /// journaled with it, also for one that is not taken, so a resumed source
+  /// never sends it again. Once the run reached the API's per-run storage
+  /// limit only its final message is taken; an output over the frame limit
+  /// is not taken. Nothing is journaled when the write fails.
+  pub(crate) fn record_outputs(
+    &self,
+    run_id: &str,
+    outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
+  ) -> Result<Recorded, EmitError> {
+    let mut state = self.state();
+    let Some((_, journal)) = state.journal.as_mut() else {
+      return Ok(Recorded::closed(outputs.len()));
+    };
+    let Some(mut record) = journal
+      .get(run_id)
+      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .cloned()
+    else {
+      return Ok(Recorded::closed(outputs.len()));
+    };
+    let mut outcomes = Vec::with_capacity(outputs.len());
+    let mut taken = Vec::new();
+    for (output, source_seq) in outputs {
+      if let Some(source_seq) = source_seq {
+        record.source_seq = record.source_seq.max(source_seq.get());
+      }
+      outcomes.push(take(&mut record, run_id, output).map(|(seq, message)| {
+        taken.push(message);
+        seq
+      }));
+    }
+    journal.put(record).map_err(|error| {
+      tracing::warn!(error = %error, "desktop runner journal write failed");
+      EmitError::Storage
+    })?;
+    if let Some(live) = state.live.as_ref() {
+      for message in taken {
+        // A runner that is gone resends from the journal once it is back.
+        let _unsent = live.send(message);
+      }
+    }
+    // Held to here: the live channel sees positions in journal order.
+    drop(state);
+    Ok(Recorded { outcomes })
+  }
+}
+
+/// What [`SharedJournal::record_outputs`] did with each output, in order.
+pub(crate) struct Recorded {
+  pub(crate) outcomes: Vec<Result<NonZeroU32, EmitError>>,
+}
+
+impl Recorded {
+  fn closed(count: usize) -> Self {
+    Self {
+      outcomes: vec![Err(EmitError::RunClosed); count],
+    }
+  }
+}
+
+/// Append one output to `record`'s outbox, or say why it is not taken.
+fn take(
+  record: &mut RunRecord,
+  run_id: &str,
+  output: RunOutput,
+) -> Result<(NonZeroU32, DesktopMessage), EmitError> {
+  if record.finished {
+    return Err(EmitError::RunClosed);
+  }
+  let seq = record
+    .last_seq
+    .checked_add(1)
+    .and_then(NonZeroU32::new)
+    .ok_or(EmitError::RunClosed)?;
+  let finished = matches!(output, RunOutput::Finished { .. });
+  let message = numbered(run_id.to_owned(), seq, output);
+  let bytes = encode(&message).ok_or(EmitError::TooLarge)?.len();
+  let bytes = u64::try_from(bytes).unwrap_or(u64::MAX);
+  let produced = record.produced_bytes.saturating_add(bytes);
+  if !finished
+    && (seq.get() > MAX_MESSAGES_PER_RUN || produced > MAX_MESSAGE_BYTES_PER_RUN)
+  {
+    return Err(EmitError::Full);
+  }
+  record.outbox.push(message.clone());
+  record.last_seq = seq.get();
+  record.produced_bytes = produced;
+  record.finished = finished;
+  Ok((seq, message))
+}
+
+fn numbered(run_id: String, seq: NonZeroU32, output: RunOutput) -> DesktopMessage {
+  match output {
+    RunOutput::Event(chunk) => {
+      DesktopMessage::RunEvent(RunEvent { run_id, seq, chunk })
+    }
+    RunOutput::ApprovalRequest {
+      request_id,
+      kind,
+      summary,
+    } => DesktopMessage::RunApprovalRequest(RunApprovalRequest {
+      run_id,
+      seq,
+      request_id,
+      kind,
+      summary,
+    }),
+    RunOutput::Finished {
+      outcome,
+      harness_session_id,
+    } => DesktopMessage::RunFinished(RunFinished {
+      run_id,
+      seq,
+      outcome,
+      harness_session_id,
+    }),
+  }
 }
 
 #[cfg(test)]

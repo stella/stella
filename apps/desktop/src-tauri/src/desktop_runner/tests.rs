@@ -36,7 +36,7 @@ use super::harness::{
   EmitError, HarnessHost, HarnessReports, NoHarnessReports, RunOutput, RunSink,
   UnavailableHarnessHost,
 };
-use super::journal::{Journal, JournalBacking};
+use super::journal::{Journal, JournalBacking, SharedJournal};
 use super::state::RunnerState;
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
@@ -347,6 +347,8 @@ pub(super) struct Setup {
   pub(super) device_key: DeviceKey,
   pub(super) desktop_id: Uuid,
   pub(super) signed_in: bool,
+  /// Shared by every runner this setup starts, as the app shares it.
+  pub(super) journal: Arc<SharedJournal>,
 }
 
 impl Setup {
@@ -360,6 +362,7 @@ impl Setup {
       device_key: DeviceKey::fixture(),
       desktop_id: Uuid::new_v4(),
       signed_in: true,
+      journal: Arc::new(SharedJournal::default()),
     }
   }
 
@@ -381,6 +384,7 @@ impl Setup {
         signed_in: self.signed_in,
       }),
       journals: Arc::new(DirectoryJournals(self.journal_dir.clone())),
+      journal: Arc::clone(&self.journal),
       host: Arc::clone(&self.host),
       reports: Arc::clone(&self.reports),
       state,
@@ -520,7 +524,7 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   );
   let sink = host.sink(RUN);
   for (expected, delta) in [(1, "One"), (2, "Two"), (3, "Three")] {
-    assert_eq!(sink.emit(text_chunk(delta)).await.unwrap().get(), expected);
+    assert_eq!(sink.emit(text_chunk(delta)).unwrap().get(), expected);
     let event = connection.receive_type("run.event").await;
     assert_eq!(event["seq"], expected);
     assert_eq!(event["chunk"]["delta"], delta);
@@ -531,7 +535,7 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   connection.close(1011, "internal_error").await;
 
   // Produced while disconnected: journaled, sent after the next welcome.
-  assert_eq!(sink.emit(text_chunk("Four")).await.unwrap().get(), 4);
+  assert_eq!(sink.emit(text_chunk("Four")).unwrap().get(), 4);
 
   let mut connection = gateway.accept().await;
   assert_eq!(
@@ -555,6 +559,8 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
     device_key: setup.device_key.clone(),
     desktop_id: setup.desktop_id,
     signed_in: true,
+    // A new app process opens the journal from disk again.
+    journal: Arc::new(SharedJournal::default()),
   };
   let runner = restarted.start(&gateway);
   let mut connection = gateway.accept().await;
@@ -604,7 +610,6 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
         kind: ApprovalKind::Command,
         summary: "Run the test suite".to_owned(),
       })
-      .await
       .unwrap()
       .get(),
     1
@@ -626,7 +631,6 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
         outcome: RunOutcome::Completed,
         harness_session_id: Some("session-1".to_owned()),
       })
-      .await
       .unwrap()
       .get(),
     2
@@ -636,14 +640,11 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
     "session-1"
   );
   // Nothing follows the final message.
-  assert_eq!(
-    done.emit(text_chunk("late")).await,
-    Err(EmitError::RunClosed)
-  );
+  assert_eq!(done.emit(text_chunk("late")), Err(EmitError::RunClosed));
   connection
     .send(json!({"type": "ack", "runId": finished, "seq": 2}))
     .await;
-  host.sink(RUN).emit(text_chunk("Working")).await.unwrap();
+  host.sink(RUN).emit(text_chunk("Working")).unwrap();
   connection.receive_type("run.event").await;
   connection.close(1011, "internal_error").await;
 
@@ -659,7 +660,7 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
   assert_eq!(connection.hello().await["activeRuns"], json!([]));
   assert!(host.calls().contains(&format!("cancel {RUN}")));
   assert_eq!(
-    host.sink(RUN).emit(text_chunk("gone")).await,
+    host.sink(RUN).emit(text_chunk("gone")),
     Err(EmitError::RunClosed)
   );
   runner.stop().await;
@@ -736,6 +737,8 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     device_key: setup.device_key.clone(),
     desktop_id: setup.desktop_id,
     signed_in: true,
+    // A new app process opens the journal from disk again.
+    journal: Arc::new(SharedJournal::default()),
   };
   let runner = restarted.start(&gateway);
   let mut connection = gateway.accept().await;
@@ -922,11 +925,8 @@ async fn frames_over_the_limit_are_refused_both_ways() {
   // journaled, and takes no position.
   let sink = host.sink(RUN);
   let oversized = "x".repeat(MAX_FRAME_BYTES);
-  assert_eq!(
-    sink.emit(text_chunk(&oversized)).await,
-    Err(EmitError::TooLarge)
-  );
-  assert_eq!(sink.emit(text_chunk("fits")).await.unwrap().get(), 1);
+  assert_eq!(sink.emit(text_chunk(&oversized)), Err(EmitError::TooLarge));
+  assert_eq!(sink.emit(text_chunk("fits")).unwrap().get(), 1);
   assert_eq!(connection.receive_type("run.event").await["seq"], 1);
 
   // A frame from the API over the limit drops the socket: the runner stops

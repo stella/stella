@@ -20,8 +20,8 @@ use super::sidecar_host::{
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
-use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar};
-use crate::runner_protocol::Harness;
+use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, RUN_OUTPUT_QUEUE};
+use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
 const VERSION: &str = "0.50.0";
@@ -35,6 +35,7 @@ const MODELS: &[&str] = &[
   "approve",
   "needs-login",
   "crash",
+  "flood-later",
 ];
 
 /// Codex installed at `VERSION`, optionally on a credential that records
@@ -291,7 +292,7 @@ fn stop_holders(place: &Place) {
 }
 
 #[test]
-fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_after_each_output()
+fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_journaled()
  {
   let place = Place::new();
   let id = run_id();
@@ -314,7 +315,7 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_after_e
     assert_eq!(messages[2]["outcome"], "completed");
     assert_eq!(messages[2]["harnessSessionId"], "thread-a");
     until("the holder was acked through its last seq", || {
-      place.acks(&id) == vec![1, 2, 3]
+      place.acks(&id).last() == Some(&3)
     })
     .await;
     let workspace = place.workspaces().join(&id);
@@ -575,7 +576,7 @@ fn a_harness_process_runs_only_once_its_credential_authorized_it() {
 }
 
 #[test]
-fn a_restarted_runner_takes_over_a_run_the_host_held_and_acks_only_what_it_journaled() {
+fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
   let place = Place::new();
   let id = run_id();
   run(async {
@@ -584,32 +585,71 @@ fn a_restarted_runner_takes_over_a_run_the_host_held_and_acks_only_what_it_journ
     let gateway = Gateway::bind().await;
     let runner = setup.start(&gateway);
     let mut connection = connect(&gateway, &[], "ready").await;
-    connection.send(run_start(&id, "wait")).await;
+    connection.send(run_start(&id, "flood-later")).await;
     connection.receive_type("run.accepted").await;
-    connection.receive_type("run.event").await;
+    assert_eq!(connection.receive_type("run.event").await["seq"], 1);
     until("the holder was acked for the event", || {
       place.acks(&id) == vec![1]
     })
     .await;
     runner.stop().await;
 
-    // The holder ends the run while no runner journals: nothing is acked.
-    host.cancel(&id);
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(place.acks(&id), vec![1]);
+    // With no runner and no socket, the harness produces more than the
+    // supervisor's channel for the run can hold.
+    host.approval(RunApproval {
+      run_id: id.clone(),
+      request_id: REQUEST_ID.to_owned(),
+      decision: ApprovalDecision::Approve,
+    });
+    // What the stand-in sends on the approval: more than the channel holds.
+    let flooded: u64 = 300;
+    assert!(flooded > u64::try_from(RUN_OUTPUT_QUEUE).unwrap());
+    until(
+      "the journal took every output and the holder was acked for it",
+      || place.acks(&id).last() == Some(&(flooded + 1)),
+    )
+    .await;
+    // Each ack follows the journal: it never names a position the journal
+    // does not hold yet.
+    let journaled = setup.journal.get(&id).unwrap();
+    assert_eq!(u64::from(journaled.last_seq), flooded + 1);
+    assert_eq!(u64::from(journaled.source_seq), flooded + 1);
+    let acks = place.acks(&id);
+    assert!(acks.windows(2).all(|pair| pair[0] < pair[1]), "{acks:?}");
 
     let runner = setup.start(&gateway);
-    let mut connection = connect(&gateway, &[(id.as_str(), 1)], "ready").await;
+    let mut connection = gateway.accept().await;
+    let hello = connection.hello().await;
+    assert_eq!(
+      hello["activeRuns"],
+      json!([{"runId": id, "lastSeq": flooded + 1}])
+    );
+    connection.welcome(&[(id.as_str(), 1)]).await;
+    let mut seqs = Vec::new();
+    while seqs.len() < usize::try_from(flooded).unwrap() {
+      let message = connection.receive().await;
+      if message["type"] == "run.event" {
+        assert_eq!(message["chunk"]["delta"], "more");
+        seqs.push(message["seq"].as_u64().unwrap());
+      }
+    }
+    assert_eq!(seqs, (2..=flooded + 1).collect::<Vec<_>>());
+    connection
+      .send(json!({"type": "run.cancel", "runId": id}))
+      .await;
     let finished = connection.receive_type("run.finished").await;
-    assert_eq!(finished["seq"], 2);
+    assert_eq!(finished["seq"], flooded + 2);
     assert_eq!(finished["outcome"], "cancelled");
-    until("the holder was acked once journaled", || {
-      place.acks(&id) == vec![1, 2]
-    })
-    .await;
     runner.stop().await;
   });
   stop_holders(&place);
+  // Only the API's cancel reached the holder: the outage cancelled nothing.
+  let cancels = place
+    .received("run.cancel")
+    .into_iter()
+    .filter(|cancel| cancel["runId"] == id.as_str())
+    .count();
+  assert_eq!(cancels, 1);
 }
 
 /// The first app: start a run and see its first event journaled, then quit

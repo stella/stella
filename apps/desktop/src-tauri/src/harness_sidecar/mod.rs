@@ -79,7 +79,7 @@ const COMMAND_QUEUE: usize = 256;
 /// Bound on a run's undelivered outputs. The last slot is kept for the run's
 /// final message: a run whose consumer lets the others fill up ends `failed`
 /// in it and is cancelled, so no consumer can stall the supervisor.
-const RUN_OUTPUT_QUEUE: usize = 256;
+pub(crate) const RUN_OUTPUT_QUEUE: usize = 256;
 const LINK_EVENT_QUEUE: usize = 256;
 /// What the sidecar is named next to the app executable in a bundle.
 const BUNDLED_NAME: &str = "stella-agent-sidecar";

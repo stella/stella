@@ -36,7 +36,7 @@ use self::client::{
 use self::harness::{
   HarnessHost, HarnessReports, NoHarnessReports, UnavailableHarnessHost,
 };
-use self::journal::{Journal, JournalBacking};
+use self::journal::{Journal, JournalBacking, SharedJournal};
 use self::sidecar_host::{
   HarnessCredentials, HostSettings, InstalledHarness, LocalHarnesses,
   SidecarHarnessHost,
@@ -63,6 +63,9 @@ pub(crate) struct DesktopRunnerControl {
   /// The harness host, made by the first runner task; `None` inside when
   /// this computer has no data folder for it.
   host: Arc<OnceLock<Option<SidecarHarnessHost>>>,
+  /// The runners' journal: hosts keep journaling into it while no runner
+  /// runs, and the next runner sends what it holds.
+  journal: Arc<SharedJournal>,
 }
 
 #[derive(Default)]
@@ -80,6 +83,7 @@ impl Default for DesktopRunnerControl {
       state: Arc::new(watch::channel(RunnerState::Off).0),
       tasks: Mutex::new(Tasks::default()),
       host: Arc::new(OnceLock::new()),
+      journal: Arc::new(SharedJournal::default()),
     }
   }
 }
@@ -98,6 +102,7 @@ impl DesktopRunnerControl {
     let app = app.clone();
     let state = Arc::clone(&self.state);
     let host_slot = Arc::clone(&self.host);
+    let journal = Arc::clone(&self.journal);
     tasks.latest = Some(tauri::async_runtime::spawn(async move {
       if let Some(previous) = previous
         && previous.await.is_err()
@@ -128,6 +133,7 @@ impl DesktopRunnerControl {
         },
         auth: Arc::new(AccountAuth { app: app.clone() }),
         journals: Arc::new(EncryptedJournals),
+        journal,
         host,
         reports,
         state,

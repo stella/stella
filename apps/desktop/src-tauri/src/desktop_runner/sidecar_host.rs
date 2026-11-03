@@ -9,12 +9,14 @@
 //!   `harness.status`.
 //! - `start` decides synchronously from the cache and the installed CLI,
 //!   then hands the run to the holder.
-//! - The holder numbers a run's outputs itself. The host relays each one
-//!   with that number ([`RunSink::relay`]), so the runner journals the
-//!   holder position with the output, and acks the holder only after the
-//!   journal holds it. A restarted app resumes the holder after the
-//!   journaled position ([`HarnessHost::reattach`]): nothing is lost or
-//!   sent twice.
+//! - The holder numbers a run's outputs itself. The host drains each run's
+//!   channel as it fills and journals the outputs with those numbers
+//!   ([`RunSink::relay_all`]), several per write, whether or not a runner
+//!   socket is up or a runner runs; it acks the holder only after the
+//!   journal holds them. The journal's per-run storage limits bound what a
+//!   run may hold; a run past them is cancelled and ends `failed`. A
+//!   restarted app resumes the holder after the journaled position
+//!   ([`HarnessHost::reattach`]): nothing is lost or sent twice.
 //! - A harness process whose launch needs the desktop's authorization (Codex
 //!   on the user's ChatGPT plan) is granted when the holder reports it, and
 //!   again when a restarted app resumes the run.
@@ -45,8 +47,8 @@ use crate::harness_sidecar::{
   ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
 };
 use crate::runner_protocol::{
-  Harness, HarnessReport, JsonObject, MissingHarness, RejectReason, RunApproval,
-  RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  Harness, HarnessReport, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
+  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -57,6 +59,10 @@ const STORAGE_RETRY_CAP: Duration = Duration::from_secs(30);
 const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
 const INPUT_UNSUPPORTED: &str = "input_unsupported";
 const OUTPUT_TOO_LARGE: &str = "output_too_large";
+/// Outputs journaled in one write at most.
+const JOURNAL_BATCH: usize = 256;
+/// Room a run message needs in a frame beyond its chunk.
+const FRAME_ENVELOPE_BYTES: usize = 1024;
 
 /// An installed harness CLI, kept in place while `lease` lives.
 pub(crate) struct InstalledHarness {
@@ -103,8 +109,8 @@ struct Cached {
 
 /// A run this host relays.
 struct HostRun {
-  /// The sink the runner handed over last; a restarted runner replaces it.
-  sink: watch::Sender<RunSink>,
+  /// Journals the run's outputs, whether or not a runner runs.
+  sink: RunSink,
   /// Authorizes the run's harness process, when its launch needs that.
   grant: Option<ProcessGrant>,
   /// For the chunks the host makes up itself; unknown for a run picked up
@@ -289,62 +295,70 @@ fn run_error(
   RunOutput::Event(chunk)
 }
 
-enum Relayed {
-  /// The journal holds it.
-  Recorded,
-  /// Over the frame limit; nothing was recorded.
-  TooLarge,
-  /// The runner no longer holds the run.
-  Closed,
-  /// The host no longer holds the run.
-  Gone,
-}
-
-/// Hand one output to the run's current sink until the journal holds it,
-/// the runner gives the run up, or the host does. A runner that stopped is
-/// waited out: the next one hands over a new sink.
-async fn relay(
-  sinks: &mut watch::Receiver<RunSink>,
-  output: &RunOutput,
-  source_seq: Option<NonZeroU32>,
-) -> Relayed {
+/// Journal one output the host made up, retrying a write that failed. An
+/// output the journal will never take (the run ended, or is past its limit)
+/// is dropped.
+async fn emit(sink: &RunSink, output: &RunOutput) {
   let mut retry = STORAGE_RETRY_FIRST;
   loop {
-    let sink = sinks.borrow_and_update().clone();
-    let emitted = match source_seq {
-      Some(seq) => sink.relay(output.clone(), seq).await,
-      None => sink.emit(output.clone()).await,
-    };
-    match emitted {
-      Ok(_seq) => return Relayed::Recorded,
-      Err(EmitError::TooLarge) => return Relayed::TooLarge,
-      Err(EmitError::RunClosed) => return Relayed::Closed,
+    match sink.emit(output.clone()) {
       Err(EmitError::Storage) => {
         tracing::warn!(target: LOG_TARGET, "the runner journal refused a run output; retrying");
         tokio::time::sleep(retry).await;
         retry = retry.saturating_mul(2).min(STORAGE_RETRY_CAP);
       }
-      Err(EmitError::Stopped) => {
-        if sinks.changed().await.is_err() {
-          return Relayed::Gone;
-        }
+      Ok(_) | Err(EmitError::TooLarge | EmitError::Full | EmitError::RunClosed) => {
+        return;
       }
     }
   }
 }
 
-/// Relay a run's outputs until it finished; ack the holder after each one
-/// the journal holds.
+/// Move a run's outputs from the supervisor's channel to `queue` as they
+/// arrive, so a journal write that takes a while never makes the run look
+/// undrained to the supervisor. The queue holds only what the holder has not
+/// been acked for, which the holder bounds by the run's storage limits.
+async fn drain(
+  mut outputs: mpsc::Receiver<SidecarDelivery>,
+  queue: mpsc::UnboundedSender<SidecarDelivery>,
+) {
+  while let Some(delivery) = outputs.recv().await {
+    let last = matches!(delivery.output, SidecarRunOutput::Finished { .. });
+    if queue.send(delivery).is_err() || last {
+      return;
+    }
+  }
+}
+
+/// What a batch of holder outputs did to the run.
+struct Batch {
+  outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
+  /// The last holder position in the batch.
+  holder_seq: Option<NonZeroU32>,
+  outcome: Option<RunOutcome>,
+}
+
+/// Journal a run's outputs as the holder delivers them, connected or not,
+/// several per journal write, and ack the holder after each write. A run
+/// that reached the API's per-run storage limit is cancelled and ends
+/// `failed`.
 async fn pump(
   shared: Arc<Shared>,
   sidecar: HarnessSidecar,
   run_id: String,
-  mut outputs: mpsc::Receiver<SidecarDelivery>,
-  mut sinks: watch::Receiver<RunSink>,
+  outputs: mpsc::Receiver<SidecarDelivery>,
+  sink: RunSink,
   lease: Option<Box<dyn Send + Sync>>,
 ) {
+  let (queue_tx, mut queue) = mpsc::unbounded_channel();
+  tokio::spawn(drain(outputs, queue_tx));
+  let (model, thread_id) = locked(&shared.runs)
+    .get(&run_id)
+    .map(|run| (run.model.clone(), run.thread_id.clone()))
+    .unwrap_or_default();
+  let mut limited = false;
   let outcome = loop {
-    let delivery = outputs.recv().await.unwrap_or_else(|| {
+    let first = queue.recv().await.unwrap_or_else(|| {
       // The supervisor always ends a run's channel with its end; a channel
       // closed without one is a run nobody can finish any more.
       tracing::warn!(target: LOG_TARGET, "a run's channel closed before its end");
@@ -356,41 +370,41 @@ async fn pump(
         },
       }
     });
-    let outcome = match &delivery.output {
-      SidecarRunOutput::Finished { outcome, .. } => Some(*outcome),
-      _ => None,
-    };
-    let output = sidecar_output(delivery.output);
-    let relayed = match relay(&mut sinks, &output, delivery.holder_seq).await {
-      Relayed::TooLarge => {
-        tracing::warn!(target: LOG_TARGET, "a run output exceeded the frame limit; sent an error instead");
-        let (model, thread_id) = locked(&shared.runs)
-          .get(&run_id)
-          .map(|run| (run.model.clone(), run.thread_id.clone()))
-          .unwrap_or_default();
-        let error = run_error(
-          &run_id,
-          model.as_deref(),
-          thread_id.as_deref(),
-          OUTPUT_TOO_LARGE,
-          "The harness produced an output larger than the runner can send.",
-        );
-        relay(&mut sinks, &error, delivery.holder_seq).await
+    let mut deliveries = vec![first];
+    while deliveries.len() < JOURNAL_BATCH
+      && !matches!(
+        deliveries.last().map(|delivery| &delivery.output),
+        Some(SidecarRunOutput::Finished { .. })
+      )
+    {
+      match queue.try_recv() {
+        Ok(delivery) => deliveries.push(delivery),
+        Err(_empty) => break,
       }
-      other => other,
-    };
-    if matches!(relayed, Relayed::Gone) {
-      // The host let the run go; the holder keeps it for the next app.
-      return;
     }
-    // Recorded, or the runner gave the run up: either way the holder need
-    // not keep it any longer.
-    if let Some(seq) = delivery.holder_seq
+    let batch = batch(
+      deliveries,
+      limited,
+      &run_id,
+      model.as_deref(),
+      thread_id.as_deref(),
+    );
+    let recorded = journal(&sink, batch.outputs).await;
+    if recorded.contains(&Err(EmitError::Full)) && !limited {
+      tracing::warn!(target: LOG_TARGET, "a run reached the per-run storage limit; cancelling it");
+      limited = true;
+      if sidecar.cancel(&run_id).is_err() {
+        tracing::warn!(target: LOG_TARGET, "a run past its storage limit was not cancelled");
+      }
+    }
+    // Journaled, past the limit, or given up by the runner: either way the
+    // holder need not keep any of it longer.
+    if let Some(seq) = batch.holder_seq
       && sidecar.ack(&run_id, seq).is_err()
     {
       tracing::warn!(target: LOG_TARGET, "the harness holder could not be acked");
     }
-    if let Some(outcome) = outcome {
+    if let Some(outcome) = batch.outcome {
       break outcome;
     }
   };
@@ -402,6 +416,79 @@ async fn pump(
   }
   if matches!(outcome, RunOutcome::NeedsLogin | RunOutcome::LimitReached) {
     shared.refresh.notify_one();
+  }
+}
+
+/// The runner outputs for some holder deliveries: an output too large for
+/// a frame becomes an error chunk, and a run cut short at the storage limit
+/// ends `failed` whatever it says.
+fn batch(
+  deliveries: Vec<SidecarDelivery>,
+  limited: bool,
+  run_id: &str,
+  model: Option<&str>,
+  thread_id: Option<&str>,
+) -> Batch {
+  let mut batch = Batch {
+    outputs: Vec::with_capacity(deliveries.len()),
+    holder_seq: None,
+    outcome: None,
+  };
+  for delivery in deliveries {
+    let output = match delivery.output {
+      SidecarRunOutput::Finished {
+        harness_session_id, ..
+      } if limited => SidecarRunOutput::Finished {
+        outcome: RunOutcome::Failed,
+        harness_session_id,
+      },
+      output => output,
+    };
+    if let SidecarRunOutput::Finished { outcome, .. } = &output {
+      batch.outcome = Some(*outcome);
+    }
+    let output = match sidecar_output(output) {
+      RunOutput::Event(chunk) if !fits_a_frame(&chunk) => {
+        tracing::warn!(target: LOG_TARGET, "a run output exceeded the frame limit; sent an error instead");
+        run_error(
+          run_id,
+          model,
+          thread_id,
+          OUTPUT_TOO_LARGE,
+          "The harness produced an output larger than the runner can send.",
+        )
+      }
+      output => output,
+    };
+    batch.holder_seq = delivery.holder_seq.or(batch.holder_seq);
+    batch.outputs.push((output, delivery.holder_seq));
+  }
+  batch
+}
+
+/// Whether a chunk leaves room in a frame for the message around it.
+fn fits_a_frame(chunk: &JsonObject) -> bool {
+  serde_json::to_vec(chunk).is_ok_and(|bytes| {
+    bytes.len() <= MAX_FRAME_BYTES.saturating_sub(FRAME_ENVELOPE_BYTES)
+  })
+}
+
+/// Journal outputs in one write, retrying a write that failed: nothing was
+/// journaled then. What happened to each output, in order.
+async fn journal(
+  sink: &RunSink,
+  outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
+) -> Vec<Result<NonZeroU32, EmitError>> {
+  let mut retry = STORAGE_RETRY_FIRST;
+  loop {
+    match sink.relay_all(outputs.clone()) {
+      Ok(recorded) => return recorded.outcomes,
+      Err(_storage) => {
+        tracing::warn!(target: LOG_TARGET, "the runner journal refused run outputs; retrying");
+        tokio::time::sleep(retry).await;
+        retry = retry.saturating_mul(2).min(STORAGE_RETRY_CAP);
+      }
+    }
   }
 }
 
@@ -504,7 +591,7 @@ impl SidecarHarnessHost {
     sidecar: HarnessSidecar,
     run_id: String,
     outputs: mpsc::Receiver<SidecarDelivery>,
-    sinks: watch::Receiver<RunSink>,
+    sink: RunSink,
     lease: Option<Box<dyn Send + Sync>>,
   ) {
     tokio::spawn(pump(
@@ -512,7 +599,7 @@ impl SidecarHarnessHost {
       sidecar,
       run_id,
       outputs,
-      sinks,
+      sink,
       lease,
     ));
   }
@@ -542,17 +629,17 @@ impl SidecarHarnessHost {
         .credentials(holder_run.harness)
         .await
         .and_then(|credentials| credentials.grant);
-      let sinks = locked(&self.shared.runs).get_mut(&run.run_id).map(|entry| {
+      let sink = locked(&self.shared.runs).get_mut(&run.run_id).map(|entry| {
         entry.grant = grant;
-        entry.sink.subscribe()
+        entry.sink.clone()
       });
-      let Some(sinks) = sinks else {
+      let Some(sink) = sink else {
         continue;
       };
       match sidecar.resume_run(&run.run_id, run.source_seq).await {
         Ok(outputs) => {
           tracing::info!(target: LOG_TARGET, "picked up a run the harness holder kept");
-          self.spawn_pump(sidecar.clone(), run.run_id, outputs, sinks, None);
+          self.spawn_pump(sidecar.clone(), run.run_id, outputs, sink, None);
         }
         Err(ResumeError::UnknownRun) => self.lost(run),
         Err(error) => {
@@ -570,7 +657,7 @@ impl SidecarHarnessHost {
     let Some(entry) = locked(&self.shared.runs).remove(&run.run_id) else {
       return;
     };
-    let mut sinks = entry.sink.subscribe();
+    let sink = entry.sink.clone();
     let workspace = Uuid::parse_str(&run.run_id)
       .ok()
       .map(|uuid| self.shared.workspace(uuid));
@@ -581,7 +668,7 @@ impl SidecarHarnessHost {
       };
       // Keeps the sender alive while the end is relayed.
       let _entry = entry;
-      relay(&mut sinks, &failed, None).await;
+      emit(&sink, &failed).await;
       if let Some(workspace) = workspace {
         remove_workspace(workspace);
       }
@@ -640,15 +727,14 @@ impl HarnessHost for SidecarHarnessHost {
     let mut fresh = Vec::new();
     let mut held = locked(&self.shared.runs);
     for run in runs {
-      if let Some(known) = held.get(&run.run_id) {
-        // Relayed already: report through the new runner from now on.
-        known.sink.send_replace(run.sink);
+      if held.contains_key(&run.run_id) {
+        // Relayed already: its sink journals for any runner.
         continue;
       }
       held.insert(
         run.run_id.clone(),
         HostRun {
-          sink: watch::channel(run.sink.clone()).0,
+          sink: run.sink.clone(),
           grant: None,
           model: None,
           thread_id: None,
@@ -690,11 +776,10 @@ impl HarnessHost for SidecarHarnessHost {
       .harness_session_id
       .clone()
       .unwrap_or_else(|| start.run_id.clone());
-    let (sink, sinks) = watch::channel(sink);
     locked(&self.shared.runs).insert(
       start.run_id.clone(),
       HostRun {
-        sink,
+        sink: sink.clone(),
         grant: credentials.as_ref().and_then(|held| held.grant.clone()),
         model: Some(start.model.clone()),
         thread_id: Some(thread_id.clone()),
@@ -725,7 +810,7 @@ impl HarnessHost for SidecarHarnessHost {
         return Err(RejectReason::AtCapacity);
       }
     };
-    self.spawn_pump(sidecar, run_id, outputs, sinks, Some(installed.lease));
+    self.spawn_pump(sidecar, run_id, outputs, sink, Some(installed.lease));
     Ok(())
   }
 
@@ -733,14 +818,10 @@ impl HarnessHost for SidecarHarnessHost {
   /// The input is answered on the run's stream instead of dropped.
   fn input(&self, input: RunInput) {
     tracing::warn!(target: LOG_TARGET, "a run received input local harnesses do not take");
-    let held = locked(&self.shared.runs).get(&input.run_id).map(|run| {
-      (
-        run.sink.subscribe(),
-        run.model.clone(),
-        run.thread_id.clone(),
-      )
-    });
-    let Some((mut sinks, model, thread_id)) = held else {
+    let held = locked(&self.shared.runs)
+      .get(&input.run_id)
+      .map(|run| (run.sink.clone(), run.model.clone(), run.thread_id.clone()));
+    let Some((sink, model, thread_id)) = held else {
       return;
     };
     let error = run_error(
@@ -751,7 +832,7 @@ impl HarnessHost for SidecarHarnessHost {
       "Local harnesses take no input while a run is going; send it as the next turn.",
     );
     tokio::spawn(async move {
-      relay(&mut sinks, &error, None).await;
+      emit(&sink, &error).await;
     });
   }
 
