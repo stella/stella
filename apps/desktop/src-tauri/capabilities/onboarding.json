@@ -26,6 +26,7 @@
     "allow-shortcut-resume",
     "allow-onboarding-dismiss",
     "allow-onboarding-open-activity",
-    "allow-shortcut-set"
+    "allow-shortcut-set",
+    "core:window:allow-start-dragging"
   ]
 }
