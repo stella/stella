@@ -66,6 +66,8 @@ export type AppServerClient = {
   notify: (method: string, params?: unknown) => void;
   respond: (id: CodexRequestId, result: unknown) => void;
   respondError: (id: CodexRequestId, code: number, message: string) => void;
+  /** The server process's id. */
+  pid: number;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<AppServerExit>;
   /** Ends stdin, which asks the server to flush its state and exit. */
@@ -224,6 +226,7 @@ export const startAppServer = ({
   })();
 
   return {
+    pid: child.pid,
     request: async (method, params) => {
       if (state.closed) {
         return Result.err(

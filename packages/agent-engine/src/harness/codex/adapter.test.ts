@@ -191,7 +191,10 @@ describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
       await run("tool_calls");
-    expect(startup()).toEqual({ codexHome, cwd: realpathSync(workspaceDir) });
+    expect(startup()).toMatchObject({
+      codexHome,
+      cwd: realpathSync(workspaceDir),
+    });
     const threadStart = received().find(
       ({ method }) => method === "thread/start",
     );

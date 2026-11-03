@@ -755,7 +755,19 @@ if (import.meta.main) {
     appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
   };
   log({
-    startup: { codexHome: process.env["CODEX_HOME"], cwd: process.cwd() },
+    startup: {
+      codexHome: process.env["CODEX_HOME"],
+      cwd: process.cwd(),
+      pid: process.pid,
+      /** What follows the scenario: the launch's own arguments. */
+      args: process.argv.slice(3),
+      /** The variables a launch may set or remove. */
+      launchEnvironment: Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([name]) => name.startsWith("STELLA_") || name === "OPENAI_API_KEY",
+        ),
+      ),
+    },
   });
   if (!isScenario(scenario)) {
     log({ unknownScenario: scenario });

@@ -49,6 +49,11 @@ export const HOLDER_HELLO_TIMEOUT_MS = 10_000;
  */
 export const HOLDER_UNACKED_RETENTION_MS = 24 * 60 * 60_000;
 /**
+ * How long a harness process waits for the desktop to authorize it. The
+ * desktop may be restarting; a run whose wait ends fails before it begins.
+ */
+export const HOLDER_PROCESS_GRANT_TIMEOUT_MS = 60_000;
+/**
  * The runner contract's per-run storage limits (messages, UTF-8 bytes): a
  * run the API would refuse to store is not worth holding either.
  */
@@ -75,6 +80,7 @@ export type HolderOptions = {
   idleExitMs: number;
   helloTimeoutMs: number;
   unackedRetentionMs: number;
+  processGrantTimeoutMs: number;
   limits: HolderRunLimits;
   /** Called once, after every run stopped: the process may exit. */
   exit: () => void;
@@ -108,6 +114,11 @@ type Journal = {
   kept: Kept[];
   keptBytes: number;
   expiry: ReturnType<typeof setTimeout> | null;
+  /**
+   * The harness process the desktop was asked to authorize, until the run
+   * finishes; reported again to each connection that resumes the run.
+   */
+  processId: number | null;
 };
 
 type Peer = {
@@ -145,6 +156,7 @@ export class Holder {
       },
       log: options.log,
       environment: options.environment,
+      processGrantTimeoutMs: options.processGrantTimeoutMs,
     });
     this.settle();
   }
@@ -323,6 +335,7 @@ export class Holder {
           kept: [],
           keptBytes: 0,
           expiry: null,
+          processId: null,
         });
         peer.attached.add(message.runId);
         this.settle();
@@ -330,6 +343,7 @@ export class Holder {
         return;
       }
       case "harness.probe":
+      case "harness.process_granted":
       case "run.approval":
       case "run.interrupt":
       case "run.cancel":
@@ -379,6 +393,14 @@ export class Holder {
       }
     }
     peer.attached.add(runId);
+    if (journal.processId !== null) {
+      // A restarted desktop authorizes the process again.
+      this.write(peer, {
+        type: "harness.process",
+        id: runId,
+        pid: journal.processId,
+      });
+    }
   }
 
   private fromHost(message: SidecarHostOutput) {
@@ -387,6 +409,12 @@ export class Holder {
       message.type !== "run.approval_request" &&
       message.type !== "run.finished"
     ) {
+      if (message.type === "harness.process") {
+        const journal = this.journals.get(message.id);
+        if (journal !== undefined && journal.status !== "finished") {
+          journal.processId = message.pid;
+        }
+      }
       if (this.current !== null) {
         this.write(this.current, message);
       }
@@ -446,6 +474,7 @@ export class Holder {
     }
     if (message.type === "run.finished") {
       journal.status = "finished";
+      journal.processId = null;
       journal.expiry = setTimeout(() => {
         this.options.log("forgot a finished run no desktop collected");
         this.forget(runId, journal);

@@ -59,6 +59,14 @@ const FAKE_CLAUDE = path.join(
 );
 const API_ORIGIN = "https://api.example.test";
 const RUN_TOKEN = "run-token-1";
+/** A launch with nothing added: the harness's managed home only. */
+const PLAIN_LAUNCH = {
+  configOverrides: [],
+  environment: {},
+  removedEnvironment: [],
+  clientName: null,
+  processGrant: false,
+};
 const WAIT_MS = 10_000;
 
 // timeout: each test starts real processes, the holder and the fake harness.
@@ -98,8 +106,19 @@ type Place = {
     type?: string;
     request?: { subtype?: string; servers?: unknown };
   }[];
+  /** How each fake harness process started, in order. */
+  startups: () => unknown[];
   log: () => string;
 };
+
+/** Every line the fake harnesses logged, parsed. */
+const fakeEntries = (fakeLog: string): Record<string, unknown>[] =>
+  existsSync(fakeLog)
+    ? readFileSync(fakeLog, "utf-8")
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => JSON.parse(line))
+    : [];
 
 const place = (): Place => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-holder-"));
@@ -123,6 +142,10 @@ const place = (): Place => {
             .filter((entry) => entry.received !== undefined)
             .map((entry) => entry.received)
         : [],
+    startups: () =>
+      fakeEntries(fakeLog).flatMap(({ startup }) =>
+        startup === undefined ? [] : [startup],
+      ),
     log: () => readFileSync(path.join(dir, HOLDER_LOG_FILE), "utf-8"),
   };
 };
@@ -141,6 +164,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
         PATH: process.env["PATH"] ?? "",
         FAKE_CODEX_LOG: at.fakeLog,
         FAKE_CLAUDE_LOG: at.fakeLog,
+        OPENAI_API_KEY: "inherited-key",
       },
     },
   );
@@ -247,7 +271,7 @@ const fakeCodex = (root: string, scenario: FakeScenario) => {
   const executable = path.join(root, `codex-${scenario}`);
   writeFileSync(
     executable,
-    `#!/bin/sh\nexec "${process.execPath}" "${FAKE_SERVER}" "${scenario}"\n`,
+    `#!/bin/sh\nexec "${process.execPath}" "${FAKE_SERVER}" "${scenario}" "$@"\n`,
   );
   chmodSync(executable, 0o755);
   return executable;
@@ -269,6 +293,14 @@ const is =
   (message: SidecarMessage): message is Extract<SidecarMessage, { type: K }> =>
     message.type === type &&
     (runId === undefined || ("runId" in message && message.runId === runId));
+
+/** The `harness.process` report for a run or probe id. */
+const processOf =
+  (id: string) =>
+  (
+    message: SidecarMessage,
+  ): message is Extract<SidecarMessage, { type: "harness.process" }> =>
+    message.type === "harness.process" && message.id === id;
 
 const helloMessage = (
   at: Place,
@@ -316,6 +348,7 @@ const startRun = (
     threadId: "thread-1",
     ...launch,
     configDir,
+    launch: PLAIN_LAUNCH,
     workspaceDir,
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
@@ -525,6 +558,7 @@ describe("harness holder over its socket", () => {
       harness: "codex",
       executable: fakeCodex(holder.root, "probe"),
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     expect(await client.waitFor(is("harness.probed"))).toEqual({
       type: "harness.probed",
@@ -554,6 +588,7 @@ describe("harness holder over its socket", () => {
       harness: "codex",
       executable: fakeCodex(holder.root, "outdated"),
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     const policy = bundledHarnessCompatibility().compatibility.find(
       ({ harness }) => harness === "codex",
@@ -577,6 +612,7 @@ describe("harness holder over its socket", () => {
       harness: "codex",
       executable: fakeCodex(holder.root, "signed_out"),
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     const opencode = crypto.randomUUID();
     client.send({
@@ -585,6 +621,7 @@ describe("harness holder over its socket", () => {
       harness: "opencode",
       executable: "/nonexistent/opencode",
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     const probed = async (requestId: string) =>
       client.waitFor(
@@ -615,6 +652,7 @@ describe("harness holder over its socket", () => {
       harness: "claude-code",
       executable: fakeClaude(holder.root, "probe"),
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     const missing = crypto.randomUUID();
     client.send({
@@ -623,6 +661,7 @@ describe("harness holder over its socket", () => {
       harness: "claude-code",
       executable: "/nonexistent/claude",
       configDir,
+      launch: PLAIN_LAUNCH,
     });
     const probed = async (requestId: string) =>
       client.waitFor(
@@ -814,6 +853,96 @@ describe("harness holder over its socket", () => {
     }
   });
 
+  test("starts Codex with the launch's overrides and environment, and only asks it anything once the desktop granted its process", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const override = 'model_provider="openai_chatgpt_plan"';
+    const runId = runStart(client, holder, "stella_tools", {
+      launch: {
+        configOverrides: [override],
+        environment: { STELLA_CODEX_TOKEN_BROKER: "/tmp/broker/s" },
+        removedEnvironment: ["OPENAI_API_KEY"],
+        clientName: "Stella",
+        processGrant: true,
+      },
+    });
+    const reported = await client.waitFor(processOf(runId));
+    // real-time: give an ungated harness the time to be asked something.
+    await Bun.sleep(300);
+    expect(holder.received()).toEqual([]);
+    expect(runMessages(client, runId)).toEqual([]);
+    client.send({ type: "harness.process_granted", id: runId });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+    expect(holder.startups()).toEqual([
+      expect.objectContaining({
+        pid: reported.pid,
+        args: ["app-server", "-c", override],
+        launchEnvironment: { STELLA_CODEX_TOKEN_BROKER: "/tmp/broker/s" },
+      }),
+    ]);
+    expect(
+      holder.received().find(({ method }) => method === "initialize")?.params,
+    ).toMatchObject({ clientInfo: { name: "Stella" } });
+    // A run without a grant in its launch reports no process.
+    const plain = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", plain));
+    expect(client.messages.filter(processOf(plain))).toEqual([]);
+    expect(holder.startups().at(-1)).toMatchObject({
+      args: ["app-server"],
+      launchEnvironment: { OPENAI_API_KEY: "inherited-key" },
+    });
+  });
+
+  test("a desktop that reconnects is told a granted run's harness process again, and a finished run's never", async () => {
+    const holder = await spawnHolder();
+    const first = await desktop(holder);
+    const runId = runStart(first.client, holder, "interrupt_queued", {
+      launch: { ...PLAIN_LAUNCH, processGrant: true },
+    });
+    const reported = await first.client.waitFor(processOf(runId));
+    first.client.send({ type: "harness.process_granted", id: runId });
+    await first.client.waitFor(
+      (message): message is SidecarMessage =>
+        message.type === "run.event" &&
+        message.runId === runId &&
+        message.chunk.type === "TOOL_CALL_START",
+    );
+    first.client.close();
+    await first.client.ended;
+    const held = Math.max(...seqs(first.client, runId));
+    const second = await desktop(holder, [{ runId, afterSeq: held }]);
+    expect(await second.client.waitFor(processOf(runId))).toEqual(reported);
+    // A repeated grant changes nothing.
+    second.client.send({ type: "harness.process_granted", id: runId });
+    second.client.send({ type: "run.cancel", runId });
+    const finished = await second.client.waitFor(is("run.finished", runId));
+    expect(finished.outcome).toBe("cancelled");
+    const third = await desktop(holder, [{ runId, afterSeq: held }]);
+    await third.client.waitFor(is("run.finished", runId));
+    expect(third.client.messages.filter(processOf(runId))).toEqual([]);
+  });
+
+  test("Claude Code refuses launch settings it cannot apply", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { launch: { ...PLAIN_LAUNCH, processGrant: true } },
+    );
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "failed",
+    });
+    expect(holder.received()).toEqual([]);
+  });
+
   test("maps a harness failure to the runner outcome", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -995,6 +1124,7 @@ describe("holder limits and timers", () => {
     overrides: Partial<{
       idleExitMs: number;
       unackedRetentionMs: number;
+      processGrantTimeoutMs: number;
       limits: { maxMessages: number; maxBytes: number };
     }>,
   ) => {
@@ -1010,6 +1140,7 @@ describe("holder limits and timers", () => {
       idleExitMs: 60_000,
       helloTimeoutMs: 5000,
       unackedRetentionMs: 60_000,
+      processGrantTimeoutMs: 60_000,
       limits: { maxMessages: 1000, maxBytes: 1024 * 1024 },
       ...overrides,
     });
@@ -1072,5 +1203,39 @@ describe("holder limits and timers", () => {
     await Bun.sleep(400);
     const second = await desktop(at);
     expect(second.hello.runs).toEqual([]);
+  });
+
+  test("a harness process the desktop never authorizes is ended unused, and its run or probe fails", async () => {
+    const { at } = await startInProcess({ processGrantTimeoutMs: 200 });
+    const { client } = await desktop(at);
+    const launch = { ...PLAIN_LAUNCH, processGrant: true };
+    const runId = runStart(client, at, "stella_tools", { launch });
+    const configDir = path.join(at.root, "codex-home");
+    const requestId = crypto.randomUUID();
+    client.send({
+      type: "harness.probe",
+      requestId,
+      harness: "codex",
+      executable: fakeCodex(at.root, "probe"),
+      configDir,
+      launch,
+    });
+    await client.waitFor(processOf(runId));
+    await client.waitFor(processOf(requestId));
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "failed",
+    });
+    const probed = await client.waitFor(
+      (
+        message,
+      ): message is Extract<SidecarMessage, { type: "harness.probed" }> =>
+        message.type === "harness.probed" && message.requestId === requestId,
+    );
+    expect(probed.outcome).toMatchObject({
+      type: "failed",
+      reason: "harness_unavailable",
+    });
+    // Neither process was asked anything.
+    expect(at.received()).toEqual([]);
   });
 });

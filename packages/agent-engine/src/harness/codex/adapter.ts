@@ -44,9 +44,16 @@ import { CodexTurnSession } from "./turn";
  * process, account read before any session, resume by native thread id.
  */
 
-export const codexAppServerLaunch = (executable: string): AppServerLaunch => ({
+/** `codex app-server`, with each configuration override as `-c <override>`. */
+export const codexAppServerLaunch = (
+  executable: string,
+  configOverrides: readonly string[] = [],
+): AppServerLaunch => ({
   executable,
-  args: ["app-server"],
+  args: [
+    "app-server",
+    ...configOverrides.flatMap((override) => ["-c", override]),
+  ],
 });
 
 export type CodexHarnessAdapterOptions = {
@@ -67,6 +74,13 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /**
+   * Called with each new process's id before it is asked anything; a
+   * process it does not answer `true` for is ended unused.
+   */
+  onProcess?: (pid: number) => Promise<boolean>;
+  /** `initialize`'s client name, when a credential was registered under one. */
+  clientName?: string;
 };
 
 const CLIENT_NAME = "stella";
@@ -151,9 +165,19 @@ const connect = async ({
     });
   }
   const client = started.value;
+  if (
+    options.onProcess !== undefined &&
+    !(await options.onProcess(client.pid))
+  ) {
+    await client.kill();
+    return Result.err({
+      reason: "harness_unavailable",
+      message: "The desktop did not authorize the harness process.",
+    });
+  }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: CLIENT_NAME,
+      name: options.clientName ?? CLIENT_NAME,
       title: "stella",
       version: options.clientVersion,
     },

@@ -1,6 +1,6 @@
 {
   "vocabulary": {
-    "protocol": 2,
+    "protocol": 3,
     "maxLineBytes": 8388608,
     "maxHeldRuns": 1000,
     "hostMessageTypes": [
@@ -13,12 +13,14 @@
       "run.token",
       "ack",
       "resume",
+      "harness.process_granted",
       "drain",
       "shutdown"
     ],
     "messageTypes": [
       "hello",
       "harness.probed",
+      "harness.process",
       "run.event",
       "run.approval_request",
       "run.finished",
@@ -48,7 +50,7 @@
     "host": [
       {
         "type": "hello",
-        "protocol": 2,
+        "protocol": 3,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "https://api.example.test",
@@ -56,13 +58,19 @@
       },
       {
         "type": "hello",
-        "protocol": 2,
+        "protocol": 3,
         "secret": "abababababababababababababababababababababababababababababababab",
         "appVersion": "1.4.0",
         "apiOrigin": "http://127.0.0.1:3000",
         "resume": [
-          { "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f", "afterSeq": 0 },
-          { "runId": "1c7a6d9f-3e4b-4a2c-8d8f-6b5e4c3d2f1a", "afterSeq": 41 }
+          {
+            "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+            "afterSeq": 0
+          },
+          {
+            "runId": "1c7a6d9f-3e4b-4a2c-8d8f-6b5e4c3d2f1a",
+            "afterSeq": 41
+          }
         ]
       },
       {
@@ -70,7 +78,14 @@
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "harness": "codex",
         "executable": "/data/harness/codex/0.165.0/codex",
-        "configDir": "/data/harness-home/codex"
+        "configDir": "/data/harness-home/codex",
+        "launch": {
+          "configOverrides": [],
+          "environment": {},
+          "removedEnvironment": [],
+          "clientName": null,
+          "processGrant": false
+        }
       },
       {
         "type": "run.start",
@@ -79,12 +94,33 @@
         "harness": "codex",
         "executable": "C:\\data\\harness\\codex\\0.165.0\\codex.exe",
         "configDir": "C:\\data\\harness-home\\codex",
+        "launch": {
+          "configOverrides": [
+            "model_provider=\"openai_chatgpt_plan\"",
+            "model_providers.openai_chatgpt_plan={name=\"ChatGPT plan\"}"
+          ],
+          "environment": {
+            "STELLA_CODEX_TOKEN_BROKER": "/tmp/stella-broker/s",
+            "STELLA_CODEX_TOKEN_PROFILE": "abababababababababababababababababababababababababababababababab"
+          },
+          "removedEnvironment": ["OPENAI_API_KEY", "OPENAI_BASE_URL"],
+          "clientName": "Stella",
+          "processGrant": true
+        },
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
         "model": "gpt-test",
         "instructions": "Answer briefly.",
-        "messages": [{ "role": "user", "content": "Find the lease decision." }],
+        "messages": [
+          {
+            "role": "user",
+            "content": "Find the lease decision."
+          }
+        ],
         "harnessSessionId": null,
-        "policy": { "network": "open", "fs": "workspace" },
+        "policy": {
+          "network": "open",
+          "fs": "workspace"
+        },
         "mcp": {
           "serverName": "stella",
           "url": "https://api.example.test/mcp",
@@ -99,16 +135,35 @@
         "harness": "codex",
         "executable": "/data/harness/codex/0.165.0/codex",
         "configDir": "/data/harness-home/codex",
+        "launch": {
+          "configOverrides": [],
+          "environment": {},
+          "removedEnvironment": [],
+          "clientName": null,
+          "processGrant": false
+        },
         "workspaceDir": "/data/runs/0b6f5c8e",
         "model": "gpt-test",
         "instructions": "",
         "messages": [
-          { "role": "user", "content": "First question." },
-          { "role": "assistant", "content": "First answer." },
-          { "role": "user", "content": "Second question." }
+          {
+            "role": "user",
+            "content": "First question."
+          },
+          {
+            "role": "assistant",
+            "content": "First answer."
+          },
+          {
+            "role": "user",
+            "content": "Second question."
+          }
         ],
         "harnessSessionId": "thread-old",
-        "policy": { "network": "open", "fs": "workspace" },
+        "policy": {
+          "network": "open",
+          "fs": "workspace"
+        },
         "mcp": {
           "serverName": "stella",
           "url": "https://api.example.test/mcp",
@@ -146,20 +201,28 @@
         "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
         "afterSeq": 12
       },
-      { "type": "drain" },
-      { "type": "shutdown" }
+      {
+        "type": "harness.process_granted",
+        "id": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      },
+      {
+        "type": "drain"
+      },
+      {
+        "type": "shutdown"
+      }
     ],
     "sidecar": [
       {
         "type": "hello",
-        "protocol": 2,
+        "protocol": 3,
         "sidecarVersion": "1.4.0",
         "mode": "serving",
         "runs": []
       },
       {
         "type": "hello",
-        "protocol": 2,
+        "protocol": 3,
         "sidecarVersion": "1.3.2",
         "mode": "draining",
         "runs": [
@@ -184,7 +247,11 @@
           "version": "0.165.0",
           "capabilities": ["approvals", "interrupt", "resume"],
           "models": [
-            { "id": "gpt-test", "label": "GPT Test", "isDefault": true }
+            {
+              "id": "gpt-test",
+              "label": "GPT Test",
+              "isDefault": true
+            }
           ]
         }
       },
@@ -192,7 +259,10 @@
         "type": "harness.probed",
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "harness": "codex",
-        "outcome": { "type": "needs_login", "version": "0.165.0" }
+        "outcome": {
+          "type": "needs_login",
+          "version": "0.165.0"
+        }
       },
       {
         "type": "harness.probed",
@@ -223,6 +293,11 @@
           "reason": "unsupported",
           "message": "This harness has no local adapter yet."
         }
+      },
+      {
+        "type": "harness.process",
+        "id": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "pid": 48213
       },
       {
         "type": "run.event",
@@ -275,8 +350,16 @@
   },
   "rejected": {
     "host": [
-      { "name": "not JSON", "line": "{\"type\":", "reason": "not_json" },
-      { "name": "no type", "line": "{\"runId\":\"x\"}", "reason": "invalid" },
+      {
+        "name": "not JSON",
+        "line": "{\"type\":",
+        "reason": "not_json"
+      },
+      {
+        "name": "no type",
+        "line": "{\"runId\":\"x\"}",
+        "reason": "invalid"
+      },
       {
         "name": "unknown type",
         "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
@@ -284,27 +367,27 @@
       },
       {
         "name": "relative executable",
-        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"codex\",\"configDir\":\"/data/harness-home/codex\"}",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false}}",
         "reason": "invalid"
       },
       {
         "name": "unknown harness",
-        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"other\",\"executable\":\"/x\",\"configDir\":\"/y\"}",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"other\",\"executable\":\"/x\",\"configDir\":\"/y\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false}}",
         "reason": "invalid"
       },
       {
         "name": "api origin with a path",
-        "line": "{\"type\":\"hello\",\"protocol\":2,\"secret\":\"abababababababababababababababababababababababababababababababab\",\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test/v1\",\"resume\":[]}",
+        "line": "{\"type\":\"hello\",\"protocol\":3,\"secret\":\"abababababababababababababababababababababababababababababababab\",\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test/v1\",\"resume\":[]}",
         "reason": "invalid"
       },
       {
         "name": "hello without a secret",
-        "line": "{\"type\":\"hello\",\"protocol\":2,\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test\",\"resume\":[]}",
+        "line": "{\"type\":\"hello\",\"protocol\":3,\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test\",\"resume\":[]}",
         "reason": "invalid"
       },
       {
         "name": "secret that is not 32 bytes of hex",
-        "line": "{\"type\":\"hello\",\"protocol\":2,\"secret\":\"4F3C\",\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test\",\"resume\":[]}",
+        "line": "{\"type\":\"hello\",\"protocol\":3,\"secret\":\"4F3C\",\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test\",\"resume\":[]}",
         "reason": "invalid"
       },
       {
@@ -325,6 +408,26 @@
       {
         "name": "run id that is not a UUID",
         "line": "{\"type\":\"run.cancel\",\"runId\":\"run-1\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "probe without launch settings",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "environment name with a separator",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{\"A=B\":\"x\"},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "variable both set and removed",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{\"OPENAI_API_KEY\":\"x\"},\"removedEnvironment\":[\"OPENAI_API_KEY\"],\"clientName\":null,\"processGrant\":false}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "grant for an id that is not a UUID",
+        "line": "{\"type\":\"harness.process_granted\",\"id\":\"run-1\"}",
         "reason": "invalid"
       }
     ],
@@ -351,14 +454,16 @@
           "type": "run.event",
           "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
           "seq": 0,
-          "chunk": { "type": "RUN_STARTED" }
+          "chunk": {
+            "type": "RUN_STARTED"
+          }
         }
       },
       {
         "name": "unknown holder mode",
         "message": {
           "type": "hello",
-          "protocol": 2,
+          "protocol": 3,
           "sidecarVersion": "1.4.0",
           "mode": "paused",
           "runs": []
@@ -400,7 +505,24 @@
           "type": "run.event",
           "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
           "seq": 1,
-          "chunk": { "delta": "x" }
+          "chunk": {
+            "delta": "x"
+          }
+        }
+      },
+      {
+        "name": "process id 0",
+        "message": {
+          "type": "harness.process",
+          "id": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "pid": 0
+        }
+      },
+      {
+        "name": "process report without an id",
+        "message": {
+          "type": "harness.process",
+          "pid": 48213
         }
       }
     ]

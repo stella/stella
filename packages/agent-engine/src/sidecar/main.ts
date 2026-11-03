@@ -5,6 +5,7 @@ import { harnessEnvironment, sidecarVersion } from "./env";
 import {
   HOLDER_HELLO_TIMEOUT_MS,
   HOLDER_IDLE_EXIT_MS,
+  HOLDER_PROCESS_GRANT_TIMEOUT_MS,
   HOLDER_RUN_LIMITS,
   HOLDER_UNACKED_RETENTION_MS,
 } from "./holder";
@@ -45,6 +46,7 @@ const started = await startHolderServer({
   idleExitMs: HOLDER_IDLE_EXIT_MS,
   helloTimeoutMs: HOLDER_HELLO_TIMEOUT_MS,
   unackedRetentionMs: HOLDER_UNACKED_RETENTION_MS,
+  processGrantTimeoutMs: HOLDER_PROCESS_GRANT_TIMEOUT_MS,
   limits: HOLDER_RUN_LIMITS,
 });
 if (Result.isError(started)) {
