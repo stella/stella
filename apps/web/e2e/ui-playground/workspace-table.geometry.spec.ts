@@ -70,7 +70,7 @@ const readGeometry = async (page: Page) => {
         !(section instanceof HTMLElement) ||
         !(scroll instanceof HTMLElement)
       ) {
-        throw new Error("workspace table bench is not mounted");
+        throw new TypeError("workspace table bench is not mounted");
       }
       const origin = scroll.getBoundingClientRect();
       const box = (element: Element): CellBox => {
@@ -125,7 +125,7 @@ const scrollToMiddle = async (
     ([scrollSelector, inline, block]) => {
       const scroll = document.querySelector(scrollSelector);
       if (!(scroll instanceof HTMLElement)) {
-        throw new Error("workspace table scroll box is not mounted");
+        throw new TypeError("workspace table scroll box is not mounted");
       }
       if (inline) {
         // `scrollLeft` is physical, and under `dir="rtl"` its scrollable range
@@ -244,7 +244,7 @@ test.describe("a short viewport", () => {
             !(pageScroller instanceof HTMLElement) ||
             !(below instanceof HTMLElement)
           ) {
-            throw new Error("workspace table bench is not mounted");
+            throw new TypeError("workspace table bench is not mounted");
           }
           const scrollerBox = pageScroller.getBoundingClientRect();
           const belowBox = below.getBoundingClientRect();

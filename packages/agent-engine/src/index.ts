@@ -57,3 +57,8 @@ export {
   preferNewerManifest,
   resolveHarnessCompatibility,
 } from "./harness/compatibility";
+export type { CodexHarnessAdapterOptions } from "./harness/codex/adapter";
+export {
+  codexAppServerLaunch,
+  createCodexHarnessAdapter,
+} from "./harness/codex/adapter";

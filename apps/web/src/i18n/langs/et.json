@@ -1412,6 +1412,18 @@
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
+    "anonymizationPreview": {
+      "answer": "<person1>Mari Tamm</person1> võib nõuda <person2>Jüri Saarelt</person2> võla tasumist koos viivisega.",
+      "off": "Anonüümitud AI režiim on väljas: AI saab teksti nii, nagu sa selle kirjutasid, koos isikuandmetega.",
+      "on": "Anonüümitud AI režiim on sees: isikuandmed asendatakse enne saatmist kohatäidetega ja taastatakse vastuses.",
+      "prompt": "Koosta vastus <person1>Mari Tammele</person1> (isikukood <nationalId>48512124219</nationalId>, <address>Pärnu mnt 14, Tartu</address>) <person2>Jüri Saarelt</person2> sissenõutava võla kohta.",
+      "steps": {
+        "answered": "AI vastab",
+        "restored": "Sina loed",
+        "sent": "AI saab",
+        "written": "Sina kirjutad"
+      }
+    },
     "anonymizedMode": "Anonüümitud AI režiim",
     "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",
@@ -1518,7 +1530,7 @@
       "updatingDescription": "Sinu stella laiendus on vanem versioon. Chrome uuendab selle automaatselt, tavaliselt mõne tunni jooksul; siis saab stella sinu eest jälle veebilehti avada ja lugeda."
     },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
-    "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
+    "caseLawGreeting": "Esita küsimusi selle otsuse kohta; täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
     "choosePromptImprovementStrategy": "Viiba täiustamise valikud",
     "commandsSection": "Käsud",
@@ -1668,6 +1680,11 @@
     "loadEarlierMessages": "Laadi varasemad sõnumid",
     "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
     "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
+    "localRun": {
+      "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
+      "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
+      "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti."
+    },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# veel} other {+# veel}}",
@@ -1765,7 +1782,7 @@
       "tryOne": "Alusta ühe nendest"
     },
     "queuedAttachmentCount": "{count, plural, one {# manus} other {# manust}}",
-    "queuedNotice": "Järjekorras — saadetakse, kui praegune vastus on valmis",
+    "queuedNotice": "Järjekorras: saadetakse, kui praegune vastus on valmis",
     "reasoning": "Arutlus",
     "reasoningTokens": "{count, plural, one {# arutlustoken} other {# arutlustokenit}}",
     "recapLoading": "Vestlus võetakse kokku…",
@@ -1974,7 +1991,7 @@
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
       "consoleLogs": "Konsooli väljund",
       "exactCall": "Täpne kutse",
-      "failed": "See samm ebaõnnestus — stella jätkab teisiti.",
+      "failed": "See samm ebaõnnestus; stella jätkab teisiti.",
       "field": "Väli",
       "input": "Sisend",
       "interrupted": "Katkes enne lõpetamist",
@@ -1994,7 +2011,7 @@
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
-    "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
+    "usageFallbackNotice": "Päevane AI-maht on täis; vastused jätkuvad tavamudeliga.",
     "videoContent": "Loodud video",
     "webSearch": {
       "answer": "Veebiotsingu kokkuvõte",
@@ -2793,6 +2810,28 @@
     },
     "backToList": "Tagasi kirjavahetuse juurde",
     "createAddress": "Loo aadress",
+    "dataBox": {
+      "acceptedAt": "Kätte toimetatud",
+      "acceptedByFiction": "kättetoimetatuks lugemisega",
+      "acceptedByLogin": "sisselogimisega",
+      "channel": "Andmepostkast",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Postkasti toimetatud",
+      "delivery": "Kättetoimetamine",
+      "directionUnknown": "Suund teadmata",
+      "messageId": "Sõnumi ID",
+      "moreContacts": "Selle andmepostkastiga on seotud veel kontakte.",
+      "openFile": "Ava .zfo-fail",
+      "personalDelivery": "Isiklikult adressaadile",
+      "recipient": "Adressaat",
+      "recipientReference": "Adressaadi viide",
+      "sealNotVerified": "Faili e-tempel säilitatakse koos failiga ja seda ei kontrollita.",
+      "senderReference": "Saatja viide",
+      "sent": "Saadetud",
+      "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
+      "toHands": "Isiklikult: {name}",
+      "uploaded": "Üleslaaditud andmepostkasti sõnum"
+    },
     "deliveredBy": "Edastas <address>{sender}</address>",
     "deliveredByAuthenticated": "Edastas <address>{sender}</address> · autenditud",
     "deliveryAuthentication": "Edastuse autentimine",
@@ -2963,6 +3002,7 @@
       "clauseDirectivesInvalid": "Seotud klausel sisaldab vigaseid direktiive. Enne malli täitmist parandage klausel.",
       "clauseDirectivesInvalidDetails": "Klausel {clauseName} väljas {slotName} sisaldab vigaseid direktiive. Avage klausliredaktor, parandage nimetatud lõigud ja täitke mall uuesti.",
       "clauseDirectivesOverrideInvalidDetails": "Klausli {clauseName} asendustekst väljas {slotName} sisaldab vigaseid direktiive. Parandage selle täitmise asendustekst ja proovige uuesti.",
+      "correspondenceSourceChanged": "See kirjavahetus on vahepeal muutunud. Laadige leht uuesti ja proovige uuesti.",
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "disposableEmailNotAllowed": "Ajutised e-posti aadressid ei ole lubatud. Kasutage püsivat e-posti aadressi.",
@@ -2988,6 +3028,8 @@
       "matterContactCapacityReached": "See toimik on saavutanud kontaktide arvu ülempiiri. Enne uue kontakti lisamist eemaldage üks kontaktiseos.",
       "mcpAuthorizationApprovalRequired": "Enne ühendamist peab administraator selle ühenduse heaks kiitma.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
+      "organizationDataBoxLimitReached": "See organisatsioon on jõudnud andmepostkastide piirini. Eemaldage üks andmepostkast enne uue lisamist.",
+      "organizationDataBoxesChanged": "Organisatsiooni andmepostkastid on vahepeal muutunud. Laadige leht uuesti ja proovige uuesti.",
       "organizationLastOwner": "Organisatsioonil peab olema omanik. Andke esmalt omandiõigus üle.",
       "organizationMemberLimitReached": "See organisatsioon on jõudnud liikmete piirangu täitumiseni.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
@@ -4283,7 +4325,7 @@
       "derivedQuestion": "Eraldusküsimus",
       "derivedType": "Vastuse vorming",
       "descriptionPlaceholder": "Mida see playbook kontrollib?",
-      "disabledBadge": "Väljas — jäetakse ülevaatustel vahele",
+      "disabledBadge": "Väljas: jäetakse ülevaatustel vahele",
       "discardChanges": "Loobu muudatustest",
       "duplicatePosition": "Dubleeri seisukoht",
       "empty": "Playbooke veel pole",
@@ -4298,7 +4340,7 @@
         "restricted": "Vastus peab puuduma"
       },
       "extractOnlyBadge": "Ainult väljavõte",
-      "extractOnlyDescription": "Hindamiseta — salvestab väärtuse tabelisse.",
+      "extractOnlyDescription": "Hindamiseta; salvestab väärtuse tabelisse.",
       "extraction": "Ekstraktsioon",
       "extractionAuto": "Automaatne",
       "extractionManual": "Käsitsi",
@@ -4544,6 +4586,10 @@
         "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
         "visibilityRestored": "Jagamine taastatud"
       },
+      "orphaned": {
+        "description": "Selle dokumendi teksti on pärast nende loomist uuendatud: märgitud lõike ei õnnestunud selles uuesti leida või esinevad need nüüd mitmes kohas. Neid tekstis ei kuvata.",
+        "summary": "{count, plural, one {# esiletõst või kommentaar ei vasta enam tekstile} other {# esiletõstu ja kommentaari ei vasta enam tekstile}}"
+      },
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
       "styleHighlight": "Esiletõst",
@@ -4696,7 +4742,7 @@
     "continue": "Jätka",
     "enterTeamName": "Sisestage ülal meeskonna nimi",
     "getStarted": "Alusta",
-    "inviteExternal": "Väline kasutaja — saab juurdepääsu teie dokumentidele",
+    "inviteExternal": "Väline kasutaja: saab juurdepääsu teie dokumentidele",
     "inviteHint": "Eraldage mitu aadressi komadega või kleepige nimekiri.",
     "inviteInvalidEmail": "Kehtetu e-post: {value}",
     "inviteSubtitle": "Nad saavad e-kirja liitumislingiga.",
@@ -5494,6 +5540,12 @@
         "ledes": "Elektrooniline arveldamine (LEDES)",
         "title": "Tehisintellekti arveldusmustandid"
       },
+      "dataBoxes": {
+        "description": "Ühest neist postkastidest saadetud sõnum registreeritakse väljaminevana, neile saadetud sõnum sissetulevana. Iga muudatus määrab uuesti juba registreeritud sõnumite suuna toimikutes, millele teil on juurdepääs.",
+        "invalid": "Andmepostkasti ID koosneb seitsmest tähest või numbrist.",
+        "remove": "Eemalda andmepostkast {address}",
+        "title": "Organisatsiooni andmepostkastid"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
@@ -5521,7 +5573,7 @@
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
       "promptCaching": {
-        "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
+        "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada; ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
         "title": "Promptide vahemällu salvestamine",
         "toggleLabel": "Luba promptide vahemällu salvestamine AI teenusepakkujatel"
       },
@@ -6162,7 +6214,7 @@
       "fieldSettingBrackets": "Malli märgend ei tohi sisaldada loogsulge. Eemalda need välja „{fieldPath}“ sätetest.",
       "fieldWithoutMarker": "Väljal „{fieldPath}“ pole dokumendis märgendit, seetõttu selle sätteid ei salvestatud.",
       "fillFormPreview": "Nii kuvatakse see vormis",
-      "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
+      "fillStale": "Salvestamata muudatused; salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",
       "formulaExampleLabel": "Näide",
       "formulaNoFields": "Lisage esmalt arvuväli, et valemil oleks midagi arvutada.",
@@ -6925,7 +6977,7 @@
       "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
       "personalLabel": "Isiklik",
       "promoteCta": "Eduta kliendile",
-      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
+      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline: edutatud toimikuid ei saa tagasi isiklikuks muuta.",
       "promoteToClientConfirm": "Toimik <bdi>{matterName}</bdi> määratakse kliendile <bdi>{clientName}</bdi> ja jagatakse meeskonnaga. Seda ei saa enam isiklikuks muuta.",
       "promotedSuccess": "Toimik edutatud",
       "recentClients": "Hiljutised kliendid",
@@ -7145,7 +7197,7 @@
       "optionsLabel": "Valikud",
       "person": "Isik",
       "previewEmpty": "AI ei tagastanud väärtust.",
-      "previewMockNotice": "Mock-eelvaade — taustasüsteem pole veel ühendatud.",
+      "previewMockNotice": "Mock-eelvaade: taustasüsteem pole veel ühendatud.",
       "previewOnFirst": "Eelvaade: {document}",
       "previewSkipped": "Sellel dokumendil pole sobivat sisendit.",
       "previewSubject": "Proovi näidisel",

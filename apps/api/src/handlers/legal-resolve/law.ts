@@ -17,6 +17,7 @@ import {
   type StatuteQueryCountry,
 } from "@stll/api-contract/statute-query-capability";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import {
   locateGazetteCitations,
@@ -225,7 +226,7 @@ const normalizedSection = (
   }
   const suffix = match?.at(2)?.toLowerCase() ?? "";
   return {
-    anchor: profile.anchor.render.section(`${number}${suffix}`),
+    anchor: `${statuteAnchorKindPrefix(profile.anchor, "section")}${number}${suffix}`,
     section: `${number}${suffix}`,
   };
 };

@@ -1412,6 +1412,18 @@
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
+    "anonymizationPreview": {
+      "answer": "<person1>María José Núñez</person1> puede reclamar a <person2>Íñigo Ibáñez</person2> la deuda más los intereses de demora.",
+      "off": "El modo de IA anonimizado está desactivado: la IA recibe el texto tal como lo escribiste, con los datos personales.",
+      "on": "El modo de IA anonimizado está activado: los datos personales se sustituyen por marcadores antes de que la IA los vea y se restauran en la respuesta.",
+      "prompt": "Redacta una respuesta a <person1>María José Núñez</person1> (DNI <nationalId>48291736Q</nationalId>, <address>Calle Mayor 14, Sevilla</address>) sobre la deuda de <person2>Íñigo Ibáñez</person2>.",
+      "steps": {
+        "answered": "La IA responde",
+        "restored": "Lees",
+        "sent": "La IA recibe",
+        "written": "Escribes"
+      }
+    },
     "anonymizedMode": "Modo de IA anonimizado",
     "anonymizedModeDisabled": "El modo de IA anonimizado está desactivado",
     "anonymizedModeEnabled": "El modo de IA anonimizado está activado",
@@ -1518,7 +1530,7 @@
       "updatingDescription": "Tu extensión de stella es una versión anterior. Chrome la actualiza automáticamente, normalmente en unas horas; después, stella podrá volver a abrir y leer sitios web por ti."
     },
     "cancelQueuedMessage": "Cancelar mensaje en cola",
-    "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
+    "caseLawGreeting": "Pregunta sobre esta decisión; el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
     "choosePromptImprovementStrategy": "Opciones para mejorar el prompt",
     "commandsSection": "Comandos",
@@ -1668,6 +1680,11 @@
     "loadEarlierMessages": "Cargar mensajes anteriores",
     "loadEarlierMessagesError": "No se pudieron cargar los mensajes anteriores",
     "loadingEarlierMessages": "Cargando mensajes anteriores…",
+    "localRun": {
+      "errorLimitReached": "El agente de programación de tu ordenador ha alcanzado su límite de uso. Vuelve a intentarlo cuando se restablezca el límite.",
+      "errorNeedsLogin": "El agente de programación de tu ordenador necesita que vuelvas a iniciar sesión. Inicia sesión desde stella desktop y vuelve a intentarlo.",
+      "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo."
+    },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# más} many {+# más} other {+# más}}",
@@ -1974,7 +1991,7 @@
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
       "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
-      "failed": "Este paso falló — stella lo resolverá de otra manera.",
+      "failed": "Este paso falló; stella lo resolverá de otra manera.",
       "field": "Campo",
       "input": "Entrada",
       "interrupted": "Interrumpido antes de finalizar",
@@ -2793,6 +2810,28 @@
     },
     "backToList": "Volver a correspondencia",
     "createAddress": "Crear dirección",
+    "dataBox": {
+      "acceptedAt": "Notificado",
+      "acceptedByFiction": "por notificación presunta",
+      "acceptedByLogin": "por inicio de sesión",
+      "channel": "Buzón de datos",
+      "contact": "Contacto: {name}",
+      "deliveredAt": "Entregado en el buzón",
+      "delivery": "Entrega",
+      "directionUnknown": "Dirección desconocida",
+      "messageId": "ID del mensaje",
+      "moreContacts": "Hay más contactos asociados a este buzón de datos.",
+      "openFile": "Abrir archivo .zfo",
+      "personalDelivery": "En mano al destinatario",
+      "recipient": "Destinatario",
+      "recipientReference": "Referencia del destinatario",
+      "sealNotVerified": "El sello electrónico del archivo se conserva con él y no se verifica.",
+      "senderReference": "Referencia del remitente",
+      "sent": "Enviado",
+      "statedInFile": "Mensaje de buzón de datos (según el archivo)",
+      "toHands": "A la atención de {name}",
+      "uploaded": "Mensaje de buzón de datos subido"
+    },
     "deliveredBy": "Entregado por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticación de la entrega",
@@ -2963,6 +3002,7 @@
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
+      "correspondenceSourceChanged": "Esta correspondencia cambió mientras tanto. Vuelva a cargar la página e inténtelo de nuevo.",
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
@@ -2988,6 +3028,8 @@
       "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
+      "organizationDataBoxLimitReached": "Esta organización ha alcanzado su límite de buzones de datos. Quite uno antes de añadir otro.",
+      "organizationDataBoxesChanged": "Los buzones de datos de la organización cambiaron mientras tanto. Vuelva a cargar la página e inténtelo de nuevo.",
       "organizationLastOwner": "Una organización necesita un propietario. Transfiera primero la propiedad.",
       "organizationMemberLimitReached": "Esta organización ha alcanzado su límite de miembros.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
@@ -4283,7 +4325,7 @@
       "derivedQuestion": "Pregunta de extracción",
       "derivedType": "Formato de respuesta",
       "descriptionPlaceholder": "¿Qué revisa este playbook?",
-      "disabledBadge": "Desactivado — se omite en las revisiones",
+      "disabledBadge": "Desactivado: se omite en las revisiones",
       "discardChanges": "Descartar cambios",
       "duplicatePosition": "Duplicar posición",
       "empty": "Aún no hay playbooks",
@@ -4298,7 +4340,7 @@
         "restricted": "La respuesta debe estar ausente"
       },
       "extractOnlyBadge": "Solo extracción",
-      "extractOnlyDescription": "Sin evaluación — captura el valor en la tabla.",
+      "extractOnlyDescription": "Sin evaluación; captura el valor en la tabla.",
       "extraction": "Extracción",
       "extractionAuto": "Automático",
       "extractionManual": "Manual",
@@ -4544,6 +4586,10 @@
         "undoShortcut": "Deshacer cambio de resaltado o comentario",
         "visibilityRestored": "Uso compartido restablecido"
       },
+      "orphaned": {
+        "description": "El texto de este documento se actualizó después de que se crearan: no se han podido volver a encontrar los pasajes marcados o ahora aparecen en varios lugares. No se muestran en el texto.",
+        "summary": "{count, plural, one {# resaltado o comentario ya no coincide con el texto} other {# resaltados y comentarios ya no coinciden con el texto} many {# resaltados y comentarios ya no coinciden con el texto}}"
+      },
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
       "styleHighlight": "Resaltado",
@@ -4696,7 +4742,7 @@
     "continue": "Continuar",
     "enterTeamName": "Introduzca el nombre del equipo arriba",
     "getStarted": "Comenzar",
-    "inviteExternal": "Usuario externo — tendrá acceso a sus documentos",
+    "inviteExternal": "Usuario externo: tendrá acceso a sus documentos",
     "inviteHint": "Separe varias direcciones con comas o pegue una lista.",
     "inviteInvalidEmail": "No es un correo válido: {value}",
     "inviteSubtitle": "Recibirán un correo con un enlace para unirse.",
@@ -5494,6 +5540,12 @@
         "ledes": "Facturación electrónica (LEDES)",
         "title": "Borradores de facturación con IA"
       },
+      "dataBoxes": {
+        "description": "Un mensaje enviado desde uno de estos buzones se archiva como saliente; uno enviado a ellos, como entrante. Cada cambio vuelve a determinar la dirección de los mensajes ya archivados en los asuntos a los que tiene acceso.",
+        "invalid": "Un ID de buzón de datos tiene siete letras o dígitos.",
+        "remove": "Quitar el buzón de datos {address}",
+        "title": "Buzones de datos de la organización"
+      },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
         "title": "Reconocimiento de texto de documentos",
@@ -5521,7 +5573,7 @@
       "practiceJurisdictions": "Jurisdicciones",
       "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",
       "promptCaching": {
-        "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente — solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",
+        "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente; solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",
         "title": "Caché de prompts",
         "toggleLabel": "Permitir caché de prompts con proveedores de IA"
       },
@@ -6925,7 +6977,7 @@
       "personalDescription": "Los asuntos personales son privados. Promocione a un cliente para compartir con el equipo.",
       "personalLabel": "Personal",
       "promoteCta": "Promocionar a cliente",
-      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
+      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible: los asuntos promocionados no pueden volver a ser personales.",
       "promoteToClientConfirm": "El asunto <bdi>{matterName}</bdi> se asignará a <bdi>{clientName}</bdi> y se compartirá con el equipo. No podrá volver a ser personal.",
       "promotedSuccess": "Asunto promocionado",
       "recentClients": "Clientes recientes",
@@ -7145,7 +7197,7 @@
       "optionsLabel": "Opciones",
       "person": "Persona",
       "previewEmpty": "La IA no devolvió ningún valor.",
-      "previewMockNotice": "Previsualización ficticia — backend aún no conectado.",
+      "previewMockNotice": "Previsualización ficticia: backend aún no conectado.",
       "previewOnFirst": "Previsualizar en {document}",
       "previewSkipped": "No hay entrada aplicable en este documento.",
       "previewSubject": "Pruébalo en una muestra",

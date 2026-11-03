@@ -35,51 +35,34 @@ rather than raw colour values.
 
 - **One accent per surface.** A screen region gets at most one
   saturated accent; everything else is neutral or semantic status
-  colours. Competing accents create visual noise.
+  colours. Competing accents create visual noise. [review]
 - **No pure `#000000` backgrounds** in the app chrome. Use the
   `--background` token (neutral-950 blend in dark mode) so
-  surfaces retain subtle warmth and depth.
+  surfaces retain subtle warmth and depth. [review]
 - **Saturation ceiling:** accents should stay under 80% saturation
   in oklch. Neon, oversaturated gradients, and glowing outer
   shadows are off-limits; they read as consumer/gaming, not
-  professional.
+  professional. [review]
 
 ## Core Beliefs
 
-- Number content only when order is meaningful, and only through the Steps component.
-
-- Users notice the little things
-- Every interaction should feel smooth
-- Good UX is invisible; it just works
-- Minimum clutter; keep users in the flow
+Users notice the little things. Every interaction should feel smooth, good UX
+is invisible, and minimum clutter keeps users in the flow.
 
 ## Micro-interactions
 
-Small, almost invisible touches. Linear is a good reference.
-
-- Number/count transitions: subtle fade (~200ms). No flashy
-  slot-machine animations.
-- State transitions (loading, success, error) should feel
-  continuous, not jarring.
-- When in doubt, simpler is better, or skip it.
+Small, almost invisible touches. Linear is a good reference. Number and count
+changes get a subtle fade (~200ms), never a slot-machine animation. State
+transitions (loading, success, error) should feel continuous, not jarring; when
+in doubt, simpler is better, or skip it.
 
 ## Icon Semantics
 
-- Every icon comes from `@stll/ui/icons` (`packages/ui/src/icons.ts`),
-  the only module that imports `lucide-react`
-  (`no-direct-lucide-import` enforces it). Reuse an entry first; a
-  product concept gets a semantic entry with a one-line reason, and
-  `bun scripts/codemod-icons.ts` rewrites any direct import.
 - A skill or saved prompt is `SkillIcon` (the open book) everywhere it
-  appears: menus, composer chip, sent message, landing.
+  appears: menus, composer chip, sent message, landing. [review]
 - `AiActionIcon` (the magic wand) is for AI actions: rewrite, refine,
   redraft, search query refinement, prompt editing, AI rename. Do not
-  use generic sparkles for this function, and never for a skill.
-- Never draw scales of justice or a gavel (lucide `Scale`, `Gavel`).
-  Legal cliché is decoration every product in the category already
-  uses; name the concept instead — a court is `Landmark`, a decision
-  `FileText` (`Library` for a collection of them), and the case-law
-  section is `CaseLawIcon`. `no-banned-glyph` enforces it.
+  use generic sparkles for this function, and never for a skill. [review]
 
 ## Review chrome
 
@@ -98,10 +81,10 @@ Record<...>` map and pass it in.
 Two editors, two jobs, and they never swap:
 
 - **Document model → Folio.** Anything that is a document (`.docx`,
-  drafts, templates, redlines, tracked changes) is edited in Folio.
+  drafts, templates, redlines, tracked changes) is edited in Folio. [review]
 - **Source text → the hybrid markdown editor.** Skills, prompts and
   knowledge files are plain source; they are edited in the hybrid
-  markdown editor.
+  markdown editor. [review]
 
 Never route one through the other: a document forced through the
 markdown editor loses its formatting model, and source text forced
@@ -109,122 +92,68 @@ through Folio gains one it does not have.
 
 ## Reduce Visual Noise
 
-- Secondary information (counts, metadata) subtle by default.
-  Use opacity transitions to reveal details on hover.
-- Don't compete for attention; let the content speak.
+Keep secondary information (counts, metadata) subtle by default and reveal
+details on hover with an opacity transition. Don't compete for attention; let
+the content speak.
 
 ## Typography Polish
 
-- Do not style one heading word differently for decoration; emphasis inside a heading must communicate meaning or interaction.
-- `-webkit-font-smoothing: antialiased` on macOS for crisper
-  text on light backgrounds. Apply globally in the base stylesheet.
-- `font-variant-numeric: tabular-nums` on any element whose
-  number changes dynamically (counters, timers, tables with
-  numeric columns). Prevents layout shift.
-- `text-wrap: balance` on headings and short text blocks to
-  distribute lines evenly. `text-wrap: pretty` on body/paragraph
-  text to avoid orphans.
+The base stylesheet applies `-webkit-font-smoothing: antialiased` globally for
+crisper macOS text on light backgrounds. Numbers that change in place
+(counters, timers, numeric table columns) use
+`font-variant-numeric: tabular-nums` so the layout does not shift; headings and
+short blocks use `text-wrap: balance`, body text `text-wrap: pretty`.
 
 ## Surfaces & Depth
 
-- **Concentric border radius:** when nesting rounded elements,
-  outer radius = inner radius + padding between them. Hard-coding
-  both to the same value produces a visual mismatch.
-- **Shadows over borders:** prefer layered semi-transparent
-  `box-shadow` for depth and separation. Reserve `border` for
-  semantic boundaries (inputs, dividers), not for creating depth.
-- **The chrome owns the divider under the breadcrumb bar.** A page
-  root, or a nested layout's first pane, never draws its own top
-  border (`border-t`, `border-y`, `border`) on that line; it stacks
-  on the header's `border-b` as one 2px rule. The shell's content
-  slot (`WorkspaceShell`) strips the top border off its first child,
-  and route smoke fails any route that still paints one there
-  (`findDoubledChromeDividers`, `apps/web/e2e/helpers/chrome-divider.ts`).
-- **Image outlines:** for images on white/light backgrounds, add a
-  subtle `outline: 1px solid rgb(0 0 0 / 0.06)` to define the edge
-  without a heavy border.
-- **App chrome scrolls through `ScrollArea`** (`@stll/ui/scroll-area`),
-  not a raw `overflow-auto`/`overflow-scroll` utility, so every
-  scrollbar in the shell matches; `viewportRef` hands the scrolling
-  element to a virtualizer or scroll restoration. Textareas, `<pre>`
-  blocks, editor canvases and wide tables keep their native scroller.
-  `no-raw-overflow-scroll` enforces it.
+Nested rounded elements are concentric: outer radius = inner radius + the
+padding between them. Depth comes from layered semi-transparent `box-shadow`;
+`border` marks semantic boundaries (inputs, dividers). Images on light
+backgrounds get a subtle `outline: 1px solid rgb(0 0 0 / 0.06)` edge.
 
 ## Interactions & Animations
 
-- **Never use `transition: all`.** Always specify exact properties
-  (e.g., `transition: opacity 150ms, transform 150ms`). `all`
-  triggers unnecessary repaints and can animate properties you
-  didn't intend. (enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint)
-- **GPU-friendly properties only.** Animate `transform` and
-  `opacity` exclusively. Do not animate `width`, `height`, `top`, `left`,
-  `padding`, or `margin`; these trigger layout recalc. Use
-  `scale`/`translate` instead. One exemption: a surface that
-  changes its own box (a disclosure panel or accordion, a
-  collapsible rail, a popup positioner repositioning on collision,
-  a progress bar) may transition the box property it owns, because
-  a transform moves the paint but not what siblings lay out
-  against. Each retained layout utility is listed in the rule's allowance with
-  its file and reason. (the layout-motion prohibition is enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint; existing
-  paint-property utilities and CSS declarations are decrease-only ratchets)
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged
-  sequences (page load, modals).
+  sequences (page load, modals). [review]
 - **Frequency decides whether it animates.** What people repeat many
   times a day (keyboard shortcuts, command palette open/close, list
   keyboard navigation) gets no animation; occasional surfaces (dialogs,
-  sheets, toasts) get the standard one.
-- **Easing:** entering and exiting UI uses `ease-out`, movement on
-  screen `ease-in-out`; both are strong curves in the theme and
-  `ease-out` is the default. Never `ease-in` for UI.
-- **Duration ≤ 300ms:** press 100–160ms, tooltip or small popover
-  125–200ms, dropdown 150–250ms, dialog or sheet up to 300ms; exits
-  run faster than enters. Decorative or teaching motion is listed in
-  the rule's allowance with a reason.
-- **Never enter from `scale-0`:** start near full size (`scale-95`
-  to `scale-98`) with opacity 0. Popovers, menus and tooltips scale
-  from their trigger (`origin-(--transform-origin)`); dialogs stay
-  centred. (easing, duration and scale enforced by
-  no-layout-motion-classes)
+  sheets, toasts) get the standard one. [review]
 - **Tooltips open instantly once one is open:** the app-level
-  `TooltipProvider` groups them; do not mount another provider.
+  `TooltipProvider` groups them; do not mount another provider. [review]
 - **Pressable controls give feedback on press.** The shared `Button`
   already scales slightly while enabled; do not add per-call-site
-  press effects.
-- **Staggered list entry:** when a list or grid appears (page load,
-  filter change), cascade items with a small stagger delay
-  (30–60ms per item, capped at ~8 items) so the group reads as a
-  cohesive reveal rather than a sudden block.
-- **Optical alignment over geometric:** icons inside circles,
-  play-button triangles, and asymmetric glyphs should be nudged
-  visually until they _look_ centred, even if that means offset
-  from the geometric centre.
+  press effects. [review]
+
+A list or grid that appears (page load, filter change) may cascade its items
+with a small stagger (30–60ms per item, capped at ~8 items). Icons in circles,
+play triangles and other asymmetric glyphs are aligned optically, not
+geometrically.
 
 ## Control States
 
 - **Every control answers every state:** hover, pressed, focus-visible,
   disabled and, where it loads, pending. A press with no visible
-  response reads as a missed click.
+  response reads as a missed click. [review]
 - **Show where people are.** The current item in navigation and
   breadcrumbs is styled as current and carries `aria-current`. A tab
   shows its selected state through `aria-selected`, which
-  `@stll/ui/tabs` supplies; never add `aria-current` to it.
-- **No native `alert`, `confirm` or `prompt`.** Confirm a destructive
-  action with `@stll/ui/destructive-confirm-dialog`, report an outcome
-  with `@stll/ui/toast`, and put a field error next to the field.
+  `@stll/ui/tabs` supplies; never add `aria-current` to it. [review]
 - **A dialog only when the work has to stop.** A small edit happens
   inline; a side task that needs the page behind it opens in a
-  `@stll/ui/sheet`.
+  `@stll/ui/sheet`. [review]
 - **Hidden means out of reach.** Content hidden from everyone
   (a collapsed panel, an inactive rail) leaves the tab order (`inert`,
   `hidden`, or unmounted); `aria-hidden` alone still lets focus land
   inside. The control that reveals it stays reachable, keeps an
   accessible name, and reports `aria-expanded`. A control that is
   visually hidden until focus reveals it (a skip link, the data
-  table's keyboard row action) stays in the tab order by design.
+  table's keyboard row action) stays in the tab order by design. [review]
+
+Confirm a destructive action with `@stll/ui/destructive-confirm-dialog`, report
+an outcome with `@stll/ui/toast`, and put a field error next to the field.
 
 ## Lists, Settings Pages & Search
 
@@ -235,40 +164,37 @@ through Folio gains one it does not have.
   hairline-divided rows. Row anatomy: 32px `ListItemMedia` tile, a
   truncating title, one clamped secondary line, then trailing status or
   actions. Use a `Table` only when people compare values across columns
-  (sorting, numbers, dates side by side).
+  (sorting, numbers, dates side by side). [review]
 - **Nothing scrolls sideways.** Free text (descriptions, scope lists,
   notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
   (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
   long list into a count that opens a popover ("15 permissions"). The
-  trailing actions stay on screen at every width.
+  trailing actions stay on screen at every width. [review]
 - **Status is a dot plus a label** (`ListItemStatus` with a tone). The
-  label carries the meaning; colour is never the only signal.
+  label carries the meaning; colour is never the only signal. [review]
 - **Anything people look up by name gets search.** Use
   `@stll/ui/search-field`: an instant local filter, case- and
   accent-insensitive, and Escape clears it. While a query is active,
   hide setup and help content, show match counts in the group headers,
-  and when nothing matches, show one line plus the next action.
+  and when nothing matches, show one line plus the next action. [review]
 - **Show things where people look for them.** When an entity is managed
   elsewhere but people expect it on another page (integrations live in
   Tools, yet people look for them under Connections), list it there too
   as a read-mostly row that links to its one source of truth. Don't copy
-  the management UI.
+  the management UI. [review]
 - **Write for a lawyer who has never heard of MCP.** The first path names
   the tools people already use (Claude, ChatGPT) and asks for at most one
   thing to copy. Protocol names, server variants, CLI commands and developer
   tools (Cursor, Codex) live behind a folded "Developer access" section,
-  never in the default view.
+  never in the default view. [review]
 - **Setup steps have one source.** Product copy, onboarding and copied agent
   instructions point to the same guide (one docs page, one shared component
   such as `AssistantSetup`); they never carry their own step lists that can
-  drift.
+  drift. [review]
 - **One-time setup is rows with copy buttons**, placed below the live
   state: server URLs, CLI commands, keys. No stacks of paragraphs and
   read-only inputs. Copy confirms in place (the icon turns into a check).
-- **Pick the primitive whose anatomy fits; don't bend one.** Squeezing
-  `FramePanel` to `p-1` so a heading fits inside it produced text flush
-  against the border. If a primitive needs its padding overridden to
-  work, it is the wrong one.
+  [review]
 
 ## Empty States & Inline Help
 
@@ -276,33 +202,35 @@ through Folio gains one it does not have.
   (the gesture that fills it), not a definition. Teach
   "Select text → right-click → Make field", not what a field is.
   Conceptual education lives in tooltips or docs, never as
-  permanent panel prose.
+  permanent panel prose. [review]
 - Full-width buttons are reserved for a surface's single primary
   action. Structural or secondary adds use quiet ghost
-  affordances (small `+`, text button).
+  affordances (small `+`, text button). [review]
 - Side-panel sections with zero items collapse to a single row
   (heading + count + add affordance) by default; they expand on
-  demand or when they gain content.
+  demand or when they gain content. [review]
 
 ## Loading States
 
 - **Skeleton loaders must match the real layout.** The skeleton's
   dimensions, spacing, and column count should mirror the content
-  it replaces so the page doesn't shift on load.
+  it replaces so the page doesn't shift on load. [review]
 - **Inline spinners over full-page loaders.** Scope loading
   indicators to the region that's actually waiting. A full-page
-  spinner for a sidebar fetch is disorienting.
+  spinner for a sidebar fetch is disorienting. [review]
 - **Render the destination's structure, not a logo.** When a route
   loads, show its real shape (table chrome with header and columns,
   toolbar, section cards) with the values shimmering in. The centered
   glowing logo (`DefaultPendingComponent`) is the last-resort
   fallback, not the default. Give each route its own
   `pendingComponent` so the route you navigate to picks its own shape.
+  [review]
 - **Shimmer only what you do not know yet.** Chrome that needs no data
   (the logo, primary nav icons, rail toggles, fixed icons) renders for real
   in a skeleton, taken from the same definitions the real chrome uses; only
   data- or locale-dependent parts (labels, lists, the account, the page
   body) shimmer. A grey box where the stella logo belongs reads as broken.
+  [review]
 - **Skeletons must be structurally drift-proof.** Generate the
   skeleton from the same source as the real UI, never a hand-copied
   parallel tree. For tables, render the header, rows, and skeleton
@@ -311,34 +239,23 @@ through Folio gains one it does not have.
   all three at once. Where the page chrome does not need the data,
   move the Suspense boundary inward (render the real chrome, suspend
   only the leaves). For scaffolds that cannot share a source, mirror
-  the real layout faithfully.
-
-## Viewport & Responsive
-
-- **Use `min-h-dvh`, not `h-screen`.** `h-screen` and `vh` ignore
-  the mobile browser chrome and cause scroll/overlap bugs. `dvh`
-  adapts to the dynamic viewport; use `svh` for a length that must
-  not move while the toolbar collapses. (enforced by
-  no-layout-motion-classes/no-layout-motion-classes and stylelint)
+  the real layout faithfully. [review]
 
 ## Mobile
 
 - A surface fixed to a screen edge pads that edge with the
   `--safe-area-*` properties (`@stll/ui` `lib/safe-area.ts`); shared
-  sheets, dialogs, toasts and the shell already do.
+  sheets, dialogs, toasts and the shell already do. [review]
 - A new interactive primitive gets `select-none` and its own pressed
-  state; never `select-none` on text people may copy.
+  state; never `select-none` on text people may copy. [review]
 
 ## Hit Areas
 
 - Stella targets a minimum 44×44 CSS-pixel touch area for interactive
   controls. If the visible element is smaller, extend its hit area without
-  changing the visual size or colliding with adjacent controls.
-- Use native interactive elements and preserve keyboard activation, focus
-  order, accessible names, and visible focus. A clickable `div` with ARIA is
-  not a substitute for a button or link.
+  changing the visual size or colliding with adjacent controls. [review]
 - Respect reduced-motion preferences. Meaning and completion feedback must not
-  depend on animation, hover, colour alone, or pointer precision.
+  depend on animation, hover, colour alone, or pointer precision. [review]
 
 ## Right-to-Left (RTL) & Bidirectional
 
@@ -346,11 +263,6 @@ Stella ships an Arabic (RTL) UI; every surface must mirror correctly
 and stay locale-aware. Test new UI in `ar` (not just `en`) before
 shipping — flipping `documentElement.dir` is not enough on its own.
 
-- **Logical properties only.** Use `ps-/pe-`, `ms-/me-`, `start-/end-`,
-  `border-s/-e`, `text-start/-end` — never physical `pl-/pr-`, `ml-/mr-`,
-  `left-/right-`, `text-left/right`, `border-l/-r`, `rounded-l/-r`.
-  Physical directional classes do not flip under `dir="rtl"`. Enforced by
-  the `no-physical-properties` oxlint rule.
 - **Mirror direction, not identity.** Render directional glyphs (chevrons,
   arrows, back/forward, next/prev, breadcrumb separators, pagination, drawer
   toggles) through `<DirectionalIcon icon={...} />` (`@stll/ui`), which
@@ -359,27 +271,15 @@ shipping — flipping `documentElement.dir` is not enough on its own.
   orientation-free. For disclosure chevrons that `rotate-90` on expand, pass
   `flip={!isExpanded}` so the mirror applies only while collapsed — an
   always-on mirror composes with the rotation and points the expanded state
-  the wrong way.
-- **Format through the central locale.** Route all numbers, dates, and
-  relative times through `useFormatter()`/`getFormatter()` (or pass
-  `getFormattingLocale()`); never a bare `Intl.*` / `.toLocale*String()`
-  with the base `lang` or no locale — that drops the user's numbering-system
-  preference (e.g. Eastern Arabic-Indic digits). Enforced by the
-  `no-raw-locale-format` oxlint rule.
+  the wrong way. [review]
 - **Isolate embedded Latin & numerals.** Wrap Latin runs inside RTL text
   (case numbers, ECLI, citations, file names, emails) in `<bdi>` so bidi
-  reordering doesn't scramble neighbouring punctuation. Use `dir="auto"` on
-  free-text user inputs; keep `tel`/`email`/`url` and code fields LTR.
-- **Panels mirror as a unit.** A panel on the inline-end in LTR (right)
-  docks to the inline-start in RTL (left); its internal rail + content keep
-  their relative order automatically via flex + logical props — never pin
-  with physical `right-0`/`left-0`.
+  reordering doesn't scramble neighbouring punctuation; keep `tel`/`email`/`url`
+  and code fields LTR. [review]
 - **Document surfaces stay LTR-based.** The editor/document canvas (folio)
   keeps an LTR base direction even under an RTL UI; only the app chrome
   mirrors. Brand wordmark/logo is never mirrored or transliterated.
-- **No untranslated LTR islands.** Don't leave English strings (suggested
-  prompts, labels, empty-state copy) inside an otherwise-Arabic surface;
-  route them through i18n. A Latin island reads as "unfinished," not "global."
+  [review]
 
 ## Look at the Render
 
@@ -435,37 +335,33 @@ content itself (larger, complete, specific), not with another
 ornament.
 
 - **No emojis in the product UI.** Use Lucide icons or semantic
-  status colours instead.
+  status colours instead. [review]
 - **No "AI aesthetic" chrome:** purple/blue neon glows, pulsing
   gradient borders, holographic effects. Stella's AI features
-  should feel like native tools, not a tech demo.
+  should feel like native tools, not a tech demo. [review]
 - **No centred hero sections** in application views. Heroes
   belong on marketing pages; app screens use content-first
-  layouts.
+  layouts. [review]
 - **No generic three-equal-cards grids.** If content genuinely
   comes in threes, fine; but don't default to `grid-cols-3` as
   the go-to layout. Prefer asymmetric grids, two-column splits,
-  or list views that match the data shape.
+  or list views that match the data shape. [review]
 - **No filler copy.** Never use "Lorem ipsum", "John Doe",
   "Acme Corp", "99.99%", or similar placeholder text in
   committed UI. Use realistic legal-domain examples (matter
   names, party names, deadlines) or leave the slot empty with
-  a proper empty state.
+  a proper empty state. [review]
 - **No AI copywriting clichés:** "Elevate", "Seamless",
   "Unleash", "Revolutionize", "Supercharge". Write plain,
-  specific microcopy.
+  specific microcopy. [review]
 - **No generic copy shapes.** No "not just X, it's Y"; no "Get
   started" or "Learn more" labels (name what the button does); no
   exclamation marks in success messages; no "Oops!" errors (say what
   failed and what to do next); English headings and labels use
   sentence case, not Title Case, and each translation follows its
-  own locale's capitalization.
+  own locale's capitalization. [review]
 - **No decorative scroll indicators** (bouncing chevrons,
   "Scroll to explore" text). If content scrolls, the scrollbar
-  is sufficient affordance.
+  is sufficient affordance. [review]
 - **No custom cursors or pointer overrides** beyond the standard
-  `pointer` for interactive elements.
-- **No restyling `@stll/ui` components through `className`.** A component
-  owns its spacing and typography (`shadcn(no-restyle)`): pick a variant or
-  size, and add one to the component when the design needs a treatment none
-  provides. Margin around it and gap on its parent stay yours.
+  `pointer` for interactive elements. [review]

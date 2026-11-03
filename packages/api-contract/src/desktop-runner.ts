@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
   desktopVersionSchema,
@@ -32,6 +33,50 @@ export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
+
+/**
+ * The desktop feature an account needs to hold runner sockets. The API refuses
+ * the upgrade without it and closes open sockets once it is turned off.
+ */
+export const DESKTOP_RUNNER_FEATURE_ID =
+  "local-agents" as const satisfies DesktopFeatureId;
+
+/**
+ * What one account may hold through runner sockets and what one run may
+ * store. The API enforces each; a desktop speaks the protocol without them.
+ */
+export type DesktopRunnerLimits = {
+  /** Installations (installation id and device key) per account and organization. */
+  readonly maxRunnersPerAccount: number;
+  /**
+   * How long a run may wait to be accepted, or for its computer to return,
+   * before the API ends it as lost.
+   */
+  readonly abandonedRunMs: number;
+  /** Sequenced messages (events, approval requests, the final one) one run may store. */
+  readonly maxMessagesPerRun: number;
+  /** UTF-8 bytes of sequenced messages one run may store. */
+  readonly maxMessageBytesPerRun: number;
+  /** Commands one run may queue, its `run.start` included. */
+  readonly maxCommandsPerRun: number;
+  /** How long an ended run, with its messages and commands, is kept. */
+  readonly endedRunRetentionMs: number;
+  /** UTF-8 bytes of frames one socket may have waiting to be stored. */
+  readonly maxQueuedBytesPerSocket: number;
+  /** Runner sockets one account may hold open on one API task. */
+  readonly maxSocketsPerAccount: number;
+};
+
+export const DESKTOP_RUNNER_LIMITS = {
+  maxRunnersPerAccount: 10,
+  abandonedRunMs: 24 * 60 * 60_000,
+  maxMessagesPerRun: 20_000,
+  maxMessageBytesPerRun: 64 * 1024 * 1024,
+  maxCommandsPerRun: 2000,
+  endedRunRetentionMs: 30 * 24 * 60 * 60_000,
+  maxQueuedBytesPerSocket: 4 * DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  maxSocketsPerAccount: 4,
+} as const satisfies DesktopRunnerLimits;
 
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   hello: "hello",
@@ -151,7 +196,13 @@ const harnessSessionIdSchema = v.nullable(
   v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 );
 const modelIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
-const tokenSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(8192));
+/** Longest MCP token a run message carries. */
+export const DESKTOP_RUNNER_MAX_TOKEN_LENGTH = 8192;
+const tokenSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_MAX_TOKEN_LENGTH),
+);
 
 const harnessModelSchema = v.object({
   id: modelIdSchema,
@@ -205,6 +256,8 @@ const harnessReportSchema = v.variant("state", [
 export type DesktopRunnerHarnessReport = v.InferOutput<
   typeof harnessReportSchema
 >;
+/** One harness report, for a consumer reading back reports it stored. */
+export const desktopRunnerHarnessReportSchema = harnessReportSchema;
 
 /**
  * A TanStack `StreamChunk` as it crosses the socket. Only its type is checked

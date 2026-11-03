@@ -10,9 +10,8 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {

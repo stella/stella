@@ -409,6 +409,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.correspondence.allowed-senders.list` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list` |
 | `organization-settings.correspondence.allowed-senders.scope.add` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-add` |
 | `organization-settings.correspondence.allowed-senders.scope.remove` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-scope-remove` |
+| `organization-settings.correspondence.data-boxes.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-create` |
+| `organization-settings.correspondence.data-boxes.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-delete` |
+| `organization-settings.correspondence.data-boxes.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-get` |
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
@@ -764,7 +767,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
-| assistant_chat | 15 |
+| assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |
 | chat_thread_ui | 18 |

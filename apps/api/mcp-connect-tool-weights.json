@@ -240,10 +240,10 @@
     {
       "name": "list_reader_annotations",
       "nameChars": 23,
-      "descriptionChars": 223,
+      "descriptionChars": 269,
       "inputSchemaChars": 905,
-      "totalChars": 1151,
-      "estimatedTokens": 460
+      "totalChars": 1197,
+      "estimatedTokens": 475
     },
     {
       "name": "list_tasks",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 133025,
-    "estimatedTokens": 52878
+    "characters": 133071,
+    "estimatedTokens": 52893
   }
 }

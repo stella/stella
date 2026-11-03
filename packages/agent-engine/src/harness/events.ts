@@ -49,9 +49,10 @@ export type HarnessContinuation =
     };
 
 /**
- * A tool the harness ran itself. `name` follows the cloud engine's naming:
- * MCP tools are `mcp__<server>__<tool>`, harness-native actions use the
- * native item kind (`command_execution`, `file_change`, `web_search`).
+ * A tool the harness ran itself. `name` is the name a cloud chat turn gives
+ * the same tool, built by `tool-parts.ts`: a stella tool by its registry name,
+ * any other MCP tool as `mcp__<server>__<tool>`, and a harness-native action
+ * by a name no stella tool uses (`HARNESS_TOOL_NAMES`).
  */
 export type HarnessToolCall = {
   id: string;

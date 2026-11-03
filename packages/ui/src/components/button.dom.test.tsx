@@ -1,13 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { Button } = await import("./button");
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("accessible-disabled styling preserves activation", () => {

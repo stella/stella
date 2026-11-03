@@ -473,7 +473,11 @@
     "lint": {
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": [
+        "transit",
+        "^generate:capability-runtime",
+        "//#generate:tailwind-cache"
+      ],
       // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
@@ -543,6 +547,26 @@
         "$TURBO_ROOT$/tsconfig.tooling.json",
         "$TURBO_ROOT$/types/**"
       ]
+    },
+    "//#generate:tailwind-cache": {
+      "cache": true,
+      "inputs": [
+        "$TURBO_ROOT$/apps/web/**",
+        "$TURBO_ROOT$/apps/desktop/**",
+        "$TURBO_ROOT$/apps/playground/**",
+        "$TURBO_ROOT$/apps/landing/**",
+        "$TURBO_ROOT$/packages/ui/**",
+        "$TURBO_ROOT$/packages/chat/**",
+        "$TURBO_ROOT$/packages/workspace-ui/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.tailwind.config.ts",
+        "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
+        "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]
     },
     "@stll/landing#dev": {
       "dependsOn": ["@stll/cli#codegen:runtime"],
@@ -1181,6 +1205,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1264,6 +1289,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1415,6 +1441,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1446,7 +1473,6 @@
         "$TURBO_ROOT$/packages/test-state/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/transactional/**",
-        "$TURBO_ROOT$/packages/ui/**",
         "$TURBO_ROOT$/packages/user-agent/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "$TURBO_ROOT$/scripts/**",
@@ -1500,6 +1526,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/decision-reader/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1560,12 +1587,10 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
-        "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
-        "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
@@ -1691,7 +1716,8 @@
       "env": [
         "API_TEST_DURATIONS_HASH",
         "API_TEST_SHARD",
-        "API_TEST_FILES_ENCODED"
+        "API_TEST_FILES_ENCODED",
+        "STELLA_RUN_SHARED_POSTGRES_TESTS"
       ],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
@@ -1704,8 +1730,13 @@
       "inputs": [
         "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
+        "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generation-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-docker.ts",
+        "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/scripts/generate-online-migration-entries.ts",
-        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
