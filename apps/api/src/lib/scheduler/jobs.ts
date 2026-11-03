@@ -22,7 +22,10 @@ import {
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { logger } from "@/api/lib/observability/logger";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
-import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import {
+  SCHEDULER_BACKFILL_IDS,
+  SCHEDULER_REPAIR_BACKFILL_IDS,
+} from "@/api/lib/scheduler/backfill-config";
 import {
   REGISTERED_SCHEDULER_TASK_NAMES,
   type RegisteredSchedulerTaskName,
@@ -465,7 +468,7 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Resume the case-law population seed that startup admits while pending",
-    id: "caseLaw.seedPopulationCounts.minutely",
+    id: SCHEDULER_REPAIR_BACKFILL_IDS.populationSeed,
     firstRun: "on-registration",
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },

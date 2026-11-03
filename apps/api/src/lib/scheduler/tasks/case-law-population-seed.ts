@@ -89,7 +89,6 @@ export const createCaseLawPopulationSeedTask =
           try {
             while (clock() + BATCH_START_RESERVE_MS < deadline) {
               signal.throwIfAborted();
-              // db-await-in-loop: one governed batch at a time; the seed function serializes its callers.
               const seeded = await retryLockRefusal(
                 async () =>
                   await runtime.step(async ({ tx, size }) => {
