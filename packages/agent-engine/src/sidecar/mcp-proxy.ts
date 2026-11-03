@@ -98,10 +98,14 @@ const BEARER = /^Bearer (\S+)$/u;
 
 const presentsSecret = (request: Request, held: HeldRun) => {
   const match = BEARER.exec(request.headers.get("authorization") ?? "");
-  if (match === null || match[1] === undefined) {
+  if (match === null) {
     return false;
   }
-  const presented = Buffer.from(match[1]);
+  const [, bearer] = match;
+  if (bearer === undefined) {
+    return false;
+  }
+  const presented = Buffer.from(bearer);
   return (
     presented.length === held.secret.length &&
     timingSafeEqual(presented, held.secret)
