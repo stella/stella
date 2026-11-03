@@ -7,12 +7,12 @@ import {
   courtHeadnoteOrigin,
   decisionCaseName,
   decisionDisplayReference,
-  editorialSupplementBlocks,
   footnoteParts,
   resolveDecisionLinkOverlaps,
 } from "@stll/decision-reader/decision-text.logic";
 import { buildDocumentAstSearchPieces } from "@stll/decision-reader/document-ast-text";
 import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
+import { editorialSupplementBlocks } from "@stll/decision-reader/reader-text-pieces.logic";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type {
