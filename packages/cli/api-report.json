@@ -60,6 +60,7 @@
         "./capabilities/clauses.versions.summarize.json",
         "./capabilities/client-invoices.create.json",
         "./capabilities/client-invoices.prefill.json",
+        "./capabilities/contacts.bulk.delete.json",
         "./capabilities/contacts.business-registries.check.json",
         "./capabilities/contacts.business-registries.lookup.json",
         "./capabilities/contacts.create.json",
