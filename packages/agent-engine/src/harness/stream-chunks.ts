@@ -73,6 +73,22 @@ const toTokenUsage = (usage: HarnessUsage): TokenUsage => {
   return result;
 };
 
+/**
+ * How a tool call ended. `cancelled`: its turn ended before it finished; like
+ * the cloud engine's cancelled results, it is an error with that outcome, so
+ * it never reads as complete.
+ */
+type ToolResultStatus = "succeeded" | "failed" | "cancelled";
+
+const TOOL_RESULT_FIELDS = {
+  succeeded: {},
+  failed: { state: "output-error" },
+  cancelled: {
+    state: "output-error",
+    metadata: { tanstack: { toolResultOutcome: "cancelled" } },
+  },
+} as const satisfies Record<ToolResultStatus, object>;
+
 type TextState = { text: string; emitted: number; ended: boolean };
 
 class ChunkMapper {
@@ -290,7 +306,7 @@ class ChunkMapper {
   private resolveToolCall(
     toolCallId: string,
     content: string,
-    failed: boolean,
+    status: ToolResultStatus,
   ) {
     this.unresolved.delete(toolCallId);
     this.push({
@@ -298,7 +314,7 @@ class ChunkMapper {
       toolCallId,
       messageId: this.context.generateId(),
       content,
-      ...(failed ? { state: "output-error" as const } : {}),
+      ...TOOL_RESULT_FIELDS[status],
     });
   }
 
@@ -312,11 +328,7 @@ class ChunkMapper {
     }
     this.ensureSegment();
     this.openToolCall(toolCall);
-    this.resolveToolCall(
-      toolCall.id,
-      result.content,
-      result.status === "failed",
-    );
+    this.resolveToolCall(toolCall.id, result.content, result.status);
   }
 
   private text(messageId: string, fullText: string) {
@@ -407,7 +419,7 @@ class ChunkMapper {
           status: "awaiting_reply",
           questions: request.questions,
         }),
-        false,
+        "succeeded",
       );
       return;
     }
@@ -443,7 +455,7 @@ class ChunkMapper {
       this.resolveToolCall(
         toolCallId,
         JSON.stringify({ status: "interrupted" }),
-        false,
+        "cancelled",
       );
     }
     this.closeSegment(chunk);

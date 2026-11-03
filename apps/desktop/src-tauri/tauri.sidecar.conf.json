@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/v2/crates/tauri-cli/schema.json",
+  "build": {
+    "beforeBuildCommand": "bun run build:view && bun run build:sidecar"
+  },
+  "bundle": {
+    "externalBin": ["binaries/stella-agent-sidecar"],
+    "macOS": {
+      "entitlements": "Entitlements.plist"
+    }
+  }
+}

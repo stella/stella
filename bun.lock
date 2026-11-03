@@ -266,6 +266,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.63.0",
+        "@stll/agent-engine": "workspace:*",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -685,6 +686,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",
