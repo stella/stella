@@ -1,17 +1,20 @@
+import { useState } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionPanel,
-  AccordionTrigger,
-} from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
@@ -54,6 +57,7 @@ export const SourceChips = ({
     (state) => state.registerSources,
   );
   const t = useTranslations("chat.sourceChips");
+  const [consultedOpen, setConsultedOpen] = useState(false);
   const cited = entries.filter((entry) => entry.relation === "cited");
   const consulted = entries.filter((entry) => entry.relation === "consulted");
 
@@ -65,43 +69,54 @@ export const SourceChips = ({
     return null;
   }
 
+  // Laid out by the answer's footer row: the disclosure's trigger sits in that
+  // row beside the actions, and what takes the row's full width (the disclosed
+  // sources, the cited ones) wraps below it.
   return (
-    <>
-      <Separator
-        className="self-stretch"
-        data-chat-answer-citations-divider
-        orientation="vertical"
-      />
-      <div className="contents" data-chat-answer-citations>
-        <div className="w-full space-y-2">
-          {cited.length > 0 && (
+    <div className="contents" data-chat-answer-citations>
+      {consulted.length > 0 && (
+        <Collapsible
+          className="contents"
+          onOpenChange={setConsultedOpen}
+          open={consultedOpen}
+        >
+          <div className="flex items-center gap-2">
+            <Separator
+              className="self-stretch"
+              data-chat-answer-citations-divider
+              orientation="vertical"
+            />
+            <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
+              <DirectionalIcon
+                className={cn(
+                  "size-3.5 shrink-0 transition-transform",
+                  consultedOpen && "rotate-90",
+                )}
+                flip={!consultedOpen}
+                icon={ChevronRightIcon}
+              />
+              {t("alsoConsulted", { count: consulted.length })}
+            </CollapsibleTrigger>
+          </div>
+          <CollapsiblePanel className="w-full">
             <SourceEntryList
-              entries={cited}
-              messageId={messageId}
+              entries={consulted}
+              messageId={`${messageId}-consulted`}
               workspaceId={workspaceId}
             />
-          )}
-          {consulted.length > 0 && (
-            <Accordion>
-              <AccordionItem>
-                <AccordionTrigger size="compact" variant="muted">
-                  {t("alsoConsulted", { count: consulted.length })}
-                </AccordionTrigger>
-                {/* Kept in the document while closed, so find-in-page reaches
-                    the consulted sources and opens the list on a match. */}
-                <AccordionPanel hiddenUntilFound keepMounted size="compact">
-                  <SourceEntryList
-                    entries={consulted}
-                    messageId={`${messageId}-consulted`}
-                    workspaceId={workspaceId}
-                  />
-                </AccordionPanel>
-              </AccordionItem>
-            </Accordion>
-          )}
+          </CollapsiblePanel>
+        </Collapsible>
+      )}
+      {cited.length > 0 && (
+        <div className="w-full">
+          <SourceEntryList
+            entries={cited}
+            messageId={messageId}
+            workspaceId={workspaceId}
+          />
         </div>
-      </div>
-    </>
+      )}
+    </div>
   );
 };
 

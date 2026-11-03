@@ -406,15 +406,11 @@ for (const { kind, path } of citations) {
               held ? internal : publisher,
             );
             // One chip per citation: a held primary trails no publisher link
-            // and carries no glyph beside its own text.
+            // and carries no glyph beside its own text. The tray's disclosure
+            // chevron belongs to its trigger, not to the chip.
             expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              // The "Also consulted" disclosure's own chevron is not a chip.
-              expect(
-                surface.querySelector(
-                  'svg:not([data-slot="accordion-indicator"])',
-                ),
-              ).toBeNull();
+              expect(primary?.parentElement?.querySelector("svg")).toBeNull();
             }
           }
         });
@@ -729,15 +725,19 @@ for (const interactive of [false, true]) {
   });
 }
 
-// Tray chips the answer does not cite sit under the "Also consulted"
-// disclosure, out of the accessibility tree until a reader opens it.
-const openConsulted = async () => {
-  const { alsoConsulted } = messages.chat.sourceChips;
-  const consultedLabel = alsoConsulted.split(" (").at(0) ?? alsoConsulted;
-  const trigger = await screen.findByRole("button", {
-    name: new RegExp(`^${consultedLabel}`, "u"),
+// Consulted sources sit behind the tray's disclosure; open it so the chips
+// are in the accessibility tree.
+const openConsultedSources = async (view: { container: HTMLElement }) => {
+  const trigger = await waitFor(() => {
+    const button = [...view.container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent.startsWith("Also consulted"),
+    );
+    expect(button).toBeDefined();
+    return button;
   });
-  await act(async () => fireEvent.click(trigger));
+  if (trigger !== undefined) {
+    fireEvent.click(trigger);
+  }
 };
 
 test("a long external source title stays inside its truncated tray chip", async () => {
@@ -758,7 +758,7 @@ test("a long external source title stays inside its truncated tray chip", async 
       ]}
     />,
   );
-  await openConsulted();
+  await openConsultedSources(view);
   await waitFor(() => {
     const chip = view.getByRole("link", { name: title });
     expect(chip.getAttribute("href")).toBe(href);
@@ -801,7 +801,7 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       </StreamdownMentionLink>
     </>,
   );
-  await openConsulted();
+  await openConsultedSources(view);
   await waitFor(() => {
     const primaryLinks = view.getAllByRole("link", {
       name: label,

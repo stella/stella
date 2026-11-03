@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   ANNOTATION_LOCATE_ISSUE,
@@ -265,7 +265,8 @@ describe("locatePassages", () => {
   test("any unique substring round-trips to its raw offsets, however its spaces are typed", () => {
     const word = fc.stringMatching(/^[a-zčřžáé§0-9]{1,8}$/u);
     const gap = fc.constantFrom(" ", " ", "\n", "  ");
-    fc.assert(
+    assertProperty(
+      "any unique substring round-trips to its raw offsets, however its spaces are typed",
       fc.property(
         fc.array(fc.tuple(word, gap), { minLength: 2, maxLength: 12 }),
         fc.nat(),
@@ -298,7 +299,7 @@ describe("locatePassages", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

@@ -155,9 +155,7 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
   expect(
     screen.getByText(/I\. ÚS 1\/26/u, { selector: ".font-medium" }),
   ).toBeTruthy();
-  const disclosure = screen.getByRole("button", {
-    name: "Also consulted (1)",
-  });
+  const disclosure = screen.getByRole("button", { name: "Also consulted (1)" });
   expect(disclosure.getAttribute("aria-expanded")).toBe("false");
   fireEvent.click(disclosure);
   expect(disclosure.getAttribute("aria-expanded")).toBe("true");
@@ -170,6 +168,51 @@ test("shows cited court groups and keeps consulted decisions collapsed", () => {
       }),
     ).toBeNull();
   }
+});
+
+test("cited sources alone leave no disclosure and no divider in the footer row", () => {
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <SourceChips
+            messageId="answer"
+            parts={[
+              {
+                type: "tool-call",
+                id: "search",
+                name: "infosoud_lookup_case",
+                state: "complete",
+                arguments: "{}",
+                input: {},
+                output: {
+                  results: [
+                    hit(
+                      "https://example.test/cases/cited",
+                      "I. ÚS 1/26",
+                      "Ústavní soud",
+                      "ÚS",
+                    ),
+                  ],
+                },
+              },
+              {
+                type: "text",
+                content: "[authority](https://example.test/cases/cited)",
+              },
+            ]}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.getByText(/I\. ÚS 1\/26/u, { selector: ".font-medium" }),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /Also consulted/u })).toBeNull();
+  expect(
+    container.querySelector("[data-chat-answer-citations-divider]"),
+  ).toBeNull();
 });
 
 test("renders a case-law source without an invalid decision date", () => {

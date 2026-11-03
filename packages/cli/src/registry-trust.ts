@@ -116,7 +116,6 @@ const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   "source",
   "title",
   "type",
-  "x-stella-agent-input",
 ]);
 
 const UNSUPPORTED_SCHEMA_KEYWORDS = [
@@ -137,14 +136,22 @@ const UNSUPPORTED_SCHEMA_KEYWORDS = [
 ] as const;
 
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
+const featureCapabilityNamesSchema = v.pipe(
+  v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  v.maxLength(10_000),
+);
+const featureToolNamesSchema = v.pipe(
+  v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
+  v.maxLength(MAX_TOOLS),
+);
 const featureAccessSnapshotSchema = v.object({
-  capabilities: v.pipe(
-    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
-    v.maxLength(10_000),
-  ),
-  tools: v.pipe(
-    v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
-    v.maxLength(MAX_TOOLS),
+  capabilities: featureCapabilityNamesSchema,
+  tools: featureToolNamesSchema,
+  disabled: v.exactOptional(
+    v.object({
+      capabilities: featureCapabilityNamesSchema,
+      tools: featureToolNamesSchema,
+    }),
   ),
 });
 
@@ -168,6 +175,28 @@ const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   const result = isRecord(parsed) ? parsed["result"] : undefined;
   if (isRecord(result) && isUnknownArray(result["tools"])) {
     return result["tools"];
+  }
+  return undefined;
+};
+
+// Vendor annotations are opaque data, never schema constraints. Bound their
+// nesting too, so ignoring their vocabulary does not bypass the work caps.
+const annotationDepthViolation = (
+  value: unknown,
+  depth: number,
+): string | undefined => {
+  if (depth > MAX_SCHEMA_DEPTH) {
+    return `schema nested deeper than ${MAX_SCHEMA_DEPTH}`;
+  }
+  if (!isUnknownArray(value) && !isRecord(value)) {
+    return undefined;
+  }
+  const children = isUnknownArray(value) ? value : Object.values(value);
+  for (const child of children) {
+    const violation = annotationDepthViolation(child, depth + 1);
+    if (violation !== undefined) {
+      return violation;
+    }
   }
   return undefined;
 };
@@ -197,6 +226,13 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   for (const keyword of Object.keys(schema)) {
+    if (keyword.startsWith("x-")) {
+      const violation = annotationDepthViolation(schema[keyword], depth);
+      if (violation !== undefined) {
+        return violation;
+      }
+      continue;
+    }
     if (!SUPPORTED_SCHEMA_KEYWORDS.has(keyword)) {
       return `${keyword} schema constraints are unsupported`;
     }
@@ -508,6 +544,19 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
   );
   if (!featureAccess.success) {
     return { ok: false, violation: "feature access snapshot is invalid" };
+  }
+  const disabled = featureAccess.output.disabled;
+  if (
+    disabled !== undefined &&
+    (disabled.tools.some((name) => featureAccess.output.tools.includes(name)) ||
+      disabled.capabilities.some((id) =>
+        featureAccess.output.capabilities.includes(id),
+      ))
+  ) {
+    return {
+      ok: false,
+      violation: "feature access snapshot contains contradictory decisions",
+    };
   }
   return {
     ok: true,

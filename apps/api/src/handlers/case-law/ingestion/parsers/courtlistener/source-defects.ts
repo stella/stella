@@ -1,5 +1,7 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import type { ValidationResult } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -35,7 +37,7 @@ export const publishedTextDefects = (
   }
   // Compare every non-whitespace character in order with the independently
   // projected source. A parser leak cannot qualify as published wording.
-  const source = visibleHtmlText(cheerio.load(text.validationHtml).root());
+  const source = visibleHtmlText(load(text.validationHtml).root());
   if (!conservesText(source, text.units)) {
     return null;
   }

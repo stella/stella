@@ -6,10 +6,15 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { restrictApiTestFiles } from "../apps/api/scripts/test-file-shards";
 import { allApiTests } from "./api-test-impact";
 import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { selectedTestJobs } from "./ci-affected-selection";
-import { parseApiTestImpact, planCiApiTests } from "./ci-api-test-plan";
+import {
+  parseApiTestImpact,
+  planCiApiTests,
+  serializeApiTestFilesOutput,
+} from "./ci-api-test-plan";
 
 const selected = () => ({
   mode: "selected" as const,
@@ -239,4 +244,15 @@ test("matrix admission follows the executable Turbo test plan", () => {
     FULL_TEST_JOB_SHARDS.filter((shard) => shard !== "rest-web"),
   );
   expect(selectedTestJobs(turboPlan([]))).toEqual([]);
+});
+
+test("an empty API selection reaches the shards as no explicit selection", () => {
+  const files = ["src/a.test.ts", "src/b.test.ts"];
+  expect(serializeApiTestFilesOutput([])).toBe("");
+  expect(restrictApiTestFiles(files, serializeApiTestFilesOutput([]))).toEqual(
+    files,
+  );
+  expect(
+    restrictApiTestFiles(files, serializeApiTestFilesOutput(["src/b.test.ts"])),
+  ).toEqual(["src/b.test.ts"]);
 });

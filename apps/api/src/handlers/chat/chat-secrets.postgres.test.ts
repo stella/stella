@@ -39,6 +39,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { validatePrivateReceipts } from "./chat-secret-validation";
 import {
@@ -108,7 +109,7 @@ const withFixture = async <T>(
       targetConnectionId: Bun.randomUUIDv7(),
     });
   } finally {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   }
 };

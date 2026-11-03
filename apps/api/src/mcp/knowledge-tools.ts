@@ -3,6 +3,7 @@ import { deepEquals } from "bun";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
@@ -673,7 +674,7 @@ const listClausesArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.clausesPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max clauses to return"),
         ),
       ),
@@ -1580,9 +1581,7 @@ const savePlaybookArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description("Playbook name; required when creating"),
         ),
       ),
@@ -1720,7 +1719,7 @@ const toPlaybookScope = ({
   const scope = {
     ...(documentTypeKey === undefined ? {} : { documentTypeKey }),
     ...(perspective === undefined ? {} : { perspective }),
-    ...(stored?.trigger === undefined ? {} : { trigger: stored.trigger }),
+    ...(stored?.trigger !== undefined ? { trigger: stored.trigger } : {}),
   };
   // An unscoped playbook is stored as null, never as an empty object.
   return Object.keys(scope).length === 0 ? null : scope;

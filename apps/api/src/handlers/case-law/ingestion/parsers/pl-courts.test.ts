@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import * as cheerio from "cheerio";
-import { isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
@@ -10,9 +10,12 @@ import {
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import {
-  parsePlDecisionContent,
+  parsePlDecisionContent as uncheckedParsePlDecisionContent,
   PL_DECISION_MARKUP,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -82,7 +85,7 @@ describe("parsePlDecisionContent", () => {
         block.plainText.startsWith(opening),
       );
       expect(recital?.plainText).toBe(
-        `${opening} ${cheerio.load(continuation).text()}`.replace(/\s+/gu, " "),
+        `${opening} ${load(continuation).text()}`.replace(/\s+/gu, " "),
       );
       expect(
         documentAst.blocks.some((block) =>
@@ -126,8 +129,8 @@ describe("parsePlDecisionContent", () => {
     ]);
     expect(blocks.at(8)).toMatchObject({ role: "holding" });
     expect(blocks.slice(9).map(roleOfBlock)).toEqual([
-      "apparatus",
-      "apparatus",
+      "publisher-note",
+      "publisher-note",
       "signature",
     ]);
   });
@@ -313,7 +316,9 @@ describe("parsePlDecisionContent", () => {
         ),
       );
       expect(documentAst.blocks.at(1)).toMatchObject({ role: "holding" });
-      expect(documentAst.blocks.at(-1)).toMatchObject({ role: "apparatus" });
+      expect(documentAst.blocks.at(-1)).toMatchObject({
+        role: "publisher-note",
+      });
     },
   );
 
@@ -637,7 +642,7 @@ describe("markup whitespace", () => {
       const html = await gunzipText(name);
       // The capture reaches the fault: a paragraph whose markup puts a line
       // break or a run of spaces between two of its words.
-      const $ = cheerio.load(html);
+      const $ = load(html);
       expect(
         $("p")
           .toArray()
@@ -862,7 +867,7 @@ describe("ordered list items print the number a browser gives them", () => {
       value !== null &&
       Object.hasOwn(value, "contents");
     // The prototype cheerio defines `contents` on, above each load's class.
-    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    let contentsOwner: unknown = load("<p></p>").root();
     while (contentsOwner !== null && !ownsContents(contentsOwner)) {
       contentsOwner = Object.getPrototypeOf(contentsOwner);
     }
@@ -904,7 +909,7 @@ describe("ordered list items print the number a browser gives them", () => {
         baseInput(`<ol>${"<li>Treść punktu</li>".repeat(count)}</ol>`, {
           decisionType: undefined,
           loadHtml: (html) => {
-            const $ = cheerio.load(html);
+            const $ = load(html);
             $("li").each((_, element) => {
               if (!isTag(element)) {
                 return;

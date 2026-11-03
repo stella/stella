@@ -27,6 +27,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import presignUpload from "./create";
 import finalizeUpload from "./update";
@@ -243,9 +244,7 @@ if (!databaseUrl || !runPostgresTests) {
           await db
             .delete(pendingUploads)
             .where(eq(pendingUploads.workspaceId, workspaceId));
-          await db
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(db, [organizationId]);
           await db.delete(user).where(eq(user.id, userId));
         } finally {
           fake.stop();
