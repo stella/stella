@@ -318,22 +318,22 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1756,
+    line: 1762,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1830,
+    line: 1836,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1867,
+    line: 1873,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1915,
+    line: 1921,
     kind: "pending",
   },
   {
