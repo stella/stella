@@ -176,7 +176,11 @@ test("a cited decision is one uncapped line in the answer footer row", () => {
   // The tier label and its decisions are items of the footer row itself, so
   // they sit beside Copy and Retry rather than in a full-width block below.
   expect(citations?.className).toBe("contents");
-  expect(citations?.firstElementChild?.className).toBe("contents");
+  // After the divider, the cited sources are items of that row too.
+  expect(
+    citations?.querySelector(":scope > [data-chat-answer-citations-divider]")
+      ?.nextElementSibling?.className,
+  ).toBe("contents");
   const label = screen.getByText(/I\. ÚS 1\/26 · /u, {
     selector: ".font-medium",
   });

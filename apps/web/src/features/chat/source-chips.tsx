@@ -74,26 +74,37 @@ export const SourceChips = ({
   // disclosure's trigger sit in that row after Copy and Retry, wrapping only
   // when they run out of room; the disclosed sources take a full row below.
   return (
-    <>
-      <Separator
-        className="self-stretch"
-        data-chat-answer-citations-divider
-        orientation="vertical"
-      />
-      <div className="contents" data-chat-answer-citations>
-        {cited.length > 0 && (
+    <div className="contents" data-chat-answer-citations>
+      {cited.length > 0 && (
+        <>
+          <Separator
+            className="self-stretch"
+            data-chat-answer-citations-divider
+            orientation="vertical"
+          />
           <SourceEntryList
             entries={cited}
             messageId={messageId}
             workspaceId={workspaceId}
           />
-        )}
-        {consulted.length > 0 && (
-          <Collapsible
-            className="contents"
-            onOpenChange={setConsultedOpen}
-            open={consultedOpen}
-          >
+        </>
+      )}
+      {consulted.length > 0 && (
+        <Collapsible
+          className="contents"
+          onOpenChange={setConsultedOpen}
+          open={consultedOpen}
+        >
+          {/* Without cited sources the divider travels with the trigger, so
+              it never ends a wrapped line. */}
+          <div className="flex items-center gap-2">
+            {cited.length === 0 && (
+              <Separator
+                className="self-stretch"
+                data-chat-answer-citations-divider
+                orientation="vertical"
+              />
+            )}
             <CollapsibleTrigger render={<Button size="xs" variant="muted" />}>
               <DirectionalIcon
                 className={cn(
@@ -105,19 +116,19 @@ export const SourceChips = ({
               />
               {t("alsoConsulted", { count: consulted.length })}
             </CollapsibleTrigger>
-            <CollapsiblePanel className="w-full">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <SourceEntryList
-                  entries={consulted}
-                  messageId={`${messageId}-consulted`}
-                  workspaceId={workspaceId}
-                />
-              </div>
-            </CollapsiblePanel>
-          </Collapsible>
-        )}
-      </div>
-    </>
+          </div>
+          <CollapsiblePanel className="w-full">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <SourceEntryList
+                entries={consulted}
+                messageId={`${messageId}-consulted`}
+                workspaceId={workspaceId}
+              />
+            </div>
+          </CollapsiblePanel>
+        </Collapsible>
+      )}
+    </div>
   );
 };
 
