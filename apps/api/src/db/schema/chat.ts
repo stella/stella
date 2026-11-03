@@ -729,6 +729,12 @@ export const chatTurns = p.pgTable(
         table.createdAt,
         table.id,
       ),
+    // A member's unfinished runs, without walking their settled history.
+    // Built online (indexes-chat-turns-org-user-active-idx).
+    p
+      .index("chat_turns_org_user_active_idx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.status} IN ('accepted', 'running', 'awaiting-user')`),
     p
       .index("chat_turns_org_user_message_created_idx")
       .on(table.organizationId, table.userMessageId, table.createdAt, table.id),
