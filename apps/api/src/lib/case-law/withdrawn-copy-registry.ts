@@ -237,6 +237,7 @@ export const WITHDRAWN_COPY_REGISTRY = {
       "webSearchEnabled",
       "chatModel",
       "chatReasoningEffort",
+      "chatRunTarget",
       "recapMessageId",
       "recapPromptVersion",
       "recapGeneratedAt",

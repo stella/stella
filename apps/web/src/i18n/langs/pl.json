@@ -1412,6 +1412,18 @@
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
+    "anonymizationPreview": {
+      "answer": "<person1>Małgorzata Wójcik</person1> może żądać od <person2>Łukasza Nowaka</person2> spłaty długu wraz z odsetkami za opóźnienie.",
+      "off": "Zanonimizowany tryb AI jest wyłączony: AI otrzymuje tekst w takiej postaci, w jakiej go napisano, razem z danymi osobowymi.",
+      "on": "Zanonimizowany tryb AI jest włączony: dane osobowe są zastępowane symbolami zastępczymi przed wysłaniem do AI i przywracane w odpowiedzi.",
+      "prompt": "Przygotuj odpowiedź dla <person1>Małgorzaty Wójcik</person1> (PESEL <nationalId>85121214219</nationalId>, <address>ul. Lipowa 14, Kraków</address>) w sprawie długu <person2>Łukasza Nowaka</person2>.",
+      "steps": {
+        "answered": "AI odpowiada",
+        "restored": "Czytasz",
+        "sent": "AI otrzymuje",
+        "written": "Piszesz"
+      }
+    },
     "anonymizedMode": "Zanonimizowany tryb AI",
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
@@ -1668,6 +1680,11 @@
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
+    "localRun": {
+      "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
+      "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
+      "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie."
+    },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
