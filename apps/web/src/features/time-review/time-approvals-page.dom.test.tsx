@@ -372,7 +372,7 @@ describe("approving time by person", () => {
 
     const row = (await screen.findByText("Narrative adam-1")).closest("li");
     if (!(row instanceof HTMLElement)) {
-      throw new Error("no row for adam-1");
+      throw new TypeError("no row for adam-1");
     }
     const send = within(row).getByRole("button", {
       name: messages.billing.revertToDraft,
@@ -501,7 +501,7 @@ describe("approving time by person", () => {
     });
     const refused = (await screen.findByText("Narrative adam-2")).closest("li");
     if (!(refused instanceof HTMLElement)) {
-      throw new Error("no row for adam-2");
+      throw new TypeError("no row for adam-2");
     }
     // In return wording, never the approval's.
     expect(within(refused).getByRole("alert").textContent).toBe(

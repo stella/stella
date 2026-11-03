@@ -596,16 +596,35 @@ const readPageSnippets = async ({
     }
   };
   recordResults(fastResults);
-  const missing = clauses.filter(({ id }) => !seen.has(id));
   // A superseded scan chunk can vanish under the applied-revision filter.
   // Optional snippet/anchor metadata does not make a returned passage missing.
+  const missingAfter = (from: typeof clauses) =>
+    from.filter(({ id }) => !seen.has(id));
+  const missing = missingAfter(clauses);
+  // Several missing documents are re-selected in one request: hits come best
+  // first, and each document's revision-narrowed clause scores its own
+  // passages alike, so a document's first hit there is the passage its own
+  // request would have chosen. A document whose passages the others crowd
+  // out of the batch falls back to a request of its own, so the batch can
+  // only remove requests: one engine round instead of one per document,
+  // which is what a page reached mid-refresh would otherwise cost.
+  if (missing.length > 1) {
+    rounds += 1;
+    recordResults([
+      await search(
+        missing.map(({ document }) => document).join(" OR "),
+        missing.length * PASSAGE_OVER_FETCH,
+      ),
+    ]);
+  }
+  const unresolved = missingAfter(missing);
   const fallbackResults = await mapWithConcurrency({
-    items: missing,
+    items: unresolved,
     limit: LIMITS.corpusIndexHighlightConcurrency,
     operation: async ({ document }) => search(document, 1),
   });
   recordResults(fallbackResults);
-  rounds += missing.length;
+  rounds += unresolved.length;
   hitDispositions.record({ malformed });
   return {
     indexMs: performance.now() - startedAt,
