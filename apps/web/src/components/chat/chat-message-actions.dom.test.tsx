@@ -130,7 +130,7 @@ test("right-clicking the answer opens what its … button opens, item by item", 
 
   const row = view.container.querySelector("[data-chat-answer-actions]");
   if (!(row instanceof HTMLElement)) {
-    throw new Error("Expected the answer's action row");
+    throw new TypeError("Expected the answer's action row");
   }
   fireEvent.click(
     within(row).getByRole("button", { name: messages.common.actions }),
@@ -175,7 +175,7 @@ test("right-clicking a gap between the answer's parts opens its actions", async 
     ':scope > [data-slot="entity-actions"] > div',
   );
   if (!(box instanceof HTMLElement)) {
-    throw new Error("Expected the answer box directly inside its actions");
+    throw new TypeError("Expected the answer box directly inside its actions");
   }
   expect(box.children.length).toBeGreaterThan(1);
   const event = new MouseEvent("contextmenu", {
