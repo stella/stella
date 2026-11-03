@@ -320,6 +320,42 @@
         "status": null,
         "grade": "defect"
       }
+    },
+    {
+      "name": "local_runner_needs_login",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_needs_login"
+      },
+      "expected": {
+        "kind": "local_runner_needs_login",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "local_runner_limit_reached",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_limit_reached"
+      },
+      "expected": {
+        "kind": "local_runner_limit_reached",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "local_runner_unavailable",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_unavailable"
+      },
+      "expected": {
+        "kind": "local_runner_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
     }
   ]
 }

@@ -1,6 +1,7 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { BrowserExtensionStatus } from "./browser-control";
+import type { ChatRunTarget } from "./chat-run-target";
 import type { SafeId } from "./safe-id";
 
 export type ChatTurnTiming =
@@ -295,6 +296,8 @@ type ChatSendRequestBase = {
   docxEditRepresentation?: "tracked-changes" | "direct";
   editApplyMode?: "manual" | "auto";
   runMode?: ChatRunMode;
+  /** Where the turn runs; absent runs it on stella's own models. */
+  runTarget?: ChatRunTarget;
   /** AG-UI run correlation minted by TanStack ChatClient. */
   runId: string;
   sendMode: ChatSendMode;
