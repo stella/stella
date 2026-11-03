@@ -33,6 +33,14 @@ export type EditingPhase =
 /** Whether the edits so far are stored on the server. */
 export type SaveState = "saved" | "saving" | "notSaved";
 
+/** Deletes an uploaded save from the cache: whether it is gone. */
+const removeUpload = (file: File): boolean =>
+  Result.try(() => {
+    if (file.exists) {
+      file.delete();
+    }
+  }).isOk();
+
 type Stored =
   | { readonly outcome: "stored"; readonly session: EditSession }
   | { readonly outcome: "takenOver" | "failed" };
@@ -70,11 +78,8 @@ const storeCheckpoint = async ({
           }),
       ),
   );
-  Result.try(() => {
-    if (file.exists) {
-      file.delete();
-    }
-  });
+  // A copy left behind is overwritten by this session's next save.
+  removeUpload(file);
   if (stored.isOk()) {
     return { outcome: "stored", session: stored.value };
   }
