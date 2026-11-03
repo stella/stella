@@ -74,7 +74,12 @@ afterEach(() => {
   }
 });
 
-const harnessFor = (scenario: FakeScenario) => {
+const FAST_CAPACITY_RETRY = { maxAttempts: 5, baseDelayMs: 5, maxDelayMs: 20 };
+
+const harnessFor = (
+  scenario: FakeScenario,
+  capacityRetry = FAST_CAPACITY_RETRY,
+) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-codex-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const codexHome = path.join(root, "codex-home");
@@ -89,6 +94,7 @@ const harnessFor = (scenario: FakeScenario) => {
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
+    capacityRetry,
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
@@ -657,6 +663,63 @@ describe("Codex adapter over a stdio app-server", () => {
         resetsAt: "2026-10-28T14:00:00.000Z",
       },
     });
+  });
+
+  test("a turn the model's capacity ended continues on the same thread with empty input", async () => {
+    const { events, received } = await run("capacity_retry");
+    expect(events).toContainEqual({
+      type: "retrying",
+      message: "Selected model is at capacity. Please try a different model.",
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "text.completed", text: "Recovered." }),
+    );
+    expect(terminal(events)).toMatchObject({ type: "turn.completed" });
+    const starts = received().filter(({ method }) => method === "turn/start");
+    expect(starts).toHaveLength(2);
+    expect(starts[1]?.params).toEqual({ threadId: FAKE_THREAD_ID, input: [] });
+  });
+
+  test("a turn still at capacity after five continuations fails with the native code", async () => {
+    const { events, received } = await run("capacity_exhausted");
+    expect(events.filter(({ type }) => type === "retrying")).toHaveLength(5);
+    expect(terminal(events)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "provider_error",
+        message: "Selected model is at capacity. Please try a different model.",
+        code: "serverOverloaded",
+      },
+    });
+    expect(
+      received().filter(({ method }) => method === "turn/start"),
+    ).toHaveLength(6);
+  });
+
+  test("stopping a turn while it waits to continue ends it as interrupted", async () => {
+    const harness = harnessFor("capacity_retry", {
+      maxAttempts: 5,
+      baseDelayMs: 60_000,
+      maxDelayMs: 60_000,
+    });
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir),
+    );
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const turn = started.value;
+    const collected = collect(turn, async (event) => {
+      if (event.type === "retrying") {
+        await turn.interrupt();
+      }
+    });
+    await collected.done;
+    await turn.dispose();
+    expect(terminal(collected.events)).toEqual({ type: "turn.interrupted" });
+    const methods = harness.received().map(({ method }) => method);
+    expect(methods.filter((method) => method === "turn/start")).toHaveLength(1);
+    expect(methods).not.toContain("turn/interrupt");
   });
 
   test("a malformed line fails the turn as a protocol violation", async () => {

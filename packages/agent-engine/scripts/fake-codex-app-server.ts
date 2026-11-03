@@ -154,6 +154,28 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
   ...extra,
 });
 
+/** The selected model was at capacity: the turn ends and may continue. */
+const OVERLOADED = {
+  message: "Selected model is at capacity. Please try a different model.",
+  codexErrorInfo: "serverOverloaded",
+  additionalDetails: null,
+};
+const CONTINUED_TURN_ID = "turn-2";
+
+const continuedTurn = (status: string, error: unknown = null) => ({
+  id: CONTINUED_TURN_ID,
+  items: [],
+  status,
+  error,
+  startedAt: 2,
+});
+
+/** A continuation: `turn/start` on the same thread, then its outcome. */
+const continuation = (outcome: FakeStep[]): FakeStep[] => [
+  { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+  ...outcome,
+];
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -547,6 +569,39 @@ const FAKE_SCENARIOS = {
       codexErrorInfo: "usageLimitExceeded",
       additionalDetails: null,
     }),
+  ],
+  capacity_retry: [
+    ...freshTurn(),
+    completed("failed", OVERLOADED),
+    ...continuation([
+      {
+        notify: "item/completed",
+        params: {
+          threadId: FAKE_THREAD_ID,
+          turnId: CONTINUED_TURN_ID,
+          item: agentMessage("m-r", "Recovered."),
+        },
+      },
+      {
+        notify: "turn/completed",
+        params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+      },
+    ]),
+  ],
+  capacity_exhausted: [
+    ...freshTurn(),
+    completed("failed", OVERLOADED),
+    ...Array.from({ length: 5 }, () =>
+      continuation([
+        {
+          notify: "turn/completed",
+          params: {
+            threadId: FAKE_THREAD_ID,
+            turn: continuedTurn("failed", OVERLOADED),
+          },
+        },
+      ]),
+    ).flat(),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
   crash: [
