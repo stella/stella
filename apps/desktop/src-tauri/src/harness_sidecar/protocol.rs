@@ -36,6 +36,10 @@ macro_rules! wire_values {
       )+
     }
 
+    #[cfg_attr(
+      not(test),
+      allow(dead_code, reason = "the tests compare every closed list with the contract")
+    )]
     impl $name {
       #[cfg(test)]
       pub(crate) const ALL: &[Self] = &[$(Self::$variant),+];

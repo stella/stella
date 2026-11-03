@@ -151,6 +151,7 @@ impl SidecarLaunch {
     self
   }
 
+  #[cfg(test)]
   #[must_use]
   pub(crate) fn env(
     mut self,
@@ -277,6 +278,10 @@ enum Control {
   Ack(Ack),
   WatchProcesses(mpsc::Sender<HarnessProcess>),
   GrantProcess(String),
+  #[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "sent by `HarnessSidecar::shutdown` only")
+  )]
   Shutdown(oneshot::Sender<()>),
 }
 
@@ -464,6 +469,13 @@ impl HarnessSidecar {
 
   /// Stop every run, let every holder exit, and stop supervising. Quitting
   /// the app does not call this: runs keep going in the holder.
+  #[cfg_attr(
+    not(test),
+    allow(
+      dead_code,
+      reason = "the app leaves runs to the holder; nothing in it stops holders yet"
+    )
+  )]
   pub(crate) async fn shutdown(&self) {
     let (done, stopped) = oneshot::channel();
     if self.controls.send(Control::Shutdown(done)).await.is_ok() {

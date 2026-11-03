@@ -364,14 +364,10 @@ async fn pump(
     let relayed = match relay(&mut sinks, &output, delivery.holder_seq).await {
       Relayed::TooLarge => {
         tracing::warn!(target: LOG_TARGET, "a run output exceeded the frame limit; sent an error instead");
-        let (model, thread_id) = {
-          let runs = locked(&shared.runs);
-          let run = runs.get(&run_id);
-          (
-            run.and_then(|run| run.model.clone()),
-            run.and_then(|run| run.thread_id.clone()),
-          )
-        };
+        let (model, thread_id) = locked(&shared.runs)
+          .get(&run_id)
+          .map(|run| (run.model.clone(), run.thread_id.clone()))
+          .unwrap_or_default();
         let error = run_error(
           &run_id,
           model.as_deref(),
@@ -528,10 +524,9 @@ impl SidecarHarnessHost {
       Err(error) => {
         // Tried again on the runner's next connection.
         tracing::warn!(target: LOG_TARGET, ?error, "the harness holder's runs could not be listed");
-        let mut known = locked(&self.shared.runs);
-        for run in &runs {
-          known.remove(&run.run_id);
-        }
+        locked(&self.shared.runs).retain(|run_id, _run| {
+          !runs.iter().any(|journaled| journaled.run_id == *run_id)
+        });
         return;
       }
     };
@@ -547,13 +542,12 @@ impl SidecarHarnessHost {
         .credentials(holder_run.harness)
         .await
         .and_then(|credentials| credentials.grant);
-      let sinks = {
-        let mut runs = locked(&self.shared.runs);
-        let Some(entry) = runs.get_mut(&run.run_id) else {
-          continue;
-        };
+      let sinks = locked(&self.shared.runs).get_mut(&run.run_id).map(|entry| {
         entry.grant = grant;
         entry.sink.subscribe()
+      });
+      let Some(sinks) = sinks else {
+        continue;
       };
       match sidecar.resume_run(&run.run_id, run.source_seq).await {
         Ok(outputs) => {
@@ -594,7 +588,7 @@ impl SidecarHarnessHost {
     });
   }
 
-  fn forward(&self, what: &str, sent: Result<(), harness_sidecar::SidecarUnavailable>) {
+  fn forward(what: &str, sent: Result<(), harness_sidecar::SidecarUnavailable>) {
     if let Err(error) = sent {
       tracing::warn!(target: LOG_TARGET, ?error, command = what, "a run command did not reach the harness holder");
     }
@@ -644,26 +638,25 @@ impl HarnessHost for SidecarHarnessHost {
       return;
     };
     let mut fresh = Vec::new();
-    {
-      let mut held = locked(&self.shared.runs);
-      for run in runs {
-        if let Some(known) = held.get(&run.run_id) {
-          // Relayed already: report through the new runner from now on.
-          known.sink.send_replace(run.sink);
-          continue;
-        }
-        held.insert(
-          run.run_id.clone(),
-          HostRun {
-            sink: watch::channel(run.sink.clone()).0,
-            grant: None,
-            model: None,
-            thread_id: None,
-          },
-        );
-        fresh.push(run);
+    let mut held = locked(&self.shared.runs);
+    for run in runs {
+      if let Some(known) = held.get(&run.run_id) {
+        // Relayed already: report through the new runner from now on.
+        known.sink.send_replace(run.sink);
+        continue;
       }
+      held.insert(
+        run.run_id.clone(),
+        HostRun {
+          sink: watch::channel(run.sink.clone()).0,
+          grant: None,
+          model: None,
+          thread_id: None,
+        },
+      );
+      fresh.push(run);
     }
+    drop(held);
     if !fresh.is_empty() {
       tokio::spawn(self.clone().reclaim(sidecar, fresh));
     }
@@ -767,7 +760,7 @@ impl HarnessHost for SidecarHarnessHost {
       .shared
       .sidecar()
       .map_or(Ok(()), |sidecar| sidecar.approval(approval));
-    self.forward("approval", sent);
+    Self::forward("approval", sent);
   }
 
   fn interrupt(&self, run_id: &str) {
@@ -775,7 +768,7 @@ impl HarnessHost for SidecarHarnessHost {
       .shared
       .sidecar()
       .map_or(Ok(()), |sidecar| sidecar.interrupt(run_id));
-    self.forward("interrupt", sent);
+    Self::forward("interrupt", sent);
   }
 
   fn cancel(&self, run_id: &str) {
@@ -783,7 +776,7 @@ impl HarnessHost for SidecarHarnessHost {
       .shared
       .sidecar()
       .map_or(Ok(()), |sidecar| sidecar.cancel(run_id));
-    self.forward("cancel", sent);
+    Self::forward("cancel", sent);
   }
 
   fn token(&self, refresh: RunTokenRefresh) {
@@ -791,7 +784,7 @@ impl HarnessHost for SidecarHarnessHost {
       .shared
       .sidecar()
       .map_or(Ok(()), |sidecar| sidecar.token(refresh));
-    self.forward("token", sent);
+    Self::forward("token", sent);
   }
 }
 
