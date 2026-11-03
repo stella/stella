@@ -1114,7 +1114,7 @@ describe("maintenance release preparation", () => {
     }
     expect(caught).toBeInstanceOf(MaintenanceReleaseError);
     if (!(caught instanceof MaintenanceReleaseError)) {
-      throw new Error("Expected maintenance release failure");
+      throw new TypeError("Expected maintenance release failure");
     }
     expect(caught.message).toContain("persistent write failure");
     expect(caught.message).toContain(

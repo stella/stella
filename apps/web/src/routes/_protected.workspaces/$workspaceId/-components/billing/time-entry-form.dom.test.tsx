@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { TimeEntryFormValues } from "./time-entry-form";
 import type { TimeEntryPricingSelection } from "./time-entry-pricing.logic";

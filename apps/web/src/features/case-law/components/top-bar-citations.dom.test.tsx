@@ -3,9 +3,10 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { DecisionCitationSummary } from "@/features/case-law/citation-treatment";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;
