@@ -57,6 +57,7 @@ const fixtureSchema = v.strictObject({
         "deadline",
         "loop",
         "empty",
+        "local-runner",
       ]),
       evidence: v.optional(v.record(v.string(), v.unknown())),
       expected: v.strictObject({
@@ -132,6 +133,25 @@ const evidenceFor = (
       return new ChatEmptyCompletionError({
         message: "Run returned no answer",
       });
+    case "local-runner": {
+      // A turn run on the member's computer ends with the run error the
+      // chunk source names; no provider response is involved.
+      const code = evidence?.["code"];
+      if (typeof code !== "string") {
+        return panic("A local runner failure needs its code");
+      }
+      expect(
+        classifyRunErrorChunk({
+          type: EventType.RUN_ERROR,
+          message: "The computer stopped the turn",
+          code,
+          timestamp: 1,
+        }),
+      ).toBe(fixture.expected.kind);
+      return Object.assign(new Error("The computer stopped the turn"), {
+        code,
+      });
+    }
     default:
       origin satisfies never;
       return panic("Unknown failure fixture origin");
