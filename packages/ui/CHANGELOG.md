@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.65.0
+
+### Minor Changes
+
+- [#7816](https://github.com/stella/stella/pull/7816) [`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `DictateIcon`, the microphone for dictating a message.
+
 ## 0.64.0
 
 ### Minor Changes
