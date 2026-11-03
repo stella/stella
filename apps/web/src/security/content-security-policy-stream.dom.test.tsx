@@ -19,8 +19,9 @@ import { createServerEntry } from "@tanstack/react-start/server";
 import { plugin } from "bun";
 import { expect, mock, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { renderSsrResponse } from "../ssr-renderer";
-import { unregisterDomEnvironment } from "../test-dom-environment";
 import { withContentSecurityPolicy } from "./content-security-policy.server";
 
 // This file renders documents on the server, where Start's build keeps the
