@@ -128,6 +128,9 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
+ *   budget, so the page holds the phrasings that finished and none of its
+ *   hits; the hint names how to run it again.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -135,6 +138,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
+  "phrasing_timed_out",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -200,6 +204,29 @@ export const filterUnreadWarning = ({
   code: "filter_unread",
   message: `The stored ${filter} values could not be read in time, so the ${filter} filter was used exactly as sent.`,
   hint: `If this page looks narrower than expected, pass ${filter} as the corpus stores it, or search again.`,
+});
+
+/**
+ * A phrasing of a several-phrasing search stopped on the call's time budget
+ * while the others finished. Its absence from the page is not "nothing
+ * matched", so it is said: a continuation of the page retries it, and a
+ * phrasing that had not returned a page yet is rerun by name, since the
+ * cursor cannot hold a first page that never ran.
+ */
+export const phrasingTimedOutWarning = ({
+  query,
+  retriedByCursor,
+}: {
+  query: string;
+  /** Whether the page's cursor carries this phrasing's continuation. */
+  retriedByCursor: boolean;
+}): AgentCaseLawSearchWarning => ({
+  code: "phrasing_timed_out",
+  message:
+    "This phrasing ran out of the search's time budget, so the page holds none of its hits; the other phrasings finished.",
+  hint: retriedByCursor
+    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
+    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
 });
 
 export const manyRequiredTermsWarning = ({
@@ -317,6 +344,11 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       ],
       wordCount: 6,
       slots: 5,
+    }),
+  phrasing_timed_out: () =>
+    phrasingTimedOutWarning({
+      query: "náhrada škody promlčení",
+      retriedByCursor: false,
     }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,
