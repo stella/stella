@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
     "takenOverBody": "{fileName} — Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
     "takenOverLocalError": "Desktop-Bearbeitung auf anderes Gerät verschoben. Diese lokale Kopie bleibt erhalten.",
-    "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben"
+    "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben",
+    "editsSetAsideTitle": "Änderungen zurückgestellt",
+    "editsSetAsideBody": "Nicht gespeicherte Änderungen wurden zurückgestellt. Verbinden Sie dasselbe Konto erneut, um den Wiederherstellungsordner in den Einstellungen zu öffnen."
   },
   "dialog": {
     "accountWindowTitle": "Konto verbinden",
@@ -232,7 +234,16 @@
     "permissionDenied": "In den Systemeinstellungen ausgeschaltet.",
     "permissionManaged": "Von Ihrer Organisation verwaltet",
     "errorUpdateAutostart": "stella desktop konnte den Start bei der Anmeldung nicht aktualisieren.",
-    "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern."
+    "errorPermissions": "stella desktop konnte diese Berechtigung nicht lesen oder ändern.",
+    "recoveryTitle": "Zurückgestellte Änderungen",
+    "recoveryBody": "Ungespeicherte Änderungen werden hier für Ihr Konto aufbewahrt. Öffnen Sie den Ordner, um sie wiederherzustellen.",
+    "recoverySignIn": "Änderungen wurden für das betreffende Konto zurückgestellt. Verbinden Sie dieses Konto erneut, um seinen Ordner zu öffnen.",
+    "recoveryUnassigned": "Für einige Änderungen ist kein Konto vermerkt. Öffnen Sie ihren Ordner, um sie manuell wiederherzustellen.",
+    "recoveryPending": "Einige Änderungen werden noch zurückgestellt. Versuchen Sie es erneut, um den Vorgang abzuschließen.",
+    "recoveryOpenFolder": "Wiederherstellungsordner öffnen",
+    "recoveryOpenUnassigned": "Nicht zugeordnete Änderungen öffnen",
+    "recoveryFilePending": "Warten auf Zurückstellung",
+    "recoveryError": "Der Wiederherstellungsordner konnte nicht geöffnet werden. Versuchen Sie es erneut."
   },
   "clipboard": {
     "registryUnavailable": "Für Ihre Tätigkeitsgebiete sind keine Register aktiviert.",

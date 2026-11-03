@@ -4643,6 +4643,8 @@ const config = defineConfig({
           "error",
         "no-optional-chain-null-compare/no-optional-chain-null-compare":
           "error",
+        "no-optional-chain-null-compare/no-optional-chain-absent-match":
+          "error",
       },
     },
     {

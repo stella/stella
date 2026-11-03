@@ -158,6 +158,8 @@ export const buildOrganizationAuditArchive = async ({
           ? {
               createdAt: row.createdAt,
               userId: row.userId,
+              performerType: row.performerType,
+              performerName: row.performerName,
               action: row.action,
               resourceType: row.resourceType,
               resourceId:
@@ -168,6 +170,8 @@ export const buildOrganizationAuditArchive = async ({
           : {
               createdAt: row.createdAt,
               userId: row.userId,
+              performerType: row.performerType,
+              performerName: row.performerName,
               action: row.action,
               resourceType: row.resourceType,
               matterReadable: false,

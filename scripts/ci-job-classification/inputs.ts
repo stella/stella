@@ -27,11 +27,11 @@ export const CLASSIFICATION_INPUT_PATHS = [
   ".github/actions",
   CLASSIFICATION_DECISIONS_PATH,
   ".github/ci-job-classification-sources.json",
+  ".github/global-rule-inputs.json",
   "scripts/check-ci-job-classification.ts",
   "scripts/ci-job-classification",
   "packages/collation/src/collation.ts",
   "packages/sha256/src/node.ts",
-  "packages/sha256/src/types.ts",
 ] as const;
 
 const DIRECTORY_INPUTS = new Set<string>([

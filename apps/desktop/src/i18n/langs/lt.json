@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Turite neišsaugotų vietinių pakeitimų. Savo kopiją rasite Laikinose darbinėse kopijose.",
     "takenOverBody": "{fileName} — Iš naujo atidarykite iš stella, kad susigrąžintumėte redagavimą",
     "takenOverLocalError": "Darbalaukio redagavimas perkeltas į kitą įrenginį. Ši vietinė kopija yra išsaugota.",
-    "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį"
+    "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį",
+    "editsSetAsideTitle": "Pakeitimai atidėti",
+    "editsSetAsideBody": "Neišsaugoti pakeitimai buvo atidėti. Iš naujo prisijunkite prie tos pačios paskyros, kad nustatymuose atidarytumėte atkūrimo aplanką."
   },
   "dialog": {
     "accountWindowTitle": "Prijungti paskyrą",
@@ -232,7 +234,16 @@
     "permissionDenied": "Išjungta sistemos nustatymuose.",
     "permissionManaged": "Tvarko jūsų organizacija",
     "errorUpdateAutostart": "stella desktop nepavyko atnaujinti paleidimo prisijungiant.",
-    "errorPermissions": "stella desktop nepavyko perskaityti arba pakeisti šio leidimo."
+    "errorPermissions": "stella desktop nepavyko perskaityti arba pakeisti šio leidimo.",
+    "recoveryTitle": "Atidėti pakeitimai",
+    "recoveryBody": "Neišsaugoti pakeitimai čia saugomi jūsų paskyrai. Atidarykite aplanką, kad juos atkurtumėte.",
+    "recoverySignIn": "Pakeitimai atidėti tai paskyrai. Iš naujo prisijunkite prie tos paskyros, kad atidarytumėte jos aplanką.",
+    "recoveryUnassigned": "Kai kuriems pakeitimams nepriskirta užregistruota paskyra. Atidarykite jų aplanką, kad atkurtumėte juos rankiniu būdu.",
+    "recoveryPending": "Kai kurie pakeitimai vis dar atidedami. Pabandykite dar kartą, kad užbaigtumėte.",
+    "recoveryOpenFolder": "Atidaryti atkūrimo aplanką",
+    "recoveryOpenUnassigned": "Atidaryti nepriskirtus pakeitimus",
+    "recoveryFilePending": "Laukiama atidėjimo",
+    "recoveryError": "Nepavyko atidaryti atkūrimo aplanko. Bandykite dar kartą."
   },
   "clipboard": {
     "registryUnavailable": "Jūsų praktikos jurisdikcijose nėra įjungtų registrų.",
