@@ -989,6 +989,7 @@ export const OUTPUT_RULES = {
           "scripts/rehearse-migration-upgrade.sh",
           "scripts/resolve-promoted-release.ts",
           "scripts/migration-rehearsal-db.ts",
+          "scripts/migration-rehearsal-startup-refusal.ts",
           ".github/workflows/ci.yml",
         ]),
       ),
