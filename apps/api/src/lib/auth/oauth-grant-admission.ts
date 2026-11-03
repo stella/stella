@@ -198,7 +198,7 @@ export const admitOAuthCredential = async ({
     issuedAtCutoff: credential.issuedAt - OAUTH_REVOCATION_CLOCK_SKEW_SECONDS,
     db,
   });
-  if (match?.revokedAt !== null && match?.revokedAt !== undefined) {
+  if ((match?.revokedAt ?? null) !== null) {
     return Result.err(
       new McpAuthenticationError({ message: "Invalid or expired token" }),
     );

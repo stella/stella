@@ -8951,6 +8951,16 @@
   },
   {
     "schema": "public",
+    "table": "oauth_grant_revocations",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
     "table": "oauth_refresh_token",
     "policy": "auth_no_stella_access",
     "command": "ALL",
