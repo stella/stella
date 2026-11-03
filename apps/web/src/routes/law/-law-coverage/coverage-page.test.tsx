@@ -26,6 +26,7 @@ import {
   NEARLY_COMPLETE,
   NEVER_MEASURED,
 } from "./coverage-page.fixture";
+import type { CaseLawCoverageSource } from "./coverage.logic";
 
 const rootRoute = createRootRoute();
 
@@ -275,6 +276,35 @@ describe("the coverage page states what it counts", () => {
       `>${messages.caseLaw.coverage.healthCurrent}<`,
     );
     expect(markup).toContain("1 source needs attention");
+  });
+
+  // A fixed release's currency is the day it was taken, stated in the
+  // reader's locale beside the status, never a recent run.
+  test("a snapshot source states its status with the day it was taken", () => {
+    const snapshot: CaseLawCoverageSource = {
+      ...NEARLY_COMPLETE,
+      adapterKey: "pl-nsa",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
+    };
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [{ ...CZECHIA, sources: [snapshot] }],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.coverage.healthSnapshot);
+    expect(markup).not.toContain("source needs attention");
+    expect(markup).not.toContain("All sources up to date");
+    expect(markup).toContain('dateTime="2025-03-06"');
+    expect(markup).toContain("Mar 6, 2025");
+    // A live source states no such day.
+    expect(render(<CaseLawCoveragePage coverage={COVERAGE} />)).not.toContain(
+      "<time",
+    );
   });
 
   test("each country is a section a link from elsewhere can land on", () => {

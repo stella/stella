@@ -146,10 +146,16 @@ const isEmptyValue = (value: unknown): boolean =>
   (isRecord(value) && Object.keys(value).length === 0);
 
 /**
- * A value two keys may share only by restating each other: text, a list or a
- * record. A flag or a count is left alone, because two different facts can
- * both be `true` or `3`.
+ * Publisher-native keys that record the same field as a canonical key, keyed
+ * by the native name. Equal values under two other keys are two facts (a
+ * presiding judge who is also the rapporteur), so only a declared pair is
+ * ever collapsed.
  */
+const NATIVE_METADATA_ALIASES: Readonly<Record<string, string>> = {
+  kategorieRozhodnuti: "category",
+};
+
+/** Text, a list or a record, compared as stored; null for anything else. */
 const duplicateKeyOf = (value: unknown): string | null => {
   if (typeof value === "string") {
     return comparableScalar(value);
@@ -165,10 +171,10 @@ const duplicateKeyOf = (value: unknown): string | null => {
  *
  * Dropped: empty values; a value that restates a top-level field of the
  * answer (the court, the date, the docket, the ECLI, a URL), whatever key the
- * publisher filed it under; and a value two keys both carry (a publisher's
- * native label beside the canonical one, `kategorieRozhodnuti` beside
- * `category`), of which the shorter key is kept, the canonical names being
- * the short English ones. Everything else passes through as stored.
+ * publisher filed it under; and a publisher's native label that restates its
+ * canonical key (`kategorieRozhodnuti` beside an equal `category`). Everything
+ * else passes through as stored, including different keys that happen to hold
+ * the same value.
  */
 export const compactDecisionMetadata = ({
   metadata,
@@ -190,20 +196,18 @@ export const compactDecisionMetadata = ({
     const comparable = comparableScalar(value);
     return comparable === null || !answered.has(comparable);
   });
-  // The first key per shared value, shortest name first.
-  const keeper = new Map<string, string>();
-  for (const [key, value] of kept.toSorted(
-    ([left], [right]) => left.length - right.length || compareKeys(left, right),
-  )) {
-    const duplicate = duplicateKeyOf(value);
-    if (duplicate !== null && !keeper.has(duplicate)) {
-      keeper.set(duplicate, key);
-    }
-  }
   return Object.fromEntries(
     kept.filter(([key, value]) => {
+      const canonical = Object.hasOwn(NATIVE_METADATA_ALIASES, key)
+        ? NATIVE_METADATA_ALIASES[key]
+        : undefined;
+      if (canonical === undefined || !Object.hasOwn(metadata, canonical)) {
+        return true;
+      }
       const duplicate = duplicateKeyOf(value);
-      return duplicate === null || keeper.get(duplicate) === key;
+      return (
+        duplicate === null || duplicate !== duplicateKeyOf(metadata[canonical])
+      );
     }),
   );
 };

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   expectNullableString,
@@ -94,7 +94,8 @@ const submission = fc
 const now = Date.parse("2026-09-30T00:00:00.000Z");
 
 test("submissions retain source names and zip bounded filings without losing column alignment", () => {
-  fc.assert(
+  assertProperty(
+    "submissions retain source names and zip bounded filings without losing column alignment",
     fc.property(submission, (raw) => {
       const output = expectRegistryOutcome(() => parseSubmission(raw, { now }));
       if (output === undefined) {
@@ -161,7 +162,7 @@ test("submissions retain source names and zip bounded filings without losing col
         );
       }
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });
 
@@ -204,7 +205,8 @@ const expectTypedOutput = (output: EdgarCompany) => {
 };
 
 test("submission response mutations retain typed nested filings or registry failures", async () => {
-  await fc.assert(
+  await assertProperty(
+    "submission response mutations retain typed nested filings or registry failures",
     fc.asyncProperty(
       submission,
       fc.nat(),
@@ -231,7 +233,7 @@ test("submission response mutations retain typed nested filings or registry fail
         expectTypedOutput(output);
       },
     ),
-    propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+    { seed: propertySeed(), numRuns: 20 },
   );
 });
 

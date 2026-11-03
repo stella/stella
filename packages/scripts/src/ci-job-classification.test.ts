@@ -53,11 +53,13 @@ import {
   isPrivilegedJob,
   ReviewRequiredError,
 } from "../../../scripts/ci-job-classification/review";
+import { writeClassificationFixtureInputs } from "../../../scripts/ci-job-classification/test-fixtures";
 import {
   AdmissionError,
   CLASSIFICATION_EXCLUSIONS,
   parseDocument,
 } from "../../../scripts/ci-job-classification/yaml";
+import { withoutCiEventContext } from "./without-ci-event-context";
 
 const ORDINARY = CLASSIFICATIONS[0];
 const SUPPORT = CLASSIFICATIONS[1];
@@ -208,7 +210,7 @@ test("the classification CLI accepts an explicit check flag and source directory
       "--base",
       "HEAD",
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    { env: withoutCiEventContext(), stdout: "pipe", stderr: "pipe" },
   );
   expect(new TextDecoder().decode(result.stderr)).toBe("");
   expect(result.exitCode).toBe(0);
@@ -2028,6 +2030,7 @@ for (const review of ["missing", "stale"] as const) {
 
 test("the CLI emits a sensitive annotation and machine output until review is updated", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-review-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflowPath = path.join(root, ".github/workflows/ci.yml");
@@ -2090,7 +2093,7 @@ test("the CLI emits a sensitive annotation and machine output until review is up
           base,
         ],
         {
-          env: { ...process.env, GITHUB_OUTPUT: outputPath },
+          env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
           stdout: "pipe",
           stderr: "pipe",
         },
@@ -2156,6 +2159,7 @@ test("a reached document is privileged when only one of its jobs is", () => {
 
 test("a reviewed publish change in a reachable composite action stays sensitive", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-closure-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     mkdirSync(path.join(root, ".github/actions/local"), { recursive: true });
@@ -2229,7 +2233,7 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2245,6 +2249,7 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
 
 test("the CLI defaults its root and base when invoked without arguments", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-defaults-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflow = "jobs: {check: {steps: []}}";
@@ -2286,7 +2291,12 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
         process.execPath,
         path.join(repositoryRoot, "scripts/check-ci-job-classification.ts"),
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      {
+        cwd: root,
+        env: withoutCiEventContext(),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
     );
     expect(result.exitCode).toBe(0);
     expect(new TextDecoder().decode(result.stdout)).toBe(
@@ -2307,7 +2317,7 @@ test("the CLI defaults its root and base when invoked without arguments", () => 
       ],
       {
         cwd: root,
-        env: { ...process.env, GITHUB_OUTPUT: outputPath },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: outputPath },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2341,6 +2351,7 @@ for (const scenario of [
     scenario.name,
     () => {
       const root = mkdtempSync(path.join(tmpdir(), "classification-base-"));
+      writeClassificationFixtureInputs(root);
       try {
         mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
         const workflow = path.join(root, ".github/workflows/ci.yml");
@@ -2401,7 +2412,7 @@ for (const scenario of [
               base,
             ],
             {
-              env: { ...process.env, GITHUB_OUTPUT: output },
+              env: { ...withoutCiEventContext(), GITHUB_OUTPUT: output },
               stdout: "pipe",
               stderr: "pipe",
             },
@@ -2432,6 +2443,7 @@ for (const scenario of [
 
 test("downgrading a priority decision with an unchanged digest is a sensitive change", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-kind-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflow = "jobs: {check: {steps: []}}";
@@ -2485,7 +2497,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: output },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: output },
         stdout: "pipe",
         stderr: "pipe",
       },
@@ -2522,7 +2534,7 @@ test("downgrading a priority decision with an unchanged digest is a sensitive ch
         base,
       ],
       {
-        env: { ...process.env, GITHUB_OUTPUT: removedOutput },
+        env: { ...withoutCiEventContext(), GITHUB_OUTPUT: removedOutput },
         stdout: "pipe",
         stderr: "pipe",
       },

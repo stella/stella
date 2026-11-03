@@ -43,7 +43,6 @@ const SNAPSHOT = {
   sourceAppVisuals: [],
   browserTitleApps: [],
   detailsAccess: "disabled",
-  narrativeAssist: "ask",
   persistence: "encrypted",
   recordingStatus: "recording",
   retention: "month",
@@ -93,12 +92,67 @@ type InstallNativeBoundaryOptions = {
   view?: "activity" | "settings";
   /** Whether the account has the activity feature. */
   activityEnabled?: boolean;
-  /** How the stella AI description request settles. */
-  narrativeGeneration?: "write" | "fail";
+  /** The firm's AI drafting mode, the user's consent on the server, and how
+   * a drafting request settles. */
+  drafting?: DraftingFixture;
 };
 
-/** What the mocked stella AI writes for an approved suggestion. */
+type DraftingFixture = {
+  mode: "off" | "plain" | "guided";
+  consent: "granted" | "revoked";
+  generation: "write" | "fail";
+  /** Drafting requests wait until the test calls `releaseDraft`. */
+  held?: boolean;
+  /** The remembered drafting instruction the server starts with. */
+  preference?: string;
+  /** What a guided draft proposes beyond its text, as the contract spells
+   * it, and whether its guideline note is fixed by a split. */
+  operations?: unknown[];
+  flagFix?: "split";
+};
+
+const RELEASE_DRAFT = "__STELLA_TEST_RELEASE_DRAFT__";
+
+const heldDrafts = async (page: Page) =>
+  page.evaluate((key) => {
+    const held: unknown = Reflect.get(window, key);
+    return Array.isArray(held) ? held.length : 0;
+  }, RELEASE_DRAFT);
+
+/** Waits for a drafting request to be held, then lets every held one settle. */
+const releaseDraft = async (page: Page) => {
+  await expect.poll(async () => heldDrafts(page)).toBeGreaterThan(0);
+  await page.evaluate((key) => {
+    const held: unknown = Reflect.get(window, key);
+    if (!Array.isArray(held)) {
+      throw new TypeError("No drafting request is held");
+    }
+    for (const release of held.splice(0)) {
+      if (typeof release === "function") {
+        release();
+      }
+    }
+  }, RELEASE_DRAFT);
+};
+
+const DRAFTING: DraftingFixture = {
+  mode: "plain",
+  consent: "revoked",
+  generation: "write",
+};
+
+/** What the mocked stella AI writes for a drafted suggestion. */
 const GENERATED_NARRATIVE = "Reviewed the lease draft and its annexes.";
+/** What it writes when asked to adjust a draft. */
+const REFINED_NARRATIVE = "Reviewed the lease draft.";
+
+/** The user's earlier entry the mocked draft follows. */
+const EARLIER_ENTRY = {
+  id: "00000000-0000-4000-8000-0000000000e1",
+  dateWorked: "2026-10-02",
+  durationMinutes: 42,
+  narrative: "Reviewed the lease annex.",
+};
 
 const installNativeBoundary = async ({
   page,
@@ -111,7 +165,7 @@ const installNativeBoundary = async ({
   firstRenderTimeoutMs,
   view = "activity",
   activityEnabled = true,
-  narrativeGeneration = "write",
+  drafting = DRAFTING,
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
@@ -126,8 +180,11 @@ const installNativeBoundary = async ({
       batchValidation,
       batchReceipt,
       historyDeletion,
-      narrativeGeneration,
+      drafting,
       generatedNarrative: GENERATED_NARRATIVE,
+      refinedNarrative: REFINED_NARRATIVE,
+      earlierEntry: EARLIER_ENTRY,
+      releaseDraftKey: RELEASE_DRAFT,
       settingsWindow: {
         account: ACCOUNT,
         activityEnabled,
@@ -145,14 +202,29 @@ const installNativeBoundary = async ({
         batchValidation: validation,
         batchReceipt: receipt,
         historyDeletion: historyState,
-        narrativeGeneration: generation,
+        drafting: draftingFixture,
         generatedNarrative,
+        refinedNarrative,
+        earlierEntry,
+        releaseDraftKey,
         settingsWindow,
       },
       { emit },
     ) => {
       let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
+      let draftConsent = draftingFixture.consent;
+      let draftPreference = draftingFixture.preference ?? null;
+      let draftRevision = 1;
+      const scopedDraftSettings = () => ({
+        scopeKey: '["org_fixture","user_fixture"]',
+        settings: {
+          revision: `revision-${String(draftRevision)}`,
+          effectiveMode: draftingFixture.mode,
+          consent: draftConsent,
+          preference: draftPreference,
+        },
+      });
       const emitActivityChanged = () => emit(changedEvent, null);
       Reflect.set(
         window,
@@ -217,7 +289,6 @@ const installNativeBoundary = async ({
             detailsAccess: day.detailsAccess,
             browserApps: day.browserApps,
             browserTitleApps: day.browserTitleApps,
-            narrativeAssist: day.narrativeAssist,
             sourceAppVisuals: day.sourceAppVisuals,
             apps: [...totals.values()]
               .toSorted(
@@ -234,6 +305,7 @@ const installNativeBoundary = async ({
         get_desktop_telemetry_enabled: () => true,
         permissions_get_snapshot: () => settingsWindow.permissions,
         shortcut_get_snapshot: () => settingsWindow.shortcut,
+        dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
         activity_delete_all: (args) => {
           if (
@@ -335,31 +407,112 @@ const installNativeBoundary = async ({
           emitActivityChanged();
           return undefined;
         },
-        activity_set_narrative_assist: (args) => {
-          const assist = args["assist"];
-          if (assist !== "ask" && assist !== "always") {
-            throw new TypeError("Narrative assist must be explicit");
+        billing_draft_get_settings: () => scopedDraftSettings(),
+        billing_draft_grant_consent: (args) => {
+          if (args["revision"] !== `revision-${String(draftRevision)}`) {
+            throw new Error("billing draft request failed");
           }
-          activitySnapshot = { ...activitySnapshot, narrativeAssist: assist };
-          emitActivityChanged();
-          return undefined;
+          draftConsent = "granted";
+          draftRevision += 1;
+          return scopedDraftSettings();
         },
-        activity_generate_narrative: (args) => {
+        billing_draft_set_preference: (args) => {
+          if (args["revision"] !== `revision-${String(draftRevision)}`) {
+            throw new Error("billing draft request failed");
+          }
+          const preference = args["preference"];
+          draftPreference = typeof preference === "string" ? preference : null;
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
+        billing_draft_withdraw_consent: () => {
+          draftConsent = "revoked";
+          draftRevision += 1;
+          return scopedDraftSettings();
+        },
+        billing_draft_create_confirmed: async (args) => {
+          if (draftingFixture.held === true) {
+            const held = Promise.withResolvers<undefined>();
+            const queue: unknown = Reflect.get(window, releaseDraftKey);
+            const releases = Array.isArray(queue) ? queue : [];
+            releases.push(() => {
+              held.resolve(undefined);
+            });
+            Reflect.set(window, releaseDraftKey, releases);
+            await held.promise;
+          }
           const request = args["request"];
-          if (typeof request !== "object" || request === null) {
-            throw new TypeError("Narrative request is missing");
+          if (
+            typeof request !== "object" ||
+            request === null ||
+            !("entries" in request) ||
+            !Array.isArray(request.entries)
+          ) {
+            throw new TypeError("Drafting request is missing");
           }
-          if ("approval" in request && request.approval === "always") {
-            activitySnapshot = {
-              ...activitySnapshot,
-              narrativeAssist: "always",
+          if (draftConsent !== "granted") {
+            // The native boundary rejects with its typed failure.
+            throw Object.assign(new Error("billing draft request failed"), {
+              type: "consentRequired",
+            });
+          }
+          if (draftingFixture.generation === "fail") {
+            // The native boundary rejects with its typed failure.
+            throw Object.assign(new Error("billing draft request failed"), {
+              type: "failed",
+            });
+          }
+          if (draftingFixture.mode === "guided") {
+            return {
+              result: {
+                mode: "guided",
+                drafts: request.entries.map((entry: { entryId: string }) => ({
+                  entryId: entry.entryId,
+                  narrative:
+                    "steer" in request ? refinedNarrative : generatedNarrative,
+                  classification: {
+                    type: "ledes",
+                    taskCode: "L120",
+                    activityCode: "A104",
+                  },
+                  flags: [
+                    {
+                      text: "List each task separately.",
+                      ruleRef: {
+                        fileId: "guideline-1",
+                        fileName: "Outside counsel guidelines.pdf",
+                        section: "4.2",
+                      },
+                      ...(draftingFixture.flagFix === undefined
+                        ? {}
+                        : { fix: draftingFixture.flagFix }),
+                    },
+                  ],
+                  matchedEarlierEntryIds: [earlierEntry.id],
+                  operations: draftingFixture.operations ?? [],
+                })),
+                checkedGuidelines: [
+                  {
+                    fileId: "guideline-1",
+                    fileName: "Outside counsel guidelines.pdf",
+                  },
+                ],
+              },
+              earlierEntries: [earlierEntry],
             };
-            emitActivityChanged();
           }
-          if (generation === "fail") {
-            throw new Error("draft time entry request failed");
-          }
-          return generatedNarrative;
+          return {
+            result: {
+              mode: "plain",
+              drafts: request.entries.map((entry: { entryId: string }) => ({
+                entryId: entry.entryId,
+                narrative:
+                  "steer" in request ? refinedNarrative : generatedNarrative,
+                matchedEarlierEntryIds: [earlierEntry.id],
+              })),
+            },
+            earlierEntries: [earlierEntry],
+          };
         },
         activity_set_recording_status: (args) => {
           if (args["status"] === "recording") {
@@ -2223,6 +2376,29 @@ test("welcome uses native icons for sample apps without recorded activity", asyn
   }
 });
 
+test("a suggestion card shows each app with its native icon", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      sourceAppVisuals: [
+        { key: "com.example.editor", iconDataUrl, color: null },
+      ],
+    },
+  });
+  await page.locator(SUGGESTION_BLOCKS).first().click();
+  const card = suggestionCard(page, "Example matter");
+  await card
+    .getByRole("tab", { name: enMessages.activity.evidenceApps })
+    .click();
+  const app = card.getByRole("listitem").filter({ hasText: "Example Editor" });
+  await expect(app.locator("img")).toHaveAttribute("src", iconDataUrl);
+});
+
 test("a call segment reads as a call in the calendar", async ({ page }) => {
   await installNativeBoundary({
     page,
@@ -2337,22 +2513,33 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
 });
 
 for (const language of ["en", "ar"] as const) {
-  test(`${language}: selecting a range in Activity opens a card for that range`, async ({
+  test(`${language}: selecting a range in Time entries opens a card for that range`, async ({
     page,
   }) => {
     const messages = language === "ar" ? arMessages : enMessages;
     await installNativeBoundary({ page, language });
+    // Activity is the record and takes no drag; entries are drawn where
+    // they are kept.
+    await expect(
+      page.locator(
+        '[data-column-id="activity"] [role="slider"][data-slot="day-calendar-surface"]',
+      ),
+    ).toHaveCount(0);
     const block = page.locator(ACTIVITY_BLOCKS).first();
     await block.scrollIntoViewIfNeeded();
     const box = await block.boundingBox();
-    if (!box) {
-      throw new TypeError("The activity block must have bounds");
+    const entries = await page
+      .locator('[data-column-id="entries"] [data-slot="day-calendar-surface"]')
+      .boundingBox();
+    if (!box || !entries) {
+      throw new TypeError("The activity block and entries column need bounds");
     }
-    await page.mouse.move(box.x + box.width / 2, box.y + 3);
+    // The suggestion covers the block's time in Time entries; the drag starts
+    // in the empty time just after it and runs up across it.
+    const x = entries.x + entries.width / 2;
+    await page.mouse.move(x, box.y + box.height + 8);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 3, {
-      steps: 6,
-    });
+    await page.mouse.move(x, box.y + 3, { steps: 6 });
     await page.mouse.up();
     const card = suggestionCard(page, "Example matter");
     await expect(card).toBeFocused();
@@ -2386,135 +2573,87 @@ for (const language of ["en", "ar"] as const) {
   });
 }
 
-test("declining stella AI sends nothing and three declines fold the prompt", async ({
-  page,
-}) => {
-  await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
-  const prompt = page.getByText(enMessages.activity.narrativeAiPrompt);
-  for (const matter of ["Example matter", "Second matter", "Third matter"]) {
-    if (matter === "Example matter") {
-      await openSuggestion(page, matter);
-    }
-    const card = suggestionCard(page, matter);
-    await expect(card).toBeFocused();
-    await expect(prompt).toBeVisible();
-    await card
-      .getByRole("button", {
-        name: enMessages.activity.narrativeAiNo,
-        exact: true,
-      })
-      .click();
-    await expect(prompt).toHaveCount(0);
-    await expect(
-      card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-    ).toHaveValue(/^Work on /u);
-    await card.getByRole("button", { name: rejectName(enMessages) }).click();
-  }
-  const last = suggestionCard(page, "Fourth matter");
-  await expect(last).toBeFocused();
-  await expect(prompt).toHaveCount(0);
-  await expect(
-    last.getByRole("button", { name: enMessages.activity.narrativeAiWrite }),
-  ).toBeVisible();
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "activity_generate_narrative" }),
+const draftInvocations = async (page: Page) =>
+  (await tauriInvocations(page)).filter(
+    ({ command }) => command === "billing_draft_create_confirmed",
   );
-});
 
-test("approving stella AI once sends only that suggestion's titles", async ({
+test("a card asks for consent once, then drafts its description and shows the earlier entry it follows", async ({
   page,
 }) => {
   await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByText(enMessages.activity.aiDraftConsent),
+  ).toBeVisible();
+  // Nothing is drafted before the user allows it.
+  expect(await draftInvocations(page)).toEqual([]);
   await card
-    .getByRole("button", {
-      name: enMessages.activity.narrativeAiApprove,
-      exact: true,
-    })
+    .getByRole("button", { name: enMessages.activity.aiDraftAllow })
     .click();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue(GENERATED_NARRATIVE);
-  expect(
-    (await tauriInvocations(page)).filter(
-      ({ command }) => command === "activity_generate_narrative",
-    ),
-  ).toEqual([
-    {
-      command: "activity_generate_narrative",
-      args: {
-        request: {
-          titles: ["Lease draft.docx"],
-          locale: "en",
-          matterName: "Example matter",
-          approval: "once",
-        },
-      },
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_grant_consent",
+    args: {
+      scopeKey: '["org_fixture","user_fixture"]',
+      revision: "revision-1",
     },
-  ]);
+  });
+  const [draft] = await draftInvocations(page);
+  // Only the entry's matter, date, duration, app names and, as titles are
+  // recorded, the names the card shows are sent.
+  expect(draft?.args).toEqual({
+    request: {
+      entries: [
+        {
+          entryId: "entry_1",
+          matterId: expect.any(String),
+          date: TRIAGE_SNAPSHOT.date,
+          timezone: expect.any(String),
+          durationMinutes: expect.any(Number),
+          appNames: ["Example Editor"],
+          evidence: { documentNames: [], windowTitles: ["Lease draft.docx"] },
+        },
+      ],
+    },
+  });
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
+  );
+  // The English plural for one earlier entry.
+  await card.getByRole("button", { name: "Follows 1 earlier entry" }).click();
+  await expect(card.getByText(EARLIER_ENTRY.narrative)).toBeVisible();
+  // The next card drafts as it opens: consent is asked once.
   await pressCardShortcut(page, "Backspace");
-  await expect(suggestionCard(page, "Second matter")).toBeFocused();
-  await expect(
-    page.getByText(enMessages.activity.narrativeAiPrompt),
-  ).toBeVisible();
-  expect(
-    (await tauriInvocations(page)).filter(
-      ({ command }) => command === "activity_generate_narrative",
-    ),
-  ).toHaveLength(1);
-});
-
-test("always approving stella AI persists the choice and writes later descriptions without asking", async ({
-  page,
-}) => {
-  await installNativeBoundary({ page, snapshot: TRIAGE_SNAPSHOT });
-  await openSuggestion(page, "Example matter");
-  await suggestionCard(page, "Example matter")
-    .getByRole("button", {
-      name: enMessages.activity.narrativeAiAlways,
-      exact: true,
-    })
-    .click();
-  await expect(
-    suggestionCard(page, "Example matter").getByRole("textbox", {
-      name: enMessages.activity.entryNarrative,
-    }),
-  ).toHaveValue(GENERATED_NARRATIVE);
-  await pressCardShortcut(page, "Enter");
   const next = suggestionCard(page, "Second matter");
   await expect(next).toBeFocused();
   await expect(
     next.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue(GENERATED_NARRATIVE);
-  await expect(
-    page.getByText(enMessages.activity.narrativeAiPrompt),
-  ).toHaveCount(0);
-  const generated = (await tauriInvocations(page)).filter(
-    ({ command }) => command === "activity_generate_narrative",
+  await expect(page.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
   );
-  expect(generated).toEqual([
-    {
-      command: "activity_generate_narrative",
-      args: {
-        request: expect.objectContaining({
-          titles: ["Lease draft.docx"],
-          matterName: "Example matter",
-          approval: "always",
-        }),
-      },
-    },
-    {
-      command: "activity_generate_narrative",
-      args: {
-        request: expect.objectContaining({
-          titles: ["Service agreement.docx"],
-          matterName: "Second matter",
-          approval: "once",
-        }),
-      },
-    },
-  ]);
+  expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("an accepted drafted entry carries the drafted description", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
   expect(batchRequests(await tauriInvocations(page))).toEqual([
     expect.objectContaining({
       items: [
@@ -2526,55 +2665,501 @@ test("always approving stella AI persists the choice and writes later descriptio
   ]);
 });
 
-test("a failed stella AI description keeps the template", async ({ page }) => {
+test("text typed while a draft is written is kept over the draft", async ({
+  page,
+}) => {
   await installNativeBoundary({
     page,
     snapshot: TRIAGE_SNAPSHOT,
-    narrativeGeneration: "fail",
+    drafting: { ...DRAFTING, consent: "granted", held: true },
   });
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByText(enMessages.activity.aiDraftWriting),
+  ).toBeVisible();
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await narrative.fill("My own words");
+  await releaseDraft(page);
+  await expect(card.getByText(enMessages.activity.aiDraftWriting)).toHaveCount(
+    0,
+  );
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftAgain }),
+  ).toBeVisible();
+  await expect(narrative).toHaveValue("My own words");
+  // Asking again replaces the description with a new draft.
   await card
+    .getByRole("button", { name: enMessages.activity.aiDraftAgain })
+    .click();
+  await releaseDraft(page);
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  expect(await draftInvocations(page)).toHaveLength(2);
+});
+
+test("a guided draft shows its codes and guideline notes, and the accepted entry carries its classification", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  const notes = card.getByRole("region", {
+    name: enMessages.activity.aiDraftFlags,
+  });
+  await expect(notes).toContainText("List each task separately.");
+  await expect(notes).toContainText("Outside counsel guidelines.pdf, 4.2");
+  await pressCardShortcut(page, "Enter");
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  expect(batchRequests(await tauriInvocations(page))).toEqual([
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          entry: expect.objectContaining({
+            narrative: GENERATED_NARRATIVE,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+          }),
+        }),
+      ],
+    }),
+  ]);
+});
+
+test("a guided split creates its parts as entries, each over its own share of the time", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      flagFix: "split",
+      operations: [
+        {
+          type: "split",
+          parts: [10, 20].map((durationMinutes, index) => ({
+            durationMinutes,
+            narrative: `Part ${String(index + 1)}`,
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toContainText("Part 1");
+  await expect(proposal).toContainText("Part 2");
+  // Nothing is created until the split is accepted.
+  expect(batchRequests(await tauriInvocations(page))).toEqual([]);
+  await card
+    .getByRole("region", { name: enMessages.activity.aiDraftFlags })
+    .getByRole("button", { name: enMessages.activity.aiFlagSplit })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 10,
+            narrative: "Part 1",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:10:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: "Part 2",
+          }),
+          ranges: [
+            { start: "2026-10-07T09:10:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+/** A matter the server named from the firm's records, outside the card's
+ * candidates. */
+const OTHER_CLIENT_MATTER_ID = "00000000-0000-4000-8000-0000000000b2";
+
+test("a guided move of part of the time keeps the rest on the card's matter", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "move",
+          targetMatterId: OTHER_CLIENT_MATTER_ID,
+          targetMatterName: "Other client matter",
+          durationMinutes: 10,
+          narrative: "Called about the service agreement.",
+          classification: { type: "activity_group", activityGroup: "client" },
+          billable: false,
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: /Other client matter/u,
+  });
+  await expect(proposal).toContainText("Called about the service agreement.");
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiStructureMoveAccept })
+    .click();
+  await expect(suggestionCard(page, "Second matter")).toBeFocused();
+  const [batch] = batchRequests(await tauriInvocations(page));
+  expect(batch).toEqual(
+    expect.objectContaining({
+      items: [
+        {
+          entry: expect.objectContaining({
+            matterId: "matter-1",
+            durationMinutes: 20,
+            narrative: GENERATED_NARRATIVE,
+            billable: true,
+          }),
+          ranges: [
+            { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:20:00Z" },
+          ],
+        },
+        {
+          entry: expect.objectContaining({
+            matterId: OTHER_CLIENT_MATTER_ID,
+            durationMinutes: 10,
+            narrative: "Called about the service agreement.",
+            billable: false,
+            classification: {
+              type: "activity_group",
+              activityGroup: "client",
+            },
+          }),
+          ranges: [
+            { start: "2026-10-07T09:20:00Z", end: "2026-10-07T09:30:00Z" },
+          ],
+        },
+      ],
+    }),
+  );
+});
+
+test("a split proposed for one matter is not offered once the card's matter changes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: {
+      ...DRAFTING,
+      mode: "guided",
+      consent: "granted",
+      operations: [
+        {
+          type: "split",
+          parts: [15, 15].map((durationMinutes) => ({
+            durationMinutes,
+            narrative: "Half",
+            classification: {
+              type: "ledes",
+              taskCode: "L120",
+              activityCode: "A104",
+            },
+            billable: true,
+          })),
+        },
+      ],
+    },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const proposal = card.getByRole("region", {
+    name: "stella AI suggests splitting this into 2 entries",
+  });
+  await expect(proposal).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(proposal).toHaveCount(0);
+});
+
+test("choosing another matter drops a guided draft's codes", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "guided", consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText("Task L120 · Activity A104")).toBeVisible();
+  await card.getByRole("button", { name: "Example matter" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /Second matter/u })
+    .click();
+  await expect(page.getByText("Task L120 · Activity A104")).toHaveCount(0);
+});
+
+test("refining a draft proposes the change, accepting applies it and Undo restores the draft", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  const proposal = card.getByRole("region", {
+    name: enMessages.activity.aiProposal,
+  });
+  await expect(proposal).toBeVisible();
+  // The proposal reads as a change to the draft until it is accepted.
+  expect(
+    (await proposal.getByRole("deletion").allTextContents()).join(""),
+  ).toBe("draft and its annexes.");
+  expect(
+    (await proposal.getByRole("insertion").allTextContents()).join(""),
+  ).toBe("draft.");
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  const [, refined] = await draftInvocations(page);
+  // The instruction goes with the entry and the server's first result, sent
+  // back as it came.
+  expect(refined?.args).toEqual({
+    request: {
+      entries: [expect.objectContaining({ entryId: "entry_1" })],
+      steer: enMessages.activity.aiSteerShorter,
+      previousResult: {
+        mode: "plain",
+        drafts: [
+          {
+            entryId: "entry_1",
+            narrative: GENERATED_NARRATIVE,
+            matchedEarlierEntryIds: [EARLIER_ENTRY.id],
+          },
+        ],
+      },
+    },
+  });
+  await proposal
+    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .click();
+  await expect(narrative).toHaveValue(REFINED_NARRATIVE);
+  await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+});
+
+test("dismissing a proposal keeps the draft, and Use original brings back the template", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  const narrative = card.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("textbox", { name: enMessages.activity.aiRefinePlaceholder })
+    .fill("Mention the annex numbers");
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await card
+    .getByRole("region", { name: enMessages.activity.aiProposal })
+    .getByRole("button", { name: enMessages.activity.aiDismiss })
+    .click();
+  await expect(narrative).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiUseOriginal })
+    .click();
+  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+});
+
+test("an instruction remembered while refining becomes the drafting preference", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(
+    card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
+  ).toHaveValue(GENERATED_NARRATIVE);
+  await card
+    .getByRole("button", { name: enMessages.activity.aiSteerShorter })
+    .click();
+  await card
+    .getByRole("checkbox", { name: enMessages.activity.aiSteerRemember })
+    .click();
+  await card
+    .getByRole("button", { name: enMessages.activity.aiRefine, exact: true })
+    .click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "billing_draft_set_preference",
+      ),
+    )
+    .toEqual([
+      {
+        command: "billing_draft_set_preference",
+        args: {
+          scopeKey: '["org_fixture","user_fixture"]',
+          revision: "revision-1",
+          preference: enMessages.activity.aiSteerShorter,
+        },
+      },
+    ]);
+});
+
+test("Settings shows the remembered drafting preference and forgets it", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "granted", preference: "Shorter" },
+  });
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toBeVisible();
+  await expect(page.getByText("Shorter", { exact: true })).toBeVisible();
+  await page
     .getByRole("button", {
-      name: enMessages.activity.narrativeAiApprove,
-      exact: true,
+      name: enMessages.activity.billingDraftsForgetPreference,
     })
     .click();
   await expect(
-    card.getByText(enMessages.activity.narrativeAiFailed),
-  ).toBeVisible();
+    page.getByText(enMessages.activity.billingDraftsPreference),
+  ).toHaveCount(0);
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_set_preference",
+    args: {
+      scopeKey: '["org_fixture","user_fixture"]',
+      revision: "revision-1",
+      preference: null,
+    },
+  });
+});
+
+test("a failed draft keeps the template and offers to try again", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, consent: "granted", generation: "fail" },
+  });
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue("Work on Lease draft.docx");
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
+  ).toBeVisible();
   await expect(
     card.getByRole("button", { name: acceptName(enMessages) }),
   ).toBeEnabled();
 });
 
-test("the Settings switch for stella AI descriptions changes only that choice", async ({
+test("with drafting switched off for the firm, a card offers no stella AI and sends nothing", async ({
   page,
 }) => {
-  await installNativeBoundary({ page, view: "settings" });
-  const always = page.getByRole("switch", {
-    name: enMessages.activity.narrativeAssistAlways,
+  await installNativeBoundary({
+    page,
+    snapshot: TRIAGE_SNAPSHOT,
+    drafting: { ...DRAFTING, mode: "off", consent: "granted" },
   });
-  await expect(always).not.toBeChecked();
-  await expect(
-    page.getByText(enMessages.activity.narrativeAssistDescription),
-  ).toBeVisible();
-  await always.click();
-  await expect(always).toBeChecked();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "activity_set_narrative_assist",
-    args: { assist: "always" },
-  });
-  await always.click();
-  await expect(always).not.toBeChecked();
-  expect(await tauriInvocations(page)).toContainEqual({
-    command: "activity_set_narrative_assist",
-    args: { assist: "ask" },
-  });
-  expect(await tauriInvocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "activity_generate_narrative" }),
+  await openSuggestion(page, "Example matter");
+  const card = suggestionCard(page, "Example matter");
+  await expect(card).toBeFocused();
+  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
+    0,
   );
+  await expect(
+    card.getByRole("button", { name: enMessages.activity.aiDraftWrite }),
+  ).toHaveCount(0);
+  expect(await draftInvocations(page)).toEqual([]);
+});
+
+test("Settings withdraws consent to stella AI drafts and sends nothing else", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "granted" },
+  });
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsGranted),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.activity.billingDraftsWithdraw })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsRevoked),
+  ).toBeVisible();
+  expect(await tauriInvocations(page)).toContainEqual({
+    command: "billing_draft_withdraw_consent",
+    args: { scopeKey: '["org_fixture","user_fixture"]' },
+  });
+  expect(await draftInvocations(page)).toEqual([]);
 });

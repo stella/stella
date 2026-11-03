@@ -53,6 +53,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -142,7 +143,7 @@ const withFixture = async (
     });
   } finally {
     await db.delete(apikey).where(inArray(apikey.referenceId, ids));
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     for (const id of ids) {
       await db.delete(user).where(eq(user.id, id));
     }

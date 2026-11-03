@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -80,6 +81,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1339,8 +1341,9 @@ const assembleAuthorityDecision = ({
   const decisionDate = dayOf(row.time);
   const sourceUrl = documentPageUrl(urn);
   const resource = body?.resource ?? plUodoBodyResourceOf(row);
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const documentUrl =
-    resource?.ref === undefined ? undefined : bodyPdfUrl(urn, resource.ref);
+    resource?.ref !== undefined ? bodyPdfUrl(urn, resource.ref) : undefined;
 
   // A parse failure is not the decision's failure: the body is stored
   // verbatim below, so its text is recoverable by re-parsing what was kept.
@@ -2373,7 +2376,11 @@ const plUodoFetchPage = async (
   const encoded = encodePlUodoCursor(position);
   // Parked on a day that has not closed: this cycle has nothing to ask.
   if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({
+      decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+      nextCursor: encoded,
+    });
   }
   const listing: Record<string, unknown>[] = [];
   let url = "";
@@ -2423,6 +2430,7 @@ const plUodoFetchPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encoded,
       });
     }
@@ -2503,6 +2511,7 @@ const plUodoFetchPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlUodoCursor(
       reachedTip ? { ...next, parkedOn: todayUtc() } : next,
     ),

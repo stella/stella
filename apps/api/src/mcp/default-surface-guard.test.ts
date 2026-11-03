@@ -84,7 +84,7 @@ describe("default MCP purpose-built tool guard", () => {
     ).toEqual([]);
   });
 
-  test("rejects every real advanced-only static definition", () => {
+  test("identifies advanced-only definitions and rejects their generic executors", () => {
     const defaultNames = new Set(
       listStaticMcpToolDefinitions("default").map(({ name }) => name),
     );
@@ -93,13 +93,16 @@ describe("default MCP purpose-built tool guard", () => {
     );
 
     expect(advancedOnly.map(({ name }) => name)).toEqual([
+      "create_organization",
       "list_capabilities",
       "describe_capability",
       "read_capability",
       "write_capability",
     ]);
     expect(defaultSurfaceViolations(advancedOnly)).toEqual(
-      advancedOnly.map(({ name }) => `${name}: operation selector`),
+      advancedOnly
+        .filter(({ name }) => name !== "create_organization")
+        .map(({ name }) => `${name}: operation selector`),
     );
   });
 });

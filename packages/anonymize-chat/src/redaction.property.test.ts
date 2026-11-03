@@ -7,7 +7,7 @@ import type {
   NativeStaticRedactionResult,
   PipelineConfig,
 } from "@stll/anonymize-wasm";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { runChatAnonPipeline } from "./index";
 import type { ChatAnonRuntime } from "./index";
@@ -277,7 +277,8 @@ const documentArb = fc
 
 describe("chat redaction never leaks a reported entity", () => {
   test("no reported span survives in the redacted text", async () => {
-    await fc.assert(
+    await assertProperty(
+      "no reported span survives in the redacted text",
       fc.asyncProperty(documentArb, async ({ text, spans }) => {
         const runtime = buildOffsetRuntime(spans);
         const result = await runChatAnonPipeline({
@@ -300,7 +301,7 @@ describe("chat redaction never leaks a reported entity", () => {
         expect(result.entityCount).toBe(spans.length);
         expect(result.pairs.length).toBe(result.redactionMap.size);
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 });
@@ -329,7 +330,8 @@ const overlappingCaseArb = fc
 
 describe("chat redaction under adversarial overlapping spans", () => {
   test("stays reversible and structurally consistent", async () => {
-    await fc.assert(
+    await assertProperty(
+      "stays reversible and structurally consistent",
       fc.asyncProperty(overlappingCaseArb, async ({ text, spans }) => {
         const runtime = buildOffsetRuntime(spans);
         const result = await runChatAnonPipeline({
@@ -355,7 +357,7 @@ describe("chat redaction under adversarial overlapping spans", () => {
           result.pairs.length,
         );
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 });
@@ -396,7 +398,8 @@ const repeatedEntitiesArb = fc
 
 describe("chat redaction placeholder stability", () => {
   test("one placeholder per canonical, reversible, distinct across canonicals", async () => {
-    await fc.assert(
+    await assertProperty(
+      "one placeholder per canonical, reversible, distinct across canonicals",
       fc.asyncProperty(
         repeatedEntitiesArb,
         async ({ canonicals, text, spans }) => {
@@ -417,12 +420,13 @@ describe("chat redaction placeholder stability", () => {
           ).toBe(text);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("excluding a canonical removes only that entity and stays reversible", async () => {
-    await fc.assert(
+    await assertProperty(
+      "excluding a canonical removes only that entity and stays reversible",
       fc.asyncProperty(
         repeatedEntitiesArb,
         fc.integer({ min: 0, max: 3 }),
@@ -459,7 +463,7 @@ describe("chat redaction placeholder stability", () => {
           ).toBe(text);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

@@ -59,6 +59,11 @@ export const FAILURE_REASON_GRADE = {
   // the lock or statement timeout is expected.
   pg_lock_timeout_budgeted: "transient",
   pg_statement_budget_exhausted: "transient",
+  // parser-output-unchanged: a failure grade for budgeted request timeouts; no parser reads it.
+  // Only through a bounded request step: the request answered without the
+  // step, inside a sub-budget of its own latency budget. The counterpart of
+  // `timeout_unbounded`, a wait nobody bounded against the caller's budget.
+  timeout_budgeted: "transient",
   redis_connection: "transient",
   redis_poll_blip: "transient",
   network_reset: "transient",
@@ -76,6 +81,8 @@ export const FAILURE_REASON_GRADE = {
   // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
   visual_preview_input_invalid: "anticipated",
   visual_preview_not_configured: "anticipated",
+  // parser-output-unchanged: grades a deployment without hosted usage management; no parser reads it.
+  hosted_usage_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
   publisher_refused: "anticipated",

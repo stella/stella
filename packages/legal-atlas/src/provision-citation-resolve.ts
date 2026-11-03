@@ -511,7 +511,10 @@ const parseAnchor = (
   const designator = SECTION_DESIGNATOR.exec(
     head.slice(statuteAnchorKindPrefix(scheme, unit).length),
   )?.groups;
-  if (designator?.["number"] === undefined) {
+  if (designator === undefined) {
+    return null;
+  }
+  if (designator["number"] === undefined) {
     return null;
   }
   const subdivisions = Object.fromEntries(

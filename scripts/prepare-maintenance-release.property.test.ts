@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { createTestState } from "@stll/test-state";
 
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
@@ -32,7 +32,6 @@ import {
   readPreviousRelease,
   readReleaseManifest,
   refreshMaintenanceReleaseFiles,
-  refreshUnpromotedReleases,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -62,22 +61,6 @@ const PUBLISHED = {
   publishedAt: "2026-02-03T04:05:06Z",
 } as const;
 const UNPROMOTED = { kind: "unpromoted" } as const;
-
-const failingRead = async (): Promise<typeof UNPROMOTED> => {
-  throw new MaintenanceReleaseError("GitHub is unreachable");
-};
-
-/** What the refresh rejects with; null when it completes. */
-const refreshFailure = async (
-  options: Parameters<typeof refreshUnpromotedReleases>[0],
-): Promise<unknown> => {
-  try {
-    await refreshUnpromotedReleases(options);
-  } catch (error) {
-    return error;
-  }
-  return null;
-};
 
 const failureMessage = async (tag: string): Promise<string> => {
   let previous: unknown;
@@ -219,7 +202,8 @@ describe("the token the GitHub reads are made with", () => {
   });
 
   test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
-    fc.assert(
+    assertProperty(
+      "changes GITHUB_TOKEN alone, whatever the parent environment holds",
       fc.property(
         fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
         fc.option(fc.string({ minLength: 1 }), { nil: null }),
@@ -237,7 +221,7 @@ describe("the token the GitHub reads are made with", () => {
           expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -690,7 +674,8 @@ describe("pending changesets folded into the release", () => {
 
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
-    fc.assert(
+    assertProperty(
+      "increments every safe stable patch version without changing its series",
       fc.property(
         fc.nat({ max: 1_000_000 }),
         fc.nat({ max: 1_000_000 }),
@@ -707,7 +692,7 @@ describe("maintenance release preparation", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -882,78 +867,26 @@ describe("maintenance release preparation", () => {
     expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
   });
 
-  test("an unpromoted record GitHub now dates is refreshed, one still unpublished stays null", async () => {
-    const dates = {
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": null,
-      "v1.2.3": null,
-    };
-    const asked: string[] = [];
-    const refreshed = await refreshUnpromotedReleases({
-      cutVersion: "1.2.4",
-      dates,
-      previousTag: "v1.2.3",
-      readRelease: async (tag) => {
-        asked.push(tag);
-        return tag === "v1.2.2" ? PUBLISHED : UNPROMOTED;
-      },
-    });
-    // The previous final is read by the cut itself, never twice.
-    expect(asked).toEqual(["v1.2.1", "v1.2.2"]);
-    expect(refreshed).toEqual({ "v1.2.2": PUBLISHED.publishedAt });
-    expect(
-      projectReleaseDates({
-        dates,
-        previousRelease: UNPROMOTED,
-        previousTag: "v1.2.3",
-        refreshed,
-      }),
-    ).toEqual({
-      "v1.2.0": "2026-01-01T00:00:00Z",
-      "v1.2.1": null,
-      "v1.2.2": PUBLISHED.publishedAt,
-      "v1.2.3": null,
-    });
-  });
-
-  test("the manifest note never reaches the unpromoted refresh and survives the rewrite", async () => {
+  test("a recorded never-promoted release stays null even when GitHub shows it published", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
-    releaseFixture(
-      root,
-      `${JSON.stringify(
-        {
-          _note: "Publication timestamps, keyed by tag.",
-          "v1.2.1": "2026-01-01T00:00:00Z",
-          "v1.2.2": null,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    const manifest = readReleaseManifest(root);
-    expect(manifest).toEqual({
-      note: "Publication timestamps, keyed by tag.",
-      releases: { "v1.2.1": "2026-01-01T00:00:00Z", "v1.2.2": null },
-    });
-    const asked: string[] = [];
-    const refreshed = await refreshUnpromotedReleases({
-      cutVersion: "1.2.4",
-      dates: manifest.releases,
-      previousTag: "v1.2.3",
-      readRelease: async (tag) => {
-        asked.push(tag);
-        return PUBLISHED;
+    const recorded = `${JSON.stringify(
+      {
+        _note: "Publication timestamps, keyed by tag.",
+        "v0.8.10": null,
+        "v0.9.14": null,
+        "v1.2.2": "2026-01-01T00:00:00Z",
       },
-    });
-    expect(asked).toEqual(["v1.2.2"]);
+      null,
+      2,
+    )}\n`;
+    releaseFixture(root, recorded);
 
+    // Each recorded null is a release that was never promoted to production;
+    // a GitHub release published for it later does not change that.
     prepareMaintenanceReleaseFiles({
       previousRelease: PUBLISHED,
       previousFinalVersion: "1.2.3",
-      refreshedReleases: refreshed,
       rootDir: root,
     });
     expect(
@@ -968,14 +901,22 @@ describe("maintenance release preparation", () => {
       `${JSON.stringify(
         {
           _note: "Publication timestamps, keyed by tag.",
-          "v1.2.1": "2026-01-01T00:00:00Z",
-          "v1.2.2": PUBLISHED.publishedAt,
+          "v0.8.10": null,
+          "v0.9.14": null,
+          "v1.2.2": "2026-01-01T00:00:00Z",
           "v1.2.3": PUBLISHED.publishedAt,
         },
         null,
         2,
       )}\n`,
     );
+    expect(
+      projectReleaseDates({
+        dates: readReleaseManifest(root).releases,
+        previousRelease: UNPROMOTED,
+        previousTag: "v1.2.4",
+      }),
+    ).toMatchObject({ "v0.8.10": null, "v0.9.14": null, "v1.2.4": null });
   });
 
   test.each([
@@ -989,51 +930,6 @@ describe("maintenance release preparation", () => {
     releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
 
     expect(() => readReleaseManifest(root)).toThrow(message);
-  });
-
-  test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
-    const dates = { "v1.2.0": "2026-01-01T00:00:00Z", "v1.1.0": null };
-    const failing = failingRead;
-    expect(
-      await refreshUnpromotedReleases({
-        cutVersion: "1.2.4",
-        dates,
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toEqual({});
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { ...dates, "v1.2.1": null },
-        previousTag: "v1.2.3",
-        readRelease: failing,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
-
-  test("the previous final never sets the bound for tolerated lookup failures", async () => {
-    // v1.2.3 is recorded as promoted, but the cut reads it itself: v1.1.0 is
-    // not older than a release that can be trusted, so its failure stops the cut.
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.2.3": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
-  });
-
-  test("a release at or above the cut version never sets the bound", async () => {
-    expect(
-      await refreshFailure({
-        cutVersion: "1.2.4",
-        dates: { "v1.1.0": null, "v1.3.0": "2026-02-01T00:00:00Z" },
-        previousTag: "v1.2.3",
-        readRelease: failingRead,
-      }),
-    ).toBeInstanceOf(MaintenanceReleaseError);
   });
 
   test("reads the publication date of a published release", async () => {
@@ -1465,7 +1361,8 @@ describe("a superseded version's notes folded into the release", () => {
   // of cuts leaves no undated page behind the newest, and a bullet of a
   // superseded version stays on exactly one page.
   test("leaves every page but the newest dated after any run of cuts", () => {
-    fc.assert(
+    assertProperty(
+      "leaves every page but the newest dated after any run of cuts",
       fc.property(
         fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
           maxLength: 6,
@@ -1511,7 +1408,7 @@ describe("a superseded version's notes folded into the release", () => {
           expect(holding).toHaveLength(1);
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });

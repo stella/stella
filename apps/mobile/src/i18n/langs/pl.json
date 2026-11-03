@@ -34,6 +34,14 @@
     "composerPlaceholder": "Zapytaj stellę",
     "send": "Wyślij",
     "stop": "Zatrzymaj",
+    "dictate": "Dyktuj",
+    "dictationCancel": "Anuluj dyktowanie",
+    "dictationFinish": "Zakończ dyktowanie",
+    "dictationListening": "Słucham… {elapsed} z {limit}",
+    "dictationTranscribing": "Transkrypcja…",
+    "dictationDenied": "Dyktowanie wymaga mikrofonu. Zezwól na nie dla stella w Ustawieniach.",
+    "dictationFailed": "Nie udało się przepisać nagrania. Spróbuj ponownie.",
+    "dictationSilent": "Nie usłyszano mowy.",
     "sendFailed": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
     "answerWorking": "Pracuję…",
     "answerStopped": "Zatrzymano.",
@@ -74,7 +82,8 @@
       "none": "Bez terminu",
       "today": "Dziś",
       "tomorrow": "Jutro",
-      "nextWeek": "Za tydzień"
+      "nextWeek": "Za tydzień",
+      "pick": "Wybierz datę"
     },
     "due": {
       "overdue": "Po terminie",
@@ -89,7 +98,14 @@
     "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
     "pickTitle": "Wybierz zadanie",
     "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
-    "openMatter": "Otwórz sprawę"
+    "openMatter": "Otwórz sprawę",
+    "assignedTo": "Przypisano do",
+    "nobody": "Nieprzypisane",
+    "assign": "Przypisz",
+    "doneAssigning": "Gotowe",
+    "someone": "Ktoś",
+    "membersFailed": "Nie udało się wczytać członków sprawy.",
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",
@@ -133,7 +149,9 @@
     },
     "add": "Dodaj",
     "scanDocument": "Zeskanuj dokument",
-    "newTask": "Nowe zadanie"
+    "newTask": "Nowe zadanie",
+    "uploadDocument": "Prześlij dokument",
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
   },
   "entity": {
     "type": "Typ",
@@ -155,7 +173,27 @@
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
-    "details": "Szczegóły"
+    "details": "Szczegóły",
+    "zoomOut": "Pomniejsz",
+    "zoomIn": "Powiększ",
+    "zoomFit": "Dopasuj do szerokości",
+    "fit": "Szerokość",
+    "appearance": {
+      "system": "Wygląd: automatyczny",
+      "light": "Wygląd: jasny",
+      "dark": "Wygląd: ciemny"
+    },
+    "edit": {
+      "saved": "Zapisano",
+      "saving": "Zapisywanie…",
+      "notSaved": "Jeszcze nie zapisano",
+      "done": "Gotowe",
+      "openFailed": "Tego dokumentu nie można teraz edytować",
+      "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
+      "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
+      "stay": "Zostań",
+      "leave": "Wyjdź"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -183,7 +221,8 @@
     "server": "Serwer",
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
-    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
   },
   "header": {
     "search": "Szukaj"
@@ -197,13 +236,12 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
+    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },
   "more": {
-    "soon": "Wkrótce",
-    "timers": "Stopery",
-    "voiceInput": "Wprowadzanie głosowe"
+    "timers": "Stopery"
   },
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
@@ -282,6 +320,29 @@
   "palette": {
     "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
     "noResults": "Nic nie pasuje do „{query}”"
+  },
+  "search": {
+    "placeholder": "Szukaj w stella",
+    "clear": "Wyczyść wyszukiwanie",
+    "cancel": "Anuluj",
+    "recent": "Ostatnie wyszukiwania",
+    "clearRecent": "Wyczyść",
+    "hint": "Szukaj w sprawach, dokumentach, zadaniach, rozmowach i orzecznictwie.",
+    "filters": "Filtry",
+    "noResultsTitle": "Brak wyników",
+    "noResults": "Nic nie pasuje do „{query}”. Spróbuj innych słów lub usuń filtr.",
+    "loadFailed": "Nie udało się wykonać wyszukiwania.",
+    "retry": "Spróbuj ponownie",
+    "type": {
+      "document": "Dokumenty",
+      "matter": "Sprawy",
+      "task": "Zadania",
+      "caseLaw": "Orzecznictwo",
+      "chat": "Rozmowy",
+      "folder": "Foldery",
+      "message": "E-maile",
+      "link": "Linki"
+    }
   },
   "pane": {
     "showList": "Pokaż listę",

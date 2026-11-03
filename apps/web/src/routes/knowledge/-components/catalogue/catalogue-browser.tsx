@@ -21,6 +21,7 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
@@ -142,10 +143,11 @@ const CatalogueBrowser = ({
       inspector.close(tabId);
       return;
     }
+    const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     inspector.open({
       type: "tool-detail",
       id: tabId,
-      label: entry.displayName,
+      label: labelKey ? t(labelKey) : entry.displayName,
       payload: getToolDetailPayload(entry, organizationId),
       ownerRouteId: "/knowledge/tools",
     });

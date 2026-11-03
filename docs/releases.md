@@ -104,8 +104,8 @@ images. Self-hosted and local runtimes can leave it unset.
 
 The repository variable `STAGING_STATE` declares environment prerequisites as
 JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
-keys are `corpus_index` (`on` or `off`) and `rollout` (`on` or
-`knowledge-web-pending`). Unknown keys, invalid values, and malformed JSON fail
+keys are `corpus_index` (`on` or `off`), `corpus_reads` (`all` or `search-only`)
+and `rollout` (`on` or `knowledge-web-pending`). Unknown keys, invalid values, and malformed JSON fail
 closed. Set it explicitly when a prerequisite is unavailable:
 
 ```sh
@@ -120,7 +120,11 @@ gh variable delete STAGING_STATE --repo stella/stella
 
 Only the public-law hydration check becomes report-only when `corpus_index=off`;
 only Public Knowledge API/web flag consistency becomes report-only when
-`rollout=knowledge-web-pending`. Assertions still run, and failures retain their
+`rollout=knowledge-web-pending`. `corpus_reads=search-only` declares a staging
+environment that serves case-law search but no legislation index or coverage
+snapshot: those two preflight probes still run and report, the case-law search
+probe still gates, and the MCP journeys that need the missing reads do not run.
+Once both probes answer, the MCP journeys run and gate again. Assertions still run, and failures retain their
 Playwright traces and report. Every smoke run logs the dispositions and reasons
 and writes them to the step summary. Other test failures and runner errors gate.
 Visitor route checks are skipped with an explicit reason when the web side is

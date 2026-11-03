@@ -519,13 +519,13 @@ export const parseEuProvisionAnchor = (
   raw: string,
 ): ProvisionReference | null => {
   const match = EU_PROVISION_ANCHOR.exec(raw);
-  if (match?.groups === undefined) {
-    return null;
+  if (match?.groups !== undefined) {
+    const reference = referenceFrom(match.groups);
+    return reference === null
+      ? null
+      : { ...reference, point: match.groups["numericPoint"] ?? null };
   }
-  const reference = referenceFrom(match.groups);
-  return reference === null
-    ? null
-    : { ...reference, point: match.groups["numericPoint"] ?? null };
+  return null;
 };
 
 export const normalizeEuProvisionReference = (

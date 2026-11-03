@@ -11,7 +11,12 @@ import type { ChatThreadDecision } from "./chat-thread-decision";
 // the row's link.
 GlobalRegistrator.register({ url: "http://localhost:3000/chat", width: 1280 });
 
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
+const { TooltipProvider } = await import("@stll/ui/tooltip");
+const messages = (await import("@/i18n/langs/en.json")).default;
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { createCaseDecisionViewTab } =
   await import("@/components/inspector/case-decision-view");
 const { useInspectorTabsStore } =
@@ -19,7 +24,8 @@ const { useInspectorTabsStore } =
 const { decisionChatKey } =
   await import("@/features/chat/legal-document-chat-key");
 const { toSafeId } = await import("@/lib/safe-id");
-const { useOpenChatThreadDecision } = await import("./chat-thread-decision");
+const { ChatThreadDecisionLabel, useOpenChatThreadDecision } =
+  await import("./chat-thread-decision");
 
 afterEach(() => {
   cleanup();
@@ -200,5 +206,32 @@ describe("opening a decision chat from history", () => {
     } finally {
       window.matchMedia = matchMedia;
     }
+  });
+});
+
+describe("chat thread decision label", () => {
+  test("pointing at the court chip names the court in a tooltip", async () => {
+    const view = render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <TooltipProvider delay={0}>
+            <ChatThreadDecisionLabel decision={DECISION} />
+          </TooltipProvider>
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    const chip =
+      view.container.querySelector<HTMLElement>(
+        "[data-base-ui-tooltip-trigger]",
+      ) ?? panic("the court chip is no tooltip trigger");
+
+    fireEvent.pointerOver(chip, { pointerType: "mouse" });
+    fireEvent.mouseEnter(chip);
+    fireEvent.mouseMove(chip);
+
+    await waitFor(() => {
+      const popup = document.querySelector('[data-slot="tooltip-popup"]');
+      expect(popup?.textContent).toBe(DECISION.court);
+    });
   });
 });
