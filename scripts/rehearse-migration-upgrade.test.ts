@@ -240,8 +240,6 @@ const runFake = async (failure: string, body = script) => {
   }
 };
 
-// timeout: three fake boots spawn dozens of short processes, which outrun the
-// default 5 s on a busy machine; the fakes never wait, so this bounds a hang.
 test("base startup precedes target fixtures; the promoted and candidate releases boot after all migration proofs", async () => {
   const result = await runFake("");
   expect(result.exitCode, result.output).toBe(0);
@@ -276,7 +274,7 @@ test("base startup precedes target fixtures; the promoted and candidate releases
   expect(result.events).toContain("--volumes --remove-orphans");
   expect(result.state).toEqual([]);
   expect(result.runtime).toEqual([]);
-}, 30_000);
+});
 
 test("a nonempty database is rejected before Docker work or resource allocation", async () => {
   const result = await runFake("nonempty");
