@@ -2798,6 +2798,28 @@
     },
     "backToList": "Volver a correspondencia",
     "createAddress": "Crear dirección",
+    "dataBox": {
+      "acceptedAt": "Notificado",
+      "acceptedByFiction": "por notificación presunta",
+      "acceptedByLogin": "por inicio de sesión",
+      "channel": "Buzón de datos",
+      "contact": "Contacto: {name}",
+      "deliveredAt": "Entregado en el buzón",
+      "delivery": "Entrega",
+      "directionUnknown": "Dirección desconocida",
+      "messageId": "ID del mensaje",
+      "moreContacts": "Hay más contactos asociados a este buzón de datos.",
+      "openFile": "Abrir archivo .zfo",
+      "personalDelivery": "En mano al destinatario",
+      "recipient": "Destinatario",
+      "recipientReference": "Referencia del destinatario",
+      "sealNotVerified": "El sello electrónico del archivo se conserva con él y no se verifica.",
+      "senderReference": "Referencia del remitente",
+      "sent": "Enviado",
+      "statedInFile": "Mensaje de buzón de datos (según el archivo)",
+      "toHands": "A la atención de {name}",
+      "uploaded": "Mensaje de buzón de datos subido"
+    },
     "deliveredBy": "Entregado por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticación de la entrega",
@@ -2968,6 +2990,7 @@
       "clauseDirectivesInvalid": "Una cláusula vinculada contiene directivas no válidas. Corrija la cláusula antes de rellenar la plantilla.",
       "clauseDirectivesInvalidDetails": "La cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Abra el editor de cláusulas, corrija los párrafos indicados y vuelva a rellenar la plantilla.",
       "clauseDirectivesOverrideInvalidDetails": "La sustitución de la cláusula {clauseName} en el campo {slotName} contiene directivas no válidas. Corrija la sustitución de este formulario antes de volver a rellenarlo.",
+      "correspondenceSourceChanged": "Esta correspondencia cambió mientras tanto. Vuelva a cargar la página e inténtelo de nuevo.",
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "disposableEmailNotAllowed": "No se permiten direcciones de correo temporales. Usa una dirección de correo permanente.",
@@ -2993,6 +3016,8 @@
       "matterContactCapacityReached": "Este asunto ha alcanzado el límite de contactos. Elimine un vínculo con un contacto antes de añadir otro.",
       "mcpAuthorizationApprovalRequired": "Un administrador debe aprobar este conector antes de que puedas conectarte.",
       "notOrganizationMember": "No eres miembro de esta organización.",
+      "organizationDataBoxLimitReached": "Esta organización ha alcanzado su límite de buzones de datos. Quite uno antes de añadir otro.",
+      "organizationDataBoxesChanged": "Los buzones de datos de la organización cambiaron mientras tanto. Vuelva a cargar la página e inténtelo de nuevo.",
       "organizationLastOwner": "Una organización necesita un propietario. Transfiera primero la propiedad.",
       "organizationMemberLimitReached": "Esta organización ha alcanzado su límite de miembros.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
@@ -4549,6 +4574,10 @@
         "undoShortcut": "Deshacer cambio de resaltado o comentario",
         "visibilityRestored": "Uso compartido restablecido"
       },
+      "orphaned": {
+        "description": "El texto de este documento se actualizó después de que se crearan: no se han podido volver a encontrar los pasajes marcados o ahora aparecen en varios lugares. No se muestran en el texto.",
+        "summary": "{count, plural, one {# resaltado o comentario ya no coincide con el texto} other {# resaltados y comentarios ya no coinciden con el texto} many {# resaltados y comentarios ya no coinciden con el texto}}"
+      },
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
       "styleHighlight": "Resaltado",
@@ -5498,6 +5527,12 @@
         "firm": "Directrices del despacho",
         "ledes": "Facturación electrónica (LEDES)",
         "title": "Borradores de facturación con IA"
+      },
+      "dataBoxes": {
+        "description": "Un mensaje enviado desde uno de estos buzones se archiva como saliente; uno enviado a ellos, como entrante. Cada cambio vuelve a determinar la dirección de los mensajes ya archivados en los asuntos a los que tiene acceso.",
+        "invalid": "Un ID de buzón de datos tiene siete letras o dígitos.",
+        "remove": "Quitar el buzón de datos {address}",
+        "title": "Buzones de datos de la organización"
       },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",

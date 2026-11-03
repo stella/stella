@@ -2798,6 +2798,28 @@
     },
     "backToList": "Voltar para correspondência",
     "createAddress": "Criar endereço",
+    "dataBox": {
+      "acceptedAt": "Recebido",
+      "acceptedByFiction": "por intimação presumida",
+      "acceptedByLogin": "por login",
+      "channel": "Caixa de dados",
+      "contact": "Contato: {name}",
+      "deliveredAt": "Entregue na caixa",
+      "delivery": "Entrega",
+      "directionUnknown": "Direção desconhecida",
+      "messageId": "ID da mensagem",
+      "moreContacts": "Há mais contatos associados a esta caixa de dados.",
+      "openFile": "Abrir arquivo .zfo",
+      "personalDelivery": "Em mãos ao destinatário",
+      "recipient": "Destinatário",
+      "recipientReference": "Referência do destinatário",
+      "sealNotVerified": "O selo eletrônico do arquivo é mantido com ele e não é verificado.",
+      "senderReference": "Referência do remetente",
+      "sent": "Enviada",
+      "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
+      "toHands": "Aos cuidados de {name}",
+      "uploaded": "Mensagem de caixa de dados enviada"
+    },
     "deliveredBy": "Entregue por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregue por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticação da entrega",
@@ -2968,6 +2990,7 @@
       "clauseDirectivesInvalid": "Uma cláusula vinculada contém diretivas inválidas. Corrija a cláusula antes de preencher o modelo.",
       "clauseDirectivesInvalidDetails": "A cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Abra o editor de cláusulas, corrija os parágrafos indicados e preencha o modelo novamente.",
       "clauseDirectivesOverrideInvalidDetails": "O texto substituto da cláusula {clauseName} no campo {slotName} contém diretivas inválidas. Corrija o texto substituto deste preenchimento antes de tentar novamente.",
+      "correspondenceSourceChanged": "Esta correspondência mudou nesse meio-tempo. Recarregue a página e tente novamente.",
       "deeplKeyRejected": "A chave do DeepL salva foi rejeitada. Substitua-a nas configurações da organização.",
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
@@ -2993,6 +3016,8 @@
       "matterContactCapacityReached": "Este caso atingiu o limite de contatos. Remova um vínculo com um contato antes de adicionar outro.",
       "mcpAuthorizationApprovalRequired": "Um administrador precisa aprovar este conector antes que você possa se conectar.",
       "notOrganizationMember": "Você não é membro desta organização.",
+      "organizationDataBoxLimitReached": "Esta organização atingiu o limite de caixas de dados. Remova uma antes de adicionar outra.",
+      "organizationDataBoxesChanged": "As caixas de dados da organização mudaram nesse meio-tempo. Recarregue a página e tente novamente.",
       "organizationLastOwner": "Uma organização precisa de um proprietário. Transfira a propriedade primeiro.",
       "organizationMemberLimitReached": "Esta organização atingiu o limite de membros.",
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
@@ -4549,6 +4574,10 @@
         "undoShortcut": "Desfazer alteração de destaque ou comentário",
         "visibilityRestored": "Compartilhamento restaurado"
       },
+      "orphaned": {
+        "description": "O texto deste documento foi atualizado desde que foram criados: os trechos marcados não puderam ser encontrados nele novamente ou agora aparecem em mais de um lugar. Eles não são exibidos no texto.",
+        "summary": "{count, plural, one {# destaque ou comentário não corresponde mais ao texto} other {# destaques e comentários não correspondem mais ao texto} many {# destaques e comentários não correspondem mais ao texto}}"
+      },
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
       "styleHighlight": "Destaque",
@@ -5498,6 +5527,12 @@
         "firm": "Diretrizes do escritório",
         "ledes": "Faturamento eletrônico (LEDES)",
         "title": "Rascunhos de faturamento com IA"
+      },
+      "dataBoxes": {
+        "description": "Uma mensagem enviada de uma destas caixas é arquivada como enviada; uma enviada para elas, como recebida. Cada alteração recalcula a direção das mensagens já arquivadas nos casos a que você tem acesso.",
+        "invalid": "Um ID de caixa de dados tem sete letras ou dígitos.",
+        "remove": "Remover a caixa de dados {address}",
+        "title": "Caixas de dados da organização"
       },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
