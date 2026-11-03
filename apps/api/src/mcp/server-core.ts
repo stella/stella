@@ -30,6 +30,7 @@ import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
 import type { BoundedRequest } from "@/api/http/request-body";
 import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
@@ -60,7 +61,7 @@ import {
   resolveMachineApiKeySession,
   revalidateMachineApiKeySession,
 } from "@/api/mcp/api-key-auth";
-import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
+import type { McpAuthenticationFailure } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
   disabledFeatureCapabilityIds,
@@ -224,7 +225,7 @@ type McpServerDependencies = {
       mode: McpMode;
       resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
-  ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
+  ) => Promise<Result<AdmittedMcpSession, McpAuthenticationFailure>>;
   captureError: typeof captureApiError;
   observeTransportFailure?: typeof observeMcpTransportFailure;
   getMcpToolDefinition: (
@@ -263,7 +264,7 @@ type McpServerDependencies = {
   ) => ReadResourceResult | Promise<ReadResourceResult>;
   recordMcpSessionInitialized: RecordMcpSessionInitialized;
   resolveMcpSessionContext: (
-    session: McpSession,
+    session: AdmittedMcpSession,
     options: { clientIp?: string | null; request: Request },
   ) => Promise<McpRequestResources>;
 };
@@ -352,7 +353,10 @@ export const mcpOmittedToolNamesByReason = ({
 
 /** An accepted MCP credential: who it resolved to, and what an event-stream
  *  answer to it stays bound to. */
-type McpAuthenticated = { session: McpSession; stream: SseStreamBinding };
+type McpAuthenticated = {
+  session: AdmittedMcpSession;
+  stream: SseStreamBinding;
+};
 
 const withMcpCors = async (
   response: Response,
@@ -633,7 +637,7 @@ const withCappedRequestBody = async (
 type McpFactoryState = {
   context: McpRequestResources;
   registryVersion?: string;
-  session: McpSession;
+  session: AdmittedMcpSession;
 };
 
 const factoryState = new AsyncLocalStorage<McpFactoryState>();
@@ -872,7 +876,7 @@ const boundMcpToolResult = async ({
 
 type AuthenticateMcpStreamOptions = {
   authenticateMcpRequest: McpServerDependencies["authenticateMcpRequest"];
-  session: McpSession;
+  session: AdmittedMcpSession;
   token: string;
   mode: McpMode;
 };
@@ -1053,7 +1057,7 @@ export const createMcpHttpRequestHandler = ({
     requestContext: ServerContext;
     context: McpRequestResources;
     mode: McpMode;
-    session: McpSession;
+    session: AdmittedMcpSession;
   };
   const handleToolsCallRequest = async ({
     toolRequest,
@@ -1272,7 +1276,7 @@ export const createMcpHttpRequestHandler = ({
   }: {
     context: McpRequestResources;
     mode: McpMode;
-    session: McpSession;
+    session: AdmittedMcpSession;
     /**
      * Whether this connection receives `notifications/tools/list_changed`.
      * Only a connection that does may advertise `tools.listChanged`.
@@ -1474,7 +1478,7 @@ export const createMcpHttpRequestHandler = ({
     mode: McpMode;
     parsedBody: unknown;
     request: Request;
-    session: McpSession;
+    session: AdmittedMcpSession;
   }): Promise<Response> => {
     const server = await createMcpServer({
       context,
