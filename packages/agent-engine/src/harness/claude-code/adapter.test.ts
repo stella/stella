@@ -251,6 +251,7 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
     },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
+    requestTimeoutMs: 10_000,
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
