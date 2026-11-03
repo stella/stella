@@ -35,6 +35,7 @@ import {
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_OAUTH_PROTOCOL_SCOPES,
   STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_HEADER,
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
@@ -42,6 +43,7 @@ import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolOutputContract,
   MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
 import {
@@ -111,18 +113,35 @@ type RegistryToolListing = {
   name: string;
   description: string;
   inputSchema: unknown;
+  outputSchema: unknown;
   annotations?: unknown;
 };
 
 const listings: RegistryToolListing[] = [];
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+  const output = getStaticMcpToolOutputContract(tool.name);
+  if (output === undefined) {
+    panic(`Static MCP tool is missing its output contract: ${tool.name}`);
+  }
   listings.push({
     cli: deriveCliAnnotation(tool),
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
+    outputSchema: output.outputSchema,
     annotations: tool.annotations,
   });
+}
+
+const projectionOutputPath = process.argv
+  .find((argument) => argument.startsWith("--projection-output="))
+  ?.slice("--projection-output=".length);
+if (projectionOutputPath !== undefined) {
+  await Bun.write(
+    projectionOutputPath,
+    `${JSON.stringify({ tools: listings, httpPath: MCP_ADVANCED_HTTP_PATH, contract: STELLA_API_CONTRACT })}\n`,
+  );
+  process.exit(0);
 }
 
 const snapshotPath = new URL(
@@ -270,6 +289,7 @@ await Bun.write(
 
 export const MCP_CAPABILITY_EXECUTORS = ${JSON.stringify(MCP_CAPABILITY_EXECUTORS, null, 2)} as const;
 export const MCP_HTTP_PATH = ${JSON.stringify(MCP_ADVANCED_HTTP_PATH)} as const;
+export const MCP_API_CONTRACT_HEADER = ${JSON.stringify(STELLA_MCP_API_CONTRACT_HEADER)} as const;
 export const MCP_DISCOVERY_PATH = ${JSON.stringify(MCP_ADVANCED_DISCOVERY_PATH)} as const;
 export const MCP_TOOL_NAME_MAX_LENGTH = ${MCP_TOOL_NAME_MAX_LENGTH};
 export const MCP_TOOL_NAME_PATTERN_SOURCE = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.source)} as const;

@@ -69,7 +69,6 @@ const TRANSIENT_VALUES = [
   "POST /v1/chat body.forwardedProps.activeExternal.sourceToolName",
   "POST /v1/chat body.forwardedProps.activeSkill.skillName",
   "POST /v1/desktop/billing-drafts body.previousResult.drafts[].operations[].targetMatterName",
-  "POST /v1/desktop/time-entries/narrative body.matterName",
 ];
 
 /** Identifiers and account labels a program supplies, not a person. */

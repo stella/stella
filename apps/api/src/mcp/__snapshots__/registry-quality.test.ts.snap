@@ -1596,7 +1596,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -1611,13 +1611,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -3130,7 +3140,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3158,7 +3168,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3183,7 +3193,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3212,7 +3222,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3232,8 +3242,15 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -4900,7 +4917,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -6465,7 +6482,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -6480,7 +6497,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -6502,6 +6519,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "minLength": 1,
           "description": "Actor user id"
         },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
+        },
         "from": {
           "type": "string",
           "maxLength": 40,
@@ -6515,7 +6540,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -6526,7 +6551,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -8860,7 +8885,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. The configuration is in the shape configure_template_fields accepts (see stella://reference/template-fields), and the response carries that call to make next. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -8875,13 +8900,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -10394,7 +10429,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10422,7 +10457,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10447,7 +10482,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10476,7 +10511,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10496,8 +10531,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -12164,7 +12206,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -13729,7 +13771,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -13744,7 +13786,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -13766,6 +13808,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "minLength": 1,
           "description": "Actor user id"
         },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
+        },
         "from": {
           "type": "string",
           "maxLength": 40,
@@ -13779,7 +13829,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -13790,7 +13840,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -15060,7 +15110,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15088,7 +15138,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15113,7 +15163,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15142,7 +15192,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15162,8 +15212,15 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -16543,7 +16600,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "List templates does not change state.",
       "openWorldHint": "List templates is confined to the private workspace or a bounded computation."
     },
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); use a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration, its named conditions and formula fields. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
+    "description": "List the organization's document templates (NDAs, powers of attorney, leases), or pass template_id for one template's full field configuration, named conditions and formula fields. Listing returns each template's id, name, field count, tags and usage guidance: use one whose whenToUse matches the request; skip any whose whenNotToUse applies. \`arrays\` marks {% for %} fields as arrays of objects, not dotted keys.",
     "annotations": {
       "title": "List templates",
       "destructiveHint": false,
@@ -16558,13 +16615,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -16956,7 +17023,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
