@@ -3,6 +3,7 @@ import {
   CI_GENERATED_OUTPUTS,
   MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
+  MODEL_CATALOG_INPUTS,
 } from "../packages/scripts/src/generated-files";
 
 export {
@@ -59,29 +60,6 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
   ...SHARED_GENERATOR_INPUTS,
   ...generator.inputs,
 ];
-
-const MODEL_CATALOG_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-defaults-ledger.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/ai-catalog/src/reasoning-capabilities.ts",
-  "packages/fetch/src/body-reader.ts",
-  "packages/fetch/src/connection-failure.ts",
-  "packages/fetch/src/index.ts",
-  "packages/fetch/src/race-abort.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-  "packages/scripts/src/model-catalog-snapshot.ts",
-  "packages/scripts/src/offline-check-startup.ts",
-] as const;
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
@@ -269,6 +247,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/uploads/file-comparison/sweep.ts",
     "apps/api/src/lib/user-files/types.ts",
     "apps/api/src/lib/views/*",
+    "apps/api/src/lib/workspaces/creation-capacity.ts",
     "apps/api/src/lib/workspaces/list-query.ts",
     "packages/anonymize-chat/src/index.ts",
     "packages/anonymize-chat/src/normalization.ts",
@@ -287,6 +266,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/account-export/enqueue.ts",
+    "apps/api/src/lib/account-export/organization-audit-gate.ts",
     "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
     "apps/api/src/lib/analytics/*",
@@ -1816,11 +1796,11 @@ const GENERATOR_DECLARATIONS = [
       ".github/actions/**",
       ".github/ci-job-classification-decisions/**",
       ".github/ci-job-classification-sources.json",
+      ".github/global-rule-inputs.json",
       "scripts/check-ci-job-classification.ts",
       "scripts/ci-job-classification/**",
       "packages/collation/src/collation.ts",
       "packages/sha256/src/node.ts",
-      "packages/sha256/src/types.ts",
     ],
     write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
     check: null,

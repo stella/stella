@@ -13,6 +13,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -37,10 +38,17 @@ export const Route = createFileRoute(
 )({
   component: CorrespondenceDetailPage,
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      correspondenceByIdOptions(params.workspaceId, params.correspondenceId),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.correspondenceId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          correspondenceByIdOptions(
+            params.workspaceId,
+            params.correspondenceId,
+          ),
+        ),
+    });
   },
 });
 
