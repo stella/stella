@@ -276,10 +276,10 @@ fn seq(value: u32) -> NonZeroU32 {
 
 /// Wait for a condition another process makes true.
 async fn until(what: &str, condition: impl Fn() -> bool) {
-  let deadline = tokio::time::Instant::now() + WAIT;
+  let deadline = tokio::time::Instant::now() + WAIT; // kit-allow: waits on another process
   while !condition() {
-    assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert!(tokio::time::Instant::now() < deadline, "timed out: {what}"); // kit-allow: waits on another process
+    tokio::time::sleep(Duration::from_millis(20)).await; // kit-allow: polls another process
   }
 }
 
@@ -487,7 +487,7 @@ fn runs_outlive_the_supervisor_and_resume_in_the_next_one() {
     drop(first);
     // The holder still answers once the old supervisor let go.
     let endpoint = fixture.endpoint(VERSION);
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
     assert!(endpoint.exists());
 
     let second = fixture.sidecar();
@@ -588,7 +588,7 @@ fn a_new_version_drains_the_old_holder_and_removes_its_folder() {
     let mut outputs = old.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
     drop(old);
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
 
     let new = fixture.sidecar();
     assert_eq!(
@@ -754,7 +754,7 @@ fn a_holder_is_found_where_it_recorded_its_endpoint_after_the_runtime_folder_mov
     let mut outputs = first.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
     drop(first);
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process
 
     // The next launch's environment names another runtime folder.
     let second = fixture.sidecar_with_sockets_in(second_dir.clone());

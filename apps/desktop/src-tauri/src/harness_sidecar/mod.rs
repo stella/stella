@@ -681,7 +681,7 @@ fn spawn_holder(
   endpoint: &OsStr,
   version: &str,
 ) -> std::io::Result<()> {
-  let mut command = tokio::process::Command::new(program);
+  let mut command = tokio::process::Command::new(program); // kit-allow: spawns the detached holder process
   command
     .args(&launch.args)
     .arg("--dir")
@@ -1043,9 +1043,11 @@ impl Supervisor {
       tracing::error!(target: LOG_TARGET, kind = ?error.kind(), "harness holder did not start");
       return None;
     }
-    let deadline = Instant::now() + self.settings.start_timeout;
+    let deadline = Instant::now() + self.settings.start_timeout; // kit-allow: bounds the wait for a real holder process to listen
     loop {
-      match self.open(&dir).await {
+      let opened = self.open(&dir).await;
+      let in_time = Instant::now() < deadline; // kit-allow: bounds the wait for a real holder process to listen
+      match opened {
         Ok(opened) => {
           tracing::info!(
             target: LOG_TARGET,
@@ -1056,8 +1058,8 @@ impl Supervisor {
           return Some(dir);
         }
         Err(OpenError::Incompatible | OpenError::NoEndpoint) => return None,
-        Err(OpenError::Gone | OpenError::Failed) if Instant::now() < deadline => {
-          tokio::time::sleep(START_POLL).await;
+        Err(OpenError::Gone | OpenError::Failed) if in_time => {
+          tokio::time::sleep(START_POLL).await; // kit-allow: polls a real holder process that is starting
         }
         Err(OpenError::Gone | OpenError::Failed) => {
           tracing::error!(target: LOG_TARGET, "harness holder did not answer after it started");
@@ -1257,7 +1259,7 @@ impl Supervisor {
         }
         Err(OpenError::Gone | OpenError::Incompatible | OpenError::NoEndpoint) => break,
         Err(OpenError::Failed) => {
-          tokio::time::sleep(self.settings.backoff.delay(attempt)).await;
+          tokio::time::sleep(self.settings.backoff.delay(attempt)).await; // kit-allow: reconnect backoff to a real holder process
         }
       }
     }
@@ -1479,7 +1481,7 @@ impl Supervisor {
     for dir in &dirs {
       self.write(dir, &HostMessage::Shutdown).await;
     }
-    let deadline = tokio::time::Instant::now() + self.settings.shutdown_grace;
+    let deadline = tokio::time::Instant::now() + self.settings.shutdown_grace; // kit-allow: bounds the shutdown of real holder processes
     while !self.links.is_empty() {
       let Ok(Some(Event { dir, link, event })) =
         tokio::time::timeout_at(deadline, self.events.recv()).await
