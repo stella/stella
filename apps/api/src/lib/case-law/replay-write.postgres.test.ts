@@ -23,7 +23,16 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const ROWS = 1000;
+// Each decision replays in its own transaction, so run time is linear in
+// ROWS: the seed, the warmup and every WAL attempt (replay plus lock control)
+// commit one to three transactions per decision, and an attempt whose window
+// crosses a checkpoint runs again. 200 decisions keep all five attempts inside
+// the default test budget, so the cleanup below runs before the next suite on
+// the same database, and the unchanged writers' WAL stays far below the
+// unguarded writers' rate.
+const ROWS = 200;
+// Main before these writers: 2,035,464 WAL bytes for 1,000 decisions.
+const UNGUARDED_WAL_BYTES_PER_DECISION = 2_035_464 / 1000;
 
 if (!databaseUrl || !enabled) {
   describe.skip("replay physical fixed point (postgres)", () => {
@@ -238,8 +247,8 @@ if (!databaseUrl || !enabled) {
             `Every WAL measurement crossed a checkpoint in ${WAL_ATTEMPTS} attempts`,
           );
         }
-        process.stdout.write(`REPLAY_WAL_1000 ${pair.measured}\n`);
-        process.stdout.write(`REPLAY_LOCK_CONTROL_1000 ${pair.control}\n`);
+        process.stdout.write(`REPLAY_WAL_${ROWS} ${pair.measured}\n`);
+        process.stdout.write(`REPLAY_LOCK_CONTROL_${ROWS} ${pair.control}\n`);
         const after = await versions();
         process.stdout.write(
           `REPLAY_VERSIONS ${before.filter((row, i) => JSON.stringify(row) !== JSON.stringify(after.at(i))).length}\n`,
@@ -247,9 +256,12 @@ if (!databaseUrl || !enabled) {
         expect(after).toEqual(before);
         expect(await statistics()).toEqual(beforeStatistics);
         // Allow one 64 KiB WAL segment fraction beyond the measured lock and
-        // commit control; baseline main produced 2,035,464 bytes for this fixture.
+        // commit control, and stay under a quarter of the unguarded writers'
+        // WAL for the same number of decisions.
         expect(pair.measured).toBeLessThanOrEqual(pair.control + 65_536);
-        expect(pair.measured).toBeLessThan(2_035_464 / 4);
+        expect(pair.measured).toBeLessThan(
+          (UNGUARDED_WAL_BYTES_PER_DECISION * ROWS) / 4,
+        );
       } finally {
         if (insertedGeneration) {
           await db
