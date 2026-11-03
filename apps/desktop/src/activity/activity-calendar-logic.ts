@@ -111,7 +111,7 @@ export type ActivityBlock = DayCalendarRange & {
   topicApp: ActivityTopicApp | null;
 };
 
-export type ActivityTopicApp = {
+type ActivityTopicApp = {
   appIdentifier: string;
   appName: string;
   call: boolean;
