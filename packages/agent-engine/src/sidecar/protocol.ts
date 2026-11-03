@@ -426,8 +426,7 @@ const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 );
 const lineTypeSchema = v.object({ type: v.string() });
 
-export const utf8Length = (line: string) =>
-  new TextEncoder().encode(line).byteLength;
+const utf8Length = (line: string) => new TextEncoder().encode(line).byteLength;
 
 /** A line as JSON; `null` when it is over the limit or not JSON. */
 const parseJsonLine = (line: string): { value: unknown } | null => {
