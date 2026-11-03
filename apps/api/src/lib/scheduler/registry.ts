@@ -44,6 +44,10 @@ import {
   foldCaseLawPopulationCountsTask,
 } from "@/api/lib/scheduler/tasks/case-law-population-fold";
 import {
+  SEED_CASE_LAW_POPULATION_COUNTS_TASK,
+  seedCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-seed";
+import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
@@ -287,6 +291,7 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
+  [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
   [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
     reconcileCaseLawDecisionIdentifiersTask,

@@ -319,6 +319,19 @@ type ReportPendingStepOptions = {
   reason: string;
 };
 
+const recordPendingStep = (
+  report: OnlineMigrationStartupReport,
+  step: PendingOnlineMigrationStep,
+): void => {
+  if (
+    !report.pending.some(
+      ({ kind, name }) => kind === step.kind && name === step.name,
+    )
+  ) {
+    report.pending.push(step);
+  }
+};
+
 const reportPendingStep = ({
   report,
   step,
@@ -334,12 +347,42 @@ const reportPendingStep = ({
       `Online ${step.kind} ${step.name} introduced by ${step.introducedBy} is not complete: ${reason}`,
     );
   }
-  if (
-    !report.pending.some(
-      ({ kind, name }) => kind === step.kind && name === step.name,
-    )
-  ) {
-    report.pending.push(step);
+  recordPendingStep(report, step);
+};
+
+/**
+ * A migration-owned repair with a durable pending checkpoint is deployable
+ * under any release, so a newer applied migration never refuses boot over
+ * it: its readers already serve the pending state (the newest release boots
+ * beside it the same way), and the migrate run or the repair's scheduled
+ * owner resumes the checkpoint after boot. Refusing would only stop every
+ * task, of every version, until something else finished the walk. Work with
+ * no checkpoint has nothing durable to resume, so it keeps the newest-release
+ * rule.
+ */
+type ReportPendingRepairOptions = Omit<ReportPendingStepOptions, "reason"> & {
+  completion: Exclude<OnlineRepairCompletion, { type: "complete" }>;
+};
+
+const reportPendingRepair = ({
+  report,
+  step,
+  completion,
+}: ReportPendingRepairOptions): void => {
+  switch (completion.type) {
+    case "pending":
+      if (typeof step.introducedBy === "string") {
+        recordPendingStep(report, step);
+        return;
+      }
+      reportPendingStep({ report, step, reason: completion.reason });
+      return;
+    case "incomplete":
+      reportPendingStep({ report, step, reason: completion.reason });
+      return;
+    default:
+      completion satisfies never;
+      return panic(`Online repair ${step.name}: unexpected completion state`);
   }
 };
 
@@ -574,14 +617,14 @@ const processOnlineRepairAt = async ({
   const completion = await repair.readCompletion(connection);
   if (mode.operation === "validate") {
     if (completion.type !== "complete") {
-      reportPendingStep({
+      reportPendingRepair({
         report: mode.report,
         step: {
           kind: "repair",
           name: repair.name,
           introducedBy: repair.introducedBy,
         },
-        reason: completion.reason,
+        completion,
       });
     }
     return await processOnlineRepairAt({

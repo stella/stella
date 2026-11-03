@@ -6,7 +6,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import type { PopulationCountsFreshness } from "@/api/lib/case-law/population-count-freshness";
+import type { PopulationCountsReadFreshness } from "@/api/lib/case-law/population-count-freshness";
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
@@ -131,8 +131,7 @@ export type LegalBrowseFacetsQuery = {
 
 export type LegalBrowseFacets = {
   /** Present for the maintained population owner; provider-native facets have no fold. */
-  countsFreshness?:
-    PopulationCountsFreshness | { status: "unavailable" } | undefined;
+  countsFreshness?: PopulationCountsReadFreshness | undefined;
   country: FacetBucket[];
   court: FacetBucket[];
   year: FacetBucket[];

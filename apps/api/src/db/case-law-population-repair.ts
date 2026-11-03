@@ -1,49 +1,23 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 import { Temporal } from "@stll/time";
 
 import { loadGateHealthConfig } from "@/api/env-online-index";
 import { CASE_LAW_POPULATION_SEED_REPAIR_NAME } from "@/api/lib/case-law/population-count-limits";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  CASE_LAW_POPULATION_SEED_BATCH_SIZE,
+  caseLawPopulationSeedBatchSize,
+  caseLawPopulationSeedConfig,
+  readCaseLawPopulationSeedBatch,
+  retryLockRefusal,
+} from "@/api/lib/case-law/population-seed-batch";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { BackfillHeldError, createBackfillRuntime } from "./backfill-runtime";
 import type { OnlineRepair } from "./online-migration-connection";
 
-const BATCH_SIZE = 128;
-const MAX_BATCH_SIZE = 256;
-/**
- * A batch waits on one decision row at most, so this outlasts a queue of
- * writer transactions on that row instead of losing to a busy decision.
- */
-const BATCH_LOCK_TIMEOUT_MS = 15_000;
-const BATCH_STATEMENT_TIMEOUT_MS = 30_000;
-const LOCK_REFUSAL_RETRIES = 3;
-const LOCK_REFUSAL_BACKOFF_MS = 1000;
 const HOLD_RETRY_FLOOR_MS = 1000;
-
-/** A refused batch rolled back whole, so running it again replays nothing. */
-const retryLockRefusal = async <Value>(
-  step: () => Promise<Value>,
-  attempt = 1,
-): Promise<Value> => {
-  const outcome = await Result.tryPromise({
-    try: step,
-    catch: (cause: unknown) => cause,
-  });
-  if (outcome.isOk()) {
-    return outcome.value;
-  }
-  if (
-    attempt > LOCK_REFUSAL_RETRIES ||
-    !isPgError(outcome.error, PG_ERROR.LOCK_NOT_AVAILABLE)
-  ) {
-    throw outcome.error;
-  }
-  await Bun.sleep(LOCK_REFUSAL_BACKOFF_MS * attempt);
-  return await retryLockRefusal(step, attempt + 1);
-};
 
 /** A row projection is the data checkpoint; the cursor bounds seed discovery. */
 export const CASE_LAW_POPULATION_REPAIR = {
@@ -105,13 +79,8 @@ export const CASE_LAW_POPULATION_REPAIR = {
     const runtime = createBackfillRuntime({
       name: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
       tableName: "case_law_decisions",
-      initialSize: BATCH_SIZE,
-      config: {
-        ...loadGateHealthConfig(),
-        maxSize: MAX_BATCH_SIZE,
-        batchStatementTimeoutMs: BATCH_STATEMENT_TIMEOUT_MS,
-        batchLockTimeoutMs: BATCH_LOCK_TIMEOUT_MS,
-      },
+      initialSize: CASE_LAW_POPULATION_SEED_BATCH_SIZE,
+      config: caseLawPopulationSeedConfig(loadGateHealthConfig()),
       connection,
     });
     try {
@@ -121,38 +90,25 @@ export const CASE_LAW_POPULATION_REPAIR = {
         step: async () =>
           await retryLockRefusal(
             async () =>
-              await runtime.step(async ({ tx, size }) => {
-                const row = (
-                  await tx.query(
-                    "SELECT cursor, processed, done FROM public.seed_case_law_population_counts($1)",
-                    [Math.min(size, MAX_BATCH_SIZE)],
-                  )
-                ).at(0);
-                if (
-                  !isRecord(row) ||
-                  !(
-                    row["cursor"] === null || typeof row["cursor"] === "string"
-                  ) ||
-                  typeof row["processed"] !== "number" ||
-                  typeof row["done"] !== "boolean"
-                ) {
-                  return panic("Invalid case-law population seed batch");
-                }
-                return {
-                  cursor: row["cursor"],
-                  done: row["done"],
-                  value: row["processed"],
-                };
-              }),
+              await runtime.step(async ({ tx, size }) =>
+                readCaseLawPopulationSeedBatch(
+                  (
+                    await tx.query(
+                      "SELECT cursor, processed, done FROM public.seed_case_law_population_counts($1)",
+                      [caseLawPopulationSeedBatchSize(size)],
+                    )
+                  ).at(0),
+                ),
+              ),
           ),
       });
       if (pass.isErr()) {
         if (!(pass.error instanceof BackfillHeldError)) {
           throw pass.error;
         }
-        // Startup refuses this seed once a newer migration exists, and only a
-        // migrate run advances it, so a hold defers the phase instead of
-        // ending the run with the seed unfinished.
+        // A hold defers the phase rather than ending the run, so a migrate
+        // run that keeps going finishes the seed; the scheduled owner
+        // (`caseLaw.seedPopulationCounts`) resumes it after one that did not.
         return {
           type: "deferred",
           step: CASE_LAW_POPULATION_SEED_REPAIR_NAME,

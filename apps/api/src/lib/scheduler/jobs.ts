@@ -39,6 +39,7 @@ import { RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK } from "@/api/lib/schedule
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
 import { FOLD_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-fold";
+import { SEED_CASE_LAW_POPULATION_COUNTS_TASK } from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
@@ -459,6 +460,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+    reads: "load-governed",
+  },
+  {
+    description:
+      "Resume the case-law population seed that startup admits while pending",
+    id: "caseLaw.seedPopulationCounts.minutely",
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: SEED_CASE_LAW_POPULATION_COUNTS_TASK,
     reads: "load-governed",
   },
   {

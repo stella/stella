@@ -105,8 +105,12 @@ export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
  * one read rather than a pass over the table. Repair mode may defer a durable
- * pending backfill. Startup reports unfinished work only for the newest
- * applied migration; work introduced by an older migration must be complete.
+ * pending backfill. Startup admits a migration-owned repair's durable
+ * `pending` checkpoint under any release, so the data it produces must read
+ * as not ready, never as complete, until `readCompletion` says `complete`;
+ * the migrate run or the repair's scheduled owner resumes it. `incomplete`
+ * work has no checkpoint to resume: startup reports it only for the newest
+ * applied migration and refuses it once a newer one exists.
  */
 export type OnlineRepair = {
   introducedBy: OnlineStepIntroduction;
