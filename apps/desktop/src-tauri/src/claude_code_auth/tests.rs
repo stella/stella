@@ -29,7 +29,8 @@ echo "$*" >> "$dir/calls"
 case "$1 $2" in
   "auth status")
     if [ -f "$dir/status-stall" ]; then
-      echo $$ > "$dir/status-pid"
+      echo $$ > "$dir/status-pid.partial"
+      mv "$dir/status-pid.partial" "$dir/status-pid"
       while [ -f "$dir/status-stall" ]; do sleep 0.05; done
     fi
     if [ -f "$dir/report" ]; then cat "$dir/report"; exit 0; fi
@@ -210,6 +211,18 @@ async fn until(
   panic!("status never settled: {:?}", auth.status().await);
 }
 
+/// Returns once the stand-in CLI has written `name`, or panics after the
+/// same generous wait as [`until`].
+async fn written(fixture: &Fixture, name: &str) {
+  for _ in 0..200 {
+    if fixture.exists(name) {
+      return;
+    }
+    tokio::time::sleep(Duration::from_millis(50)).await;
+  }
+  panic!("the stand-in CLI never wrote {name}");
+}
+
 async fn page_shown(auth: &ClaudeCodeAuth) {
   until(auth, |status| {
     *status == ClaudeCodeStatus::SigningIn { sign_in_page: true }
@@ -374,12 +387,7 @@ fn cancelling_during_the_status_read_after_the_login_stops_that_read() {
     page_shown(&auth).await;
     fixture.mark("status-stall");
     fixture.mark("approve");
-    for _ in 0..200 {
-      if fixture.exists("status-pid") {
-        break;
-      }
-      tokio::time::sleep(Duration::from_millis(50)).await;
-    }
+    written(&fixture, "status-pid").await;
     assert!(
       fixture.running("status-pid"),
       "the status read never started"
