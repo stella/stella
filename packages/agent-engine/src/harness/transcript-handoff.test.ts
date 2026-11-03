@@ -75,6 +75,17 @@ describe("turn prompt from the portable transcript", () => {
       [{ role: "assistant", content: "hi" }],
       [user("   ")],
       [{ role: "user", content: null }],
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "url", value: "https://example.test/scan.png" },
+            },
+          ],
+        },
+      ],
     ];
     for (const bad of refused) {
       const built = buildTurnPrompt({ transcript: bad, mode: "standalone" });
@@ -107,6 +118,37 @@ describe("turn prompt from the portable transcript", () => {
         },
       ),
       { numRuns: 40 },
+    );
+  });
+
+  test("the history budget counts separators and the omission marker", () => {
+    // Many short turns: their separators alone would pass the budget.
+    const history = Array.from({ length: 20_000 }, () => user("x"));
+    const text = prompt([...history, user("Final question?")], "standalone");
+    const rendered = text
+      .replace(/^The conversation so far:\n\n/u, "")
+      .replace(/\n\nCurrent request:\nFinal question\?$/u, "");
+    expect(rendered).toStartWith("[earlier messages omitted]\n\n");
+    expect(new TextEncoder().encode(rendered).byteLength).toBeLessThanOrEqual(
+      64 * 1024,
+    );
+  });
+
+  test("truncation keeps a U+FFFD that was in the text and drops a split character", () => {
+    const toolResult = (content: string) =>
+      prompt(
+        [{ role: "tool", toolCallId: "c1", content }, user("Next?")],
+        "standalone",
+      );
+    // U+FFFD is three bytes: the cut falls right after it.
+    const genuine = `${"a".repeat(2045)}�tail`;
+    expect(toolResult(genuine)).toContain(
+      `[tool result ${"a".repeat(2045)}� [truncated]]`,
+    );
+    // "č" is two bytes: the cut falls between them.
+    const split = `${"a".repeat(2047)}čtail`;
+    expect(toolResult(split)).toContain(
+      `[tool result ${"a".repeat(2047)} [truncated]]`,
     );
   });
 });
