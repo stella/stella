@@ -71,11 +71,15 @@ type ChatLinkProps = Omit<
   appearance?: "inline" | "tray";
   iconSource?: ChatLinkIconSource | undefined;
   newTabLabel?: string;
+  /** A tray chip whose label is the whole point (a decision's case number and
+   *  date) keeps it up to the row's width instead of the compact 20ch cap. */
+  fullLabel?: boolean | undefined;
 };
 
 export const ChatLink = ({
   appearance = "inline",
   children,
+  fullLabel = false,
   href,
   iconSource,
   newTabLabel,
@@ -84,10 +88,12 @@ export const ChatLink = ({
 }: ChatLinkProps) => {
   const className =
     appearance === "tray"
-      ? "bg-muted/50 hover:bg-muted inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      ? "bg-muted/50 hover:bg-muted inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       : CHAT_LINK_CLASS_NAME;
-  const labelClassName =
-    appearance === "tray" ? "max-w-[20ch] truncate" : undefined;
+  const trayLabelClassName = fullLabel
+    ? "min-w-0 truncate"
+    : "max-w-[20ch] truncate";
+  const labelClassName = appearance === "tray" ? trayLabelClassName : undefined;
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
@@ -141,7 +147,7 @@ export const ChatLink = ({
         aria-hidden="true"
         className={
           appearance === "tray"
-            ? "inline-block shrink-0"
+            ? "flex shrink-0"
             : "me-1 inline-block align-[-0.125em]"
         }
       >

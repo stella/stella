@@ -473,7 +473,11 @@
     "lint": {
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
-      "dependsOn": ["transit", "^generate:capability-runtime"],
+      "dependsOn": [
+        "transit",
+        "^generate:capability-runtime",
+        "//#generate:tailwind-cache"
+      ],
       // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
@@ -543,6 +547,26 @@
         "$TURBO_ROOT$/tsconfig.tooling.json",
         "$TURBO_ROOT$/types/**"
       ]
+    },
+    "//#generate:tailwind-cache": {
+      "cache": true,
+      "inputs": [
+        "$TURBO_ROOT$/apps/web/**",
+        "$TURBO_ROOT$/apps/desktop/**",
+        "$TURBO_ROOT$/apps/playground/**",
+        "$TURBO_ROOT$/apps/landing/**",
+        "$TURBO_ROOT$/packages/ui/**",
+        "$TURBO_ROOT$/packages/chat/**",
+        "$TURBO_ROOT$/packages/workspace-ui/**",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.tailwind.config.ts",
+        "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
+        "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["$TURBO_ROOT$/.tailwind-cache/**"]
     },
     "@stll/landing#dev": {
       "dependsOn": ["@stll/cli#codegen:runtime"],

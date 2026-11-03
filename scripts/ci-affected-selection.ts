@@ -190,7 +190,8 @@ export const withDerivedOutputs = (changed: readonly string[]) => {
   while (expanded) {
     expanded = false;
     for (const generator of GENERATORS.filter(
-      ({ outputKind }) => outputKind === "derived",
+      ({ outputKind, selectsConsumers }) =>
+        outputKind === "derived" && selectsConsumers !== false,
     )) {
       if (
         ![...files].some((file) =>
