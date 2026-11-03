@@ -5,9 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { CONTACT_BULK_DELETE_LIMIT } from "@stll/api-contract";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const receivedBatches: string[][] = [];
 const deleteContacts = async (contactIds: readonly string[]) => {
