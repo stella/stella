@@ -1653,6 +1653,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
+      "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
