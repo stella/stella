@@ -405,7 +405,8 @@ const fetchCompletionCandidate = async (
       raw === null
         ? null
         : decodeSourceRawEnvelope(new TextDecoder().decode(raw));
-    if (raw === null || parts?.["notice"] === undefined) {
+    const hasNotice = parts?.["notice"] !== undefined;
+    if (raw === null || !hasNotice) {
       const candidate = yield* Result.await(
         fetchFullCompletionCandidate({ row, signal, ensure }, raw),
       );

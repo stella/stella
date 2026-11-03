@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Vous avez des modifications locales non enregistrées. Retrouvez votre copie dans Copies de travail temporaires.",
     "takenOverBody": "{fileName} — Rouvrez depuis stella ici pour reprendre la modification",
     "takenOverLocalError": "La modification sur le bureau a été déplacée vers un autre appareil. Cette copie locale est préservée.",
-    "takenOverTitle": "Modification déplacée vers un autre appareil"
+    "takenOverTitle": "Modification déplacée vers un autre appareil",
+    "editsSetAsideTitle": "Modifications mises de côté",
+    "editsSetAsideBody": "Les modifications non enregistrées ont été mises de côté. Reconnectez le même compte pour ouvrir le dossier de récupération dans les paramètres."
   },
   "dialog": {
     "accountWindowTitle": "Connecter un compte",
@@ -232,7 +234,16 @@
     "permissionDenied": "Désactivé dans les réglages du système.",
     "permissionManaged": "Géré par votre organisation",
     "errorUpdateAutostart": "stella desktop n’a pas pu modifier le démarrage à la connexion.",
-    "errorPermissions": "stella desktop n'a pas pu lire ni modifier cette autorisation."
+    "errorPermissions": "stella desktop n'a pas pu lire ni modifier cette autorisation.",
+    "recoveryTitle": "Modifications mises de côté",
+    "recoveryBody": "Les modifications non enregistrées sont conservées ici pour votre compte. Ouvrez le dossier pour les récupérer.",
+    "recoverySignIn": "Les modifications ont été mises de côté pour ce compte. Reconnectez ce compte pour ouvrir son dossier.",
+    "recoveryUnassigned": "Aucun compte n’est enregistré pour certaines modifications. Ouvrez leur dossier pour les récupérer manuellement.",
+    "recoveryPending": "Certaines modifications sont encore en cours de mise de côté. Réessayez pour terminer.",
+    "recoveryOpenFolder": "Ouvrir le dossier de récupération",
+    "recoveryOpenUnassigned": "Ouvrir les modifications non attribuées",
+    "recoveryFilePending": "En attente de mise de côté",
+    "recoveryError": "Impossible d’ouvrir le dossier de récupération. Réessayez."
   },
   "clipboard": {
     "registryUnavailable": "Aucun registre n’est activé pour vos juridictions d’exercice.",
