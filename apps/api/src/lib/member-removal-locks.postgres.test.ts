@@ -33,6 +33,7 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -212,7 +213,7 @@ const fixture = async (db: GatedTestDb) => {
         eq(verification.identifier, `delete-account:${email}`),
       ),
     cleanUp: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db
         .delete(accountDeletionRequests)
         .where(eq(accountDeletionRequests.userId, leaverId));
@@ -767,9 +768,7 @@ const movableMatter = async (db: GatedTestDb, data: Fixture) => {
       ).at(0)?.count,
     cleanUp: async () => {
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-      await db
-        .delete(organization)
-        .where(eq(organization.id, targetOrganizationId));
+      await deleteOrganizationsForTest(db, [targetOrganizationId]);
     },
   };
 };
