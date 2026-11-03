@@ -635,7 +635,6 @@ impl Inner {
       )
       .map_err(failed_storage("managed harness download was not created"))?,
     );
-
     let mut digest = Digester::new(&asset.digest);
     let mut downloaded = 0u64;
     // The first chunk is always reported, then at most every interval.
@@ -953,7 +952,7 @@ async fn publish(runtime: &Path, destination: &Path) -> std::io::Result<()> {
       let runtime = runtime.to_path_buf();
       let destination = destination.to_path_buf();
       tokio::task::spawn_blocking(move || {
-        crate::local_store::publish_harness_directory(&runtime, &destination)
+        crate::local_store::publish_directory(&runtime, &destination)
       })
       .await
       .map_err(std::io::Error::other)?

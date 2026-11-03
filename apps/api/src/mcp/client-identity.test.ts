@@ -177,7 +177,11 @@ describe("MCP session telemetry audience", () => {
     const captured = recording();
 
     handshake({
-      credential: { clientId: "client_1", type: "oauth_client" },
+      credential: {
+        clientId: "client_1",
+        issuedAt: 1_700_000_000,
+        type: "oauth_client",
+      },
       organizationId: "org_1",
       scopes: ["stella:read"],
       userId: "user_1",
@@ -201,7 +205,7 @@ describe("MCP session telemetry audience", () => {
         permissions: { workspace: ["read"] },
         type: "machine_api_key",
       },
-      { clientId: "client_1", type: "oauth_client" },
+      { clientId: "client_1", issuedAt: 1_700_000_000, type: "oauth_client" },
     ] satisfies McpSession["credential"][]) {
       handshake({
         credential,

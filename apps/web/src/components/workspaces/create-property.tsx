@@ -445,12 +445,12 @@ const PropertyComposerBody = ({
   const fileProperties = properties.filter((p) => p.content.type === "file");
   const fileProperty = fileProperties.at(0);
   const extractionFileProperty =
-    extractionContext?.filePropertyId === null ||
-    extractionContext?.filePropertyId === undefined
-      ? null
-      : (fileProperties.find(
+    extractionContext?.filePropertyId !== undefined &&
+    extractionContext.filePropertyId !== null
+      ? (fileProperties.find(
           (property) => property.id === extractionContext.filePropertyId,
-        ) ?? null);
+        ) ?? null)
+      : null;
 
   // Split the existing dependencies (if editing) into file-typed (which
   // become chips) and other (which live as @-mentions in the textarea).

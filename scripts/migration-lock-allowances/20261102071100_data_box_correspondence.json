@@ -1,0 +1,5 @@
+{
+  "add-column": "The envelope is nullable and default-free; the data-box inventory uses a constant JSON default on PostgreSQL's fast-default path. Neither addition rewrites existing rows; lock_timeout is 1s and statement_timeout is 5s.",
+  "alter-column": "Dropping direction's NOT NULL flag changes catalog metadata without reading correspondence rows. The replacement channel-specific CHECK is added NOT VALID; lock_timeout is 1s and statement_timeout is 5s.",
+  "add-constraint": "All four channel, direction, envelope and bounded-inventory CHECKs are added NOT VALID, with no existing-row scan. Canonical gated online repairs validate them after commit; lock_timeout is 1s and statement_timeout is 5s."
+}

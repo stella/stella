@@ -97,6 +97,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "contacts.metadata",
   "contacts.bank_accounts",
   "contacts.billing_address",
+  "correspondence.data_box_envelope",
   "correspondence.original_signature",
   "correspondence.sender",
   "correspondence.recipients_to",
@@ -164,6 +165,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
+  "organization_settings.data_box_ids",
   "organization_settings.practice_jurisdictions",
   "organization_settings.native_tool_overrides",
   "organization_settings.disabled_native_tools",
@@ -217,6 +219,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "oauth_grant_revocations.user_id":
+    "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
   "desktop_time_entry_batches.user_id":
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":
