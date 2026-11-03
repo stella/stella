@@ -24,6 +24,7 @@ import { AUTH_REJECTION_BODY } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordContentDeliveryReceipt } from "@/api/lib/files/content-delivery";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   initAgentAuthTestDb,
@@ -31,6 +32,8 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
+
+const oauthCredential = await admittedOAuthCredentialForTest("cli");
 
 // timeout: Boot the shared PGlite engine and complete schema before assertions.
 setDefaultTimeout(120_000);
@@ -99,7 +102,7 @@ const createFixture = async () => {
       return Result.ok({
         ...claims,
         scopes: [ACCOUNT_EXPORT_SCOPES.read],
-        credential: { type: "oauth_client" as const, clientId: "cli" },
+        credential: oauthCredential,
       });
     },
     authenticateBrowserSession: async () => ({
