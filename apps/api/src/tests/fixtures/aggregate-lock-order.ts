@@ -59,6 +59,10 @@ export const aggregateFences = () => {
       id: organizationId,
       mode: "update",
     },
+    organizationDataBoxes: {
+      aggregate: "organizationDataBoxes",
+      id: { organizationId },
+    },
     organizationObjectIntent: {
       aggregate: "organizationObjectIntent",
       id: organizationId,
@@ -190,6 +194,11 @@ export const aggregateFences = () => {
     entity: {
       aggregate: "entity",
       id: { id: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
+    correspondence: {
+      aggregate: "correspondence",
+      id: { id: createSafeId<"correspondence">(), workspaceId },
       mode: "update",
     },
     entityVersion: {

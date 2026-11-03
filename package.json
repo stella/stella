@@ -312,6 +312,7 @@
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
+    "icu-minify": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",
     "xmllint-wasm": "5.3.0",

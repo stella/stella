@@ -122,6 +122,8 @@ const comment = ({
   kind: "comment" as const,
   mine,
   quote: "the contract was void",
+  quotePrefix: "So ",
+  quoteSuffix: ".",
   startOffset: 3,
   style: null,
   updatedAt: writtenAt,
@@ -166,6 +168,7 @@ const DecisionComments = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const surface = useDecisionAnnotationSurface({
     marks: "all",
+    text: [{ anchorId: "p-2", text: "So the contract was void." }],
     scrollContainerRef,
     target,
   });
