@@ -242,12 +242,9 @@ describe("AnimatedPreviewCard", () => {
     fireEvent.mouseMove(trigger);
     expect(openCard()).toBeNull();
 
-    await waitFor(
-      () => {
-        expect(openCard()).not.toBeNull();
-      },
-      { timeout: ANIMATED_PREVIEW_CARD_DELAY_MS * 4 },
-    );
+    await waitFor(() => {
+      expect(openCard()).not.toBeNull();
+    });
     expect(performance.now() - startedAt).toBeGreaterThanOrEqual(
       ANIMATED_PREVIEW_CARD_DELAY_MS - 20,
     );
@@ -272,12 +269,9 @@ describe("AnimatedPreviewCard", () => {
       trigger.focus();
     });
 
-    await waitFor(
-      () => {
-        expect(openCard()).not.toBeNull();
-      },
-      { timeout: ANIMATED_PREVIEW_CARD_DELAY_MS * 4 },
-    );
+    await waitFor(() => {
+      expect(openCard()).not.toBeNull();
+    });
     expect(document.activeElement).toBe(trigger);
   });
 });
