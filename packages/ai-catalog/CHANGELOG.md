@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.10.1
+
+### Patch Changes
+
+- [#7357](https://github.com/stella/stella/pull/7357) [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
 ## 0.10.0
 
 ### Minor Changes

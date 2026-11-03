@@ -1,5 +1,17 @@
 # @stll/chat
 
+## 0.3.5
+
+### Patch Changes
+
+- [#7838](https://github.com/stella/stella/pull/7838) [`a8c6d13`](https://github.com/stella/stella/commit/a8c6d133b99d6f7440bc90f864501ff2a60bb8b5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Bare file names whose extension is also a top-level domain (for example `memo.md`, `smlouva.pl`, `build.sh`) are no longer detected as links. Such a name becomes a link only when it carries a scheme, a `www.` prefix or a path.
+
+- [#7418](https://github.com/stella/stella/pull/7418) [`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `htmlToMarkdown` loads HTML through `@stll/html` instead of Cheerio's main entry, so the chat package no longer bundles Cheerio's byte decoders or HTTP client.
+- Updated dependencies [[`68eeb7e`](https://github.com/stella/stella/commit/68eeb7e7dadeeca9efdd6458472a6a3b9187e173), [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29), [`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/html@0.1.0
+  - @stll/ai-catalog@0.10.1
+  - @stll/ui@0.65.0
+
 ## 0.3.4
 
 ### Patch Changes

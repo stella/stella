@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.15.7
+
+### Patch Changes
+
+- [#7844](https://github.com/stella/stella/pull/7844) [`f630d4c`](https://github.com/stella/stella/commit/f630d4c14cffb0b8e8ccef327601ba4d2760c217) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ViewSwitcher` renders view names isolated and without directional controls.
+- Updated dependencies [[`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b)]:
+  - @stll/ui@0.65.0
+
 ## 0.15.6
 
 ### Patch Changes
