@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -114,7 +114,7 @@ describe("SidebarEntityRow right-click", () => {
       document.querySelectorAll('[role="menuitem"]'),
     ).find((item) => item.textContent.trim() === messages.common.rename);
     if (!(rename instanceof HTMLElement)) {
-      throw new Error("The rename item is missing.");
+      throw new TypeError("The rename item is missing.");
     }
     act(() => {
       rename.click();
