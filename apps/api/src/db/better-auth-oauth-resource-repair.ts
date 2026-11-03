@@ -249,8 +249,8 @@ const reconcileStoredResources = async (
   expectedResources: readonly BetterAuthExpectedOAuthResource[],
 ): Promise<BetterAuthExpectedOAuthResource[]> => {
   const stored = await readStoredPolicies(transaction, expectedResources);
-  const storedScopes = (identifier: string): readonly string[] =>
-    stored.get(identifier)?.allowedScopes ?? [];
+  const storedHolds = (identifier: string, scope: string): boolean =>
+    stored.get(identifier)?.allowedScopes?.includes(scope) === true;
   const plans = expectedResources.map((resource) => {
     const current = stored.get(resource.identifier);
     if (
@@ -320,13 +320,13 @@ const reconcileStoredResources = async (
     .filter((target) => isEveryClientOAuthResource(target))
     .flatMap(({ allowedScopes, identifier: to }) =>
       allowedScopes
-        .filter((scope) => !storedScopes(to).includes(scope))
+        .filter((scope) => !storedHolds(to, scope))
         .flatMap((scope) =>
           expectedResources
             .filter(
               (source) =>
                 source.identifier !== to &&
-                storedScopes(source.identifier).includes(scope) &&
+                storedHolds(source.identifier, scope) &&
                 !source.allowedScopes.includes(scope),
             )
             .map(({ identifier: from }) => ({ from, scope, to })),
