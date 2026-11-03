@@ -1,5 +1,45 @@
 # @stll/cli
 
+## 6.6.1
+
+### Patch Changes
+
+- [#7839](https://github.com/stella/stella/pull/7839) [`d35400e`](https://github.com/stella/stella/commit/d35400e1f22707188c32659ca94b2e74ca84b527) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `set_field_value` accepts `null` as an int value, which clears the cell.
+
+- [#7616](https://github.com/stella/stella/pull/7616) [`bd8e585`](https://github.com/stella/stella/commit/bd8e585d1c18484955d354b23ca36374d4a08867) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept vendor schema annotations, cache trusted registry projections between commands, serialize token refreshes, and distinguish missing scopes, disabled features, incompatible protocols and commands unknown to the server. Add template list paging and validate every generated list and curated command binding against the server contract. Resolve effective scope grants once for command discovery and execution.
+
+  Keep template pagination stable after boundary deletion, allow unrelated credential refreshes to overlap, and report registry persistence failures consistently.
+
+- [#7845](https://github.com/stella/stella/pull/7845) [`abe39ba`](https://github.com/stella/stella/commit/abe39ba8cf2b6828e0fe4663a09c006cc8629d5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `invoices.prefill` returns `issueBlockers`, what would stop the new invoice from being issued. `invoices.transition` refuses to finalize an invoice without a seller profile or a default number series with the codes `invoice_seller_profile_missing` and `invoice_number_series_missing`.
+
+- [#7840](https://github.com/stella/stella/pull/7840) [`98d0c2e`](https://github.com/stella/stella/commit/98d0c2eccf00a9445d55a110d1a124e2fbb2785a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `rates.create` makes a matter's first rate table its default, and `rates.delete` can remove a matter's last table.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.1
+
+## 6.6.0
+
+### Minor Changes
+
+- Contact create and import no longer accept a contact `id`; the server mints each contact's id and returns it.
+
+### Patch Changes
+
+- `entities.files.list` takes a `search` text that keeps only documents whose file name or name contains it, ignoring case and accents.
+
+- The `matters.update` capability accepts `billingNarrativeLanguage`, the BCP-47 language a matter's billing narratives are written in, or null to clear it.
+- Updated dependencies []:
+  - @stll/agent-input@0.4.0
+
+## 6.5.1
+
+### Patch Changes
+
+- Keep provision-filtered case-law searches bounded. Exhausting the candidate budget returns a successful partial or empty page with a continuation cursor; only a statement timeout returns the retryable timeout response.
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
+- `search.results.list` searches across the matters you can open, by text and filters, with `stella:read`. Assistant chat results need `stella:chat`.
+
 ## 6.5.0
 
 ### Minor Changes
