@@ -1,13 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 const { act, cleanup, render } = await import("@testing-library/react");
 const { Tooltip, TooltipPopup, TooltipTrigger } = await import("./tooltip");
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a label too long for one line pushes the shortcut onto the next", async () => {

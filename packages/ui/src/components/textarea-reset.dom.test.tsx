@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 const { cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -8,7 +10,7 @@ const { Textarea } = await import("./textarea");
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a form reset brings the count back to the restored text", async () => {
