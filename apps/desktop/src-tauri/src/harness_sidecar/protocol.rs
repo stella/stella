@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunApproval,
-  RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  Ack, ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunAnswer,
+  RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
@@ -246,16 +246,6 @@ impl HostMessage {
     "drain",
     "shutdown",
   ];
-}
-
-/// Answers to a blocking question a run asked, keyed by question id: option
-/// labels or free text. The request id is the one the run's pause carries.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RunAnswer {
-  pub(crate) run_id: String,
-  pub(crate) request_id: String,
-  pub(crate) answers: BTreeMap<String, Vec<String>>,
 }
 
 /// A run the holder holds: running, or finished and not yet acked.

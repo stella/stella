@@ -10,7 +10,7 @@ use tokio::sync::watch;
 use super::journal::{Recorded, SharedJournal};
 use crate::runner_protocol::{
   ApprovalKind, Harness, HarnessReport, JsonObject, MissingHarness, RejectReason,
-  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
 /// Runs the commands the API sends. Every call returns promptly; a host does
@@ -26,6 +26,8 @@ pub(crate) trait HarnessHost: Send + Sync + 'static {
   fn start(&self, start: RunStart, sink: RunSink) -> Result<(), RejectReason>;
   fn input(&self, input: RunInput);
   fn approval(&self, approval: RunApproval);
+  /// Answers to a blocking question the run asked.
+  fn answer(&self, answer: RunAnswer);
   fn interrupt(&self, run_id: &str);
   fn cancel(&self, run_id: &str);
   /// A newer MCP token for the run; an older one never follows it.
@@ -145,6 +147,7 @@ impl HarnessHost for UnavailableHarnessHost {
   // Nothing is ever accepted, so the runner never forwards these.
   fn input(&self, _input: RunInput) {}
   fn approval(&self, _approval: RunApproval) {}
+  fn answer(&self, _answer: RunAnswer) {}
   fn interrupt(&self, _run_id: &str) {}
   fn cancel(&self, _run_id: &str) {}
   fn token(&self, _refresh: RunTokenRefresh) {}

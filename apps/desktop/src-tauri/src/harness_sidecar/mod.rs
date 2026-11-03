@@ -60,7 +60,7 @@ pub(crate) use endpoint::EndpointError;
 use endpoint::Endpoints;
 pub(crate) use protocol::{
   HarnessLaunchSettings, HarnessProbe, HarnessProcess, HeldRun, ProbeOutcome,
-  RunAnswer, SidecarRunStart,
+  SidecarRunStart,
 };
 use protocol::{
   HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProcessRef,
@@ -69,8 +69,8 @@ use protocol::{
 
 use crate::runner_protocol::{
   Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject, LimitedHarness,
-  ReadyHarness, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnsupportedHarness,
+  ReadyHarness, RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh,
+  SignedOutHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -422,13 +422,6 @@ impl HarnessSidecar {
   }
 
   /// Answers to a blocking question the run asked.
-  #[cfg_attr(
-    not(test),
-    allow(
-      dead_code,
-      reason = "the runner socket has no answer message yet; the host relays one once it does"
-    )
-  )]
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), HostMessage::RunAnswer(answer))
   }

@@ -249,7 +249,10 @@ export const desktopRunnerCommands = p.pgTable.withRLS(
     kind: p.text({ enum: DESKTOP_RUNNER_COMMAND_KINDS }).notNull(),
     /** The id the command is idempotent on. */
     commandKey: p.uuid("command_key").notNull(),
-    /** The server message as sent, without a token. */
+    /**
+     * The server message as sent, without a token; a `run.answer` holds its
+     * answers sealed (`sealedAnswers`), never as plain text.
+     */
     payload: jsonb("payload").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
@@ -284,7 +287,11 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
       .references(() => desktopRunnerRuns.runId, { onDelete: "cascade" }),
     seq: p.bigint({ mode: "number" }).notNull(),
     type: p.text({ enum: DESKTOP_RUNNER_EVENT_TYPES }).notNull(),
-    /** Set on an approval request, so an answer can be matched to it. */
+    /**
+     * The request an answer is matched to: set on an approval request, and on
+     * an event whose chunk pauses the run for a blocking question (the id of
+     * the question's interrupt).
+     */
     requestId: p.uuid("request_id"),
     /** The desktop message as validated. */
     message: jsonb("message").notNull(),
@@ -309,7 +316,7 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
     ),
     p.check(
       "desktop_runner_events_request_check",
-      sql`(${table.type} = 'run.approval_request') = (${table.requestId} IS NOT NULL)`,
+      sql`(${table.type} <> 'run.approval_request' OR ${table.requestId} IS NOT NULL) AND (${table.type} <> 'run.finished' OR ${table.requestId} IS NULL)`,
     ),
     p.check(
       "desktop_runner_events_message_check",

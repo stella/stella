@@ -738,6 +738,15 @@ impl Runner {
         }
         Ok(())
       }
+      ServerMessage::RunAnswer(answer) => {
+        let request_id = answer.request_id.clone();
+        if self
+          .first_time(&answer.run_id, |record| record.answers.insert(request_id))?
+        {
+          self.host.answer(answer);
+        }
+        Ok(())
+      }
       ServerMessage::RunInterrupt(RunRef { run_id }) => {
         if self.first_time(&run_id, |record| {
           !std::mem::replace(&mut record.interrupted, true)

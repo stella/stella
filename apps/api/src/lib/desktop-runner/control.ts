@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
+  DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
@@ -19,6 +20,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type RunAnswerMessage,
+  sealRunAnswer,
+} from "@/api/lib/desktop-runner/sealed-answers";
+import {
+  type AnsweredRequest,
   type ChatRunForRequest,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
@@ -270,24 +276,61 @@ type QueuedMessage = Extract<
     type:
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runInput
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runApproval
+      | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt
       | typeof DESKTOP_RUNNER_SERVER_MESSAGE.runCancel;
   }
 >;
 
-/** The id a command is idempotent on, and the approval request it answers. */
-const commandKeyOf = (message: QueuedMessage) => {
+/** The id a command is idempotent on, and the request it answers. */
+const commandKeyOf = (
+  message: QueuedMessage,
+): { commandKey: string; answers: AnsweredRequest | null } => {
   switch (message.type) {
     case DESKTOP_RUNNER_SERVER_MESSAGE.runInput:
-      return { commandKey: message.inputId, answersRequestId: null };
+      return { commandKey: message.inputId, answers: null };
     case DESKTOP_RUNNER_SERVER_MESSAGE.runApproval:
       return {
         commandKey: message.requestId,
-        answersRequestId: message.requestId,
+        answers: {
+          requestId: message.requestId,
+          askedBy: DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest,
+        },
+      };
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer:
+      return {
+        commandKey: message.requestId,
+        answers: {
+          requestId: message.requestId,
+          askedBy: DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent,
+        },
       };
     case DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt:
     case DESKTOP_RUNNER_SERVER_MESSAGE.runCancel:
-      return { commandKey: message.runId, answersRequestId: null };
+      return { commandKey: message.runId, answers: null };
+    default: {
+      message satisfies never;
+      return panic("Unknown desktop runner command");
+    }
+  }
+};
+
+/**
+ * The command as the queue keeps it: as sent, except that answers to a
+ * question are sealed (`sealed-answers.ts`).
+ */
+const storedPayloadOf = async (
+  owner: RunOwner,
+  message: QueuedMessage,
+): Promise<object> => {
+  switch (message.type) {
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer:
+      return await sealRunAnswer(owner.organizationId, message);
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runInput:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runApproval:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt:
+    case DESKTOP_RUNNER_SERVER_MESSAGE.runCancel:
+      return message;
     default: {
       message satisfies never;
       return panic("Unknown desktop runner command");
@@ -307,13 +350,24 @@ const queue = async (
   if (!fitsOneFrame(checked.output)) {
     return Result.ok({ type: "too_large" });
   }
+  const payload = await Result.tryPromise({
+    try: async () => await storedPayloadOf(owner, message),
+    catch: (cause) =>
+      new DatabaseError({
+        message: "Desktop runner command could not be sealed",
+        cause,
+      }),
+  });
+  if (payload.isErr()) {
+    return payload;
+  }
   const inserted = await Result.tryPromise({
     try: async () =>
       await insertRunCommand(deps.db, {
         owner,
         runId: message.runId,
         kind: message.type,
-        payload: checked.output,
+        payload: payload.value,
         limits: deps.limits,
         ...commandKeyOf(message),
       }),
@@ -413,6 +467,25 @@ export const createDesktopRunnerControl = ({
         requestId,
         decision,
       }),
+    /**
+     * Answer a blocking question the run asked, keyed by question id;
+     * idempotent on `requestId`. The answers are stored sealed.
+     */
+    answerQuestion: async ({
+      owner,
+      runId,
+      requestId,
+      answers,
+    }: RunOptions & {
+      requestId: string;
+      answers: RunAnswerMessage["answers"];
+    }) =>
+      await queue(deps, owner, {
+        type: DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+        runId,
+        requestId,
+        answers,
+      }),
     /** Stop the current turn; the run stays open. */
     interruptRun: async ({ owner, runId }: RunOptions) =>
       await queue(deps, owner, {
@@ -472,7 +545,7 @@ export const createDesktopRunnerControl = ({
         try: async () => await readChatRunSession(db, options),
         catch: toDatabaseError,
       }),
-    /** The thread's run that asked for approval `requestId`. */
+    /** The thread's run that asked request `requestId`. */
     readChatRunForRequest: async (
       options: Parameters<typeof readChatRunForRequest>[1],
     ): Promise<Result<ChatRunForRequest | null, DatabaseError>> =>

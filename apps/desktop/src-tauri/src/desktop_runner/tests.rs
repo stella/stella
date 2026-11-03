@@ -41,7 +41,8 @@ use super::state::RunnerState;
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ApprovalKind, DESKTOP_ID_HEADER, Harness, HarnessReport, MAX_FRAME_BYTES, PATH,
-  PROTOCOL, RejectReason, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  PROTOCOL, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -263,6 +264,16 @@ impl HarnessHost for RecordingHost {
 
   fn approval(&self, approval: RunApproval) {
     self.record(format!("approval {}", approval.request_id));
+  }
+
+  fn answer(&self, answer: RunAnswer) {
+    // The answers themselves may be secret; the host is shown only to take them.
+    let questions: Vec<&str> = answer.answers.question_ids().collect();
+    self.record(format!(
+      "answer {} {}",
+      answer.request_id,
+      questions.join(",")
+    ));
   }
 
   fn interrupt(&self, run_id: &str) {
@@ -688,6 +699,12 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
     "decision": "approve",
   });
+  let answer = json!({
+    "type": "run.answer",
+    "runId": RUN,
+    "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+    "answers": {"tone": ["Formal"], "passphrase": ["open sesame"]},
+  });
   let token = |expires_at: &str| json!({"type": "run.token", "runId": RUN, "token": "run-token-2", "expiresAt": expires_at});
   for _ in 0..2 {
     connection
@@ -696,6 +713,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     connection.receive_type("run.accepted").await;
     connection.send(input.clone()).await;
     connection.send(approval.clone()).await;
+    connection.send(answer.clone()).await;
     connection
       .send(json!({"type": "run.interrupt", "runId": RUN}))
       .await;
@@ -722,6 +740,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
       format!("start {RUN}"),
       "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
       "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
+      "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 passphrase,tone".to_owned(),
       format!("interrupt {RUN}"),
       "token 2026-10-28T13:15:00.000Z".to_owned(),
     ]
@@ -747,6 +766,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
   // The API replays its queue on a new socket.
   connection.send(input).await;
   connection.send(approval).await;
+  connection.send(answer).await;
   connection
     .send(json!({"type": "run.interrupt", "runId": RUN}))
     .await;

@@ -1,4 +1,8 @@
-import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
+import {
+  EventType,
+  RUN_CANCEL_REASON,
+  type RunAgentResumeItem,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
@@ -532,6 +536,7 @@ const ofRun = (runId: string) => (message: DesktopRunnerServerMessage) => {
     case "run.start":
     case "run.input":
     case "run.approval":
+    case "run.answer":
     case "run.interrupt":
     case "run.cancel":
     case "run.token":
@@ -717,6 +722,53 @@ describe("run messages", () => {
     expect(await storedSeqs(runId)).toEqual([]);
   });
 
+  test("a question pause an answer could not name is refused unstored", async () => {
+    const pause = (id: string, questions: unknown) => ({
+      type: "RUN_FINISHED",
+      runId: "desktop-run",
+      threadId: "desktop-thread",
+      outcome: {
+        type: "interrupt",
+        interrupts: [
+          {
+            id,
+            reason: "user_input",
+            toolCallId: "item_q",
+            metadata: { kind: "question", questions },
+          },
+        ],
+      },
+    });
+    const question = {
+      id: "tone",
+      header: "Tone",
+      prompt: "Formal or friendly?",
+      options: [],
+      allowsFreeText: true,
+      secret: false,
+    };
+    const desktopId = Bun.randomUUIDv7();
+    for (const chunk of [
+      // The harness's own id, not relabelled to a UUID.
+      pause("codex-request-number-7", [question]),
+      pause(Bun.randomUUIDv7(), [{ id: "tone" }]),
+      pause(Bun.randomUUIDv7(), []),
+    ]) {
+      // One installation throughout: the account holds few runners.
+      const desktop = await openDesktop(first, desktopId);
+      await desktop.hello();
+      const runId = await assignRun(desktopId);
+      await desktop.receive("run.start", ofRun(runId));
+      desktop.send({ type: "run.accepted", runId });
+      desktop.send({ type: "run.event", runId, seq: 1, chunk });
+      expect(await desktop.closed).toEqual({
+        code: 1008,
+        reason: "unfoldable_chunk",
+      });
+      expect(await storedSeqs(runId)).toEqual([]);
+    }
+  });
+
   test("a frame over the limit closes the socket with 1009", async () => {
     const desktop = await openDesktop(first, Bun.randomUUIDv7());
     await desktop.hello();
@@ -762,7 +814,7 @@ describe("command delivery", () => {
           decision: "approve",
         })
       ).unwrap(),
-    ).toEqual({ type: "approval_not_requested" });
+    ).toEqual({ type: "not_requested" });
     expect(
       (
         await control.answerApproval({
@@ -1958,7 +2010,7 @@ describe("chat turns on a computer", () => {
         });
       },
       finish: async (
-        outcome: "completed" | "limit_reached" | "needs_login",
+        outcome: "completed" | "interrupted" | "limit_reached" | "needs_login",
         sessionId: string | null,
       ) => {
         await sendAcked({
@@ -2345,13 +2397,22 @@ describe("chat turns on a computer", () => {
     ).toEqual([]);
   });
 
-  test("a blocking harness question ends the turn and the run's wait, so the next message answers it", async () => {
-    const chatThreadId = await newThread();
-    const { desktopId, desktop } = shared();
+  /** A run on `desktop` paused for a blocking question, with its chunks. */
+  const pausedForQuestion = async ({
+    desktop,
+    desktopId,
+    chatThreadId,
+    chatRunId,
+  }: {
+    desktop: FakeDesktop;
+    desktopId: string;
+    chatThreadId: SafeId<"chatThread">;
+    chatRunId: string;
+  }) => {
     const turn = collect(
       createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
         {
-          chatRunId: "chat-run-question",
+          chatRunId,
           messages: [{ role: "user", content: "Draft the reply" }],
           instructions: "You are stella.",
           resume: undefined,
@@ -2361,12 +2422,20 @@ describe("chat turns on a computer", () => {
     );
     const start = await desktop.receive("run.start");
     desktop.send({ type: "run.accepted", runId: start.runId });
+    // The sidecar relabels the harness's own request id to a UUID.
+    const requestId = Bun.randomUUIDv7();
+    const toolCall = { id: "item_q", name: "request_user_input", input: {} };
     const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-q"),
+        continuation: { type: "fresh" },
+      },
       {
         type: "question.requested",
         request: {
-          requestId: Bun.randomUUIDv7(),
-          toolCall: { id: "item_q", name: "request_user_input", input: {} },
+          requestId,
+          toolCall,
           questions: [
             {
               id: "tone",
@@ -2379,40 +2448,302 @@ describe("chat turns on a computer", () => {
               allowsFreeText: false,
               secret: false,
             },
+            {
+              id: "passphrase",
+              header: "Passphrase",
+              prompt: "The archive passphrase?",
+              options: [],
+              allowsFreeText: true,
+              secret: true,
+            },
           ],
           answerWith: "response",
         },
       },
+      { type: "interaction.resolved", requestId },
+      {
+        type: "tool.completed",
+        toolCall,
+        result: { content: "answered", status: "succeeded" },
+      },
+      { type: "text.completed", messageId: "msg_q", text: "Drafted." },
+      { type: "turn.completed", usage: null },
     ]);
-    const run = desktopRun(desktop, start.runId);
-    // Up to the pause; the mapper's end-of-stream error is not part of it.
-    await run.events(
-      sent.filter(
-        (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_ERROR,
-      ),
-    );
-    const chunks = await turn.done;
-    const result = chunks.find(
-      (chunk) => chunk.type === EventType.TOOL_CALL_RESULT,
-    );
-    expect(
-      result?.type === EventType.TOOL_CALL_RESULT &&
-        typeof result.content === "string"
-        ? JSON.parse(result.content)
-        : null,
-    ).toMatchObject({ status: "awaiting_reply", questions: [{ id: "tone" }] });
-    // The turn ends instead of waiting on an answer the run cannot receive.
-    expect(chunks.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED });
-    expect(
-      chunks.some(
+    const pauseAt =
+      sent.findIndex(
         (chunk) =>
-          chunk.type === EventType.RUN_FINISHED &&
-          chunk.outcome?.type === "interrupt",
-      ),
-    ).toBe(false);
+          isRecord(chunk) &&
+          chunk["type"] === EventType.RUN_FINISHED &&
+          isRecord(chunk["outcome"]) &&
+          chunk["outcome"]["type"] === "interrupt",
+      ) + 1;
+    expect(pauseAt).toBeGreaterThan(0);
+    const run = desktopRun(desktop, start.runId);
+    await run.events(sent.slice(0, pauseAt));
+    const paused = await turn.done;
+    return { runId: start.runId, requestId, run, sent, pauseAt, paused };
+  };
+
+  const resumeWith = (
+    chatThreadId: SafeId<"chatThread">,
+    item: RunAgentResumeItem,
+  ) =>
+    collect(
+      createLocalChatRun(contextFor(chatThreadId), {
+        type: "resume",
+        harness: "codex",
+      }).stream({
+        chatRunId: "chat-run-answered",
+        messages: [],
+        instructions: "You are stella.",
+        resume: [item],
+        abortSignal: new AbortController().signal,
+      }),
+    );
+
+  const ANSWERS = { tone: ["Formal"], passphrase: ["open sesame"] };
+
+  test("a blocking question pauses the turn, and its answers continue the same run, also after a reconnect", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const { runId, requestId, run, sent, pauseAt, paused } =
+      await pausedForQuestion({
+        desktop,
+        desktopId,
+        chatThreadId,
+        chatRunId: "chat-run-question",
+      });
+    // The turn awaits the member, naming the request the harness asked.
+    expect(paused.at(-1)).toMatchObject({
+      type: EventType.RUN_FINISHED,
+      runId: "chat-run-question",
+      outcome: {
+        type: "interrupt",
+        interrupts: [
+          {
+            id: requestId,
+            reason: "user_input",
+            metadata: { kind: "question", questions: [{ id: "tone" }, {}] },
+          },
+        ],
+      },
+    });
     expect(
-      (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
-    ).toBe(start.runId);
+      desktop.received.filter((message) => message.type === "run.interrupt"),
+    ).toEqual([]);
+    const [stored] = await db
+      .select({ chatReadSeq: desktopRunnerRuns.chatReadSeq })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, runId));
+    expect(stored?.chatReadSeq).toBe(run.position.seq);
+
+    const resumed = resumeWith(chatThreadId, {
+      interruptId: requestId,
+      status: "resolved",
+      payload: { answers: ANSWERS },
+    });
+    const answer = await desktop.receive("run.answer", ofRun(runId));
+    expect(answer).toEqual({
+      type: "run.answer",
+      runId,
+      requestId,
+      answers: ANSWERS,
+    });
+    // The queue keeps the answers sealed, never as typed.
+    const commands = await db
+      .select({ payload: desktopRunnerCommands.payload })
+      .from(desktopRunnerCommands)
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.answer"),
+        ),
+      );
+    expect(commands).toHaveLength(1);
+    expect(JSON.stringify(commands)).not.toContain("open sesame");
+    expect(commands[0]?.payload).not.toHaveProperty("answers");
+
+    // A computer that comes back gets the answer again, once.
+    await desktop.close();
+    const back = await openDesktop(chatInstance, desktopId);
+    await back.hello([{ runId, lastSeq: run.position.seq }]);
+    expect(await back.receive("run.answer", ofRun(runId))).toEqual(answer);
+    expect(
+      (
+        await control.answerQuestion({
+          owner,
+          runId,
+          requestId,
+          answers: ANSWERS,
+        })
+      ).unwrap(),
+    ).toEqual({ type: "duplicate" });
+    const after = desktopRun(back, runId, run.position.seq);
+    await after.events(sent.slice(pauseAt));
+    await after.finish("completed", "codex-session-q");
+    const chunks = await resumed.done;
+    expect(withoutRunStarts(chunks).map(meaning)).toEqual(
+      withoutRunStarts(sent.slice(pauseAt)).map(meaning),
+    );
+    // The question's call keeps the id the paused turn stored.
+    expect(toolCallIdsOf(chunks)).toEqual([...new Set(toolCallIdsOf(paused))]);
+    expect(
+      back.received.filter((message) => message.type === "run.answer"),
+    ).toHaveLength(1);
+    await back.close();
+  });
+
+  test("answers that do not answer the question are refused and the run stops waiting", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const { runId, requestId } = await pausedForQuestion({
+      desktop,
+      desktopId,
+      chatThreadId,
+      chatRunId: "chat-run-refused",
+    });
+    const refusals: [string, unknown][] = [
+      ["no answers field", { tone: ["Formal"] }],
+      ["answers as text", { answers: { tone: "Formal" } }],
+      [
+        "an option the question lacks",
+        { answers: { ...ANSWERS, tone: ["Casual"] } },
+      ],
+      ["a question left out", { answers: { tone: ["Formal"] } }],
+      ["a question never asked", { answers: { ...ANSWERS, venue: ["Brno"] } }],
+    ];
+    for (const [name, payload] of refusals) {
+      const chunks = await resumeWith(chatThreadId, {
+        interruptId: requestId,
+        status: "resolved",
+        payload,
+      }).done;
+      expect({ name, last: chunks.at(-1) }).toMatchObject({
+        name,
+        last: {
+          type: EventType.RUN_ERROR,
+          code: AI_FAILURE_CODES.local_runner_unavailable,
+        },
+      });
+    }
+    // Nothing reached the computer but the stop of the turn nobody answers.
+    expect((await desktop.receive("run.interrupt", ofRun(runId))).runId).toBe(
+      runId,
+    );
+    expect(
+      desktop.received.filter(
+        (message) => message.type === "run.answer" && message.runId === runId,
+      ),
+    ).toEqual([]);
+    expect(
+      await db
+        .select({ kind: desktopRunnerCommands.kind })
+        .from(desktopRunnerCommands)
+        .where(
+          and(
+            eq(desktopRunnerCommands.runId, runId),
+            eq(desktopRunnerCommands.kind, "run.answer"),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
+  test("a dismissed question stops the run's turn", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const { runId, requestId, run } = await pausedForQuestion({
+      desktop,
+      desktopId,
+      chatThreadId,
+      chatRunId: "chat-run-dismissed",
+    });
+    const resumed = resumeWith(chatThreadId, {
+      interruptId: requestId,
+      status: "cancelled",
+    });
+    expect((await desktop.receive("run.interrupt", ofRun(runId))).runId).toBe(
+      runId,
+    );
+    await run.finish("interrupted", "codex-session-q");
+    const chunks = await resumed.done;
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_FINISHED,
+      outcome: { type: "cancelled" },
+    });
+    expect(
+      desktop.received.filter(
+        (message) => message.type === "run.answer" && message.runId === runId,
+      ),
+    ).toEqual([]);
+  });
+
+  test("a run that already finished refuses the answer", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const { runId, requestId, run } = await pausedForQuestion({
+      desktop,
+      desktopId,
+      chatThreadId,
+      chatRunId: "chat-run-finished",
+    });
+    await run.finish("interrupted", "codex-session-q");
+    const chunks = await resumeWith(chatThreadId, {
+      interruptId: requestId,
+      status: "resolved",
+      payload: { answers: ANSWERS },
+    }).done;
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_unavailable,
+    });
+    expect(
+      (
+        await control.answerQuestion({
+          owner,
+          runId,
+          requestId,
+          answers: ANSWERS,
+        })
+      ).unwrap(),
+    ).toMatchObject({ type: "run_ended" });
+    expect(
+      desktop.received.filter(
+        (message) => message.type === "run.answer" && message.runId === runId,
+      ),
+    ).toEqual([]);
+  });
+
+  test("an answer is matched only to a question, and an approval only to an approval request", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId, desktop } = shared();
+    const { runId, requestId } = await pausedForQuestion({
+      desktop,
+      desktopId,
+      chatThreadId,
+      chatRunId: "chat-run-kinds",
+    });
+    expect(
+      (
+        await control.answerApproval({
+          owner,
+          runId,
+          requestId,
+          decision: "approve",
+        })
+      ).unwrap(),
+    ).toEqual({ type: "not_requested" });
+    expect(
+      (
+        await control.answerQuestion({
+          owner,
+          runId,
+          requestId: Bun.randomUUIDv7(),
+          answers: ANSWERS,
+        })
+      ).unwrap(),
+    ).toEqual({ type: "not_requested" });
   });
 
   test("stopping the turn interrupts the run on the computer", async () => {

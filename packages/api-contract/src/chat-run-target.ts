@@ -4,6 +4,7 @@ import type { AgentHarness } from "./agent-harness";
 import {
   DESKTOP_RUNNER_HARNESS_STATE,
   type DesktopRunnerHarnessReport,
+  desktopRunnerQuestionAnswersSchema,
 } from "./desktop-runner";
 
 /**
@@ -95,3 +96,19 @@ export type ChatLocalRunReadiness =
   | { status: "enabled"; runners: ChatLocalRunnerReadiness[] };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;
+
+/**
+ * The resume payload that answers a local run's blocking question: the
+ * interrupt the question paused the turn with (`metadata.kind: "question"`,
+ * its questions in `metadata.questions`) is resumed with `status: "resolved"`
+ * and this payload. Answers are keyed by question id and hold option labels
+ * or free text; every question asked takes at least one, and a question
+ * without free text takes only its option labels. A `cancelled` resume
+ * stops the run's turn instead of answering.
+ */
+export const chatLocalRunQuestionReplySchema = v.strictObject({
+  answers: desktopRunnerQuestionAnswersSchema,
+});
+export type ChatLocalRunQuestionReply = v.InferOutput<
+  typeof chatLocalRunQuestionReplySchema
+>;

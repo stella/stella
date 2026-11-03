@@ -371,7 +371,13 @@ fn commands_for_a_run_reach_the_holder() {
       .answer(RunAnswer {
         run_id: run_id.clone(),
         request_id: REQUEST_ID.to_owned(),
-        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+        answers: crate::runner_protocol::QuestionAnswers::try_from(
+          std::collections::BTreeMap::from([(
+            "law".to_owned(),
+            vec!["Czech".to_owned()],
+          )]),
+        )
+        .unwrap(),
       })
       .unwrap();
     sidecar.interrupt(&run_id).unwrap();
@@ -1288,7 +1294,9 @@ mod stand_in {
     });
     match model {
       "garbage" => write(held, "not json").await,
-      "wait" | "interruptible" | "flood-later" => emit(held, run_id, event).await,
+      "wait" | "interruptible" | "flood-later" | "ask" => {
+        emit(held, run_id, event).await
+      }
       "flood" => {
         for _ in 0..300 {
           emit(held, run_id, event.clone()).await;
@@ -1410,6 +1418,27 @@ mod stand_in {
           for _ in 0..300 {
             emit(held, &run_id, event.clone()).await;
           }
+        }
+      }
+      "run.answer" => {
+        // A run that asked a question goes on with the request it answers.
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "ask")
+        {
+          let answered = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": { "type": "TEXT_MESSAGE_CONTENT", "delta": message["requestId"] },
+          });
+          emit(held, &run_id, answered).await;
+          emit(
+            held,
+            &run_id,
+            finished(&run_id, "completed", Some("thread-a")),
+          )
+          .await;
         }
       }
       "run.interrupt" => {

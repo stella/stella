@@ -50,6 +50,8 @@ pub(crate) struct RunRecord {
   pub(crate) inputs: BTreeSet<String>,
   /// `run.approval` request ids already handed to the host.
   pub(crate) approvals: BTreeSet<String>,
+  /// `run.answer` request ids already handed to the host; never the answers.
+  pub(crate) answers: BTreeSet<String>,
   pub(crate) interrupted: bool,
   pub(crate) cancelled: bool,
   /// The last position this desktop produced; 0 before the first.
@@ -76,6 +78,7 @@ impl RunRecord {
       decided_at_ms: now_ms,
       inputs: BTreeSet::new(),
       approvals: BTreeSet::new(),
+      answers: BTreeSet::new(),
       interrupted: false,
       cancelled: false,
       last_seq: 0,

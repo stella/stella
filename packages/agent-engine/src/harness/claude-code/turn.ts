@@ -17,6 +17,7 @@ import type {
   HarnessToolCall,
   HarnessUsage,
 } from "../events";
+import { questionAnswersRefusal } from "../question-answers";
 import { unsupportedItem } from "../tool-parts";
 import type {
   ClaudeCliClient,
@@ -204,18 +205,16 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
+      const refusal = questionAnswersRefusal(
+        pending.questions,
+        response.answers,
+      );
+      if (refusal !== null) {
+        return Result.err(refusal);
+      }
       const answers: [string, string][] = [];
       for (const question of pending.questions) {
         const given = response.answers[question.id] ?? [];
-        if (given.length === 0) {
-          return Result.err(`Question ${question.id} has no answer.`);
-        }
-        const labels = new Set(question.options.map(({ label }) => label));
-        if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-          return Result.err(
-            `Question ${question.id} takes one of its options.`,
-          );
-        }
         // Native answers are keyed by the question text; several selected
         // options are one comma-separated answer.
         answers.push([pending.texts.get(question.id) ?? "", given.join(", ")]);

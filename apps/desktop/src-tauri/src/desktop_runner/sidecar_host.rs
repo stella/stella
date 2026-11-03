@@ -48,7 +48,7 @@ use crate::harness_sidecar::{
 };
 use crate::runner_protocol::{
   Harness, HarnessReport, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
-  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -842,6 +842,14 @@ impl HarnessHost for SidecarHarnessHost {
       .sidecar()
       .map_or(Ok(()), |sidecar| sidecar.approval(approval));
     Self::forward("approval", sent);
+  }
+
+  fn answer(&self, answer: RunAnswer) {
+    let sent = self
+      .shared
+      .sidecar()
+      .map_or(Ok(()), |sidecar| sidecar.answer(answer));
+    Self::forward("answer", sent);
   }
 
   fn interrupt(&self, run_id: &str) {

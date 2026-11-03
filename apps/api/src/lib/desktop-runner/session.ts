@@ -27,6 +27,10 @@ import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/l
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
+  openRunAnswer,
+  storedRunAnswerSchema,
+} from "@/api/lib/desktop-runner/sealed-answers";
+import {
   claimRunnerSession,
   type DesktopRunnerDb,
   type PendingCommand,
@@ -295,7 +299,10 @@ const sendToken = async (
   });
 };
 
-/** A stored command as the message to send, with a fresh token for `run.start`. */
+/**
+ * A stored command as the message to send: a `run.start` with a fresh
+ * token, a `run.answer` with its answers opened.
+ */
 const compose = async (
   state: SessionState,
   command: PendingCommand,
@@ -305,6 +312,13 @@ const compose = async (
     const stored = v.parse(runStartPayloadSchema, command.payload);
     const token = await mint(state, command.runId, command.workspaceIds);
     candidate = { ...stored, mcp: { ...stored.mcp, ...token } };
+  }
+  if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {
+    // The socket is bound to the organization of every run it holds.
+    candidate = await openRunAnswer(
+      state.binding.organizationId,
+      v.parse(storedRunAnswerSchema, command.payload),
+    );
   }
   const message = v.safeParse(desktopRunnerServerMessageSchema, candidate);
   // Commands are validated when queued; one that no longer is was corrupted.
