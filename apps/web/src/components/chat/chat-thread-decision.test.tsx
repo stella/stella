@@ -50,7 +50,9 @@ describe("chat thread decision label", () => {
   test("keeps the court's name beside its chip for hover and screen readers", () => {
     const html = render(DECISION);
 
-    expect(html).toContain('title="Nejvyšší soud"');
+    // The name opens as a tooltip on the chip rather than a native title.
+    expect(html).not.toContain('title="Nejvyšší soud"');
+    expect(html).toContain("data-base-ui-tooltip-trigger");
     expect(html).toContain('<span class="sr-only">Nejvyšší soud</span>');
   });
 

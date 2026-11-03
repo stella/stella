@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
@@ -8,6 +8,12 @@ import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
+import {
+  decodeTemplateListCursor,
+  encodeTemplateListCursor,
+  templateCursorCreatedAt,
+  templateListCursorCondition,
+} from "@/api/handlers/templates/list-cursor";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,18 +23,12 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 
 type TemplateRow = typeof templates.$inferSelect;
 
@@ -82,20 +82,6 @@ const listTemplatesQuerySchema = v.object({
   ),
 });
 
-// The cursor is the boundary template id alone; the query resolves its
-// (createdAt, id) tuple in-DB so it never round-trips a timestamp through a
-// millisecond-precision JS Date.
-export const decodeTemplateListCursor = (
-  cursor: string,
-): SafeId<"template"> | null => {
-  const parts = decodePaginationCursor(cursor);
-  const id = parts?.at(0);
-  return isUuidPaginationCursorPart(id) ? brandPersistedTemplateId(id) : null;
-};
-
-export const encodeTemplateListCursor = (id: SafeId<"template">): string =>
-  encodePaginationCursor([id]);
-
 // The exact `.select({...})` passed to the query below. Hoisted so the
 // selection and the derived `TemplateListItem` type can never drift apart.
 const TEMPLATE_LIST_SELECTION = {
@@ -131,7 +117,10 @@ const selectTemplateListRows = ({
   organizationId: SafeId<"organization">;
 }) =>
   tx
-    .select(TEMPLATE_LIST_SELECTION)
+    .select({
+      ...TEMPLATE_LIST_SELECTION,
+      cursorCreatedAt: templateCursorCreatedAt,
+    })
     .from(templates)
     // Author identity only for users still in the org: scope the
     // user join through membership so departed users render as
@@ -148,9 +137,10 @@ const selectTemplateListRows = ({
 // The two author-identity fields come from the joined `user` row rather than
 // from `templates` itself, so they stay excluded from the reverse totality
 // check via `Omit`.
-type TemplateListItem = Awaited<
-  ReturnType<typeof selectTemplateListRows>
->[number];
+type TemplateListItem = Omit<
+  Awaited<ReturnType<typeof selectTemplateListRows>>[number],
+  "cursorCreatedAt"
+>;
 
 // Totality guard, bidirectional: every schema column must be projected onto
 // the response or explicitly excused above, and the projection cannot carry
@@ -199,20 +189,13 @@ export const listTemplatesHandler = async function* ({
   }
 
   if (query.cursor) {
-    const boundaryId = decodeTemplateListCursor(query.cursor);
-    if (boundaryId === null) {
+    const boundary = decodeTemplateListCursor(query.cursor);
+    if (boundary === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
-    // Resolve the full-precision (createdAt, id) boundary in-DB by id so the
-    // cursor never round-trips createdAt through a millisecond JS Date. The
-    // boundary lookup is org-scoped (defense in depth beyond RLS) so a
-    // cursor carrying a foreign template id cannot shift this org's page
-    // boundary. Mirrors the list_templates MCP tool's keyset condition.
-    conditions.push(
-      sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${organizationId})`,
-    );
+    conditions.push(templateListCursorCondition(boundary));
   }
 
   const result = yield* Result.await(
@@ -227,11 +210,12 @@ export const listTemplatesHandler = async function* ({
   const page = createCursorPage({
     rows: result,
     limit,
-    cursorForItem: (item) => encodeTemplateListCursor(item.id),
+    cursorForItem: encodeTemplateListCursor,
   });
 
   return Result.ok({
     ...page,
+    items: page.items.map(({ cursorCreatedAt, ...item }) => item),
     // Per-org create cap (LIMITS.templatesCount), surfaced so the UI can
     // warn before hitting it; unrelated to this page's `limit`.
     templatesCountLimit: LIMITS.templatesCount,

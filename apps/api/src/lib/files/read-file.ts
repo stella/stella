@@ -1,5 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { status } from "@/api/http/status";
@@ -15,6 +17,12 @@ import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-princi
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
+
+const previewUnavailable = () =>
+  status(400, {
+    code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+    message: "This file has no preview. Download it instead.",
+  });
 
 type FilePurpose = "download" | "display" | "native-display";
 
@@ -178,7 +186,7 @@ export const readFileHandler = async ({
     purpose === "native-display" &&
     !isNativelyRenderableMimeType(content.mimeType)
   ) {
-    return status(400);
+    return previewUnavailable();
   }
 
   if (
@@ -202,7 +210,7 @@ export const readFileHandler = async ({
 
   const displayFileId = displayedPdfFileId(content);
   if (displayFileId === null) {
-    return status(400);
+    return previewUnavailable();
   }
   const displayFileKey = createFileKey({
     organizationId,

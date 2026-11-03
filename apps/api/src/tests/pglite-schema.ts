@@ -548,6 +548,22 @@ export const installPgliteTreeParentGuards = async (
   });
 };
 
+const ORGANIZATION_DELETE_OWNER_GUARD_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261101222534_organization_delete_owner_guard",
+  "migration.sql",
+);
+
+/** Install the organization delete guard omitted by declarative schema push. */
+export const installPgliteOrganizationDeleteOwnerGuard = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  await installPgliteMigration({
+    db,
+    migrationPath: ORGANIZATION_DELETE_OWNER_GUARD_MIGRATION_PATH,
+  });
+};
+
 /** Install the scheduler pause triggers omitted by declarative schema push. */
 export const installPgliteSchedulerJobPauseLog = async (
   db: PgliteSchemaDb,
@@ -1164,9 +1180,45 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   if (replacements.length !== 1) {
     panic("Expected the latest parsed-source invalidation function");
   }
-  for (const statement of [...statements, ...replacements]) {
+  for (const statement of [
+    ...statements,
+    ...replacements,
+    // The parsed-input state is derived from the row the invalidation leaves.
+    ...caseLawParsedInputStateStatements(),
+  ]) {
     await db.execute(sql.raw(statement));
   }
+};
+
+/**
+ * The parsed-input state's comparison function, trigger function and trigger,
+ * read from the production migration, for test databases built without it.
+ */
+export const caseLawParsedInputStateStatements = (): string[] => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261101224034_case_law_parsed_input_state",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        "CREATE OR REPLACE FUNCTION case_law_parsed_input_state",
+      ) ||
+      source.startsWith(
+        "CREATE OR REPLACE FUNCTION derive_case_law_parsed_input_state",
+      ) ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_zz_parsed_input_state",
+      )
+    );
+  });
+  if (statements.length !== 3) {
+    panic("Expected the parsed-input state functions and trigger");
+  }
+  return statements;
 };
 
 /**
@@ -1558,4 +1610,31 @@ export const installPgliteDecisionDocketFilingYear = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
   await db.execute(sql.raw(readDecisionDocketFilingYearMigration()));
+};
+
+/** Install the production population projection triggers omitted by schema push. */
+export const installPgliteCaseLawPopulationCounts = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261101022151_case_law_population_counts",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("GRANT EXECUTE ON FUNCTION") ||
+      source.startsWith("INSERT INTO public.case_law_population_seed_state") ||
+      source.startsWith("CREATE VIEW public.case_law_population_counts_live")
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+  await db.execute(sql`SELECT public.seed_case_law_population_counts(128)`);
 };

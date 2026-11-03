@@ -1,0 +1,17 @@
+{
+  "route": "/admin target",
+  "reason": "The danger zone reads the owner's latest organization audit archive, which deleting the organization requires, so it can say whether the archive is current and downloaded (one request).",
+  "budget": {
+    "depth": 5,
+    "requests": ["GET /v1/organizations/audit-export"],
+    "requestCounts": {
+      "GET /v1/organizations/audit-export": 1
+    },
+    "dbQueries": {
+      "GET /v1/organizations/audit-export": 10
+    },
+    "responseSizes": {
+      "GET /v1/organizations/audit-export": 1024
+    }
+  }
+}

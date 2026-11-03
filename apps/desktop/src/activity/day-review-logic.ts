@@ -20,11 +20,12 @@ export type MatchedSegment = TimedSegment & {
   evidence: string[];
   drafted: boolean;
 };
-/** What an app's windows showed, the longest-used title first. */
+/** What an app's windows showed and for how long, the longest-used title
+ * first. */
 export type AppEvidence = {
   identifier: string;
   name: string;
-  details: string[];
+  details: { title: string; durationMs: number }[];
 };
 export type DayReviewGroup = {
   id: string;
@@ -233,9 +234,10 @@ const SHARED_CONTEXT = [
   },
 ] as const;
 
-/** Context that several titles share says nothing about any of them, so it is
- * dropped and each title keeps only its own part. */
-export const withoutSharedContext = (evidence: readonly string[]) => {
+/** Context that several titles share says nothing about any of them, so it
+ * is dropped: each title maps to its own part. */
+export const cleanSharedContext = (evidence: readonly string[]) => {
+  const cleaned = new Map(evidence.map((title) => [title, title]));
   let titles = [...evidence];
   for (const { pattern, context, own } of SHARED_CONTEXT) {
     const counts = new Map<string, number>();
@@ -245,21 +247,21 @@ export const withoutSharedContext = (evidence: readonly string[]) => {
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
-    titles = [
-      ...new Set(
-        titles.map((title) => {
-          const match = pattern.exec(title);
-          const key = match?.at(context);
-          const rest = match?.at(own);
-          return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
-        }),
-      ),
-    ];
+    const strip = (title: string) => {
+      const match = pattern.exec(title);
+      const key = match?.at(context);
+      const rest = match?.at(own);
+      return key && rest && (counts.get(key) ?? 0) > 1 ? rest : title;
+    };
+    for (const [original, current] of cleaned) {
+      cleaned.set(original, strip(current));
+    }
+    titles = [...new Set(titles.map(strip))];
   }
-  return titles;
+  return cleaned;
 };
 
-/** Titles a review row shows per app before it counts the rest. */
+/** Titles a narrative template names per app before it stops. */
 export const EVIDENCE_DETAIL_LIMIT = 3;
 
 const TITLE_SEPARATORS = [" - ", " – ", " — "] as const;
@@ -288,7 +290,9 @@ export const withoutAppSuffix = (title: string, appName: string) => {
   return title.slice(0, cut);
 };
 
-const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
+export const appEvidence = (
+  segments: readonly MatchedSegment[],
+): AppEvidence[] =>
   appTotals(segments).flatMap(({ identifier, name }) => {
     const durations = new Map<string, number>();
     for (const segment of segments) {
@@ -305,14 +309,20 @@ const appEvidence = (segments: readonly MatchedSegment[]): AppEvidence[] =>
         );
       }
     }
-    const details = withoutSharedContext(
-      [...durations]
-        .sort(
-          ([leftTitle, left], [rightTitle, right]) =>
-            right - left || leftTitle.localeCompare(rightTitle),
-        )
-        .map(([title]) => title),
-    ).filter((title) => title.toLowerCase() !== name.toLowerCase());
+    const cleaned = cleanSharedContext([...durations.keys()]);
+    const merged = new Map<string, number>();
+    for (const [title, durationMs] of durations) {
+      const own = cleaned.get(title) ?? title;
+      merged.set(own, (merged.get(own) ?? 0) + durationMs);
+    }
+    const details = [...merged]
+      .filter(([title]) => title.toLowerCase() !== name.toLowerCase())
+      .map(([title, durationMs]) => ({ title, durationMs }))
+      .sort(
+        (left, right) =>
+          right.durationMs - left.durationMs ||
+          left.title.localeCompare(right.title),
+      );
     return details.length > 0 ? [{ identifier, name, details }] : [];
   });
 

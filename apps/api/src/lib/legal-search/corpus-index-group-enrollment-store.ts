@@ -220,8 +220,9 @@ export const attestCorpusIndexGroupEnrollmentTx = async (
     .update(corpusIndexGroupEnrollments)
     .set({
       provisioningStatus: "attested",
-      attestedAt: sql`clock_timestamp()`,
-      updatedAt: sql`clock_timestamp()`,
+      // One instant for both: clock_timestamp() advances within a statement.
+      attestedAt: sql`statement_timestamp()`,
+      updatedAt: sql`statement_timestamp()`,
     })
     .where(
       and(

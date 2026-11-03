@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
-import type { CheerioAPI } from "cheerio";
+
+import { load } from "@stll/html";
+import type { CheerioAPI } from "@stll/html";
 
 import {
   excludedSourceField,
@@ -24,6 +25,8 @@ import type {
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { listingOnlyCoverage } from "./listing-only";
 
 const ORIGIN = "https://www.edpb.europa.eu";
 const INDEXES = ["/documents_en", "/public-consultations_en"] as const;
@@ -735,13 +738,9 @@ export const edpbAdapter = {
       ...extraction,
     });
   },
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" as const }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "The publisher paginates mutable document and consultation indexes; no exhaustive date-slice endpoint or count of eligible language expressions exists.",
-  },
+  ...listingOnlyCoverage(
+    "The publisher paginates mutable document and consultation indexes; no exhaustive date-slice endpoint or count of eligible language expressions exists.",
+  ),
   sourceFields: {
     status: "declared",
     fields: SOURCE_FIELD_DISPOSITIONS,

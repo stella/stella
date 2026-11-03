@@ -1,7 +1,6 @@
 import { STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
 import { createTestState } from "@stll/test-state";
 
@@ -739,30 +738,14 @@ describe("managed OpenRouter credentials", () => {
       });
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(ACCESS_TOKEN);
-      const metricSchema = v.object({
-        _aws: v.object({
-          CloudWatchMetrics: v.array(
-            v.object({
-              Dimensions: v.array(v.array(v.string())),
-              Metrics: v.array(v.object({ Name: v.string() })),
-            }),
-          ),
-        }),
-      });
-      const dimensions = lines.flatMap((line) =>
-        v
-          .parse(metricSchema, JSON.parse(line))
-          ._aws.CloudWatchMetrics.map((metric) => metric.Dimensions),
+      expect(lines.map((line) => JSON.parse(line))).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ OpenRouterTokenExchange: 1 }),
+        ]),
       );
-      expect(dimensions).toContainEqual([["outcome"]]);
-      expect(dimensions).toContainEqual([[]]);
-      expect(
-        dimensions.every(
-          (value) =>
-            JSON.stringify(value) === JSON.stringify([["outcome"]]) ||
-            JSON.stringify(value) === JSON.stringify([[]]),
-        ),
-      ).toBe(true);
+      for (const line of lines) {
+        expect(JSON.parse(line)).not.toHaveProperty("_aws");
+      }
     } finally {
       resetMetricLineSinkForTesting();
       logger.restore();

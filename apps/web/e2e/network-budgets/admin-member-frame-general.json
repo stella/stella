@@ -1,6 +1,6 @@
 {
   "route": "/admin/general",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The danger zone reads the owner's latest organization audit archive, which deleting the organization requires (one request).",
   "budget": {
     "depth": 5,
     "requests": [
@@ -15,6 +15,7 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/deployment-features",
+      "GET /v1/organizations/audit-export",
       "GET /v1/signals/count",
       "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
@@ -35,7 +36,8 @@
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/time-entries/approval-queue": 1
+      "GET /v1/time-entries/approval-queue": 1,
+      "GET /v1/organizations/audit-export": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -52,7 +54,8 @@
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/time-entries/approval-queue": 10
+      "GET /v1/time-entries/approval-queue": 10,
+      "GET /v1/organizations/audit-export": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -68,7 +71,8 @@
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/time-entries/approval-queue": 1024
+      "GET /v1/time-entries/approval-queue": 1024,
+      "GET /v1/organizations/audit-export": 1024
     }
   }
 }

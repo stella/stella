@@ -9,21 +9,9 @@ import {
 } from "./text.shared";
 
 /**
- * The embedded font each face is, by the name the app registers it under:
- * DM Sans, the web's typeface, for the interface; the platform's Georgia for
- * reading, since the web reader's Source Serif 4 ships only as web fonts.
+ * The embedded DM Sans face, the web's typeface, for each weight, by the
+ * name the app registers it under.
  */
-const faceName = ({ family, weight, italic }: TextFace): string => {
-  if (family === "serif") {
-    const bold = weight === "bold" || weight === "semibold";
-    if (bold) {
-      return italic === true ? "Georgia-BoldItalic" : "Georgia-Bold";
-    }
-    return italic === true ? "Georgia-Italic" : "Georgia";
-  }
-  return SANS_FACES[weight];
-};
-
 const SANS_FACES = {
   light: "DMSans-Light",
   regular: "DMSans-Regular",
@@ -51,7 +39,7 @@ const withForeground = (classes: string): string =>
 
 /** The font a role is set in, for a native control that draws its own text. */
 export const textFontFamily = (variant: TextContract["variant"]): string =>
-  faceName(TEXT_VARIANT_FACES[variant ?? "body"]);
+  SANS_FACES[TEXT_VARIANT_FACES[variant ?? "body"].weight];
 
 /**
  * Text in one of the design system's roles (./text.shared.ts), as the web

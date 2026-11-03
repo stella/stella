@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
-import { useBrowserClientConnected } from "@/features/chat/browser-control/browser-extension-bridge";
+import { useBrowserExtensionState } from "@/features/chat/browser-control/browser-extension-bridge";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
@@ -85,7 +85,7 @@ export const useComposerSkillAvailability = ({
   userId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
-  const browserExtension = useBrowserClientConnected();
+  const browserExtension = useBrowserExtensionState().status === "connected";
   const query =
     chat === undefined
       ? undefined

@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { parse } from "tldts";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { detectChatLinks, normalizeChatLink } from "./link-detection";
+import {
+  detectChatLinks,
+  FILE_EXTENSION_TLDS,
+  normalizeChatLink,
+} from "./link-detection";
 
 const label = fc.stringMatching(/^[a-z][a-z0-9]{0,15}$/u);
 const domain = fc
@@ -58,6 +63,31 @@ describe("chat link detection", () => {
     expect(detectChatLinks("www.report.zip https://report.zip")).toHaveLength(
       2,
     );
+  });
+
+  test("file names whose extension is also a TLD stay plain unless written as a site", () => {
+    expect(
+      detectChatLinks(
+        "Link me to qa30-memo.md, smlouva.pl, build.sh, main.rs, app.py, logo.ai and notes.one",
+      ),
+    ).toEqual([]);
+    expect(
+      detectChatLinks(
+        "www.example.md https://example.pl example.md/docs allegro.pl/?q=1",
+      ).map(({ hostname }) => hostname),
+    ).toEqual(["www.example.md", "example.pl", "example.md", "allegro.pl"]);
+    expect(detectChatLinks("seznam.cz stll.app")).toHaveLength(2);
+  });
+
+  test("every file-extension TLD is a live ICANN suffix", () => {
+    for (const suffix of FILE_EXTENSION_TLDS) {
+      const parsed = parse(`memo.${suffix}`, { allowPrivateDomains: false });
+      expect({ suffix, isIcann: parsed.isIcann }).toEqual({
+        suffix,
+        isIcann: true,
+      });
+      expect(normalizeChatLink(`https://memo.${suffix}`)).not.toBeNull();
+    }
   });
 
   test("rejects credentials, executable schemes and invisible characters", () => {
@@ -161,7 +191,7 @@ describe("chat link detection", () => {
       "chat links reject the ambiguous filename and numeric citation classes",
       fc.property(
         label,
-        fc.constantFrom("zip", "mov", "pdf", "docx", "txt", "js"),
+        fc.constantFrom("pdf", "docx", "txt", "js", ...FILE_EXTENSION_TLDS),
         fc.nat(),
         fc.nat(),
         (name, suffix, first, second) => {
