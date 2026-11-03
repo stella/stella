@@ -191,6 +191,7 @@
       "openFailed": "Ce document ne peut pas être modifié pour le moment",
       "takenOver": "Quelqu’un d’autre modifie maintenant ce document. Vos modifications depuis le dernier enregistrement n’ont pas été conservées.",
       "finishFailed": "Vos modifications sont enregistrées, mais elles ne sont pas encore devenues une nouvelle version. Touchez à nouveau Terminé, ou quittez le document. La prochaine modification reprendra à partir de là.",
+      "notStored": "Vos dernières modifications n’ont pas pu être enregistrées. Restez pour réessayer, ou quittez sans elles.",
       "stay": "Rester",
       "leave": "Quitter"
     }

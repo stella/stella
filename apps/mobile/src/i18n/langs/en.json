@@ -191,6 +191,7 @@
       "openFailed": "This document cannot be edited right now",
       "takenOver": "Someone else is now editing this document. Your changes since the last save were not kept.",
       "finishFailed": "Your changes are saved, but they could not become a new version yet. Tap Done again, or leave: the next edit continues from them.",
+      "notStored": "Your latest changes could not be saved. Stay to try again, or leave without them.",
       "stay": "Stay",
       "leave": "Leave"
     }

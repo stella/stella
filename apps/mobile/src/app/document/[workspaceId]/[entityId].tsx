@@ -303,11 +303,9 @@ const OpenedDocument = ({
               editing.requestEdit();
             }
           }}
-          onEditSaved={async (size: number | null, final: boolean) => {
-            if (mounted.current) {
-              await editing.editSaved(size, final);
-            }
-          }}
+          onEditSaved={async (size: number | null, final: boolean) =>
+            mounted.current ? await editing.editSaved(size, final) : false
+          }
           onReady={() => {
             if (mounted.current) {
               setReady(true);
