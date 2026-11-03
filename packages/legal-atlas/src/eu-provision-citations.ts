@@ -516,13 +516,13 @@ export const parseEuProvisionAnchor = (
     /^art_(?<article>[1-9]\d*[a-z]?)(?:-par_(?<wordParagraph>[1-9]\d*))?(?:-pt_(?<point>[a-z]))?(?:-num_(?<numericPoint>[1-9]\d*))?$/u.exec(
       raw,
     );
-  if (match?.groups === undefined) {
-    return null;
+  if (match?.groups !== undefined) {
+    const reference = referenceFrom(match.groups);
+    return reference === null
+      ? null
+      : { ...reference, point: match.groups["numericPoint"] ?? null };
   }
-  const reference = referenceFrom(match.groups);
-  return reference === null
-    ? null
-    : { ...reference, point: match.groups["numericPoint"] ?? null };
+  return null;
 };
 
 export const normalizeEuProvisionReference = (

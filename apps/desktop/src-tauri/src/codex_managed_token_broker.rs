@@ -303,8 +303,9 @@ impl CodexManagedTokenBroker {
     if path.as_os_str().len() > UNIX_SOCKET_PATH_BYTES {
       return Err(std::io::Error::other("token broker path is too long"));
     }
-    let listener = tokio::net::UnixListener::bind(&path)?;
-    directory.restrict_socket()?;
+    let listener = std::os::unix::net::UnixListener::from(directory.bind_socket()?);
+    listener.set_nonblocking(true)?;
+    let listener = tokio::net::UnixListener::from_std(listener)?;
     let endpoint = path
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
@@ -349,7 +350,11 @@ impl CodexManagedTokenBroker {
     use std::os::windows::io::AsHandle;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
-    let endpoint = format!(r"\\.\pipe\stella-token-{}", uuid::Uuid::new_v4());
+    let endpoint = format!(
+      "{}{}",
+      crate::local_store::token_broker::PIPE_PREFIX,
+      uuid::Uuid::new_v4()
+    );
     // Remote clients are refused, only the current user may open the pipe,
     // and the first instance claims the name, so no other process can have
     // created it first.
