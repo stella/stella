@@ -29,6 +29,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createRateTable from "./create";
 import deleteRateTable from "./delete";
@@ -405,9 +406,7 @@ if (!databaseUrl || !runPostgres) {
         expect(fresh).toHaveProperty("id");
         expect(await defaultIds()).toHaveLength(1);
       } finally {
-        await firstDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(firstDb, [organizationId]);
         await firstDb.delete(user).where(eq(user.id, userId));
       }
     });

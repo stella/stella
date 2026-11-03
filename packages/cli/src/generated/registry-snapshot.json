@@ -12630,7 +12630,7 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Requires audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -12639,7 +12639,7 @@
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -12660,6 +12660,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": ["people", "automations"],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -12685,7 +12690,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     },

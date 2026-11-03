@@ -5,7 +5,9 @@ import { PgTable } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 
+import { CASE_LAW_REPLAY_PENDING_INDEX } from "@/api/db/case-law-parsed-input-state";
 import * as schema from "@/api/db/schema";
+import { BACKGROUND_REPLAY_ARMS } from "@/api/handlers/case-law/ingestion/replay";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
@@ -18,7 +20,10 @@ import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
+import {
+  indexedAccessPaths,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 import {
   CASE_LAW_SEARCH_FETCH_LIMIT,
@@ -634,6 +639,30 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 rows.every((row) => !row.eligible)
                 ? undefined
                 : `${budgetId}: expected 100 ineligible rows`,
+            );
+          }
+          // Plan stability by construction: every arm of the probe is one
+          // index read, never a scan whose cost rests on a row estimate.
+          if (budgetId === "statement.caseLaw.backgroundReplayProbe") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            );
+            const orderedReads = indexedAccessPaths(
+              result.plan.Plan,
+              "case_law_decisions",
+            ).filter(
+              ({ accessKind, branches }) =>
+                accessKind !== "bitmap" &&
+                branches.every(
+                  ({ indexName }) =>
+                    indexName === CASE_LAW_REPLAY_PENDING_INDEX.name,
+                ),
+            );
+            note(
+              scans.length === BACKGROUND_REPLAY_ARMS.length &&
+                orderedReads.length === scans.length
+                ? undefined
+                : `${budgetId}: each arm must read ${CASE_LAW_REPLAY_PENDING_INDEX.name} alone; scans: ${scans.map(({ nodeType, index }) => `${nodeType} ${String(index)}`).join(", ")}`,
             );
           }
         }

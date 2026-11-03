@@ -18,6 +18,7 @@ import {
   requestBoundedTimeout,
   requestBudgetExpiry,
 } from "@/api/lib/load/request-latency-budget";
+import { rebuildResponse } from "@/api/lib/observability/server-error-answer";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -656,13 +657,9 @@ export const probeCorpusIndexSearchLiveness = async (
     init: { timeoutMs },
     observer,
     consume: async (response) =>
-      new Response(
+      rebuildResponse(
+        response,
         response.body === null ? null : await response.arrayBuffer(),
-        {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        },
       ),
   });
 
