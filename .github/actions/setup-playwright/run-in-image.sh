@@ -63,8 +63,16 @@ args=(run --pull=never --rm --init --ipc=host --network "$network"
   --env HOME=/tmp/playwright-home
   --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
   --env PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1)
+if [[ -n "${FLAKY_TEST_QUARANTINE_REPORT_DIR:-}" ]]; then
+  if [[ "$FLAKY_TEST_QUARANTINE_REPORT_DIR" != /* ]]; then
+    echo "::error::Flaky-test quarantine report directory must be an absolute path" >&2
+    exit 1
+  fi
+  mkdir -p "$FLAKY_TEST_QUARANTINE_REPORT_DIR"
+  args+=(--volume "$FLAKY_TEST_QUARANTINE_REPORT_DIR:$FLAKY_TEST_QUARANTINE_REPORT_DIR:rw")
+fi
 # Forward browser inputs only, never runner tokens or the Docker socket.
-for key in PLAYWRIGHT_PACKAGE_DIR BROWSERS CI NODE_ENV E2E_EXECUTION_PROFILE E2E_EXPECT_DEV_ROUTES E2E_OUTPUT_DIR \
+for key in BUN_OPTIONS FLAKY_TEST_QUARANTINE_REPORT_DIR PLAYWRIGHT_PACKAGE_DIR BROWSERS CI NODE_ENV E2E_EXECUTION_PROFILE E2E_EXPECT_DEV_ROUTES E2E_OUTPUT_DIR \
   E2E_WEB_URL E2E_API_URL E2E_LANDING_URL E2E_NETWORK_BASELINE \
   E2E_SOAK_SEED E2E_SOAK_STEPS E2E_SOAK_REPLAY \
   E2E_EDGE_HEADER_NAME E2E_EDGE_HEADER_VALUE SMOKE_SESSION_SECRET \

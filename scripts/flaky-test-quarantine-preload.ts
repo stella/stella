@@ -232,10 +232,13 @@ const install = (reportDir: string): void => {
   const registryPath =
     process.env[QUARANTINE_REGISTRY_ENV] ??
     path.join(import.meta.dir, "flaky-test-quarantine.json");
-  // The registry sits in <root>/scripts/, and ids are relative to <root>.
-  // Bun.main is a real path, so the root is too (a symlinked checkout or
-  // temporary directory would otherwise match no test file).
-  const root = realpathSync(path.resolve(path.dirname(registryPath), ".."));
+  // Workflow-owned tooling may be preserved outside the deployed source.
+  // Test identities still belong to GitHub's workspace; local runs derive
+  // their root from the registry. Match Bun.main's real path in either case.
+  const root = realpathSync(
+    process.env["GITHUB_WORKSPACE"] ??
+      path.resolve(path.dirname(registryPath), ".."),
+  );
   const quarantined = new Set(readQuarantinedIds(registryPath));
   if (quarantined.size === 0) {
     return;

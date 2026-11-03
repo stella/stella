@@ -61,6 +61,9 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Prepare shared compiler inputs once
         run: |
           bun test scripts/type-cost-measurement.test.ts

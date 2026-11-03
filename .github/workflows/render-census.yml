@@ -170,6 +170,9 @@ jobs:
         timeout-minutes: 2
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Verify render counting and React Refresh
         timeout-minutes: 3
         run: |

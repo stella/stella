@@ -65,6 +65,9 @@ jobs:
           cd ./apps/api
           cp .env.example .env
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Provider request all-triples cover
         working-directory: apps/api
         run: bun run test src/handlers/chat/provider-request-schemas.integration.test.ts
@@ -114,6 +117,9 @@ jobs:
         run: |
           cd ./apps/api
           cp .env.example .env
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Provider request combinations
         working-directory: apps/api
@@ -166,6 +172,9 @@ jobs:
         run: |
           cd ./apps/api
           cp .env.example .env
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Turn outcome combinations
         working-directory: apps/api
@@ -244,6 +253,9 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Sanctions properties
         run: bun --filter @stll/sanctions test:property
