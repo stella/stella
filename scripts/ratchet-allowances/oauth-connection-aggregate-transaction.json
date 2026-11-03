@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/oauth-connections.ts",
+  "delta": 1,
+  "reason": "The existing root transaction now takes the aggregate lock; no new root access, same operation."
+}

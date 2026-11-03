@@ -82,6 +82,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "oauth_access_token",
   "oauth_client",
   "oauth_consent",
+  "oauth_grant_revocations",
   "oauth_refresh_token",
   "organization_creation_requests",
   "organization_professional_use_acceptances",
