@@ -51,6 +51,7 @@ import type {
   RecoveryTarget,
 } from "../shared/rpc";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -1090,6 +1091,7 @@ const App = () => {
 
   return (
     <main className="bg-background text-foreground min-h-dvh">
+      <WindowDragRegion />
       <div
         className={cn(
           "mx-auto flex h-dvh max-w-[30rem] flex-col px-4 pb-4",
