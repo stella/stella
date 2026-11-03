@@ -422,6 +422,13 @@ impl HarnessSidecar {
   }
 
   /// Answers to a blocking question the run asked.
+  #[cfg_attr(
+    not(test),
+    allow(
+      dead_code,
+      reason = "the runner socket has no answer message yet; the host relays one once it does"
+    )
+  )]
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
     self.forward(answer.run_id.clone(), HostMessage::RunAnswer(answer))
   }
