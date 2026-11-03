@@ -109,8 +109,9 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
-      <MenuGroupLabel>{t("chat.localRun.runOn")}</MenuGroupLabel>
+      {/* A group label renders only inside its group; the radio group is one. */}
       <MenuRadioGroup value={value}>
+        <MenuGroupLabel>{t("chat.localRun.runOn")}</MenuGroupLabel>
         <MenuRadioItem
           onClick={() => choose(CHAT_CLOUD_RUN_TARGET)}
           value={CHAT_RUN_TARGET_KIND.cloud}
