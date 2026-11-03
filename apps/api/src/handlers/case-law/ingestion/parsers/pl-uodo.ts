@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
  *
@@ -14,9 +16,16 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -32,7 +41,7 @@ import type {
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import {
   buildValidationHtml,
-  validateAndLog,
+  validateAst,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { appendTextInline, inlinesToPlainText } from "./shared-inlines";
@@ -128,6 +137,24 @@ const nextId = (state: ParseState): number => {
   return state.counter;
 };
 
+/**
+ * What an `xGlossRef` prints, raised: the label of the footnote it points at,
+ * or, where it names no footnote, its reference itself. The portal sets an
+ * article's superscript index this way (`art. 22<xGlossRef xRef="1"/>` is
+ * art. 22¹), and its own text rendition prints both readings. Undefined only
+ * for a mark that states nothing to print.
+ */
+const glossRefMark = (
+  glossLabels: ReadonlyMap<string, string>,
+  ref: Element,
+): string | undefined => {
+  const target = collapse(ref.attribs["xRef"] ?? "").trim();
+  if (target === "") {
+    return undefined;
+  }
+  return glossLabels.get(target) ?? target;
+};
+
 /** The inline run of one `xText`, with links and footnote marks kept. */
 const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
   const inlines: Inline[] = [];
@@ -169,13 +196,15 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
         return;
       }
       case "xGlossRef": {
-        const label = state.glossLabels.get(current.attribs["xRef"] ?? "");
-        if (label !== undefined) {
-          target.push({
-            type: "superscript",
-            children: [{ type: "text", text: label }],
-          });
+        const mark = glossRefMark(state.glossLabels, current);
+        if (mark === undefined) {
+          state.unmapped.add(current.tagName);
+          return;
         }
+        target.push({
+          type: "superscript",
+          children: [{ type: "text", text: mark }],
+        });
         return;
       }
       default: {
@@ -509,7 +538,7 @@ const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   return root === undefined ? [] : sourceTextsOf($, root);
 };
@@ -517,7 +546,7 @@ export const plUodoSourceTexts = (xml: string): string[] => {
 export const parsePlUodoDecisionXml = (
   input: ParsePlUodoDecisionInput,
 ): Result<ParsePlUodoDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return Result.err(
@@ -592,13 +621,10 @@ export const parsePlUodoDecisionXml = (
     );
   }
 
-  const validation = validateAndLog(
-    {
-      parser: "pl-uodo",
-      caseNumber: input.caseNumber,
-      language: "pl",
-      url: input.sourceUrl,
-    },
+  // Measured, not logged: a failed verdict fails the parse, which the adapter
+  // reports as a document parse failure, and the pipeline reports retention
+  // for every document it stores.
+  const validation = validateAst(
     buildValidationHtml(sourceTextsOf($, root)),
     state.blocks,
   );

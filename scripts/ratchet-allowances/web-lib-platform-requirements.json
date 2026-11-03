@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "lib/platform holds what the device and layout can do (side panel, desktop-app host) and the typed requirements UI actions declare against it. It is not inspector-specific: menus and toolbars are meant to declare the same requirements, and no existing lib entry owns device or layout capabilities (lib/capabilities is the API capability layer)."
+}

@@ -1,3 +1,4 @@
+// parser-output-unchanged: no case-law or legislation adapter or parser calls slugify; adapters reach this module only through the package index.
 /**
  * One slug generator for the key-shaped strings the apps derive from a label.
  *
@@ -7,20 +8,23 @@
  * characters into one separator, clip, trim a trailing separator, fall back
  * when nothing is left — was identical in all four and is fixed here.
  *
- * Deliberately does NOT transliterate. `slugify("café")` is `"caf"` under the
- * `ascii` charset, not `"cafe"`: slugs are persisted, and folding here would
- * quietly start minting different keys for the same labels. The folding
- * primitives in this package are for search text, where nothing is stored.
+ * The `ascii` charset transliterates Latin letters before filtering:
+ * `slugify("Łódź")` is `"lodz"`, not `"odz"`. A key minted before
+ * transliteration is not recomputed by its owner; a caller that re-derives a
+ * stored key at lookup (the case-law routes) recognises the earlier fold
+ * itself.
  *
  * Single-pass by construction: a regex pipeline over untrusted label text is
  * what the slow-regex guard exists to prevent.
  */
 
+import { applyAsciiFolds } from "./ascii-fold.js";
+
 /**
  * Which characters survive.
  *
  * - `ascii` keeps `[a-z0-9]`, for keys that end up in URLs and columns
- *   validated against that charset.
+ *   validated against that charset. Latin letters are transliterated first.
  * - `unicode` keeps any Unicode letter or number, for paths shown back to the
  *   person who typed them.
  */
@@ -48,6 +52,21 @@ export type SlugifyOptions = {
 
 const UNICODE_SLUG_CHARACTER = /[\p{L}\p{N}]/u;
 
+/** Compatibility decomposition, the search fold's mark strip and the table. */
+const spellInAscii = (text: string): string =>
+  applyAsciiFolds(text.normalize("NFKD"));
+
+/**
+ * Latin letters spelled in ASCII: compatibility decomposition (`ﬁ`, `Ａ`), the
+ * search fold's mark strip (`č`), and the `unaccent()` table for letters no
+ * decomposition reaches (`ł`, `ø`, `ß`, `þ`, `ı`). The table is not closed
+ * under case (`Ɩ` folds and its small letter `ɩ` does not; `ɡ` folds and its
+ * capital `Ɡ` does not), so it applies on both sides of the lowercase. Other
+ * scripts pass through and are filtered out.
+ */
+const transliterateToAscii = (value: string): string =>
+  spellInAscii(spellInAscii(value).toLowerCase()).toLowerCase();
+
 const isSlugCharacter = (character: string, charset: SlugCharset): boolean => {
   if (charset === "unicode") {
     return UNICODE_SLUG_CHARACTER.test(character);
@@ -62,10 +81,12 @@ export const slugify = (
   value: string,
   { charset, separator, maxLength, fallback }: SlugifyOptions,
 ): string => {
+  const source =
+    charset === "ascii" ? transliterateToAscii(value) : value.toLowerCase();
   let buffer = "";
   let lastWasSeparator = true;
 
-  for (const character of value.toLowerCase()) {
+  for (const character of source) {
     if (isSlugCharacter(character, charset)) {
       buffer += character;
       lastWasSeparator = false;

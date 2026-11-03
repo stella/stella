@@ -15,7 +15,7 @@ import {
   caseLawResearchColumns,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { readNamedResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -23,6 +23,7 @@ import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -40,6 +41,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -59,6 +61,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const lookupResearchAnswers = createLookupResearchAnswers({
+  readCopies: createTestWithdrawalCopyReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -77,7 +82,7 @@ const contextFor = (
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),
-  route: "/case/research/columns",
+  route: "/v1/case/research/columns" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [], organizationId, userId),
   scopedDb: createScopedDb(testDb, [], organizationId, userId),
   session: { activeOrganizationId: organizationId },

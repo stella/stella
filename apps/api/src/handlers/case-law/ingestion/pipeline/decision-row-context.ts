@@ -9,7 +9,6 @@ import {
 } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ObservationShape } from "@/api/handlers/case-law/ingestion/pipeline/decision-existing";
 import type {
   DecisionIdentity,
@@ -26,6 +25,7 @@ import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplem
 import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 

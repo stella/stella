@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -140,7 +143,7 @@ describe("parseRegionalDecision", () => {
       expect(introBlocks.length).toBe(2);
     });
 
-    test("adds takto: heading before verdict", () => {
+    test("adds the takto: lead-in before verdict", () => {
       const input = baseInput({
         verdict: [makePara("Žaloba se zamítá.")],
       });
@@ -149,6 +152,9 @@ describe("parseRegionalDecision", () => {
 
       const texts = collectPlainTexts(documentAst.blocks);
       expect(texts).toContain("takto:");
+      expect(findAllByType(documentAst.blocks, "heading")).not.toContainEqual(
+        expect.objectContaining({ plainText: "takto:" }),
+      );
     });
 
     test("maps verdict paragraphs to holding role", () => {
@@ -219,17 +225,25 @@ describe("parseRegionalDecision", () => {
       const headings = findAllByType(documentAst.blocks, "heading");
       const headingTexts = headings.map((h) => h.plainText);
       expect(headingTexts).toContain("ROZSUDEK");
-      expect(headingTexts).toContain("takto:");
       expect(headingTexts).toContain("Odůvodnění:");
       expect(headingTexts).toContain("Poučení:");
 
       // Verify order: title < takto < oduvodneni < pouceni
       const titleIdx = headingTexts.indexOf("ROZSUDEK");
-      const taktoIdx = headingTexts.indexOf("takto:");
+      const taktoIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "takto:",
+      );
+      const titleBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "ROZSUDEK",
+      );
+      const oduvBlockIdx = documentAst.blocks.findIndex(
+        (b) => b.plainText === "Odůvodnění:",
+      );
       const oduvIdx = headingTexts.indexOf("Odůvodnění:");
       const poucIdx = headingTexts.indexOf("Poučení:");
-      expect(titleIdx).toBeLessThan(taktoIdx);
-      expect(taktoIdx).toBeLessThan(oduvIdx);
+      expect(titleIdx).toBeGreaterThanOrEqual(0);
+      expect(titleBlockIdx).toBeLessThan(taktoIdx);
+      expect(taktoIdx).toBeLessThan(oduvBlockIdx);
       expect(oduvIdx).toBeLessThan(poucIdx);
 
       // Fulltext includes all content
@@ -639,4 +653,47 @@ describe("section text fallback", () => {
       "Flat reasoning",
     );
   });
+});
+
+test("a fallback cannot reintroduce a removed running header", () => {
+  const header = "pokračování -2- sp. zn. 9 C 191/2025";
+  const { documentAst, fulltext } = parseRegionalDecision(
+    baseInput({
+      verdict: [makePara(header)],
+      verdictText: header,
+      justification: [makePara(header)],
+      justificationText: header,
+    }),
+  );
+  expect(
+    documentAst.blocks.some((block) => block.plainText.includes(header)),
+  ).toBe(false);
+  expect(fulltext).not.toContain(header);
+});
+
+test("quote repair preserves the publisher span owning every surviving character", () => {
+  const { documentAst } = parseRegionalDecision(
+    baseInput({
+      header: [
+        {
+          texts: [
+            { text: "též„", anonStyle: "NORMAL" },
+            { text: " J. N.", anonStyle: "ANON" },
+          ],
+          styleLocalId: 1,
+          tableCellInfo: null,
+        },
+      ],
+    }),
+  );
+  const intro = documentAst.blocks
+    .filter(isParagraph)
+    .find((block) => block.role === "intro");
+  expect(intro?.plainText).toBe("též „J. N.");
+  expect(intro?.inlines).toEqual([
+    { type: "text", text: "též" },
+    { type: "text", text: " ", anonymized: true },
+    { type: "text", text: "„" },
+    { type: "text", text: "J. N.", anonymized: true },
+  ]);
 });

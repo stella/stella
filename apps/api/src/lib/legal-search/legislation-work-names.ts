@@ -3,8 +3,12 @@ import { panic } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
+import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
 import {
+  parseStatuteQuery,
   readStatuteQueryReferences,
   type StatuteQueryReference,
 } from "@stll/api-contract/statute-query-intent";
@@ -12,7 +16,13 @@ import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
+import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
+import {
+  nominativeTitle,
+  resolveActCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import { normalizeUnicode } from "@stll/text-normalize";
+import { todayFor } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -36,8 +46,12 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
  * word forms is kept anywhere, so a jurisdiction is covered by the titles it
  * stores and nothing else.
  *
- * What a title does not state is not matched: an inflected form, an
- * abbreviation, a long official name shortened in speech. A later deriver can
+ * What a title does not state is not matched: an abbreviation, a long
+ * official name shortened in speech. Inflection is read from the
+ * jurisdiction's citation profile at query time: the head a short title
+ * opens with (`zákona o …` for `zákon o …`), and a query that is wholly one
+ * of the profile's declined short titles (`občanského zákoníku`), which
+ * names that act by identity. A later deriver can
  * add such names as rows of its own `derivation` (with its provenance), and
  * the lookup below reads them unchanged; this module derives only what the
  * text itself says.
@@ -411,14 +425,43 @@ const NAMED_VERSION_LIMIT = 500;
 const CITED_KEY_LIMIT = 50;
 
 type NameLookup = {
-  matchKey: string;
+  matchKeys: readonly string[];
   country?: string | undefined;
 };
 
-const nameLookupWhere = ({ matchKey, country }: NameLookup): SQL[] => [
-  eq(legislationWorkNames.matchKey, matchKey),
+const nameLookupWhere = ({ matchKeys, country }: NameLookup): SQL[] => [
+  inArray(legislationWorkNames.matchKey, [...matchKeys]),
   ...(country === undefined ? [] : [eq(legislationWorkNames.country, country)]),
 ];
+
+/**
+ * The keys a query is compared with: its own, and, where it opens with a
+ * declined head of its jurisdiction's short titles, the key of the same name
+ * in the nominative a stored title states (`zákona o obětech trestných činů`
+ * matches `zákon o obětech trestných činů`). The declension is the citation
+ * profile's grammar, not a list of names.
+ */
+export const legislationNameQueryKeys = (
+  query: string,
+  country: string | undefined,
+): string[] => {
+  const keys = new Set<string>();
+  const own = legislationNameMatchKey(query);
+  if (own !== null) {
+    keys.add(own);
+  }
+  const profile =
+    country === undefined
+      ? null
+      : provisionCitationProfileFor(country.toUpperCase());
+  const nominative = profile === null ? null : nominativeTitle(query, profile);
+  const declined =
+    nominative === null ? null : legislationNameMatchKey(nominative);
+  if (declined !== null) {
+    keys.add(declined);
+  }
+  return [...keys];
+};
 
 /**
  * Versions whose own title states the name, by the match-key index. Exported
@@ -461,21 +504,96 @@ export const citedKeysQuery = (
     .groupBy(legislationWorkNames.country, legislationWorkNames.citedKey)
     .limit(CITED_KEY_LIMIT);
 
+/** The zone whose calendar day a jurisdiction's acts take effect on. */
+const LEGAL_DAY_TIME_ZONE = {
+  cze: "Europe/Prague",
+  svk: "Europe/Bratislava",
+} as const satisfies Record<StatuteQueryCountry, string>;
+
+const foldedTitle = (text: string) =>
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim().toLowerCase();
+
 /**
- * Act identities the query names in its jurisdiction. Without a jurisdiction,
- * or in one with no act grammar, there are none and only titles are matched.
+ * The act a query names when the whole query is one of the jurisdiction's
+ * short titles in any declined form (`občanského zákoníku`, `Trestného
+ * zákona`), read by the citation profile for `citedOn` so a recodified title
+ * names the act in force that day. Null for anything else: a title inside
+ * longer prose stays a text match.
+ */
+export const declinedTitleReference = (
+  query: string,
+  country: StatuteQueryCountry,
+  citedOn: string,
+): StatuteQueryReference | null => {
+  const profile = provisionCitationProfileFor(country.toUpperCase());
+  if (profile === null) {
+    return null;
+  }
+  const folded = foldedTitle(query);
+  const isTitle = profile.titles.some(({ spellings }) =>
+    spellings.some((spelling) => foldedTitle(spelling) === folded),
+  );
+  if (!isTitle) {
+    return null;
+  }
+  const read = resolveActCitation({ text: query, profile, citedOn });
+  if (read.status !== "resolved") {
+    return null;
+  }
+  const collection = statuteGazetteEliCollection(read.work.collection);
+  if (collection === null) {
+    return null;
+  }
+  return {
+    country,
+    collection,
+    number: String(read.work.number),
+    year: String(read.work.year),
+    label: null,
+  };
+};
+
+/**
+ * Act identities the query names in its jurisdiction. An unscoped act number
+ * addresses every admitted jurisdiction whose grammar accepts its collection;
+ * aliases and prose still need a jurisdiction to give them meaning.
  */
 const statuteQueryReferences = (
   query: string,
   country: string | undefined,
 ): StatuteQueryReference[] => {
   if (country === undefined) {
-    return [];
+    return PUBLIC_LEGISLATION_COUNTRIES.flatMap((candidate) => {
+      const scope = readStatuteQueryScope(candidate.toLowerCase());
+      switch (scope.type) {
+        case "supported": {
+          const intent = parseStatuteQuery(scope.country, query);
+          return intent.type === "act" && intent.label === null
+            ? readStatuteQueryReferences(scope.country, query)
+            : [];
+        }
+        case "unsupported":
+          return [];
+        default:
+          scope satisfies never;
+          return panic("Unhandled statute query scope");
+      }
+    });
   }
   const scope = readStatuteQueryScope(country.toLowerCase());
   switch (scope.type) {
-    case "supported":
-      return readStatuteQueryReferences(scope.country, query);
+    case "supported": {
+      const references = readStatuteQueryReferences(scope.country, query);
+      if (references.length > 0) {
+        return references;
+      }
+      const declined = declinedTitleReference(
+        query,
+        scope.country,
+        todayFor(LEGAL_DAY_TIME_ZONE[scope.country]).toString(),
+      );
+      return declined === null ? [] : [declined];
+    }
     case "unsupported":
       return [];
     default: {
@@ -560,12 +678,12 @@ export const readNamedLegislationWorks = async (
       }));
     }
   }
-  const matchKey = legislationNameMatchKey(query);
-  if (matchKey === null) {
+  const matchKeys = legislationNameQueryKeys(query, country);
+  if (matchKeys.length === 0) {
     return [];
   }
-  const ownNames = await ownNameVersionsQuery(tx, { matchKey, country });
-  const citedKeys = await citedKeysQuery(tx, { matchKey, country });
+  const ownNames = await ownNameVersionsQuery(tx, { matchKeys, country });
+  const citedKeys = await citedKeysQuery(tx, { matchKeys, country });
 
   const citations = citedKeys.flatMap(({ country: citedCountry, citedKey }) =>
     citedKey === null ? [] : [{ country: citedCountry, citedKey }],

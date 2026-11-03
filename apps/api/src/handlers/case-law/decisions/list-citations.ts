@@ -41,7 +41,8 @@ const listDecisionCitations = createSafePublicSubjectHandler({
       {
         ...result,
         items: result.items.map(
-          ({ evidenceQuote: _evidenceQuote, ...item }) => item,
+          ({ evidenceQuote: _evidenceQuote, printedBy: _printedBy, ...item }) =>
+            item,
         ),
       },
       citationsResponseSchema,

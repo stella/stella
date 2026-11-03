@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { destinationNavigation } from "@/lib/redirect";
 
 type ProfessionalUsePanelProps = {
   redirectTo: string;
@@ -44,7 +45,7 @@ export const ProfessionalUsePanel = ({
     onSuccess: async (state) => {
       queryClient.setQueryData(professionalUseOptions(userId).queryKey, state);
       signalSessionChange();
-      await navigate({ to: redirectTo, replace: true });
+      await navigate(destinationNavigation(redirectTo));
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

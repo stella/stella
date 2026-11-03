@@ -21,6 +21,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
@@ -183,7 +184,8 @@ const resumeContext = ({
         ? {}
         : { headers: { "Last-Event-ID": lastEventIdHeader } },
     ),
-    route: "/v1/chat/threads/:threadId/turns/:turnId/join",
+    route:
+      "/v1/chat/threads/:threadId/turns/:turnId/join" satisfies ApiRoutePath,
     safeDb: toSafeDbMock(viewer.db),
     scopedDb: viewer.db,
     session: { activeOrganizationId: viewer.organizationId },

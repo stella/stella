@@ -13,7 +13,8 @@ import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
@@ -27,7 +28,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
       userId,
     }),
   );
-  const settingsView = useQueryView(settingsQuery);
+  const settingsView = queryView(settingsQuery);
   useQueryViewError(settingsView, "MatterNumberHint:query");
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;

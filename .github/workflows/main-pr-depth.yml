@@ -38,8 +38,28 @@ jobs:
       sha: ${{ steps.ancestor.outputs.sha }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
+      green-base: ${{ steps.green-base.outputs.sha }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
+      - name: Checkout network retry helper
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      # The workflow's own helper: this job fetches before, or without, a
+      # checkout of this revision into the workspace.
+      - name: Stage network retry helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-retry"
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout trusted release proof tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,6 +78,7 @@ jobs:
           no-cache: true
 
       - name: Reuse completed release proof
+        timeout-minutes: 5
         id: reuse
         working-directory: .release-proof
         env:
@@ -113,6 +134,7 @@ jobs:
           fi
 
       - name: Fetch main history
+        timeout-minutes: 5
         if: steps.selection.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,10 +147,12 @@ jobs:
           git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
+          git -C "$directory" show origin/main:scripts/main-pr-depth-green-base.sh > "$RUNNER_TEMP/main-pr-depth-green-base.sh"
 
       - name: Verify main ancestry
         if: steps.selection.outputs.run == 'true'
@@ -139,8 +163,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
-          bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
+          proof_args=()
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            proof_args+=(--allow-pr-head)
+          fi
+          bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      # A dispatched run checks every file, so only a scheduled one needs a base.
+      - name: Select the last green PR-depth base
+        if: steps.selection.outputs.run == 'true' && github.event_name == 'schedule'
+        id: green-base
+        timeout-minutes: 2
+        working-directory: ${{ runner.temp }}/main-pr-depth-validation
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_RETRY: ${{ runner.temp }}/gh-retry.sh
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Without a known green base (none found, or the lookup failed or
+          # overran) the code check covers every file.
+          base=$(timeout 60 bash "$RUNNER_TEMP/main-pr-depth-green-base.sh") || base=""
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
 
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
@@ -156,6 +201,7 @@ jobs:
       depth: fast
       pr_depth_only: true
       sha: ${{ needs.validate.outputs.sha }}
+      green_base: ${{ needs.validate.outputs.green-base }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

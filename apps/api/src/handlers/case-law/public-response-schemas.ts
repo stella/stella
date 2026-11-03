@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -36,7 +37,13 @@ import type {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
+import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
+import {
+  populationCountsFreshnessSchema,
+  populationCountsReadFreshnessSchema,
+} from "@/api/lib/case-law/population-count-freshness";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import { LIMITS } from "@/api/lib/limits";
@@ -93,6 +100,7 @@ export const listDecisionsResponseSchema = page(
     caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
     courtAbbreviation: nullableBoundedString(512),
     courtTier: v.picklist(COURT_TIER_LABELS),
+    decisionTypeKind: v.union([v.picklist(DECISION_TYPE_KINDS), v.null()]),
     sourceUrl: nullableBoundedString(8192),
     headnote,
     citationCount: v.number(),
@@ -134,6 +142,7 @@ const facet = v.object({
   count: v.number(),
 } satisfies Record<keyof FacetBucket, v.GenericSchema>);
 export const decisionFacetsResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   country: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   court: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawFacetLimit)),
   year: v.pipe(v.array(facet), v.maxLength(LIMITS.caseLawYearFacetLimit)),
@@ -173,9 +182,10 @@ const courts = v.pipe(
   v.maxLength(LIMITS.caseLawFacetLimit + 1),
 );
 export const corpusStatusResponseSchema = v.object({
+  countsFreshness: v.optional(populationCountsReadFreshnessSchema),
   decisions: v.number(),
   updatedAt: date,
-  courts,
+  health: v.enum(CASE_LAW_COVERAGE_HEALTH),
 } satisfies Record<
   keyof Success<typeof readCaseLawCorpusStatusHandler>,
   v.GenericSchema
@@ -201,7 +211,9 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  // The printing version is internal: it locates a passage, and no response
+  // carries it.
+  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
   v.GenericSchema
 >);
 // A leading citation always names a held decision; only the general list
@@ -302,6 +314,17 @@ const sourceCompleteness = v.union([
   v.object({ state: v.literal("not-measured-yet") }),
   v.object({ state: v.literal("not-counted-yet") }),
 ]);
+/**
+ * The parts a refresh could not read. A summary stored before the field
+ * existed was only ever stored complete, so its absence reads as none.
+ */
+const unreadParts = v.optional(
+  v.pipe(
+    v.array(v.picklist(CASE_LAW_COVERAGE_PARTS)),
+    v.maxLength(CASE_LAW_COVERAGE_PARTS.length),
+  ),
+  [],
+);
 const countryCoverage = {
   // An enum record keeps the literal union; a mapped array would widen it.
   country: v.enum(
@@ -313,6 +336,7 @@ const countryCoverage = {
   stored,
   addedLastWeek: numberOrNull,
   completeness,
+  unreadParts,
   sources: v.pipe(
     v.array(
       v.object({
@@ -320,11 +344,28 @@ const countryCoverage = {
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
         health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+        edition: v.variant("type", [
+          v.object({ type: v.literal("live") }),
+          v.object({
+            type: v.literal("snapshot"),
+            snapshotDate: boundedString(10),
+          }),
+        ]),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
         storedDecisions: numberOrNull,
+        publishedDecisions: v.number(),
+        courts: v.pipe(
+          v.array(
+            v.object({
+              court: v.nullable(identity.court),
+              decisions: v.number(),
+            }),
+          ),
+          v.maxLength(LIMITS.caseLawFacetLimit + 1),
+        ),
         knownGaps: v.union([
           v.object({
             type: v.literal("not_reconciled"),
@@ -397,8 +438,11 @@ const provisionProcessingState = v.union([
   }),
 ]);
 
-export const coverageResponseSchema = v.object({
+const coverageSnapshotEntries = {
+  // Existing stored summaries predate the population fold metadata.
+  countsFreshness: v.optional(populationCountsFreshnessSchema),
   generatedAt: boundedString(128),
+  unreadParts,
   provisionProcessing: v.pipe(
     v.array(
       v.object({
@@ -408,7 +452,11 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
-  totals: v.object({ searchable: v.number(), stored }),
+  totals: v.object({
+    addedLastWeek: v.nullable(v.number()),
+    searchable: v.nullable(v.number()),
+    stored,
+  }),
   countries: v.pipe(
     v.array(
       v.union([
@@ -428,6 +476,17 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
+};
+
+/** The answer the scheduler stores, before a reader states its age. */
+export const coverageSnapshotSchema = v.object(coverageSnapshotEntries);
+
+export const coverageResponseSchema = v.object({
+  ...coverageSnapshotEntries,
+  freshness: v.object({
+    status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+    ageSeconds: v.number(),
+  }),
 } satisfies Record<
   keyof Success<typeof readCaseLawCoverageHandler>,
   v.GenericSchema

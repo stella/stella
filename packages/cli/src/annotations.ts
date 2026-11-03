@@ -3,6 +3,7 @@
 /** Reserved top-level command names a generated domain may never take (spec S1). */
 export const RESERVED_TOP_LEVEL_NAMES: ReadonlySet<string> = new Set([
   "auth",
+  "batch",
   "compatibility",
   "tools",
   "reference",

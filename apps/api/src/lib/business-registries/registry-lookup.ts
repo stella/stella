@@ -24,7 +24,7 @@ type LookupBusinessRegistryProps = {
   q: string;
   detail?: BusinessRegistryLookupDetail | undefined;
   executeLookup?: typeof executeRegistryLookup | undefined;
-  loadWebSearch?: LoadRegistryWebSearch | undefined;
+  loadWebSearch: LoadRegistryWebSearch;
 };
 
 // Native-tool preferences control discovery, not access to public records.

@@ -132,6 +132,21 @@ describe("chat mention suggestions", () => {
     ]);
   });
 
+  test("filters local cached mentions by label regardless of case and accents", () => {
+    const result = selectChatSuggestionItems({
+      localItems: [
+        option({ id: "entity-1", label: "Smlouva Dvořák" }),
+        option({ id: "entity-2", label: "Faktura" }),
+      ],
+      query: "DVORAK",
+      searchedItems: [],
+    });
+
+    expect(result.map((item) => chatMentionOptionId(item))).toEqual([
+      "entity-1",
+    ]);
+  });
+
   test("still filters local cached mentions by label", () => {
     const result = selectChatSuggestionItems({
       localItems: [

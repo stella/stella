@@ -1,7 +1,8 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { legislationDocuments } from "@/api/db/schema";
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/legal-search/corpus-reads";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
@@ -207,13 +209,18 @@ export type ReadVersionAstOptions = {
  * result. Never call this inside a database transaction, because object
  * storage is a network hop that must not hold one open.
  */
-export const readVersionAst = async ({
+type ReadVersionAstPayloadOptions = Pick<
+  ReadVersionAstOptions,
+  "row" | "step"
+> & {
+  readStoredAst: () => Promise<unknown>;
+};
+
+const readVersionAstPayload = async ({
   row,
-  legislationDb,
+  readStoredAst,
   step,
-  purpose = "reader",
-  surface,
-}: ReadVersionAstOptions): Promise<DocumentAst | EmptyAst | null> => {
+}: ReadVersionAstPayloadOptions): Promise<DocumentAst | EmptyAst | null> => {
   const source = canonicalLegislationAstSource(row, corpusStorageMode);
   switch (source.type) {
     case "database":
@@ -224,15 +231,7 @@ export const readVersionAst = async ({
         key: source.key,
         step,
         read: async () => await versionAstCache.read(source.key),
-        fallback: async () =>
-          parsePersistedCorpusAst(
-            await readStoredVersionAst({
-              legislationDb,
-              id: row.id,
-              purpose,
-              surface,
-            }),
-          ),
+        fallback: async () => parsePersistedCorpusAst(await readStoredAst()),
       });
     default: {
       source satisfies never;
@@ -241,10 +240,95 @@ export const readVersionAst = async ({
   }
 };
 
+/** Invalid stored structure leaves the version's independent text readable. */
+const readRecoverableVersionAst = async (
+  options: ReadVersionAstPayloadOptions,
+) =>
+  (
+    await readCorpusForRecovery({
+      documentId: options.row.id,
+      read: async () => await readVersionAstPayload(options),
+    })
+  ).unwrapOr(null);
+
+export const readVersionAst = async (options: ReadVersionAstOptions) =>
+  await readRecoverableVersionAst({
+    row: options.row,
+    step: options.step,
+    readStoredAst: async () =>
+      await readStoredVersionAst({
+        legislationDb: options.legislationDb,
+        id: options.row.id,
+        ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+        surface: options.surface,
+      }),
+  });
+
 /** One version's parsed blocks; see {@link readVersionAst}. */
 export const readVersionBlocks = async (
   options: ReadVersionAstOptions,
 ): Promise<readonly Block[]> => {
   const ast = await readVersionAst(options);
   return ast !== null && "blocks" in ast ? ast.blocks : [];
+};
+
+type ReadVersionBlocksBatchOptions<T> = Omit<ReadVersionAstOptions, "row"> & {
+  rows: readonly LegislationVersionAstRow[];
+  select: (blocks: readonly Block[]) => T;
+};
+
+/** Share one gated fallback query across every failed object read in the set. */
+export const readVersionBlocksBatch = async <T>({
+  rows,
+  legislationDb,
+  step,
+  purpose = "reader",
+  surface,
+  select,
+}: ReadVersionBlocksBatchOptions<T>) => {
+  let storedRows:
+    Promise<Map<SafeId<"legislationDocument">, unknown>> | undefined;
+  const readStoredRows = async () => {
+    const records = await legislationDb(
+      async (tx) =>
+        await tx
+          .select({
+            id: legislationDocuments.id,
+            documentAst: legislationDocuments.documentAst,
+          })
+          .from(legislationDocuments)
+          .where(
+            and(
+              inArray(
+                legislationDocuments.id,
+                rows.map(({ id }) => id),
+              ),
+              redistributableLegislationVersionFor(surface),
+              purpose === "derived-ai"
+                ? derivedAiLegislationVersion
+                : undefined,
+            ),
+          )
+          .limit(rows.length),
+    );
+    return new Map(records.map(({ id, documentAst }) => [id, documentAst]));
+  };
+  return await mapWithConcurrency({
+    items: rows,
+    limit: 2,
+    operation: async (row) => {
+      const ast = await readRecoverableVersionAst({
+        row,
+        step,
+        readStoredAst: async () => {
+          storedRows ??= readStoredRows();
+          return (await storedRows).get(row.id) ?? null;
+        },
+      });
+      return {
+        id: row.id,
+        value: select(ast !== null && "blocks" in ast ? ast.blocks : []),
+      };
+    },
+  });
 };

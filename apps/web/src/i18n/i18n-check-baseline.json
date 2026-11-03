@@ -50,6 +50,7 @@
     "workspaces.views.filter"
   ],
   "duplicateValues": [
+    "account.sessions.activeNow",
     "account.sessions.currentSession",
     "agentClaim.error",
     "appearance.calendar",
@@ -64,7 +65,6 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
-    "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
     "billing.stopTimer",
@@ -93,8 +93,8 @@
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
+    "chat.tool.delete_contact",
     "chat.tool.delete_matter",
-    "chat.tool.docxReplaceSummary",
     "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
@@ -102,6 +102,7 @@
     "clauses.titleLabel",
     "clauses.versionRestored",
     "consent.error",
+    "contacts.deleteContact",
     "contacts.emailTypes.other",
     "contacts.emailTypes.personal",
     "contacts.fields.vatPayerUnknown",
@@ -109,7 +110,6 @@
     "contacts.search",
     "docxReview.applyTracked",
     "docxReview.reject",
-    "docxReview.summary.replaceInBlock",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
     "fileDetail.current",
@@ -135,6 +135,7 @@
     "folio.deleted",
     "folio.markupView.original",
     "guides.status.skipped",
+    "inbox.evidence.current",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",
@@ -186,7 +187,6 @@
     "organization.aiConfig.defaultModelOption",
     "organization.aiConfig.roles.chat",
     "organization.aiConfig.roles.reasoning",
-    "organization.aiConfig.title",
     "organization.invitations.statuses.accepted",
     "organization.invitations.statuses.pending",
     "organization.invitations.statuses.rejected",
@@ -207,12 +207,12 @@
     "search.updatedWithinOptions.week",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
-    "settings.organization.ai",
     "settings.organization.anonymization.deleteAction",
     "settings.organization.anonymization.labelPickerAriaLabel",
     "settings.organization.anonymization.labelPickerEmpty",
     "settings.organization.anonymization.labelPickerPlaceholder",
     "settings.organization.anonymization.title",
+    "settings.organization.auditResourceKinds.property",
     "settings.organization.matterNumbering",
     "settings.organization.matterNumberingDescription",
     "settings.organization.practiceJurisdictions",
@@ -246,6 +246,7 @@
     "templates.saveFailed",
     "templates.studio.conditionSourceRule",
     "templates.studio.insertFormatDefault",
+    "templates.studio.namePlaceholder",
     "templates.studio.slashEmpty",
     "templates.tags",
     "translate.settings.apiKeyLabel",
@@ -262,6 +263,8 @@
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
+    "workspaces.overview.activity.fields.name",
+    "workspaces.overview.activity.fields.property",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
@@ -273,7 +276,6 @@
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
@@ -316,9 +318,6 @@
     ],
     "auth.emailPlaceholder": [
       "ar"
-    ],
-    "avt.claimDetail.sourceCount": [
-      "fr"
     ],
     "avt.verification.documentView.original": [
       "de",
@@ -426,9 +425,6 @@
     "common.documents": [
       "fr"
     ],
-    "common.error": [
-      "es"
-    ],
     "common.filter": [
       "et"
     ],
@@ -472,9 +468,6 @@
     ],
     "common.type": [
       "fr"
-    ],
-    "common.urlIdentifierPlaceholder": [
-      "ar"
     ],
     "common.version": [
       "de",
@@ -564,9 +557,6 @@
     ],
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
-    ],
-    "inspector.review.passagesCount": [
-      "fr"
     ],
     "inspector.review.passagesToggle": [
       "fr"
@@ -691,6 +681,9 @@
     "navigation.contacts": [
       "fr"
     ],
+    "navigation.knowledge": [
+      "fr"
+    ],
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
@@ -786,6 +779,16 @@
     "settings.account.desktop": [
       "de"
     ],
+    "settings.organization.auditResourceKinds.playbook": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "styleSets.stellaStyle": [
       "ar",
       "cs",
@@ -807,9 +810,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "templates.conditionCount": [
-      "fr"
     ],
     "templates.conditionDecidedNo": [
       "es"
@@ -911,6 +911,13 @@
     "workspaces.lead": [
       "de"
     ],
+    "workspaces.overview.activity.fields.status": [
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.fields.type": [
+      "fr"
+    ],
     "workspaces.overview.activity.targets.folder": [
       "pl"
     ],
@@ -931,6 +938,15 @@
     ],
     "workspaces.parties.personalLabel": [
       "es"
+    ],
+    "workspaces.pdf.evidence": [
+      "fr"
+    ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
     ],
     "workspaces.properties.chipSingle": [
       "pl"
@@ -953,6 +969,18 @@
       "de",
       "fr",
       "pl"
+    ],
+    "workspaces.properties.sortAscendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "workspaces.properties.sortDescendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "workspaces.properties.text": [
       "cs",
@@ -1060,7 +1088,6 @@
     "lawHome.tryIdentifier",
     "legalReader.annotations.sharedBadge",
     "navigation.myTodos",
-    "navigation.recentMatters",
     "organization.aiConfig.apiKeyUpdatePlaceholder",
     "organization.aiConfig.baseUrl",
     "organization.aiConfig.chooseModelsSubtitle",
@@ -1097,65 +1124,6 @@
     "organization.members.changeRoleDescription",
     "organization.members.updateRole",
     "organization.settingsDescription",
-    "tasks.addSubtask",
-    "tasks.assigneeRoles.assignee",
-    "tasks.assigneeRoles.reviewer",
-    "tasks.completeWork",
-    "tasks.linkEntity",
-    "tasks.myTasksTitle",
-    "tasks.myWorkTitle",
-    "tasks.noLinks",
-    "tasks.noSubtasks",
-    "tasks.noTasksAssigned",
-    "tasks.noWorkInQueue",
-    "tasks.queue.completed",
-    "tasks.queue.upcoming",
-    "tasks.workingTargetDue",
-    "templates.addPart",
-    "templates.backToList",
-    "templates.binding.attorneyLead",
-    "templates.binding.fieldBillingReference",
-    "templates.binding.sourceFirm",
-    "templates.binding.sourceParty",
-    "templates.conditionNamePlaceholder",
-    "templates.conditionOperator",
-    "templates.conditionsTitle",
-    "templates.configureFields",
-    "templates.createFromStyles",
-    "templates.createFromStylesHint",
-    "templates.editFields",
-    "templates.fieldFormat",
-    "templates.fieldFormatHint",
-    "templates.fieldMultipleParts",
-    "templates.fieldOptions",
-    "templates.fieldPartKeyPlaceholder",
-    "templates.fieldUpdateFailed",
-    "templates.fieldsUpdated",
-    "templates.generate",
-    "templates.inputTypes.textarea",
-    "templates.previewFillLoading",
-    "templates.previewFillTitle",
-    "templates.registryAutofill",
-    "templates.studio.aiDrafted",
-    "templates.studio.aiNoFields",
-    "templates.studio.conditionAskQuestion",
-    "templates.studio.conditionMatchField",
-    "templates.studio.conditionsSectionHelp",
-    "templates.studio.expressionPlaceholder",
-    "templates.studio.fieldHelp",
-    "templates.studio.fillFormPreview",
-    "templates.studio.markerCount",
-    "templates.studio.markerIndex",
-    "templates.studio.markerNum",
-    "templates.studio.markerRef",
-    "templates.studio.markerSyntaxNote",
-    "templates.studio.markerSyntaxTitle",
-    "templates.studio.namePlaceholder",
-    "templates.studio.questions",
-    "templates.templateName",
-    "templates.templateNamePlaceholder",
-    "templates.unusedValues",
-    "templates.viewVersion",
     "translate.settings.removing",
     "workspaces.deleteSelectedRows",
     "workspaces.deleteSelectedRowsDescription",
@@ -1203,7 +1171,6 @@
     "workspaces.overview.activity.loadEarlier",
     "workspaces.overview.atAGlance",
     "workspaces.overview.getStarted",
-    "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
     "workspaces.parties.noClient",
     "workspaces.parties.removePartyConfirm",

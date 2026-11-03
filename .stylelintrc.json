@@ -4,6 +4,21 @@
   "reportInvalidScopeDisables": true,
   "reportNeedlessDisables": true,
   "reportUnscopedDisables": true,
+  "overrides": [
+    {
+      "files": ["packages/decision-reader/**/*.css"],
+      "rules": {
+        "declaration-property-value-allowed-list": [
+          {
+            "/^-webkit-hyphens$|^hyphens$/": ["manual", "none"]
+          },
+          {
+            "message": "Decision reader styles must not enable automatic hyphenation. Found \"%s: %s\"."
+          }
+        ]
+      }
+    }
+  ],
   "rules": {
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": [
@@ -31,6 +46,12 @@
       },
       {
         "message": "conventions-ux (Interactions & Animations): animate transform and opacity only. The `%s` frame animates `%s`, which forces a layout recalc on every frame; use scale/translate instead."
+      }
+    ],
+    "media-feature-name-value-allowed-list": [
+      { "/^(any-)?hover$/": ["hover"] },
+      {
+        "message": "conventions-ux (Interactions & Animations): keep touch reveals on the `pointer-coarse` query, not `hover: none`. Found \"(%s: %s)\"."
       }
     ],
     "selector-no-unmatchable": true,

@@ -6,10 +6,15 @@ import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import {
+  type CorpusIndexProjectionQueueStatus,
+  readCorpusIndexProjectionQueueStatusTx,
+} from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  buildCaseLawDecisionIdentifierPassAgeMetric,
+  buildCaseLawDecisionIdentifierRepairMetric,
   buildCaseLawOldestUnpublishedAgeMetric,
   buildCaseLawProjectionBacklogMetric,
   buildCaseLawProjectionConvergenceMetric,
@@ -44,13 +49,38 @@ type CaseLawFreshnessReport = {
   backlogCapped: boolean;
   oldestUnpublishedAge: CaseLawOldestUnpublishedAge;
   sourceAges: readonly { source: string; ageSeconds: number }[];
-  convergence: string | null;
+  /**
+   * The serving generation's state queue only. The revision checks behind
+   * census readiness read every applied revision, so a recurring report never
+   * runs them.
+   */
+  convergence: CorpusIndexProjectionQueueStatus | null;
+  lastCompletedIdentifierPass: {
+    repairs: number;
+    ageSeconds: number;
+  } | null;
 };
 const requiredNumber = (row: unknown, key: string): number => {
   if (!isRecord(row) || typeof row[key] !== "number") {
     return panic(`Malformed case-law freshness query result: ${key}`);
   }
   return row[key];
+};
+
+const completedIdentifierPassOf = (row: unknown) => {
+  if (row === undefined) {
+    return null;
+  }
+  if (!isRecord(row)) {
+    return panic("Malformed decision identifier completion row");
+  }
+  if (row["age"] === null) {
+    return null;
+  }
+  return {
+    repairs: requiredNumber(row, "repairs"),
+    ageSeconds: requiredNumber(row, "age"),
+  };
 };
 
 const requiredAgeSource = (
@@ -92,7 +122,7 @@ export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
  * only for a state it claimed from this queue, and the state leaves the queue
  * only once that revision is applied, so a revision in flight is already
  * counted through its state. Cleanup of a superseded revision changes nothing
- * readers are served; the convergence status reports it.
+ * readers are served; the serving flip's convergence check reports it.
  */
 export const caseLawFreshnessPendingStatesQuery = (
   target: { family: CorpusFamily; generation: string },
@@ -196,7 +226,7 @@ const oldestUnpublishedAgeOf = (
 export const readCaseLawFreshnessReportTx = async (
   tx: Transaction,
 ): Promise<CaseLawFreshnessReport> => {
-  const [sourceRows, serving] = await Promise.all([
+  const [sourceRows, serving, identifierRows] = await Promise.all([
     tx
       .select({
         source: caseLawSources.adapterKey,
@@ -210,6 +240,12 @@ export const readCaseLawFreshnessReportTx = async (
         ),
       ),
     readServedCorpusIndexGenerationsTx(tx, "case_law"),
+    tx.execute(sql`
+      SELECT last_completed_repaired_count AS repairs,
+        extract(epoch FROM clock_timestamp() - last_completed_at)::float8 AS age
+      FROM case_law_decision_identifier_backfills
+      WHERE version = 'typed-identifiers-v1'
+    `),
   ]);
   const served = Result.isOk(serving) ? serving.value : null;
   const backlog =
@@ -224,13 +260,17 @@ export const readCaseLawFreshnessReportTx = async (
   const convergence =
     served === null
       ? null
-      : await readCorpusIndexProjectionConvergenceTx(tx, served.serving);
+      : await readCorpusIndexProjectionQueueStatusTx(tx, served.serving);
+  const lastCompletedIdentifierPass = completedIdentifierPassOf(
+    executedRows(identifierRows).at(0),
+  );
   return {
     backlogItems: Math.min(backlog.count, CASE_LAW_FRESHNESS_SCAN_CAP),
     backlogCapped: backlog.capped,
     oldestUnpublishedAge: oldestUnpublishedAgeOf(backlog, backlog.capped),
     sourceAges: sourceRows,
     convergence,
+    lastCompletedIdentifierPass,
   };
 };
 
@@ -261,6 +301,18 @@ export const emitCaseLawFreshnessReport = (
   for (const source of report.sourceAges) {
     writeMetricLine(
       buildCaseLawSourceSyncAgeMetric(source.source, source.ageSeconds),
+    );
+  }
+  if (report.lastCompletedIdentifierPass !== null) {
+    writeMetricLine(
+      buildCaseLawDecisionIdentifierRepairMetric(
+        report.lastCompletedIdentifierPass.repairs,
+      ),
+    );
+    writeMetricLine(
+      buildCaseLawDecisionIdentifierPassAgeMetric(
+        report.lastCompletedIdentifierPass.ageSeconds,
+      ),
     );
   }
   if (report.convergence !== null) {

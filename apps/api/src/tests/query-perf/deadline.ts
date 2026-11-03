@@ -6,7 +6,7 @@ const QUERY_PERF_PROFILE_DEADLINE_MS = 150_000;
 
 type QueryPerfDeadlineOptions = {
   profileId: QueryPerfProfileId;
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   now?: () => number;
 };
 

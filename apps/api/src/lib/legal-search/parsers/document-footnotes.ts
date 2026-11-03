@@ -143,6 +143,10 @@ export const createParagraphLineReader = <T>(
           case "preservedBlock":
           case "bookmarkStart":
           case "bookmarkEnd":
+          case "moveFromRangeStart":
+          case "moveFromRangeEnd":
+          case "moveToRangeStart":
+          case "moveToRangeEnd":
             break;
           default:
             block satisfies never;

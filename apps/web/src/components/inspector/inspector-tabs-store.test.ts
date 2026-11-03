@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -8,6 +16,7 @@ import { stellaToast } from "@stll/ui/toast";
 import {
   holdInspectorRestoreSettle,
   isFileFacet,
+  readPersistedInspectorPaneOpen,
   startNewPageLoadForTest,
 } from "@/components/inspector/inspector-broadcast";
 import {
@@ -36,6 +45,11 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -179,6 +193,8 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: {
       BroadcastChannel: FakeBroadcastChannel,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
       localStorage: new MemoryStorage(),
       sessionStorage: new MemoryStorage(),
     },
@@ -906,6 +922,18 @@ describe("revive suggestion", () => {
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
+  test("a tab moved to the main view minimizes the pane; a plain close does not", () => {
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().setMinimized(false);
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().closeTab("field-1", { movedToMain: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+  });
+
   test("closing a side-peek file tab leaves no suggestion", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-1",
@@ -1390,6 +1418,30 @@ describe("Inspector tab broadcast", () => {
       groups: [],
       groupAssignments: {},
     });
+  });
+
+  test("reserved pane visibility matches restoration before tabs arrive", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(true);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, userId: "other-user" }),
+    ).toBe(false);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, organizationId: "other-org" }),
+    ).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().tabs.length).toBeGreaterThan(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    useInspectorTabsStore.setState({ minimized: true });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
   });
 
   test("a reload restores a full-view file tab in side peek", () => {

@@ -12,12 +12,11 @@ import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 
+import { CitationChip } from "@/components/references/citation-chip";
 import { useFormatter } from "@/i18n/formatting-context";
 
-import {
-  ParagraphReference,
-  resolveParagraphReference,
-} from "../paragraph-reference";
+import { useUnresolvedCitationTelemetry } from "../paragraph-citation-telemetry";
+import { resolveParagraphReference } from "../paragraph-reference.logic";
 
 /** Every block here was written by a model, and says so on each block. */
 const AI_ORIGIN = { type: "ai" } as const satisfies HeadnoteOrigin;
@@ -25,6 +24,8 @@ const AI_ORIGIN = { type: "ai" } as const satisfies HeadnoteOrigin;
 type AiHeadnotesProps = {
   analysis: DecisionAnalysis;
   blocks: Block[];
+  /** The decision's language, for the cited text a reference previews. */
+  language: string;
   /** Scrolls the text to a paragraph a claim rests on. */
   onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
 };
@@ -48,10 +49,18 @@ export const hasAiHeadnotes = (analysis: DecisionAnalysis): boolean => {
 export const AiHeadnotes = ({
   analysis,
   blocks,
+  language,
   onAnchorClick,
 }: AiHeadnotesProps) => {
   const t = useTranslations();
   const { abstract, holding } = analysisLayersOf(analysis);
+  useUnresolvedCitationTelemetry({
+    blocks,
+    ranges: [holding, abstract]
+      .flatMap((layer) => (layer === null ? [] : layer.spans))
+      .flatMap(({ anchors }) => anchors),
+    source: analysis.inputFingerprint,
+  });
 
   return (
     <>
@@ -61,10 +70,11 @@ export const AiHeadnotes = ({
           label={t("caseLaw.viewer.legalSentence")}
           origin={AI_ORIGIN}
         >
-          <p className="reader-justify">
+          <p className="reader-prose">
             <BidiText as="span" lang={holding.language}>
               <CitedSpans
                 blocks={blocks}
+                language={language}
                 onAnchorClick={onAnchorClick}
                 spans={holding.spans}
               />
@@ -83,11 +93,12 @@ export const AiHeadnotes = ({
         >
           <BidiText
             as="p"
-            className="reader-justify text-foreground-strong-muted"
+            className="reader-prose text-foreground-strong-muted"
             lang={abstract.language}
           >
             <CitedSpans
               blocks={blocks}
+              language={language}
               onAnchorClick={onAnchorClick}
               spans={abstract.spans}
             />
@@ -100,6 +111,7 @@ export const AiHeadnotes = ({
 
 type CitedSpansProps = {
   blocks: Block[];
+  language: string;
   onAnchorClick: (startAnchorId: string, endAnchorId: string) => void;
   spans: readonly AnalysisCitedSpan[];
 };
@@ -109,7 +121,12 @@ type CitedSpansProps = {
  * the span's last word, before the space that follows it, so a citation
  * never lands at the start of the next claim.
  */
-function CitedSpans({ blocks, onAnchorClick, spans }: CitedSpansProps) {
+function CitedSpans({
+  blocks,
+  language,
+  onAnchorClick,
+  spans,
+}: CitedSpansProps) {
   const format = useFormatter();
   return spanOffsets(spans).map(({ span, start }) => {
     const claim = span.text.trimEnd();
@@ -141,11 +158,11 @@ function CitedSpans({ blocks, onAnchorClick, spans }: CitedSpansProps) {
           .map((anchor) => (
             <Fragment key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}>
               {" "}
-              <ParagraphReference
-                blocks={blocks}
-                endAnchorId={anchor.endAnchorId}
+              <CitationChip
+                kind="paragraph"
+                language={language}
                 onAnchorClick={onAnchorClick}
-                startAnchorId={anchor.startAnchorId}
+                reference={anchor}
               />
             </Fragment>
           ))}

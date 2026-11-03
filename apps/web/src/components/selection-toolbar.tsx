@@ -29,9 +29,10 @@ type SelectionToolbarProps = {
 
 /**
  * The floating bar over selected text, shared by the document reader's
- * mark-up bar and the chat's selection actions. It owns placement only:
- * reading the selection and choosing the actions stay with each host,
- * because what counts as a selection differs between them.
+ * mark-up bar, the PDF viewer's selection bar and the chat's selection
+ * actions. It owns placement only: reading the selection and choosing the
+ * actions stay with each host, because what counts as a selection differs
+ * between them. The actions they share live in `selection-toolbar-actions`.
  */
 export const SelectionToolbar = ({
   anchorRect,

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   buildDeclineBody,
@@ -623,18 +624,20 @@ describe("runAIChatJourney", () => {
     });
     expect(checks.filter(({ ok }) => !ok)).toEqual([]);
     expect(checks.map(({ name }) => name)).toEqual([
-      "POST /v1/organization-settings/ai-config",
-      "POST /v1/chat/ (turn 1)",
+      "POST /v1/organization-settings/ai-config" satisfies ApiRouteKey,
+      `${"POST /v1/chat" satisfies ApiRouteKey}/ (turn 1)`,
       "turn 1 awaits tool approval",
-      "POST /v1/chat/ (decline)",
+      `${"POST /v1/chat" satisfies ApiRouteKey}/ (decline)`,
       "turn 1 settles after the decline",
-      "POST /v1/chat/ (turn 2)",
+      `${"POST /v1/chat" satisfies ApiRouteKey}/ (turn 2)`,
       "turn 2 delegates without approval and completes",
-      "cleanup: DELETE /v1/chat/threads/:threadId",
-      "cleanup: DELETE /v1/organization-settings/ai-config",
+      `cleanup: ${"DELETE /v1/chat/threads/:threadId" satisfies ApiRouteKey}`,
+      `cleanup: ${"DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey}`,
     ]);
     expect(
-      deployment.calls.filter((call) => call === "POST /v1/chat/"),
+      deployment.calls.filter(
+        (call) => call === `${"POST /v1/chat" satisfies ApiRouteKey}/`,
+      ),
     ).toHaveLength(3);
     const threadDeletes = deployment.calls.filter((call) =>
       call.startsWith("DELETE /v1/chat/threads/"),
@@ -654,15 +657,18 @@ describe("runAIChatJourney", () => {
       refreshSession: deployment.refreshSession,
       request: deployment.request,
     });
-    const turn = checks.find(({ name }) => name === "POST /v1/chat/ (turn 1)");
+    const turn = checks.find(
+      ({ name }) =>
+        name === `${"POST /v1/chat" satisfies ApiRouteKey}/ (turn 1)`,
+    );
     expect(turn).toMatchObject({ ok: false });
     expect(turn?.detail).toContain("AI smoke organization");
     expect(deployment.calls).toEqual([
-      "POST /v1/organization-settings/ai-config",
-      "POST /v1/chat/",
+      "POST /v1/organization-settings/ai-config" satisfies ApiRouteKey,
+      `${"POST /v1/chat" satisfies ApiRouteKey}/`,
       "REFRESH session",
       expect.stringMatching(/^DELETE \/v1\/chat\/threads\/.+/u),
-      "DELETE /v1/organization-settings/ai-config",
+      "DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey,
     ]);
   });
 
@@ -679,7 +685,7 @@ describe("runAIChatJourney", () => {
     expect(deployment.calls.slice(-3)).toEqual([
       "REFRESH session",
       expect.stringMatching(/^DELETE \/v1\/chat\/threads\/.+/u),
-      "DELETE /v1/organization-settings/ai-config",
+      "DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey,
     ]);
   });
 
@@ -700,11 +706,11 @@ describe("runAIChatJourney", () => {
         detail: "Could not mint a smoke session: 503",
       },
       expect.objectContaining({
-        name: "cleanup: DELETE /v1/chat/threads/:threadId",
+        name: `cleanup: ${"DELETE /v1/chat/threads/:threadId" satisfies ApiRouteKey}`,
         ok: true,
       }),
       expect.objectContaining({
-        name: "cleanup: DELETE /v1/organization-settings/ai-config",
+        name: `cleanup: ${"DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey}`,
         ok: true,
       }),
     ]);
@@ -729,9 +735,9 @@ describe("runAIChatJourney", () => {
     });
     expect(checks.map(({ ok }) => ok)).toEqual([false, true]);
     expect(calls).toEqual([
-      "POST /v1/organization-settings/ai-config",
+      "POST /v1/organization-settings/ai-config" satisfies ApiRouteKey,
       "REFRESH session",
-      "DELETE /v1/organization-settings/ai-config",
+      "DELETE /v1/organization-settings/ai-config" satisfies ApiRouteKey,
     ]);
   });
 });

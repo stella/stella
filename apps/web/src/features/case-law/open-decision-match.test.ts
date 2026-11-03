@@ -70,7 +70,10 @@ test("the selected source narrows both browse and ranked decision requests", () 
       country: "CZ",
       sourceId,
       excerpt: DEFAULT_SEARCH_EXCERPT,
-      ...(q === undefined ? {} : { search: q, sort: "relevance" }),
+      // A listing walks the dates (newest first by default); a search ranks.
+      ...(q === undefined
+        ? { sort: "newest" }
+        : { search: q, sort: "relevance" }),
     });
   }
 });

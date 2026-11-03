@@ -1,0 +1,90 @@
+{
+  "pins": {
+    "codex": "0.164.0",
+    "claudeAgentSdk": "0.3.309"
+  },
+  "harnesses": {
+    "codex": {
+      "version": "0.164.0",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-package-aarch64-apple-darwin.tar.gz",
+          "digest": {
+            "sha256": "dd99e9092270691a67bdde7be04ac283dea9da8e86cbde356c2cc851a79205fa"
+          },
+          "archiveBytes": 136007998,
+          "target": "aarch64-apple-darwin",
+          "executable": "bin/codex"
+        },
+        "darwin-x64": {
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-package-x86_64-apple-darwin.tar.gz",
+          "digest": {
+            "sha256": "cfb2a9988d7ea448511166a35789af07a0065d1117db54350b17d46cf03d0294"
+          },
+          "archiveBytes": 147158682,
+          "target": "x86_64-apple-darwin",
+          "executable": "bin/codex"
+        },
+        "win32-arm64": {
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-package-aarch64-pc-windows-msvc.tar.gz",
+          "digest": {
+            "sha256": "735deb6af84fd927084429f7a371ee38670a013baace6df24985780f7ef67355"
+          },
+          "archiveBytes": 154368833,
+          "target": "aarch64-pc-windows-msvc",
+          "executable": "bin/codex.exe"
+        },
+        "win32-x64": {
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-package-x86_64-pc-windows-msvc.tar.gz",
+          "digest": {
+            "sha256": "700116be3143576d006467af8576f7f4c9dada1feddfdb7f69743bfde0997018"
+          },
+          "archiveBytes": 167144380,
+          "target": "x86_64-pc-windows-msvc",
+          "executable": "bin/codex.exe"
+        }
+      }
+    },
+    "claude-code": {
+      "version": "2.1.309",
+      "assets": {
+        "darwin-arm64": {
+          "url": "https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-arm64/-/claude-agent-sdk-darwin-arm64-0.3.309.tgz",
+          "digest": {
+            "sha512": "a82f778831848a8697a96b186b3719ccdbf785df1de151e408581bf80cef6e40963b36479d1bb512a178233e640932c3b3855d32f09ad4d933954c2d4de74157"
+          },
+          "archiveBytes": 122689403,
+          "target": "aarch64-apple-darwin",
+          "executable": "package/claude"
+        },
+        "darwin-x64": {
+          "url": "https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-x64/-/claude-agent-sdk-darwin-x64-0.3.309.tgz",
+          "digest": {
+            "sha512": "46f3f450e718c67e36735960072a0cb9f1da30e1fce94d93846185ba93b104a01363843a58977a3350ae910feaca07e027c95cc6f2bc18e39ddd2227cb8910f1"
+          },
+          "archiveBytes": 127778023,
+          "target": "x86_64-apple-darwin",
+          "executable": "package/claude"
+        },
+        "win32-arm64": {
+          "url": "https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-win32-arm64/-/claude-agent-sdk-win32-arm64-0.3.309.tgz",
+          "digest": {
+            "sha512": "943b26c39860b8317b28d306d8ebef2a51b4660b3d6ca96b5fd1acd91bff3632d59743c8cb54d4b21edbc8eb14478a57c28314d6da3253508aa8173f02ef211f"
+          },
+          "archiveBytes": 131314988,
+          "target": "aarch64-pc-windows-msvc",
+          "executable": "package/claude.exe"
+        },
+        "win32-x64": {
+          "url": "https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-win32-x64/-/claude-agent-sdk-win32-x64-0.3.309.tgz",
+          "digest": {
+            "sha512": "a2d1874229b3e85fbee926a31aa48028172544f1939fad1cc7ef2eddd9e131ae72a2f299e5280284582cb45b220c85abfd906aa49cacbc57a64a01d7eb59a599"
+          },
+          "archiveBytes": 136346594,
+          "target": "x86_64-pc-windows-msvc",
+          "executable": "package/claude.exe"
+        }
+      }
+    }
+  }
+}

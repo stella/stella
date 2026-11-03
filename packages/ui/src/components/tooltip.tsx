@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 
 import {
@@ -14,12 +16,47 @@ import { cn } from "../lib/utils";
 
 const TooltipCreateHandle = TooltipPrimitive.createHandle;
 
-const TooltipProvider = TooltipPrimitive.Provider;
+/**
+ * How long the pointer rests on a trigger before its tooltip opens. Base UI
+ * waits 600ms, which reads as lag on toolbars where the label is the only
+ * name a glyph has; 300ms still lets the pointer cross a row of triggers
+ * without flashing each one.
+ */
+const TOOLTIP_OPEN_DELAY_MS = 300;
+
+/**
+ * Shares one open delay across every tooltip below it. Once a tooltip has
+ * shown, the next one opens at once if the pointer reaches its trigger within
+ * Base UI's 400ms warm window (`timeout`), so scanning a toolbar does not wait
+ * on each glyph. A trigger's own `delay` still wins.
+ */
+const TooltipProvider = ({
+  delay = TOOLTIP_OPEN_DELAY_MS,
+  ...props
+}: TooltipPrimitive.Provider.Props) => (
+  <TooltipPrimitive.Provider delay={delay} {...props} />
+);
 
 const Tooltip = TooltipPrimitive.Root;
 
 const TooltipTrigger = (props: TooltipPrimitive.Trigger.Props) => (
   <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+);
+
+/**
+ * A fact read inline with the facts beside it, whose dotted rule says there
+ * is more on hover or focus. The words keep the colour and weight of the
+ * text the caller wraps them in; the trigger owns the rule, the focus ring
+ * and the touch target.
+ */
+const TooltipFactTrigger = ({ children }: { children: ReactNode }) => (
+  <TooltipPrimitive.Trigger
+    className="decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+    data-slot="tooltip-trigger"
+    type="button"
+  >
+    {children}
+  </TooltipPrimitive.Trigger>
 );
 
 const TooltipPopup = ({
@@ -68,10 +105,12 @@ const TooltipPopup = ({
 );
 
 export {
+  TOOLTIP_OPEN_DELAY_MS,
   TooltipCreateHandle,
   TooltipProvider,
   Tooltip,
   TooltipTrigger,
+  TooltipFactTrigger,
   TooltipPopup,
   TooltipPopup as TooltipContent,
 };

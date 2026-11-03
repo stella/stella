@@ -11,10 +11,64 @@
 // opaque. This detector is shared by oxlint and the baseline counter.
 
 import { panic } from "better-result";
-import ts from "typescript6";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
+import {
+  type BindingIdentifier as Identifier,
+  type CallExpression,
+  type Expression as OxcExpression,
+  type MemberExpression,
+  type Node,
+  type ParsedSource,
+  parseSource,
+  type SpreadElement,
+  type TaggedTemplateExpression,
+  type TemplateLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
+
+type Expression = OxcExpression | SpreadElement;
+type SourceFile = ParsedSource & { parents: ReadonlyMap<Node, Node> };
+const parseFile = (filename: string, source: string): SourceFile => {
+  const parsed = parseSource(filename, source);
+  const parents = new Map<Node, Node>();
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+  });
+  return { ...parsed, parents };
+};
+const textOf = (node: Node, file: Pick<ParsedSource, "sourceText">): string =>
+  file.sourceText.slice(node.start, node.end);
+const isMember = (
+  node: Node,
+): node is MemberExpression & { computed: false; property: Identifier } =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier";
+const isExpression = (node: Node): node is Expression =>
+  node.type.endsWith("Expression") ||
+  node.type === "Identifier" ||
+  node.type === "Literal" ||
+  node.type === "TemplateLiteral" ||
+  node.type === "JSXElement" ||
+  node.type === "JSXFragment" ||
+  node.type === "Super" ||
+  node.type === "MetaProperty" ||
+  node.type === "TSTypeAssertion" ||
+  node.type === "SpreadElement";
+const forEachChild = (node: Node, visit: (node: Node) => void): void => {
+  walk(node, (child, ancestors) => {
+    if (ancestors.length === 1) {
+      visit(child);
+      return "skip-children";
+    }
+    return undefined;
+  });
+};
 
 export type SqlPerfHit = {
   kind:
@@ -92,90 +146,73 @@ const MIGRATION_COMMENT_START = /--\s*sql-perf-allow\b/iu;
 type TemplateParts = {
   sql: string;
   offsets: number[];
-  expressions: ts.Expression[];
+  expressions: Expression[];
 };
 
-const location = (file: ts.SourceFile, offset: number) => {
-  const { line, character } = file.getLineAndCharacterOfPosition(offset);
-  return { line: line + 1, column: character + 1 };
-};
-
-const propertyName = (node: ts.Node): string | undefined =>
-  ts.isIdentifier(node) ? node.text : undefined;
-
-const isSqlTag = (node: ts.TaggedTemplateExpression): boolean =>
+const location = (file: SourceFile, offset: number) => file.locate(offset);
+const propertyName = (node: Node): string | undefined =>
+  node.type === "Identifier" ? node.name : undefined;
+const isSqlTag = (node: TaggedTemplateExpression): boolean =>
   propertyName(node.tag) === "sql" ||
-  (ts.isCallExpression(node.tag) &&
-    propertyName(node.tag.expression) === "sql");
-
-const isLikeCall = (node: ts.CallExpression): boolean => {
-  const callee = node.expression;
-  let name: string | undefined;
-  if (ts.isIdentifier(callee)) {
-    name = callee.text;
-  } else if (ts.isPropertyAccessExpression(callee)) {
-    name = callee.name.text;
+  (node.tag.type === "CallExpression" &&
+    propertyName(node.tag.callee) === "sql");
+const isLikeCall = (node: CallExpression): boolean => {
+  const callee = node.callee;
+  let name;
+  if (callee.type === "Identifier") {
+    name = callee.name;
+  } else if (isMember(callee)) {
+    name = callee.property.name;
   }
   return name !== undefined && /^(?:like|ilike|notLike|notIlike)$/u.test(name);
 };
-
 const isGroupByCall = (
-  node: ts.CallExpression,
-): node is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
-  ts.isPropertyAccessExpression(node.expression) &&
-  node.expression.name.text === "groupBy";
-
-type DrizzleImports = {
-  names: Map<string, string>;
-  namespaces: Set<string>;
-};
-
-const drizzleImports = (file: ts.SourceFile): DrizzleImports => {
+  node: CallExpression,
+): node is CallExpression & {
+  callee: MemberExpression & { computed: false; property: Identifier };
+} => isMember(node.callee) && node.callee.property.name === "groupBy";
+type DrizzleImports = { names: Map<string, string>; namespaces: Set<string> };
+const drizzleImports = (file: SourceFile): DrizzleImports => {
   const names = new Map<string, string>();
   const namespaces = new Set<string>();
-  for (const statement of file.statements) {
+  for (const statement of file.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== "drizzle-orm"
+      statement.type !== "ImportDeclaration" ||
+      statement.source.value !== "drizzle-orm" ||
+      statement.importKind === "type"
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-      bindings === undefined
-    ) {
-      continue;
-    }
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const specifier of bindings.elements) {
-      if (!specifier.isTypeOnly) {
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.add(specifier.local.name);
+      } else if (
+        specifier.type === "ImportSpecifier" &&
+        specifier.importKind !== "type"
+      ) {
         names.set(
-          specifier.name.text,
-          specifier.propertyName?.text ?? specifier.name.text,
+          specifier.local.name,
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value,
         );
       }
     }
   }
   return { names, namespaces };
 };
-
 const drizzleCallName = (
-  call: ts.CallExpression,
+  call: CallExpression,
   imports: DrizzleImports,
 ): string | undefined => {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) {
-    return imports.names.get(callee.text);
+  const callee = call.callee;
+  if (callee.type === "Identifier") {
+    return imports.names.get(callee.name);
   }
-  return ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    imports.namespaces.has(callee.expression.text)
-    ? callee.name.text
+  return isMember(callee) &&
+    callee.object.type === "Identifier" &&
+    imports.namespaces.has(callee.object.name)
+    ? callee.property.name
     : undefined;
 };
 
@@ -195,18 +232,16 @@ const migrationSqlWithoutLiterals = (text: string): string =>
     hidden.replace(/[^\n]/gu, " "),
   );
 
-const textOfTemplate = (node: ts.TemplateLiteral): string =>
-  ts.isNoSubstitutionTemplateLiteral(node) ? node.text : node.head.text;
-
-const templateStartsWithWildcard = (node: ts.TemplateLiteral): boolean =>
+const textOfTemplate = (node: TemplateLiteral): string =>
+  node.quasis.at(0)?.value.cooked ?? "";
+const templateStartsWithWildcard = (node: TemplateLiteral): boolean =>
   /^[%_]/u.test(textOfTemplate(node));
-
 const sqlParts = (
-  file: ts.SourceFile,
-  template: ts.TemplateLiteral,
+  _file: SourceFile,
+  template: TemplateLiteral,
 ): TemplateParts => {
   const offsets: number[] = [];
-  const expressions: ts.Expression[] = [];
+  const expressions: Expression[] = [];
   let sql = "";
   const append = (text: string, start: number) => {
     for (let index = 0; index < text.length; index += 1) {
@@ -214,56 +249,56 @@ const sqlParts = (
     }
     sql += text;
   };
-  if (ts.isNoSubstitutionTemplateLiteral(template)) {
-    append(template.text, template.getStart(file) + 1);
-    return { sql, offsets, expressions };
+  const first = template.quasis.at(0);
+  if (first !== undefined) {
+    append(first.value.cooked ?? "", first.start + 1);
   }
-  append(template.head.text, template.head.getStart(file) + 1);
-  for (const [index, span] of template.templateSpans.entries()) {
-    expressions.push(span.expression);
-    const marker = `__SQL_EXPR_${index}__`;
-    append(marker, span.expression.getStart(file));
-    append(span.literal.text, span.literal.getStart(file) + 1);
+  for (const [index, expression] of template.expressions.entries()) {
+    expressions.push(expression);
+    append(`__SQL_EXPR_${index}__`, expression.start);
+    const quasi = template.quasis.at(index + 1);
+    if (quasi !== undefined) {
+      append(quasi.value.cooked ?? "", quasi.start + 1);
+    }
   }
   return { sql, offsets, expressions };
 };
-
-const holdsStatements = (node: ts.Node): boolean =>
-  ts.isBlock(node) ||
-  ts.isSourceFile(node) ||
-  ts.isModuleBlock(node) ||
-  ts.isCaseClause(node) ||
-  ts.isDefaultClause(node) ||
-  ts.isClassLike(node) ||
-  ts.isObjectLiteralExpression(node);
-
-type ConstBinding = { scope: ts.Node; initializer: ts.Expression };
-type ConstBindings = Map<string, ConstBinding[]>;
-
-const constBindings = (file: ts.SourceFile): ConstBindings => {
-  const bindings: ConstBindings = new Map();
-  const visit = (node: ts.Node) => {
+const holdsStatements = (node: Node): boolean =>
+  [
+    "BlockStatement",
+    "Program",
+    "TSModuleBlock",
+    "SwitchCase",
+    "ClassDeclaration",
+    "ClassExpression",
+    "ObjectExpression",
+  ].includes(node.type);
+type ConstBinding = { scope: Node; initializer: Expression };
+type ConstBindings = Map<string, ConstBinding[]> & { sourceText: string };
+const constBindings = (file: SourceFile): ConstBindings => {
+  const bindings: ConstBindings = Object.assign(
+    new Map<string, ConstBinding[]>(),
+    { sourceText: file.sourceText },
+  );
+  walk(file.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      ts.isVariableDeclarationList(node.parent) &&
-      // oxlint-disable-next-line no-bitwise -- TypeScript encodes declaration kind in flags
-      (node.parent.flags & ts.NodeFlags.Const) !== 0
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "Identifier" ||
+      node.init === null ||
+      parent?.type !== "VariableDeclaration" ||
+      parent.kind !== "const"
     ) {
-      let scope: ts.Node = node.parent;
-      while (!holdsStatements(scope)) {
-        scope = scope.parent;
-      }
-      const binding = { scope, initializer: node.initializer };
-      bindings.set(node.name.text, [
-        ...(bindings.get(node.name.text) ?? []),
-        binding,
-      ]);
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+    const scope = ancestors.findLast(holdsStatements);
+    if (scope === undefined) {
+      panic("Missing constant binding scope");
+    }
+    const previous = bindings.get(node.id.name) ?? [];
+    previous.push({ scope, initializer: node.init });
+    bindings.set(node.id.name, previous);
+  });
   return bindings;
 };
 
@@ -272,17 +307,18 @@ const constBindings = (file: ts.SourceFile): ConstBindings => {
  * innermost scope that contains the use, as the language resolves it.
  */
 const bindingAt = (
-  identifier: ts.Identifier,
+  identifier: Identifier,
   bindings: ConstBindings,
-): ts.Expression | undefined => {
+): Expression | undefined => {
   let innermost: ConstBinding | undefined;
-  for (const binding of bindings.get(identifier.text) ?? []) {
+  for (const binding of bindings.get(identifier.name) ?? []) {
     const { scope } = binding;
-    const contains = scope.pos <= identifier.pos && identifier.end <= scope.end;
+    const contains =
+      scope.start <= identifier.start && identifier.end <= scope.end;
     if (
       contains &&
       (innermost === undefined ||
-        scope.end - scope.pos < innermost.scope.end - innermost.scope.pos)
+        scope.end - scope.start < innermost.scope.end - innermost.scope.start)
     ) {
       innermost = binding;
     }
@@ -291,11 +327,11 @@ const bindingAt = (
 };
 
 const resolve = (
-  expression: ts.Expression,
+  expression: Expression,
   bindings: ConstBindings,
   depth = 0,
-): ts.Expression => {
-  if (depth > 4 || !ts.isIdentifier(expression)) {
+): Expression => {
+  if (depth > 4 || expression.type !== "Identifier") {
     return expression;
   }
   const initializer = bindingAt(expression, bindings);
@@ -305,9 +341,9 @@ const resolve = (
 };
 
 const hasSelectBuilder = (
-  expression: ts.Expression,
+  expression: Expression,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
   depth = 0,
 ): boolean => {
   if (depth > 12) {
@@ -315,23 +351,27 @@ const hasSelectBuilder = (
   }
   const value = resolve(expression, bindings);
   if (
-    ts.isTaggedTemplateExpression(value) &&
+    value.type === "TaggedTemplateExpression" &&
     isSqlTag(value) &&
-    /\bSELECT\b/iu.test(sqlWithoutLiterals(sqlParts(file, value.template).sql))
+    /\bSELECT\b/iu.test(sqlWithoutLiterals(sqlParts(file, value.quasi).sql))
   ) {
     return true;
   }
   if (
-    ts.isCallExpression(value) &&
-    ts.isPropertyAccessExpression(value.expression) &&
-    /^select(?:Distinct|DistinctOn)?$/u.test(value.expression.name.text)
+    value.type === "CallExpression" &&
+    isMember(value.callee) &&
+    /^select(?:Distinct|DistinctOn)?$/u.test(value.callee.property.name)
   ) {
     return true;
   }
+  // TypeScript's expression-only recursion stops at template spans.
+  if (value.type === "TemplateLiteral") {
+    return false;
+  }
   let found = false;
-  ts.forEachChild(value, (child) => {
+  forEachChild(value, (child) => {
     if (
-      ts.isExpression(child) &&
+      isExpression(child) &&
       hasSelectBuilder(child, bindings, file, depth + 1)
     ) {
       found = true;
@@ -358,9 +398,9 @@ const SQL_PREDICATE_BOUNDARIES = new Set([
 
 const sqlOrSubqueryOffsets = (
   visible: string,
-  expressions: ts.Expression[],
+  expressions: Expression[],
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): number[] => {
   const tokens: SqlPredicateToken[] = [];
   let depth = 0;
@@ -451,11 +491,11 @@ const sqlOrSubqueryOffsets = (
 type SubqueryOperandContext = {
   imports: DrizzleImports;
   bindings: ConstBindings;
-  file: ts.SourceFile;
+  file: SourceFile;
 };
 
 const hasSubqueryOperand = (
-  expression: ts.Expression,
+  expression: Expression,
   context: SubqueryOperandContext,
   depth = 0,
 ): boolean => {
@@ -464,8 +504,8 @@ const hasSubqueryOperand = (
   }
   const { imports, bindings, file } = context;
   const value = resolve(expression, bindings);
-  if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
-    const visible = sqlWithoutLiterals(sqlParts(file, value.template).sql);
+  if (value.type === "TaggedTemplateExpression" && isSqlTag(value)) {
+    const visible = sqlWithoutLiterals(sqlParts(file, value.quasi).sql);
     if (
       /\bEXISTS\s*\(/iu.test(visible) ||
       hasSelectBuilder(value, bindings, file)
@@ -473,7 +513,7 @@ const hasSubqueryOperand = (
       return true;
     }
   }
-  if (ts.isCallExpression(value)) {
+  if (value.type === "CallExpression") {
     const name = drizzleCallName(value, imports);
     if (name === "exists" || name === "notExists") {
       return true;
@@ -486,12 +526,13 @@ const hasSubqueryOperand = (
       return true;
     }
   }
+  // TypeScript's expression-only recursion stops at template spans.
+  if (value.type === "TemplateLiteral") {
+    return false;
+  }
   let found = false;
-  ts.forEachChild(value, (child) => {
-    if (
-      ts.isExpression(child) &&
-      hasSubqueryOperand(child, context, depth + 1)
-    ) {
+  forEachChild(value, (child) => {
+    if (isExpression(child) && hasSubqueryOperand(child, context, depth + 1)) {
       found = true;
     }
   });
@@ -528,7 +569,7 @@ const sqlTableName = (name: string): string =>
   name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
 
 type SelectedColumnOfOptions = {
-  expression: ts.Expression;
+  expression: Expression;
   name: string;
   bindings: ConstBindings;
   seen?: Set<string>;
@@ -539,17 +580,17 @@ const selectedColumnOf = ({
   name,
   bindings,
   seen = new Set<string>(),
-}: SelectedColumnOfOptions): ts.Expression | undefined => {
+}: SelectedColumnOfOptions): Expression | undefined => {
   let current = expression;
   if (
-    ts.isCallExpression(current) &&
-    ts.isIdentifier(current.expression) &&
-    !seen.has(current.expression.text)
+    current.type === "CallExpression" &&
+    current.callee.type === "Identifier" &&
+    !seen.has(current.callee.name)
   ) {
-    seen.add(current.expression.text);
-    const producer = bindings.get(current.expression.text)?.at(0)?.initializer;
-    if (producer !== undefined && ts.isArrowFunction(producer)) {
-      if (!ts.isBlock(producer.body)) {
+    seen.add(current.callee.name);
+    const producer = bindings.get(current.callee.name)?.at(0)?.initializer;
+    if (producer?.type === "ArrowFunctionExpression") {
+      if (producer.body.type !== "BlockStatement") {
         return selectedColumnOf({
           expression: producer.body,
           name,
@@ -557,15 +598,14 @@ const selectedColumnOf = ({
           seen,
         });
       }
-      const statement = producer.body.statements.at(0);
+      const statement = producer.body.body.at(0);
       if (
-        producer.body.statements.length === 1 &&
-        statement !== undefined &&
-        ts.isReturnStatement(statement) &&
-        statement.expression !== undefined
+        producer.body.body.length === 1 &&
+        statement?.type === "ReturnStatement" &&
+        statement.argument !== null
       ) {
         return selectedColumnOf({
-          expression: statement.expression,
+          expression: statement.argument,
           name,
           bindings,
           seen,
@@ -573,30 +613,31 @@ const selectedColumnOf = ({
       }
     }
   }
-  while (
-    ts.isCallExpression(current) &&
-    ts.isPropertyAccessExpression(current.expression)
-  ) {
-    if (current.expression.name.text === "select") {
+  while (current.type === "CallExpression" && isMember(current.callee)) {
+    if (current.callee.property.name === "select") {
       const projection = current.arguments.at(0);
-      if (
-        projection === undefined ||
-        !ts.isObjectLiteralExpression(projection)
-      ) {
+      if (projection?.type !== "ObjectExpression") {
         return undefined;
       }
       const selected = projection.properties.find(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          ((ts.isIdentifier(property.name) && property.name.text === name) ||
-            (ts.isStringLiteralLike(property.name) &&
-              property.name.text === name)),
+          property.type === "Property" &&
+          !property.shorthand &&
+          !property.method &&
+          property.kind === "init" &&
+          ((property.key.type === "Identifier" && property.key.name === name) ||
+            (property.key.type === "Literal" &&
+              typeof property.key.value === "string" &&
+              property.key.value === name)),
       );
-      return selected !== undefined && ts.isPropertyAssignment(selected)
-        ? selected.initializer
+      return selected?.type === "Property" &&
+        !selected.shorthand &&
+        !selected.method &&
+        selected.kind === "init"
+        ? selected.value
         : undefined;
     }
-    current = current.expression.expression;
+    current = current.callee.object;
   }
   return undefined;
 };
@@ -625,12 +666,11 @@ const isCorpusColumn = ({
   seen.add(column);
   const alias = bindings.get(owner)?.at(0)?.initializer;
   if (
-    alias !== undefined &&
-    ts.isCallExpression(alias) &&
-    ts.isIdentifier(alias.expression) &&
-    alias.expression.text === "alias" &&
+    alias?.type === "CallExpression" &&
+    alias.callee.type === "Identifier" &&
+    alias.callee.name === "alias" &&
     alias.arguments[0] !== undefined &&
-    REPORT_CORPUS_TABLES.has(sqlTableName(alias.arguments[0].getText()))
+    REPORT_CORPUS_TABLES.has(sqlTableName(textOf(alias.arguments[0], bindings)))
   ) {
     return true;
   }
@@ -646,9 +686,9 @@ const isCorpusColumn = ({
       });
       return (
         selected !== undefined &&
-        ts.isPropertyAccessExpression(selected) &&
+        isMember(selected) &&
         isCorpusColumn({
-          column: selected.getText(),
+          column: textOf(selected, bindings),
           bindings,
           seen: new Set(seen),
         })
@@ -784,54 +824,51 @@ const fullSourceCount = (text: string): boolean =>
     );
 
 const isSourceRestrictionColumn = (
-  column: ts.PropertyAccessExpression,
+  column: MemberExpression & { computed: false; property: Identifier },
   { bindings, file }: SubqueryOperandContext,
 ): boolean => {
-  const owner = resolve(column.expression, bindings).getText(file);
-  if (column.name.text === "sourceId") {
+  const owner = textOf(resolve(column.object, bindings), file);
+  if (column.property.name === "sourceId") {
     return (
-      isCorpusColumn({ column: column.getText(file), bindings }) ||
+      isCorpusColumn({ column: textOf(column, file), bindings }) ||
       isCorpusColumn({ column: `${owner}.sourceId`, bindings })
     );
   }
   return (
-    (column.name.text === "adapterKey" || column.name.text === "id") &&
+    (column.property.name === "adapterKey" || column.property.name === "id") &&
     SOURCE_RELATION.test(owner)
   );
 };
 
 const singletonSourceValue = (
-  value: ts.Expression | undefined,
+  value: Expression | undefined,
   bindings: ConstBindings,
-): ts.Expression | undefined => {
-  if (
-    value === undefined ||
-    !ts.isArrayLiteralExpression(value) ||
-    value.elements.length !== 1
-  ) {
+): Expression | undefined => {
+  if (value?.type !== "ArrayExpression" || value.elements.length !== 1) {
     return undefined;
   }
   const element = value.elements.at(0);
-  if (element === undefined || ts.isSpreadElement(element)) {
+  if (
+    element === undefined ||
+    element === null ||
+    element.type === "SpreadElement"
+  ) {
     return undefined;
   }
   const resolved = resolve(element, bindings);
-  if (
-    ts.isPropertyAccessExpression(resolved) &&
-    resolved.name.text === "sourceId"
-  ) {
+  if (isMember(resolved) && resolved.property.name === "sourceId") {
     return undefined;
   }
   return resolved;
 };
 
 const drizzleSourceCount = (
-  node: ts.CallExpression,
+  node: CallExpression,
   context: SubqueryOperandContext,
 ): boolean => {
   const { imports, bindings, file } = context;
   if (
-    !ts.isPropertyAccessExpression(node.expression) ||
+    !isMember(node.callee) ||
     ![
       "where",
       "groupBy",
@@ -840,21 +877,21 @@ const drizzleSourceCount = (
       "rightJoin",
       "fullJoin",
       "$count",
-    ].includes(node.expression.name.text)
+    ].includes(node.callee.property.name)
   ) {
     return false;
   }
-  const dollarCount = node.expression.name.text === "$count";
+  const dollarCount = node.callee.property.name === "$count";
   const countTable = dollarCount ? node.arguments.at(0) : undefined;
   const state = {
     corpus:
       countTable !== undefined &&
       (isCorpusColumn({
-        column: `${countTable.getText(file)}.sourceId`,
+        column: `${textOf(countTable, file)}.sourceId`,
         bindings,
       }) ||
         isCorpusColumn({
-          column: `${resolve(countTable, bindings).getText(file)}.sourceId`,
+          column: `${textOf(resolve(countTable, bindings), file)}.sourceId`,
           bindings,
         })),
     count: dollarCount,
@@ -862,14 +899,14 @@ const drizzleSourceCount = (
   };
   // Resolving bindings turns the syntax tree into a graph (recursive closures
   // and aliases can revisit their own initializer).
-  const inspected = new Set<ts.Node>();
-  const inspectedSources = new Set<ts.Node>();
-  const inspect = (child: ts.Node) => {
+  const inspected = new Set<Node>();
+  const inspectedSources = new Set<Node>();
+  const inspect = (child: Node) => {
     if (inspected.has(child)) {
       return;
     }
     inspected.add(child);
-    if (ts.isExpression(child)) {
+    if (isExpression(child)) {
       const value = resolve(child, bindings);
       if (value !== child) {
         if (inspected.has(value)) {
@@ -877,7 +914,7 @@ const drizzleSourceCount = (
         }
         inspected.add(value);
       }
-      if (ts.isCallExpression(value)) {
+      if (value.type === "CallExpression") {
         const name = drizzleCallName(value, imports);
         if (name === "count") {
           state.count = true;
@@ -887,51 +924,50 @@ const drizzleSourceCount = (
           argument === undefined ? undefined : resolve(argument, bindings);
         if (name === "sum" && operand !== undefined) {
           state.count ||=
-            (ts.isNumericLiteral(operand) && operand.text === "1") ||
-            (ts.isTaggedTemplateExpression(operand) &&
+            (operand.type === "Literal" &&
+              typeof operand.value === "number" &&
+              operand.value === 1) ||
+            (operand.type === "TaggedTemplateExpression" &&
               isSqlTag(operand) &&
               /^\+?1(?:\.0+)?$/u.test(
-                sqlParts(file, operand.template).sql.trim(),
+                sqlParts(file, operand.quasi).sql.trim(),
               ));
         }
-        if (
-          ts.isPropertyAccessExpression(value.expression) &&
-          value.expression.name.text === "from"
-        ) {
+        if (isMember(value.callee) && value.callee.property.name === "from") {
           const table = value.arguments.at(0);
           if (table !== undefined) {
             state.corpus ||=
               isCorpusColumn({
-                column: `${table.getText(file)}.sourceId`,
+                column: `${textOf(table, file)}.sourceId`,
                 bindings,
               }) ||
               isCorpusColumn({
-                column: `${resolve(table, bindings).getText(file)}.sourceId`,
+                column: `${textOf(resolve(table, bindings), file)}.sourceId`,
                 bindings,
               });
           }
         }
       }
-      if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
+      if (value.type === "TaggedTemplateExpression" && isSqlTag(value)) {
         state.count ||= FULL_COUNT.test(
           sqlWithoutLiterals(
-            expandedSql({ ...sqlParts(file, value.template), bindings, file }),
+            expandedSql({ ...sqlParts(file, value.quasi), bindings, file }),
           ),
         );
       }
       if (value !== child) {
-        ts.forEachChild(value, inspect);
+        forEachChild(value, inspect);
         return;
       }
     }
-    ts.forEachChild(child, inspect);
+    forEachChild(child, inspect);
   };
-  const inspectSource = (child: ts.Node) => {
+  const inspectSource = (child: Node) => {
     if (inspectedSources.has(child)) {
       return;
     }
     inspectedSources.add(child);
-    if (ts.isExpression(child)) {
+    if (isExpression(child)) {
       const value = resolve(child, bindings);
       if (value !== child) {
         if (inspectedSources.has(value)) {
@@ -940,14 +976,14 @@ const drizzleSourceCount = (
         inspectedSources.add(value);
       }
       if (
-        ts.isTaggedTemplateExpression(value) &&
+        value.type === "TaggedTemplateExpression" &&
         (isSqlTag(value) ||
-          (ts.isIdentifier(value.tag) &&
-            imports.names.get(value.tag.text) === "sql"))
+          (value.tag.type === "Identifier" &&
+            imports.names.get(value.tag.name) === "sql"))
       ) {
         const predicate = sqlWithoutLiterals(
           expandedSql({
-            ...sqlParts(file, value.template),
+            ...sqlParts(file, value.quasi),
             bindings,
             file,
           }).replace(SQL_STRING, "__SQL_EXPR_0__"),
@@ -957,7 +993,7 @@ const drizzleSourceCount = (
         );
       }
       if (
-        ts.isCallExpression(value) &&
+        value.type === "CallExpression" &&
         ["eq", "inArray"].includes(drizzleCallName(value, imports) ?? "")
       ) {
         const singletonMembership =
@@ -974,15 +1010,15 @@ const drizzleSourceCount = (
             otherValue = singletonSourceValue(otherValue, bindings);
           }
           if (
-            ts.isPropertyAccessExpression(column) &&
-            (column.name.text === "sourceId" ||
-              column.name.text === "adapterKey" ||
-              column.name.text === "id") &&
+            isMember(column) &&
+            (column.property.name === "sourceId" ||
+              column.property.name === "adapterKey" ||
+              column.property.name === "id") &&
             otherValue !== undefined &&
-            (!ts.isPropertyAccessExpression(otherValue) ||
+            (!isMember(otherValue) ||
               (!isSourceRestrictionColumn(otherValue, context) &&
                 !isCorpusColumn({
-                  column: otherValue.getText(file),
+                  column: textOf(otherValue, file),
                   bindings,
                 })))
           ) {
@@ -991,11 +1027,11 @@ const drizzleSourceCount = (
         }
       }
       if (value !== child) {
-        ts.forEachChild(value, inspectSource);
+        forEachChild(value, inspectSource);
         return;
       }
     }
-    ts.forEachChild(child, inspectSource);
+    forEachChild(child, inspectSource);
   };
   for (const argument of node.arguments) {
     inspectSource(argument);
@@ -1005,49 +1041,49 @@ const drizzleSourceCount = (
 };
 
 const comparisonColumn = (
-  expression: ts.Expression,
+  expression: Expression,
   imports: DrizzleImports,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): string | undefined => {
   const value = resolve(expression, bindings);
   if (
-    !ts.isCallExpression(value) ||
+    value.type !== "CallExpression" ||
     !COMPARISONS.has(drizzleCallName(value, imports) ?? "")
   ) {
     return undefined;
   }
   const column = value.arguments[0];
-  return column !== undefined && ts.isPropertyAccessExpression(column)
-    ? column.getText(file)
+  return column !== undefined && isMember(column)
+    ? textOf(column, file)
     : undefined;
 };
 
 const comparisonColumns = (
-  expression: ts.Expression,
+  expression: Expression,
   imports: DrizzleImports,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): Set<string> => {
   const columns = new Set<string>();
-  const visit = (node: ts.Node) => {
-    if (ts.isExpression(node)) {
+  const visit = (node: Node) => {
+    if (isExpression(node)) {
       const column = comparisonColumn(node, imports, bindings, file);
       if (column !== undefined) {
         columns.add(column);
       }
     }
-    ts.forEachChild(node, visit);
+    forEachChild(node, visit);
   };
   visit(resolve(expression, bindings));
   return columns;
 };
 
 const isKeysetOr = (
-  call: ts.CallExpression,
+  call: CallExpression,
   imports: DrizzleImports,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): boolean => {
   const left = call.arguments[0];
   const right = call.arguments[1];
@@ -1055,9 +1091,9 @@ const isKeysetOr = (
     call.arguments.length !== 2 ||
     left === undefined ||
     right === undefined ||
-    !ts.isCallExpression(left) ||
+    left.type !== "CallExpression" ||
     !CURSOR_COMPARISONS.has(drizzleCallName(left, imports) ?? "") ||
-    !ts.isCallExpression(right) ||
+    right.type !== "CallExpression" ||
     drizzleCallName(right, imports) !== "and" ||
     right.arguments.length !== 2
   ) {
@@ -1066,20 +1102,20 @@ const isKeysetOr = (
   const leftColumn = comparisonColumn(left, imports, bindings, file);
   const equality = right.arguments.find(
     (argument) =>
-      ts.isCallExpression(argument) &&
+      argument.type === "CallExpression" &&
       drizzleCallName(argument, imports) === "eq",
   );
   const continuation = right.arguments.find(
     (argument) =>
-      ts.isCallExpression(argument) &&
+      argument.type === "CallExpression" &&
       CURSOR_COMPARISONS.has(drizzleCallName(argument, imports) ?? ""),
   );
   if (
     leftColumn === undefined ||
     equality === undefined ||
     continuation === undefined ||
-    !ts.isCallExpression(equality) ||
-    !ts.isCallExpression(continuation) ||
+    equality.type !== "CallExpression" ||
+    continuation.type !== "CallExpression" ||
     left.arguments[1] === undefined ||
     equality.arguments[1] === undefined
   ) {
@@ -1097,7 +1133,7 @@ const isKeysetOr = (
     continuationColumn !== undefined &&
     continuationColumn !== leftColumn &&
     rightColumns.has(leftColumn) &&
-    left.arguments[1].getText(file) === equality.arguments[1].getText(file)
+    textOf(left.arguments[1], file) === textOf(equality.arguments[1], file)
   );
 };
 
@@ -1111,18 +1147,15 @@ export const reportSqlPerfOrColumns = (
   source: string,
   filename: string,
 ): SqlPerfReportHit[] => {
-  const file = ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const file = parseFile(filename, source);
   const bindings = constBindings(file);
   const imports = drizzleImports(file);
   const hits: SqlPerfReportHit[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && drizzleCallName(node, imports) === "or") {
+  const visit = (node: Node) => {
+    if (
+      node.type === "CallExpression" &&
+      drizzleCallName(node, imports) === "or"
+    ) {
       const columns = new Set(
         node.arguments.flatMap((argument) => [
           ...comparisonColumns(argument, imports, bindings, file),
@@ -1133,11 +1166,11 @@ export const reportSqlPerfOrColumns = (
         !isKeysetOr(node, imports, bindings, file) &&
         [...columns].some((column) => isCorpusColumn({ column, bindings }))
       ) {
-        hits.push(location(file, node.getStart(file)));
+        hits.push(location(file, node.start));
       }
     }
-    if (ts.isTaggedTemplateExpression(node) && isSqlTag(node)) {
-      const { sql, offsets, expressions } = sqlParts(file, node.template);
+    if (node.type === "TaggedTemplateExpression" && isSqlTag(node)) {
+      const { sql, offsets, expressions } = sqlParts(file, node.quasi);
       const visible = sqlWithoutLiterals(sql);
       const aliases = new Map<string, string>();
       for (const match of visible.matchAll(
@@ -1155,7 +1188,7 @@ export const reportSqlPerfOrColumns = (
           const expression = expressions[Number(expressionIndex)];
           return (
             expression !== undefined &&
-            isCorpusColumn({ column: expression.getText(file), bindings })
+            isCorpusColumn({ column: textOf(expression, file), bindings })
           );
         }
         const owner = column.slice(0, column.lastIndexOf("."));
@@ -1165,7 +1198,7 @@ export const reportSqlPerfOrColumns = (
           const expression = expressions[Number(tableExpressionIndex)];
           return (
             expression !== undefined &&
-            REPORT_CORPUS_TABLES.has(sqlTableName(expression.getText(file)))
+            REPORT_CORPUS_TABLES.has(sqlTableName(textOf(expression, file)))
           );
         }
         return REPORT_CORPUS_TABLES.has(sqlTableName(table));
@@ -1193,33 +1226,28 @@ export const reportSqlPerfOrColumns = (
           leftColumn !== rightColumn &&
           (corpusSqlColumn(leftColumn) || corpusSqlColumn(rightColumn))
         ) {
-          hits.push(
-            location(file, offsets[match.index] ?? node.getStart(file)),
-          );
+          hits.push(location(file, offsets[match.index] ?? node.start));
         }
       }
     }
-    ts.forEachChild(node, visit);
+    forEachChild(node, visit);
   };
-  visit(file);
+  visit(file.program);
   return hits;
 };
 
 const startsWithWildcard = (
-  expression: ts.Expression,
+  expression: Expression,
   bindings: ConstBindings,
 ): boolean => {
   const value = resolve(expression, bindings);
-  if (ts.isStringLiteral(value)) {
-    return /^[%_]/u.test(value.text);
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return /^[%_]/u.test(value.value);
   }
-  if (ts.isTemplateLiteral(value)) {
+  if (value.type === "TemplateLiteral") {
     return templateStartsWithWildcard(value);
   }
-  if (
-    ts.isBinaryExpression(value) &&
-    value.operatorToken.kind === ts.SyntaxKind.PlusToken
-  ) {
+  if (value.type === "BinaryExpression" && value.operator === "+") {
     return startsWithWildcard(value.left, bindings);
   }
   return false;
@@ -1228,20 +1256,20 @@ const startsWithWildcard = (
 const containsCorpus = (text: string): boolean => CORPUS.test(text);
 
 const sqlExpressionText = (
-  expression: ts.Expression,
+  expression: Expression,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): string => {
   const value = resolve(expression, bindings);
-  return ts.isTaggedTemplateExpression(value) && isSqlTag(value)
-    ? sqlParts(file, value.template).sql
-    : value.getText(file);
+  return value.type === "TaggedTemplateExpression" && isSqlTag(value)
+    ? sqlParts(file, value.quasi).sql
+    : textOf(value, file);
 };
 
 const groupExpression = (
-  expression: ts.Expression,
+  expression: Expression,
   bindings: ConstBindings,
-  file: ts.SourceFile,
+  file: SourceFile,
 ): boolean =>
   isGroupExpressionText(sqlExpressionText(expression, bindings, file));
 
@@ -1282,46 +1310,23 @@ const groupItems = (text: string) => {
   return items;
 };
 
-const allowCommentsOf = (source: string, file: ts.SourceFile) => {
-  const comments: { line: number; reason: string }[] = [];
-  const commentStarts = new Set<number>();
-  const recordComments = (ranges: readonly ts.CommentRange[] | undefined) => {
-    for (const range of ranges ?? []) {
-      if (
-        range.kind !== ts.SyntaxKind.SingleLineCommentTrivia ||
-        commentStarts.has(range.pos)
-      ) {
-        continue;
-      }
-      commentStarts.add(range.pos);
-      const comment = source.slice(range.pos, range.end);
-      if (!COMMENT_START.test(comment)) {
-        continue;
-      }
-      const match = COMMENT.exec(comment);
-      comments.push({
-        line: location(file, range.pos).line,
-        reason: match?.[1]?.trim() ?? "",
-      });
+const allowCommentsOf = (source: string, file: SourceFile) =>
+  file.comments.flatMap((range) => {
+    const comment = source.slice(range.start, range.end);
+    if (range.type !== "Line" || !COMMENT_START.test(comment)) {
+      return [];
     }
-  };
-  const visit = (node: ts.Node) => {
-    recordComments(ts.getLeadingCommentRanges(source, node.getFullStart()));
-    recordComments(ts.getTrailingCommentRanges(source, node.getEnd()));
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
-  return comments;
-};
+    const match = COMMENT.exec(comment);
+    return [
+      {
+        line: location(file, range.start).line,
+        reason: match?.[1]?.trim() ?? "",
+      },
+    ];
+  });
 
 export const listSqlPerfAllowComments = (source: string, filename: string) => {
-  const file = ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const file = parseFile(filename, source);
   return allowCommentsOf(source, file);
 };
 
@@ -1348,12 +1353,19 @@ const leadingOperand = (text: string): string => {
 };
 
 /** The statement (or class member) a node sits in, where a comment can go. */
-const statementOf = (node: ts.Node): ts.Node => {
+const statementOf = (node: Node, file: SourceFile): Node => {
   let current = node;
-  while (!ts.isSourceFile(current) && !holdsStatements(current.parent)) {
-    current = current.parent;
+  for (;;) {
+    const parent = file.parents.get(current);
+    if (
+      current.type === "Program" ||
+      parent === undefined ||
+      holdsStatements(parent)
+    ) {
+      return current;
+    }
+    current = parent;
   }
-  return current;
 };
 
 /**
@@ -1362,10 +1374,18 @@ const statementOf = (node: ts.Node): ts.Node => {
  * Placeholders count as parameters only in a `sql` template (`expressions`);
  * in a plain string only `$n` does.
  */
+const expressionTextAt = (
+  expressions: readonly Expression[],
+  index: number,
+  file: SourceFile,
+): string | undefined => {
+  const expression = expressions.at(index);
+  return expression === undefined ? undefined : textOf(expression, file);
+};
 const optionalKeysetOffsets = (
   text: string,
-  expressions: readonly ts.Expression[],
-  file: ts.SourceFile,
+  expressions: readonly Expression[],
+  file: SourceFile,
 ): number[] => {
   const visible = sqlWithoutLiterals(text);
   if (!/\bLIMIT\b/iu.test(visible)) {
@@ -1374,7 +1394,7 @@ const optionalKeysetOffsets = (
   const parameterText = (parameter: string | undefined) =>
     parameter?.startsWith("$") === true
       ? parameter
-      : expressions[Number(parameter?.slice(11, -2))]?.getText(file);
+      : expressionTextAt(expressions, Number(parameter?.slice(11, -2)), file);
   return OPTIONAL_KEYSETS.flatMap((pattern) =>
     [...visible.matchAll(pattern)].flatMap((match) => {
       const tested = parameterText(match[1]);
@@ -1479,25 +1499,24 @@ export const analyzeMigrationSqlPerf = (source: string) => {
 };
 
 /** A string or untagged template: SQL text whose `$n` are parameters. */
-const plainSqlText = (node: ts.Node, file: ts.SourceFile) => {
-  if (ts.isStringLiteral(node)) {
-    const start = node.getStart(file) + 1;
+const plainSqlText = (node: Node, file: SourceFile) => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    const start = node.start + 1;
     return {
-      sql: node.text,
+      sql: node.value,
       expressions: [],
       offsetAt: (index: number) => start + index,
     };
   }
   if (
-    (ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateExpression(node)) &&
-    !ts.isTaggedTemplateExpression(node.parent)
+    node.type === "TemplateLiteral" &&
+    file.parents.get(node)?.type !== "TaggedTemplateExpression"
   ) {
     const { sql, offsets, expressions } = sqlParts(file, node);
     return {
       sql,
       expressions,
-      offsetAt: (index: number) => offsets[index] ?? node.getStart(file),
+      offsetAt: (index: number) => offsets[index] ?? node.start,
     };
   }
   return undefined;
@@ -1505,9 +1524,9 @@ const plainSqlText = (node: ts.Node, file: ts.SourceFile) => {
 
 type ExpandedSqlOptions = {
   sql: string;
-  expressions: ts.Expression[];
+  expressions: Expression[];
   bindings: ConstBindings;
-  file: ts.SourceFile;
+  file: SourceFile;
 };
 
 const expandedSql = ({
@@ -1522,11 +1541,13 @@ const expandedSql = ({
       return marker;
     }
     const value = resolve(expression, bindings);
-    const text = value.getText(file);
-    return ts.isTaggedTemplateExpression(value) ||
-      (ts.isPropertyAccessExpression(value) &&
-        (SOURCE_COLUMN.test(text) || value.name.text === "adapterKey")) ||
-      (ts.isNumericLiteral(value) && value.text === "1") ||
+    const text = textOf(value, file);
+    return value.type === "TaggedTemplateExpression" ||
+      (isMember(value) &&
+        (SOURCE_COLUMN.test(text) || value.property.name === "adapterKey")) ||
+      (value.type === "Literal" &&
+        typeof value.value === "number" &&
+        value.value === 1) ||
       CORPUS_COUNT_TABLE.test(sqlTableName(text)) ||
       SOURCE_RELATION.test(text)
       ? text
@@ -1534,19 +1555,13 @@ const expandedSql = ({
   });
 
 export const analyzeSqlPerf = (source: string, filename: string) => {
-  const file = ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const file = parseFile(filename, source);
   const bindings = constBindings(file);
   const imports = drizzleImports(file);
   const subqueryOperandContext = { imports, bindings, file };
   const rawHits: SqlPerfHit[] = [];
   const seen = new Set<string>();
-  const add = (kind: SqlPerfHit["kind"], offset: number, holder: ts.Node) => {
+  const add = (kind: SqlPerfHit["kind"], offset: number, holder: Node) => {
     const place = location(file, offset);
     const key = `${kind}:${place.line}:${place.column}`;
     if (seen.has(key)) {
@@ -1558,22 +1573,22 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       ...place,
       anchorLines: [
         place.line,
-        location(file, holder.getStart(file)).line,
-        location(file, statementOf(holder).getStart(file)).line,
+        location(file, holder.start).line,
+        location(file, statementOf(holder, file).start).line,
       ],
     });
   };
 
-  const inspectSql = (node: ts.TaggedTemplateExpression) => {
+  const inspectSql = (node: TaggedTemplateExpression) => {
     if (!isSqlTag(node)) {
       return;
     }
-    const { sql, offsets, expressions } = sqlParts(file, node.template);
+    const { sql, offsets, expressions } = sqlParts(file, node.quasi);
     if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
-      add("per-source-full-count", node.getStart(file), node);
+      add("per-source-full-count", node.start, node);
     }
     for (const index of optionalKeysetOffsets(sql, expressions, file)) {
-      add("optional-keyset", offsets[index] ?? node.getStart(file), node);
+      add("optional-keyset", offsets[index] ?? node.start, node);
     }
     for (const index of sqlOrSubqueryOffsets(
       sqlWithoutLiterals(sql),
@@ -1581,7 +1596,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       bindings,
       file,
     )) {
-      add("or-subquery", offsets[index] ?? node.getStart(file), node);
+      add("or-subquery", offsets[index] ?? node.start, node);
     }
     for (const match of /\bCHECK\s*\(/iu.test(sql) ? [] : sql.matchAll(LIKE)) {
       const index = match.index;
@@ -1592,8 +1607,8 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       const lhsExpression =
         lhsMarker === null ? undefined : expressions[Number(lhsMarker[1])];
       const lhsText =
-        lhsExpression === undefined ? lhs : lhsExpression.getText(file);
-      const offset = offsets[index] ?? node.getStart(file);
+        lhsExpression === undefined ? lhs : textOf(lhsExpression, file);
+      const offset = offsets[index] ?? node.start;
       if (S3_KEY.test(lhsText)) {
         add("s3-key-like", offset, node);
       }
@@ -1616,7 +1631,7 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       if (
         !containsCorpus(sql) &&
         !expressions.some((expression) =>
-          containsCorpus(expression.getText(file)),
+          containsCorpus(textOf(expression, file)),
         )
       ) {
         continue;
@@ -1636,33 +1651,29 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
             groupExpression(expression, bindings, file))
         ) {
           const cursor = match.index + match[0].length + item.start;
-          add(
-            "group-by-expression",
-            offsets[cursor] ?? node.getStart(file),
-            node,
-          );
+          add("group-by-expression", offsets[cursor] ?? node.start, node);
         }
       }
     }
   };
 
-  const visit = (node: ts.Node) => {
-    if (ts.isTaggedTemplateExpression(node)) {
+  const visit = (node: Node) => {
+    if (node.type === "TaggedTemplateExpression") {
       inspectSql(node);
     }
     const plain = plainSqlText(node, file);
     if (plain !== undefined) {
       const { sql, expressions } = plain;
       if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
-        add("per-source-full-count", node.getStart(file), node);
+        add("per-source-full-count", node.start, node);
       }
       for (const index of optionalKeysetOffsets(plain.sql, [], file)) {
         add("optional-keyset", plain.offsetAt(index), node);
       }
     }
-    if (ts.isCallExpression(node)) {
+    if (node.type === "CallExpression") {
       if (drizzleSourceCount(node, subqueryOperandContext)) {
-        add("per-source-full-count", node.getStart(file), node);
+        add("per-source-full-count", node.start, node);
       }
       if (
         drizzleCallName(node, imports) === "or" &&
@@ -1670,32 +1681,32 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
           hasSubqueryOperand(argument, subqueryOperandContext),
         )
       ) {
-        add("or-subquery", node.getStart(file), node);
+        add("or-subquery", node.start, node);
       }
       if (isLikeCall(node) && node.arguments.length >= 2) {
         const column = node.arguments[0];
         const pattern = node.arguments[1];
-        if (column !== undefined && S3_KEY.test(column.getText(file))) {
-          add("s3-key-like", node.getStart(file), node);
+        if (column !== undefined && S3_KEY.test(textOf(column, file))) {
+          add("s3-key-like", node.start, node);
         }
         if (pattern !== undefined && startsWithWildcard(pattern, bindings)) {
-          add("leading-wildcard", node.getStart(file), node);
+          add("leading-wildcard", node.start, node);
         }
       }
       if (isGroupByCall(node)) {
-        const receiver = node.expression.expression.getText(file);
+        const receiver = textOf(node.callee.object, file);
         if (containsCorpus(receiver)) {
           for (const argument of node.arguments) {
             if (groupExpression(argument, bindings, file)) {
-              add("group-by-expression", argument.getStart(file), node);
+              add("group-by-expression", argument.start, node);
             }
           }
         }
       }
     }
-    ts.forEachChild(node, visit);
+    forEachChild(node, visit);
   };
-  visit(file);
+  visit(file.program);
 
   const comments = allowCommentsOf(source, file).map(({ line, reason }) => ({
     line,

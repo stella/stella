@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type ArrowFunctionExpression,
+  type CallExpression,
+  type Function as SyntaxFunction,
+  type NewExpression,
+  type Node,
+  parseSource,
+  type Program,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const root = path.resolve(import.meta.dir, "../../../../..");
 const writeHelpers = new Set([
@@ -107,30 +117,43 @@ const expectedWriteCounts = {
   "src/mcp/file-comparison-links-tool.ts": 1,
 } as const satisfies Record<string, number>;
 
+type SourceTree = {
+  readonly program: Program;
+  readonly text: (node: Node) => string;
+  readonly parents: ReadonlyMap<Node, Node>;
+};
+
+const memberName = (callee: Node) => {
+  if (callee.type !== "MemberExpression" || callee.computed) {
+    return null;
+  }
+  return callee.property.type === "PrivateIdentifier"
+    ? `#${callee.property.name}`
+    : callee.property.name;
+};
+
 const invokedName = (
-  node: ts.CallExpression | ts.NewExpression,
+  node: CallExpression | NewExpression,
   imports: ReadonlyMap<string, string>,
 ) => {
-  const callee = node.expression;
-  if (ts.isIdentifier(callee)) {
-    return imports.get(callee.text) ?? callee.text;
+  const callee = node.callee;
+  if (callee.type === "Identifier") {
+    return imports.get(callee.name) ?? callee.name;
   }
-  if (ts.isPropertyAccessExpression(callee)) {
-    if (callee.name.text === "write") {
-      const receiver = callee.expression;
-      if (
-        (ts.isCallExpression(receiver) &&
-          ts.isIdentifier(receiver.expression) &&
-          (imports.get(receiver.expression.text) ??
-            receiver.expression.text) === "getS3") ||
-        (ts.isIdentifier(receiver) && imports.get(receiver.text) === "getS3")
-      ) {
-        return "getS3.write";
-      }
+  const name = memberName(callee);
+  if (name === "write" && callee.type === "MemberExpression") {
+    const receiver = callee.object;
+    if (
+      (receiver.type === "CallExpression" &&
+        receiver.callee.type === "Identifier" &&
+        (imports.get(receiver.callee.name) ?? receiver.callee.name) ===
+          "getS3") ||
+      (receiver.type === "Identifier" && imports.get(receiver.name) === "getS3")
+    ) {
+      return "getS3.write";
     }
-    return callee.name.text;
   }
-  return null;
+  return name;
 };
 
 // The one gating form: the flag read through its owner. Compared with
@@ -139,124 +162,193 @@ const FILE_USAGE_LIMITS_ENABLED =
   'isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")';
 const FILE_USAGE_LIMITS_DISABLED = `!${FILE_USAGE_LIMITS_ENABLED}`;
 
-const normalizedCondition = (condition: ts.Expression): string =>
-  condition.getText().replaceAll(/\s/gu, "").replaceAll(",)", ")");
+const normalizedCondition = (tree: SourceTree, condition: Node): string =>
+  tree.text(condition).replaceAll(/\s/gu, "").replaceAll(",)", ")");
 
-const isFlagOff = (node: ts.Node): boolean => {
+const isFlagOff = (tree: SourceTree, node: Node): boolean => {
   let child = node;
-  let current = node.parent;
-  while (!ts.isSourceFile(current)) {
-    if (ts.isIfStatement(current)) {
-      const condition = normalizedCondition(current.expression);
+  let current = tree.parents.get(node);
+  while (current !== undefined && current.type !== "Program") {
+    if (current.type === "IfStatement") {
+      const condition = normalizedCondition(tree, current.test);
       if (
         (condition === FILE_USAGE_LIMITS_DISABLED &&
-          child === current.thenStatement) ||
-        (condition === FILE_USAGE_LIMITS_ENABLED &&
-          child === current.elseStatement)
+          child === current.consequent) ||
+        (condition === FILE_USAGE_LIMITS_ENABLED && child === current.alternate)
       ) {
         return true;
       }
     }
-    if (ts.isConditionalExpression(current)) {
-      const condition = normalizedCondition(current.condition);
+    if (current.type === "ConditionalExpression") {
+      const condition = normalizedCondition(tree, current.test);
       if (
         (condition === FILE_USAGE_LIMITS_DISABLED &&
-          child === current.whenTrue) ||
-        (condition === FILE_USAGE_LIMITS_ENABLED && child === current.whenFalse)
+          child === current.consequent) ||
+        (condition === FILE_USAGE_LIMITS_ENABLED && child === current.alternate)
       ) {
         return true;
       }
     }
     child = current;
-    current = current.parent;
+    current = tree.parents.get(current);
   }
   return false;
 };
 
+type FunctionNode = ArrowFunctionExpression | SyntaxFunction;
+
+const isFunctionNode = (node: Node): node is FunctionNode =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "TSDeclareFunction" ||
+  node.type === "TSEmptyBodyFunctionExpression";
+
+// A method's function value belongs to the method, which is not a callback.
+const isMethodValue = (node: Node, parent: Node | undefined) =>
+  node.type === "FunctionExpression" &&
+  (parent?.type === "MethodDefinition" ||
+    parent?.type === "TSAbstractMethodDefinition" ||
+    (parent?.type === "Property" && (parent.method || parent.kind !== "init")));
+
 // Follow only values supplied to ledger inputs. A nearby ledger call cannot
 // account for an unrelated callback, collection, or shadowed declaration.
-type StorageCallback =
-  ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
+type StorageCallback = FunctionNode;
 
-const collectCallbackFlow = (ast: ts.SourceFile) => {
-  const bindings: (
-    ts.VariableDeclaration | ts.ParameterDeclaration | ts.FunctionDeclaration
-  )[] = [];
-  const calls: ts.CallExpression[] = [];
-  const collect = (candidate: ts.Node) => {
+type Identifier = Extract<Node, { type: "Identifier" }>;
+
+type Binding = {
+  readonly kind: "variable" | "parameter" | "function";
+  readonly node: Node;
+  readonly name: string;
+  readonly scope: Node | undefined;
+  readonly initializer?: Node | null;
+};
+
+const bindingName = (pattern: Node): string | undefined => {
+  if (pattern.type === "Identifier") {
+    return pattern.name;
+  }
+  if (pattern.type === "AssignmentPattern") {
+    return bindingName(pattern.left);
+  }
+  if (pattern.type === "RestElement") {
+    return bindingName(pattern.argument);
+  }
+  return pattern.type === "TSParameterProperty"
+    ? bindingName(pattern.parameter)
+    : undefined;
+};
+
+const collectCallbackFlow = (tree: SourceTree) => {
+  const bindings: Binding[] = [];
+  const calls: CallExpression[] = [];
+  const blockOf = (ancestors: readonly Node[]) =>
+    ancestors.findLast(
+      (ancestor) =>
+        ancestor.type === "BlockStatement" || ancestor.type === "Program",
+    );
+  walk(tree.program, (candidate, ancestors) => {
+    const parent = ancestors.at(-1);
     if (
-      ts.isVariableDeclaration(candidate) ||
-      ts.isParameter(candidate) ||
-      ts.isFunctionDeclaration(candidate)
+      candidate.type === "VariableDeclarator" &&
+      candidate.id.type === "Identifier"
     ) {
-      bindings.push(candidate);
+      bindings.push({
+        kind: "variable",
+        node: candidate,
+        name: candidate.id.name,
+        scope: blockOf(ancestors),
+        initializer: candidate.init,
+      });
     }
-    if (ts.isCallExpression(candidate)) {
+    // A caught error is declared like a variable without an initializer.
+    if (
+      candidate.type === "Identifier" &&
+      parent?.type === "CatchClause" &&
+      parent.param === candidate
+    ) {
+      bindings.push({
+        kind: "variable",
+        node: candidate,
+        name: candidate.name,
+        scope: blockOf(ancestors),
+        initializer: null,
+      });
+    }
+    if (
+      parent !== undefined &&
+      "params" in parent &&
+      parent.type !== "TSTypeParameterDeclaration" &&
+      parent.params.some((parameter: Node) => parameter === candidate)
+    ) {
+      const name = bindingName(candidate);
+      if (name !== undefined) {
+        bindings.push({
+          kind: "parameter",
+          node: candidate,
+          name,
+          scope: parent,
+        });
+      }
+    }
+    if (
+      (candidate.type === "FunctionDeclaration" ||
+        candidate.type === "TSDeclareFunction") &&
+      candidate.id
+    ) {
+      bindings.push({
+        kind: "function",
+        node: candidate,
+        name: candidate.id.name,
+        scope: blockOf(ancestors),
+      });
+    }
+    if (candidate.type === "CallExpression") {
       calls.push(candidate);
     }
-    ts.forEachChild(candidate, collect);
-  };
-  collect(ast);
-  const scopeOf = (binding: (typeof bindings)[number]) => {
-    let scope = binding.parent;
-    while (
-      !ts.isBlock(scope) &&
-      !ts.isSourceFile(scope) &&
-      !(ts.isParameter(binding) && ts.isFunctionLike(scope))
-    ) {
-      scope = scope.parent;
-    }
-    return scope;
-  };
-  const resolve = (identifier: ts.Identifier) => {
-    let scope = identifier.parent;
-    for (;;) {
+  });
+  const resolve = (identifier: Identifier) => {
+    let scope = tree.parents.get(identifier);
+    while (scope !== undefined) {
       const currentScope = scope;
       const found = bindings.find(
         (binding) =>
-          binding.name !== undefined &&
-          ts.isIdentifier(binding.name) &&
-          binding.name.text === identifier.text &&
-          scopeOf(binding) === currentScope,
+          binding.name === identifier.name && binding.scope === currentScope,
       );
       if (found) {
         return found;
       }
-      if (ts.isSourceFile(scope)) {
+      if (scope.type === "Program") {
         return undefined;
       }
-      scope = scope.parent;
+      scope = tree.parents.get(scope);
     }
+    return undefined;
   };
   return { calls, resolve };
 };
 
-const returnedValues = (
-  fn: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
-) => {
-  const values: ts.Expression[] = [];
+const returnedValues = (fn: FunctionNode) => {
+  const values: Node[] = [];
   if (!fn.body) {
     return values;
   }
-  if (!ts.isBlock(fn.body)) {
+  if (fn.body.type !== "BlockStatement") {
     return [fn.body];
   }
-  const visit = (candidate: ts.Node) => {
-    if (ts.isReturnStatement(candidate) && candidate.expression) {
-      values.push(candidate.expression);
-      return;
+  walk(fn.body, (candidate) => {
+    if (candidate.type === "ReturnStatement" && candidate.argument) {
+      values.push(candidate.argument);
+      return "skip-children";
     }
-    if (ts.isFunctionLike(candidate)) {
-      return;
-    }
-    ts.forEachChild(candidate, visit);
-  };
-  visit(fn.body);
+    return isFunctionNode(candidate) ? "skip-children" : undefined;
+  });
   return values;
 };
 
 type CallbackTraceOptions = {
-  ast: ts.SourceFile;
+  tree: SourceTree;
   flow: ReturnType<typeof collectCallbackFlow>;
   target: StorageCallback;
 };
@@ -265,97 +357,108 @@ const createCallbackMatcher = ({
   flow: { resolve },
   target,
 }: CallbackTraceOptions) => {
-  const referencesFunction = (value: ts.Node): boolean => {
+  const referencesFunction = (value: Node): boolean => {
     if (value === target) {
       return true;
     }
-    if (ts.isIdentifier(value)) {
+    if (value.type === "Identifier") {
       const binding = resolve(value);
       return (
-        binding === target ||
-        (binding !== undefined &&
-          ts.isVariableDeclaration(binding) &&
-          binding.initializer === target)
+        binding?.node === target ||
+        (binding?.kind === "variable" && binding.initializer === target)
       );
     }
     return false;
   };
-  const callbackUsesTarget = (value: ts.Node): boolean => {
+  const callbackUsesTarget = (value: Node): boolean => {
     if (referencesFunction(value)) {
       return true;
     }
-    if (!ts.isArrowFunction(value) && !ts.isFunctionExpression(value)) {
+    if (
+      value.type !== "ArrowFunctionExpression" &&
+      value.type !== "FunctionExpression"
+    ) {
       return false;
     }
     let used = false;
-    const visit = (candidate: ts.Node) => {
-      if (
-        ts.isCallExpression(candidate) &&
-        referencesFunction(candidate.expression)
-      ) {
-        used = true;
-      }
-      if (ts.isFunctionLike(candidate)) {
-        return;
-      }
-      ts.forEachChild(candidate, visit);
-    };
-    visit(value.body);
+    if (value.body) {
+      walk(value.body, (candidate) => {
+        if (
+          candidate.type === "CallExpression" &&
+          referencesFunction(candidate.callee)
+        ) {
+          used = true;
+        }
+        return isFunctionNode(candidate) ? "skip-children" : undefined;
+      });
+    }
     return used;
   };
   return callbackUsesTarget;
 };
 
+const CALLBACK_NAMES = new Set(["copy", "write", "writePdf"]);
+
 const traceLedgerInputs = (options: CallbackTraceOptions) => {
   const {
-    ast,
+    tree,
     flow: { calls, resolve },
   } = options;
-  const visited = new Set<ts.Node>();
+  const visited = new Set<Node>();
   const callbackUsesTarget = createCallbackMatcher(options);
-  const propertyCarriesCallback = (property: ts.ObjectLiteralElementLike) => {
-    if (ts.isShorthandPropertyAssignment(property)) {
-      if (property.name.text === "inputs") {
-        return carriesCallback(property.name);
-      }
-      return (
-        (property.name.text === "copy" ||
-          property.name.text === "write" ||
-          property.name.text === "writePdf") &&
-        callbackUsesTarget(property.name)
-      );
-    }
-    if (!ts.isPropertyAssignment(property)) {
+  const propertyCarriesCallback = (property: Node) => {
+    if (
+      property.type !== "Property" ||
+      property.kind !== "init" ||
+      property.method
+    ) {
       return false;
     }
-    const name = property.name.getText(ast);
-    if (name === "copy" || name === "write" || name === "writePdf") {
-      return callbackUsesTarget(property.initializer);
+    if (property.shorthand) {
+      if (property.value.type !== "Identifier") {
+        return false;
+      }
+      if (property.value.name === "inputs") {
+        return carriesCallback(property.value);
+      }
+      return (
+        CALLBACK_NAMES.has(property.value.name) &&
+        callbackUsesTarget(property.value)
+      );
     }
-    return name === "inputs" && carriesCallback(property.initializer);
+    if (property.computed) {
+      return false;
+    }
+    const name = tree.text(property.key);
+    if (CALLBACK_NAMES.has(name)) {
+      return callbackUsesTarget(property.value);
+    }
+    return name === "inputs" && carriesCallback(property.value);
   };
-  const carriesCallback = (value: ts.Node): boolean => {
+  const carriesCallback = (value: Node): boolean => {
     if (visited.has(value)) {
       return false;
     }
     visited.add(value);
     if (
-      ts.isParenthesizedExpression(value) ||
-      ts.isAwaitExpression(value) ||
-      ts.isSpreadElement(value)
+      value.type === "ParenthesizedExpression" ||
+      value.type === "ChainExpression"
     ) {
       return carriesCallback(value.expression);
     }
-    if (ts.isIdentifier(value)) {
+    if (value.type === "AwaitExpression" || value.type === "SpreadElement") {
+      return carriesCallback(value.argument);
+    }
+    if (value.type === "Identifier") {
       const binding = resolve(value);
       if (!binding) {
         return false;
       }
-      if (ts.isFunctionDeclaration(binding)) {
-        return returnedValues(binding).some(carriesCallback);
+      if (binding.kind === "function" && isFunctionNode(binding.node)) {
+        return returnedValues(binding.node).some(carriesCallback);
       }
       if (
-        ts.isVariableDeclaration(binding) &&
+        binding.kind === "variable" &&
         binding.initializer &&
         carriesCallback(binding.initializer)
       ) {
@@ -363,41 +466,46 @@ const traceLedgerInputs = (options: CallbackTraceOptions) => {
       }
       return calls.some(
         (call) =>
-          ts.isPropertyAccessExpression(call.expression) &&
-          call.expression.name.text === "push" &&
-          ts.isIdentifier(call.expression.expression) &&
-          resolve(call.expression.expression) === binding &&
+          call.callee.type === "MemberExpression" &&
+          memberName(call.callee) === "push" &&
+          call.callee.object.type === "Identifier" &&
+          resolve(call.callee.object) === binding &&
           call.arguments.some(carriesCallback),
       );
     }
-    if (ts.isPropertyAccessExpression(value)) {
-      return value.name.text === "value" && carriesCallback(value.expression);
+    if (value.type === "MemberExpression") {
+      return memberName(value) === "value" && carriesCallback(value.object);
     }
-    if (ts.isArrayLiteralExpression(value)) {
-      return value.elements.some(carriesCallback);
+    if (value.type === "ArrayExpression") {
+      return value.elements.some(
+        (element) => element !== null && carriesCallback(element),
+      );
     }
-    if (ts.isObjectLiteralExpression(value)) {
+    if (value.type === "ObjectExpression") {
       return value.properties.some(propertyCarriesCallback);
     }
-    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
+    if (
+      value.type === "ArrowFunctionExpression" ||
+      value.type === "FunctionExpression"
+    ) {
       return returnedValues(value).some(carriesCallback);
     }
     if (
-      !ts.isCallExpression(value) ||
-      !ts.isPropertyAccessExpression(value.expression)
+      value.type !== "CallExpression" ||
+      value.callee.type !== "MemberExpression"
     ) {
       return false;
     }
-    const { expression: receiver, name } = value.expression;
-    if (name.text === "map" || name.text === "flatMap") {
+    const receiver = value.callee.object;
+    const name = memberName(value.callee);
+    if (name === "map" || name === "flatMap") {
       const callback = value.arguments.at(0);
       return callback !== undefined && carriesCallback(callback);
     }
     if (
-      ts.isIdentifier(receiver) &&
-      ((receiver.text === "Result" &&
-        (name.text === "ok" || name.text === "all")) ||
-        (receiver.text === "Promise" && name.text === "all"))
+      receiver.type === "Identifier" &&
+      ((receiver.name === "Result" && (name === "ok" || name === "all")) ||
+        (receiver.name === "Promise" && name === "all"))
     ) {
       const input = value.arguments.at(0);
       return input !== undefined && carriesCallback(input);
@@ -408,21 +516,23 @@ const traceLedgerInputs = (options: CallbackTraceOptions) => {
 };
 
 type LedgerCallbackContext = {
-  ast: ts.SourceFile;
+  tree: SourceTree;
   imports: ReadonlyMap<string, string>;
   flow: ReturnType<typeof collectCallbackFlow>;
 };
 
 const ledgerCallback = (
-  node: ts.Node,
-  { ast, imports, flow }: LedgerCallbackContext,
+  node: Node,
+  { tree, imports, flow }: LedgerCallbackContext,
 ): boolean => {
-  let ancestor = node.parent;
-  while (!ts.isSourceFile(ancestor)) {
+  let ancestor = tree.parents.get(node);
+  while (ancestor !== undefined && ancestor.type !== "Program") {
+    const parent = tree.parents.get(ancestor);
     if (
-      ts.isArrowFunction(ancestor) ||
-      ts.isFunctionExpression(ancestor) ||
-      ts.isFunctionDeclaration(ancestor)
+      (ancestor.type === "ArrowFunctionExpression" ||
+        ancestor.type === "FunctionExpression" ||
+        ancestor.type === "FunctionDeclaration") &&
+      !isMethodValue(ancestor, parent)
     ) {
       const target = ancestor;
       if (
@@ -432,97 +542,111 @@ const ledgerCallback = (
             call.arguments.some(
               (argument, index) =>
                 index === 0 &&
-                traceLedgerInputs({ ast, flow, target })(argument),
+                traceLedgerInputs({ tree, flow, target })(argument),
             ),
         )
       ) {
         return true;
       }
     }
-    ancestor = ancestor.parent;
+    ancestor = parent;
   }
   return false;
 };
 
 const scan = (file: string, source: string): WriteSite[] => {
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const { program } = parseSource(file, source);
   const imports = new Map<string, string>();
-  for (const statement of ast.statements) {
-    if (!ts.isImportDeclaration(statement)) {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const named = statement.importClause?.namedBindings;
-    if (!named || !ts.isNamedImports(named)) {
-      continue;
-    }
-    for (const element of named.elements) {
-      imports.set(
-        element.name.text,
-        element.propertyName?.text ?? element.name.text,
-      );
+    for (const element of statement.specifiers) {
+      if (element.type === "ImportSpecifier") {
+        imports.set(
+          element.local.name,
+          element.imported.type === "Identifier"
+            ? element.imported.name
+            : element.imported.value,
+        );
+      }
     }
   }
-  const visitAliases = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const initializer = node.initializer;
-      if (initializer && ts.isIdentifier(initializer)) {
-        const target = imports.get(initializer.text) ?? initializer.text;
-        if (writeHelpers.has(target) || target === "getS3") {
-          imports.set(node.name.text, target);
-        }
-      }
-      if (
-        initializer &&
-        ts.isCallExpression(initializer) &&
-        ts.isIdentifier(initializer.expression) &&
-        (imports.get(initializer.expression.text) ??
-          initializer.expression.text) === "getS3"
-      ) {
-        imports.set(node.name.text, "getS3");
-      }
-      if (
-        initializer &&
-        ts.isPropertyAccessExpression(initializer) &&
-        initializer.name.text === "write" &&
-        ts.isCallExpression(initializer.expression) &&
-        ts.isIdentifier(initializer.expression.expression) &&
-        (imports.get(initializer.expression.expression.text) ??
-          initializer.expression.expression.text) === "getS3"
-      ) {
-        imports.set(node.name.text, "getS3.write");
+  walk(program, (node) => {
+    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
+      return;
+    }
+    const initializer = node.init;
+    if (initializer?.type === "Identifier") {
+      const target = imports.get(initializer.name) ?? initializer.name;
+      if (writeHelpers.has(target) || target === "getS3") {
+        imports.set(node.id.name, target);
       }
     }
-    ts.forEachChild(node, visitAliases);
+    if (
+      initializer?.type === "CallExpression" &&
+      initializer.callee.type === "Identifier" &&
+      (imports.get(initializer.callee.name) ?? initializer.callee.name) ===
+        "getS3"
+    ) {
+      imports.set(node.id.name, "getS3");
+    }
+    if (
+      initializer?.type === "MemberExpression" &&
+      memberName(initializer) === "write" &&
+      initializer.object.type === "CallExpression" &&
+      initializer.object.callee.type === "Identifier" &&
+      (imports.get(initializer.object.callee.name) ??
+        initializer.object.callee.name) === "getS3"
+    ) {
+      imports.set(node.id.name, "getS3.write");
+    }
+  });
+  const writes: { node: CallExpression | NewExpression; name: string }[] = [];
+  walk(program, (node) => {
+    if (node.type !== "CallExpression" && node.type !== "NewExpression") {
+      return;
+    }
+    const name = invokedName(node, imports);
+    if (
+      name &&
+      (writeHelpers.has(name) ||
+        writeCommands.has(name) ||
+        name === "getS3.write")
+    ) {
+      writes.push({ node, name });
+    }
+  });
+  if (writes.length === 0) {
+    return [];
+  }
+  // Parent links and bindings serve only the files that write.
+  const parents = new Map<Node, Node>();
+  walk(program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+  });
+  const tree: SourceTree = {
+    program,
+    parents,
+    text: (node) => source.slice(node.start, node.end),
   };
-  visitAliases(ast);
-  const flow = collectCallbackFlow(ast);
+  const flow = collectCallbackFlow(tree);
   const ordinals = new Map<string, number>();
-  const sites: WriteSite[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
-      const name = invokedName(node, imports);
-      if (
-        name &&
-        (writeHelpers.has(name) ||
-          writeCommands.has(name) ||
-          name === "getS3.write")
-      ) {
-        const ordinal = ordinals.get(name) ?? 0;
-        ordinals.set(name, ordinal + 1);
-        sites.push({
-          file,
-          name,
-          ordinal,
-          operation: node.getText(ast).replace(/\s+/gu, " "),
-          ledgerBound: ledgerCallback(node, { ast, imports, flow }),
-          flagOff: isFlagOff(node),
-        });
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  return sites;
+  return writes.map(({ node, name }) => {
+    const ordinal = ordinals.get(name) ?? 0;
+    ordinals.set(name, ordinal + 1);
+    return {
+      file,
+      name,
+      ordinal,
+      operation: tree.text(node).replace(/\s+/gu, " "),
+      ledgerBound: ledgerCallback(node, { tree, imports, flow }),
+      flagOff: isFlagOff(tree, node),
+    };
+  });
 };
 
 describe("durable organization file writes", () => {

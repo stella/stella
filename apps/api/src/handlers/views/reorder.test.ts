@@ -10,6 +10,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -82,7 +83,7 @@ const runReorder = async (
     memberRole: sessionMemberRole("owner"),
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
-    route: "/test/views/reorder",
+    route: "/v1/views/:workspaceId/reorder" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },

@@ -22,7 +22,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 import { getClauseImportPreviewCount } from "./clause-import-dialog.logic";
 
@@ -95,7 +95,7 @@ export const ClauseImportDialog = ({
 
     const data = response.data;
     if (data instanceof Response) {
-      notifyUserError(undefined, t("clauses.importFailed"));
+      notifyUserProblem(t("clauses.importFailed"));
       return;
     }
 

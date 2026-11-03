@@ -4,10 +4,13 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  CASE_LAW_DECISION_PATH_MATCH,
+  type CaseLawDecisionPathMatch,
   type CaseLawDecisionRouteParams,
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
   extractCaseLawDecisionIdFromIdRouteParam,
+  matchCaseLawDecisionPath,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
 import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
@@ -60,6 +63,7 @@ const optionalPublicDecisionSearchQuerySchema = v.optional(
 );
 
 export const publicDecisionSearchSchema = routeSearchSchema({
+  caseFileCursor: v.optional(v.string()),
   // A stale or hand-edited value drops the note rather than failing the page.
   match: v.fallback(
     v.optional(v.picklist(Object.values(PUBLIC_DECISION_MATCH))),
@@ -107,10 +111,31 @@ type PublicLawAlternateLink = {
   hreflang: string;
 };
 
+/**
+ * A path the pre-transliteration slug fold published moves permanently: its
+ * canonical form is fixed. Every other non-canonical path keeps the router's
+ * temporary redirect, because what it resolves to can still change (a stored
+ * slug assigned later, a second language version published).
+ */
+const CANONICAL_REDIRECT_STATUS = {
+  [CASE_LAW_DECISION_PATH_MATCH.LEGACY_FOLD]: 308,
+  [CASE_LAW_DECISION_PATH_MATCH.OTHER]: 307,
+} as const satisfies Record<
+  Exclude<
+    CaseLawDecisionPathMatch["type"],
+    typeof CASE_LAW_DECISION_PATH_MATCH.CANONICAL
+  >,
+  number
+>;
+
+type CanonicalRedirectStatus =
+  (typeof CANONICAL_REDIRECT_STATUS)[keyof typeof CANONICAL_REDIRECT_STATUS];
+
 type RedirectToCanonicalDecisionPathOptions = {
   canonicalParams: CaseLawDecisionRouteParams;
   hash: string;
   search: PublicDecisionSearch;
+  statusCode: CanonicalRedirectStatus;
 };
 
 export const extractId = (param: string): SafeId<"caseLawDecision"> =>
@@ -257,6 +282,7 @@ const redirectToCanonicalDecisionPath = ({
   canonicalParams,
   hash,
   search,
+  statusCode,
 }: RedirectToCanonicalDecisionPathOptions) => {
   const redirectSearch: PublicDecisionSearch = {
     ...(search.match === undefined ? {} : { match: search.match }),
@@ -277,6 +303,7 @@ const redirectToCanonicalDecisionPath = ({
       },
       replace: true,
       search: redirectSearch,
+      statusCode,
       ...redirectHash,
     });
   }
@@ -290,8 +317,58 @@ const redirectToCanonicalDecisionPath = ({
     },
     replace: true,
     search: redirectSearch,
+    statusCode,
     ...redirectHash,
   });
+};
+
+type CanonicalizeDecisionPathOptions = {
+  decision: PublicCaseLawDecision;
+  hash: string;
+  params: PublicDecisionRouteParams;
+  search: PublicDecisionSearch;
+};
+
+/**
+ * Redirect to the decision's canonical path unless the request is already on
+ * it. A decision with a stored slug canonicalises to it; without one the id
+ * form is canonical.
+ */
+const canonicalizeDecisionPath = async ({
+  decision,
+  hash,
+  params,
+  search,
+}: CanonicalizeDecisionPathOptions) => {
+  const match = matchCaseLawDecisionPath({
+    decision: {
+      caseNumber: decision.caseNumber,
+      country: decision.country,
+      court: decision.court,
+      decisionId: decision.id,
+      language: decision.language,
+      languageAlternates: decision.languageAlternates,
+      slug: decision.slug,
+    },
+    requested: params,
+  });
+  switch (match.type) {
+    case CASE_LAW_DECISION_PATH_MATCH.CANONICAL:
+      return;
+    case CASE_LAW_DECISION_PATH_MATCH.LEGACY_FOLD:
+    case CASE_LAW_DECISION_PATH_MATCH.OTHER:
+      redirectToCanonicalDecisionPath({
+        canonicalParams: match.canonical,
+        hash: await canonicalDecisionHash({ decision, hash }),
+        search,
+        statusCode: CANONICAL_REDIRECT_STATUS[match.type],
+      });
+      return;
+    default: {
+      match satisfies never;
+      panic(`Unhandled decision path match: ${String(match)}`);
+    }
+  }
 };
 
 const createDecisionAlternateLinks = (
@@ -333,32 +410,12 @@ export const loadPublicCaseLawDecisionRoute = async ({
         async () =>
           await ensureRouteQueryData(
             queryClient,
-            decisionOptions(extractId(routeDecisionId)),
+            decisionOptions(extractId(routeDecisionId), search.caseFileCursor),
           ),
       ),
       routeCountry,
     );
-    // A decision with a stored slug canonicalises to it; without one the
-    // id form is canonical and no redirect happens.
-    const canonicalParams = createCaseLawDecisionRouteParams({
-      caseNumber: decision.caseNumber,
-      country: decision.country,
-      court: decision.court,
-      decisionId: decision.id,
-      language: decision.language,
-      languageAlternates: decision.languageAlternates,
-      slug: decision.slug,
-    });
-
-    const canonicalPath = createCaseLawDecisionPath(canonicalParams);
-    const currentPath = createCaseLawDecisionPath(params);
-    if (currentPath !== canonicalPath) {
-      redirectToCanonicalDecisionPath({
-        canonicalParams,
-        hash: await canonicalDecisionHash({ decision, hash }),
-        search,
-      });
-    }
+    await canonicalizeDecisionPath({ decision, hash, params, search });
 
     primeDecisionProvisions(queryClient, decision.id);
 
@@ -375,9 +432,14 @@ export const loadPublicCaseLawDecisionRoute = async ({
           queryClient,
           decisionBySlugOptions(
             params.language === undefined || normalizedRouteLanguage === null
-              ? { country: routeCountry, slug: params.slug }
+              ? {
+                  country: routeCountry,
+                  slug: params.slug,
+                  caseFileCursor: search.caseFileCursor,
+                }
               : {
                   country: routeCountry,
+                  caseFileCursor: search.caseFileCursor,
                   language: normalizedRouteLanguage,
                   slug: params.slug,
                 },
@@ -386,25 +448,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
     ),
     routeCountry,
   );
-  const canonicalParams = createCaseLawDecisionRouteParams({
-    caseNumber: decision.caseNumber,
-    country: decision.country,
-    court: decision.court,
-    decisionId: decision.id,
-    language: decision.language,
-    languageAlternates: decision.languageAlternates,
-    slug: decision.slug,
-  });
-
-  const canonicalPath = createCaseLawDecisionPath(canonicalParams);
-  const currentPath = createCaseLawDecisionPath(params);
-  if (currentPath !== canonicalPath) {
-    redirectToCanonicalDecisionPath({
-      canonicalParams,
-      hash: await canonicalDecisionHash({ decision, hash }),
-      search,
-    });
-  }
+  await canonicalizeDecisionPath({ decision, hash, params, search });
 
   primeDecisionProvisions(queryClient, decision.id);
 

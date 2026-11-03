@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getOauthAccountSwitchHref,
-  getOauthClientDisplayName,
   getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQuery,
@@ -116,21 +115,6 @@ describe("getOauthAccountSwitchHref", () => {
     expect(target.searchParams.get("redirectTo")).toBe(
       "/auth/organization?client_id=client-123&sig=abc123",
     );
-  });
-});
-
-describe("getOauthClientDisplayName", () => {
-  test("prefers OAuth registration metadata names", () => {
-    expect(
-      getOauthClientDisplayName({
-        client_name: "Inspector",
-        name: "Fallback",
-      }),
-    ).toBe("Inspector");
-  });
-
-  test("falls back to generic name fields", () => {
-    expect(getOauthClientDisplayName({ name: "CLI" })).toBe("CLI");
   });
 });
 

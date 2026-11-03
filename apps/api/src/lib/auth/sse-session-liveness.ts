@@ -1,7 +1,8 @@
-import { and, gt, inArray, sql } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
 
 import { session } from "@/api/db/auth-schema";
 import type { RootDatabase } from "@/api/db/root";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SseSessionLivenessReader } from "@/api/lib/sse";
 
 /**
@@ -25,10 +26,7 @@ export const readLiveSseSessions = async (
     .select({ id: session.id, userId: session.userId })
     .from(session)
     .where(
-      and(
-        inArray(session.id, [...owners.keys()]),
-        gt(session.expiresAt, sql`${now.toISOString()}::timestamptz`),
-      ),
+      and(inArray(session.id, [...owners.keys()]), liveSessionPredicate(now)),
     );
   return new Set(
     rows.filter((row) => owners.get(row.id) === row.userId).map(({ id }) => id),

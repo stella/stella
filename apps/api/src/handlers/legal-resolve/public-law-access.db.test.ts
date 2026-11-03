@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { afterAll, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { organization } from "@/api/db/auth-schema";
 import {
@@ -17,8 +17,8 @@ import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   getTestDb,
   releaseTestDb,
@@ -78,11 +78,9 @@ testState.beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(organization).where(
-    inArray(
-      organization.id,
-      fixtures.map(({ organizationId }) => organizationId),
-    ),
+  await deleteOrganizationsForTest(
+    db,
+    fixtures.map(({ organizationId }) => organizationId),
   );
   await releaseTestDb();
 });

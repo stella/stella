@@ -164,17 +164,21 @@ const SessionsCardContent = () => {
                   </TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
                   <TableCell>
-                    <Tooltip
-                      content={formatFullTimestamp(session.updatedAt)}
-                      render={
-                        <button
-                          className="rounded-sm text-start focus-visible:outline-2"
-                          type="button"
-                        />
-                      }
-                    >
-                      {formatRelativeTime(session.updatedAt)}
-                    </Tooltip>
+                    {isCurrent ? (
+                      t("account.sessions.activeNow")
+                    ) : (
+                      <Tooltip
+                        content={formatFullTimestamp(session.updatedAt)}
+                        render={
+                          <button
+                            className="rounded-sm text-start focus-visible:outline-2"
+                            type="button"
+                          />
+                        }
+                      >
+                        {formatRelativeTime(session.updatedAt)}
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell className="text-end">
                     {isCurrent ? (

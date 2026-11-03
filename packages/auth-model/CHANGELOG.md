@@ -1,5 +1,37 @@
 # @stll/auth-model
 
+## 0.6.0
+
+### Minor Changes
+
+- Export the opaque organization slug pattern next to its generator.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#7600](https://github.com/stella/stella/pull/7600) [`cd76389`](https://github.com/stella/stella/commit/cd7638987595cc0f1776b204073fb958bf94bf35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose a shared invitation lifecycle classifier for pending, past, and accepted invitations.
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the opaque organization slug generator next to the shared slug rules.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7236](https://github.com/stella/stella/pull/7236) [`52590f6`](https://github.com/stella/stella/commit/52590f6353c040428264ad26386d7a5e6492ad5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `apple` to the social provider identifiers and export `AuthSocialProviderId`.
+
+- [#6315](https://github.com/stella/stella/pull/6315) [`a21a5e7`](https://github.com/stella/stella/commit/a21a5e7d9a41efbc874e06450be60e9818cf2cf6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the session startup header constant from the portable authentication contract.
+
+### Patch Changes
+
+- [#7359](https://github.com/stella/stella/pull/7359) [`fa2397d`](https://github.com/stella/stella/commit/fa2397d59e8a09dc9d412a102f18c5c449341876) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.12 after confirming the core and organization schemas are unchanged.
+
 ## 0.2.7
 
 ### Patch Changes

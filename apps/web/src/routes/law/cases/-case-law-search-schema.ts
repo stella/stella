@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
-import { SEARCH_SORTS } from "@stll/api-contract/search";
+import { caseLawFilterValidationSchema } from "@stll/api-contract/case-law-filter-scope";
+import { DECISION_SORTS } from "@stll/api-contract/search";
 
 import {
   publicLawPageSearchSchemaUpTo,
@@ -59,6 +60,10 @@ const optionalStrictSchema = v.fallback(
 
 export const searchSchema = routeSearchSchema({
   country: optionalBrowseStringSchema(3),
+  filterNotice: v.fallback(
+    v.optional(caseLawFilterValidationSchema.entries.removed),
+    undefined,
+  ),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,
   lang: optionalBrowseStringSchema(16),
@@ -79,7 +84,7 @@ export const searchSchema = routeSearchSchema({
   ),
   rewrite: v.fallback(v.optional(v.picklist(["off"])), undefined),
   rewrittenFrom: optionalLawSearchQuerySchema,
-  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  sort: v.fallback(v.optional(v.picklist(DECISION_SORTS)), undefined),
   sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
   to: optionalDateSchema,

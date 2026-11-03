@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateToolCallParts } from "@/api/handlers/chat/chat-schema";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -123,7 +123,8 @@ const toolCallOutcome = ({
 test(
   "a strict provider's null-widened text is the call its folded input describes",
   () => {
-    fc.assert(
+    assertProperty(
+      "a strict provider's null-widened text is the call its folded input describes",
       fc.property(inputArbitrary, (input) => {
         const widenedText = stringifyDifferently(nullWidenedRecord(input));
 
@@ -180,7 +181,7 @@ test(
           ).toBe(mismatch);
         }
       }),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),

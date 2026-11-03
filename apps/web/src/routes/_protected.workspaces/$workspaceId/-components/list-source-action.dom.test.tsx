@@ -1,10 +1,20 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { InferDataFromTag } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -13,24 +23,12 @@ import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import slovak from "@/i18n/langs/sk.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {
   throw new TypeError("Unexpected source request");
 };
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      return await respondRequest(request);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -77,6 +75,8 @@ const files = [
     mimeType: DOCX_MIME,
   },
 ];
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
@@ -93,9 +93,8 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 
@@ -279,7 +278,23 @@ const save = async (mounted: Awaited<ReturnType<typeof mountAction>>) => {
     );
   });
 };
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        return await respondRequest(request);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients.splice(0)) {
     client.clear();
@@ -315,6 +330,7 @@ for (const { locale, messages } of [
     await save(mounted);
     await waitFor(() => expect(mounted.created).toEqual([itemEntityId]));
     const post = requests.find((request) => request.method === "POST");
+    expect(post?.headers.get("Idempotency-Key")).toBeNull();
     expect(await post?.json()).toEqual({
       listId,
       itemEntityId,

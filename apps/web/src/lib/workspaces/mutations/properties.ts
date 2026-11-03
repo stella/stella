@@ -1,9 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -31,7 +34,8 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async ({
       name,
       contentType,
@@ -77,6 +81,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
         fingerprintKey: "useCreateProperty:failure",
         scope: { type: "handler", handlerId: "useCreateProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -99,32 +104,38 @@ export const useCreatePropertiesBatch = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }, request) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .batch.put({
-          items: items.map((item) => ({
-            name: item.name,
-            contentType: item.contentType,
-            ...(item.toolType ? { toolType: item.toolType } : {}),
-            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
-            ...(item.dependencies && item.dependencies.length > 0
-              ? {
-                  dependencies: item.dependencies.map((dep) => ({
-                    dependsOnPropertyId: toSafeId<"property">(
-                      dep.dependsOnPropertyId,
-                    ),
-                    condition: dep.condition,
-                  })),
-                }
-              : {}),
-            ...(item.options && item.options.length > 0
-              ? { options: item.options }
-              : {}),
-            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
-          })),
-        });
+        .batch.put(
+          {
+            items: items.map((item) => ({
+              name: item.name,
+              contentType: item.contentType,
+              ...(item.toolType ? { toolType: item.toolType } : {}),
+              ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+              ...(item.dependencies && item.dependencies.length > 0
+                ? {
+                    dependencies: item.dependencies.map((dep) => ({
+                      dependsOnPropertyId: toSafeId<"property">(
+                        dep.dependsOnPropertyId,
+                      ),
+                      condition: dep.condition,
+                    })),
+                  }
+                : {}),
+              ...(item.options && item.options.length > 0
+                ? { options: item.options }
+                : {}),
+              ...(item.fallback !== undefined
+                ? { fallback: item.fallback }
+                : {}),
+            })),
+          },
+          request,
+        );
 
       return unwrapApiResponse(response);
     },
@@ -141,6 +152,7 @@ export const useCreatePropertiesBatch = ({
           handlerId: "useCreatePropertiesBatch:failure",
         },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -202,6 +214,7 @@ export const useUpdateProperty = () => {
         fingerprintKey: "useUpdateProperty:failure",
         scope: { type: "handler", handlerId: "useUpdateProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -248,6 +261,7 @@ export const useSuggestPrompt = () => {
         fingerprintKey: "useSuggestPrompt:failure",
         scope: { type: "handler", handlerId: "useSuggestPrompt:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -282,6 +296,7 @@ export const useDeleteProperty = () => {
         fingerprintKey: "useDeleteProperty:failure",
         scope: { type: "handler", handlerId: "useDeleteProperty:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

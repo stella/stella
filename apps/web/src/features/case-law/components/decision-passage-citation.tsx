@@ -4,7 +4,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import { BidiText } from "@stll/ui/bidi-text";
 
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { Citation } from "@/lib/citations";
@@ -39,7 +39,8 @@ export const DecisionPassageCitation = ({
   return (
     <>
       <BidiText as="span">{citation.excerpt}</BidiText>{" "}
-      <DecisionCitationChip
+      <CitationChip
+        kind="decision"
         decision={{
           decisionId: decision.id,
           court: decision.court,

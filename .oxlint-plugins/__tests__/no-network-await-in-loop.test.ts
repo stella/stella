@@ -19,6 +19,14 @@ describe("no-network-await-in-loop", () => {
       ),
     ).toEqual([3, 3]);
   });
+  test("reports operator endpoint requests inside loops", async () => {
+    expect(
+      await lintSingleRule(
+        "no-network-await-in-loop",
+        'import { postToOperatorEndpoint as send } from "@/api/lib/observability/operator-endpoint-fetch";\nasync function flush() { for (const batch of batches) { await send(batch); } }',
+      ),
+    ).toEqual([2]);
+  });
   test("reports AWS command dispatch and Result boundaries", async () => {
     expect(
       await lintSingleRule(

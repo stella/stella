@@ -285,7 +285,7 @@ export class LegislationRevision {
     stored,
     classification,
     write,
-  }: WriteRevisionCorpusOptions): Promise<LegislationRevisionProjection> {
+  }: WriteRevisionCorpusOptions) {
     const sourceHash = this.sourceHash(classification);
     const outcome = await write({
       documentId,
@@ -293,6 +293,9 @@ export class LegislationRevision {
       ...this.payload,
       stored,
     });
-    return new RevisionProjection(sourceHash, outcome);
+    if (outcome.isErr()) {
+      return outcome;
+    }
+    return Result.ok(new RevisionProjection(sourceHash, outcome.value));
   }
 }

@@ -31,11 +31,15 @@ const collectParagraphContent = (
       case "blockCustomXml":
         content.push(...collectParagraphContent(block.content));
         break;
-      // Hold no paragraph content: a bookmark marker is a position and a
-      // preserved block is opaque markup.
+      // Hold no paragraph content: a bookmark or move range marker is a
+      // position and a preserved block is opaque markup.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         break;
     }
   }
@@ -526,6 +530,91 @@ describe("styleDocumentCitations", () => {
       );
     },
   );
+
+  test("move range markers are written back where they were in every style", () => {
+    const moveMarkers: BlockContent[] = [
+      { type: "moveFromRangeStart", id: 1, name: "move1", author: "Author" },
+      { type: "moveFromRangeEnd", id: 1 },
+      { type: "moveToRangeStart", id: 2, name: "move1", author: "Author" },
+      { type: "moveToRangeEnd", id: 2 },
+    ];
+    const document = markdownToStellaDocument(
+      [
+        "[body citation](https://example.com/body)",
+        "",
+        "| kind | link |",
+        "| --- | --- |",
+        "| citation | [cell citation](https://example.com/cell) |",
+      ].join("\n"),
+    );
+    const content = [
+      ...moveMarkers,
+      ...document.package.document.content.map((block): BlockContent =>
+        block.type === "table"
+          ? {
+              ...block,
+              rows: block.rows.map((row) => ({
+                ...row,
+                cells: row.cells.map((cell) => ({
+                  ...cell,
+                  content: [...moveMarkers, ...cell.content],
+                })),
+              })),
+            }
+          : block,
+      ),
+    ];
+    const marked = {
+      ...document,
+      package: {
+        ...document.package,
+        document: { ...document.package.document, content },
+      },
+    };
+    // Each marker with its container (the body, or a table cell by row and
+    // column) and the number of content blocks before it there, so a marker
+    // that crosses a paragraph or a cell boundary changes the record.
+    type PlacedMarker = {
+      container: string;
+      precededBy: number;
+      marker: BlockContent;
+    };
+    const markersOf = (
+      blocks: readonly BlockContent[],
+      container = "body",
+    ): PlacedMarker[] => {
+      let precededBy = 0;
+      return blocks.flatMap((block) => {
+        if (block.type.startsWith("move")) {
+          return [{ container, precededBy, marker: block }];
+        }
+        const table = `${container}/${String(precededBy)}`;
+        precededBy += 1;
+        if (block.type === "table") {
+          return block.rows.flatMap((row, rowIndex) =>
+            row.cells.flatMap((cell, cellIndex) =>
+              markersOf(
+                cell.content,
+                `${table}/${String(rowIndex)}/${String(cellIndex)}`,
+              ),
+            ),
+          );
+        }
+        return [];
+      });
+    };
+
+    // Every marker comes back in the container it was in, at its place.
+    const placed = markersOf(content);
+    expect(placed.length).toBeGreaterThan(moveMarkers.length);
+    for (const style of ["none", "footnotes"] as const) {
+      const styled = styleDocumentCitations(marked, style, options);
+      expect(markersOf(styled.package.document.content)).toEqual(placed);
+    }
+    const counted = styleDocumentCitationsWithCounts(marked, "inline", options);
+    expect(counted.document).toEqual(marked);
+    expect(counted.citationCounts).toEqual({ unverified: 2, verified: 0 });
+  });
 
   test("the transformation reaches a fixed point", () => {
     const once = styleDocumentCitations(

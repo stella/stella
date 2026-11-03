@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +29,16 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
+
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
+});
 
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
@@ -241,7 +252,9 @@ const createContext = ({
     organizationId,
     workspaceId: sourceWorkspaceId,
     userId,
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: new Request(
+      `https://example.test/v1/entities/${sourceWorkspaceId}/copy-to-workspace`,
+    ),
     server: null,
   };
   const createBoundAuditRecorder: CopyToWorkspaceContext["createAuditRecorder"] =
@@ -267,7 +280,7 @@ const createContext = ({
       sourceFieldId,
     },
     request: sourceRecorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+    route: "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
     getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
       workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,

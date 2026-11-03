@@ -8,6 +8,7 @@ import { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/
 import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -43,10 +44,21 @@ export default createSafeRootHandler(
         if (!loaded) {
           return null;
         }
+        const { projection, subjectByThread } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: loaded.message,
+        });
+        const masked = projection.chat(
+          loaded.message,
+          subjectByThread.get(threadId),
+        );
         const projected = (
           await projectPageRowsOnTx({
             tx,
-            rows: [loaded.message],
+            rows: [masked],
+            threadId,
+            withdrawal: projection,
             userId: user.id,
           })
         ).at(0);
@@ -56,7 +68,7 @@ export default createSafeRootHandler(
         return {
           ...projected,
           content: serializeRevisionSnapshot(
-            normalizeRevisionContent(loaded.message.content).content,
+            normalizeRevisionContent(masked.content).content,
           ),
         };
       }),

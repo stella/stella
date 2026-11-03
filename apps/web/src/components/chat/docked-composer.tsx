@@ -25,7 +25,10 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
-import { useDockedChatSlotRef } from "@/components/chat/docked-chat-stack";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  useDockedChatSlotRef,
+} from "@/components/chat/docked-chat-stack";
 
 /**
  * Styled placeholder label rendered in the prompt bar when the editor
@@ -169,6 +172,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
         DOCKED_COMPOSER_INSET_START_CLASS,
         OVERLAY_LAYER_CLASS_NAMES.chrome,
       )}
+      data-slot={DOCKED_CHAT_COLUMN_SLOT}
       ref={publishDocumentPanelInset}
     >
       {/* The docked surfaces of this host (thread card, review pill) render

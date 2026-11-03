@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { parseSqsQueueUrl, type SqsQueue } from "@/api/lib/email/sqs-queue-url";
+
 export type InboundMailReceivingInput = {
   INBOUND_MAIL_DOMAIN?: string | undefined;
   INBOUND_MAIL_QUEUE_URL?: string | undefined;
@@ -13,7 +15,7 @@ type InboundMailReceiving =
   | {
       type: "enabled";
       inboundDomain: string;
-      queueUrl: string;
+      queue: SqsQueue;
       topicArn: string;
       bucket: string;
       keyPrefix: string;
@@ -64,10 +66,19 @@ export const resolveInboundMailReceiving = ({
       }),
     );
   }
+  const queue = parseSqsQueueUrl(INBOUND_MAIL_QUEUE_URL);
+  if (queue === null) {
+    return Result.err(
+      new InboundMailReceivingConfigError({
+        message:
+          "INBOUND_MAIL_QUEUE_URL must be an SQS queue URL (https://sqs.<region>.amazonaws.com/<account>/<name>).",
+      }),
+    );
+  }
   return Result.ok({
     type: "enabled",
     inboundDomain: INBOUND_MAIL_DOMAIN,
-    queueUrl: INBOUND_MAIL_QUEUE_URL,
+    queue,
     topicArn: INBOUND_MAIL_TOPIC_ARN,
     bucket: INBOUND_MAIL_BUCKET,
     keyPrefix: INBOUND_MAIL_KEY_PREFIX,

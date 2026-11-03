@@ -23,6 +23,7 @@ import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import listSharepointDriveRoot from "@/api/handlers/sharepoint/list-drive-root";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -158,7 +159,7 @@ describe("own-work permissions", () => {
       const context = {
         memberRole,
         request: new Request("https://api.test/v1/desktop-registry/grant"),
-        route: "/v1/desktop-registry/grant",
+        route: "/v1/desktop-registry/grant" satisfies ApiRoutePath,
         get body() {
           throw new DatabaseError({
             message: "Connection work must not start",

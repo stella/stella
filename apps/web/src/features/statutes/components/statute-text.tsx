@@ -21,7 +21,10 @@ import {
 import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
@@ -57,6 +60,8 @@ type StatuteTextProps = {
   landingAnchorId?: string | undefined;
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
+  /** The publisher's scheme its anchors nest provision lists in. */
+  statuteAnchors: StatuteAnchorScheme;
   statuteTitle: string;
   /** A Work with a single consolidation has no history to offer. */
   versionCount: number;
@@ -68,6 +73,21 @@ const READER_STYLE = {
   fontSize: "var(--reader-body-size)",
   lineHeight: "var(--reader-body-line-height)",
 } as const;
+
+/**
+ * The blocks the statute reader draws marks in: the parsed provisions, or
+ * the plain text's paragraphs when the version has none. The marks are
+ * placed among these and drawn over these, so the two cannot disagree.
+ */
+export const statuteAnnotationBlocks = (
+  blocks: readonly Block[],
+  fulltext: string | null,
+): readonly Block[] => {
+  if (blocks.length > 0) {
+    return blocks;
+  }
+  return fulltext ? buildFulltextParagraphBlocks(fulltext) : [];
+};
 
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
@@ -124,6 +144,7 @@ export const StatuteText = ({
   language,
   masthead,
   provisionCitationCounts,
+  statuteAnchors,
   statuteTitle,
   versionCount,
   versionValidFrom,
@@ -144,10 +165,16 @@ export const StatuteText = ({
   }, [landingAnchorId]);
 
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
+    const anchorsByPieceId = buildAnnotationAnchors(
+      annotationAnchors,
+      statuteAnnotationBlocks(blocks, fulltext),
+    );
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground text-start",
+        )}
         lang={language}
         ref={articleRef}
         style={READER_STYLE}
@@ -187,6 +214,7 @@ export const StatuteText = ({
               landing={block.anchorId === landingAnchorId}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
+              statuteAnchors={statuteAnchors}
             />
           );
         })}
@@ -197,7 +225,10 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-statute text-card-foreground text-start",
+        )}
         lang={language}
         style={READER_STYLE}
       >
@@ -206,7 +237,10 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(
+            annotationAnchors,
+            statuteAnnotationBlocks(blocks, fulltext),
+          )}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />
@@ -233,6 +267,7 @@ type StatuteBlockProps = {
   provisionAccessory?:
     ((provision: ProvisionHeadingLine) => ReactNode) | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
+  statuteAnchors: StatuteAnchorScheme;
 };
 
 /**
@@ -247,6 +282,7 @@ export const StatuteBlock = ({
   landing = false,
   provisionAccessory,
   rangesByPieceId,
+  statuteAnchors,
 }: StatuteBlockProps) => {
   // The unit case law cites and a drafting history is about: the
   // designation the heading states, wherever the publisher put it.
@@ -277,6 +313,7 @@ export const StatuteBlock = ({
           : undefined
       }
       rangesByPieceId={rangesByPieceId}
+      statuteAnchors={statuteAnchors}
       variant="statute"
     />
   );

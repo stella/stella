@@ -1,12 +1,14 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   assembleCaseLawCoverageAnswer,
   type CaseLawCoveragePart,
-  createCaseLawCoverageCache,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CASE_LAW_COVERAGE_PARTS } from "@/api/lib/case-law/coverage-parts";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 type Assembly = Parameters<typeof assembleCaseLawCoverageAnswer>[0];
@@ -33,6 +35,8 @@ const answeringReaders = (): Assembly => ({
         decisionYearFrom: 1993,
         decisionYearTo: 2026,
         pendingTextCount: 0,
+        courts: [],
+        publishedDecisions: 0,
       },
     ],
     readArrivals: async () => new Map(),
@@ -90,51 +94,124 @@ const failing = (part: CaseLawCoveragePart): Assembly => {
   }
 };
 
-const PARTS = [
-  "arrivals",
-  "slice-completeness",
-  "facets",
-  "courts",
-  "provision-processing",
-] as const satisfies readonly CaseLawCoveragePart[];
+const PARTS = CASE_LAW_COVERAGE_PARTS;
 
-/** Two reads of one key through the shared cache; how many computations ran. */
-const computationsForTwoReads = async (assembly: Assembly) => {
-  const cache = createCaseLawCoverageCache(() => 1000);
-  let computations = 0;
-  const compute = async () => {
-    computations += 1;
-    return await assembleCaseLawCoverageAnswer(assembly);
-  };
-  const first = await cache.read("policy", compute);
-  await cache.read("policy", compute);
-  return { computations, first };
-};
+describe("coverage summary publication eligibility", () => {
+  test("a complete answer can replace the stored summary", async () => {
+    const computation = await assembleCaseLawCoverageAnswer(answeringReaders());
 
-describe("the shared coverage answer", () => {
-  test("a complete answer is computed once and served again", async () => {
-    const { computations, first } =
-      await computationsForTwoReads(answeringReaders());
-
-    expect(first.complete).toBe(true);
-    expect(computations).toBe(1);
+    expect(computation.complete).toBe(true);
+    if ("message" in computation.answer) {
+      panic("The readers must produce a coverage answer");
+    }
+    expect(computation.answer.unreadParts).toEqual([]);
+    expect(computation.answer.countries.at(0)?.unreadParts).toEqual([]);
   });
 
-  for (const part of PARTS) {
-    test(`an answer without ${part} still answers but is computed again`, async () => {
-      const { computations, first } = await computationsForTwoReads(
-        failing(part),
-      );
+  for (const { storedTotal, storedTotalAsOf, storedDecisions } of [
+    { storedTotal: 0, storedTotalAsOf: null, storedDecisions: null },
+    {
+      storedTotal: 0,
+      storedTotalAsOf: new Date("2026-10-25T10:00:00.000Z"),
+      storedDecisions: 0,
+    },
+    {
+      storedTotal: 7,
+      storedTotalAsOf: new Date("2026-10-25T10:00:00.000Z"),
+      storedDecisions: 7,
+    },
+  ]) {
+    test(`stored count ${storedTotal} observed ${storedTotalAsOf?.toISOString() ?? "never"} is published as ${String(storedDecisions)}`, async () => {
+      const readers = answeringReaders();
+      const sources = await readers.load.readSources();
+      const computation = await assembleCaseLawCoverageAnswer({
+        ...readers,
+        load: {
+          ...readers.load,
+          readSources: async () =>
+            sources.map((source) => ({
+              ...source,
+              storedTotal,
+              storedTotalAsOf,
+            })),
+        },
+      });
 
-      expect("message" in first.answer).toBe(false);
-      expect(first.complete).toBe(false);
-      expect(computations).toBe(2);
+      expect(computation.complete).toBe(true);
+      if ("message" in computation.answer) {
+        panic("The source must produce a coverage answer");
+      }
+      expect(
+        computation.answer.countries.at(0)?.sources.at(0)?.storedDecisions,
+      ).toBe(storedDecisions);
     });
   }
 
-  test("an unavailable answer is computed again", async () => {
+  for (const part of PARTS) {
+    test(`an answer without ${part} is partial and names it on the country`, async () => {
+      const computation = await assembleCaseLawCoverageAnswer(failing(part));
+
+      expect(computation.complete).toBe(false);
+      if ("message" in computation.answer) {
+        panic("A missing part must leave the rest of the answer");
+      }
+      expect(computation.answer.unreadParts).toEqual([part]);
+      expect(
+        computation.answer.countries.map(({ unreadParts }) => unreadParts),
+      ).toEqual([[part]]);
+    });
+  }
+
+  test("parts read once for every country are named on each country", async () => {
     const readers = answeringReaders();
-    const { computations, first } = await computationsForTwoReads({
+    const [source] = await readers.load.readSources();
+    if (source === undefined) {
+      panic("The readers must name a source");
+    }
+    const computation = await assembleCaseLawCoverageAnswer({
+      readProvisionProcessing: async () => await Promise.reject(readFailure),
+      load: {
+        ...readers.load,
+        readSources: async () => [
+          source,
+          {
+            ...source,
+            id: createSafeId<"caseLawSource">(),
+            adapterKey: ADAPTER_KEYS.SK_US,
+          },
+        ],
+        readArrivals: async () => null,
+        readCourts: async () => await Promise.reject(readFailure),
+      },
+    });
+
+    if ("message" in computation.answer) {
+      panic("Unread parts must leave the rest of the answer");
+    }
+    expect(computation.answer.unreadParts).toEqual([
+      "arrivals",
+      "courts",
+      "provision-processing",
+    ]);
+    // Only an admitted country reads courts; every country lacks the shared parts.
+    expect(
+      computation.answer.countries.map(({ country, unreadParts }) => [
+        country,
+        unreadParts,
+      ]),
+    ).toEqual(
+      (["CZE", "SVK"] as const).map((country) => [
+        country,
+        isPublicCaseLawCountry(country)
+          ? ["arrivals", "courts", "provision-processing"]
+          : ["arrivals", "provision-processing"],
+      ]),
+    );
+  });
+
+  test("an unavailable answer cannot replace the stored summary", async () => {
+    const readers = answeringReaders();
+    const computation = await assembleCaseLawCoverageAnswer({
       ...readers,
       load: {
         ...readers.load,
@@ -142,7 +219,7 @@ describe("the shared coverage answer", () => {
       },
     });
 
-    expect(first.answer).toEqual({ message: "Coverage is unavailable" });
-    expect(computations).toBe(2);
+    expect(computation.answer).toEqual({ message: "Coverage is unavailable" });
+    expect(computation.complete).toBe(false);
   });
 });

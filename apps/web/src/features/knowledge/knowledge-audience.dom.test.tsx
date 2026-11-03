@@ -6,8 +6,7 @@ import { plugin } from "bun";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
@@ -598,7 +597,7 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 
   test("switching from organization A to B keeps nothing of A, frame included", async () => {
     session = "org-a";
@@ -620,5 +619,5 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 });

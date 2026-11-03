@@ -3,7 +3,9 @@
 Some desktop features keep data on the device: clipboard history and the
 activity timeline. Activity recording never exports data automatically; its
 Copy summary action explicitly publishes the selected summary to the system
-clipboard at the user's request. They share one set of guardrails. A new
+clipboard at the user's request, and a suggestion's window titles leave the
+device only for a stella AI description the user approved (see
+[stella AI descriptions](#stella-ai-descriptions)). They share one set of guardrails. A new
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 
@@ -31,7 +33,12 @@ local-only feature follows every rule below and adds one entry to
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
 - **Single-window capability.** The feature's commands are granted only in
-  its own capability file, for its own windows.
+  its own capability file, for its own windows. Activity settings are the one
+  exception: `activity_settings.rs` takes an `ActivitySettingsCaller`, which
+  also accepts the Settings window, and its read returns settings, deletion
+  state and the names of one day's apps, never the timeline. The Settings
+  window is granted those commands only; the day timeline, its review and
+  copying stay with `ActivityCaller` and the activity window.
 - **No network imports.** Feature modules and the shared machinery
   (`local_store`, `local_window`, `foreground_app`, `idle_time`,
   `feature_gate`) contain no HTTP client or socket code.
@@ -56,8 +63,9 @@ local-only feature follows every rule below and adds one entry to
   modules or shared machinery; the gate fetch never references feature data;
   `fixedCodes` features send no error details and import no telemetry.
 - `tests/local-only-window-boundary.test.ts`: commands granted only to the
-  feature's windows, every command takes the caller proof, and every caller
-  type is listed.
+  feature's windows, every granted command belongs to a feature's owner
+  module, every command takes the caller proof, every caller type is listed,
+  and the Settings window holds no timeline command.
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 
@@ -87,7 +95,7 @@ files remain available when those accounts relink.
 The loaded account uses its configured retention after reading each day's
 pending draft state. Pending days remain available for recovery beyond that
 window; unreadable day files are preserved. Other namespaces remain untouched
-until explicit deletion: the open activity window shows only their aggregate
+until explicit deletion: the activity settings show only their aggregate
 day count and a Delete action with confirmation. It never shows their dates,
 identity or content. Counting needs no key or decryption. Deletion reads each
 inactive account's existing key and refuses the operation if a draft batch
@@ -140,15 +148,19 @@ this warning: private windows may be recorded too, so pause recording or exclude
 the browser while browsing privately. Known private markers suppress details
 before truncation even after browser consent. Browser URLs are never captured.
 
-Titles and document filenames appear only in the activity window; the full
-local path appears on hover. Proposed blocks group segments per matter using a
-manual assignment, an open Stella edit session, or a unique matter reference or
-name in the recorded details. Unmatched time stays in its own group; recorded
-time not yet drafted counts toward its group's duration, and each group is
-rounded up to the next six minutes. Explicit Copy summary may include document filenames. Draft
-narratives are prefilled locally from recorded document names, opted-in window
-titles, or app names; the user can edit them, and they are sent only after
-confirmation.
+Titles and document filenames appear only in the activity window, never full
+local paths. The window is a day calendar: an Activity column shows the
+recorded segments, runs of very short ones merged into one block that lists
+their apps, and a Time entries column shows created drafts and suggestions.
+A suggestion groups segments per matter using a manual assignment, an open
+Stella edit session, or a unique matter reference or name in the recorded
+details; a range selected in the Activity column becomes a suggestion for that
+range. Recorded time not yet drafted counts toward its suggestion's duration,
+rounded up to the next six minutes. Rejecting a suggestion leaves it out of
+that day's view only. Explicit Copy summary may include document filenames.
+Draft narratives are prefilled locally from recorded document names, opted-in
+window titles, or app names; the user can edit them, and they are sent only
+after confirmation.
 Titles, paths and documents never enter telemetry, logs or error reports.
 Platform wrappers are listed with the feature's native modules so the same
 network and fixed-code guards cover them.
@@ -161,10 +173,35 @@ same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
 
+## stella AI drafts
+
+A suggestion leaves the device for a stella AI draft only after the user has
+consented on the server, from a card's prompt; consent is asked once and
+withdrawn in the Settings window's Activity tab. Without consent, or where the
+firm has drafting off, the card keeps its local template and sends nothing.
+With consent, a card with a matter is drafted as it opens and on Draft again;
+text the user typed meanwhile wins over the draft, and the draft never blocks
+accepting the template.
+
+A drafting request carries one entry: its matter, date, time zone, duration
+rounded to six minutes and app names, plus the document names and window
+titles its card shows, and those only while titles are recorded. Each name is
+cut to the API contract's length and their number bounded.
+`billing_draft_commands` takes the activity caller proof and the same
+linked-account binding as draft creation; `billing_draft_settings` reads,
+grants and withdraws consent from the activity window or Settings and answers
+with the linked account it belongs to, so a window never applies an answer for
+another account. `billing_draft_submit` sends only those fields and the
+server's settings changes, refuses unknown fields, and reads back the draft and
+the user's own earlier entries it followed. A withdrawal applies in the window
+at once and is sent again until the server confirms it. Drafts, titles and
+earlier entries are never logged.
+
 ## Confirmed draft time entries
 
-The activity window can create a draft time entry only after the user confirms
-a matter, date worked, time zone, duration, narrative, and billable choice. The
+The activity window can create a draft time entry only after the user accepts
+one suggestion with a matter, date worked, time zone, duration, narrative, and
+billable choice; each acceptance is its own confirmed batch of one. The
 narrative is prefilled locally from recorded document names, window titles
 (only when opted in), or app names. It remains editable and is sent only on
 confirmation. `time_entry_commands` holds the activity caller proof

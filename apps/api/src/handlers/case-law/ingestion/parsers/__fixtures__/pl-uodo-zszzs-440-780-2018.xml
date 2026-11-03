@@ -1,0 +1,144 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Created to version 4.0.3  by 'docproc.py' ver. 1.0.16, 'Tue Apr 15 08:06:28 UTC 2025'  -->
+<xPart xVersion="4.0.3" xml:space="preserve" xVolType="UODO" xYear="2018" xLang="pl" xFlag="checked">
+<xName>Decyzja</xName>
+<xTitle>ZSZZS.440.780.2018</xTitle>
+<xBlock>
+<xUnit xIsTitle="true" xType="bran" xBookmark="B1"><xName> </xName><xTitle> </xTitle>
+    <xUnit xType="none" xBookmark="n0"><xName> </xName>
+        <xText>Na podstawie art. 104 § 1 ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego (<xLexLink xRef="urn:ndoc:pro:pl:durp:2017:1257">Dz. U. z 2017 r. poz. 1257</xLexLink> ze zm.), art. 160 ust. 1 i 2 ustawy z dnia 10 maja 2018 r. o ochronie danych osobowych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:1000">Dz. U. z 2018 r., poz. 1000</xLexLink>) w zw. z art. 18 ust. 1 ustawy z dnia 29 sierpnia 1997 r. o ochronie danych osobowych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2016:922">Dz. U. z 2016 r., poz. 922</xLexLink>) oraz art. 6 ust. 1 lit. c) Rozporządzenia Parlamentu Europejskiego i Rady (UE) 2016/679 z dnia 27 kwietnia 2016 r. w sprawie ochrony osób fizycznych w związku z przetwarzaniem danych osobowych i w sprawie swobodnego przepływu takich danych oraz uchylenia dyrektywy 95/46/WE (Dziennik Urzędowy Unii Europejskiej, L 119, 4 maja 2016),</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n0a"><xName> </xName>
+        <xText>po przeprowadzeniu postępowania administracyjnego w sprawie skargi Pana D.S., na przetwarzanie jego danych osobowych, przez Przedszkole z siedzibą w G., Prezes Urzędu Ochrony Danych Osobowych</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n0b"><xName> </xName>
+        <xText>odmawia uwzględnienia wniosku.</xText>
+    </xUnit>
+</xUnit>
+<xUnit xIsTitle="true" xType="bran" xBookmark="B2"><xName> </xName><xTitle>Uzasadnienie</xTitle>
+    <xUnit xType="none" xBookmark="n1"><xName> </xName>
+        <xText>Do Biura Generalnego Inspektora Ochrony Danych Osobowych wpłynęła skarga Pana D.S, zwanego dalej Skarżącym, na przetwarzanie jego danych osobowych, przez Przedszkole z siedzibą w G., zwane dalej również Przedszkolem.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n2"><xName> </xName>
+        <xText>Skarżący w treści skargi wskazał, że jego dane osobowe nie są zabezpieczone w prawidłowy sposób przed udostępnieniem ich osobom nieupoważnionym oraz przetwarzaniem przez osoby do tego nieuprawnione. Podniósł, że jego akta osobowe przechowywane są w niezabezpieczonym pomieszczeniu, a dane osobowe znajdują się na dysku twardym niezabezpieczonego komputera. Ponadto z posiadanych przez niego informacji wynika, że Dyrektor Przedszkola przekazał do utylizacji komputery zawierające na dysku twardym jego dane osobowe. Skarżący wskazał także, że Dyrektor Przedszkola przetwarza dane osobowe pracowników znajdujące się w kopiach (skanach) dowodów osobistych.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n3"><xName> </xName>
+        <xText>W toku prowadzonego postępowania administracyjnego, Prezes Urzędu Ochrony Danych Osobowych ustalił następujący stan faktyczny.</xText>
+        <xUnit xType="pass" xBookmark="n3:s1"><xName xSffx=".">1</xName>
+            <xText>Skarżący w okresie od (…) września 2017 r. do (…) listopada 2017 r. był zatrudniony na podstawie umowy o pracę w Przedszkolu z siedzibą w G.. W związku z powyższym jego dane osobowe były przetwarzane przez pracodawcę w zakresie i celach wynikających z Ustawy z dnia 26 czerwca 1974 r. Kodeks pracy (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:917">Dz.U.2018.917</xLexLink> t.j.) tj. m.in. w celach niezbędnych do zatrudnienia pracownika, dokumentacji przebiegu zatrudniania, ustalenia praw i obowiązków pracownika.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s2"><xName xSffx=".">2</xName>
+            <xText>W związku z ustaniem stosunku pracy dokumenty zawierające dane osobowe Skarżącego zostały złożone w archiwum Przedszkola z siedzibą w G. Przechowywane są przez ww. placówkę tj. przez byłego pracodawcę, w zakresie i celu zgodnym z przepisami prawa pracy w pomieszczeniu bez okien, które zamknięte jest na klucz. Klucz znajduje się w sejfie, do którego dostęp ma wyłącznie Dyrektor tej placówki.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s3"><xName xSffx=".">3</xName>
+            <xText>Dane osobowe Skarżącego w zakresie numeru jego prywatnego telefonu oraz adresu e-mail nie są aktualnie przetwarzane przez Przedszkole. Ze złożonych przy piśmie z dnia (…) kwietnia 2018 r. wyjaśnień wynika, że Skarżący dobrowolnie podał numer jego prywatnego telefonu i jako pierwszy wysłał wiadomość do Dyrektora z prywatnego adresu e-mail.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s4"><xName xSffx=".">4</xName>
+            <xText>Dyrektor Przedszkola nie posiada skanów dowodów osobistych pracowników a ich dane osobowe znajdujące się w dokumentach są przechowywane w teczkach osobowych w metalowym sejfie, do którego dostęp ma wyłącznie Dyrektor tej placówki. W aktach osobowych nie są przechowywane numery telefonów pracowników ani ich adresy poczty elektronicznej.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s5"><xName xSffx=".">5</xName>
+            <xText>Komputer stacjonarny znajduje się w gabinecie Dyrektora Przedszkola, którego drzwi zamykane są na klucz, a w oknach znajdują się kraty. Komputer posiada hasło dostępu oraz oprogramowanie antywirusowe. Natomiast komputer przekazany do utylizacji nie zawierał dysku twardego. W placówce funkcjonuje bezprzewodowa sieć internetowa zabezpieczona hasłem, które jest znane tylko Dyrektorowi Przedszkola.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s6"><xName xSffx=".">6</xName>
+            <xText>Dyrektor Przedszkola nie korzysta z prywatnego komputera do celów służbowych oraz nie zapisuje żadnych danych dotyczących tej placówki na nośnikach elektronicznych.</xText>
+        </xUnit>
+        <xUnit xType="pass" xBookmark="n3:s7"><xName xSffx=".">7</xName>
+            <xText>W Przedszkolu w G. w dniu (…) stycznia 2018 r. została zatwierdzona dokumentacja opisująca środki organizacyjne i techniczne służące ochronie przetwarzanych danych osobowych.</xText>
+        </xUnit>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n4"><xName> </xName>
+        <xText>W tym stanie faktycznym sprawy, Prezes Urzędu zważył co następuje.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n5"><xName> </xName>
+        <xText>W pierwszej kolejności zaznaczenia wymaga, że z dniem wejścia w życie ustawy z dnia 10 maja 2018 r. o ochronie danych osobowych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:1000">Dz. U. z 2018 r., poz. 1000</xLexLink>) na podstawie art. 166 ust. 1 tej ustawy, Generalny Inspektor Ochrony Danych Osobowych stał się Prezesem Urzędu Ochrony Danych Osobowych, zaś na podstawie art. 167 ust. 1 tej samej ustawy, Biuro Generalnego Inspektora Ochrony Danych Osobowych stało się Urzędem Ochrony Danych Osobowych. Z kolei na podstawie art. 160 tej samej ustawy, postępowania prowadzone przez Generalnego Inspektora Ochrony Danych Osobowych, wszczęte i niezakończone przed dniem wejścia w życie niniejszej ustawy, prowadzone są przez Prezesa Urzędu (ust. 1) na podstawie ustawy z dnia 29 sierpnia 1997 r. o ochronie danych osobowych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2016:922">Dz. U. z 2016 r., poz. 922</xLexLink>), zwanej dalej również u.o.d.o., zgodnie z zasadami określonymi w ustawie z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego (<xLexLink xRef="urn:ndoc:pro:pl:durp:2017:1257">Dz. U. z 2017 r., poz. 1257</xLexLink>) (ust. 2), zwanej dalej również K.p.a. Czynności dokonane w postępowaniach, o których mowa w ust. 1, pozostają skuteczne (ust. 3).</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n6"><xName> </xName>
+        <xText>Dodatkowo konieczne jest podkreślenie, że Prezes Urzędu Ochrony Danych Osobowych wydając decyzję administracyjną, zobowiązany jest do rozstrzygania sprawy w oparciu o stan faktyczny istniejący w chwili wydania tej decyzji. Jak podnosi się w doktrynie <xCx>„organ administracji publicznej ocenia stan faktyczny sprawy według chwili wydania decyzji administracyjnej. Reguła ta odnosi się także do oceny stanu prawnego sprawy, co oznacza, że organ administracji publicznej wydaje decyzję administracyjną na podstawie przepisów prawa obowiązujących w chwili jej wydania (…). Rozstrzyganie w postępowaniu administracyjnym polega na zastosowaniu obowiązującego prawa do ustalonego stanu faktycznego sprawy administracyjnej. W ten sposób organ administracji publicznej realizuje cel postępowania administracyjnego, jakim jest urzeczywistnienie obowiązującej normy prawnej w zakresie stosunków administracyjno-prawnych, gdy stosunki te tego wymagają”</xCx> (Komentarz do ustawy z dnia 14 czerwca 1960 r. Kodeks postępowania administracyjnego M. Jaśkowska, A. Wróbel, Lex., el/2012). Ponadto, w wyroku z dnia 7 maja 2008 r. w sprawie o sygn. akt <xLexLink xRef="urn:ndoc:court:pl:sa:2007:i_osk_761">I OSK 761/07</xLexLink>, Naczelny Sąd Administracyjny stwierdził, iż <xCx>„badając (…) legalność przetwarzania danych osobowych, GIODO ma obowiązek ustalenia, czy na datę wydawania rozstrzygnięcia w sprawie dane konkretnego podmiotu są przetwarzane oraz czy czynione to jest w sposób zgodny z prawem”</xCx>.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n7"><xName> </xName>
+        <xText>Odnosząc powyższe do ustalonego stanu faktycznego, podkreślenia wymaga, że decydujące znaczenie dla rozstrzygnięcia, jakie musi być wydane w przedmiotowej sprawie, ma okoliczność, że przetwarzanie danych osobowych Skarżącego rozpoczęło się co prawda w okresie obowiązywania ustawy z dnia 29 sierpnia 1997 r. o ochronie danych osobowych, ale jest obecnie kontynuowane. Stwierdzić zatem należy, że właściwe w przedmiotowej sprawie jest zastosowanie przepisów obowiązujących w czasie wydawania rozstrzygnięcia sprawy tj. Rozporządzenia Parlamentu Europejskiego i Rady (UE) 2016/679 z dnia 27 kwietnia 2016 r. w sprawie ochrony osób fizycznych w związku z przetwarzaniem danych osobowych i w sprawie swobodnego przepływu takich danych oraz uchylenia dyrektywy 95/46/WE (Dziennik Urzędowy Unii Europejskiej, L 119, 4 maja 2016), zwane dalej również RODO, ponieważ Prezes Urzędu Ochrony Danych Osobowych musi ocenić czy kwestionowany proces przetwarzania danych osobowych na dzień wydania decyzji administracyjnej jest zgodny z prawem.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n8"><xName> </xName>
+        <xText>Przesłanki legalności przetwarzania danych osobowych określał poprzednio art. 23 ust. 1 u.o.d.o., zgodnie z którym przetwarzanie danych było dopuszczalne tylko wtedy, gdy:</xText>
+        <xUnit xType="pint" xBookmark="n8:p1"><xName xSffx=")">1</xName>
+            <xText>osoba, której dane dotyczą, wyrazi na to zgodę, chyba że chodzi o usunięcie dotyczących jej danych;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n8:p2"><xName xSffx=")">2</xName>
+            <xText>jest to niezbędne dla zrealizowania uprawnienia lub spełnienia obowiązku wynikającego z przepisu prawa;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n8:p3"><xName xSffx=")">3</xName>
+            <xText>jest to konieczne do realizacji umowy, gdy osoba, której dane dotyczą, jest jej stroną lub gdy jest to niezbędne do podjęcia działań przed zawarciem umowy na żądanie osoby, której dane dotyczą;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n8:p4"><xName xSffx=")">4</xName>
+            <xText>jest niezbędne do wykonania określonych prawem zadań realizowanych dla dobra publicznego;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n8:p5"><xName xSffx=")">5</xName>
+            <xText>jest to niezbędne dla wypełnienia prawnie usprawiedliwionych celów realizowanych przez administratorów danych albo odbiorców danych, a przetwarzanie nie narusza praw i wolności osoby, której dane dotyczą.</xText>
+        </xUnit>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n9"><xName> </xName>
+        <xText>Każda z powyższych przesłanek miała charakter samodzielny i autonomiczny, co oznacza, że spełnienie chociaż jednej z nich przesądzało o legalności procesu przetwarzania danych osobowych.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n10"><xName> </xName>
+        <xText>Odnosząc się do aktualnego stanu prawnego należy przywołać odpowiednik art. 23 ust. 1 obowiązującej dotychczas ustawy z 1997 r. – art. 6 ust. 1 RODO, który określa przesłanki legalności przetwarzania danych. Zgodnie z przywołanym wyżej przepisem przetwarzanie danych osobowych jest zgodne z prawem wyłącznie w przypadkach, gdy - i w takim zakresie, w jakim - spełniony jest co najmniej jeden z poniższych warunków: osoba, której dane dotyczą wyraziła zgodę na przetwarzanie swoich danych osobowych w jednym lub większej liczbie określonych celów (lit. a); przetwarzanie jest niezbędne do wykonania umowy, której stroną jest osoba, której dane dotyczą, lub do podjęcia działań na żądanie osoby, której dane dotyczą, przed zawarciem umowy (lit. b); przetwarzanie jest niezbędne do wypełnienia obowiązku prawnego ciążącego na administratorze (lit. c); przetwarzanie jest niezbędne do ochrony żywotnych interesów osoby, której dane dotyczą, lub innej osoby fizycznej (lit. d); przetwarzanie jest niezbędne do wykonania zadania realizowanego w interesie publicznym lub w ramach sprawowania władzy publicznej powierzonej administratorowi (e); przetwarzanie jest niezbędne do celów wynikających z prawnie uzasadnionych interesów realizowanych przez administratora lub przez stronę trzecią, z wyjątkiem sytuacji, w których nadrzędny charakter wobec tych interesów mają interesy lub podstawowe prawa i wolności osoby, której dane dotyczą, wymagające ochrony danych osobowych, w szczególności gdy osoba, której dane dotyczą, jest dzieckiem (f). Ponadto motyw 155 RODO wskazuje, że w prawie państwa członkowskiego mogą być przewidziane przepisy szczegółowe o przetwarzaniu danych osobowych pracowników w związku z zatrudnieniem, w szczególności warunki, na których dane osobowe w związku z zatrudnieniem można przetwarzać za zgodą pracownika do celów procedury rekrutacyjnej, wykonywania umowy o pracę, w tym wykonywania obowiązków określonych w przepisach lub w porozumieniach zbiorowych, zarządzania, planowania i organizacji pracy, równości i różnorodności w miejscu pracy, bezpieczeństwa i higieny pracy oraz do celów indywidualnego lub zbiorowego wykonywania praw i korzystania ze świadczeń związanych z zatrudnieniem, a także do celów zakończenia stosunku pracy.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n11"><xName> </xName>
+        <xText>Przechodząc na grunt przepisów krajowych, należy zauważyć, że zgodnie z brzmieniem art. 22<xGlossRef xCtxt="0" xRef="1"/> ustawy z dnia 26 czerwca 1974 r. Kodeks pracy (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:917">Dz. U. z 2018 r. poz. 917</xLexLink>) (dalej jako Kodeks pracy) pracodawca ma prawo żądać od osoby ubiegającej się o zatrudnienie podania danych osobowych obejmujących:</xText>
+        <xUnit xType="pint" xBookmark="n11:p1"><xName xSffx=")">1</xName>
+            <xText>imię (imiona) i nazwisko;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n11:p2"><xName xSffx=")">2</xName>
+            <xText>imiona rodziców;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n11:p3"><xName xSffx=")">3</xName>
+            <xText>datę urodzenia;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n11:p4"><xName xSffx=")">4</xName>
+            <xText>miejsce zamieszkania (adres do korespondencji);</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n11:p5"><xName xSffx=")">5</xName>
+            <xText>wykształcenie;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n11:p6"><xName xSffx=")">6</xName>
+            <xText>przebieg dotychczasowego zatrudnienia (§ 1).</xText>
+        </xUnit>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n12"><xName> </xName>
+        <xText>Pracodawca ma również prawo żądać od pracownika podania, niezależnie od danych osobowych, o których mowa w § 1, także:</xText>
+        <xUnit xType="pint" xBookmark="n12:p1"><xName xSffx=")">1</xName>
+            <xText>innych danych osobowych pracownika;</xText>
+        </xUnit>
+        <xUnit xType="pint" xBookmark="n12:p2"><xName xSffx=")">2</xName>
+            <xText>numeru PESEL (§ 2), a także innych danych osobowych niż określone w § 1 i 2, jeżeli obowiązek ich podania wynika z odrębnych przepisów (§ 4).</xText>
+        </xUnit>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n13"><xName> </xName>
+        <xText>W zakresie nieuregulowanym w § 1-4 do danych osobowych, o których mowa w tych przepisach, stosuje się przepisy o ochronie danych osobowych (§ 5). Pracodawca mocą art. 94 Kodeksu pracy jest zobowiązany prowadzić dokumentację w sprawach związanych ze stosunkiem pracy oraz akta osobowe pracowników (pkt 9a), a także przechowywać dokumentację w sprawach związanych ze stosunkiem pracy oraz akta osobowe pracowników w warunkach niegrożących uszkodzeniem lub zniszczeniem (9b). W myśl § 6 ust. 1 Rozporządzenia Ministra Pracy i Polityki Socjalnej z dnia 28 maja 1996 r. w sprawie zakresu prowadzenia przez pracodawców dokumentacji w sprawach związanych ze stosunkiem pracy oraz sposobu prowadzenia akt osobowych pracownika (<xLexLink xRef="urn:ndoc:pro:pl:durp:2017:894">Dz. U. z 2017 r., poz. 894</xLexLink>) (zwane dalej również Rozporządzeniem) pracodawca zakłada i prowadzi akta osobowe pracownika, które obejmują m.in. dokumenty związane z ustaniem zatrudnienia (§ 6 ust. 3 Rozporządzenia).</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n14"><xName> </xName>
+        <xText>Z kolei według art. 125a ust. 4 ustawy z dnia 17 grudnia 1998 r. o emeryturach i rentach z Funduszu Ubezpieczeń Społecznych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2018:1270">Dz. U. z 2018 r. poz. 1270</xLexLink>) (zwana dalej również ustawą o emeryturach i rentach) płatnik składek jest zobowiązany przechowywać listy płac, karty wynagrodzeń albo inne dowody, na podstawie których następuje ustalenie podstawy wymiaru emerytury lub renty, przez okres 50 lat od dnia zakończenia przez ubezpieczonego pracy u danego płatnika. Identyczny 50-letni okres przechowywania obowiązuje w stosunku do akt osobowych, co wynika z 51 u ust. 1 ustawy z 14 lipca 1983 r. o narodowym zasobie archiwalnym i archiwach (<xLexLink xRef="urn:ndoc:pro:pl:durp:2016:1506">Dz. U. z 2016 r. poz. 1506</xLexLink> t. j.).</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n15"><xName> </xName>
+        <xText>Odnośnie zaś kwestii zabezpieczenia danych osobowych wskazać należy, że na podstawie art. 36 ust. 1 u.o.d.o. administrator danych był obowiązany zastosować środki techniczne i organizacyjne zapewniające ochronę przetwarzanych danych osobowych odpowiednią do zagrożeń oraz kategorii danych objętych ochroną, a w szczególności powinien zabezpieczyć dane przed ich udostępnieniem osobom nieupoważnionym, zabraniem przez osobę nieuprawnioną, przetwarzaniem z naruszeniem ustawy oraz zmianą, utratą, uszkodzeniem lub zniszczeniem. Ponadto administrator danych był zobligowany do prowadzenia dokumentacji opisującej sposób przetwarzania danych oraz ww. środki techniczne i organizacyjne, która szczegółowo została określona w Rozporządzeniu Ministra Spraw Wewnętrznych i Administracji z dnia 29 kwietnia 2004 r. w sprawie dokumentacji przetwarzania danych osobowych oraz warunków technicznych i organizacyjnych, jakim powinny odpowiadać urządzenia i systemy informatyczne służące do przetwarzania danych osobowych (<xLexLink xRef="urn:ndoc:pro:pl:durp:2004:1024">Dz. U. z 2004 r. Nr 100, poz.1024</xLexLink>).</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n16"><xName> </xName>
+        <xText>Natomiast zgodnie z art. 5 ust. 1 lit f) RODO dane osobowe muszą być przetwarzane w sposób zapewniający odpowiednie bezpieczeństwo danych osobowych, w tym ochronę przed niedozwolonym lub niezgodnym z prawem przetwarzaniem oraz przypadkową utratą, zniszczeniem lub uszkodzeniem, za pomocą odpowiednich środków technicznych lub organizacyjnych. Ponadto na mocy art. 25 RODO uwzględniając stan wiedzy technicznej, koszt wdrażania oraz charakter, zakres, kontekst i cele przetwarzania oraz ryzyko naruszenia praw lub wolności osób fizycznych o różnym prawdopodobieństwie wystąpienia i wadze wynikające z przetwarzania, administrator - zarówno przy określaniu sposobów przetwarzania, jak i w czasie samego przetwarzania - wdraża odpowiednie środki techniczne i organizacyjne, takie jak pseudonimizacja, zaprojektowane w celu skutecznej realizacji zasad ochrony danych, takich jak minimalizacja danych, oraz w celu nadania przetwarzaniu niezbędnych zabezpieczeń, tak by spełnić wymogi niniejszego rozporządzenia oraz chronić prawa osób, których dane dotyczą.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n17"><xName> </xName>
+        <xText>Mając na uwadze powyższy stan faktyczny i prawny, należy wskazać, że Przedszkole przetwarza aktualnie dane osobowe Skarżącego w celach i zakresie określonych w obowiązujących przepisach prawa dotyczących przechowywania dokumentacji związanej ze stosunkiem pracy, co wypełnia znamiona przesłanki legalności przetwarzania danych osobowych określonej w art. 6 ust. 1 lit. c) RODO, a poprzednio w art. 23 ust. 1 pkt 2 u.o.d.o. Jeżeli chodzi natomiast o dane osobowe Skarżącego w postaci prywatnego numeru telefonu oraz adresu e-mail to z wyjaśnień złożonych przy piśmie z dnia (…) kwietnia 2018 r. przez Przedszkole wynika, że dane te zostały przekazane przez Skarżącego dobrowolnie i obecnie nie są przetwarzane. Skarżący, będąc bowiem pracownikiem Przedszkola, jako pierwszy wysłał widomość e-mail na adresy mailowe Dyrektora Przedszkola oraz Przedszkola, która zawierała porównanie dotyczące montażu monitoringu placówki z kosztami wynikającymi z zatrudnienia dozorców oraz propozycję założenia kodu dostępu do Przedszkola. Wobec powyższego ww. dane osobowe Skarżącego były przetwarzane przez Przedszkole zgodnie z art. 23 ust 1 pkt 5 u.o.d.o. Pracodawca będący administratorem danych osobowych może bowiem przetwarzać dane osobowe, których nie żądał od pracownika, również gdy jest to niezbędne dla wypełnienia prawnie usprawiedliwionych celów realizowanych przez administratora tych danych albo odbiorców danych, a przetwarzanie nie narusza praw i wolności osoby, której dane dotyczą.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n18"><xName> </xName>
+        <xText>Ponadto nawiązując do zarzutu Skarżącego dotyczącego niewłaściwego zabezpieczenia danych osobowych przed udostępnieniem osobom nieupoważnionym, zabraniem przez osobę nieuprawnioną oraz przetwarzaniem z naruszeniem ustawy o ochronie danych osobowych wskazać należy, że w Przedszkolu w G. została zatwierdzona dokumentacja opisująca środki organizacyjne i techniczne służące ochronie przetwarzanych danych osobowych. Powyższy dokument zawiera szczegółowy opis podstawowych zasad organizacji pracy przy zbiorach osobowych przetwarzanych metodami tradycyjnymi oraz w systemie informatycznym wyrażone w Polityce bezpieczeństwa oraz w Instrukcji zarządzania systemem informatycznym służącym do przetwarzania danych osobowych. Ponadto z wyjaśnień z dnia (…) lutego 2018 r. wynika m.in., że tylko Dyrektor Przedszkola ma dostęp do danych osobowych pracowników znajdujących się w dokumentach. Komputer stacjonarny w placówce znajduje się w zabezpieczonym przed dostępem osób nieupoważnionych pomieszczeniu, posiada oprogramowanie antywirusowe i hasło dostępu. Dyrektor Przedszkola ustalił również hasło do bezprzewodowej sieci internetowej, które jest znane tylko jemu. Ponadto do utylizacji został przekazany komputer niezawierający dysku twardego, a nie jak wskazywał Skarżący komputer zawierający na dysku twardym dane osobowe.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n19"><xName> </xName>
+        <xText>Powyższe wyjaśnienia nie potwierdzają zatem zarzucanego przez Skarżącego niewłaściwego zabezpieczenia danych osobowych przed udostępnieniem osobom nieupoważnionym, zabraniem przez osobę nieuprawnioną oraz przetwarzaniem z naruszeniem ustawy o ochronie danych osobowych. W takiej sytuacji organ administracji publicznej może uznać stan faktyczny rozpatrywanej sprawy za ustalony jedynie na podstawie nie budzących wątpliwości dowodów i nie może poprzestać w tym zakresie na uprawdopodobnieniu, chyba że przepisy Kpa stanowią inaczej (np. art. 24 § 3 Kpa). Jak stwierdził Naczelny Sąd Administracyjny w wyroku z dnia 9 lipca 1999 r. (sygn. <xLexLink xRef="urn:ndoc:court:pl:sa:1998:iii_sa_5417">III SA 5417/98</xLexLink>) <xCx>„organ prowadzący postępowanie musi dążyć do ustalenia prawdy materialnej i według swej wiedzy, doświadczenia oraz wewnętrznego przekonania ocenić wartość dowodową poszczególnych środków dowodowych, wpływ udowodnienia jednej okoliczności na inne okoliczności”</xCx>.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n20"><xName> </xName>
+        <xText>Mając na uwadze powyższe stwierdzić należy, iż w toku postępowania wyjaśniającego nie stwierdzono niewłaściwego zabezpieczenia danych, nieuprawnionego udostępnienia danych osobowych Skarżącego, jak również przetwarzania danych osobowych z naruszeniem ustawy o ochronie danych osobowych przed dniem 25 maja 2018 r., a obecnie RODO. Z wyjaśnień Przedszkola z siedzibą w G. wynika, że dane osobowe Skarżącego nie zostały udostępnione osobom nieuprawnionym. Zarówno sprzęt komputerowy placówki, jak i dane osobowe znajdujące się w dokumentach zostały zabezpieczone przed dostępem osób nieupoważnionych. Z uwagi na fakt ustania stosunku pracy Skarżącego, jego dane osobowe są przechowywane zgodnie z obowiązującymi przepisami prawnymi w archiwum Przedszkola, które również zabezpieczone jest przed nieuprawnionym udostępnieniem znajdujących się tam danych osobowych. Tym samym brak jest dowodów umożliwiających stwierdzenie naruszenia przepisów dotyczących ochrony danych osobowych. Skarżący również nie przedstawił takich dowodów w toku niniejszego postępowania. Brak jest zatem podstaw do wydania przez niniejszy organ decyzji przywracającej stan zgodny z prawem na podstawie art. 18 ust. 1 u.o.d.o.</xText>
+    </xUnit>
+    <xUnit xType="none" xBookmark="n21"><xName> </xName>
+        <xText>W tym stanie faktycznym oraz prawnym Prezes Urzędu Ochrony Danych Osobowych orzekł, jak w sentencji.</xText>
+    </xUnit>
+</xUnit>
+</xBlock>
+</xPart>

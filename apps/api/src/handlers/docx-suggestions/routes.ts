@@ -7,7 +7,7 @@ import { routes } from "@/api/http/route";
 
 /**
  * Persistence for AI DOCX review suggestions, entity-scoped under a
- * server-validated workspace. Thin: structure + macro wiring only; each
+ * server-validated workspace. Thin: paths and methods only; each
  * handler owns its schema, permissions, and business logic.
  *
  * No realtime event: the client review store is the source of truth during a

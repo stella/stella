@@ -7,17 +7,20 @@ import {
   homeCurrencyVat,
   INVOICE_COUNTRY_PROFILES,
   INVOICE_PDF_LABELS,
+  INVOICE_VARIABLE_SYMBOL_PROFILES,
   invoiceCountryOf,
   type InvoiceDocumentType,
   type InvoicePartyId,
   invoiceSellerCountryOf,
   isVatRateSource,
   legalNotesFor,
+  variableSymbolOf,
   VAT_RATE_QUOTE_BASIS,
   type VatTreatment,
 } from "@stll/invoicing";
 import { formatMoneyCents } from "@stll/money";
 
+import { groupInvoiceLinesByMatter } from "../matter-groups";
 import {
   buildInvoicePaymentPayload,
   createInvoiceFormatters,
@@ -66,14 +69,21 @@ type InvoiceTemplateData = {
     rateSource: string;
     rateDate: string;
   };
-  lines: {
-    description: string;
-    quantity: string | null;
-    unitPrice: string | null;
+  groups: {
+    workspaceId: string;
+    workspaceName: string;
     net: string;
-    vatLabel: string;
     vat: string;
     total: string;
+    lines: {
+      description: string;
+      quantity: string | null;
+      unitPrice: string | null;
+      net: string;
+      vatLabel: string;
+      vat: string;
+      total: string;
+    }[];
   }[];
   totals: {
     net: string;
@@ -89,13 +99,21 @@ type InvoiceTemplateData = {
       date: string;
     } | null;
   };
-  payment: {
-    fields: Field[];
-    accountNumber: string | null;
-    /** SVG markup of the supported domestic payment QR code, or null when nothing is payable. */
-    qrSvg: string | null;
-    qrWidthMm: number;
-  } | null;
+  payment:
+    | { status: "not_payable" }
+    | {
+        status: "settled";
+        statement: string;
+      }
+    | {
+        status: "due";
+        fields: Field[];
+        accountNumber: string | null;
+        /** SVG markup of the supported domestic payment QR code, or null when nothing is payable. */
+        qrSvg: string | null;
+        qrWidthMm: number;
+      }
+    | null;
   legalNotes: string[];
   notes: string | null;
   footerNotes: string | null;
@@ -107,7 +125,9 @@ const compact = (values: (string | null | undefined)[]) =>
       value !== null && value !== undefined && value !== "",
   );
 
-const fields = (entries: [string, string | null | undefined][]): Field[] =>
+const fields = (
+  entries: readonly (readonly [string, string | null | undefined])[],
+): Field[] =>
   entries.flatMap(([label, value]) =>
     value === null || value === undefined || value === ""
       ? []
@@ -262,6 +282,30 @@ const homeCurrencyVatBlock = ({
   };
 };
 
+/** Encode and frame the domestic payment mark before template layout. */
+const invoicePaymentQr = (options: RenderInvoicePdfOptions) => {
+  let qr: string | null = null;
+  let qrWidthMm = 32;
+  const payment = buildInvoicePaymentPayload(options);
+  if (payment !== null) {
+    if (payment.isErr()) {
+      return Result.err(payment.error);
+    }
+    if (payment.value.status === "payable") {
+      qr = qrSvg(payment.value.payload, payment.value.errorCorrection);
+      if (payment.value.scheme === "pay_by_square") {
+        // Official print frame: the 62-unit QR box stays inside its 64-unit
+        // width with four quiet modules; 37.254 mm is the recommended size.
+        const framed = `${qr.replace("<svg ", '<svg x="1" y="1" width="62" height="62" ')}</svg>`;
+        qr = payBySquareLogo.replace("</svg>", () => framed);
+        qrWidthMm = 37.254;
+      }
+    }
+  }
+
+  return Result.ok({ qr, qrWidthMm });
+};
+
 export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   const { invoice, seller, totals, originalNumber } = options;
   const lang = invoice.language;
@@ -293,26 +337,63 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     date,
   });
 
-  let qr: string | null = null;
-  let qrWidthMm = 32;
-  const payment = buildInvoicePaymentPayload(options);
-  if (payment !== null) {
-    if (payment.isErr()) {
-      return Result.err(payment.error);
-    }
-    if (payment.value.status === "payable") {
-      qr = qrSvg(payment.value.payload, payment.value.errorCorrection);
-      if (payment.value.scheme === "pay_by_square") {
-        // Official print frame: the 62-unit QR box stays inside its 64-unit
-        // width with four quiet modules; 37.254 mm is the recommended size.
-        const framed = `${qr.replace("<svg ", '<svg x="1" y="1" width="62" height="62" ')}</svg>`;
-        qr = payBySquareLogo.replace("</svg>", () => framed);
-        qrWidthMm = 37.254;
-      }
-    }
+  const qrResult = invoicePaymentQr(options);
+  if (qrResult.isErr()) {
+    return Result.err(qrResult.error);
+  }
+  const { qr, qrWidthMm } = qrResult.value;
+
+  const variableSymbol =
+    INVOICE_VARIABLE_SYMBOL_PROFILES[country] === "variable_symbol"
+      ? variableSymbolOf({
+          number: invoice.invoiceNumber ?? "",
+          reference: invoice.reference,
+        })
+      : null;
+  const paymentFields = [
+    [l.variableSymbol, variableSymbol],
+    [
+      l.reference,
+      invoice.reference === variableSymbol ? null : invoice.reference,
+    ],
+  ] as const;
+
+  let paymentInstructions: InvoiceTemplateData["payment"];
+  switch (options.settlement.status) {
+    case "not_payable":
+      paymentInstructions = { status: "not_payable" };
+      break;
+    case "settled":
+      paymentInstructions = { status: "settled", statement: l.paid };
+      break;
+    case "due":
+      paymentInstructions =
+        seller === null
+          ? null
+          : {
+              status: "due",
+              // What a payer needs beside the QR code: amount, due date, reference.
+              fields: fields([
+                [l.amountDue, money(options.settlement.amountMinor)],
+                [
+                  l.dueDate,
+                  invoice.dueDate === null ? null : date(invoice.dueDate),
+                ],
+                ...paymentFields,
+                ["IBAN", seller.iban],
+                ["BIC", seller.bic],
+              ]),
+              accountNumber: seller.accountNumber,
+              qrSvg: qr,
+              qrWidthMm,
+            };
+      break;
+    default:
+      options.settlement satisfies never;
+      return panic("Unknown invoice settlement state");
   }
 
-  const data: InvoiceTemplateData = {
+  return Result.ok({
     lang,
     dir: lang === "ar" ? "rtl" : "ltr",
     title:
@@ -331,7 +412,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
           ? null
           : date(invoice.taxableSupplyDate),
       ],
-      [l.reference, invoice.reference],
+      ...paymentFields,
     ]),
     seller:
       seller === null
@@ -377,24 +458,31 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       rateSource: l.rateSource,
       rateDate: l.rateDate,
     },
-    lines: invoice.lines.map((line) => {
-      const billed = line.quantity !== null && line.unitPrice !== null;
-      return {
-        description: line.description,
-        quantity:
-          billed && line.quantity !== null
-            ? compact([quantity(line.quantity), line.unit]).join(" ")
-            : null,
-        unitPrice:
-          billed && line.unitPrice !== null ? money(line.unitPrice) : null,
-        net: money(line.netAmount),
-        // Only the rate: the treatment is named in the VAT breakdown and the
-        // legal notes, and a long treatment label would squeeze the description.
-        vatLabel: vatRate(line.vatRateBps),
-        vat: money(line.vatAmount),
-        total: money(line.grossAmount),
-      };
-    }),
+    groups: groupInvoiceLinesByMatter(invoice.lines).map((group) => ({
+      workspaceId: group.workspaceId,
+      workspaceName: group.workspaceName,
+      net: money(group.netAmount),
+      vat: money(group.vatAmount),
+      total: money(group.grossAmount),
+      lines: group.lines.map((line) => {
+        const billed = line.quantity !== null && line.unitPrice !== null;
+        return {
+          description: line.description,
+          quantity:
+            billed && line.quantity !== null
+              ? compact([quantity(line.quantity), line.unit]).join(" ")
+              : null,
+          unitPrice:
+            billed && line.unitPrice !== null ? money(line.unitPrice) : null,
+          net: money(line.netAmount),
+          // Only the rate: the treatment is named in the VAT breakdown and the
+          // legal notes, and a long treatment label would squeeze the description.
+          vatLabel: vatRate(line.vatRateBps),
+          vat: money(line.vatAmount),
+          total: money(line.grossAmount),
+        };
+      }),
+    })),
     totals: {
       net: money(totals.netAmountMinor),
       vat: money(totals.vatAmountMinor),
@@ -407,25 +495,7 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
       })),
       homeVat,
     },
-    payment:
-      seller === null
-        ? null
-        : {
-            // What a payer needs beside the QR code: amount, due date, reference.
-            fields: fields([
-              [l.total, money(totals.grossAmountMinor)],
-              [
-                l.dueDate,
-                invoice.dueDate === null ? null : date(invoice.dueDate),
-              ],
-              [l.reference, invoice.reference],
-              ["IBAN", seller.iban],
-              ["BIC", seller.bic],
-            ]),
-            accountNumber: seller.accountNumber,
-            qrSvg: qr,
-            qrWidthMm,
-          },
+    payment: paymentInstructions,
     legalNotes: legalNotesFor({
       profile,
       language: lang,
@@ -441,6 +511,5 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
         seller?.barRegistration,
         seller?.footerNotes,
       ]).join("\n") || null,
-  };
-  return Result.ok(data);
+  } satisfies InvoiceTemplateData);
 };

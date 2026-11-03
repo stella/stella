@@ -1,4 +1,6 @@
+import { SQL } from "bun";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
@@ -6,6 +8,7 @@ import {
   createSearchSummaryChatThread,
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
+  validateSearchQueryWithPostgres,
 } from "@/api/handlers/search/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -15,6 +18,11 @@ import {
   rootDbSelectMock,
 } from "@/api/tests/helpers/mock-root-db";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  noopAuditRecorder.mockClear();
+  upsertSearchDocumentMock.mockClear();
+});
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["EMAIL_PROVIDER"] ??= "smtp";
@@ -103,11 +111,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -185,11 +195,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -246,11 +258,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -333,11 +347,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 2,
     });
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -412,11 +428,13 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -454,3 +472,35 @@ const extractDataWorkspaceIds = (
   }
   return [];
 };
+
+describe("search query validation", () => {
+  test.each([
+    ["42601", "invalid"],
+    ["57P01", "failed"],
+  ] as const)("classifies PostgreSQL %s as %s", async (errno, type) => {
+    const failure = new DrizzleQueryError(
+      "select 1",
+      [],
+      new SQL.PostgresError("Query validation failed", {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno,
+        detail: "",
+        hint: "",
+        severity: "ERROR",
+      }),
+    );
+    const { scopedDb } = createScopedDbMock({
+      execute: async () => {
+        throw failure;
+      },
+    });
+    const validation = await validateSearchQueryWithPostgres({
+      query: "contract",
+      scopedDb,
+    });
+    expect(validation).toMatchObject({ type });
+    if (type === "failed") {
+      expect(validation).toMatchObject({ cause: failure });
+    }
+  });
+});

@@ -5,7 +5,7 @@ import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { redirectToSchema } from "@/lib/redirect";
+import { destinationNavigation, redirectToSchema } from "@/lib/redirect";
 import { routeSearchSchema } from "@/route-search-params";
 import { ProfessionalUsePanel } from "@/routes/auth/-components/professional-use-panel";
 
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/auth/professional-use")({
       case PROFESSIONAL_USE_STATUS.required:
         return { userId };
       case PROFESSIONAL_USE_STATUS.accepted:
-        redirect({ to: search.redirectTo, replace: true, throw: true });
+        redirect({ ...destinationNavigation(search.redirectTo), throw: true });
         return panic("TanStack Router did not throw the continue redirect.");
       default:
         professionalUse satisfies never;

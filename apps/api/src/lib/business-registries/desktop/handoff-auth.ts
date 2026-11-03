@@ -84,6 +84,7 @@ export const authorizeDesktopHandoff = async (
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Handoff status is unavailable. Try again shortly.",
         retryable: true,
         cause,

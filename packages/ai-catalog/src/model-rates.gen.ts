@@ -424,9 +424,9 @@ export const MODEL_RATES = {
   // models.dev: mistral:mistral-large-4
   "mistral-large-4": {
     kind: "flat",
-    inputPerMTok: 136_000,
-    outputPerMTok: 418_000,
-    cachedInputPerMTok: 14_000,
+    inputPerMTok: 70_000,
+    outputPerMTok: 210_000,
+    cachedInputPerMTok: 7000,
   },
   // models.dev: mistral:mistral-large-latest
   "mistral-large-latest": {

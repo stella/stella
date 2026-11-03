@@ -13,6 +13,7 @@ import * as v from "valibot";
 import { user as authUser } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { createUpdateGuideProgressHandler } from "@/api/handlers/me/update-guide-progress";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { writeUserGuideProgress } from "@/api/lib/guide-progress";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -76,7 +77,7 @@ const updateProgress = async (
       request: new Request("https://example.test/v1/me/guide-progress", {
         method: "PATCH",
       }),
-      route: "/v1/me/guide-progress",
+      route: "/v1/me/guide-progress" satisfies ApiRoutePath,
       user: { id: currentUserId },
     }),
   );

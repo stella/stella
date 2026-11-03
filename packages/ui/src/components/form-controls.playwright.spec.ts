@@ -47,7 +47,7 @@ test("keeps portal-backed options readable in a forced dark color scheme", async
 test("preserves rapid numeric text until the value is committed", async ({
   page,
 }) => {
-  const input = page.getByRole("textbox", { name: "Quantity" });
+  const input = page.getByRole("spinbutton", { name: "Quantity" });
   await input.pressSequentially("000", { delay: 1 });
 
   await expect(input).toHaveValue("000");

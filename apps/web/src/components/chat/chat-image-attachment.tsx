@@ -2,7 +2,14 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { Button } from "@stll/ui/button";
+import {
+  Dialog,
+  DIALOG_MOBILE_LAYOUT,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 
 type ChatImageAttachmentProps = {
   alt: string;
@@ -22,11 +29,11 @@ export const ChatImageAttachment = ({
 
   return (
     <>
-      <button
+      <Button
         aria-label={`${t("common.preview")}: ${alt}`}
-        className="focus-visible:ring-ring cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:outline-none"
+        className="cursor-zoom-in"
         onClick={() => setOpen(true)}
-        type="button"
+        variant="plain"
       >
         <img
           alt={alt}
@@ -36,9 +43,12 @@ export const ChatImageAttachment = ({
           style={thumbnailStyle}
           width={128}
         />
-      </button>
+      </Button>
       <Dialog onOpenChange={setOpen} open={open}>
-        <DialogPopup bottomStickOnMobile={false} className="max-w-4xl">
+        <DialogPopup
+          mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
+          className="max-w-4xl"
+        >
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <DialogPanel className="flex justify-center p-2">
             <img

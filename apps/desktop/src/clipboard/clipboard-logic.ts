@@ -1,15 +1,24 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { TextDirection } from "@stll/locales";
 import {
   findSearchMatchRanges,
-  foldSearchMatchText,
-  foldSearchMatchTextWithOffsets,
+  foldSearchMatchTextWithOffsetsAndOptions,
+  foldSearchMatchTextWithOptions,
+  hasFoldedSearchMatch,
 } from "@stll/text-normalize";
-import type { FoldedSearchText, SearchMatchRange } from "@stll/text-normalize";
+import type {
+  FoldedSearchText,
+  SearchFoldOptions,
+  SearchMatchRange,
+} from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
-import type { ClipboardItem, ClipboardSourceApp } from "./clipboard-types";
+import type {
+  ClipboardCopyFormat,
+  ClipboardItem,
+  ClipboardSourceApp,
+} from "./clipboard-types";
 
 const CLIPBOARD_SOURCE_TINT_COUNT = 6;
 
@@ -332,29 +341,72 @@ export const clipboardDraggedGroupId = (
 };
 
 /**
- * Deduplicated diacritic-folded query terms, longest first so overlapping
- * terms match whole. The whole query is folded before splitting because
- * compatibility decomposition can itself produce whitespace (NBSP).
+ * How the search field matches, set from its options menu. By default every
+ * word of the query must occur somewhere, ignoring case and accents.
  */
-const clipboardQueryTerms = (query: string) => {
-  const normalizedTerms = foldSearchMatchText(query)
-    .split(/\s+/u)
-    .filter(Boolean);
+export type ClipboardSearchOptions = {
+  /** The query must occur as typed, as one phrase, not word by word. */
+  exactPhrase: boolean;
+  matchCase: boolean;
+  matchDiacritics: boolean;
+  wholeWords: boolean;
+};
+
+export const CLIPBOARD_SEARCH_OPTION_KEYS = [
+  "exactPhrase",
+  "wholeWords",
+  "matchCase",
+  "matchDiacritics",
+] as const satisfies readonly (keyof ClipboardSearchOptions)[];
+
+export const DEFAULT_CLIPBOARD_SEARCH_OPTIONS = {
+  exactPhrase: false,
+  matchCase: false,
+  matchDiacritics: false,
+  wholeWords: false,
+} as const satisfies ClipboardSearchOptions;
+
+export const activeClipboardSearchOptionCount = (
+  options: ClipboardSearchOptions,
+) => CLIPBOARD_SEARCH_OPTION_KEYS.filter((key) => options[key]).length;
+
+/** Folded text caches hold one entry per fold the options can select. */
+const clipboardFoldKey = ({ matchCase, matchDiacritics }: SearchFoldOptions) =>
+  `${matchCase === true ? "case" : "anycase"}:${matchDiacritics === true ? "marks" : "nomarks"}`;
+
+/**
+ * Deduplicated folded query terms, longest first so overlapping terms match
+ * whole; an exact phrase is a single term. The whole query is folded before
+ * splitting because compatibility decomposition can itself produce
+ * whitespace (NBSP).
+ */
+const clipboardQueryTerms = (
+  query: string,
+  options: ClipboardSearchOptions,
+) => {
+  const folded = foldSearchMatchTextWithOptions(query, options);
+  const normalizedTerms = options.exactPhrase
+    ? [folded.trim()].filter(Boolean)
+    : folded.split(/\s+/u).filter(Boolean);
   return Array.from(new Set(normalizedTerms)).sort(
     (left, right) => right.length - left.length,
   );
 };
 
-export const highlightClipboardText = (text: string, query: string) => {
-  const terms = clipboardQueryTerms(query);
+export const highlightClipboardText = (
+  text: string,
+  query: string,
+  options: ClipboardSearchOptions = DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+) => {
+  const terms = clipboardQueryTerms(query, options);
   if (terms.length === 0) {
     return [{ match: false, start: 0, text }] satisfies ClipboardTextSegment[];
   }
 
-  const foldedText = foldSearchMatchTextWithOffsets(text);
+  const foldedText = foldSearchMatchTextWithOffsetsAndOptions(text, options);
   const ranges: SearchMatchRange[] = [];
   for (const term of terms) {
-    ranges.push(...findSearchMatchRanges(foldedText, term));
+    ranges.push(...findSearchMatchRanges(foldedText, term, options));
   }
   // Same start prefers the longer term; a range starting inside an already
   // highlighted one is dropped.
@@ -401,6 +453,65 @@ const SEARCH_PREVIEW_LEAD_CHARACTERS = 24;
  */
 export const CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS = 1000;
 
+/**
+ * What a clip's card shows while a paste format control is highlighted. Only a
+ * formatted clip looks different pasted as plain text, so only it previews.
+ */
+export type ClipboardPastePreview =
+  { type: "none" } | { itemId: string; type: "plainText" };
+
+export const NO_CLIPBOARD_PASTE_PREVIEW = {
+  type: "none",
+} as const satisfies ClipboardPastePreview;
+
+/** The preview that highlighting `format` for `item` asks its card for. */
+export const clipboardPastePreview = (
+  item: ClipboardItem,
+  format: ClipboardCopyFormat,
+): ClipboardPastePreview => {
+  switch (format) {
+    case "original":
+      return NO_CLIPBOARD_PASTE_PREVIEW;
+    case "plainText":
+      return item.type === "formattedText"
+        ? { itemId: item.id, type: "plainText" }
+        : NO_CLIPBOARD_PASTE_PREVIEW;
+    default: {
+      format satisfies never;
+      return panic(`Unknown clipboard copy format: ${String(format)}`);
+    }
+  }
+};
+
+const previewsAsPlainText = (
+  preview: ClipboardPastePreview,
+  itemId: string,
+) => {
+  switch (preview.type) {
+    case "none":
+      return false;
+    case "plainText":
+      return preview.itemId === itemId;
+    default: {
+      preview satisfies never;
+      return panic("Unknown clipboard paste preview.");
+    }
+  }
+};
+
+/**
+ * The format a card renders `item` in, given the previews its controls hold.
+ * A preview for another clip, or for a clip without formatting, changes nothing.
+ */
+export const clipboardCardRenderFormat = (
+  item: ClipboardItem,
+  previews: readonly ClipboardPastePreview[],
+): ClipboardCopyFormat =>
+  item.type === "formattedText" &&
+  previews.some((preview) => previewsAsPlainText(preview, item.id))
+    ? "plainText"
+    : "original";
+
 export type ClipboardSearchPreview = { text: string; truncated: boolean };
 
 type ClipboardSearchPreviewSource = {
@@ -416,16 +527,26 @@ type ClipboardSearchPreviewSource = {
  */
 const foldedPlainTextCache = new WeakMap<
   ClipboardSearchPreviewSource,
-  FoldedSearchText
+  Map<string, FoldedSearchText>
 >();
 
-const foldedPlainText = (item: ClipboardSearchPreviewSource) => {
-  const cached = foldedPlainTextCache.get(item);
+const foldedPlainText = (
+  item: ClipboardSearchPreviewSource,
+  options: SearchFoldOptions,
+) => {
+  const key = clipboardFoldKey(options);
+  const folds =
+    foldedPlainTextCache.get(item) ?? new Map<string, FoldedSearchText>();
+  const cached = folds.get(key);
   if (cached) {
     return cached;
   }
-  const folded = foldSearchMatchTextWithOffsets(item.plainText ?? "");
-  foldedPlainTextCache.set(item, folded);
+  const folded = foldSearchMatchTextWithOffsetsAndOptions(
+    item.plainText ?? "",
+    options,
+  );
+  folds.set(key, folded);
+  foldedPlainTextCache.set(item, folds);
   return folded;
 };
 
@@ -437,18 +558,20 @@ const foldedPlainText = (item: ClipboardSearchPreviewSource) => {
 export const clipboardSearchPreviewText = (
   item: ClipboardSearchPreviewSource,
   query: string,
+  options: ClipboardSearchOptions = DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
 ): ClipboardSearchPreview => {
   const text = item.plainText ?? "";
   const cap = (value: string) =>
     value.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS);
-  const terms = clipboardQueryTerms(query);
+  const terms = clipboardQueryTerms(query, options);
   if (terms.length === 0) {
     return { text: cap(text), truncated: false };
   }
-  const foldedText = foldedPlainText(item);
+  const foldedText = foldedPlainText(item, options);
   let matchIndex = -1;
   for (const term of terms) {
     const first = findSearchMatchRanges(foldedText, term, {
+      ...options,
       maxMatches: 1,
     }).at(0);
     if (first && (matchIndex === -1 || first.start < matchIndex)) {
@@ -615,17 +738,24 @@ export const clipboardRailWindow = ({
  * object: a snapshot replaces its items wholesale, so stale entries fall away
  * with the old snapshot, and an item's text only changes via a new snapshot.
  */
-const searchableTextCache = new WeakMap<ClipboardItem, string>();
+const searchableTextCache = new WeakMap<ClipboardItem, Map<string, string>>();
 
-const clipboardSearchableText = (item: ClipboardItem) => {
-  const cached = searchableTextCache.get(item);
+const clipboardSearchableText = (
+  item: ClipboardItem,
+  options: SearchFoldOptions,
+) => {
+  const key = clipboardFoldKey(options);
+  const folds = searchableTextCache.get(item) ?? new Map<string, string>();
+  const cached = folds.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const searchableText = foldSearchMatchText(
+  const searchableText = foldSearchMatchTextWithOptions(
     `${item.name ?? ""}\n${item.type === "image" ? "" : item.plainText}`,
+    options,
   );
-  searchableTextCache.set(item, searchableText);
+  folds.set(key, searchableText);
+  searchableTextCache.set(item, folds);
   return searchableText;
 };
 
@@ -633,6 +763,7 @@ export const filterClipboardItems = (
   items: readonly ClipboardItem[],
   query: string,
   groupId: string | null = null,
+  options: ClipboardSearchOptions = DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
 ) => {
   // The timeline follows recency; a group keeps the order clips were added
   // in, so copying a clip again never reshuffles the group.
@@ -645,13 +776,15 @@ export const filterClipboardItems = (
           ),
         )
     : items;
-  const terms = clipboardQueryTerms(query);
+  const terms = clipboardQueryTerms(query, options);
   if (terms.length === 0) {
     return groupedItems;
   }
   return groupedItems.filter((item) => {
-    const searchableText = clipboardSearchableText(item);
-    return terms.every((term) => searchableText.includes(term));
+    const searchableText = clipboardSearchableText(item, options);
+    return terms.every((term) =>
+      hasFoldedSearchMatch(searchableText, term, options),
+    );
   });
 };
 

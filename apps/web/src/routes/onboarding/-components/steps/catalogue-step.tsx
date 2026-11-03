@@ -11,6 +11,7 @@ import {
 } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
@@ -35,8 +36,11 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import { useLocale } from "@/i18n/formatting-context";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { filterOnboardingCatalogueEntries } from "@/routes/onboarding/-components/steps/catalogue-search.logic";
@@ -81,7 +85,7 @@ export const CatalogueStep = ({
   unavailableNativeToolBackendSlugs,
 }: CatalogueStepProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
   // Multi-select jurisdiction chips. Pre-populated from the user's
@@ -133,6 +137,13 @@ export const CatalogueStep = ({
     const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     return key ? t(key) : entry.displayName;
   };
+  const localizedDescription = (entry: LoadedCatalogueEntry) => {
+    const key = nativeToolDescriptionKey({
+      slug: entry.slug,
+      kind: entry.kind,
+    });
+    return key ? t(key) : entry.description;
+  };
   const compareLocalizedName = compareByLocale(locale);
 
   const recommendedEntries = selectableEntries
@@ -156,6 +167,7 @@ export const CatalogueStep = ({
   const filteredEntries = filterOnboardingCatalogueEntries({
     compareName: compareLocalizedName,
     jurisdictionFilter,
+    localizedDescription,
     localizedName,
     otherEntries,
     query,
@@ -321,11 +333,11 @@ export const CatalogueStep = ({
                   </>
                 )}
                 {(() => {
-                  const filtered = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(filterQuery.trim().toLowerCase()),
-                  );
+                  const filtered = filterBySearchQuery({
+                    items: allJurisdictionCodes,
+                    query: filterQuery,
+                    fields: (code) => [code],
+                  });
                   if (filtered.length === 0) {
                     return (
                       <p className="text-muted-foreground px-2 py-3 text-center text-xs">

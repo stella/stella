@@ -4,6 +4,7 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { ComposerSource } from "@/components/chat-editor-source";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
@@ -12,6 +13,33 @@ import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
+
+/**
+ * What the file's chat does with a handed-over draft: leave it in the
+ * composer for the reader to edit and send, or send it at once (a request
+ * whose wording the reader does not write, such as "Explain").
+ */
+export const FILE_CHAT_DRAFT_DELIVERY = {
+  draft: "draft",
+  send: "send",
+} as const;
+type FileChatDraftDelivery =
+  (typeof FILE_CHAT_DRAFT_DELIVERY)[keyof typeof FILE_CHAT_DRAFT_DELIVERY];
+
+/**
+ * What another surface hands the file's chat: a prose draft that replaces
+ * the composer's unsent text (a review finding to discuss, "Explain"), or a
+ * passage the reader selected, which joins what they already typed as a
+ * pasted-text chip.
+ */
+export type FileChatHandoff =
+  | {
+      type: "prose";
+      delivery: FileChatDraftDelivery;
+      /** What the composer takes: prose or its own inline Markdown. */
+      markdown: ComposerSource;
+    }
+  | { type: "passage"; quote: PastedTextAttrs };
 
 /** The route a page-owned tab belongs to; the tab closes when it leaves. */
 export type InspectorOwnerRouteId = RouteIds<RegisteredRouter["routeTree"]>;
@@ -241,11 +269,11 @@ type InspectorCommandState = {
   } | null;
   pendingDocxEditTabId: string | null;
   /** A composer draft handed to the chat over one document (a review
-   *  finding to discuss); the overlay for that file consumes it. */
+   *  finding to discuss, a selected passage); the overlay for that file
+   *  consumes it. */
   pendingFileChatDraft: {
     fileFieldId: string;
-    /** What the composer takes: prose or its own inline Markdown. */
-    markdown: ComposerSource;
+    handoff: FileChatHandoff;
     sequence: number;
   } | null;
 };
@@ -287,6 +315,12 @@ type InspectorAnonymizationState = {
 
 type CloseTabOptions = {
   suggestRevive?: boolean;
+  /**
+   * The tab's content moved to the main view. The pane is minimized with it:
+   * what would remain in front is not what the reader asked to look at, and
+   * the rail keeps every other tab one click away.
+   */
+  movedToMain?: boolean;
 };
 
 type FileFieldReplacement = {
@@ -439,7 +473,7 @@ type InspectorCommandActions = {
   clearDocxEditRequest: () => void;
   requestFileChatDraft: (request: {
     fileFieldId: string;
-    markdown: ComposerSource;
+    handoff: FileChatHandoff;
   }) => void;
   clearFileChatDraft: (sequence: number) => void;
   requestBlockScroll: (request: {

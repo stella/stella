@@ -11,6 +11,8 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
+
 const EMPTY_CONTROL_ITEMS = Object.freeze([]);
 
 export const ControlSizesPlayground = () => (
@@ -40,10 +42,14 @@ export const ControlSizesPlayground = () => (
                 <SelectItem value="litigation">Litigation</SelectItem>
               </SelectPopup>
             </Select>
-            <Combobox items={EMPTY_CONTROL_ITEMS}>
+            <Combobox filter={matchesComboboxItem} items={EMPTY_CONTROL_ITEMS}>
               <ComboboxInput placeholder={`Combobox ${size}`} size={size} />
             </Combobox>
-            <Command items={EMPTY_CONTROL_ITEMS} open={false}>
+            <Command
+              filter={matchesComboboxItem}
+              items={EMPTY_CONTROL_ITEMS}
+              open={false}
+            >
               <CommandPanel className="px-3 sm:col-span-2">
                 <CommandInput placeholder={`Command ${size}`} size={size} />
               </CommandPanel>

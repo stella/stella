@@ -96,6 +96,7 @@ export const AiRewriteControl = ({
         onOpenChange={setOpen}
         open={open}
         primaryDisabled={unavailable}
+        primaryContent="icon"
         primaryLabel={actionLabel}
         size="sm"
         menu={

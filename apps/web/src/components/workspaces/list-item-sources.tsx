@@ -13,7 +13,8 @@ import { SourceVerificationAction } from "@/components/workspaces/source-verific
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { legalListSourcesOptions } from "@/lib/workspaces/queries/legal-lists";
 
 type ListItemSourcesProps = {
@@ -30,7 +31,7 @@ export const ListItemSources = ({
   const user = useAuthenticatedUser();
   const enabled = useCallerFeatureEnabled(CALLER_FEATURE.legalLists);
   const openSourceDocument = useOpenSourceDocument(workspaceId);
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...legalListSourcesOptions({
         workspaceId,

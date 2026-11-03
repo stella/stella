@@ -1029,26 +1029,35 @@ export const processLegislationDocument = async (
   // either way. Treating `canonical` as `dual-write` here is the scope
   // decision, not an oversight.
   if (corpus.mode !== "off") {
-    try {
-      const projection = await revision.writeCorpus({
-        documentId: id,
-        stored: existing === undefined ? null : storedCorpusWrite(existing),
-        classification,
-        write: corpus.write,
-      });
-      // An unchanged outcome means the row already records exactly these
-      // pointers; a written or skipped-empty outcome records the keys, or
-      // null pointers where the payload carried no document. The empty
-      // payload's hash is still recorded: the corpus indexer's missing and
-      // stale scans require a non-null content hash, so a row whose indexed
-      // document refreshed to empty must stay visible to them — with a null
-      // hash the previously indexed text would remain searchable forever.
-      await settleLegislationCorpusProjection({
-        documentId: id,
-        projection,
-        scopedDb,
-      });
-    } catch (error) {
+    const mirrored = (
+      await Result.tryPromise(async () => {
+        const projected = await revision.writeCorpus({
+          documentId: id,
+          stored: existing === undefined ? null : storedCorpusWrite(existing),
+          classification,
+          write: corpus.write,
+        });
+        if (projected.isErr()) {
+          return projected;
+        }
+        const projection = projected.value;
+        // An unchanged outcome means the row already records exactly these
+        // pointers; a written or skipped-empty outcome records the keys, or
+        // null pointers where the payload carried no document. The empty
+        // payload's hash is still recorded: the corpus indexer's missing and
+        // stale scans require a non-null content hash, so a row whose indexed
+        // document refreshed to empty must stay visible to them — with a null
+        // hash the previously indexed text would remain searchable forever.
+        await settleLegislationCorpusProjection({
+          documentId: id,
+          projection,
+          scopedDb,
+        });
+        return Result.ok(undefined);
+      })
+    ).andThen((outcome) => outcome);
+    if (mirrored.isErr()) {
+      const error = mirrored.error;
       corpusWriteFailed = true;
       captureError(
         error,

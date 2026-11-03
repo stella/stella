@@ -32,6 +32,25 @@ import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 ```
 
+## Formatting locale
+
+Field values and column calculations format numbers, money and dates in the
+reader's formatting locale, which can differ from the UI language that
+`use-intl`'s `IntlProvider` serves messages in (an English interface with
+German number formatting, say). Render them inside
+`WorkspaceUiFormattingProvider`; without it they throw rather than fall back
+to the UI language.
+
+```tsx
+import { WorkspaceUiFormattingProvider } from "@stll/workspace-ui/formatting";
+
+<IntlProvider locale="en" messages={messages} timeZone="Europe/Prague">
+  <WorkspaceUiFormattingProvider locale="de-DE" timeZone="Europe/Prague">
+    {children}
+  </WorkspaceUiFormattingProvider>
+</IntlProvider>;
+```
+
 The package also exposes a root entry for code that uses several workspace
 surfaces together. Focused modules, including the responsive action toolbar,
 are intentionally available through explicit subpaths; use those subpaths to

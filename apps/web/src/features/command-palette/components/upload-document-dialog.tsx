@@ -28,7 +28,8 @@ import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-fe
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -56,7 +57,7 @@ export const UploadDocumentDialog = ({
     select: (data) => data.workspaces.map(toMatterOption),
     enabled: workspaceId !== undefined,
   });
-  const mattersView = useQueryView(mattersQuery);
+  const mattersView = queryView(mattersQuery);
   useQueryViewError(mattersView, "UploadDocumentDialog:query");
   const { refetch } = mattersQuery;
   const matters = mattersView.type === "items" ? mattersView.items : undefined;

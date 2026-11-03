@@ -8,7 +8,10 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
+import {
+  READER_ANNOTATION_QUOTE_MAX_LENGTH,
+  readerPdfPageAnchorId,
+} from "@stll/api-contract/legal-reader-annotations";
 
 import type { Transaction } from "@/api/db/root";
 import { legalListClaims } from "@/api/db/schema";
@@ -58,7 +61,7 @@ const anchorBlockId = (anchor: ClaimAnchor): string => {
       return anchor.blockId;
     }
     case "pdf-page": {
-      return `page-${String(anchor.pageNumber)}`;
+      return readerPdfPageAnchorId(anchor.pageNumber);
     }
     default: {
       anchor satisfies never;
@@ -82,10 +85,15 @@ export const claimQuote = (text: string): string => {
   return quote;
 };
 
-/** The one span a comment on this claim covers. */
+/**
+ * The one span a comment on this claim covers. A claim's comment is found
+ * by its claim, not by its words in a document, so it keeps no context.
+ */
 export const claimCommentSpan = (claim: CommentedClaim) => ({
   blockAnchorId: anchorBlockId(claim.anchor),
   endOffset: claim.anchor.end,
   quote: claimQuote(claim.text),
+  quotePrefix: "",
+  quoteSuffix: "",
   startOffset: claim.anchor.start,
 });

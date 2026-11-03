@@ -71,9 +71,10 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 import {
@@ -173,7 +174,7 @@ export const ChatHistoryPage = ({
     // Typing refines the list in place instead of blanking it per keystroke.
     placeholderData: keepPreviousData,
   });
-  const threadsView = useQueryView(threadsQuery);
+  const threadsView = queryView(threadsQuery);
   useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
@@ -186,7 +187,7 @@ export const ChatHistoryPage = ({
       userId,
     }),
   );
-  const mattersView = useQueryView(mattersQuery);
+  const mattersView = queryView(mattersQuery);
   useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per

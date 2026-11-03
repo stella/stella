@@ -41,6 +41,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
   (mark): mark is TextMarkState => mark in MARK_PRIORITY,
@@ -77,6 +78,7 @@ export const OriginalDocxView = ({
   onSelect,
 }: OriginalDocxViewProps) => {
   const renderFileViewer = React.useContext(OriginalDocxHostContext);
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   const [doc, setDoc] = React.useState<ProseMirrorNode | null>(null);
   // Folio keeps host plugins for as long as the editor is mounted, so the
   // array is made once.
@@ -248,7 +250,7 @@ export const OriginalDocxView = ({
           interactionMode: "preview-only",
           pdfPageSource: "document",
           scaleOffset: 0,
-          viewId: "all",
+          viewId,
           workspaceId,
         })}
       </div>

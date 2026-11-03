@@ -1,14 +1,13 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import type { SkillLastEdit } from "@/components/chat-editor-slash-items";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { skillsOptions } from "@/lib/knowledge/queries";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import type { ChatPrompt } from "./types";
 
@@ -30,15 +29,13 @@ export const useSuggestedSkills = (): SuggestedSkill[] => {
   const user = useMaybeAuthenticatedUser();
   const activeOrganizationId = user?.activeOrganizationId;
   const userId = user?.id;
-  const skillPagesQuery = useInfiniteQuery({
-    ...skillsOptions(
-      activeOrganizationId ?? "",
-      userId ?? SIGNED_OUT_QUERY_OWNER,
-    ),
+  const skillPagesQuery = useSkillsPages({
     enabled: activeOrganizationId !== undefined && userId !== undefined,
+    organizationId: activeOrganizationId ?? "",
+    userId: userId ?? SIGNED_OUT_QUERY_OWNER,
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = skillPagesQuery;
-  const skillPagesView = useQueryView(skillPagesQuery);
+  const skillPagesView = queryView(skillPagesQuery);
   useQueryViewError(skillPagesView, "useSuggestedSkills:query");
   const skillPages =
     skillPagesView.type === "items" ? skillPagesView.items : undefined;

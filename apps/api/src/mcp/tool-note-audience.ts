@@ -9,6 +9,7 @@ export const MCP_NOTE_AUDIENCE = {
   partial_matches_appended: "agent",
   filter_read: "agent",
   filter_dropped: "agent",
+  filter_unread: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
 } as const satisfies Record<

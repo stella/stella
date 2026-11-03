@@ -69,6 +69,7 @@ export const resolveChatSandboxPlan = async (
     });
     throw new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "Agent sandbox configuration is incomplete.",
     });
   }

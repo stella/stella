@@ -40,12 +40,14 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
@@ -241,6 +243,7 @@ export const useTemplateStudioSlashMenu = ({
   markDirty,
   upsertField,
 }: UseTemplateStudioSlashMenuOptions) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [slash, setSlashState] = useState<SlashMenu | null>(null);
@@ -271,7 +274,7 @@ export const useTemplateStudioSlashMenu = ({
     }),
     enabled: slashClausesEnabled,
   });
-  const slashClauseDataView = useQueryView(slashClauseDataQuery);
+  const slashClauseDataView = queryView(slashClauseDataQuery);
   useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"
@@ -504,9 +507,14 @@ export const useTemplateStudioSlashMenu = ({
   };
 
   const linkClauseToSlot = async (clauseId: string, slotName: string) => {
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body: { clauseId: toSafeId<"clause">(clauseId), slotName },
+      send: async (body) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(body),
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(

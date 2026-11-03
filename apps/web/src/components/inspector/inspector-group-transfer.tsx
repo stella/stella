@@ -25,9 +25,10 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -72,7 +73,7 @@ export const useInspectorGroupTransfer = (
     ...workspacesRouteOptions(activeOrganizationId),
     enabled: pending !== null,
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useInspectorGroupTransfer:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const queryClient = useQueryClient();
@@ -243,7 +244,7 @@ export const useInspectorGroupTransfer = (
             },
           },
         );
-        notifyUserError(undefined, t("errors.actionFailed"));
+        notifyUserProblem(t("errors.actionFailed"));
         submittingRef.current = false;
         setIsSubmitting(false);
         return;
@@ -271,7 +272,7 @@ export const useInspectorGroupTransfer = (
       }
     }
     if (copiedFile.fieldId === null) {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       submittingRef.current = false;
       setIsSubmitting(false);
       return;
@@ -334,7 +335,7 @@ export const useInspectorGroupTransfer = (
           candidate.type === "pdf" && candidate.id === copiedFieldId,
       );
     if (!opened || copiedTab?.type !== "pdf") {
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
       submittingRef.current = false;
       setIsSubmitting(false);
       return;

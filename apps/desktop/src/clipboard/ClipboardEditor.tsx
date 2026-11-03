@@ -2,6 +2,7 @@ import {
   forwardRef,
   Fragment,
   memo,
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
@@ -537,7 +538,6 @@ const RichTextArea = memo(
       return (
         <div
           aria-label={label}
-          autoFocus
           className="clipboard-rich-editor clipboard-html bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 tab-4 ring-1 outline-none ring-inset focus:ring-2"
           contentEditable
           dir="auto"
@@ -564,6 +564,12 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const reportIdle = useEffectEvent(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
+  // React applies `autoFocus` to form controls only, so the clip text, a
+  // contenteditable, takes focus when each open mounts it.
+  const attachEditor = useCallback((node: HTMLDivElement | null) => {
+    editorRef.current = node;
+    node?.focus({ preventScroll: true });
+  }, []);
   // Text and HTML are regenerated from the DOM on save and never round-trip
   // byte-for-byte, so an untouched editor submits the stored content instead:
   // a group-only save must not read as a content edit.
@@ -1067,7 +1073,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               onInput={() => {
                 editedRef.current = true;
               }}
-              ref={editorRef}
+              ref={attachEditor}
             />
           </>
         )}

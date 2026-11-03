@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/folio-collab";
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCollabServer } from "./server";
@@ -69,22 +70,14 @@ type RedisBackedCollabProcess = {
   websocketUrl: string;
 };
 
+// The collaboration server runs in its own process, so its effects reach
+// these clients over the network with no event of their own to await.
 const waitFor = async (
   predicate: () => boolean | Promise<boolean>,
-  message: string,
+  description: string,
   timeoutMs = 3000,
 ) => {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    if (await predicate()) {
-      return;
-    }
-
-    await Bun.sleep(10);
-  }
-
-  throw new Error(message);
+  await waitForExternalState({ description, read: predicate, timeoutMs });
 };
 
 const requestBody = async (request: Request) => {

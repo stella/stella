@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
@@ -85,7 +85,6 @@ afterEach(async () => {
   await act(async () => cleanup());
   observers.length = 0;
   globalThis.IntersectionObserver = originalIntersectionObserver;
-  jest.useRealTimers();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();

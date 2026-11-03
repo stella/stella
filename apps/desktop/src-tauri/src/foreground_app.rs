@@ -117,7 +117,7 @@ pub fn bounded_metadata(value: &str, max_bytes: usize) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn current_on_main_thread() -> Option<ForegroundApp> {
+pub(crate) fn current_on_main_thread() -> Option<ForegroundApp> {
   use objc2_app_kit::NSWorkspace;
 
   let application = NSWorkspace::sharedWorkspace().frontmostApplication()?;

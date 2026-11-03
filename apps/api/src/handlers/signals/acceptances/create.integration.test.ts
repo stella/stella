@@ -1,6 +1,7 @@
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -20,6 +21,7 @@ import {
 
 import { entities, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -31,6 +33,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+beforeEach(() => {
+  flushEntitySearchRepairsMock.mockClear();
+});
 
 const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
@@ -94,7 +100,7 @@ const accept = async (signalId: SafeId<"signal">) => {
       promptCachingEnabled: false,
       recordAuditEvent,
       request: new Request("https://example.test/signals/acceptances"),
-      route: "/test/signals/acceptances",
+      route: "/v1/signals/:signalId/acceptances" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },

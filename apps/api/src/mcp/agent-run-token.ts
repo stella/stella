@@ -5,6 +5,7 @@ import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import {
+  AGENT_RUN_TOKEN_PURPOSE,
   getMcpResourceUrl,
   MCP_OAUTH_SCOPES,
   type McpOAuthScope,
@@ -52,6 +53,9 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   "stella:billing_write": "excluded",
   "stella:admin_read": "excluded",
   "stella:admin_write": "excluded",
+  "stella:account_export_read": "excluded",
+  "stella:account_export_write": "excluded",
+  "stella:organization_create": "excluded",
   "stella:onboarding": "excluded",
   "stella:skills": "default",
   "stella:external_mcps": "excluded",
@@ -80,7 +84,6 @@ export const AGENT_RUN_DEFAULT_SCOPES = MCP_OAUTH_SCOPES.filter(
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
 const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
-export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 export type AgentRunTokenClaims = {
   sub: string;

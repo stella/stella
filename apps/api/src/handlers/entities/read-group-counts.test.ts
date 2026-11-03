@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -29,7 +30,7 @@ const createContext = ({
     body,
     safeDb,
     request: new Request("https://example.test/v1/entities/group-counts"),
-    route: "/v1/entities/:workspaceId/group-counts",
+    route: "/v1/entities/:workspaceId/group-counts" satisfies ApiRoutePath,
   });
 
 // Single-select property path issues three safeDb calls in order: the property

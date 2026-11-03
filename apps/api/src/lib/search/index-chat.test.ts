@@ -82,7 +82,7 @@ describe("chat search indexing", () => {
     "rejects unmigrated version %i content",
     async (version) => {
       const { normalizeSearchableChatMessageContent } =
-        await import("./index-chat");
+        await import("./chat-search-text");
       expect(() =>
         normalizeSearchableChatMessageContent({ version, data: [] }),
       ).toThrow("Stored chat content requires the v3 data backfill");
@@ -90,7 +90,7 @@ describe("chat search indexing", () => {
   );
 
   test("indexes citation labels without their link targets", async () => {
-    const { extractMessageSearchText } = await import("./index-chat");
+    const { extractMessageSearchText } = await import("./chat-search-text");
     const workspaceId = "db9b500f-aa40-4bee-bd7e-624ef4be6193";
     const entityId = "6d0f4b21-5c7e-4a0e-9f31-1b3a7c2d8e55";
 
@@ -117,7 +117,7 @@ describe("chat search indexing", () => {
   });
 
   test("indexes only source-document metadata that previews can display", async () => {
-    const { extractMessageSearchText } = await import("./index-chat");
+    const { extractMessageSearchText } = await import("./chat-search-text");
 
     expect(
       extractMessageSearchText({
@@ -143,7 +143,7 @@ describe("chat search indexing", () => {
 
   test("filters malformed version 3 source-document metadata", async () => {
     const { normalizeSearchableChatMessageContent } =
-      await import("./index-chat");
+      await import("./chat-search-text");
     const validSource = {
       entityId: "entity-1",
       kind: "document",
@@ -165,7 +165,7 @@ describe("chat search indexing", () => {
 
   test("indexes version 3 text and metadata", async () => {
     const { normalizeSearchableChatMessageContent } =
-      await import("./index-chat");
+      await import("./chat-search-text");
 
     expect(
       normalizeSearchableChatMessageContent({

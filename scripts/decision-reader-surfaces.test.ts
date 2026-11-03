@@ -1,9 +1,17 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { DECISION_READER_SURFACES } from "../apps/web/src/features/case-law/decision-reader-surfaces";
+import {
+  type CallExpression,
+  type JSXOpeningElement,
+  type Node,
+  type ObjectExpression,
+  parseSource,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 type ReaderRegistry = Readonly<Record<string, readonly string[]>>;
 type ReaderSource = { file: string; text: string };
@@ -17,29 +25,27 @@ type ReaderImports = {
   hook: ImportedSymbols;
   blocks: ImportedSymbols;
 };
-type ReaderElement = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
-
-const functionScope = (node: ts.Node): ts.Node => {
-  let scope = node.parent;
-  while (
-    !ts.isSourceFile(scope) &&
-    !ts.isArrowFunction(scope) &&
-    !ts.isFunctionExpression(scope) &&
-    !ts.isFunctionDeclaration(scope) &&
-    !ts.isMethodDeclaration(scope)
-  ) {
-    scope = scope.parent;
-  }
-  return scope;
-};
-
-const collectNodes = (source: ts.SourceFile): ts.Node[] => {
-  const nodes: ts.Node[] = [];
-  const visit = (node: ts.Node) => {
+type ReaderElement = JSXOpeningElement;
+const scopes = new WeakMap<Node, Node>();
+const texts = new WeakMap<Node, string>();
+const functionScope = (node: Node): Node => scopes.get(node) ?? node;
+const collectNodes = (source: Program, text: string): Node[] => {
+  const nodes: Node[] = [];
+  walk(source, (node, ancestors) => {
     nodes.push(node);
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    texts.set(node, text.slice(node.start, node.end));
+    const scope = ancestors.findLast((ancestor) =>
+      [
+        "Program",
+        "ArrowFunctionExpression",
+        "FunctionExpression",
+        "FunctionDeclaration",
+      ].includes(ancestor.type),
+    );
+    if (scope) {
+      scopes.set(node, scope);
+    }
+  });
   return nodes;
 };
 
@@ -50,17 +56,21 @@ const importedSymbols = (member: string): ImportedSymbols => ({
 });
 
 const namedExpression = (
-  expression: ts.Node,
+  expression: Node,
   symbols: ImportedSymbols,
 ): boolean =>
-  ts.isIdentifier(expression)
-    ? symbols.names.has(expression.text)
-    : ts.isPropertyAccessExpression(expression) &&
-      ts.isIdentifier(expression.expression) &&
-      symbols.namespaces.has(expression.expression.text) &&
-      expression.name.text === symbols.member;
+  expression.type === "Identifier" || expression.type === "JSXIdentifier"
+    ? symbols.names.has(expression.name)
+    : ((expression.type === "MemberExpression" && !expression.computed) ||
+        expression.type === "JSXMemberExpression") &&
+      (expression.object.type === "Identifier" ||
+        expression.object.type === "JSXIdentifier") &&
+      symbols.namespaces.has(expression.object.name) &&
+      (expression.property.type === "Identifier" ||
+        expression.property.type === "JSXIdentifier") &&
+      expression.property.name === symbols.member;
 
-const readImports = (nodes: readonly ts.Node[]): ReaderImports => {
+const readImports = (nodes: readonly Node[]): ReaderImports => {
   const imports = {
     reader: importedSymbols("WebDecisionReader"),
     hook: importedSymbols("useDecisionProvisionAnchors"),
@@ -72,32 +82,27 @@ const readImports = (nodes: readonly ts.Node[]): ReaderImports => {
     { suffix: "/case-law-reader", symbols: imports.blocks },
   ];
   for (const node of nodes) {
-    if (
-      !ts.isImportDeclaration(node) ||
-      !ts.isStringLiteral(node.moduleSpecifier)
-    ) {
+    if (node.type !== "ImportDeclaration") {
       continue;
     }
-    const moduleName = node.moduleSpecifier.text.replace(
-      /\.[cm]?[jt]sx?$/u,
-      "",
-    );
+    const moduleName = node.source.value.replace(/\.[cm]?[jt]sx?$/u, "");
     const symbols = modules.find(({ suffix }) =>
       moduleName.endsWith(suffix),
     )?.symbols;
-    const bindings = node.importClause?.namedBindings;
-    if (!symbols || !bindings) {
+    if (!symbols) {
       continue;
     }
-    if (ts.isNamespaceImport(bindings)) {
-      symbols.namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const binding of bindings.elements) {
+    for (const binding of node.specifiers) {
+      if (binding.type === "ImportNamespaceSpecifier") {
+        symbols.namespaces.add(binding.local.name);
+      }
       if (
-        (binding.propertyName?.text ?? binding.name.text) === symbols.member
+        binding.type === "ImportSpecifier" &&
+        (binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value) === symbols.member
       ) {
-        symbols.names.add(binding.name.text);
+        symbols.names.add(binding.local.name);
       }
     }
   }
@@ -105,7 +110,7 @@ const readImports = (nodes: readonly ts.Node[]): ReaderImports => {
 };
 
 const includeReaderAliases = (
-  nodes: readonly ts.Node[],
+  nodes: readonly Node[],
   reader: ImportedSymbols,
 ) => {
   let changed = true;
@@ -113,27 +118,27 @@ const includeReaderAliases = (
     changed = false;
     for (const node of nodes) {
       if (
-        !ts.isVariableDeclaration(node) ||
-        !ts.isIdentifier(node.name) ||
-        !node.initializer
+        node.type !== "VariableDeclarator" ||
+        node.id.type !== "Identifier" ||
+        !node.init
       ) {
         continue;
       }
       if (
-        namedExpression(node.initializer, reader) &&
-        !reader.names.has(node.name.text)
+        namedExpression(node.init, reader) &&
+        !reader.names.has(node.id.name)
       ) {
-        reader.names.add(node.name.text);
+        reader.names.add(node.id.name);
         changed = true;
       }
     }
   }
 };
 
-const readBindings = (nodes: readonly ts.Node[]) => {
-  const byScope = new Map<ts.Node, Map<string, ts.Expression | undefined>>();
+const readBindings = (nodes: readonly Node[]) => {
+  const byScope = new Map<Node, Map<string, Node | undefined>>();
   for (const node of nodes) {
-    if (!ts.isVariableDeclaration(node)) {
+    if (node.type !== "VariableDeclarator") {
       continue;
     }
     const scope = functionScope(node);
@@ -142,83 +147,79 @@ const readBindings = (nodes: readonly ts.Node[]) => {
       bindings = new Map();
       byScope.set(scope, bindings);
     }
-    if (ts.isIdentifier(node.name)) {
-      bindings.set(node.name.text, node.initializer);
+    if (node.id.type === "Identifier") {
+      bindings.set(node.id.name, node.init ?? undefined);
       continue;
     }
-    if (!ts.isObjectBindingPattern(node.name)) {
+    if (node.id.type !== "ObjectPattern") {
       continue;
     }
-    for (const element of node.name.elements) {
-      const property = element.propertyName ?? element.name;
+    for (const element of node.id.properties) {
       if (
-        element.dotDotDotToken ||
-        element.initializer ||
-        !ts.isIdentifier(element.name) ||
-        !(ts.isIdentifier(property) || ts.isStringLiteral(property)) ||
-        property.text !== "anchors"
+        element.type !== "Property" ||
+        element.value.type !== "Identifier" ||
+        !(
+          (element.key.type === "Identifier" &&
+            element.key.name === "anchors") ||
+          (element.key.type === "Literal" && element.key.value === "anchors")
+        )
       ) {
         continue;
       }
-      bindings.set(element.name.text, node.initializer);
+      bindings.set(element.value.name, node.init ?? undefined);
     }
   }
   return byScope;
 };
 
-const jsxAttribute = (
-  node: ReaderElement,
-  name: string,
-): ts.JsxAttributeValue | undefined =>
-  node.attributes.properties
-    .filter(ts.isJsxAttribute)
-    .find((attribute) => attribute.name.getText() === name)?.initializer;
-
-const jsxExpression = (
-  node: ReaderElement,
-  name: string,
-): ts.Expression | undefined => {
+const jsxAttribute = (node: ReaderElement, name: string): Node | undefined => {
+  for (const attribute of node.attributes) {
+    if (
+      attribute.type === "JSXAttribute" &&
+      attribute.name.type === "JSXIdentifier" &&
+      attribute.name.name === name
+    ) {
+      return attribute.value ?? undefined;
+    }
+  }
+  return undefined;
+};
+const jsxExpression = (node: ReaderElement, name: string): Node | undefined => {
   const attribute = jsxAttribute(node, name);
-  return attribute && ts.isJsxExpression(attribute)
+  return attribute?.type === "JSXExpressionContainer"
     ? attribute.expression
     : undefined;
 };
-
 const objectProperty = (
-  object: ts.ObjectLiteralExpression,
+  object: ObjectExpression,
   name: string,
-): ts.Expression | undefined => {
+): Node | undefined => {
   for (const property of object.properties) {
     if (
-      ts.isShorthandPropertyAssignment(property) &&
-      property.name.text === name
+      property.type === "Property" &&
+      !property.computed &&
+      !property.method &&
+      property.kind === "init" &&
+      ((property.key.type === "Identifier" && property.key.name === name) ||
+        (property.key.type === "Literal" && property.key.value === name))
     ) {
-      return property.name;
-    }
-    if (!ts.isPropertyAssignment(property)) {
-      continue;
-    }
-    if (
-      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-      property.name.text === name
-    ) {
-      return property.initializer;
+      return property.value;
     }
   }
   return undefined;
 };
 
 const sameExpression = (
-  left: ts.Expression | undefined,
-  right: ts.Expression | undefined,
+  left: Node | undefined,
+  right: Node | undefined,
 ): boolean =>
   left !== undefined &&
   right !== undefined &&
-  left.getText() === right.getText();
+  texts.get(left) === texts.get(right);
 
 type HookContractOptions = {
   node: ReaderElement;
-  hookCall: ts.CallExpression;
+  hookCall: CallExpression;
   expected: string;
   imports: ReaderImports;
 };
@@ -233,14 +234,14 @@ const hookContractFindings = ({
   const input = hookCall.arguments.at(0);
   if (
     !input ||
-    !ts.isObjectLiteralExpression(input) ||
-    input.properties.some(ts.isSpreadAssignment)
+    input.type !== "ObjectExpression" ||
+    input.properties.some((property) => property.type === "SpreadElement")
   ) {
     return ["provision loader must declare its reader inputs explicitly"];
   }
   const findings: string[] = [];
   const surface = objectProperty(input, "surface");
-  if (!surface || !ts.isStringLiteral(surface) || surface.text !== expected) {
+  if (!surface || surface.type !== "Literal" || surface.value !== expected) {
     findings.push("provision loader surface must match the registered surface");
   }
   if (
@@ -256,20 +257,24 @@ const hookContractFindings = ({
   const blocks = objectProperty(input, "blocks");
   if (
     !blocks ||
-    !ts.isCallExpression(blocks) ||
-    !namedExpression(blocks.expression, imports.blocks)
+    blocks.type !== "CallExpression" ||
+    !namedExpression(blocks.callee, imports.blocks)
   ) {
     findings.push(
       "provision loader blocks must come from visibleDecisionBlocks",
     );
     return findings;
   }
-  const fulltext = blocks.arguments.at(2);
+  const argument = blocks.arguments.at(2);
+  const fulltext =
+    argument?.type === "ChainExpression" ? argument.expression : argument;
   if (
     !fulltext ||
-    !ts.isPropertyAccessExpression(fulltext) ||
-    fulltext.name.text !== "fulltext" ||
-    !sameExpression(fulltext.expression, jsxExpression(node, "decision"))
+    fulltext.type !== "MemberExpression" ||
+    fulltext.computed ||
+    fulltext.property.type !== "Identifier" ||
+    fulltext.property.name !== "fulltext" ||
+    !sameExpression(fulltext.object, jsxExpression(node, "decision"))
   ) {
     findings.push(
       "visibleDecisionBlocks must receive this DecisionText decision's fulltext",
@@ -297,11 +302,13 @@ const inspectConsumer = ({
     return ["unregistered DecisionText consumer"];
   }
   const findings: string[] = [];
-  if (node.attributes.properties.some(ts.isJsxSpreadAttribute)) {
+  if (
+    node.attributes.some((attribute) => attribute.type === "JSXSpreadAttribute")
+  ) {
     findings.push("spread props cannot override registered reader contracts");
   }
   const surface = jsxAttribute(node, "surface");
-  if (!surface || !ts.isStringLiteral(surface) || surface.text !== expected) {
+  if (!surface || surface.type !== "Literal" || surface.value !== expected) {
     findings.push(`surface must be the literal ${expected}`);
   }
   if (expected === "development") {
@@ -312,13 +319,13 @@ const inspectConsumer = ({
   }
   const provision = jsxExpression(node, "provisionAnchors");
   const hookCall =
-    provision && ts.isIdentifier(provision)
-      ? bindings.get(functionScope(node))?.get(provision.text)
+    provision?.type === "Identifier"
+      ? bindings.get(functionScope(node))?.get(provision.name)
       : undefined;
   if (
     !hookCall ||
-    !ts.isCallExpression(hookCall) ||
-    !namedExpression(hookCall.expression, imports.hook)
+    hookCall.type !== "CallExpression" ||
+    !namedExpression(hookCall.callee, imports.hook)
   ) {
     findings.push(
       "provisionAnchors must receive this reader's useDecisionProvisionAnchors result",
@@ -333,14 +340,8 @@ const inspectSource = (
   { file, text }: ReaderSource,
   registry: ReaderRegistry,
 ) => {
-  const source = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const nodes = collectNodes(source);
+  const source = parseSource(file, text).program;
+  const nodes = collectNodes(source, text);
   const imports = readImports(nodes);
   includeReaderAliases(nodes, imports.reader);
   const bindings = readBindings(nodes);
@@ -351,8 +352,8 @@ const inspectSource = (
   let consumerCount = 0;
   for (const node of nodes) {
     if (
-      (!ts.isJsxOpeningElement(node) && !ts.isJsxSelfClosingElement(node)) ||
-      !namedExpression(node.tagName, imports.reader)
+      node.type !== "JSXOpeningElement" ||
+      !namedExpression(node.name, imports.reader)
     ) {
       continue;
     }

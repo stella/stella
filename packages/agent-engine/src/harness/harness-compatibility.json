@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-28T00:00:00Z",
+  "compatibility": [
+    {
+      "harness": "codex",
+      "desktopRange": ">=0.0.1",
+      "recommendedVersion": "0.164.0",
+      "recommendedRange": ">=0.164.0",
+      "ranges": [
+        { "range": ">=0.164.0", "status": "supported" },
+        { "range": "<0.164.0", "status": "unsupported" }
+      ]
+    },
+    {
+      "harness": "claude-code",
+      "desktopRange": ">=0.0.1",
+      "recommendedVersion": "2.1.309",
+      "recommendedRange": ">=2.1.309",
+      "ranges": [
+        { "range": ">=2.1.309", "status": "supported" },
+        { "range": "<2.1.309", "status": "unsupported" }
+      ]
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import {
   loadThread,
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -82,7 +83,7 @@ const readThread = async (threadId: SafeId<"chatThread">) =>
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
-      route: "/v1/chat/threads/:threadId/messages",
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

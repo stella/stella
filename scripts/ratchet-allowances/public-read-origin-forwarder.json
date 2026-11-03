@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The canonical outbound owner executes scope-issued public-read capabilities whose destinations are checked at registered transport issuers. The transport guard confines this native forwarder to the scoped owner; negative tests reject direct callers, raw transports, and forged handles. This one narrow source proof records that delegated origin boundary rather than exempting a file or weakening origin checks."
+}

@@ -76,6 +76,8 @@ export const InlineRenameInput = ({
         {mirrorText}
       </span>
       <input
+        // Enter commits, so touch keyboards label that key "Done".
+        enterKeyHint="done"
         {...props}
         data-slot="inline-rename-input"
         dir={

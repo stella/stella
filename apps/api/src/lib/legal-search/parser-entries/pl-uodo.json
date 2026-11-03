@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_UODO",
+  "key": "pl-uodo",
+  "parserVersion": 16,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+  }
+}

@@ -5,11 +5,11 @@ import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
 import type { GuestAnnotationStore } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
 import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ReaderAnnotationController } from "./use-reader-annotation-history";
 
@@ -293,6 +293,8 @@ const scopeInput = {
       startOffset: 0,
       endOffset: PASSAGE.length,
       quote: PASSAGE,
+      quotePrefix: "",
+      quoteSuffix: "",
     },
   ],
 } satisfies CreateAnnotationInput;
@@ -444,7 +446,7 @@ test("scope commit retires old work and accepts new writes before passive effect
   const previous = view.result.current;
   const creating = previous.create(scopeInput);
   const undoing = previous.undo();
-  const next = Promise.withResolvers<Promise<void>[]>();
+  const next = Promise.withResolvers<Promise<unknown>[]>();
   view.rerender({
     scope: "B",
     writes: b.writes,
@@ -466,7 +468,7 @@ test("scope commit retires old work and accepts new writes before passive effect
 test("unmount commit rejects stale writes before passive cleanup", async () => {
   const store = recordingStore();
   const view = scopeHistory({ scope: "A", writes: store.writes });
-  const completed = Promise.withResolvers<Promise<void>>();
+  const completed = Promise.withResolvers<Promise<unknown>>();
   view.rerender({
     scope: "A",
     writes: store.writes,

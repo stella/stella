@@ -143,7 +143,17 @@ const createHarness = ({
     },
   });
 
-  const context = createTestHandlerContext<ReviewPartiesCtx>({
+  const context = createTestHandlerContext<
+    Extract<
+      ReviewPartiesCtx,
+      {
+        orgAIConfigStatus: Exclude<
+          ReviewPartiesCtx["orgAIConfigStatus"],
+          "unreadable"
+        >;
+      }
+    >
+  >({
     audit: NO_AUDIT,
     body: { mode, target: { entityId: ENTITY_ID, fileFieldId: FIELD_ID } },
     workspaceId: WORKSPACE_ID,

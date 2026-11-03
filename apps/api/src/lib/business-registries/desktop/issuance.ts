@@ -197,6 +197,7 @@ export const issueDesktopAccountCredential = async ({
         ? cause
         : new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Could not connect desktop account",
             cause,
           }),

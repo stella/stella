@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
 import { ReaderAnswerCard } from "@/features/case-law/components/case-viewer/reader-answer-card";
+import type { ReaderAnswerCitationTarget } from "@/features/case-law/components/case-viewer/reader-answer-citation.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 const fixture = {
@@ -53,6 +54,21 @@ const fixture = {
   updatedAt: "2026-10-10T12:00:00Z",
 } satisfies ReaderAnswer;
 
+const RESPONSE_PARAGRAPH =
+  "The opportunity to respond gives each party a chance to explain their position before the court resolves the dispute.";
+
+const citedParagraph = {
+  type: "paragraph",
+  reference: {
+    startAnchorId: "p-13",
+    endAnchorId: "p-13",
+    startIndex: 1,
+    endIndex: 1,
+    label: "[13]",
+    paragraphs: [{ anchorId: "p-13", number: "13", text: RESPONSE_PARAGRAPH }],
+  },
+} satisfies ReaderAnswerCitationTarget;
+
 export const ReaderAnswersPlayground = () => {
   const [visibility, setVisibility] = useState<ReaderAnswer["visibility"]>(
     fixture.visibility,
@@ -66,17 +82,15 @@ export const ReaderAnswersPlayground = () => {
             {fixture.anchor.spans[0].quote}
           </span>
         </p>
-        <p data-anchor="p-13">
-          The opportunity to respond gives each party a chance to explain their
-          position before the court resolves the dispute.
-        </p>
+        <p data-anchor="p-13">{RESPONSE_PARAGRAPH}</p>
       </article>
       <ReaderAnswerCard
         answer={{ ...fixture, visibility }}
         generationMode="enabled"
         active={false}
         openRevision={openRevision}
-        citationLabel={() => "¶13"}
+        citationTarget={() => citedParagraph}
+        language="en"
         onOpen={() => setOpenRevision((value) => value + 1)}
         onVisibility={setVisibility}
         onCitation={() => undefined}

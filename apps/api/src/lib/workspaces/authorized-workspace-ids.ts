@@ -100,6 +100,26 @@ export const readAuthorizedWorkspaces = async (
     })
   ).map((authorizedWorkspaces) => ({ workspaces: authorizedWorkspaces }));
 
+/**
+ * Snapshot matter reach for a delayed operation without pinning an RLS
+ * bypass: every later transaction still proves current membership. Lifecycle
+ * status remains in the list so each consumer can apply its operation's rule.
+ */
+export const readAuthorizedWorkspaceExecutionAccess = async (
+  tx: AuthorizedWorkspaceReader,
+  scope: OrganizationScope,
+) =>
+  (await readAuthorizedWorkspaces(tx, scope)).map(
+    ({ workspaces: accessibleWorkspaces }) => {
+      const workspaceIds = new Set(accessibleWorkspaces.map(({ id }) => id));
+      return {
+        accessibleWorkspaces,
+        pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) =>
+          workspaceIds.has(workspaceId),
+      };
+    },
+  );
+
 type RequestedWorkspaceScope = OrganizationScope & {
   workspaceIds: readonly SafeId<"workspace">[];
 };

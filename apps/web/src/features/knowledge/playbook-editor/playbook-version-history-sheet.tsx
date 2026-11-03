@@ -36,9 +36,9 @@ import {
   knowledgeKeys,
   playbookVersionsOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 
 type PlaybookVersionHistorySheetProps = {
   onOpenChange: (open: boolean) => void;
@@ -73,7 +73,7 @@ const PlaybookVersionHistorySheetBody = ({
     playbookVersionsOptions(organizationId, playbookId),
   );
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.items.length === 0,
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -165,7 +165,7 @@ const VersionRow = ({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium" dir="auto">
           {t("common.versionLabel", { version: String(version.version) })}
-          {" — "}
+          {" · "}
           {version.name}
         </p>
         <p className="text-muted-foreground text-xs">

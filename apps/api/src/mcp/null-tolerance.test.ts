@@ -11,6 +11,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  loadOrgSettingsMock.mockClear();
+});
+
 /**
  * A known LLM-client behavior (Stripe's agent toolkit tests for it explicitly)
  * is sending an explicit JSON `null` for an optional field instead of omitting
@@ -296,7 +300,6 @@ describe("capability executors read explicit null on plain optional fields as om
   // A contact body with everything the schema requires, so each case below
   // differs from its omitted twin in exactly the one null under test.
   const contact = {
-    id: "0d0d3b3c-3a55-4f9d-9d3f-2c9b1c9a8f10",
     type: "person",
     displayName: "Ada Lovelace",
   };

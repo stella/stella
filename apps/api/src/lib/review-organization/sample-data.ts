@@ -1,8 +1,7 @@
 /**
  * The fictional data the restricted review organization holds. Every person,
  * firm, company, address and number here is invented; none refers to a real
- * one. Keys are stable: they derive the deterministic ids the seeder writes,
- * so changing a key reseeds that item under a new id.
+ * one. Keys are stable identifiers used to connect the sample records.
  */
 
 export type SampleContact =

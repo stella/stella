@@ -7,7 +7,8 @@ import {
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 import { aiDefaultsPreviewOptions } from "@/lib/organization/ai-config-queries";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type UseAIConfigDefaultsOptions = {
   config: OrganizationAIConfig | null;
@@ -38,7 +39,7 @@ export const useAIConfigDefaults = ({
         }
       : {}),
   });
-  const defaultsView = useQueryView(defaultsQuery);
+  const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "useAIConfigDefaults:query");
   return {
     defaultModels:

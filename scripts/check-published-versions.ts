@@ -1,190 +1,96 @@
 #!/usr/bin/env bun
+import { parseChangesetEntry } from "./changeset-entry";
 import {
+  checkPromotedRegistry,
   checkRegistry,
   DAY_SECONDS,
-  newestStableTag,
+  type FirstPublishResult,
   readPackageManifest,
   type RegistryFetch,
   type RegistryResult,
   versionBumpTime,
 } from "./check-npm-publish-lag";
 import {
+  git,
+  type GitRunner,
+  readPromotedCliTarget,
+} from "./promoted-cli-target";
+import {
   ALL_PACKAGE_ORDER,
   MOVED_PACKAGE_REPOSITORIES,
 } from "./publish-packages";
 
-export type GitResult = { exitCode: number; stdout: string };
-export type GitRunner = (args: readonly string[]) => GitResult;
+// Packages are enrolled at this version and keep it on main until the release
+// that carries their first publish bumps it.
+const ENROLLMENT_VERSION = "0.0.0";
+const CHANGESET_README = ".changeset/README.md";
 
-const git: GitRunner = (args) => {
-  const result = Bun.spawnSync(["git", ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return {
-    exitCode: result.exitCode,
-    stdout: new TextDecoder().decode(result.stdout),
-  };
+// The pending changesets on `ref` are the next release's manifest: a package
+// they name is published by that release, so its absence from npm is expected.
+// Returns undefined when the changeset tree cannot be read.
+const readFirstPublish = ({
+  gitRunner,
+  ref,
+  name,
+}: {
+  gitRunner: GitRunner;
+  ref: string;
+  name: string;
+}): { result: FirstPublishResult; changeset?: string } | undefined => {
+  const listing = gitRunner([
+    "ls-tree",
+    "--name-only",
+    ref,
+    "--",
+    ".changeset/",
+  ]);
+  if (listing.exitCode !== 0) {
+    return undefined;
+  }
+  for (const file of listing.stdout.split("\n")) {
+    if (!file.endsWith(".md") || file === CHANGESET_README) {
+      continue;
+    }
+    const entry = gitRunner(["show", `${ref}:${file}`]);
+    if (entry.exitCode !== 0) {
+      return undefined;
+    }
+    if (parseChangesetEntry(entry.stdout).packages.includes(name)) {
+      return {
+        result: { status: "skipped", reason: "pending_first_publish" },
+        changeset: file,
+      };
+    }
+  }
+  return { result: { status: "failed", reason: "first_publish_unplanned" } };
 };
-
-const DEPLOYED_COMMIT = /^[\da-f]{40}$/u;
 
 type PublishedVersionsOptions = {
   ref: string;
   registry: string;
-  cliUrl: string;
   timeoutMs: number;
   now: number;
   directories?: readonly (typeof ALL_PACKAGE_ORDER)[number][];
   gitRunner?: GitRunner;
-  healthFetch?: RegistryFetch;
+  promotionFetch?: RegistryFetch;
+  githubToken?: string | undefined;
   registryFetch?: RegistryFetch;
   log?: (line: string) => void;
-};
-
-type PromotionAssessment = {
-  result: RegistryResult;
-  release?: string;
 };
 
 export const checkPublishedVersions = async ({
   ref,
   registry,
-  cliUrl,
   timeoutMs,
   now,
   directories = ALL_PACKAGE_ORDER,
   gitRunner = git,
-  healthFetch = fetch,
+  promotionFetch = fetch,
+  githubToken,
   registryFetch = fetch,
   log = console.log,
 }: PublishedVersionsOptions): Promise<boolean> => {
-  let deployedCommitRequest: Promise<string | undefined> | undefined;
-  const deployedCommit = async () => {
-    deployedCommitRequest ??= (async () => {
-      try {
-        const response = await healthFetch(
-          `${cliUrl.replace(/\/$/u, "")}/health`,
-          {
-            signal: AbortSignal.timeout(timeoutMs),
-          },
-        );
-        if (!response.ok) {
-          return undefined;
-        }
-        const payload: unknown = await response.json();
-        if (
-          typeof payload !== "object" ||
-          payload === null ||
-          !("commit" in payload) ||
-          typeof payload.commit !== "string" ||
-          !DEPLOYED_COMMIT.test(payload.commit)
-        ) {
-          return undefined;
-        }
-        return payload.commit;
-      } catch {
-        return undefined;
-      }
-    })();
-    return deployedCommitRequest;
-  };
-
-  // A shallow clone treats its oldest commit as a root, so every package
-  // would look bumped there; only complete history can name the bump.
-  let completeHistory: boolean | undefined;
-  const hasCompleteHistory = () => {
-    if (completeHistory === undefined) {
-      const shallow = gitRunner(["rev-parse", "--is-shallow-repository"]);
-      completeHistory =
-        shallow.exitCode === 0 && shallow.stdout.trim() === "false";
-    }
-    return completeHistory;
-  };
-
-  type PromotionAssessmentOptions = {
-    directory: string;
-    target: string | undefined;
-    result: RegistryResult;
-  };
-  const assessPromotion = async ({
-    directory,
-    target,
-    result,
-  }: PromotionAssessmentOptions): Promise<PromotionAssessment> => {
-    if (result.status !== "failed" || result.reason !== "version_mismatch") {
-      return { result };
-    }
-    // Only a registry behind main can be waiting for the release to deploy.
-    if (
-      target === undefined ||
-      Bun.semver.order(result.latest, target) !== -1
-    ) {
-      return { result };
-    }
-    if (!hasCompleteHistory()) {
-      return { result };
-    }
-    const path = `packages/${directory}/package.json`;
-    const bump = gitRunner([
-      "log",
-      "-1",
-      "--format=%H",
-      "-G",
-      '"version"[[:space:]]*:',
-      ref,
-      "--",
-      path,
-    ]);
-    const bumpCommit = bump.stdout.trim();
-    if (bump.exitCode !== 0 || !DEPLOYED_COMMIT.test(bumpCommit)) {
-      return { result };
-    }
-    const deployed = await deployedCommit();
-    if (deployed === undefined) {
-      return { result };
-    }
-    const local = gitRunner(["cat-file", "-e", `${deployed}^{commit}`]);
-    if (local.exitCode !== 0) {
-      return { result };
-    }
-    const ancestor = gitRunner([
-      "merge-base",
-      "--is-ancestor",
-      bumpCommit,
-      deployed,
-    ]);
-    if (ancestor.exitCode !== 1) {
-      return { result };
-    }
-    const tags = gitRunner([
-      "tag",
-      "--contains",
-      bumpCommit,
-      "--sort=v:refname",
-    ]);
-    if (tags.exitCode !== 0) {
-      return { result };
-    }
-    // Version sorting puts the earliest stable release carrying the bump first.
-    let release = newestStableTag(
-      tags.stdout.split("\n").map((tag) => tag.trim()),
-    );
-    if (release === undefined) {
-      const version = gitRunner(["show", `${bumpCommit}:VERSION`]);
-      if (version.exitCode !== 0 || version.stdout.trim() === "") {
-        return { result };
-      }
-      release = `v${version.stdout.trim()} (untagged)`;
-    }
-    return {
-      result: { status: "failed", reason: "publish_awaits_promote" },
-      release,
-    };
-  };
-
   let failed = false;
-  // Batches bound network concurrency and keep the five-minute workflow budget.
   for (let offset = 0; offset < directories.length; offset += 4) {
     const results = await Promise.all(
       directories.slice(offset, offset + 4).map(async (directory) => {
@@ -192,53 +98,94 @@ export const checkPublishedVersions = async ({
           status: "failed",
           reason: "contract_error",
         };
-        let target: string | undefined;
         try {
           const path = `packages/${directory}/package.json`;
           const contents = gitRunner(["show", `${ref}:${path}`]);
-          const history = gitRunner([
-            "log",
-            ref,
-            `--since=@${now - DAY_SECONDS}`,
-            "--format=journey-commit %ct",
-            "-p",
-            "-G",
-            '"version"[[:space:]]*:',
-            "--",
-            path,
-          ]);
           const manifest = readPackageManifest({
             directory,
             text: contents.exitCode === 0 ? contents.stdout : undefined,
             policy: "journey",
           });
-          if (history.exitCode === 0 && manifest !== undefined) {
-            target = manifest.version;
-            result = await checkRegistry({
-              name: manifest.name,
-              version: manifest.version,
-              movedRepository: MOVED_PACKAGE_REPOSITORIES[directory],
-              bumpedAt: versionBumpTime(history.stdout),
+          if (manifest === undefined) {
+            log(
+              `journey registry-@stll/${directory} ${result.status} ${result.reason}`,
+            );
+            return result;
+          }
+          const options = {
+            name: manifest.name,
+            now,
+            registry,
+            timeoutMs,
+            fetchImpl: registryFetch,
+          };
+          if (directory === "cli") {
+            const promotion = await readPromotedCliTarget({
               now,
-              registry,
               timeoutMs,
-              fetchImpl: registryFetch,
+              gitRunner,
+              promotionFetch,
+              githubToken,
             });
+            if (promotion.status === "failed") {
+              result = { status: "failed", reason: promotion.reason };
+              log(`journey-detail registry-@stll/cli ${promotion.message}`);
+            } else {
+              result = await checkPromotedRegistry({
+                ...options,
+                mainVersion: manifest.version,
+                promotion: {
+                  version: promotion.version,
+                  promotedAt: promotion.promotedAt,
+                },
+              });
+              log(
+                `journey-detail registry-@stll/cli target ${promotion.version} from ${promotion.ref}; publication deadline ${promotion.deadline}; publish using publish-npm.yml`,
+              );
+            }
+          } else if (manifest.version === ENROLLMENT_VERSION) {
+            const firstPublish = readFirstPublish({
+              gitRunner,
+              ref,
+              name: manifest.name,
+            });
+            if (firstPublish !== undefined) {
+              result = firstPublish.result;
+              log(
+                firstPublish.changeset === undefined
+                  ? `journey-detail registry-@stll/${directory} is enrolled at ${ENROLLMENT_VERSION} with no pending changeset; add one so the next release publishes it`
+                  : `journey-detail registry-@stll/${directory} first publish expected in the release that consumes ${firstPublish.changeset}`,
+              );
+            }
+          } else {
+            const history = gitRunner([
+              "log",
+              ref,
+              `--since=@${now - DAY_SECONDS}`,
+              "--format=journey-commit %ct",
+              "-p",
+              "-G",
+              '"version"[[:space:]]*:',
+              "--",
+              path,
+            ]);
+            if (history.exitCode === 0) {
+              result = await checkRegistry({
+                ...options,
+                version: manifest.version,
+                movedRepository: MOVED_PACKAGE_REPOSITORIES[directory],
+                bumpedAt: versionBumpTime(history.stdout),
+              });
+            }
           }
         } catch {
-          // The command boundary reports malformed manifests without their contents.
+          // The command boundary reports malformed contracts without their contents.
           result = { status: "failed", reason: "contract_error" };
         }
-        const assessment = await assessPromotion({ directory, target, result });
         log(
-          `journey registry-@stll/${directory} ${assessment.result.status} ${assessment.result.reason}`,
+          `journey registry-@stll/${directory} ${result.status} ${result.reason}`,
         );
-        if (assessment.release !== undefined) {
-          log(
-            `journey-detail registry-@stll/${directory} awaits ${assessment.release}`,
-          );
-        }
-        return assessment.result;
+        return result;
       }),
     );
     if (results.some((result) => result.status === "failed")) {
@@ -253,9 +200,9 @@ if (import.meta.main) {
     ref: process.env["JOURNEY_MAIN_REF"] ?? "origin/main",
     registry:
       process.env["JOURNEY_NPM_REGISTRY_URL"] ?? "https://registry.npmjs.org",
-    cliUrl: process.env["JOURNEY_CLI_URL"] ?? "https://api.stll.app",
     timeoutMs: Number(process.env["JOURNEY_REGISTRY_TIMEOUT_MS"] ?? "10000"),
     now: Math.floor(Date.now() / 1000),
+    githubToken: process.env["GITHUB_TOKEN"],
   });
   process.exitCode = failed ? 1 : 0;
 }

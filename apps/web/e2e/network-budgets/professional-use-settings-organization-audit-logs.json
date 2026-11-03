@@ -1,11 +1,12 @@
 {
   "route": "/admin/audit-logs",
-  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data.",
+  "reason": "Organization admin renders inside the app frame, which loads its shared chat, notification, timer and organization-settings data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The person filter lists the organization's members, read once from the full organization.",
   "budget": {
     "depth": 6,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
+      "GET /api/auth/organization/get-full-organization",
       "GET /api/auth/organization/list",
       "GET /health",
       "GET /v1/audit-logs",
@@ -17,12 +18,14 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/signals/count",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
       "GET /api/auth/get-session": 1,
       "GET /api/auth/organization/get-active-member-role": 1,
+      "GET /api/auth/organization/get-full-organization": 1,
       "GET /api/auth/organization/list": 1,
       "GET /health": 1,
       "GET /v1/audit-logs": 1,
@@ -34,6 +37,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/organization-settings/deployment-features": 1,
       "GET /v1/signals/count": 1,
+      "GET /v1/time-entries/approval-queue": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1
     },
@@ -52,7 +56,8 @@
       "GET /v1/organization-settings/deployment-features": 5,
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
-      "GET /v1/workspaces/navigation": 7
+      "GET /v1/workspaces/navigation": 7,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -68,7 +73,8 @@
       "GET /v1/organization-settings/deployment-features": 1024,
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

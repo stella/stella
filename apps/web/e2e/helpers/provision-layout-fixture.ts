@@ -8,6 +8,7 @@ import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { E2E_API_ORIGIN } from "./api";
+import { openMemberDecision } from "./decision-reader";
 import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
 
 export const PROVISION_LAYOUT_SENTENCE =
@@ -289,27 +290,16 @@ export const openProvisionLayoutInspector = async (
   page: Page,
   webOrigin = "",
 ) => {
-  await page.goto(`${webOrigin}/chat`, { waitUntil: "commit" });
-  await page.locator("main").waitFor({ state: "visible", timeout: 30_000 });
-  await page.evaluate(
-    (path) => history.pushState(null, "", path),
-    PROVISION_LAYOUT_DECISION_PATH,
-  );
-  const citation = page
+  // The citation's preview belongs to the reader that stays mounted.
+  const reader = await openMemberDecision(page, {
+    bootPath: `${webOrigin}/chat`,
+    path: PROVISION_LAYOUT_DECISION_PATH,
+  });
+  const citation = reader
     .locator(".reader-case-law")
     .getByRole("link", { name: "§ 2895" })
     .first();
   await citation.waitFor({ state: "visible", timeout: 30_000 });
-  // The public reader remains visible while the authenticated workspace loads;
-  // its preview is replaced on that handoff. The editable composer belongs to
-  // the authenticated workspace, so open the preview only after it mounts.
-  await page
-    .locator('[data-file-viewer-root="true"]')
-    .filter({ has: page.locator(".reader-case-law") })
-    .locator(
-      '[data-slot="docked-chat-composer"] [role="textbox"][contenteditable="true"]',
-    )
-    .waitFor({ state: "visible", timeout: 30_000 });
   await citation.click();
   // Enter the preview before moving to its edge-aligned header action;
   // a direct pointer jump from the citation leaves the hover corridor.

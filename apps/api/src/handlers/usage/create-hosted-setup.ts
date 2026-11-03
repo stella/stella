@@ -32,6 +32,7 @@ import {
   HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
 } from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
+import { hostedExternalAccountRef } from "@/api/lib/hosted-usage-provider/external-account-ref";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
@@ -56,10 +57,6 @@ const config = {
   mcp: { type: "internal", reason: "hosted_billing" },
   body: createHostedSetupBodySchema,
 } satisfies HandlerConfig;
-
-const hostedExternalAccountRef = (
-  organizationId: SafeId<"organization">,
-): string => `stella_org_${organizationId}`;
 
 // Covers the provider call; a created session's own expiry replaces it.
 const HOSTED_CHECKOUT_CLAIM_TTL_SECONDS = 60 * 60;
@@ -563,6 +560,7 @@ const checkoutRefusalError = (refusal: CheckoutRefusal) => {
 const hostedSessionUnavailableError = (cause?: unknown) =>
   new HandlerError({
     status: 502,
+    code: "internal_error",
     message: "Could not create hosted usage setup session",
     cause,
   });
@@ -575,6 +573,7 @@ const createHostedSetup = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "Hosted usage management is not configured on this deployment",
         }),

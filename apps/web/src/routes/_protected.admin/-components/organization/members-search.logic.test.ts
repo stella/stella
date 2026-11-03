@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
 
@@ -21,6 +22,20 @@ const invitations = [
 const PROPERTY_TEXT_PARTS_MAX = 24;
 const PROPERTY_MEMBERS_MAX = 16;
 const PROPERTY_INVITATIONS_MAX = 12;
+
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
+  );
+};
 
 describe("organization member and invitation search", () => {
   test("matches member names or emails and invitation emails separately", () => {
@@ -47,6 +62,16 @@ describe("organization member and invitation search", () => {
     expect(
       filterOrganizationLists({ members, invitations, query: "ada hopper" }),
     ).toEqual({ members: [], invitations: [] });
+    const accented = [
+      { id: "cs", user: { name: "Jiří Dvořák", email: "jd@example.test" } },
+    ];
+    expect(
+      filterOrganizationLists({
+        members: accented,
+        invitations: [],
+        query: " DVORAK ",
+      }).members,
+    ).toEqual(accented);
   });
 
   test("keeps source order, all rows for an empty query, and empty collections", () => {
@@ -103,7 +128,7 @@ describe("organization member and invitation search", () => {
   });
 });
 
-test("organization filtering preserves the previous substring predicates", () => {
+test("organization filtering keeps exactly the rows a field of which matches", () => {
   const text = fc
     .array(
       fc.constantFrom(
@@ -128,7 +153,7 @@ test("organization filtering preserves the previous substring predicates", () =>
     .map((parts) => parts.join(""));
 
   assertProperty(
-    "organization filtering preserves the previous substring predicates",
+    "organization filtering keeps exactly the rows a field of which matches",
     fc.property(
       fc.array(fc.record({ name: text, email: text }), {
         maxLength: PROPERTY_MEMBERS_MAX,
@@ -148,29 +173,15 @@ test("organization filtering preserves the previous substring predicates", () =>
             ...invitation,
           }),
         );
-        const normalizedQuery = query.toLowerCase().toWellFormed();
         const expected = {
-          invitations: query
-            ? generatedInvitations.filter((invitation) =>
-                invitation.email
-                  .toLowerCase()
-                  .toWellFormed()
-                  .includes(normalizedQuery),
-              )
-            : generatedInvitations,
-          members: query
-            ? generatedMembers.filter(
-                (member) =>
-                  member.user.name
-                    .toLowerCase()
-                    .toWellFormed()
-                    .includes(normalizedQuery) ||
-                  member.user.email
-                    .toLowerCase()
-                    .toWellFormed()
-                    .includes(normalizedQuery),
-              )
-            : generatedMembers,
+          invitations: generatedInvitations.filter((invitation) =>
+            matchesFolded(invitation.email, query),
+          ),
+          members: generatedMembers.filter(
+            (member) =>
+              matchesFolded(member.user.name, query) ||
+              matchesFolded(member.user.email, query),
+          ),
         };
 
         expect(

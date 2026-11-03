@@ -28,6 +28,11 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  generateObjectMock.mockReset();
+  generateObjectMock.mockImplementation(generateObjectDefault);
+});
+
 type CapturedGenerateOptions = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   messages: readonly ModelMessage[];
@@ -60,10 +65,11 @@ const capturedGenerateOptions: CapturedGenerateOptions[] = [];
  *  nothing. Queued rather than `mockResolvedValueOnce`, which would skip the
  *  capture above. */
 const queuedAnswers: { findings: ReturnType<typeof answer>[] }[] = [];
-const generateObjectMock = mock(async (options: CapturedGenerateOptions) => {
+const generateObjectDefault = async (options: CapturedGenerateOptions) => {
   capturedGenerateOptions.push(options);
   return await Promise.resolve(queuedAnswers.shift() ?? { findings: [] });
-});
+};
+const generateObjectMock = mock(generateObjectDefault);
 const generateObjectForTest =
   asTestRaw<typeof generateTanStackObjectForTask>(generateObjectMock);
 

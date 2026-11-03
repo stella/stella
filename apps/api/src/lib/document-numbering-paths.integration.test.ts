@@ -25,6 +25,7 @@ import clipEntity from "@/api/handlers/entities/clip";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createDuplicateWorkspace } from "@/api/handlers/workspaces/duplicate";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -400,7 +401,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           request: new Request(
             `https://example.test/workspaces/${clippedState.matter}`,
           ),
-          route: "/test/entities/clip",
+          route: "/v1/entities/:workspaceId/clip" satisfies ApiRoutePath,
           safeDb: scopeFor(clippedState.matter),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
@@ -560,7 +561,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           request: new Request(
             `https://example.test/workspaces/${duplicateSource}/duplicate`,
           ),
-          route: "/test/workspaces/duplicate",
+          route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           workspaceId: duplicateSource,

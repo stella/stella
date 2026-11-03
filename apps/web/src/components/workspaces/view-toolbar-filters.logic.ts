@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type FilterField = {
   label: string;
@@ -7,11 +7,9 @@ type FilterField = {
 export const filterFieldsByLabel = <T extends FilterField>(
   fields: readonly T[],
   query: string,
-) => {
-  const normalized = query.trim().toLowerCase();
-  return normalized
-    ? fields.filter((field) =>
-        containsSearchMatchKey(field.label.toLowerCase(), normalized),
-      )
-    : fields;
-};
+) =>
+  filterBySearchQuery({
+    items: fields,
+    query,
+    fields: ({ label }) => [label],
+  });

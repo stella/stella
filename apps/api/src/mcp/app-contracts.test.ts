@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import * as v from "valibot";
 
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
   APP_RESOLVE_FIXTURE,
@@ -28,7 +29,9 @@ import type {
   ResolveResults,
   SearchResults,
 } from "@stll/mcp-apps/shared/contracts";
+import APP_INPUT_SCHEMAS from "@stll/mcp-apps/shared/input-schemas";
 
+import { appInputSchema } from "../../scripts/lib/mcp-app-inputs";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
@@ -38,6 +41,7 @@ import { MCP_APP_OUTPUT_CONTRACTS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
 import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
+import { mcpAppToolInputSchema } from "./app-tool-inputs";
 import type { McpMode } from "./constants";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
@@ -543,10 +547,10 @@ describe("MCP app registry and contracts", () => {
     expect(view.results.at(0)?.url).toBeNull();
     expect(view.results.at(0)?.source_url).toBe("http://example.org/original");
   });
-  test("filter changes restart the search without discarding unrelated filters", () => {
+  test("filter changes restart the search and retain only declared arguments", () => {
     const expected = {
       queries: ["náhrada škody"],
-      source_id: "source",
+      source_id: "00000000-0000-4000-8000-000000000001",
       limit: 10,
       country: "SVK",
       court: "court",
@@ -559,7 +563,8 @@ describe("MCP app registry and contracts", () => {
           country: "CZE",
           cursor: "old",
           courts: ["old court"],
-          source_id: "source",
+          source_id: "00000000-0000-4000-8000-000000000001",
+          unknown_model_key: true,
           limit: 10,
           date_to: "2023-01-01",
         },
@@ -605,6 +610,25 @@ describe("MCP app registry and contracts", () => {
       "invalid",
     );
   });
+  test.each(Object.values(DECISION_TEXT_AVAILABILITY))(
+    "browser validation preserves %s decision text availability",
+    (textAvailability) => {
+      const view = createCaseLawParser()(
+        {
+          ...APP_SEARCH_FIXTURE,
+          results: APP_SEARCH_FIXTURE.results.map((row) => ({
+            ...row,
+            textAvailability,
+          })),
+        },
+        { country: "CZE" },
+      );
+      expect(view).toMatchObject({
+        type: "search",
+        results: [{ type: "search", textAvailability }],
+      });
+    },
+  );
   test("browser validation strips fields the app does not render", () => {
     const parse = createCaseLawParser();
     const view = parse(
@@ -724,4 +748,26 @@ describe("MCP app registry and contracts", () => {
       "resolve_case_law_decision",
     ]);
   });
+});
+
+test("browser input schemas match the input every app-callable tool declares", () => {
+  const tools = [
+    ...new Set(
+      MCP_APPS.filter((app) => app.type === "presentation").flatMap(
+        (app) => app.callableTools,
+      ),
+    ),
+  ];
+  expect(Object.keys(APP_INPUT_SCHEMAS).toSorted()).toEqual(tools.toSorted());
+  for (const name of tools) {
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === name,
+    );
+    expect(definition).toBeDefined();
+    expect(appInputSchema(mcpAppToolInputSchema(name))).toEqual(
+      appInputSchema(definition?.inputSchema),
+    );
+    const generated: unknown = APP_INPUT_SCHEMAS[name];
+    expect(generated).toEqual(appInputSchema(definition?.inputSchema));
+  }
 });

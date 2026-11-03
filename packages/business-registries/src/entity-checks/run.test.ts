@@ -23,7 +23,17 @@ const fixture = async (name: string): Promise<string> =>
   await Bun.file(new URL(name, FIXTURE_DIR)).text();
 
 type Reply = { body: string; status?: number; contentType?: string };
-type RecordedRequest = { url: string; body: string; soapAction: string | null };
+type RecordedRequest = {
+  url: string;
+  body: string;
+  soapAction: string | null;
+  contentType: string | null;
+};
+
+// The registry validates each request against its schema's element sequence,
+// so the envelopes are pinned exactly, order included.
+const isirEnvelope = (criteria: string) =>
+  `<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:typ="http://isirws.cca.cz/types/"><soapenv:Header/><soapenv:Body><typ:getIsirWsCuzkDataRequest>${criteria}</typ:getIsirWsCuzkDataRequest></soapenv:Body></soapenv:Envelope>`;
 
 let restoreFetch: () => void = () => {
   // replaced by stubFetch
@@ -44,6 +54,7 @@ const stubFetch = (replies: readonly (Reply | Error)[]): RecordedRequest[] => {
         url,
         body: typeof init?.body === "string" ? init.body : "",
         soapAction: new Headers(init?.headers).get("SOAPAction"),
+        contentType: new Headers(init?.headers).get("Content-Type"),
       });
       const reply = replies.at(requests.length - 1);
       if (reply === undefined) {
@@ -132,14 +143,18 @@ describe("Czech insolvency check", () => {
     // The first query covers every proceeding and caps matching at the IČO;
     // only the second one narrows to pending proceedings.
     expect(requests).toHaveLength(2);
-    expect(requests[0]?.body).toContain("<ic>26863154</ic>");
-    expect(requests[0]?.body).toContain(
-      "<maxRelevanceVysledku>2</maxRelevanceVysledku>",
-    );
-    expect(requests[0]?.body).not.toContain("filtrAktualniRizeni");
-    expect(requests[1]?.body).toContain(
-      "<filtrAktualniRizeni>T</filtrAktualniRizeni>",
-    );
+    expect(requests.map(({ body }) => body)).toEqual([
+      isirEnvelope(
+        "<ic>26863154</ic><maxPocetVysledku>50</maxPocetVysledku><maxRelevanceVysledku>2</maxRelevanceVysledku>",
+      ),
+      isirEnvelope(
+        "<ic>26863154</ic><maxPocetVysledku>50</maxPocetVysledku><filtrAktualniRizeni>T</filtrAktualniRizeni><maxRelevanceVysledku>2</maxRelevanceVysledku>",
+      ),
+    ]);
+    for (const request of requests) {
+      expect(request.soapAction).toBe('""');
+      expect(request.contentType).toBe("text/xml; charset=utf-8");
+    }
   });
 
   test("marks a proceeding ended when the pending-only query finds nothing", async () => {
@@ -238,11 +253,11 @@ describe("Czech insolvency check", () => {
       },
     });
     expect(result.status).toBe("clear");
-    const body = requests[0]?.body ?? "";
-    expect(body).toContain("<nazevOsoby>Zkušební&lt;ková&gt;</nazevOsoby>");
-    expect(body).toContain("<jmeno>Testovaná</jmeno>");
-    expect(body).toContain("<datumNarozeni>1901-01-01</datumNarozeni>");
-    expect(body).toContain("<maxRelevanceVysledku>4</maxRelevanceVysledku>");
+    expect(requests[0]?.body).toBe(
+      isirEnvelope(
+        "<nazevOsoby>Zkušební&lt;ková&gt;</nazevOsoby><jmeno>Testovaná</jmeno><datumNarozeni>1901-01-01</datumNarozeni><maxPocetVysledku>50</maxPocetVysledku><vyhledatBezDiakritiky>T</vyhledatBezDiakritiky><maxRelevanceVysledku>4</maxRelevanceVysledku>",
+      ),
+    );
   });
 });
 

@@ -105,6 +105,11 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+beforeEach(() => {
+  enqueueFlowStepMock.mockClear();
+  generateTanStackTextForTaskMock.mockClear();
+});
+
 setDefaultTimeout(60_000);
 
 const testDb: TestDatabase = await getTestDb();

@@ -43,6 +43,7 @@ import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-
 import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -262,7 +263,8 @@ const stop = async ({
         `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
         { method: "POST" },
       ),
-      route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+      route:
+        "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
       safeDb: as,
       session: { activeOrganizationId: ids.orgA },
       set,

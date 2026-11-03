@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { apiRoutes } from "@/api/api-routes";
+import type { ApiRouteKey, ApiRoutePath } from "@/api/http/api-route-types";
 import { HTTP_METHODS } from "@/api/http/route";
 import {
   markAiRequest,
@@ -21,7 +22,7 @@ const MCP_TRANSPORTS = [
   "/mcp-law",
   "/mcp-documents",
   "/mcp-anonymized",
-];
+] satisfies readonly ApiRoutePath[];
 
 const STREAM_SETUP_ROUTES = [
   "GET /v1/notifications/events",
@@ -29,7 +30,7 @@ const STREAM_SETUP_ROUTES = [
   "GET /v1/desktop-edit-sessions/:sessionId/events",
   "GET /v1/chat/threads/:threadId/turns/:turnId/join",
   "POST /v1/chat",
-];
+] satisfies readonly ApiRouteKey[];
 
 const splitKey = (key: string) => {
   const split = key.indexOf(" ");
@@ -84,7 +85,7 @@ describe("the class a completed request is measured under", () => {
       expect(
         requestClassAtCompletion({
           method: "GET",
-          route: "/v1/contacts/sanctions/events",
+          route: "/v1/contacts/sanctions/events" satisfies ApiRoutePath,
         }),
       ).toBe("crud");
     });

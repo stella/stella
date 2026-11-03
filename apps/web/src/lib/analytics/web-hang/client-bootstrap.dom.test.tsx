@@ -1,7 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://app.example.test/chat" });
 const { bootClientRuntime } = await import("./client-bootstrap");

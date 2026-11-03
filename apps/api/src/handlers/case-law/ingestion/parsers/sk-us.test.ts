@@ -3,8 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 
@@ -42,6 +46,25 @@ const roleOf = (block: Block): string | undefined =>
   "role" in block ? block.role : undefined;
 
 describe("the document the court renders as markup", () => {
+  test("a preamble title spanning large-font lines is one reader heading", () => {
+    const { documentAst } = parse(
+      '<html><body><span style="font-size: 22px">NÁLEZ<br/><br/>Ústavného súdu Slovenskej republiky</span><br/>' +
+        '<span style="font-size: 12px">rozhodol:<br/>Návrhu vyhovuje.<br/>Odôvodnenie:<br/>Prvý dôvod.</span></body></html>',
+    );
+    expect(
+      documentAst.blocks.filter(
+        (block) => block.type === "heading" && block.role === "decision-title",
+      ),
+    ).toMatchObject([
+      {
+        anchorId: "h-title",
+        plainText: "NÁLEZ Ústavného súdu Slovenskej republiky",
+      },
+    ]);
+    const anchors = documentAst.blocks.map(({ anchorId }) => anchorId);
+    expect(new Set(anchors).size).toBe(anchors.length);
+  });
+
   test("reads its parts from the words the court prints, not from tags", async () => {
     const payload = await readGzipJson(
       new URL("sk-us-content.json.gz", FIXTURES),
@@ -65,8 +88,8 @@ describe("the document the court renders as markup", () => {
     );
     expect(headings.map((block) => block.plainText.trim())).toEqual([
       "OPRAVNÉ UZNESENIE",
-      "rozh od ol :",
-      "O d ôvod n eni e:",
+      "rozhodol:",
+      "Odôvodnenie:",
     ]);
     expect(headings.at(0)).toMatchObject({ role: "decision-title" });
     expect(
@@ -330,6 +353,327 @@ describe("numbered reasoning set without blank lines", () => {
     expect(blocks.map((block) => block.plainText)).toEqual([
       "Sťažovateľ podal ústavnú sťažnosť dňa 2. februára 2026 a domáha sa ochrany.",
       "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+});
+
+describe("page numbers the markup keeps", () => {
+  /** The court's markup: one span, a `<br/>` after every printed line. */
+  const markup = (lines: readonly string[]) =>
+    parse(
+      `<html><body><div><span style="font-size: 12px; ">${lines
+        .map((line) => `${line}<br/>`)
+        .join("\n")}</span></div></body></html>`,
+    ).documentAst.blocks;
+  const texts = (lines: readonly string[]) =>
+    markup(lines).flatMap((block) =>
+      block.type === "paragraph" || block.type === "heading"
+        ? [block.plainText]
+        : [],
+    );
+  /** A page's worth of prose: about 1,500 characters in 20 lines. */
+  const page = (label: string) =>
+    Array.from(
+      { length: 20 },
+      (_, line) =>
+        `${label} ${line} pokračuje ďalej a opisuje priebeh konania pred súdom,`,
+    );
+
+  test.each([
+    ["an amount", "2 eurá."],
+    ["a docket", "5 Cdo 12/2020 rozhodol."],
+    ["a paragraph number", "2. Sťažovateľ podal sťažnosť."],
+  ])(
+    "a number opening a line after a blank line keeps it when no page sequence confirms it: %s",
+    (_, line) => {
+      expect(
+        texts(["O d ô v o d n e n i e :", "", "Zostáva zaplatiť", "", line]),
+      ).toEqual(["Odôvodnenie:", "Zostáva zaplatiť", line]);
+    },
+  );
+
+  test("numbers glued to body lines a page apart do not vouch for each other", () => {
+    for (const [third, fourth] of [
+      ["3 eurá.", "4 eurá."],
+      ["3 Ďalšie odôvodnenie.", "4 Ďalšie odôvodnenie."],
+    ] as const) {
+      const paragraphs = texts([
+        "Odôvodnenie:",
+        "Text odôvodnenia. ".repeat(130),
+        "",
+        third,
+        "Text odôvodnenia. ".repeat(70),
+        "",
+        fourth,
+      ]);
+      expect(paragraphs.some((text) => text.startsWith(third))).toBe(true);
+      expect(paragraphs.at(-1)).toBe(fourth);
+    }
+  });
+
+  test("an amount where a page's number is due keeps its number, and the pages stay unproven", () => {
+    const paragraphs = texts([
+      "O d ô v o d n e n i e :",
+      "",
+      ...page("Prvá strana"),
+      "",
+      "2",
+      "",
+      ...page("Druhá strana"),
+      "",
+      "3 eurá za každý deň omeškania.",
+      ...page("Tretia strana"),
+      "",
+      "4",
+    ]);
+    expect(
+      paragraphs.some((text) =>
+        text.startsWith("3 eurá za každý deň omeškania."),
+      ),
+    ).toBe(true);
+  });
+
+  test("an amount on a page of a numbered document is not that page's number", () => {
+    const paragraphs = texts([
+      "O d ô v o d n e n i e :",
+      "",
+      ...page("Prvá strana"),
+      "Zostáva zaplatiť",
+      "",
+      "2 eurá za každý deň omeškania.",
+      ...page("Ešte prvá strana"),
+      "",
+      "2 strana sa začína tu.",
+      ...page("Druhá strana"),
+      "",
+      "3 Tretia strana sa začína tu.",
+      ...page("Tretia strana"),
+      "",
+      "4",
+    ]);
+    expect(
+      paragraphs.some((text) =>
+        text.startsWith("2 eurá za každý deň omeškania."),
+      ),
+    ).toBe(true);
+    // The page sequence still reads: both pages go on with the sentence the
+    // page before cut, their numbers gone.
+    for (const opening of [
+      "strana sa začína tu.",
+      "Tretia strana sa začína tu.",
+    ]) {
+      expect(
+        paragraphs.some((text) => text.includes(`pred súdom, ${opening}`)),
+      ).toBe(true);
+    }
+  });
+
+  test("a standalone footer after a part title stays out of the heading", () => {
+    const blocks = markup([
+      "Odôvodnenie:",
+      "",
+      "I.",
+      ...page("Prvá strana"),
+      "Predchádzajúca časť skončila.",
+      "",
+      "II.",
+      "Argumentácia",
+      "2",
+      "",
+      "1. Nový odsek.",
+      ...page("Druhá strana"),
+      "",
+      "3",
+    ]);
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading" ? [block.plainText] : [],
+    );
+    expect(headings).toContain("II. Argumentácia");
+    expect(headings).not.toContain("II. Argumentácia 2");
+  });
+
+  test("a page number on a line of its own does not join a part heading to the page before", () => {
+    const blocks = markup([
+      "O d ô v o d n e n i e :",
+      "",
+      "I.",
+      ...page("Prvá strana"),
+      "Text predchádzajúcej časti",
+      "",
+      "2",
+      "II. Argumentácia",
+      "",
+      "Nový odsek.",
+      ...page("Druhá strana"),
+      "",
+      "3",
+    ]);
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading" ? [block.plainText] : [],
+    );
+    expect(headings).toContain("II. Argumentácia");
+    expect(
+      blocks.some(
+        (block) =>
+          block.type === "paragraph" &&
+          block.plainText.endsWith("Text predchádzajúcej časti"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("letter spacing across inline boundaries", () => {
+  // The same text in every case, its spans cut at different places: a span's
+  // edge is not a gap between words.
+  test.each([
+    ["one span", ["Podanie bolo doručené k elektronickému podaniu."]],
+    [
+      "the short word on its own",
+      ["Podanie bolo doručené ", "k e", "lektronickému podaniu."],
+    ],
+    [
+      "split inside the word",
+      ["Podanie bolo doručené k e", "lektro", "nickému podaniu."],
+    ],
+  ])("%s", (_, runs) => {
+    const { documentAst } = parse(
+      `<html><body><div>${runs
+        .map((run) => `<span style="font-size: 12px; ">${run}</span>`)
+        .join("")}</div></body></html>`,
+    );
+    expect(
+      documentAst.blocks.flatMap((block) =>
+        block.type === "paragraph" ? [block.plainText] : [],
+      ),
+    ).toEqual(["Podanie bolo doručené k elektronickému podaniu."]);
+  });
+});
+
+test("unpainted redaction gaps survive line trimming and paragraph projection", async () => {
+  const xhtml = await Bun.file(
+    new URL("__fixtures__/sk-us-redaction-gaps.xhtml", import.meta.url),
+  ).text();
+  const { documentAst, fulltext } = parse(xhtml);
+  expect(fulltext).toContain(
+    "s obsahom ústavnej sťažnosti anonymizované, anonymizované (ďalej",
+  );
+  expect(fulltext).toContain("zastúpeného advokátom anonymizované");
+  expect(
+    segmentDecision(fulltext)
+      .map(({ text }) => text)
+      .join("\n"),
+  ).toContain("zastúpeného advokátom anonymizované");
+  expect(
+    inlinesOf(documentAst.blocks).filter(
+      (inline) => inline.type === "text" && inline.anonymized === true,
+    ),
+  ).toHaveLength(4);
+  expect(
+    documentAst.blocks.find(
+      (block) => block.type === "heading" && block.plainText.startsWith("II."),
+    )?.plainText,
+  ).toBe("II. Relevantná právna úprava");
+  const numbered = documentAst.blocks.filter(
+    (block) => block.type === "paragraph" && block.number !== undefined,
+  );
+  expect(numbered).toHaveLength(2);
+  expect(numbered.at(0)?.plainText).toContain(
+    "o vylúčení sudcu ústavného súdu",
+  );
+});
+
+test("redaction gaps inside unknown markup survive while ordinary spacing stays whitespace", () => {
+  for (const wrapper of ["span", "mark", "custom-redaction", "b", "em"]) {
+    for (const length of [4, 10, 36, 57]) {
+      const { documentAst, fulltext } = parse(
+        `<div><span>Úvod <${wrapper}>${"&nbsp;".repeat(length)}</${wrapper}> záver.<br/></span></div>`,
+      );
+      expect(fulltext).toBe("Úvod anonymizované záver.");
+      expect(inlinesOf(documentAst.blocks)).toContainEqual({
+        type: "text",
+        text: "anonymizované",
+        anonymized: true,
+      });
+    }
+  }
+  for (const gap of [" ".repeat(40), "&nbsp;", "&nbsp;".repeat(3)]) {
+    expect(parse(`<span>Slovo${gap}slovo.</span>`).fulltext).not.toContain(
+      "anonymizované",
+    );
+  }
+});
+
+describe("the plain spaces of a file that sets its word gaps as no-break spaces", () => {
+  const NBSP = " ";
+  /** The same holding, its words set apart by `gap`, with the file's two seams. */
+  const holding = (gap: string) =>
+    [
+      "rozhodol:",
+      "",
+      `1. Základné právo na súdnu ochranu sťažovateľa poru šen é boli. 2. Uznesenie krajského súdu`,
+      "zru šuje a vec vracia na ďalšie konanie.",
+      "",
+      "3. Vo zvyšnej časti sťažnosti nevyhovuje.",
+      "",
+      "Odôvodnenie:",
+      "",
+      // Enough of the court's ordinary words for the file to show its gaps.
+      ...Array.from(
+        { length: 30 },
+        (_, index) =>
+          `${index + 1}. Ústavný súd preskúmal sťažnosť a dospel k záveru, že je dôvodná.`,
+      ),
+    ]
+      .map((line) =>
+        line.replaceAll(/(?<=\S) (?=\S)/gu, (space, offset, text: string) =>
+          /^(?:poru|šen|zru|boli\.)$/u.test(
+            text.slice(0, offset).split(/[  ]/u).at(-1) ?? "",
+          )
+            ? space
+            : gap,
+        ),
+      )
+      .join("<br/>");
+
+  const holdingTexts = (gap: string) =>
+    parse(
+      `<html><body><div><span style="font-size: 12px; ">${holding(gap)}<br/></span></div></body></html>`,
+    )
+      .documentAst.blocks.filter((block) => roleOf(block) === "holding")
+      .map((block) => ("inlines" in block ? plainTextOf(block.inlines) : ""))
+      .map((text) => text.replaceAll(NBSP, " "));
+
+  test("are seams: the words read whole and the lost line break opens the next point", () => {
+    expect(holdingTexts(NBSP)).toEqual([
+      "1. Základné právo na súdnu ochranu sťažovateľa porušené boli.",
+      "2. Uznesenie krajského súdu zrušuje a vec vracia na ďalšie konanie.",
+      "3. Vo zvyšnej časti sťažnosti nevyhovuje.",
+    ]);
+  });
+
+  test("between two words the file prints whole are the court's own gaps", () => {
+    // One gap of the court's ordinary sentence set as a plain space, as a
+    // pasted quotation would be; both words read whole everywhere else.
+    const html = holding(NBSP).replace(`súd${NBSP}preskúmal`, "súd preskúmal");
+    const text = parse(
+      `<html><body><div><span style="font-size: 12px; ">${html}<br/></span></div></body></html>`,
+    )
+      .documentAst.blocks.map((block) =>
+        "inlines" in block ? plainTextOf(block.inlines) : "",
+      )
+      .join("\n")
+      .replaceAll(NBSP, " ");
+    // Every one of the thirty sentences keeps the gap, the one set plain too.
+    expect(text.match(/súd preskúmal sťažnosť/gu)?.length).toBe(30);
+    expect(text).not.toContain("súdpreskúmal");
+    // The file still reads as one that sets its gaps as no-break spaces.
+    expect(text).toContain("zrušuje");
+  });
+
+  test("say nothing in a file that sets plain spaces throughout", () => {
+    expect(holdingTexts(" ")).toEqual([
+      "1. Základné právo na súdnu ochranu sťažovateľa poru šen é boli. 2. Uznesenie krajského súdu zru šuje a vec vracia na ďalšie konanie.",
+      "3. Vo zvyšnej časti sťažnosti nevyhovuje.",
     ]);
   });
 });

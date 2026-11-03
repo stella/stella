@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type MentionOption = {
   label: string;
@@ -7,9 +7,9 @@ type MentionOption = {
 export const filterMentionItems = <T extends MentionOption>(
   mentionItems: readonly T[],
   query: string,
-) => {
-  const normalizedQuery = query.toLowerCase();
-  return mentionItems.filter((item) =>
-    containsSearchMatchKey(item.label.toLowerCase(), normalizedQuery),
-  );
-};
+) =>
+  filterBySearchQuery({
+    items: mentionItems,
+    query,
+    fields: ({ label }) => [label],
+  });

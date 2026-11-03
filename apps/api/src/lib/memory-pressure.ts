@@ -55,12 +55,17 @@ export const createMemoryPressureGate = ({
     record: (_level: MemoryPressureLevel) => {
       lastSignalAt = now();
     },
-    read: (): { cause: MemoryPressureCause; rssBytes: number } => {
+    read: (
+      admittedBytes = 0,
+    ): { cause: MemoryPressureCause; rssBytes: number } => {
       const rssBytes = readRssBytes();
       if (lastSignalAt !== null && now() - lastSignalAt < holdMs) {
         return { cause: "signal", rssBytes };
       }
-      return { cause: rssBytes >= rssHighBytes ? "rss" : null, rssBytes };
+      return {
+        cause: rssBytes + admittedBytes >= rssHighBytes ? "rss" : null,
+        rssBytes,
+      };
     },
   };
 };

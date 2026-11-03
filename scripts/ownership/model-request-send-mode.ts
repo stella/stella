@@ -74,6 +74,13 @@ export default {
     names: MODEL_REQUEST_NAMES,
     allowed: [
       {
+        // The one model caller under desktop-time-entries: billing drafts
+        // and the narrative route reach the model only through it.
+        path: "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
+        reason:
+          "Sends selected activity evidence, window titles, own bounded time history and, once the organization binds them, authorized guideline files; carries no chat transcript. Takes only a DraftingAdmission and reads the organization's switch and the member's consent again before every provider request.",
+      },
+      {
         path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
         reason:
           "Proposes an answer rewrite from stored content; reads the thread send mode after loading the answer and refuses anonymized threads.",

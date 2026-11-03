@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
+
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   contacts,
@@ -23,6 +25,7 @@ import {
   vatRates,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -137,7 +140,7 @@ const context = <TContext extends SafeHandlerLogContext>(
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "PUT" }),
-    route: "/test/invoice-prefill",
+    route: "/v1/invoices/:workspaceId/prefill" satisfies ApiRoutePath,
     memberRole: sessionMemberRole(role),
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
@@ -570,6 +573,71 @@ describe("invoice prefill", () => {
       dueDate: null,
       taxableSupplyDate: "2026-09-20",
       vatAmount: 0,
+    });
+  });
+});
+
+describe("invoice prefill issue readiness", () => {
+  const readBlockers = async () => {
+    const prefill = await prefillInvoice.handler(
+      context(prefillInvoice.handler, {}),
+    );
+    return "issueBlockers" in prefill
+      ? prefill.issueBlockers
+      : panic(JSON.stringify(prefill));
+  };
+  const finalize = async (id: SafeId<"invoice">) =>
+    await transitionInvoice.handler(
+      context(
+        transitionInvoice.handler,
+        { action: "finalize" },
+        { params: { invoiceId: id } },
+      ),
+    );
+
+  test("is not ready while a seller or a number series is missing, and issuing refuses with the same codes", async () => {
+    const first = await seedEntry("2026-09-10");
+    const second = await seedEntry("2026-09-11");
+    expect(await readBlockers()).toEqual([
+      INVOICE_ISSUE_BLOCKER.sellerProfileMissing,
+      INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
+    ]);
+    const sellerless = createdId(await create({ timeEntryIds: [first] }));
+    expect(await finalize(sellerless)).toMatchObject({
+      code: 409,
+      response: { code: INVOICE_ISSUE_BLOCKER.sellerProfileMissing },
+    });
+
+    await seedSeller(null);
+    expect(await readBlockers()).toEqual([
+      INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
+    ]);
+    const unnumbered = createdId(await create({ timeEntryIds: [second] }));
+    expect(await finalize(unnumbered)).toMatchObject({
+      code: 409,
+      response: { code: INVOICE_ISSUE_BLOCKER.numberSeriesMissing },
+    });
+    expect(await readInvoice(unnumbered)).toMatchObject({
+      status: "draft",
+      invoiceNumber: null,
+    });
+
+    const seriesId = createSafeId<"numberSeries">();
+    seriesIds.push(seriesId);
+    await db.insert(numberSeries).values({
+      id: seriesId,
+      organizationId: ids.orgA,
+      documentType: "invoice",
+      name: "Invoices",
+      pattern: "RD-{SEQ}",
+      padding: 3,
+      isDefault: true,
+    });
+    expect(await readBlockers()).toEqual([]);
+    expect(await finalize(unnumbered)).toEqual({ id: unnumbered });
+    expect(await readInvoice(unnumbered)).toMatchObject({
+      status: "finalized",
+      invoiceNumber: "RD-001",
     });
   });
 });

@@ -14,6 +14,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "mcp-reconnect": {
+    load: async () => {
+      const { McpReconnectPlayground } =
+        await import("./-components/mcp-reconnect-playground");
+      return { default: McpReconnectPlayground };
+    },
+  },
   "task-metadata": {
     load: async () => {
       const { TaskMetadataPlayground } =
@@ -33,6 +40,13 @@ const visualLoaders = {
       const { HandoffConfirmationPlayground } =
         await import("./-components/handoff-confirmation-playground");
       return { default: HandoffConfirmationPlayground };
+    },
+  },
+  "case-law-text-availability": {
+    load: async () => {
+      const { CaseLawTextAvailabilityPlayground } =
+        await import("./-components/case-law-text-availability-playground");
+      return { default: CaseLawTextAvailabilityPlayground };
     },
   },
   "hungarian-decision": {
@@ -77,6 +91,20 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "button-label": {
+    load: async () => {
+      const { ButtonLabelPlayground } =
+        await import("./-components/button-label-playground");
+      return { default: ButtonLabelPlayground };
+    },
+  },
+  "chat-composer-reference": {
+    load: async () => {
+      const { ChatComposerReferencePlayground } =
+        await import("./-components/chat-composer-reference-playground");
+      return { default: ChatComposerReferencePlayground };
+    },
+  },
   "chat-continuation-error": {
     load: async () => {
       const { ChatContinuationErrorPlayground } =
@@ -108,6 +136,20 @@ const visualLoaders = {
       return {
         default: () => (
           <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
+    },
+  },
+  "chat-answer-footer": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_ANSWER_FOOTER_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-answer-footer-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_ANSWER_FOOTER_CASSETTE} />
         ),
       };
     },

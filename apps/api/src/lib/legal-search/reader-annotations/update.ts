@@ -10,11 +10,13 @@ import { wholeAnnotationSql } from "@/api/lib/legal-search/reader-annotations/gr
 import {
   requireAnnotationColor,
   requireAnnotationStyle,
-  requireAnnotationTargetType,
   requireAnnotationVisibility,
 } from "@/api/lib/legal-search/reader-annotations/schema";
 import type { UpdateAnnotationBody } from "@/api/lib/legal-search/reader-annotations/schema";
-import { annotationAuditSubject } from "@/api/lib/legal-search/reader-annotations/target";
+import {
+  ANNOTATION_TARGET_RETURNING,
+  returnedAnnotationAuditSubject,
+} from "@/api/lib/legal-search/reader-annotations/target";
 import type {
   AnnotationAuthorScope,
   AnnotationReach,
@@ -98,22 +100,10 @@ export const updateReaderAnnotationRows = async ({
         userId,
       }),
     )
-    .returning({
-      id: legalReaderAnnotations.id,
-      targetType: legalReaderAnnotations.targetType,
-      verificationClaimId: legalReaderAnnotations.verificationClaimId,
-      verificationRunId: legalReaderAnnotations.verificationRunId,
-      workspaceId: legalReaderAnnotations.workspaceId,
-    });
+    .returning(ANNOTATION_TARGET_RETURNING);
   const first = mutatedRows.at(0);
   if (first !== undefined) {
-    const subject = annotationAuditSubject({
-      annotationId,
-      targetType: requireAnnotationTargetType(first.targetType),
-      verificationClaimId: first.verificationClaimId,
-      verificationRunId: first.verificationRunId,
-      workspaceId: first.workspaceId,
-    });
+    const subject = returnedAnnotationAuditSubject(annotationId, first);
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: subject.resourceType,

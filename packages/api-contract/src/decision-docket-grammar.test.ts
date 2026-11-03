@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
@@ -61,19 +61,27 @@ const canonicalDocketArbitraries = {
           `${chamber}. XÝ ${ordinal}/${year.toString().padStart(2, "0")}`,
       ),
   ),
-  EU: fc
-    .tuple(
-      fc.constantFrom("C", "T", "F"),
-      fc.integer({ min: 1, max: 9999 }),
-      fc.integer({ min: 0, max: 99 }),
-      fc.boolean(),
-    )
-    .map(
-      ([court, ordinal, year, appeal]) =>
-        `${court}-${ordinal}/${year.toString().padStart(2, "0")}${
-          appeal ? " P" : ""
-        }`,
-    ),
+  EU: fc.oneof(
+    fc
+      .tuple(
+        fc.constantFrom("C", "T", "F"),
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 0, max: 99 }),
+        fc.boolean(),
+      )
+      .map(
+        ([court, ordinal, year, appeal]) =>
+          `${court}-${ordinal}/${year.toString().padStart(2, "0")}${
+            appeal ? " P" : ""
+          }`,
+      ),
+    // Numbered before 1989, without a court letter.
+    fc
+      .tuple(fc.integer({ min: 1, max: 9999 }), fc.integer({ min: 0, max: 99 }))
+      .map(
+        ([ordinal, year]) => `${ordinal}/${year.toString().padStart(2, "0")}`,
+      ),
+  ),
   GBR: fc
     .tuple(
       fc.integer({ min: 1600, max: 2099 }),
@@ -294,6 +302,35 @@ describe("declared decision docket grammars", () => {
     );
   });
 
+  test("a Court of Justice case numbered before 1989 is read only under the EU scope", () => {
+    // The Court numbered its cases without a letter until the Court of First
+    // Instance was set up, and a stored row keeps the docket as printed.
+    const scoped = (docket: string) =>
+      parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.EU });
+    for (const [docket, formatted] of [
+      ["120/78", "120/78"],
+      ["8/55", "8/55"],
+      ["Case 302/87", "302/87"],
+      ["věc 6/64", "6/64"],
+    ] as const) {
+      const parsed = scoped(docket);
+      expect([docket, parsed?.formatted]).toEqual([docket, formatted]);
+      expect(storedDecisionDocketOf(formatted, "EU")).toEqual({
+        type: "canonical",
+        caseNumber: formatted,
+      });
+    }
+    // The letter names another case: `C-120/78` never keys as `120/78`.
+    expect(scoped("120/78")?.canonical).not.toBe(scoped("C-120/78")?.canonical);
+    // Bare, any number over a two-digit year: never claimed unscoped.
+    for (const text of ["120/78", "Case 302/87", "1/20"]) {
+      expect(parseDecisionDocket(text)?.jurisdiction, text).not.toBe("EU");
+    }
+    for (const text of ["120/1978", "120/7", "C120/78", "120/78 P", "/78"]) {
+      expect(scoped(text), text).toBeNull();
+    }
+  });
+
   test("a bare number or prose is not a United States docket", () => {
     for (const text of [
       "1",
@@ -337,21 +374,25 @@ describe("declared decision docket grammars", () => {
   });
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
-    test(`${grammar.jurisdiction} format is a parse fixed point`, () => {
-      fc.assert(
-        fc.property(
-          canonicalDocketArbitraries[grammar.jurisdiction],
-          (canonical) => {
-            const parsed = grammar.parse(canonical);
-            expect(parsed).not.toBeNull();
-            if (parsed === null) {
-              return;
-            }
-            expect(grammar.parse(formatDecisionDocket(parsed))).toEqual(parsed);
-          },
-        ),
-        propertyConfig(),
-      );
+    describe(grammar.jurisdiction, () => {
+      test("format is a parse fixed point", () => {
+        assertProperty(
+          "format is a parse fixed point",
+          fc.property(
+            canonicalDocketArbitraries[grammar.jurisdiction],
+            (canonical) => {
+              const parsed = grammar.parse(canonical);
+              expect(parsed).not.toBeNull();
+              if (parsed === null) {
+                return;
+              }
+              expect(grammar.parse(formatDecisionDocket(parsed))).toEqual(
+                parsed,
+              );
+            },
+          ),
+        );
+      });
     });
 
     test(`${grammar.jurisdiction} fixtures keep distinct dockets apart`, () => {
@@ -420,6 +461,7 @@ describe("British neutral citations", () => {
         jurisdiction: "GBR",
         formatted: citation,
         canonical: "[2024]ewhc123",
+        filingYear: { type: "none-in-format" },
       });
     }
   });
@@ -444,6 +486,7 @@ describe("Slovak Constitutional Court dockets", () => {
         jurisdiction: "SVK",
         formatted,
         canonical,
+        filingYear: grammar.filingYear(typed),
       });
     }
   });
@@ -461,7 +504,8 @@ describe("Slovak Constitutional Court dockets", () => {
   });
 
   test("every accepted spelling of one docket normalizes to one key", () => {
-    fc.assert(
+    assertProperty(
+      "every accepted spelling of one docket normalizes to one key",
       fc.property(
         fc.constantFrom("I", "II", "III", "IV", "PL"),
         fc.integer({ min: 1, max: 99_999 }),
@@ -483,7 +527,7 @@ describe("Slovak Constitutional Court dockets", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -501,38 +545,40 @@ describe("stored dockets", () => {
   ] as const;
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
-    test(`${grammar.jurisdiction} docket with a trailing part marker trims to the docket`, () => {
-      fc.assert(
-        fc.property(
-          canonicalDocketArbitraries[grammar.jurisdiction],
-          fc.constantFrom(...JUNK_TAILS),
-          (docket, tail) => {
-            expect(
-              storedDecisionDocketOf(docket, grammar.jurisdiction),
-            ).toEqual({ type: "canonical", caseNumber: docket });
-            const stored = storedDecisionDocketOf(
-              `${docket}${tail}`,
-              grammar.jurisdiction,
-            );
-            if (stored.type === "canonical") {
-              // The grammar itself accepts the tail (a closing dot).
-              return;
-            }
-            expect(stored.type).toBe("trimmed");
-            if (stored.type === "trimmed") {
-              // The shortest accepted cut: the docket itself, or more of the
-              // tail where a looser form of the grammar accepts that too.
-              expect(grammar.parse(stored.caseNumber)).not.toBeNull();
+    describe(grammar.jurisdiction, () => {
+      test("docket with a trailing part marker trims to the docket", () => {
+        assertProperty(
+          "docket with a trailing part marker trims to the docket",
+          fc.property(
+            canonicalDocketArbitraries[grammar.jurisdiction],
+            fc.constantFrom(...JUNK_TAILS),
+            (docket, tail) => {
               expect(
-                stored.caseNumber.startsWith(
-                  foldDecisionIdentifierInput(docket),
-                ),
-              ).toBe(true);
-            }
-          },
-        ),
-        propertyConfig(),
-      );
+                storedDecisionDocketOf(docket, grammar.jurisdiction),
+              ).toEqual({ type: "canonical", caseNumber: docket });
+              const stored = storedDecisionDocketOf(
+                `${docket}${tail}`,
+                grammar.jurisdiction,
+              );
+              if (stored.type === "canonical") {
+                // The grammar itself accepts the tail (a closing dot).
+                return;
+              }
+              expect(stored.type).toBe("trimmed");
+              if (stored.type === "trimmed") {
+                // The shortest accepted cut: the docket itself, or more of the
+                // tail where a looser form of the grammar accepts that too.
+                expect(grammar.parse(stored.caseNumber)).not.toBeNull();
+                expect(
+                  stored.caseNumber.startsWith(
+                    foldDecisionIdentifierInput(docket),
+                  ),
+                ).toBe(true);
+              }
+            },
+          ),
+        );
+      });
     });
   }
 

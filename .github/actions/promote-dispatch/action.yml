@@ -49,10 +49,30 @@ inputs:
       includes the frontend.
     required: false
     default: ""
+  proof-state-path:
+    description: Local proof state path for the deployment ECS receipt
+    required: false
+    default: ""
+  expected-sha:
+    description: Expected production commit; permits reusing a completed promotion receipt
+    required: false
+    default: ""
   git-sha:
     description: >
       Full 40-char commit SHA the synthetic ref points at. Only valid with
       main-<sha> refs; for tagged releases the tag is the checkout target.
+    required: false
+    default: ""
+  staging-lease-before-hours:
+    description: Power lease requested before a release-candidate staging promotion
+    required: false
+    default: ""
+  staging-lease-after-hours:
+    description: Power lease renewed after a release-candidate staging promotion
+    required: false
+    default: ""
+  staging-lease-sha:
+    description: Commit whose staging proof owns the power lease
     required: false
     default: ""
 
@@ -73,6 +93,11 @@ runs:
         IMAGE_DIGEST: ${{ inputs.image-digest }}
         WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
+        STAGING_PROOF_STATE_PATH: ${{ inputs.proof-state-path }}
+        EXPECTED_SHA: ${{ inputs.expected-sha }}
+        STAGING_LEASE_BEFORE_HOURS: ${{ inputs.staging-lease-before-hours }}
+        STAGING_LEASE_AFTER_HOURS: ${{ inputs.staging-lease-after-hours }}
+        STAGING_LEASE_SHA: ${{ inputs.staging-lease-sha }}
       run: |
         set -euo pipefail
 
@@ -157,12 +182,67 @@ runs:
         trap revoke_app_token EXIT
         refresh_app_token
 
+        request_staging_lease() {
+          local hours="$1"
+          [[ -n "$hours" ]] || return 0
+          STAGING_POWER_TOKEN="$current_app_token" \
+            STAGING_LEASE_ONLY=true \
+            STAGING_LEASE_HOURS="$hours" \
+            DEPLOY_SHA="$STAGING_LEASE_SHA" \
+            INFRA_REPO="$INFRA_REPO" \
+            GH_RETRY_SCRIPT="$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" \
+            bash "$GITHUB_ACTION_PATH/../../../scripts/staging-wake.sh"
+        }
+
+        request_staging_lease "${STAGING_LEASE_BEFORE_HOURS:-}"
         dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         # Must match the `run-name:` template in
         # stella-infra/.github/workflows/promote-release.yml. That template is
         # load-bearing for correlation, not decoration: changing either side
         # alone leaves the dispatch unmatched and this step failing.
         expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
+
+        # Production receipts prevent duplicate promotions. Staging dispatches
+        # again because another deployment may have replaced the proved image.
+        run_id=""
+        attempts=0
+        if [[ "$TARGET_ENV" == production ]]; then
+          if ! existing="$(
+            bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate --slurp \
+              "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=100" \
+              | jq -r --arg title "$expected_title" '
+                  [.[].workflow_runs[] | select(.display_title == $title)] as $all
+                  | ($all | map(select(.status == "queued" or .status == "in_progress" or
+                      .status == "waiting" or .status == "pending" or .conclusion == "success"))
+                    | first) as $live
+                  | [($live.id // ""), ($live.status // ""), ($live.conclusion // ""), ($all | length)]
+                  | @tsv
+                '
+          )"; then
+            echo "::error::Existing promote run lookup failed." >&2
+            exit 1
+          fi
+          run_id="$(cut -f1 <<< "$existing")"
+          attempts="$(cut -f4 <<< "$existing")"
+          [[ "$attempts" =~ ^[0-9]+$ ]] || { echo '::error::Existing promote run lookup failed.' >&2; exit 1; }
+          if [[ -n "$run_id" && "$(cut -f3 <<< "$existing")" == success ]]; then
+            echo "Promotion already succeeded: ${run_id}"
+            exit 0
+          fi
+        fi
+        # Serving the commit proves the promotion only when this workflow never
+        # attempted it: an active run may serve it while its infrastructure work
+        # continues (watched below), and a failed one may have stopped after the
+        # rollout (dispatched again below).
+        if [[ "$TARGET_ENV" == production && "$attempts" == 0 && -n "${EXPECTED_SHA:-}" ]]; then
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid expected-sha'; exit 1; }
+          api_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://api.stll.app/ready | jq -r 'select(.status == "ok") | .commit // empty') || api_commit=""
+          web_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://my.stll.app/version.json | jq -r '.commit // empty') || web_commit=""
+          if [[ "$api_commit" == "$EXPECTED_SHA" && "$web_commit" == "$EXPECTED_SHA" ]]; then
+            echo "Production already serves $EXPECTED_SHA"
+            exit 0
+          fi
+        fi
 
         dispatch_args=(
           -f "ref=main"
@@ -190,39 +270,43 @@ runs:
         # contents/metadata) those implicit lookups can fail silently and kill
         # the step in well under a second with no output. Any failure here
         # surfaces as a real HTTP error in the log.
-        echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-        bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
-          "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
-          "${dispatch_args[@]}"
+        if [[ -z "$run_id" ]]; then
+          echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
+          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
+            "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
+            "${dispatch_args[@]}"
 
-        # The dispatches endpoint returns 204 with no body, so the run id has
-        # to be recovered by listing. Match on exact display_title so
-        # concurrent dispatches cannot be confused and prefix-overlapping refs
-        # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
-        echo "Dispatch accepted. Polling for the new run..."
-        run_id=""
-        for attempt in {1..30}; do
-          # Poll successful reads until the run appears. HTTP recovery belongs
-          # to the shared owner; a failed read exhausts that request's budget.
-          if ! run_id="$(
-            bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
-              "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
-              --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-              | head -n 1
-          )"; then
-            echo "::error::Dispatched run lookup failed." >&2
+          # The dispatches endpoint returns 204 with no body, so the run id has
+          # to be recovered by listing. Match on exact display_title so
+          # concurrent dispatches cannot be confused and prefix-overlapping refs
+          # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
+          echo "Dispatch accepted. Polling for the new run..."
+          run_id=""
+          for attempt in {1..30}; do
+            # Poll successful reads until the run appears. HTTP recovery belongs
+            # to the shared owner; a failed read exhausts that request's budget.
+            if ! run_id="$(
+              bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
+                "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
+                --jq "first(.workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id)"
+            )"; then
+              echo "::error::Dispatched run lookup failed." >&2
+              exit 1
+            fi
+            if [[ -n "$run_id" ]]; then
+              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "::error::Dispatched run did not appear in the workflow run list." >&2
             exit 1
           fi
-          if [[ -n "$run_id" ]]; then
-            echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
-            break
-          fi
-          sleep 2
-        done
 
-        if [[ -z "$run_id" ]]; then
-          echo "::error::Dispatched run did not appear in the workflow run list." >&2
-          exit 1
+        else
+          echo "Watching existing promotion: $run_id"
         fi
 
         run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"
@@ -250,8 +334,22 @@ runs:
           sleep "$WATCH_POLL_SECONDS"
         done
 
+        if [[ -n "${STAGING_PROOF_STATE_PATH:-}" ]]; then
+          receipt_directory="${STAGING_PROOF_STATE_PATH}.ecs"
+          mkdir -p "$receipt_directory"
+          rm -f "${STAGING_PROOF_STATE_PATH}.ecs.json" "$receipt_directory/receipt.json"
+          if bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" run download "$run_id" \
+            --repo "$INFRA_REPO" --name staging-ecs-readiness --dir "$receipt_directory" \
+            >/dev/null 2>&1 && [[ -f "$receipt_directory/receipt.json" ]]; then
+            cp "$receipt_directory/receipt.json" "${STAGING_PROOF_STATE_PATH}.ecs.json"
+          else
+            echo "::warning::Deployment ECS readiness receipt is unavailable."
+          fi
+        fi
+
         if [[ "$conclusion" == "success" ]]; then
           echo "Promote run completed successfully: ${run_url}"
+          request_staging_lease "${STAGING_LEASE_AFTER_HOURS:-}"
           exit 0
         fi
 

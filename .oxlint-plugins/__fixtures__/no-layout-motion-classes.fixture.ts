@@ -21,6 +21,10 @@ const easeIn = "transition-opacity ease-in";
 const scaleFromZero = "data-starting-style:scale-0";
 // oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves a UI duration above 300ms is rejected
 const longDuration = "transition-opacity duration-500";
+// oxlint-disable-next-line no-layout-motion-classes/no-layout-motion-classes -- fixture proves the hover: none media variant is rejected
+const hoverNone = "opacity-0 [@media(hover:none)]:opacity-100";
+
+const touchReveal = "opacity-0 pointer-coarse:opacity-100";
 
 const namedTransitions =
   // expect-clean: no-layout-motion-classes/no-layout-motion-classes
@@ -37,12 +41,14 @@ export {
   compositableAnimation,
   dynamicViewport,
   easeIn,
+  hoverNone,
   largeViewportLength,
   longDuration,
   layoutTransition,
   namedTransitions,
   scaleFromZero,
   shortMotion,
+  touchReveal,
   transitionAll,
   viewportTemplate,
   viewportUnits,

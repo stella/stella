@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { SEARCH_TOTAL_TYPE } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { cleanup, render } = await import("@testing-library/react");
@@ -24,7 +24,7 @@ const renderHeading = (
       <FormattingProvider locale="en" timeZone="UTC">
         <CaseLawResultsSummary
           exactCount={0}
-          intent={{ type: "text", text: "employment dismissal" }}
+          order={{ type: "search", sort: "relevance" }}
           isRefreshing={false}
           page={1}
           relaxedHitCount={0}
@@ -96,17 +96,21 @@ test("keeps the displayed count busy while replacement results are pending", () 
   expect(text.parentElement?.getAttribute("aria-busy")).toBe("true");
 });
 
-test("keeps the newest-list heading without a query", () => {
-  const view = renderHeading({ intent: { type: "empty" } });
-  expect(view.getByRole("heading").textContent).toBe(
-    messages.caseLaw.newestDecisions,
-  );
-});
+test.each([
+  ["newest", messages.caseLaw.newestDecisions],
+  ["oldest", messages.caseLaw.oldestDecisions],
+] as const)(
+  "heads the %s-first listing with the order it is read in",
+  (sort, heading) => {
+    const view = renderHeading({ order: { type: "browse", sort } });
+    expect(view.getByRole("heading").textContent).toBe(heading);
+  },
+);
 
 test("keeps the court choice for an identifier shared by several decisions", () => {
   const view = renderHeading({
     exactCount: 2,
-    intent: { type: "identifier", kind: "ecli", value: "ECLI:CZ:NS:2026:1" },
+    order: { type: "identity" },
   });
   expect(
     view.getByText("2 decisions share this case number. Pick the court."),

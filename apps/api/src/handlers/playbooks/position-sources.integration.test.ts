@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Who may attach a source document to a playbook position.
  *
@@ -9,8 +10,6 @@
  * is exercised against a real schema with two users of one organization: A1
  * can open both matters, A2 only the second.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { entities, playbookDefinitions } from "@/api/db/schema";
@@ -20,6 +19,7 @@ import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -61,7 +61,7 @@ const contextFor = (actor: Actor) => ({
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/playbooks"),
-  route: "/playbooks",
+  route: "/v1/playbooks" satisfies ApiRoutePath,
   safeDb:
     actor === "a1"
       ? createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1)

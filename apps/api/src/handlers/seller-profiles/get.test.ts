@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -41,7 +42,7 @@ describe("seller profile reads", () => {
         request: new Request(
           `https://example.test/v1/seller-profiles/${profileId}`,
         ),
-        route: "/v1/seller-profiles/:sellerProfileId",
+        route: "/v1/seller-profiles/:sellerProfileId" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: organizationId },
         memberRole: sessionMemberRole("owner"),

@@ -16,10 +16,12 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createVatRate from "@/api/handlers/vat-rates/create";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { resolveVatRate } from "@/api/lib/billing/vat-rates";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -61,8 +63,12 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
     request: new Request("https://example.test/v1/vat-rates", {
       method: "POST",
     }),
-    route: "/v1/vat-rates",
+    route: "/v1/vat-rates" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+    scopedDb: createOrganizationScopedTestDb(testDb, {
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     memberRole: sessionMemberRole("owner"),
     user: { id: ids.userA1 },
@@ -103,7 +109,7 @@ describe.skipIf(!runPostgresTests)("VAT rates on Postgres", () => {
         request: new Request("https://example.test/v1/vat-rates/apply-preset", {
           method: "POST",
         }),
-        route: "/v1/vat-rates/apply-preset",
+        route: "/v1/vat-rates/apply-preset" satisfies ApiRoutePath,
         body: { country: "SK" },
       });
       const first = await applyVatRatePreset.handler(context);

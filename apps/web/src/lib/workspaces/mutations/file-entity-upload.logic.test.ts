@@ -1,5 +1,7 @@
 import { describe, expect, jest, test } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import { readQueryResult } from "@/lib/errors/query-result";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -177,7 +179,7 @@ describe("file entity upload retries", () => {
           { completed: ["entity-for-upload-1"], failed: 0, cancelled: false },
         ]);
       } finally {
-        jest.useRealTimers();
+        restoreRealTimers();
       }
     },
   );
@@ -214,7 +216,7 @@ describe("file entity upload retries", () => {
       expect(script.finalizes).toEqual(["upload-1", "upload-1"]);
       expect(done.at(-1)).toMatchObject({ failed: 0, cancelled: false });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 
@@ -268,7 +270,7 @@ describe("file entity upload retries", () => {
         cancelled: false,
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
   });
 

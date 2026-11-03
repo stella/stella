@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { createSharepointOAuthCallback } from "@/api/handlers/sharepoint/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -34,7 +35,9 @@ const userA = toSafeId<"user">("user_a");
 
 const reasonOf = (result: unknown): string | null => {
   if (!(result instanceof Response)) {
-    throw new Error(`expected a 302 Response, got ${JSON.stringify(result)}`);
+    throw new TypeError(
+      `expected a 302 Response, got ${JSON.stringify(result)}`,
+    );
   }
   expect(result.status).toBe(302);
   const location = result.headers.get("Location");
@@ -57,7 +60,7 @@ const failingLookupContext = (
   request: Request = new Request("https://api.test/sharepoint/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
-    route: "/v1/sharepoint/oauth/callback",
+    route: "/v1/sharepoint/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: queuedSafeDb([error]),

@@ -30,6 +30,7 @@ The production Compose contract contains exactly these services:
 
 - `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
 - `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `file-derivative-worker`: Durable file-derivative queue consumer; readiness `api-ready`.
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.
@@ -404,7 +405,7 @@ must build `apps/web/Dockerfile` with their own public URLs, or run
 ## Run With Docker Compose
 
 From the repository root, validate the production profile, inspect the resolved
-Compose model, migrate, then start the three declared services. Run the web SSR
+Compose model, migrate, then start the declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->

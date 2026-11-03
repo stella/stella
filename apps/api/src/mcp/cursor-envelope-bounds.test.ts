@@ -33,6 +33,7 @@ import {
   readerVersion,
 } from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
+import { cursorInput } from "@/api/mcp/input-schemas";
 import {
   isProvisionTextCursor,
   windowProvisionText,
@@ -41,7 +42,6 @@ import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
-import { cursorInput } from "@/api/mcp/tool-utils";
 
 const UUID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const TIMESTAMP = "9999-12-31T23:59:59.999999Z";
@@ -144,6 +144,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "law.fetch.nextCursor": offsetCursor,
   "advanced.list_matters.nextCursor": idCursor,
   "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,

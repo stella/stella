@@ -8,22 +8,28 @@ import {
   clipboardSearchPreviewText,
   highlightClipboardText,
 } from "./clipboard-logic";
-import type { ClipboardItem } from "./clipboard-types";
+import type { ClipboardSearchOptions } from "./clipboard-logic";
+import type { ClipboardCopyFormat, ClipboardItem } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 
 type ClipboardCardPreviewProps = {
+  /** "plainText" shows how a formatted clip pastes without its formatting. */
+  format: ClipboardCopyFormat;
   imagePreviewRetryToken: number;
   item: ClipboardItem;
   onImagePreviewStatusChange: (status: ClipboardImagePreviewStatus) => void;
   query: string;
+  searchOptions: ClipboardSearchOptions;
 };
 
 export const ClipboardCardPreview = ({
+  format,
   imagePreviewRetryToken,
   item,
   onImagePreviewStatusChange,
   query,
+  searchOptions,
 }: ClipboardCardPreviewProps) => {
   const t = useTranslations("clipboard");
   if (item.type === "image") {
@@ -39,7 +45,8 @@ export const ClipboardCardPreview = ({
       </div>
     );
   }
-  const rendersHtml = item.type === "formattedText" && !query;
+  const rendersHtml =
+    item.type === "formattedText" && format === "original" && !query;
   const previewClassName = cn(
     "text-foreground line-clamp-8 text-sm leading-5 text-pretty wrap-break-word",
     // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
@@ -60,8 +67,16 @@ export const ClipboardCardPreview = ({
     );
   }
   if (query) {
-    const searchPreview = clipboardSearchPreviewText(item, query);
-    const highlightedText = highlightClipboardText(searchPreview.text, query);
+    const searchPreview = clipboardSearchPreviewText(
+      item,
+      query,
+      searchOptions,
+    );
+    const highlightedText = highlightClipboardText(
+      searchPreview.text,
+      query,
+      searchOptions,
+    );
     return (
       <div className={previewClassName} dir="auto">
         {searchPreview.truncated ? (

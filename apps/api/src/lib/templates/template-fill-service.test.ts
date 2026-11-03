@@ -12,6 +12,7 @@ import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { decodeRequestInput } from "@/api/http/input";
 import { routes } from "@/api/http/route";
@@ -179,8 +180,8 @@ const stubScopedDb = (
   };
   // SAFETY: the fill service reads registry credentials and, for a stored
   // source, the pinned clause links and version rows modeled above.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
   return (async (fn: (tx: unknown) => Promise<unknown>) =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(fakeTx)) as unknown as ScopedDb;
 };
 
@@ -727,8 +728,8 @@ describe("fillStoredTemplateDocx use recording", () => {
     };
     // SAFETY: test stub; this fill touches the template row, registry
     // credential configuration, and the use-counter update counted above.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
     return { scopedDb, updates: () => updates };
   };
@@ -1047,8 +1048,8 @@ describe("describeStoredTemplate gated blocks", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (the DOCX comes from the fake S3 below).
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
@@ -1141,8 +1142,8 @@ describe("describeStoredTemplate array shape", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (S3 is exercised separately below via fake-s3).
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
@@ -2049,7 +2050,7 @@ test("stored web discovery, description and effective fill declarations agree fo
                       await readBody(),
                     ),
                     request: ctx.request,
-                    route: "/templates/discover",
+                    route: "/v1/templates/discover" satisfies ApiRoutePath,
                   }),
                 ),
             },

@@ -11,6 +11,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -979,23 +981,17 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         await Promise.all([firstEntered.promise, secondEntered.promise]);
         // Observe both server-side waits before releasing the row: a
         // read-then-update mutation must have read the old row twice.
-        const deadline = Date.now() + 3000;
-        let bothBlocked = false;
-        while (Date.now() < deadline) {
-          // db-await-in-loop: bounded synchronization on actual backend lock waits.
-          const row = (
-            await locker.unsafe<{ blocked: boolean }[]>(
-              "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AND cardinality(pg_blocking_pids($2::int)) > 0 AS blocked",
-              [firstPid, secondPid],
-            )
-          ).at(0);
-          if (row?.blocked === true) {
-            bothBlocked = true;
-            break;
-          }
-          await Bun.sleep(10);
-        }
-        expect(bothBlocked).toBe(true);
+        await waitForExternalState({
+          description: "both refreshes wait on the row lock",
+          timeoutMs: 3000,
+          read: async () =>
+            (
+              await locker.unsafe<{ blocked: boolean }[]>(
+                "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AND cardinality(pg_blocking_pids($2::int)) > 0 AS blocked",
+                [firstPid, secondPid],
+              )
+            ).at(0)?.blocked === true,
+        });
         expect(calls).toBe(0);
       } finally {
         await locker.unsafe("COMMIT");
@@ -1794,22 +1790,19 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       try {
         await entered.promise;
         released.resolve(undefined);
-        const deadline = performance.now() + 3000;
-        let blocked = false;
-        while (!blocked && performance.now() < deadline) {
-          // db-await-in-loop: each claimant must reach a server-side lock before the decisive rows are released.
-          const expression = pids
-            .map((pid) => `cardinality(pg_blocking_pids(${pid})) > 0`)
-            .join(" AND ");
-          blocked =
+        // Each claimant must reach a server-side lock before the decisive
+        // rows are released.
+        const expression = pids
+          .map((pid) => `cardinality(pg_blocking_pids(${pid})) > 0`)
+          .join(" AND ");
+        await waitForExternalState({
+          description: "every claimant waits on the row lock",
+          timeoutMs: 3000,
+          read: async () =>
             (await locker.unsafe(`SELECT ${expression} AS blocked`)).at(0)?.[
               "blocked"
-            ] === true;
-          if (!blocked) {
-            await Bun.sleep(10);
-          }
-        }
-        expect(blocked).toBe(true);
+            ] === true,
+        });
         expect(counts).toBe(0);
       } finally {
         released.resolve(undefined);

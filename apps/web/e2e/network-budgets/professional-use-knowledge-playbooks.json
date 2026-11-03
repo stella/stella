@@ -1,6 +1,6 @@
 {
   "route": "/knowledge/playbooks",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 5,
     "requests": [
@@ -18,6 +18,7 @@
       "GET /v1/playbooks/recent",
       "GET /v1/playbooks/starters",
       "GET /v1/signals/count",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/workspaces/navigation"
     ],
@@ -37,7 +38,8 @@
       "GET /v1/signals/count": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -55,7 +57,8 @@
       "GET /v1/signals/count": 4,
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -72,7 +75,8 @@
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

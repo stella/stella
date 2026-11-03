@@ -70,3 +70,9 @@ export const withThirdPartyOutbound = <
     },
     { [REQUIRES_THIRD_PARTY_OUTBOUND]: true } as const,
   );
+
+/** Runtime census uses the same marker as the handler's type-level permit. */
+export const requiresThirdPartyOutbound = (
+  handler: object,
+): handler is RequiresThirdPartyOutbound =>
+  REQUIRES_THIRD_PARTY_OUTBOUND in handler;

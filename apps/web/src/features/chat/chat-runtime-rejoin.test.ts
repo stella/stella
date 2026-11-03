@@ -13,6 +13,15 @@ afterEach(() => {
   globalThis.fetch = previousFetch;
 });
 
+/** Wakes `awaitCondition` whenever the fixture server, the page's reload
+ *  or a runtime the test subscribes to changes. */
+const changeListeners = new Set<() => void>();
+const notifyChange = () => {
+  for (const listener of changeListeners) {
+    listener();
+  }
+};
+
 const openLoadedTurn = () => {
   const errors: Error[] = [];
   let reloads = 0;
@@ -33,6 +42,7 @@ const openLoadedTurn = () => {
     onFinish: () => undefined,
     reloadThread: () => {
       reloads += 1;
+      notifyChange();
     },
   });
   return { runtime, errors, reloads: () => reloads };
@@ -175,6 +185,7 @@ const installPreparingThenRunningServer = () => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.includes("/join")) {
         joins.push(url);
+        notifyChange();
         return new Response(
           [
             { type: "RUN_STARTED", runId: RUN_ID, threadId: "thread-rejoin" },
@@ -197,6 +208,7 @@ const installPreparingThenRunningServer = () => {
         );
       }
       probes.push(url);
+      notifyChange();
       if (probes.length === 1) {
         return Response.json({ type: "preparing", turnId: "turn-rejoin" });
       }
@@ -213,15 +225,27 @@ const installPreparingThenRunningServer = () => {
 };
 
 const awaitCondition = async (condition: () => boolean) => {
-  for (let poll = 0; poll < 300 && !condition(); poll += 1) {
-    await sleep(10);
+  if (condition()) {
+    return;
+  }
+  const done = Promise.withResolvers<undefined>();
+  const listener = () => {
+    if (condition()) {
+      done.resolve(undefined);
+    }
+  };
+  changeListeners.add(listener);
+  try {
+    await done.promise;
+  } finally {
+    changeListeners.delete(listener);
   }
 };
 
 test("a running turn rejoins even when older history is prepended while its probe is pending", async () => {
   const server = installPreparingThenRunningServer();
   const page = openLoadedTurn();
-  const unsubscribe = page.runtime.subscribe(() => undefined);
+  const unsubscribe = page.runtime.subscribe(notifyChange);
   try {
     await awaitCondition(() => server.probes.length === 2);
     // The fixture must reach the fault: the first probe found the turn still
@@ -258,7 +282,7 @@ test("a running turn rejoins even when older history is prepended while its prob
 test("a running turn found after the page left reloads instead of reconnecting forever", async () => {
   const server = installPreparingThenRunningServer();
   const page = openLoadedTurn();
-  const unsubscribe = page.runtime.subscribe(() => undefined);
+  const unsubscribe = page.runtime.subscribe(notifyChange);
   await awaitCondition(() => server.probes.length === 2);
   expect(page.runtime.getSnapshot().reconnecting).toBe(true);
   // The last view goes while the probe is pending: nobody tails the turn.

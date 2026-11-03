@@ -8,7 +8,10 @@ import { legalReaderAnnotations } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AnnotationReach } from "@/api/lib/legal-search/reader-annotations/target";
 
-/** The marks one route may reach by id: documents, or one matter's claims. */
+/**
+ * The marks one route may reach by id: public-law documents, one matter's
+ * claims, or one matter document's marks.
+ */
 const reachSql = (reach: AnnotationReach): SQL | undefined => {
   switch (reach.type) {
     case "document": {
@@ -20,6 +23,13 @@ const reachSql = (reach: AnnotationReach): SQL | undefined => {
       return and(
         eq(legalReaderAnnotations.targetType, "verification-claim"),
         eq(legalReaderAnnotations.workspaceId, reach.workspaceId),
+      );
+    }
+    case "matter-document": {
+      return and(
+        eq(legalReaderAnnotations.targetType, "matter-document"),
+        eq(legalReaderAnnotations.workspaceId, reach.workspaceId),
+        eq(legalReaderAnnotations.entityId, reach.entityId),
       );
     }
     default: {

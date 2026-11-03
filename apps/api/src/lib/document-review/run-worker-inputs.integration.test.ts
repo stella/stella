@@ -5,6 +5,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -41,11 +43,14 @@ import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
+
+const testFetchState = createTestFetch();
 
 const { testDb, ids } = await getRlsFixture();
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
@@ -123,13 +128,20 @@ const actor = createRootRunActor(
   database,
 );
 
-const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+let preparationSpy: Mock<typeof preparation.fetchAndPrepareReviewFiles>;
+let modelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
 const fetchPreconnect = globalThis.fetch.preconnect;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
 const analytics = installRecordingAnalytics();
 
 beforeEach(async () => {
+  preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
+  modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  fetchSpy = Object.assign(mock(globalThis.fetch), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+
   preparationSpy.mockClear();
   preparationSpy.mockImplementation(async () =>
     panic("Unexpected review file preparation"),
@@ -181,6 +193,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentReviewRuns)
     .where(eq(documentReviewRuns.id, runId));
@@ -201,7 +214,7 @@ afterEach(async () => {
 afterAll(async () => {
   preparationSpy.mockRestore();
   modelSpy.mockRestore();
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   analytics.restore();
   await releaseRlsFixture();
 });

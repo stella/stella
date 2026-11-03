@@ -120,7 +120,7 @@ export type TanStackTextFinishReason = Exclude<
 // fixture, an event this service synthesises) carries the value at the top
 // level, and so does one this service transformed and re-emitted.
 const readEngineField = (chunk: object, key: string): unknown => {
-  if (key in chunk) {
+  if (Object.hasOwn(chunk, key)) {
     const topLevel: unknown = Reflect.get(chunk, key);
     if (topLevel !== undefined) {
       return topLevel;

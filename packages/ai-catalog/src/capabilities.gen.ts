@@ -256,7 +256,7 @@ export const MODEL_REASONING_EFFORTS = {
   "us.amazon.nova-micro-v1:0": null,
   "openai.gpt-oss-120b-1:0": ["low", "medium", "high"],
   "openai.gpt-oss-20b-1:0": ["low", "medium", "high"],
-  "mistral-large-4": ["none", "high"],
+  "mistral-large-4": ["low", "medium", "high"],
   "mistral-large-latest": null,
   "mistral-medium-latest": ["none", "high"],
   "mistral-small-latest": ["none", "high"],

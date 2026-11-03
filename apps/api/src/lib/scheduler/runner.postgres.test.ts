@@ -72,7 +72,7 @@ if (!databaseUrl || !runPostgresTests) {
             db: firstDb,
             heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
             leaseMs: LEASE_MS,
-            limit: 1,
+            rerunLimit: 0,
             maxRuntimeMs: MAX_RUNTIME_MS,
             registry: new Map([[TASK, firstTask]]),
             runnerId: "runner-1",
@@ -89,15 +89,6 @@ if (!databaseUrl || !runPostgresTests) {
             })
             .where(eq(schedulerJobs.id, jobId));
 
-          const secondResult = await runSchedulerOnce({
-            db: secondDb,
-            leaseMs: LEASE_MS,
-            limit: 1,
-            registry: new Map([[TASK, secondTask]]),
-            runnerId: "runner-2",
-          });
-          expect(secondResult.succeeded).toBe(1);
-
           // Wait for the event, not for a time: the heartbeat's next renewal
           // finds the lease gone and aborts the task. The hang guard only names
           // the wait if that never happens; it does not bound runner speed.
@@ -105,7 +96,19 @@ if (!databaseUrl || !runPostgresTests) {
             description: "runner 1 to stop its task after losing the lease",
           });
           releaseFirstTask.resolve();
+          // A renewal already waiting behind the eviction can briefly retain
+          // the row lock after its token check fails. Drain runner 1 before
+          // runner 2 claims with SKIP LOCKED, which may otherwise skip that row.
           const firstResult = await firstRunner;
+
+          const secondResult = await runSchedulerOnce({
+            db: secondDb,
+            leaseMs: LEASE_MS,
+            rerunLimit: 0,
+            registry: new Map([[TASK, secondTask]]),
+            runnerId: "runner-2",
+          });
+          expect(secondResult.succeeded).toBe(1);
 
           expect(firstResult).toMatchObject({ acquired: 1, skipped: 1 });
           expect(committedBy).toEqual(["runner-2"]);

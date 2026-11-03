@@ -7,11 +7,13 @@ import type { RequestListener } from "node:http";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
+} from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
+import {
   OUTBOUND_IPV6_POLICY,
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,

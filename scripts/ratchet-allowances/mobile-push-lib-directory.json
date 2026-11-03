@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "Mobile push delivery is its own domain directory: device registration, the APNs client and provider token, the delivery queue and worker, and the alert payload live together under lib/push, and no existing domain directory owns notification transport."
+}

@@ -1,11 +1,17 @@
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 
+type CoverageResponse = Exclude<
+  Awaited<ReturnType<typeof readCaseLawCoverageHandler>>,
+  { message: string }
+>;
+
 const asOf = "2026-10-01T12:00:00.000Z";
 const storedAsOf = "2026-09-30T12:00:00.000Z";
 const base = {
   health: "current",
   stored: { decisions: 150, asOf: storedAsOf },
   addedLastWeek: 5,
+  unreadParts: [],
   completeness: {
     measuredSources: 1,
     stored: 150,
@@ -21,12 +27,15 @@ const base = {
       name: "Synthetic publisher",
       publicHomeUrl:
         "https://example.test/00000000-0000-4000-8000-000000000002",
-      health: "current",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
       lastSyncAt: storedAsOf,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
       pendingTextCount: 3,
       storedDecisions: 150,
+      publishedDecisions: 100,
+      courts: [{ court: "Nejvyšší soud", decisions: 100 }],
       knownGaps: {
         type: "not_reconciled",
         reason: "The source listing is not date-sliced.",
@@ -37,10 +46,16 @@ const base = {
   ],
 } as const;
 
-export const CASE_LAW_COVERAGE_FIXTURE = {
+/** The answer as the refresh stores it. */
+export const CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE = {
   generatedAt: asOf,
+  unreadParts: [],
   provisionProcessing: [],
-  totals: { searchable: 100, stored: { decisions: 300, asOf: storedAsOf } },
+  totals: {
+    addedLastWeek: 10,
+    searchable: 100,
+    stored: { decisions: 300, asOf: storedAsOf },
+  },
   countries: [
     {
       ...base,
@@ -84,12 +99,19 @@ export const CASE_LAW_COVERAGE_FIXTURE = {
       courts: null,
     },
   ],
-} as const satisfies Awaited<ReturnType<typeof readCaseLawCoverageHandler>>;
+} as const satisfies Omit<CoverageResponse, "freshness">;
+
+/** The answer as a reader receives it, served a minute after it was computed. */
+export const CASE_LAW_COVERAGE_FIXTURE = {
+  ...CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE,
+  freshness: { status: "current", ageSeconds: 60 },
+} as const satisfies CoverageResponse;
 
 const expectedSources = [
   {
     adapterKey: "synthetic-source",
     name: "Synthetic publisher",
+    edition: { type: "snapshot", snapshotDate: "2025-03-06" },
     lastSyncAt: storedAsOf,
     decisionYearFrom: 1993,
     decisionYearTo: 2026,
@@ -103,6 +125,7 @@ const expectedSources = [
 
 export const CASE_LAW_COVERAGE_EXPECTED = {
   asOf,
+  freshness: CASE_LAW_COVERAGE_FIXTURE.freshness,
   countries: [
     {
       country: "CZE",

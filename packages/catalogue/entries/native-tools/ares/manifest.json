@@ -3,7 +3,7 @@
   "kind": "native-tool",
   "slug": "ares",
   "displayName": "ARES",
-  "description": "Czech business registry lookup by IČO or company name from the public ARES register (administrative register of economic entities, Czech equivalent of a commercial registry).",
+  "description": "Czech business registry lookup by IČO or company name from the public ARES register (administrative register of economic subjects, Czech equivalent of a commercial registry).",
   "author": "stella",
   "authorUrl": "https://github.com/stella",
   "license": "Apache-2.0",

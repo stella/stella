@@ -30,6 +30,19 @@ import {
   stampTextCheck,
 } from "@/api/lib/files/pdf-signing/stamp-text";
 
+/**
+ * The document gained a version between the checks against its bytes and
+ * opening the exchange; nothing was stored, and a new attempt checks the
+ * new version.
+ */
+export const pdfSigningBaseVersionChanged = () =>
+  new HandlerError({
+    status: 409,
+    code: "pdf_signing_base_version_changed",
+    message: "The document changed while signing was being prepared.",
+    hint: "Try again: the new version will be checked.",
+  });
+
 /** A stamp label is a short phrase ("Digitally signed by", "Date"). */
 export const STAMP_LABEL_MAX_LENGTH = 64;
 
@@ -153,20 +166,24 @@ export const drawableStamp = async ({
  */
 export const preflightPdfSigning = async ({
   entityId,
+  fieldId,
   location,
   organizationId,
   propertyId,
   reason,
+  readFile = readEntityVersionFile,
   safeDb,
   stamp,
   workspaceId,
 }: {
   entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
   /** Sanitized; drawn on the stamp when there is one. */
   location: string | null;
   organizationId: SafeId<"organization">;
   propertyId: SafeId<"property">;
   reason: string | null;
+  readFile?: typeof readEntityVersionFile;
   safeDb: SafeDb;
   stamp: StampRequest | undefined;
   workspaceId: SafeId<"workspace">;
@@ -189,11 +206,14 @@ export const preflightPdfSigning = async ({
       }),
     );
   }
+  if (current.value && current.value.fieldId !== fieldId) {
+    return Result.err(pdfSigningBaseVersionChanged());
+  }
   if (!current.value || current.value.target.status !== "signable") {
     return Result.ok(UNCHECKED);
   }
   const { baseVersionId } = current.value;
-  const bytes = await readEntityVersionFile(
+  const bytes = await readFile(
     pdfSigningFileDescriptor({
       entityId,
       entityVersionId: current.value.baseVersionId,

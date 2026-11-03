@@ -6,6 +6,10 @@ import * as v from "valibot";
 import { toSafeId } from "@stll/api-contract/safe-id";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
+import {
+  DECISION_READER_BOOT_PATH,
+  openMemberDecision,
+} from "../helpers/decision-reader";
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
@@ -35,13 +39,10 @@ const openFreshReader = async (page: Page) => {
   await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
     await route.fulfill({ json: { prompts: [] } });
   });
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(
-    () => !history.pushState.toString().includes("[native code]"),
-  );
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
-  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
+  await openMemberDecision(page, {
+    bootPath: DECISION_READER_BOOT_PATH,
+    path: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
+  });
   await expect(page.locator(".reader-scroll article")).toBeVisible();
   const composer = page.locator('[data-slot="docked-chat-composer"]');
   await expect(composer.getByRole("textbox")).toBeVisible();

@@ -12,8 +12,12 @@
 import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -49,14 +53,12 @@ setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();
 const fakeS3 = startFakeS3();
-const instanceProviderSpy = spyOn(
-  tanstackModels,
-  "hasTanStackInstanceProvider",
-).mockReturnValue(false);
-const instanceDecisionModelSpy = spyOn(
-  decisionModel,
-  "hasInstanceDecisionModel",
-).mockReturnValue(false);
+let instanceProviderSpy: Mock<
+  typeof tanstackModels.hasTanStackInstanceProvider
+>;
+let instanceDecisionModelSpy: Mock<
+  typeof decisionModel.hasInstanceDecisionModel
+>;
 
 afterAll(async () => {
   instanceProviderSpy.mockRestore();
@@ -116,6 +118,21 @@ const gatedDocx = async () => {
   }
   return file;
 };
+
+beforeEach(() => {
+  instanceProviderSpy = spyOn(
+    tanstackModels,
+    "hasTanStackInstanceProvider",
+  ).mockReturnValue(false);
+  instanceDecisionModelSpy = spyOn(
+    decisionModel,
+    "hasInstanceDecisionModel",
+  ).mockReturnValue(false);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("fill to workspace records the completion decision", () => {
   test("an undecided AI condition saves the document but records the fill as partial", async () => {

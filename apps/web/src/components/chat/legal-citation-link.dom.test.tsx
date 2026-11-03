@@ -3,12 +3,13 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawDecisionLocator } from "./case-law-open";
 
@@ -155,6 +156,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  extractionWarnings: [],
   citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
@@ -168,6 +170,7 @@ const fullDecision = {
   decisionType: null,
   ecli: null,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   slug: null,
@@ -198,6 +201,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
     abstract: absentText,
@@ -217,6 +221,7 @@ const canonicalDecision = {
 const canonicalSearchHit = {
   ...canonicalDecision,
   decisionId: documentId,
+  decisionTypeKind: null,
   identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
   textWithheldReason: null,
   keywords: null,
@@ -224,6 +229,7 @@ const canonicalSearchHit = {
   headline: null,
   citationAuthority: 0,
   citationCount: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<
@@ -401,10 +407,11 @@ for (const { kind, path } of citations) {
               held ? internal : publisher,
             );
             // One chip per citation: a held primary trails no publisher link
-            // and carries no glyph beside its own text.
+            // and carries no glyph beside its own text. The tray's disclosure
+            // chevron belongs to its trigger, not to the chip.
             expect(surface.querySelectorAll("a")).toHaveLength(1);
             if (held) {
-              expect(surface.querySelector("svg")).toBeNull();
+              expect(primary?.parentElement?.querySelector("svg")).toBeNull();
             }
           }
         });
@@ -719,6 +726,21 @@ for (const interactive of [false, true]) {
   });
 }
 
+// Consulted sources sit behind the tray's disclosure; open it so the chips
+// are in the accessibility tree.
+const openConsultedSources = async (view: { container: HTMLElement }) => {
+  const trigger = await waitFor(() => {
+    const button = [...view.container.querySelectorAll("button")].find(
+      (candidate) => candidate.textContent.startsWith("Also consulted"),
+    );
+    expect(button).toBeDefined();
+    return button;
+  });
+  if (trigger !== undefined) {
+    fireEvent.click(trigger);
+  }
+};
+
 test("a long external source title stays inside its truncated tray chip", async () => {
   const title = "Publisher".repeat(12);
   const href = "https://publisher.example.test/long-title";
@@ -737,6 +759,7 @@ test("a long external source title stays inside its truncated tray chip", async 
       ]}
     />,
   );
+  await openConsultedSources(view);
   await waitFor(() => {
     const chip = view.getByRole("link", { name: title });
     expect(chip.getAttribute("href")).toBe(href);
@@ -779,6 +802,7 @@ test("a relative held primary is one chip in the tray and the passive answer", a
       </StreamdownMentionLink>
     </>,
   );
+  await openConsultedSources(view);
   await waitFor(() => {
     const primaryLinks = view.getAllByRole("link", {
       name: label,

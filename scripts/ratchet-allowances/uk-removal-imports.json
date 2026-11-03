@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 2,
+  "reason": "The scheduler dispatches the canonical removal worker and snapshot invalidation delegates source totals to their existing ingestion owner. Reusing these owners avoids parallel mutation implementations."
+}

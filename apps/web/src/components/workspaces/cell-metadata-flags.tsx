@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
   LockIcon,
@@ -20,6 +21,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/menu";
 import { useLatest } from "@stll/ui/use-latest";
+import { cn } from "@stll/ui/utils";
 
 import {
   REVIEW_FLAG_PRESENTATION,
@@ -61,6 +63,14 @@ const cellFlagDefinition = (id: CellFlagId): CellFlagDefinition => ({
 });
 
 const VERIFIED_CELL_FLAG = cellFlagDefinition(VERIFIED_FLAG_ID);
+
+// The 12px corner badges sit 2px from the cell edge and end 14px down: inside
+// the cell's 8px padding and the space above a value's first line (a `py-1`
+// control, or a shorter item centred on that line), so they never cover text.
+const CELL_CORNER_CLASS = {
+  start: "absolute start-0.5 top-0.5 z-20",
+  end: "absolute end-0.5 top-0.5 z-20",
+} as const;
 
 export const getCellFlagById = (
   flagId: string,
@@ -162,19 +172,26 @@ export const CellMetadataFlags = ({
         <Tooltip
           content={t("workspaces.table.lock.lock")}
           render={
-            <button
+            <Button
               aria-label={t("workspaces.table.lock.lock")}
-              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
+              className={cn(
+                CELL_CORNER_CLASS.start,
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+              )}
               data-row-expansion-ignore
               onClick={(event) => {
                 event.stopPropagation();
                 setLocked(true);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+            <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
       {hasActiveFlag ? (
@@ -193,18 +210,25 @@ export const CellMetadataFlags = ({
             />
           }
           render={
-            <button
+            <Button
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
-              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
+              className={cn(
+                CELL_CORNER_CLASS.end,
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+              )}
               onClick={(event) => {
                 event.stopPropagation();
                 toggleFlag(VERIFIED_FLAG_ID);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+            <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
     </>
@@ -225,7 +249,7 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
 
   return (
     <div
-      className="absolute end-1 top-1 z-20 flex items-center gap-1"
+      className={cn(CELL_CORNER_CLASS.end, "flex items-center gap-1")}
       data-row-expansion-ignore
     >
       {flags.map((flag) => {
@@ -239,20 +263,26 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
             }
             key={flag.id}
             render={
-              <button
+              <Button
                 aria-label={getFlagLabel(flag.id)}
-                className="bg-background/55 focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-100 backdrop-blur-[2px] outline-none focus-visible:ring-1"
+                className="flex"
                 data-row-expansion-ignore
                 onClick={(event) => {
                   event.stopPropagation();
                   onDrop(flag.id);
                 }}
-                style={{ color: flag.color }}
-                type="button"
+                focusRing="inside"
+                shape="round"
+                variant="plain"
               />
             }
           >
-            <Icon className="size-2.5" strokeWidth={2.5} />
+            <span
+              className="bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+              style={{ color: flag.color }}
+            >
+              <Icon className="size-2.5" strokeWidth={2.5} />
+            </span>
           </Tooltip>
         );
       })}
@@ -305,18 +335,22 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
       className="max-w-72 text-wrap"
       content={tooltipContent}
       render={
-        <button
+        <Button
           aria-label={t("workspaces.table.lock.unlock")}
-          className="bg-background/55 text-foreground focus-visible:ring-ring animate-in fade-in-0 zoom-in-75 absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 outline-none focus-visible:ring-1 motion-reduce:animate-none"
+          className={cn(CELL_CORNER_CLASS.start, "flex")}
           data-row-expansion-ignore
           onClick={(event) => {
             event.stopPropagation();
             onUnlock();
           }}
-          type="button"
+          focusRing="inside"
+          shape="round"
+          variant="plain"
         >
-          <LockIcon className="size-2.5" strokeWidth={2.5} />
-        </button>
+          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 motion-reduce:animate-none">
+            <LockIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
+        </Button>
       }
     />
   );

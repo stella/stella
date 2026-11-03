@@ -39,6 +39,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -64,6 +65,7 @@ import {
   ImageIcon,
   KeyboardIcon,
   LinkIcon,
+  ListFilterIcon,
   LockKeyholeIcon,
   PauseIcon,
   PencilIcon,
@@ -93,6 +95,8 @@ import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -103,7 +107,12 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -124,15 +133,19 @@ import {
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
 import {
+  activeClipboardSearchOptionCount,
   adjacentClipboardIndex,
   adjacentClipboardScope,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  CLIPBOARD_SEARCH_OPTION_KEYS,
   CLIPBOARD_SEARCH_SCOPES,
+  clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
+  clipboardPastePreview,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
@@ -144,19 +157,23 @@ import {
   clipboardSourceTitle,
   clipboardTimelineKeyAction,
   clipboardUntitledName,
+  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
+  NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
 import type {
+  ClipboardPastePreview,
   ClipboardPointerPosition,
+  ClipboardSearchOptions,
   ClipboardSearchScope,
 } from "./clipboard-logic";
 import { clipboardHistory } from "./clipboard-selection";
@@ -243,6 +260,12 @@ const CLIPBOARD_SCOPE_PRESENTATION = {
   ClipboardSearchScope,
   { icon: LucideIcon; label: "clips" | "externalRegistry" }
 >;
+const SEARCH_OPTION_LABELS = {
+  exactPhrase: "searchOptionExactPhrase",
+  matchCase: "searchOptionMatchCase",
+  matchDiacritics: "searchOptionMatchDiacritics",
+  wholeWords: "searchOptionWholeWords",
+} as const satisfies Record<keyof ClipboardSearchOptions, string>;
 const PRIMARY_MODIFIER_LABEL = navigator.userAgent.includes("Mac")
   ? "⌘"
   : "Ctrl+";
@@ -367,7 +390,10 @@ type ClipboardCardProps = {
   onCopy: (item: ClipboardItem, format?: ClipboardCopyFormat) => void;
   onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
+  /** The preview held by this card's context menu. */
+  pastePreview: ClipboardPastePreview;
   query: string;
+  searchOptions: ClipboardSearchOptions;
   sourceVisual: ClipboardSourceAppVisual | null;
 };
 
@@ -456,6 +482,51 @@ const ClipboardCardFooterMetadata = ({
   );
 };
 
+type ClipboardFormatShortcutsProps = {
+  onClearPreview: () => void;
+  onCopy: (format: ClipboardCopyFormat) => void;
+  onPreview: (format: ClipboardCopyFormat) => void;
+};
+
+/** The active formatted card's paste format row; highlighting a format previews it. */
+const ClipboardFormatShortcuts = ({
+  onClearPreview,
+  onCopy,
+  onPreview,
+}: ClipboardFormatShortcutsProps) => {
+  const t = useTranslations("clipboard");
+  return (
+    <div
+      className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+      data-clipboard-format-shortcuts=""
+    >
+      <button
+        type="button"
+        onClick={() => onCopy("original")}
+        onFocus={() => onPreview("original")}
+        onPointerEnter={() => onPreview("original")}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">↵</kbd>
+        {t("originalFormatting")}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={() => onCopy("plainText")}
+        onBlur={onClearPreview}
+        onFocus={() => onPreview("plainText")}
+        onPointerEnter={() => onPreview("plainText")}
+        onPointerLeave={onClearPreview}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">⇧↵</kbd>
+        {t("plainText")}
+      </button>
+    </div>
+  );
+};
+
 const ClipboardCard = ({
   active,
   selected,
@@ -471,7 +542,9 @@ const ClipboardCard = ({
   onCopy,
   onRename,
   onSelect,
+  pastePreview,
   query,
+  searchOptions,
   sourceVisual,
 }: ClipboardCardProps) => {
   const t = useTranslations("clipboard");
@@ -481,6 +554,23 @@ const ClipboardCard = ({
     useState<ClipboardImagePreviewStatus>("loading");
   const [imagePreviewRetryToken, setImagePreviewRetryToken] = useState(0);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
+  const formatShortcutsVisible =
+    active && !editingName && item.type === "formattedText";
+  const [shortcutPastePreview, setShortcutPastePreview] =
+    useState<ClipboardPastePreview>(NO_CLIPBOARD_PASTE_PREVIEW);
+  // The shortcut row unmounts without a pointer leave or blur when the card
+  // stops being active, so its preview must not outlive the row.
+  if (!formatShortcutsVisible && shortcutPastePreview.type !== "none") {
+    setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
+  }
+  const renderFormat = clipboardCardRenderFormat(item, [
+    pastePreview,
+    shortcutPastePreview,
+  ]);
+  const previewShortcutFormat = (copyFormat: ClipboardCopyFormat) =>
+    setShortcutPastePreview(clipboardPastePreview(item, copyFormat));
+  const clearShortcutPreview = () =>
+    setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = format.number(age.value, {
     style: "unit",
@@ -584,6 +674,7 @@ const ClipboardCard = ({
       )}
       data-selected={selected ? "" : undefined}
       data-clipboard-id={item.id}
+      data-clipboard-render-format={renderFormat}
       data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
       data-source-tint={sourceTintIndex ?? undefined}
@@ -628,38 +719,32 @@ const ClipboardCard = ({
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
+          {renderFormat === "plainText" ? (
+            <span
+              className="text-muted-foreground text-3xs mb-2 flex items-center gap-1 leading-4 font-medium"
+              data-clipboard-paste-preview-label=""
+            >
+              <FileTextIcon aria-hidden="true" className="size-3 shrink-0" />
+              {t("plainTextPreview")}
+            </span>
+          ) : null}
           <ClipboardCardPreview
+            format={renderFormat}
             imagePreviewRetryToken={imagePreviewRetryToken}
             item={item}
             onImagePreviewStatusChange={setImagePreviewStatus}
             query={query}
+            searchOptions={searchOptions}
           />
         </div>
       </button>
 
-      {active && !editingName && item.type === "formattedText" ? (
-        <div
-          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-          data-clipboard-format-shortcuts=""
-        >
-          <button
-            type="button"
-            onClick={() => onCopy(item, "original")}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">↵</kbd>
-            {t("originalFormatting")}
-          </button>
-          <span aria-hidden="true">·</span>
-          <button
-            type="button"
-            onClick={() => onCopy(item, "plainText")}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">⇧↵</kbd>
-            {t("plainText")}
-          </button>
-        </div>
+      {formatShortcutsVisible ? (
+        <ClipboardFormatShortcuts
+          onClearPreview={clearShortcutPreview}
+          onCopy={(copyFormat) => onCopy(item, copyFormat)}
+          onPreview={previewShortcutFormat}
+        />
       ) : null}
 
       <Button
@@ -806,7 +891,7 @@ const DialogShell = ({
     >
       <DialogPopup
         backdropClassName="bg-background/50 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
@@ -1035,6 +1120,8 @@ type ClipboardContextMenuState =
   | {
       anchor: HTMLElement | { getBoundingClientRect: () => DOMRect };
       item: ClipboardItem;
+      // Owned by the open menu, so closing or reopening it drops the preview.
+      pastePreview: ClipboardPastePreview;
       type: "open";
     };
 
@@ -1063,6 +1150,7 @@ type ClipboardContextMenuProps = {
   onEdit: (id: string) => void;
   onExcludeSourceApp: (id: string) => void;
   onMove: (id: string, groupId: string | null) => void;
+  onPastePreviewChange: (preview: ClipboardPastePreview) => void;
   sourceAppExclusionLimit: number;
   sourceAppExclusions: ClipboardSourceAppExclusion[];
 };
@@ -1079,6 +1167,7 @@ const ClipboardContextMenu = ({
   onEdit,
   onExcludeSourceApp,
   onMove,
+  onPastePreviewChange,
   sourceAppExclusionLimit,
   sourceAppExclusions,
 }: ClipboardContextMenuProps) => {
@@ -1104,7 +1193,13 @@ const ClipboardContextMenu = ({
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
       <MenuPopup anchor={menu.anchor} className="w-56" finalFocus={false}>
         {menu.item.type === "formattedText" ? (
-          <MenuSub>
+          <MenuSub
+            onOpenChange={(open) => {
+              if (!open) {
+                onPastePreviewChange(NO_CLIPBOARD_PASTE_PREVIEW);
+              }
+            }}
+          >
             <MenuSubTrigger className="min-h-11 rounded-xl">
               <ClipboardIcon />
               {t("pasteTextAs")}
@@ -1116,16 +1211,27 @@ const ClipboardContextMenu = ({
                   onCopy(menu.item, "original");
                   onClose();
                 }}
+                onFocus={() =>
+                  onPastePreviewChange(
+                    clipboardPastePreview(menu.item, "original"),
+                  )
+                }
               >
                 <CopyPlusIcon />
                 {t("originalFormatting")}
               </MenuItem>
               <MenuItem
                 className="min-h-11 rounded-xl"
+                onBlur={() => onPastePreviewChange(NO_CLIPBOARD_PASTE_PREVIEW)}
                 onClick={() => {
                   onCopy(menu.item, "plainText");
                   onClose();
                 }}
+                onFocus={() =>
+                  onPastePreviewChange(
+                    clipboardPastePreview(menu.item, "plainText"),
+                  )
+                }
               >
                 <FileTextIcon />
                 {t("plainText")}
@@ -1439,7 +1545,7 @@ const ClipboardWelcomeDialog = ({
     >
       <DialogPopup
         backdropClassName="bg-background/54 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/94 max-w-xl rounded-[28px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] p-4"
@@ -1601,6 +1707,13 @@ const ClipboardApp = () => {
     (node: HTMLDivElement | null) => {
       timelineRailRef.current = node;
       observeTimelineRail(node);
+      const stopFading = fadeScrollEdges(node);
+      // A returned cleanup replaces React's detach call with `null`.
+      return () => {
+        stopFading?.();
+        timelineRailRef.current = null;
+        observeTimelineRail(null);
+      };
     },
     [observeTimelineRail],
   );
@@ -1614,6 +1727,11 @@ const ClipboardApp = () => {
     () => Temporal.Now.instant().epochMilliseconds,
   );
   const [query, setQuery] = useState("");
+  const [searchOptions, setSearchOptions] = useState<ClipboardSearchOptions>(
+    DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+  );
+  const activeSearchOptionCount =
+    activeClipboardSearchOptionCount(searchOptions);
   const [searchSource, setSearchSource] =
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
@@ -1848,6 +1966,7 @@ const ClipboardApp = () => {
     snapshot.items,
     filterQuery,
     activeGroupId,
+    searchOptions,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const sourceAppVisuals = new Map(
@@ -1867,7 +1986,12 @@ const ClipboardApp = () => {
   const resolveActionItems = () =>
     query === filterQuery
       ? filteredItems
-      : filterClipboardItems(snapshot.items, query, activeGroupId);
+      : filterClipboardItems(
+          snapshot.items,
+          query,
+          activeGroupId,
+          searchOptions,
+        );
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
@@ -2119,6 +2243,7 @@ const ClipboardApp = () => {
     setSelectedIndex(index);
     setContextMenu({
       item,
+      pastePreview: NO_CLIPBOARD_PASTE_PREVIEW,
       type: "open",
       anchor:
         anchor === "button"
@@ -2132,6 +2257,19 @@ const ClipboardApp = () => {
   const closeContextMenu = () => {
     setContextMenu({ type: "closed" });
     contextMenuTriggerRef.current?.focus();
+  };
+
+  const setContextMenuPastePreview = (pastePreview: ClipboardPastePreview) => {
+    setContextMenu((current) =>
+      current.type === "closed"
+        ? current
+        : {
+            anchor: current.anchor,
+            item: current.item,
+            pastePreview,
+            type: "open",
+          },
+    );
   };
 
   useEffect(() => {
@@ -2337,6 +2475,7 @@ const ClipboardApp = () => {
     filterQuery,
     railWindow.end,
     railWindow.start,
+    searchOptions,
     snapshot.groups,
     snapshot.items,
   ]);
@@ -2408,7 +2547,7 @@ const ClipboardApp = () => {
     event.preventDefault();
     const controls = Array.from(
       footer.querySelectorAll<HTMLElement>(
-        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]), a[href], input:not([disabled])",
+        "button:not([disabled]):not([aria-disabled='true']):not([data-clipboard-scope]):not([data-clipboard-search-options]), a[href], input:not([disabled])",
       ),
     ).filter((control) => !control.closest("[inert]"));
     const control = target.closest<HTMLElement>("button, a, input");
@@ -2788,6 +2927,7 @@ const ClipboardApp = () => {
           onMove={(id, groupId) =>
             applySnapshotCommand("clipboard_set_item_group", { groupId, id })
           }
+          onPastePreviewChange={setContextMenuPastePreview}
           sourceAppExclusionLimit={snapshot.sourceAppExclusionLimit}
           sourceAppExclusions={snapshot.sourceAppExclusions}
         />
@@ -2844,21 +2984,27 @@ const ClipboardApp = () => {
                     </p>
                     {filterQuery ? (
                       <Button
-                        className="text-muted-foreground h-auto max-w-sm px-2 py-1 text-wrap"
+                        className="h-auto min-h-11 max-w-sm rounded-xl px-4 py-2 text-wrap"
                         onClick={() =>
                           applyScope({ next: "registry", focusSearch: true })
                         }
-                        size="sm"
-                        variant="link"
                       >
-                        {t("noResultsDescription", { query: filterQuery })}
+                        <Building2Icon aria-hidden="true" className="size-4" />
+                        <span className="min-w-0 wrap-break-word">
+                          {t("noResultsSearchRegistries", {
+                            query: filterQuery,
+                          })}
+                        </span>
                       </Button>
                     ) : null}
                   </div>
                 ) : (
                   <div
                     aria-label={t("timeline")}
-                    className="clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1"
+                    className={cn(
+                      "clipboard-timeline absolute inset-0 flex scrollbar-none items-stretch gap-3 overflow-x-auto overscroll-x-none px-5 py-1 [--fade-size:3rem]",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     onPointerMove={handleRailPointerMove}
                     onWheel={handleRailWheel}
                     ref={attachTimelineRail}
@@ -2919,7 +3065,14 @@ const ClipboardApp = () => {
                               })
                             }
                             onSelect={setSelectedIndex}
+                            pastePreview={
+                              contextMenu.type === "open" &&
+                              contextMenu.item.id === item.id
+                                ? contextMenu.pastePreview
+                                : NO_CLIPBOARD_PASTE_PREVIEW
+                            }
                             query={filterQuery}
+                            searchOptions={searchOptions}
                             sourceVisual={
                               item.sourceApp?.visualKey
                                 ? (sourceAppVisuals.get(
@@ -3054,8 +3207,96 @@ const ClipboardApp = () => {
                 />
                 <InputGroupAddon
                   align="inline-end"
-                  className="pe-4 [&>kbd]:me-0"
+                  className="gap-1 pe-4 [&>kbd]:me-0"
                 >
+                  <span
+                    className={cn(
+                      "inline-flex",
+                      searchSource !== "clips" && "invisible",
+                    )}
+                    inert={searchSource !== "clips"}
+                  >
+                    <Menu>
+                      <Tooltip>
+                        <MenuTrigger
+                          render={
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  aria-label={t("searchOptions")}
+                                  data-clipboard-search-options=""
+                                  className="relative rounded-full"
+                                  data-active={
+                                    activeSearchOptionCount > 0 ? "" : undefined
+                                  }
+                                  size="icon-sm"
+                                  variant="ghost"
+                                />
+                              }
+                            />
+                          }
+                        >
+                          <ListFilterIcon
+                            aria-hidden="true"
+                            className={cn(
+                              "size-4",
+                              activeSearchOptionCount > 0 && "text-primary",
+                            )}
+                          />
+                          {activeSearchOptionCount > 0 ? (
+                            <span
+                              aria-hidden="true"
+                              className="bg-primary absolute end-1 top-1 size-1.5 rounded-full"
+                            />
+                          ) : null}
+                        </MenuTrigger>
+                        <TooltipPopup>{t("searchOptions")}</TooltipPopup>
+                      </Tooltip>
+                      <MenuPopup
+                        align="end"
+                        className="w-60"
+                        finalFocus={searchInputRef}
+                        side="top"
+                      >
+                        <MenuGroup>
+                          <MenuGroupLabel>{t("searchOptions")}</MenuGroupLabel>
+                          {CLIPBOARD_SEARCH_OPTION_KEYS.map((key) => (
+                            <MenuCheckboxItem
+                              checked={searchOptions[key]}
+                              className="min-h-11 rounded-xl"
+                              key={key}
+                              onCheckedChange={(checked) => {
+                                setSearchOptions((current) => ({
+                                  ...current,
+                                  [key]: checked,
+                                }));
+                                setSelectedIndex(0);
+                              }}
+                            >
+                              {t(SEARCH_OPTION_LABELS[key])}
+                            </MenuCheckboxItem>
+                          ))}
+                        </MenuGroup>
+                        {activeSearchOptionCount > 0 ? (
+                          <>
+                            <MenuSeparator />
+                            <MenuItem
+                              className="min-h-11 rounded-xl"
+                              onClick={() => {
+                                setSearchOptions(
+                                  DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+                                );
+                                setSelectedIndex(0);
+                              }}
+                            >
+                              <RotateCcwIcon />
+                              {t("searchOptionsReset")}
+                            </MenuItem>
+                          </>
+                        ) : null}
+                      </MenuPopup>
+                    </Menu>
+                  </span>
                   <kbd className="text-foreground-muted text-3xs me-0 font-mono">
                     {PRIMARY_MODIFIER_LABEL}K
                   </kbd>
@@ -3115,9 +3356,13 @@ const ClipboardApp = () => {
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
                   <div
-                    className="flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto"
+                    className={cn(
+                      "flex min-w-0 flex-1 scrollbar-none items-center gap-1 overflow-x-auto",
+                      SCROLL_EDGE_FADE_CLASS,
+                    )}
                     data-clipboard-groups-scroller=""
                     onWheel={handleRailWheel}
+                    ref={fadeScrollEdges}
                   >
                     {snapshot.groups.map((group, groupIndex) => {
                       const groupStyle: ClipboardGroupStyle = {

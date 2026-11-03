@@ -32,11 +32,7 @@ import {
   provisionPreviewOptions,
 } from "@/lib/statutes/provision-preview";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import {
-  useQueryView,
-  useQueryViewError,
-  useQueryViewErrors,
-} from "@/lib/use-query-view";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 
 const citationPreviewOptions = ({ document, payload }: CitedProvisionTarget) =>
   provisionPreviewOptions({
@@ -104,7 +100,7 @@ const useFullProvision = ({ enabled, first }: FullProvisionArgs) => {
     }),
     enabled,
   });
-  const view = useQueryView(read);
+  const view = queryView(read);
   useQueryViewError(view, "useFullProvision:query");
   return {
     full: {

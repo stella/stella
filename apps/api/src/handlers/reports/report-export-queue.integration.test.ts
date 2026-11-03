@@ -11,6 +11,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -97,13 +98,21 @@ const actor = {
   exportId,
 };
 
-const reportDataSpy = spyOn(reportData, "buildReportData");
-const textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
-const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
-const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let reportDataSpy: SpyOn<typeof reportData, "buildReportData">;
+let textModelSpy: SpyOn<typeof modelTransport, "generateTanStackTextForTask">;
+let objectModelSpy: SpyOn<
+  typeof modelTransport,
+  "generateTanStackObjectForTask"
+>;
+let chatObjectSpy: SpyOn<typeof chatRuntime, "generateChatObject">;
 // Every model run resolves its model here, and every AI condition decides here.
-const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
-const decideSpy = spyOn(decisions, "decide");
+let resolveModelSpy: SpyOn<typeof modelTransport, "resolveTanStackTextModel">;
+let decideSpy: SpyOn<typeof decisions, "decide">;
 
 const readExport = async () =>
   (
@@ -118,6 +127,13 @@ const objectWrites = () =>
   fakeS3.requests.filter((request) => request.method === "PUT");
 
 beforeEach(async () => {
+  reportDataSpy = spyOn(reportData, "buildReportData");
+  textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
+  chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+  resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+  decideSpy = spyOn(decisions, "decide");
+
   reportDataSpy.mockClear();
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
@@ -148,6 +164,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(reportExports).where(eq(reportExports.id, exportId));
   await testDb
     .insert(member)

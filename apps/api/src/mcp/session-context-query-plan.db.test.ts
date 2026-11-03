@@ -2,10 +2,12 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import * as v from "valibot";
@@ -26,6 +28,7 @@ import {
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
@@ -41,6 +44,10 @@ import {
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const routeServer = serveRoutesForTest(apiKeysRoute);
 afterAll(async () => {
@@ -62,11 +69,11 @@ afterAll(async () => {
  *    owner's membership (4).
  *  - A personal API key additionally reads the organization's personal key
  *    policy (5).
+ *  - An OAuth client reads revocation and registration together (1).
  *
  * Context, for every credential: the membership read, which also carries the
  * feature-access facts (1), then one scoped transaction, a `set_config` plus
- * the authorized workspaces (2). An OAuth client token also looks up its
- * agent registration (1).
+ * the authorized workspaces (2).
  *
  * The organization's reachable business registries are not part of the
  * context: the first projection in a request that offers the registry tool
@@ -75,7 +82,7 @@ afterAll(async () => {
  */
 const CONTEXT_TRANSACTIONS = 1;
 const CONTEXT_STATEMENTS = 1 + CONTEXT_TRANSACTIONS * 2;
-const AGENT_REGISTRATION_READ = 1;
+const OAUTH_ADMISSION_READ = 1;
 const MACHINE_KEY_STATEMENTS = 4;
 const PERSONAL_POLICY_READ = 1;
 const REGISTRY_LOAD = { statements: 3, transactions: 1 } as const;
@@ -90,8 +97,8 @@ type QueryPlan = {
 
 const QUERY_PLAN = {
   oauth_client: {
-    authenticate: 0,
-    context: CONTEXT_STATEMENTS + AGENT_REGISTRATION_READ,
+    authenticate: OAUTH_ADMISSION_READ,
+    context: CONTEXT_STATEMENTS,
     contextTransactions: CONTEXT_TRANSACTIONS,
   },
   delegated_user: {
@@ -130,7 +137,8 @@ let signingKeyFetches = 0;
 // The verifier loads the signing keys over HTTP; serve that one address from
 // the real auth handler so the token path runs unchanged, and count it.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 /** Count every transaction one database boundary opens. */
 const countTransactions = (
@@ -152,26 +160,24 @@ beforeAll(async () => {
   countTransactions(rootDb, rootDb.transaction.bind(rootDb));
   countTransactions(rlsDb, rlsDb.transaction.bind(rlsDb));
   const jwksUrl = getAuthEndpointUrl("jwks");
-  fetchSpy.mockImplementation(
-    Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? new Request(input, init)
-            : new Request(String(input), init);
-        if (request.url === jwksUrl) {
-          signingKeyFetches += 1;
-          return await getAuth().handler(request);
-        }
-        return await passThroughFetch(input, init);
-      },
-      { preconnect: passThroughFetch.preconnect },
-    ),
+  serveJwks = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      if (request.url === jwksUrl) {
+        signingKeyFetches += 1;
+        return await getAuth().handler(request);
+      }
+      return await passThroughFetch(input, init);
+    },
+    { preconnect: passThroughFetch.preconnect },
   );
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -232,7 +238,9 @@ const measure = async (credential: string): Promise<Measured> => {
   const keyFetchesBefore = signingKeyFetches;
   const { session, authenticate } = await runWithQueryCounter(
     async (counter) => {
-      const authenticated = await authenticateMcpRequest(credential);
+      const authenticated = await authenticateMcpRequest(credential, {
+        resolveApiKeySession: resolveMachineApiKeySession,
+      });
       return {
         session: authenticated.unwrap(),
         authenticate: counter.count,
@@ -288,11 +296,20 @@ const measure = async (credential: string): Promise<Measured> => {
 };
 
 const credentialTypeOf = async (credential: string) => {
-  const authenticated = await authenticateMcpRequest(credential);
+  const authenticated = await authenticateMcpRequest(credential, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   return Result.isOk(authenticated)
     ? (authenticated.value satisfies McpSession).credential?.type
     : undefined;
 };
+
+beforeEach(() => {
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+});
 
 describe("MCP request authentication and session context run a fixed query plan", () => {
   test("each credential type issues its pinned statements on every request", async () => {

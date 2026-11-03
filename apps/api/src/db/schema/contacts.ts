@@ -13,9 +13,18 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
+import { NARRATIVE_LANGUAGE_MAX_LENGTH } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
+import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "../eu-vat-id-format";
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
 import {
   centsColumn,
   isNotNull,
@@ -46,6 +55,10 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+const contactsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.contacts'::regclass)`;
+
+export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
 export const contacts = p.pgTable(
   "contacts",
@@ -87,6 +100,10 @@ export const contacts = p.pgTable(
     metadata: jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
+    timeBillingFormat: p
+      .text("time_billing_format", { enum: TIME_BILLING_FORMATS })
+      .notNull()
+      .default("categories"),
     // Billing fields
     registrationNumber: p.varchar("registration_number", {
       length: 64,
@@ -111,6 +128,9 @@ export const contacts = p.pgTable(
       .text("responsible_attorney_id")
       .references(() => user.id, { onDelete: "set null" }),
 
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
+
     createdBy: p
       .text("created_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -122,13 +142,29 @@ export const contacts = p.pgTable(
   },
   (table) => [
     p.check(
+      "contacts_time_billing_format_check",
+      sql`${table.timeBillingFormat} IN (${sql.join(
+        TIME_BILLING_FORMATS.map((format) => sql`${format}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "contacts_invoice_language_check",
       sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
         INVOICE_LANGUAGES.map((value) => sql`${value}`),
         sql`, `,
       )})`,
     ),
+    // An EU VAT number lives in vat_id: tax_id holds one only beside a vat_id
+    // (migration 20261103061500_contact_vat_id_check, validated online).
+    p.check(
+      "contacts_vat_id_check",
+      sql`${table.vatId} IS NOT NULL OR ${table.taxId} IS NULL OR ${sql.raw(
+        EU_VAT_ID_SQL_COMPACT('"tax_id"'),
+      )} !~ ${sql.raw(`'${EU_VAT_ID_SQL_PATTERN}'`)}`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
+    ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -158,6 +194,10 @@ export const contacts = p.pgTable(
         "gin",
         sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
       ),
+    // Matches a data-box message's box IDs to contacts.
+    p
+      .index("contacts_data_box_ids_idx")
+      .using("gin", sql`(${table.metadata} -> 'dataBoxes') jsonb_path_ops`),
     p.check(
       "contacts_person_details_check",
       sql`(${table.type} = 'person' OR (${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL AND cardinality(${table.nationalityCodes}) = 0))`,
@@ -178,6 +218,12 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+    p.pgPolicy("contacts_owner_organization_access", {
+      for: "all",
+      to: "public",
+      using: sql`${contactsOwner} AND ${organizationCheck}`,
+      withCheck: sql`${contactsOwner} AND ${organizationCheck}`,
+    }),
   ],
 );
 
@@ -186,13 +232,21 @@ export type ContactType = (typeof contacts.type)["enumValues"][number];
 export type ContactImportReceiptResult = {
   results: (
     | { index: number; status: "created"; contactId: SafeId<"contact"> }
+    /** The row's external ref matched a contact an earlier import created. */
+    | {
+        index: number;
+        status: "updated" | "unchanged";
+        contactId: SafeId<"contact">;
+      }
     | {
         index: number;
         status: "skipped";
         reason:
           | "contacts_limit_reached"
           | "duplicate_contact_id"
+          | "duplicate_external_ref"
           | "duplicate_tax_id"
+          | "in_file_duplicate"
           | "invalid_row"
           | "invalid_tax_id";
       }
@@ -325,6 +379,8 @@ export const workspaces = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
@@ -341,6 +397,9 @@ export const workspaces = p.pgTable(
     leadUserId: p
       .text("lead_user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    billingNarrativeLanguage: p.varchar("billing_narrative_language", {
+      length: NARRATIVE_LANGUAGE_MAX_LENGTH,
+    }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),
@@ -354,6 +413,7 @@ export const workspaces = p.pgTable(
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
@@ -552,6 +612,16 @@ export const auditActivityActionSql = (columns: AuditActivityColumns) =>
     ${columns.action}
   )`;
 
+const SERVICE_PERFORMER_SQL = sql.raw(`'service'`);
+
+/**
+ * Rows a person (or an agent acting for one) performed. A literal, never a
+ * bound parameter, so the planner can match the partial index that serves the
+ * default activity-log view.
+ */
+export const auditPeoplePerformerSql = (performerType: SQLWrapper) =>
+  sql`${performerType} <> ${SERVICE_PERFORMER_SQL}`;
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -664,6 +734,12 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_user_created_id_idx")
       .on(table.organizationId, table.userId, table.createdAt, table.id),
+    // The activity log hides background services by default; without this
+    // the newest-first page walks every service row to find people's.
+    p
+      .index("audit_logs_org_people_created_id_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(auditPeoplePerformerSql(table.performerType)),
     p.pgPolicy("audit_logs_select", {
       for: "select",
       to: stella,
@@ -726,6 +802,9 @@ export const accountAuditLogs = p.pgTable.withRLS(
         sql`, `,
       )})`,
     ),
+    p
+      .index("account_audit_logs_user_event_idx")
+      .on(table.userId, table.eventType),
     p
       .index("account_audit_logs_user_created_id_idx")
       .on(table.userId, table.createdAt, table.id),

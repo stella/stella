@@ -69,6 +69,25 @@ type Connection =
   | { status: "reconnectRequired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
+
+const registrySearchHint = (
+  t: ReturnType<typeof useTranslations<"clipboard">>,
+  connection: Connection | null,
+  registryId: string,
+) => {
+  if (connection?.status !== "connected") {
+    return t("registrySearchHint");
+  }
+  const capabilities = connection.registries.find(
+    ({ id }) => id === registryId,
+  )?.searchCapabilities;
+  if (capabilities?.nameSearch !== "unsupported") {
+    return t("registrySearchHint");
+  }
+  return t("registryIdentifierSearchHint", {
+    identifiers: capabilities.identifierKinds.join(", "),
+  });
+};
 export type DesktopConnectionStatus = Connection["status"] | "loading";
 type ResultCard = Omit<
   DesktopRegistrySearchResponse["results"][number],
@@ -544,7 +563,7 @@ export const RegistrySearch = ({
     input.addEventListener("keydown", handleSearchKey);
     return () => input.removeEventListener("keydown", handleSearchKey);
   });
-  let emptyText = t("registrySearchHint");
+  let emptyText = registrySearchHint(t, connection, registryId);
   if (connection === null) {
     emptyText = t("registryLoading");
   } else if (connection.status === "expired") {
@@ -691,9 +710,12 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                className="focus-visible:ring-ring flex min-h-0 flex-1 flex-col justify-start overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
               >
-                <h2 className="truncate text-sm font-semibold" dir="auto">
+                <h2
+                  className="shrink-0 truncate text-sm font-semibold"
+                  dir="auto"
+                >
                   {card.name}
                 </h2>
                 <p

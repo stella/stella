@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The decision text's <main> takes one delegated click that focuses the clicked paragraph for the margin's cited provisions; paragraphs are prose, not controls, and the keyboard path is each paragraph's permalink, whose Enter click bubbles to the same handler."
+}

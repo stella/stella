@@ -1,6 +1,6 @@
-import { foldSearchMatchText } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
+import type { TranslationKey } from "@/i18n/types";
 import {
   filterToolEntries,
   type ToolFilterEntry,
@@ -16,6 +16,14 @@ export const PUBLIC_TOOL_TASKS = [
 ] as const;
 
 export type PublicToolTask = (typeof PUBLIC_TOOL_TASKS)[number];
+
+export const PUBLIC_TOOL_TASK_LABEL_KEY = {
+  "prepare-documents": "publicTools.discovery.tasks.prepareDocuments",
+  "protect-client-data": "publicTools.discovery.tasks.protectClientData",
+  "research-precedents": "publicTools.discovery.tasks.researchPrecedents",
+  "review-agreements": "publicTools.discovery.tasks.reviewAgreements",
+  "verify-organizations": "publicTools.discovery.tasks.verifyOrganizations",
+} as const satisfies Record<PublicToolTask, TranslationKey>;
 
 const TASK_SLUGS = {
   "prepare-documents": ["create-docx"],
@@ -39,6 +47,8 @@ const TASK_SLUGS = {
 } as const satisfies Record<PublicToolTask, readonly string[]>;
 
 export type PublicToolBrowseEntry = ToolFilterEntry & {
+  /** The manifest's own wording, searched beside the reader's language. */
+  sourceCopy?: string | undefined;
   author?: string | undefined;
   description: string;
   pinned?: boolean | undefined;
@@ -53,22 +63,18 @@ const matchesSearchQuery = (
   entry: PublicToolBrowseEntry,
   query: string,
 ): boolean => {
-  const terms = foldSearchMatchText(query).trim().split(/\s+/u).filter(Boolean);
-  if (terms.length === 0) {
-    return true;
-  }
-
-  const haystack = foldSearchMatchText(
-    [
-      entry.displayName,
-      entry.description,
-      entry.author ?? "",
-      entry.slug,
-      ...entry.tags,
-      ...entry.jurisdictions,
-    ].join(" "),
-  );
-  return terms.every((term) => containsSearchMatchKey(haystack, term));
+  const haystack = [
+    entry.displayName,
+    entry.description,
+    entry.sourceCopy ?? "",
+    entry.author ?? "",
+    entry.slug,
+    ...entry.tags,
+    ...entry.jurisdictions,
+  ].join(" ");
+  return query
+    .split(/\s+/u)
+    .every((term) => createSearchQueryMatcher(term)(haystack));
 };
 
 export const filterPublicToolEntries = <T extends PublicToolBrowseEntry>(

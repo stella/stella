@@ -1,18 +1,11 @@
 import type { ReactNode } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -20,9 +13,11 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
   correspondenceByIdOptions,
@@ -30,10 +25,12 @@ import {
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
+import { CorrespondenceAssigneeField } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
+import { DataBoxEnvelope } from "@/routes/_protected.workspaces/$workspaceId/-components/data-box-envelope";
 import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
 import { useUpdateCorrespondence } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
@@ -42,15 +39,23 @@ export const Route = createFileRoute(
 )({
   component: CorrespondenceDetailPage,
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      correspondenceByIdOptions(params.workspaceId, params.correspondenceId),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.correspondenceId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          correspondenceByIdOptions(
+            params.workspaceId,
+            params.correspondenceId,
+          ),
+        ),
+    });
   },
 });
 
 function CorrespondenceDetailPage() {
   const t = useTranslations();
+  const router = useRouter();
   const format = useFormatter();
   const { workspaceId, correspondenceId } = Route.useParams({
     select: (params) => ({
@@ -61,18 +66,13 @@ function CorrespondenceDetailPage() {
   const { data } = useSuspenseQuery(
     correspondenceByIdOptions(workspaceId, correspondenceId),
   );
-  const { record, filers, attachments } = data;
+  const { record, filers, attachments, dataBoxContacts } = data;
   const provenance = correspondenceProvenancePresentation(record);
-  const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
-  const members = membersView.type === "items" ? membersView.items : [];
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
-  const tCommon = useTranslations("common");
 
   return (
     <div className="flex h-full flex-col">
-      <QueryViewFeedback view={membersView} />
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <BackToCorrespondenceLink workspaceId={workspaceId} />
 
@@ -124,47 +124,60 @@ function CorrespondenceDetailPage() {
             </section>
           ) : (
             <UploadedSource
+              channel={record.channel}
               uploader={filers.find((filer) => filer.type === "user")}
               signatureDomain={provenance.signatureDomain}
               sourceEntityId={record.sourceEntityId}
               workspaceId={workspaceId}
             />
           )}
-          <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-            {provenance.assertedHeadersLabel !== null && (
-              <h2 className="text-sm font-medium sm:col-span-2">
-                {t(provenance.assertedHeadersLabel)}
-              </h2>
-            )}
-            {provenance.assertedHeadersLabel !== null && (
-              <DetailField
-                label={t("inspector.metadata.documentProperties.keys.subject")}
-              >
-                <bdi dir="auto">
-                  {record.subject || t("emailViewer.noSubject")}
-                </bdi>
+          {record.channel === "data_box" ? (
+            <DataBoxEnvelope
+              contacts={dataBoxContacts}
+              envelope={record.dataBox}
+            />
+          ) : (
+            <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
+              {provenance.assertedHeadersLabel !== null && (
+                <h2 className="text-sm font-medium sm:col-span-2">
+                  {t(provenance.assertedHeadersLabel)}
+                </h2>
+              )}
+              {provenance.assertedHeadersLabel !== null && (
+                <DetailField
+                  label={t(
+                    "inspector.metadata.documentProperties.keys.subject",
+                  )}
+                >
+                  <bdi dir="auto">
+                    {record.subject || t("emailViewer.noSubject")}
+                  </bdi>
+                </DetailField>
+              )}
+              <DetailField label={t(provenance.originalSenderLabel)}>
+                <Address
+                  name={record.from.name}
+                  address={record.from.address}
+                />
               </DetailField>
-            )}
-            <DetailField label={t(provenance.originalSenderLabel)}>
-              <Address name={record.from.name} address={record.from.address} />
-            </DetailField>
-            <DetailField label={t("emailViewer.to")}>
-              <AddressList addresses={record.to} />
-            </DetailField>
-            {record.cc.length > 0 && (
-              <DetailField label={t("emailViewer.cc")}>
-                <AddressList addresses={record.cc} />
+              <DetailField label={t("emailViewer.to")}>
+                <AddressList addresses={record.to} />
               </DetailField>
-            )}
-            {record.sentAt && (
-              <DetailField label={t("correspondence.sentAt")}>
-                {format.dateTime(
-                  new Date(record.sentAt),
-                  MEDIUM_DATE_SHORT_TIME_FORMAT,
-                )}
-              </DetailField>
-            )}
-          </section>
+              {record.cc.length > 0 && (
+                <DetailField label={t("emailViewer.cc")}>
+                  <AddressList addresses={record.cc} />
+                </DetailField>
+              )}
+              {record.sentAt && (
+                <DetailField label={t("correspondence.sentAt")}>
+                  {format.dateTime(
+                    new Date(record.sentAt),
+                    MEDIUM_DATE_SHORT_TIME_FORMAT,
+                  )}
+                </DetailField>
+              )}
+            </section>
+          )}
           <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
             <DetailField label={t("correspondence.receivedAt")}>
               {format.dateTime(
@@ -173,74 +186,38 @@ function CorrespondenceDetailPage() {
               )}
             </DetailField>
             <DetailField label={t("common.assignee")}>
-              {canUpdate ? (
-                <Select
-                  disabled={update.isPending}
-                  onValueChange={(value) =>
-                    update.mutate({
-                      workspaceId,
-                      correspondenceId,
-                      type: "assign",
-                      assigneeId: value === "unassigned" ? null : value,
-                    })
-                  }
-                  value={record.assigneeId ?? "unassigned"}
-                >
-                  <SelectTrigger className="min-h-11 w-full sm:max-w-64">
-                    <SelectValue>
-                      {(value) =>
-                        value === "unassigned"
-                          ? tCommon("unassigned")
-                          : (members.find((member) => member.userId === value)
-                              ?.user?.name ?? tCommon("unassigned"))
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="unassigned">
-                      {tCommon("unassigned")}
-                    </SelectItem>
-                    {members.map((member) => {
-                      if (member.user === null) {
-                        return null;
-                      }
-                      return (
-                        <SelectItem key={member.userId} value={member.userId}>
-                          {member.user.name}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectPopup>
-                </Select>
-              ) : (
-                (members.find((member) => member.userId === record.assigneeId)
-                  ?.user?.name ?? tCommon("unassigned"))
-              )}
+              <CorrespondenceAssigneeField
+                assigneeId={record.assigneeId}
+                correspondenceId={correspondenceId}
+                workspaceId={workspaceId}
+              />
             </DetailField>
           </section>
 
-          <section className="rounded-lg border p-4">
-            <h2 className="mb-3 text-sm font-medium">
-              {t("emailViewer.bodyTitle")}
-            </h2>
-            {record.bodyHtml === null ? (
-              <pre
-                className="text-foreground font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
-                dir="auto"
-              >
-                {record.bodyText}
-              </pre>
-            ) : (
-              <iframe
-                className="h-[28rem] w-full rounded border"
-                referrerPolicy="no-referrer"
-                sandbox=""
-                // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.
-                srcDoc={record.bodyHtml}
-                title={t("emailViewer.bodyTitle")}
-              />
-            )}
-          </section>
+          {record.channel === "email" && (
+            <section className="rounded-lg border p-4">
+              <h2 className="mb-3 text-sm font-medium">
+                {t("emailViewer.bodyTitle")}
+              </h2>
+              {record.bodyHtml === null ? (
+                <pre
+                  className="text-foreground font-sans text-sm leading-6 wrap-break-word whitespace-pre-wrap"
+                  dir="auto"
+                >
+                  {record.bodyText}
+                </pre>
+              ) : (
+                <iframe
+                  className="h-[28rem] w-full rounded border"
+                  referrerPolicy="no-referrer"
+                  sandbox=""
+                  // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.
+                  srcDoc={record.bodyHtml}
+                  title={t("emailViewer.bodyTitle")}
+                />
+              )}
+            </section>
+          )}
 
           {attachments.length > 0 && (
             <section className="rounded-lg border p-4">
@@ -257,11 +234,14 @@ function CorrespondenceDetailPage() {
                       className="min-w-0"
                       onClick={() =>
                         detached(
-                          openEntityInInspector(
-                            attachment.entityId,
-                            attachment.filename,
+                          openEntityInInspector({
+                            documentOnScreen: getCurrentWorkspaceDocument(
+                              router.state.matches,
+                            ),
+                            entityId: attachment.entityId,
+                            label: attachment.filename,
                             workspaceId,
-                          ),
+                          }),
                           "correspondence.open-attachment",
                         )
                       }
@@ -339,7 +319,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
     select: (views) =>
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
-  const viewIdView = useQueryView(viewIdQuery);
+  const viewIdView = queryView(viewIdQuery);
   useQueryViewError(viewIdView, "BackToCorrespondenceLink:query");
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (

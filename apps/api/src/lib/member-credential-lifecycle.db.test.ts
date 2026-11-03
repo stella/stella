@@ -2,10 +2,12 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
 import { randomBytes } from "node:crypto";
@@ -43,6 +45,10 @@ import type {
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const routeServer = serveRoutesForTest([
   ...apiKeysRoute,
@@ -62,12 +68,13 @@ setDefaultTimeout(120_000);
 // The MCP verifier loads the signing keys over HTTP; serve that one address
 // from the real auth handler so the token path runs unchanged.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
   const jwksUrl = getAuthEndpointUrl("jwks");
-  const serveJwks: typeof fetch = Object.assign(
+  serveJwks = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request =
         input instanceof Request
@@ -80,11 +87,10 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-  fetchSpy.mockImplementation(serveJwks);
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   await releaseAgentAuthTestDb();
 });
 
@@ -246,7 +252,9 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const session = await authenticateMcpRequest(accessToken);
+  const session = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (session.isErr()) {
     return false;
   }
@@ -258,6 +266,13 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
   );
   return context.isOk();
 };
+
+beforeEach(() => {
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+});
 
 describe("organization member credential lifecycle", () => {
   test("removing a member ends every credential they hold in that organization, and re-inviting them restores none", async () => {

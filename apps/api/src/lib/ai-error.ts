@@ -72,6 +72,16 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The run error codes a local chat turn ends with when the computer it ran on
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ */
+const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
+  [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
+  [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
+  [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+]);
+
+/**
  * The run error codes TanStack's structured-output engine and its adapters
  * report for an answer that arrived but cannot be used, by what each means.
  * A cut-off answer is incomplete however it was noticed: the adapter saw the
@@ -387,6 +397,12 @@ const classifyAIErrorInternal = (
     }
   }
 
+  if (isNonNullObject(error) && typeof error["code"] === "string") {
+    const localRunnerKind = LOCAL_RUNNER_KIND_BY_CODE.get(error["code"]);
+    if (localRunnerKind !== undefined) {
+      return localRunnerKind;
+    }
+  }
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
@@ -699,6 +715,11 @@ const aiKindHandlerError = (
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
+    // A computer's run ends a chat turn, never a request this maps; its
+    // code still names the reason for whoever reads one.
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

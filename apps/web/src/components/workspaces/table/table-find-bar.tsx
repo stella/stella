@@ -166,12 +166,13 @@ export const TableFindBar = ({
             <Button
               className={cn(appliedTerm !== null && "font-normal")}
               size={appliedTerm === null ? "icon-xs" : "xs"}
+              // The hint, not the name: this bar sits beside a control that
+              // also narrows the rows, and what separates them is where each
+              // one looks.
+              tooltip={t("workspaces.views.findInTableHint")}
               variant="ghost"
             />
           }
-          // The hint, not the name: this bar sits beside a control that also
-          // narrows the rows, and what separates them is where each one looks.
-          title={t("workspaces.views.findInTableHint")}
         >
           <SearchIcon className="size-3.5" />
           {appliedTerm !== null && (
@@ -380,19 +381,17 @@ const FindColumnRow = ({
   onClick,
   title,
 }: FindColumnRowProps) => (
-  <button
+  <Button
     aria-pressed={checked}
-    className={cn(
-      "flex items-center gap-2 rounded px-2 py-1 text-start text-sm",
-      disabled ? "opacity-56" : "hover:bg-accent cursor-pointer",
-    )}
     disabled={disabled}
     onClick={onClick}
-    title={title}
-    type="button"
+    size="row"
+    // Why a column cannot be searched, reachable while the row is disabled.
+    tooltip={title}
+    variant="ghost"
   >
     {icon}
     <span className="min-w-0 flex-1 truncate">{label}</span>
     {checked && <span className="text-primary">{"✓"}</span>}
-  </button>
+  </Button>
 );

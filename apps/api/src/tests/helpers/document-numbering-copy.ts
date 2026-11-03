@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
 import { createCopyToWorkspace } from "@/api/handlers/entities/copy";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -75,7 +76,8 @@ export const runNumberingCopy = async ({
       createAuditRecorder: () => recordAuditEvent,
       recordAuditEvent,
       request: new Request("https://example.test/entities/copy"),
-      route: "/test/entities/copy",
+      route:
+        "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },

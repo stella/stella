@@ -92,7 +92,6 @@ type PDFActions = {
     pageId: string,
     renderPromise: Promise<RenderPageResult>,
   ) => boolean;
-  rerenderAtScale: (effectiveScale: number) => void;
   updateContainerWidth: (
     containerWidth: number,
     container: HTMLElement,
@@ -149,6 +148,13 @@ class PageBuffer {
   }
 }
 
+/**
+ * How long the fit-to-width scale must hold before the pages are drawn again
+ * at it. Until then the existing canvases and text layers are scaled by CSS,
+ * so a pane drag does not redraw every page on every frame.
+ */
+const FIT_TO_WIDTH_RERENDER_DELAY_MS = 150;
+
 const createPDFStore = ({
   fieldId,
   startPage,
@@ -160,6 +166,12 @@ const createPDFStore = ({
   let renderAbort: AbortController = new AbortController();
   let originalPageWidth: number | null = null;
   let pendingScrollAnchor: ScrollAnchor | null = null;
+  let fitToWidthRerender: ReturnType<typeof setTimeout> | undefined;
+
+  const cancelFitToWidthRerender = () => {
+    clearTimeout(fitToWidthRerender);
+    fitToWidthRerender = undefined;
+  };
 
   const remapPageViewports = (
     pages: Map<string, PageInfo>,
@@ -205,6 +217,7 @@ const createPDFStore = ({
     effectiveScale: number;
     updates?: Partial<Pick<PDFState, "scale" | "scaleOffset">>;
   }) => {
+    cancelFitToWidthRerender();
     renderAbort.abort();
     renderAbort = new AbortController();
 
@@ -336,6 +349,7 @@ const createPDFStore = ({
         return;
       }
 
+      cancelFitToWidthRerender();
       renderAbort.abort();
       renderAbort = new AbortController();
 
@@ -499,10 +513,6 @@ const createPDFStore = ({
       });
     },
 
-    rerenderAtScale: (effectiveScale) => {
-      refreshRenderedPagesAtScale({ effectiveScale });
-    },
-
     updateContainerWidth: (containerWidth, container) => {
       set({ containerWidth });
 
@@ -534,6 +544,17 @@ const createPDFStore = ({
         scale: fitToWidthScale,
         pages: pagesAtFitToWidthScale,
       });
+
+      // Drawing a page replaces its canvas and text layer, which collapses a
+      // text selection in progress. Only a changed scale may redraw: an
+      // observer that re-reports the same width must leave the pages alone.
+      cancelFitToWidthRerender();
+      fitToWidthRerender = setTimeout(() => {
+        const { scale, scaleOffset: currentScaleOffset } = get();
+        refreshRenderedPagesAtScale({
+          effectiveScale: scale + currentScaleOffset,
+        });
+      }, FIT_TO_WIDTH_RERENDER_DELAY_MS);
     },
 
     consumePendingScrollAnchor: () => {
@@ -544,6 +565,7 @@ const createPDFStore = ({
   }));
 
   const destroy = () => {
+    cancelFitToWidthRerender();
     renderAbort.abort();
     pageBuffer.clear();
     originalPageWidth = null;

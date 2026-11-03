@@ -1,7 +1,10 @@
+import { panic } from "better-result";
+
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
+import type { SearchRankingTier } from "@/api/lib/search/pagination";
 import { globalSearchIdentity } from "@/api/lib/search/resource-search";
 import type { EntityGlobalSearchHit } from "@/api/lib/search/types";
 import { parseEntityKind } from "@/api/lib/search/types";
@@ -10,7 +13,26 @@ type RawRow = Record<string, unknown>;
 
 type ScoredEntityGlobalSearchHit = {
   hit: EntityGlobalSearchHit;
+  tier: SearchRankingTier;
   score: number;
+};
+
+export const searchRankingTier = (value: unknown): SearchRankingTier => {
+  // The tier is an SQL `::int`, which the driver already returns as a number.
+  switch (value) {
+    case 0:
+      return 0;
+    case 1:
+      return 1;
+    case 2:
+      return 2;
+    case 3:
+      return 3;
+    case 4:
+      return 4;
+    default:
+      return panic(`Invalid global search ranking tier: ${String(value)}`);
+  }
 };
 
 const toIso = (value: unknown): string =>
@@ -68,5 +90,9 @@ export const mapEntityHit = (row: RawRow): ScoredEntityGlobalSearchHit => {
     processingStatus: null,
   };
 
-  return { hit, score: Number(row["score"]) };
+  return {
+    hit,
+    tier: searchRankingTier(row["tier"]),
+    score: Number(row["score"]),
+  };
 };

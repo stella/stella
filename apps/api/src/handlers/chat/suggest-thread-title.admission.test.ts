@@ -1,15 +1,17 @@
 import { panic } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -87,6 +89,9 @@ const runDeniedTitle = async ({
       },
     },
     select: (fields: Record<string, unknown>) => {
+      if ("subjectDecisionId" in fields) {
+        return createSelectQueryMock([]);
+      }
       // The message window reads the thread's send mode after its messages.
       if ("usedAnonymization" in fields) {
         sendModeReads += 1;
@@ -114,6 +119,7 @@ const runDeniedTitle = async ({
           if (storeState === "offline") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Coordination unavailable",
             });
           }
@@ -164,7 +170,8 @@ const runDeniedTitle = async ({
         promptCachingEnabled: false,
         query: { workspaceId },
         request: new Request("https://example.test/title/suggest"),
-        route: "/title/suggest",
+        route:
+          "/v1/chat/threads/:threadId/title/suggest" satisfies ApiRoutePath,
         safeDb: db.safeDb,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },

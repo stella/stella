@@ -26,6 +26,7 @@ import {
   DialogTrigger,
 } from "@stll/ui/dialog";
 import { LanguagesIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -54,7 +55,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
@@ -62,7 +63,8 @@ import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -99,6 +101,7 @@ type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
 export const TranslateDocumentDialog = (
   props: TranslateDocumentDialogProps,
 ) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const {
     workspaceId,
     viewId,
@@ -109,7 +112,7 @@ export const TranslateDocumentDialog = (
     disabled = false,
   } = props;
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -348,7 +351,7 @@ export const TranslateDocumentDialog = (
     }
     if (run.status === "failed" || run.status === "cancelled") {
       terminalNotifiedRunRef.current = runId;
-      notifyUserError(undefined, t("translate.error.title"), {
+      notifyUserProblem(t("translate.error.title"), {
         description: t(documentTranslationRunFailureKey(run.errorCode)),
       });
     }
@@ -381,10 +384,18 @@ export const TranslateDocumentDialog = (
         switch (choice) {
           case "translated:deepl":
             return unwrapApiResponse(
-              await client.post({
-                ...common,
-                output: "translated",
-                engine: "deepl",
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output: "translated" as const,
+                  engine: "deepl" as const,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           case "translated:ai":
@@ -393,11 +404,22 @@ export const TranslateDocumentDialog = (
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
             return unwrapApiResponse(
-              await client.post({
-                ...common,
-                output: choice === "translated:ai" ? "translated" : "bilingual",
-                engine: "ai",
-                entityVersionId,
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output:
+                    choice === "translated:ai"
+                      ? ("translated" as const)
+                      : ("bilingual" as const),
+                  engine: "ai" as const,
+                  entityVersionId,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           }
@@ -695,10 +717,7 @@ const RadioCard = ({
   value,
   onChange,
 }: RadioCardProps) => (
-  <label
-    aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-  >
+  <Label aria-label={label} variant="choice-card">
     <input
       checked={checked}
       className="accent-primary mt-0.5 size-4 shrink-0"
@@ -712,5 +731,5 @@ const RadioCard = ({
       <span className="text-sm font-medium">{label}</span>
       <span className="text-muted-foreground text-xs">{description}</span>
     </span>
-  </label>
+  </Label>
 );

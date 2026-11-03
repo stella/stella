@@ -28,12 +28,17 @@ import updateLine from "@/api/handlers/invoices/lines/update";
 import listInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -47,6 +52,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seededEntries: SafeId<"timeEntry">[] = [];
 const seededIds: SafeId<"invoice">[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -66,6 +72,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 afterAll(async () => {
   if (seededIds.length > 0) {
@@ -79,8 +86,40 @@ afterAll(async () => {
       .delete(timeEntries)
       .where(inArray(timeEntries.id, seededEntries));
   }
+  await removeIssuingSeller(testDb, issuingSellerId);
   await releaseRlsFixture();
 });
+
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === getInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === listInvoices.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  if (handler === updateInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === updateLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
 
 const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
@@ -112,7 +151,7 @@ const contextFor = <TContext extends SafeHandlerLogContext>(
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoice-types",
+    route: invoiceRouteForHandler(_handler),
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },
@@ -135,6 +174,7 @@ const seedOriginal = async (
     currency: "USD",
     status: INVOICE_STATUS.FINALIZED,
     totalAmount: cents(1210),
+    sellerProfileId: issuingSellerId,
     ...options,
   });
   return id;
@@ -533,6 +573,13 @@ describe("invoice document types", () => {
   test("linked credit notes protect original transitions and deletion", async () => {
     const originalInvoiceId = await seedOriginal();
     const creditId = createdId(await createCredit(originalInvoiceId));
+    // Issued by the original's seller, which finalizing requires.
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: creditId } },
+        columns: { sellerProfileId: true },
+      }),
+    ).toEqual({ sellerProfileId: issuingSellerId });
     for (const action of ["void", "revert_to_draft"] as const) {
       expect(await changeStatus(originalInvoiceId, action)).toMatchObject({
         code: 409,

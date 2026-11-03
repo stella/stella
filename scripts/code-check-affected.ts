@@ -30,6 +30,7 @@ import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
+import { lintModuleClosure } from "./oxlint-module-closure";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -107,9 +108,12 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
   "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
-  "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+  "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
+  "$TURBO_ROOT$/scripts/guard-rollouts/**",
+  "$TURBO_ROOT$/scripts/guard-rollouts.ts",
+  "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -129,6 +133,26 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/baseline-paths.ts",
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
   "$TURBO_ROOT$/scripts/product-frontend-files.ts",
+  "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
+  "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
+  "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
+  "$TURBO_ROOT$/packages/portable-path/src/index.ts",
+  "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
+  "$TURBO_ROOT$/packages/scripts/src/generated-artifact-format.ts",
+  "$TURBO_ROOT$/packages/scripts/src/syntax-tree.ts",
+  "$TURBO_ROOT$/packages/sha256/src/node.ts",
+  "$TURBO_ROOT$/scripts/aggregate-lock-baseline.json",
+  "$TURBO_ROOT$/scripts/calendar-day-ledger.json",
+  "$TURBO_ROOT$/scripts/contract-domain-ledger.ts",
+  "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
+  "$TURBO_ROOT$/scripts/generated-artifacts.ts",
+  "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+  "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
+  "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
+  "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+  "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -142,6 +166,7 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
   "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
   "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -156,6 +181,14 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
+// The inputs above cover the lint configs' own modules through the
+// configuration cache inputs, which leave out a module an app owns so that
+// editing it does not invalidate every workspace lint. The fixture check still
+// loads that module under Node, which resolves neither a tsconfig path alias
+// nor an extensionless import, so the planner selects the check for every
+// module the configs and plugins load, read from the checkout's import graph.
+export const pluginFixtureModules = (root: string): ReadonlySet<string> =>
+  new Set(lintModuleClosure(root).modules);
 export const PLUGIN_REGISTRY_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
@@ -228,6 +261,12 @@ type PlanCheckOptions = {
   repositoryPaths: readonly string[];
   affectedWorkspacePaths: readonly string[];
   workspacePaths: ReadonlySet<string>;
+  /**
+   * Every repository file the lint configs and their plugins load,
+   * transitively: the plugin fixture check loads them all under Node, so a
+   * change to any of them can break it. See `pluginFixtureModules`.
+   */
+  pluginModulePaths: ReadonlySet<string>;
 };
 
 const workspaceForPath = (file: string): string | null => {
@@ -281,7 +320,10 @@ const isTypeScriptPath = (file: string): boolean =>
   file.endsWith(".mts") ||
   file.endsWith(".cts");
 
-const rootChecksForPath = (file: string): readonly RootCheck[] => {
+const rootChecksForPath = (
+  file: string,
+  pluginModulePaths: ReadonlySet<string>,
+): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
   if (
     file.endsWith(".css") ||
@@ -295,7 +337,10 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
   if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
-  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
+  if (
+    pluginModulePaths.has(file) ||
+    PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))
+  ) {
     rootChecks.push(ROOT_CHECKS.pluginFixtures);
   }
   if (invalidatesRootScriptLint(file)) {
@@ -310,6 +355,7 @@ export const planCheck = ({
   repositoryPaths,
   affectedWorkspacePaths,
   workspacePaths,
+  pluginModulePaths,
 }: PlanCheckOptions): CheckPlan => {
   const targets = [...new Set(affectedWorkspacePaths)].toSorted();
   if (targets.some((target) => !workspacePaths.has(target))) {
@@ -350,7 +396,7 @@ export const planCheck = ({
     ROOT_CHECKS.repoTypecheck,
   ]);
   for (const changedPath of changedPaths) {
-    for (const rootCheck of rootChecksForPath(changedPath)) {
+    for (const rootCheck of rootChecksForPath(changedPath, pluginModulePaths)) {
       rootCheckSet.add(rootCheck);
     }
   }
@@ -415,17 +461,92 @@ export const codeCheckExclusions = (
     .toSorted()
     .map((workspace) => `--filter=!./${workspace}`);
 
+const FULL_COMMIT = /^[0-9a-f]{40}$/u;
+
+/** Where a check of main starts, and why a missing green base checks everything. */
+export type GreenBaseScope =
+  | { type: "affected"; base: string }
+  | { type: "all"; reason: "malformed" | "not-ancestor" }
+  /** The ancestry probe failed; its message is kept so it never reads as absence. */
+  | { type: "all"; reason: "probe-failed"; detail: string };
+
+/**
+ * The scope for a check of main: the change since the last commit known
+ * green, or every file when that commit is malformed, not an ancestor of the
+ * checked tree, or the ancestry probe fails. Comparing main with itself would
+ * check nothing, so the scope fails closed to the full check.
+ */
+export const greenBaseScope = (
+  greenBase: string,
+  root: string,
+): GreenBaseScope => {
+  if (!FULL_COMMIT.test(greenBase)) {
+    return { type: "all", reason: "malformed" };
+  }
+  const ancestor = Bun.spawnSync(
+    ["git", "merge-base", "--is-ancestor", greenBase, "HEAD"],
+    { cwd: root, stdout: "ignore", stderr: "pipe" },
+  );
+  switch (ancestor.exitCode) {
+    case 0:
+      return { type: "affected", base: greenBase };
+    case 1:
+      return { type: "all", reason: "not-ancestor" };
+    default:
+      return {
+        type: "all",
+        reason: "probe-failed",
+        detail:
+          ancestor.stderr.toString().trim() ||
+          `merge-base exited ${String(ancestor.exitCode)}`,
+      };
+  }
+};
+
+/** The log line that says which scope a green base produced. */
+export const greenBaseScopeMessage = (scope: GreenBaseScope): string => {
+  if (scope.type === "affected") {
+    return `code-check: checking changes since green main ${scope.base}`;
+  }
+  switch (scope.reason) {
+    case "malformed":
+      return "code-check: green main is not a full commit id; checking every file";
+    case "not-ancestor":
+      return "code-check: no reachable green main commit; checking every file";
+    case "probe-failed":
+      return `code-check: green main ancestry probe failed (${scope.detail}); checking every file`;
+    default:
+      scope satisfies never;
+      return panic("Unhandled green base scope");
+  }
+};
+
 type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
+  /** A main commit known green; replaces `scope` once resolved. */
+  greenBase?: string;
   dryRun: boolean;
   /** Pre-push leaves a change that needs the full check to CI. */
   skipFullFallback: boolean;
 };
 
-const parseArgs = (args: readonly string[]): Options => {
+// A missing value or the next flag is never an option's value.
+const optionValue = (
+  argv: Iterator<string, undefined>,
+  flag: string,
+): string => {
+  const { value } = argv.next();
+  if (value === undefined || value.startsWith("--")) {
+    return panic(`${flag} requires a value`);
+  }
+  return value;
+};
+
+export const parseArgs = (args: readonly string[]): Options => {
   let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
+  let greenBase: string | undefined;
   let all = false;
   let dryRun = false;
   let skipFullFallback = false;
@@ -453,11 +574,12 @@ const parseArgs = (args: readonly string[]): Options => {
       continue;
     }
     if (argument === "--base") {
-      const value = argv.next().value;
-      if (value === undefined) {
-        panic("--base requires a git ref");
-      }
-      base = value;
+      base = optionValue(argv, argument);
+      continue;
+    }
+    if (argument === "--green-base") {
+      // An empty value is a valid request: no green commit is known.
+      greenBase = optionValue(argv, argument);
       continue;
     }
     panic(`Unknown argument: ${argument}`);
@@ -466,8 +588,12 @@ const parseArgs = (args: readonly string[]): Options => {
   if (all && base !== null) {
     panic("--all checks every tracked file and takes no --base");
   }
+  if (greenBase !== undefined && (all || base !== null)) {
+    panic("--green-base chooses the scope and takes no --all or --base");
+  }
   return {
     ...(leg === undefined ? {} : { leg }),
+    ...(greenBase === undefined ? {} : { greenBase }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
@@ -1238,6 +1364,10 @@ export const planResultBoundaryLint = ({
   return resultBoundaryLintCommand(candidates, measureDebt(base));
 };
 
+/** Only the unpartitioned check and the rest leg run the root checks. */
+const runsRootChecks = (leg: CodeCheckLeg | undefined): boolean =>
+  leg === undefined || leg === "rest";
+
 type ScopedCommandsOptions = {
   leg: CodeCheckLeg;
   workspaces: ReadonlySet<string>;
@@ -1248,7 +1378,7 @@ export const scopedCommands = (
   partition?: ScopedCommandsOptions,
 ): string[][] => {
   if (partition !== undefined) {
-    const ownsRoot = partition.leg === "rest";
+    const ownsRoot = runsRootChecks(partition.leg);
     const commands = scopedCommands({
       type: "scoped",
       lint: plan.lint,
@@ -1346,6 +1476,9 @@ export const planFullCheck = ({
     repositoryPaths: files,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
+    // Every file counts as changed, so the declared inputs already select
+    // every root check; the check below fails if one is left out.
+    pluginModulePaths: new Set(),
   });
   if (plan.type === "fallback") {
     panic(`full code-check planned a fallback for ${plan.changedPath}`);
@@ -1374,6 +1507,7 @@ type ScopeCheck = {
 
 const planScope = async (
   scope: CheckScope,
+  leg: CodeCheckLeg | undefined,
 ): Promise<Result<ScopeCheck, CommandFailedError>> => {
   switch (scope.type) {
     case "all": {
@@ -1418,6 +1552,10 @@ const planScope = async (
                   ),
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
+                  // A leg that drops the root checks skips reading the graph.
+                  pluginModulePaths: runsRootChecks(leg)
+                    ? pluginFixtureModules(REPO_ROOT)
+                    : new Set(),
                 }),
           changedPaths: changed.value.paths,
           presentChangedPaths,
@@ -1446,7 +1584,15 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = await planScope(options.scope);
+  const resolvedGreenBase =
+    options.greenBase === undefined
+      ? undefined
+      : greenBaseScope(options.greenBase, process.cwd());
+  if (resolvedGreenBase !== undefined) {
+    console.log(greenBaseScopeMessage(resolvedGreenBase));
+  }
+  const checkScope: CheckScope = resolvedGreenBase ?? options.scope;
+  const scoped = await planScope(checkScope, options.leg);
   if (scoped.isErr()) {
     return scoped;
   }

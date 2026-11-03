@@ -1,14 +1,10 @@
 import { panic } from "better-result";
 
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-} from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
-import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip";
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { QueryView } from "@/lib/query-view.logic";
 
@@ -53,29 +49,6 @@ export const sourceCitationMetadata = ({
   }
   return null;
 };
-
-/** What a citation shows of a loaded decision, and where it opens. */
-export const decisionCitationMetadata = (
-  decision: PublicCaseLawDecision,
-): DecisionCitationMetadata => ({
-  decisionId: decision.id,
-  court: decision.court,
-  courtShortCode: decisionCitationCourtLabel(decision),
-  caseNumber: decision.caseNumber,
-  decisionDate: decision.decisionDate,
-  readerUrl: createCaseLawDecisionPath(
-    createCaseLawDecisionRouteParams({
-      caseNumber: decision.caseNumber,
-      country: decision.country,
-      court: decision.court,
-      decisionId: decision.id,
-      language: decision.language,
-      languageAlternates: decision.languageAlternates,
-      slug: decision.slug,
-    }),
-  ),
-  originalUrl: decision.sourceUrl ?? decision.documentUrl ?? null,
-});
 
 export const readyCitationMetadata = (
   read: DecisionCitationRead,

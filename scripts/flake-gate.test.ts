@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -32,6 +33,12 @@ import {
   type Target,
   trialCommand,
 } from "./flake-gate";
+import {
+  decodePlanFileList,
+  decodePostgresTestSelection,
+  encodePlanFileList,
+  encodePostgresTestSelection,
+} from "./plan-output-codec";
 
 // Markdown reads consume temporary CLI output only.
 export const CI_MARKDOWN_READER_INPUTS = [] as const;
@@ -52,6 +59,14 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
     ].join(""),
   );
   expect(source).not.toContain("CHANGED_FILES_JSON: $");
+  // Repeated tests read the API runtime their own jobs generate.
+  expect(source).toContain(
+    [
+      "          bun --cwd=packages/cli run codegen:runtime\n",
+      "          bun --cwd=apps/api run generate:capability-runtime\n",
+      `          cat > "$RUNNER_TEMP/changed-files.json"`,
+    ].join(""),
+  );
   expect(MAX_CHANGED_TEST_FILES).toBeGreaterThan(0);
   expect(REPEATS).toBe(5);
 });
@@ -182,7 +197,7 @@ test("diff selection repeats changed tests only and preserves package runners an
     ]);
     expect(withDb.env).toEqual({
       STELLA_RUN_POSTGRES_TESTS: "true",
-      CI_POSTGRES_TEST_SELECTION: JSON.stringify({
+      CI_POSTGRES_TEST_SELECTION_ENCODED: encodePostgresTestSelection({
         mode: "selected",
         files: ["src/db.test.ts"],
       }),
@@ -238,7 +253,12 @@ test("the real API manifest selects unit and Postgres files through their exact 
     if (isPostgres) {
       expect(
         parseGatedTestSelection(
-          target.env["CI_POSTGRES_TEST_SELECTION"],
+          JSON.stringify(
+            decodePostgresTestSelection(
+              target.env["CI_POSTGRES_TEST_SELECTION_ENCODED"] ??
+                panic("Missing encoded Postgres test selection"),
+            ),
+          ),
           discovered,
         ),
       ).toEqual({
@@ -251,7 +271,15 @@ test("the real API manifest selects unit and Postgres files through their exact 
       ).toBe(apiManifest.ciGateTestRunners["test:postgres"].gateValue);
     } else {
       expect(
-        restrictApiTestFiles(discovered, target.env["API_TEST_FILES"]),
+        restrictApiTestFiles(
+          discovered,
+          encodePlanFileList(
+            decodePlanFileList(
+              target.env["API_TEST_FILES_ENCODED"] ??
+                panic("Missing encoded API test selection"),
+            ),
+          ),
+        ),
       ).toEqual([relative]);
       expect(target.env["API_TEST_SHARD"]).toBe("");
     }
@@ -800,14 +828,23 @@ test("prepare c", () => { prepared += 1; });
 test("requires preparation", () => { expect(prepared).toBe(3); });
 `,
     );
+    const fixtureOutput: string[] = [];
     const report = await executeGate({
       targets: [targetFor(root)],
       skipped: [],
+      reportFailureOutput: (output) => {
+        fixtureOutput.push(output);
+      },
     });
     const result = report.results.at(0);
     expect(result?.runs).toBe(REPEATS);
     expect(result?.failures).toBeGreaterThan(0);
     expect(reportExitCode(report, true)).toBe(1);
+    expect(fixtureOutput).toHaveLength(1);
+    expect(fixtureOutput[0]?.includes("(fail) requires preparation")).toBe(
+      true,
+    );
+    expect(fixtureOutput[0]?.includes("error:")).toBe(true);
     write(root, "empty.test.ts", "export {};\n");
     expect(
       await runOnce({
@@ -818,6 +855,35 @@ test("requires preparation", () => { expect(prepared).toBe(3); });
     ).toMatchObject({ type: "executed", passed: false });
   });
 }, 30_000);
+
+test("the order-dependence self-test keeps fixture failures out of parent output", async () => {
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "test",
+      "./scripts/flake-gate.test.ts",
+      "-t",
+      "the real runner detects order dependence and rejects zero-test success",
+    ],
+    {
+      cwd: path.resolve(import.meta.dir, ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const [status, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  expect(status).toBe(0);
+  const parentOutput = `${stdout}\n${stderr}`;
+  expect(parentOutput.includes("(fail) requires preparation")).toBe(false);
+  expect(parentOutput.includes("::error")).toBe(false);
+  expect(
+    /\/tmp\/flake-gate-[^/\s]+\/fixture\.test\.ts/u.test(parentOutput),
+  ).toBe(false);
+});
 
 test("the pinned Bun accepts native rerun and shuffle flags", async () => {
   await withFixture(async (root) => {

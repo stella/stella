@@ -62,7 +62,8 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   invalidateTemplateClauseSources,
   knowledgeKeys,
@@ -517,7 +518,7 @@ const InsertAtCaretButton = ({
   const t = useTranslations();
   const formats = optionalArray(field.lookup?.formats);
   const className =
-    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100";
+    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 pointer-coarse:opacity-100";
   if (formats.length <= 1) {
     return (
       <Button
@@ -664,7 +665,7 @@ const OutlineRow = ({
         </Tooltip>
         <Button
           aria-label={t("templates.studio.insertAtCaret")}
-          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
+          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             actions?.insertClauseSlot(node.name);
@@ -1117,7 +1118,7 @@ const FieldConditionSection = ({
           className="self-start"
           onClick={() => {
             if (actions?.wrapFieldInCondition(field.path) !== true) {
-              notifyUserError(undefined, t("errors.actionFailed"));
+              notifyUserProblem(t("errors.actionFailed"));
             }
           }}
           size="sm"
@@ -1153,11 +1154,11 @@ const FieldConditionSection = ({
         disabled={!condition.canRemove}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
-            notifyUserError(undefined, t("errors.actionFailed"));
+            notifyUserProblem(t("errors.actionFailed"));
           }
         }}
         size="sm"
-        title={
+        tooltip={
           condition.canRemove
             ? undefined
             : t("templates.studio.removeConditionBlocked")
@@ -1243,7 +1244,7 @@ export const FieldFace = ({
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
       pendingFieldFaceScrollTop = null;
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
     }
   };
 
@@ -1531,7 +1532,7 @@ export const FieldFace = ({
               disabled={repeat.disabledKey !== null}
               onClick={() => toggleRepeatable(repeat.kind !== "on")}
               size="sm"
-              title={
+              tooltip={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
               variant={repeat.kind === "on" ? "secondary" : "outline"}
@@ -1581,6 +1582,7 @@ const SaveRecipeDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -1597,9 +1599,10 @@ const SaveRecipeDialog = ({
       return;
     }
     setSaving(true);
-    const response = await api["template-recipes"].put({
-      name: trimmed,
-      definition,
+    const response = await idempotentSubmit.run({
+      operation: "template-recipes.create",
+      body: { name: trimmed, definition },
+      send: async (body, request) => api["template-recipes"].put(body, request),
     });
     setSaving(false);
     if (response.error) {
@@ -1729,7 +1732,7 @@ const ClauseSlotEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("clauses.renameSlotInvalid"));
+    notifyUserProblem(t("clauses.renameSlotInvalid"));
   };
 
   if (!editing) {
@@ -1791,7 +1794,7 @@ const FieldPathEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("templates.studio.renameFieldInvalid"));
+    notifyUserProblem(t("templates.studio.renameFieldInvalid"));
   };
 
   if (!editing) {

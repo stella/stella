@@ -1,0 +1,191 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import ts from "typescript6";
+
+import {
+  formattedLikeRepository,
+  writeOrCheckArtifacts,
+} from "../../../scripts/generated-artifacts";
+import { REWRITTEN_MIGRATION_INDEXES } from "../src/lib/db/migration-history";
+import type { RequiredMigrationIndex } from "../src/lib/db/migration-history";
+
+const isUniqueInventoryFilter = (node: ts.Expression) => {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    !ts.isIdentifier(node.expression.expression) ||
+    node.expression.expression.text !== "REWRITTEN_MIGRATION_INDEXES" ||
+    node.expression.name.text !== "filter" ||
+    node.arguments.length !== 1
+  ) {
+    return false;
+  }
+  const predicate = node.arguments.at(0);
+  if (
+    predicate === undefined ||
+    !ts.isArrowFunction(predicate) ||
+    predicate.parameters.length !== 1 ||
+    !ts.isIdentifier(predicate.body)
+  ) {
+    return false;
+  }
+  const parameter = predicate.parameters.at(0)?.name;
+  if (
+    parameter === undefined ||
+    !ts.isObjectBindingPattern(parameter) ||
+    parameter.elements.length !== 1
+  ) {
+    return false;
+  }
+  const binding = parameter.elements.at(0);
+  return (
+    binding !== undefined &&
+    binding.propertyName === undefined &&
+    binding.dotDotDotToken === undefined &&
+    binding.initializer === undefined &&
+    ts.isIdentifier(binding.name) &&
+    binding.name.text === "isUnique" &&
+    predicate.body.text === "isUnique"
+  );
+};
+
+type OnlineUniqueIndexNamesOptions = {
+  source: string;
+  rewrittenIndexes: readonly RequiredMigrationIndex[];
+};
+
+/** Read declarations without importing their generated name projection. */
+export const deriveOnlineUniqueIndexNames = ({
+  source,
+  rewrittenIndexes,
+}: OnlineUniqueIndexNamesOptions) => {
+  const ast = ts.createSourceFile(
+    "online-unique-indexes.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const declarations = new Map<string, ts.Expression>();
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const { name, initializer } of statement.declarationList
+      .declarations) {
+      if (ts.isIdentifier(name) && initializer !== undefined) {
+        declarations.set(name.text, initializer);
+      }
+    }
+  }
+  const namesOf = (node: ts.Expression, seen = new Set<string>()): string[] => {
+    if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+      return namesOf(node.expression, seen);
+    }
+    if (ts.isSpreadElement(node)) {
+      return namesOf(node.expression, seen);
+    }
+    if (ts.isIdentifier(node)) {
+      if (seen.has(node.text)) {
+        return panic(`Cyclic online index declaration: ${node.text}`);
+      }
+      const declaration = declarations.get(node.text);
+      if (declaration === undefined) {
+        return panic(`Missing online index declaration: ${node.text}`);
+      }
+      return namesOf(declaration, new Set([...seen, node.text]));
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      return node.elements.flatMap((element) => namesOf(element, seen));
+    }
+    if (isUniqueInventoryFilter(node)) {
+      return rewrittenIndexes
+        .filter(({ isUnique }) => isUnique)
+        .map(({ name }) => name);
+    }
+    if (ts.isObjectLiteralExpression(node)) {
+      const name = node.properties.find(
+        (property) =>
+          ts.isPropertyAssignment(property) &&
+          (ts.isIdentifier(property.name) ||
+            ts.isStringLiteral(property.name)) &&
+          property.name.text === "name",
+      );
+      if (
+        name !== undefined &&
+        ts.isPropertyAssignment(name) &&
+        ts.isStringLiteralLike(name.initializer)
+      ) {
+        return [name.initializer.text];
+      }
+    }
+    return panic(
+      `Online index name must be a declaration literal: ${node.getText(ast)}`,
+    );
+  };
+  const declarationNames = (name: string) => {
+    const declaration = declarations.get(name);
+    if (declaration === undefined) {
+      return panic(`Missing online index declaration: ${name}`);
+    }
+    return namesOf(declaration);
+  };
+  const executableNames = declarationNames("EXECUTABLE_ONLINE_UNIQUE_INDEXES");
+  const names = declarationNames("ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS");
+  const aliases = new Map<string, string>();
+  for (const name of names.toSorted()) {
+    const alias = name.replace(/([a-z0-9])([A-Z])/gu, "$1_$2").toUpperCase();
+    if (!/^[A-Z][A-Z0-9_]*$/u.test(alias)) {
+      return panic(`Invalid online index export: ${name}`);
+    }
+    if (aliases.has(alias)) {
+      return panic(`Duplicate online index export: ${alias}`);
+    }
+    aliases.set(alias, name);
+  }
+  const renderMap = (name: string, included: ReadonlySet<string>) =>
+    `export const ${name} = {${[...aliases]
+      .filter(([, value]) => included.has(value))
+      .map(([alias]) => alias)
+      .join(",")}} as const;`;
+  return [
+    "// GENERATED by apps/api/scripts/generate-online-unique-index-names.ts. Do not edit.",
+    ...[...aliases].map(
+      ([alias, name]) => `const ${alias} = ${JSON.stringify(name)};`,
+    ),
+    renderMap("EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES", new Set(executableNames)),
+    renderMap("ONLINE_UNIQUE_INDEX_NAMES", new Set(names)),
+    "",
+  ].join("\n");
+};
+
+if (import.meta.main) {
+  const owner = new URL("../src/db/online-unique-indexes.ts", import.meta.url);
+  const source = readFileSync(owner, "utf-8");
+  const begin = "// BEGIN GENERATED ONLINE UNIQUE INDEX NAMES";
+  const end = "// END GENERATED ONLINE UNIQUE INDEX NAMES";
+  const start = source.indexOf(begin);
+  const finish = source.indexOf(end);
+  if (
+    start === -1 ||
+    finish <= start ||
+    source.includes(begin, start + begin.length) ||
+    source.includes(end, finish + end.length)
+  ) {
+    panic("Online unique index name projection needs exactly one owner block");
+  }
+  const projection = deriveOnlineUniqueIndexNames({
+    source,
+    rewrittenIndexes: REWRITTEN_MIGRATION_INDEXES,
+  });
+  const contents = await formattedLikeRepository(
+    `${source.slice(0, start)}${begin}\n${projection}${source.slice(finish)}`,
+    "ts",
+  );
+  process.exitCode = await writeOrCheckArtifacts(
+    [{ path: owner.pathname, contents }],
+    {
+      write: process.argv.includes("--write"),
+      matched: "the online unique index declarations",
+    },
+  );
+}

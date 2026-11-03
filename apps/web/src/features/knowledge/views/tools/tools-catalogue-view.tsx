@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -21,7 +22,10 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import { McpIcon } from "@/components/mcp-icon";
 import {
   ResponsiveActionToolbar,
@@ -32,7 +36,7 @@ import type {
   KnowledgeTool,
   ToolsSource,
 } from "@/features/knowledge/views/tools/tools-seam";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
@@ -101,7 +105,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
   children,
 }: ToolsCatalogueViewProps<TTool>) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [filter, setFilter] = useState<ToolsCatalogueKind>(
     initialKind ?? "all",
   );
@@ -117,11 +121,19 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
     const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     return key ? t(key) : entry.displayName;
   };
+  const localizedDescription = (entry: TTool) => {
+    const key = nativeToolDescriptionKey({
+      slug: entry.slug,
+      kind: entry.kind,
+    });
+    return key ? t(key) : entry.description;
+  };
   const filtered = filterToolsCatalogueEntries({
     compareName: compareByLocale(locale),
     entries,
     filter,
     jurisdictionFilter,
+    localizedDescription,
     localizedName,
     query,
   });
@@ -243,11 +255,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                   </>
                 )}
                 {(() => {
-                  const matches = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(jurisdictionQuery.trim().toLowerCase()),
-                  );
+                  const matches = filterBySearchQuery({
+                    items: allJurisdictionCodes,
+                    query: jurisdictionQuery,
+                    fields: (code) => [code],
+                  });
                   if (matches.length === 0) {
                     return (
                       <p className="text-muted-foreground px-2 py-3 text-center text-xs">

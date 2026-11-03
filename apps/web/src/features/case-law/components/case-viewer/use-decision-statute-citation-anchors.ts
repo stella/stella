@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { locateStatuteCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import type { DecisionStatuteCitationAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -10,7 +11,8 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /** Work-level citations resolve to the wording applicable on the decision date. */
 export const useDecisionStatuteCitationAnchors = (
@@ -32,7 +34,7 @@ export const useDecisionStatuteCitationAnchors = (
           })),
     ),
   );
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   useQueryViewError(resolvedView, "useDecisionStatuteCitationAnchors:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
@@ -60,7 +62,7 @@ export const useDecisionStatuteCitationAnchors = (
         slug: statute.slug,
         versionValidFrom: statute.versionValidFrom,
       },
-      statuteTitle: statute.title,
+      statuteTitle: statuteDisplayLabel(statute).text,
     };
     return [{ ...reference, target }];
   });

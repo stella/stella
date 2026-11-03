@@ -1,39 +1,51 @@
 import { useState } from "react";
 
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import {
-  createFileRoute,
-  Navigate,
-  Outlet,
-  redirect,
-  useMatch,
-} from "@tanstack/react-router";
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
+import { createFileRoute, Outlet, useMatch } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
 
 import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { useMountEffect } from "@/hooks/use-effect";
-import { getTranslator } from "@/i18n/i18n-store";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
-import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
+import { matterRouteView } from "@/lib/workspaces/archived-matters.logic";
+import { useUnarchiveWorkspace } from "@/lib/workspaces/mutations";
+import {
+  overviewOptions,
+  workspaceOptions,
+  workspacesRouteOptions,
+} from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { routePresentation } from "@/routes/-route-presentation";
 import { MatterUploadAction } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-upload-action";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
@@ -47,24 +59,20 @@ const extractionPreviewKey = (entityId: string, propertyId: string) =>
   `${entityId}:${propertyId}`;
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
-  component: RouteComponent,
-  notFoundComponent: () => {
-    // Handles unmatched child routes (e.g. doubled
-    // /workspaces/$id/workspaces/$id from stale router state).
-    if (import.meta.env.DEV) {
-      // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
-      console.trace(
-        "[stella] notFoundComponent triggered — redirecting to /workspaces. Current URL:",
-        globalThis.location.href,
-      );
-    }
-    return <Navigate replace to="/workspaces" />;
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "matter" }),
   },
+  component: RouteComponent,
   loader: async ({ context, params }) => {
     const wsId = params.workspaceId;
     const qc = context.queryClient;
 
     const onPrefetchError = (error: unknown) => {
+      // A matter opened cold that turns out archived or gone answers 404 to
+      // the active-only queries; the workspace load owns that outcome.
+      if (APIError.is(error) && error.status === 404) {
+        return;
+      }
       getAnalytics().captureError(error, {
         fingerprintKey:
           "workspaces.workspaceId.route.loader.onPrefetchError:failure",
@@ -78,8 +86,23 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
     // Only the workspace name blocks the breadcrumb. Start every independent
     // metadata request before awaiting it so they share the first network round.
+    const knownStatus = knownMatterStatus(
+      qc,
+      context.user.activeOrganizationId,
+      wsId,
+    );
     return await loadWorkspaceRouteQueries({
-      loadWorkspace: async () => await loadWorkspaceOrRedirect(qc, wsId),
+      loadWorkspace: async () => {
+        const workspace = await loadRouteResource({
+          ids: [wsId],
+          load: async () =>
+            await ensureRouteQueryData(qc, workspaceOptions(wsId)),
+        });
+        return workspace;
+      },
+      isActive: (workspace) => matterRouteView(workspace.status) === "active",
+      knownInactive:
+        knownStatus !== undefined && matterRouteView(knownStatus) !== "active",
       startPrefetches: [
         () =>
           detached(
@@ -119,40 +142,86 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
   }),
 });
 
-const loadWorkspaceOrRedirect = async (
+/**
+ * The matter's status as the client already holds it: the matter itself, or
+ * a matter list that contains it. `undefined` when nothing cached names it.
+ */
+const knownMatterStatus = (
   queryClient: QueryClient,
+  organizationId: string,
   workspaceId: string,
 ) => {
-  try {
-    return await ensureRouteQueryData(
-      queryClient,
-      workspaceOptions(workspaceId),
-    );
-  } catch (error) {
-    if (APIError.is(error) && error.status === 404) {
-      // The redirect swallows this branch, so capture here; the rethrow
-      // below reaches the route error boundary, which captures already.
-      getAnalytics().captureError(error, {
-        fingerprintKey: "loadWorkspaceOrRedirect:failure",
-        scope: {
-          type: "handler",
-          handlerId: "loadWorkspaceOrRedirect:failure",
-        },
-      });
-      const t = getTranslator();
-      notifyUserError(error, t("errors.matterNotFound"));
-      throw redirect({ to: "/workspaces", replace: true });
-    }
-
-    throw error;
-  }
+  const isThisMatter = ({ id }: { id: string }) => id === workspaceId;
+  return (
+    queryClient.getQueryData(workspaceOptions(workspaceId).queryKey)?.status ??
+    queryClient
+      .getQueryData(workspacesRouteOptions(organizationId, "archived").queryKey)
+      ?.workspaces.find(isThisMatter)?.status ??
+    queryClient
+      .getQueryData(workspacesRouteOptions(organizationId).queryKey)
+      ?.workspaces.find(isThisMatter)?.status
+  );
 };
 
 function RouteComponent() {
   const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
+  });
+  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  if (matterRouteView(workspace.status) === "archived-read-only") {
+    return <ArchivedMatterView workspaceId={workspaceId} />;
+  }
+  return <ActiveMatterRoute />;
+}
+
+const ArchivedMatterView = ({ workspaceId }: { workspaceId: string }) => {
+  // The route component already read this matter; the cached read renders.
+  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  const t = useTranslations();
+  const canUpdate = usePermissions({ workspace: ["update"] });
+  const unarchive = useUnarchiveWorkspace();
+  return (
+    <div className="flex flex-col gap-4 p-6">
+      <h1 className="text-xl font-semibold">
+        <BidiText>{workspace.name}</BidiText>
+      </h1>
+      <p className="text-muted-foreground text-sm">
+        {t("workspaces.archivedReadOnly")}
+      </p>
+      <BidiText>{workspace.reference}</BidiText>
+      <BidiText>
+        {workspace.client?.displayName ?? t("workspaces.parties.personalLabel")}
+      </BidiText>
+      {canUpdate && (
+        <Button
+          className="self-start"
+          disabled={unarchive.isPending}
+          onClick={() =>
+            unarchive.mutate(
+              { workspaceId: workspace.id },
+              {
+                onError: (error) => {
+                  notifyUserError(error, t("errors.actionFailed"));
+                },
+              },
+            )
+          }
+        >
+          {t("workspaces.unarchiveMatter")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+function ActiveMatterRoute() {
+  const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
   const queryClient = useQueryClient();
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
+  const liveWorkspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   // Lazy state singleton (mutated in place, identity stable): avoids both
   // the render-scope ref write (React Compiler bailout) and per-render
   // allocation.
@@ -268,6 +337,9 @@ function RouteComponent() {
 
   return (
     <WorkflowStartConfirmationPromptProvider>
+      {liveWorkspace?.name && (
+        <RouteDocumentTitle routeId={Route.id} title={liveWorkspace.name} />
+      )}
       <WorkspaceLifecycleCleanup
         flushActivityInvalidation={invalidateActivity.flush}
         key={workspaceId}

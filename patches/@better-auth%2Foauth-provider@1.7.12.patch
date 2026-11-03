@@ -1,0 +1,585 @@
+diff --git a/dist/authorize-D_jy3s-1.mjs b/dist/authorize-D_jy3s-1.mjs
+index e57ce0d..80cb8e7 100644
+--- a/dist/authorize-D_jy3s-1.mjs
++++ b/dist/authorize-D_jy3s-1.mjs
+@@ -19,7 +19,7 @@ import { CLIENT_ASSERTION_TYPE, DPOP_SIGNING_ALGORITHMS, PRIVATE_KEY_JWT_SIGNING
+ import { createHash } from "@better-auth/utils/hash";
+ import { compactVerify, createLocalJWKSet, decodeJwt, decodeProtectedHeader, errors, jwtVerify } from "jose";
+ import { getJwks, stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
+-import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
++import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
+ import { encodeDeterministicId } from "@better-auth/core/db/internal";
+ //#region src/consent.ts
+@@ -127,23 +127,34 @@ async function continueEndpoint(ctx, authorize) {
+ 		error: "invalid_request"
+ 	});
+ }
++// A session created after the signed request was issued has answered its login
++// prompt, as consent and the sign-in hook already treat it; without this, a
++// continue step after a fresh sign-in would send the browser back to sign-in.
++async function withSatisfiedLoginPrompt(ctx, oauthRequest, query) {
++	if (!parsePrompt(query.get("prompt") ?? "").has("login")) return query;
++	const session = await getSessionFromCtx(ctx);
++	if (!isSessionFreshForSignedQuery(session?.session.createdAt, oauthRequest?.signedQueryIssuedAt)) return query;
++	return removeMaxAgeFromQuery(removePromptFromQuery(query, "login"));
++}
+ async function selected(ctx, authorize) {
+-	const _query = (await oAuthState.get())?.query;
++	const oauthRequest = await oAuthState.get();
++	const _query = oauthRequest?.query;
+ 	if (!_query) throw new APIError("BAD_REQUEST", {
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+ 	ctx.headers?.set("accept", "application/json");
+-	ctx.query = searchParamsToQuery(removePromptFromQuery(new URLSearchParams(_query), "select_account"));
++	ctx.query = searchParamsToQuery(removePromptFromQuery(await withSatisfiedLoginPrompt(ctx, oauthRequest, new URLSearchParams(_query)), "select_account"));
+ 	return await authorize(ctx);
+ }
+ async function created(ctx, authorize) {
+-	const _query = (await oAuthState.get())?.query;
++	const oauthRequest = await oAuthState.get();
++	const _query = oauthRequest?.query;
+ 	if (!_query) throw new APIError("BAD_REQUEST", {
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+-	const query = new URLSearchParams(_query);
++	const query = await withSatisfiedLoginPrompt(ctx, oauthRequest, new URLSearchParams(_query));
+ 	ctx.headers?.set("accept", "application/json");
+ 	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
+ 	return await authorize(ctx);
+@@ -155,7 +166,7 @@ async function postLogin(ctx, authorize) {
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+-	const query = new URLSearchParams(_query);
++	const query = await withSatisfiedLoginPrompt(ctx, state, new URLSearchParams(_query));
+ 	ctx.headers?.set("accept", "application/json");
+ 	ctx.query = searchParamsToQuery(query);
+ 	const session = await getSessionFromCtx(ctx);
+@@ -1720,6 +1731,14 @@ function resolveDynamicRegistrationDefaultApplicationType(opts, client) {
+ 	if (configured !== "infer") return configured;
+ 	return (client.redirect_uris ?? []).some((uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri)) ? "native" : "web";
+ }
++const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
++	"file:",
++	"ftp:",
++	"mailto:",
++	"javascript:",
++	"data:",
++	"vbscript:"
++]);
+ function invalidRedirectUri(description) {
+ 	throw new APIError("BAD_REQUEST", {
+ 		error: "invalid_redirect_uri",
+@@ -1763,7 +1782,7 @@ async function resolveClientRegistrationResources(ctx, opts, requestedResources)
+ 	}
+ 	return resources;
+ }
+-function validateClientRedirectUri(redirectUri, applicationType) {
++function validateClientRedirectUri(redirectUri, applicationType, nativeRedirectUriExceptions = []) {
+ 	let url;
+ 	try {
+ 		url = new URL(redirectUri);
+@@ -1787,7 +1806,7 @@ function validateClientRedirectUri(redirectUri, applicationType) {
+ 		if (!isExactLoopbackHttpRedirectUri(redirectUri)) invalidRedirectUri(`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`);
+ 		return;
+ 	}
+-	if (!isNativePrivateUseRedirectUri(url)) invalidRedirectUri(`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`);
++	if (FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) || !isReverseDomainPrivateUseRedirectUri(url) && !nativeRedirectUriExceptions.includes(redirectUri)) invalidRedirectUri(`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`);
+ }
+ async function registerEndpoint(ctx, opts) {
+ 	const body = ctx.body;
+@@ -1854,7 +1873,7 @@ async function checkOAuthClient(client, opts, settings) {
+ 		error: "invalid_redirect_uri",
+ 		error_description: "Redirect URIs are required for authorization_code and implicit grant types"
+ 	});
+-	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "web"));
++	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "web"), opts.nativeRedirectUriExceptions);
+ 	if (isClientMetadataDocument) resolveMutuallySupportedGrantTypes(opts, grantTypes);
+ 	else {
+ 		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+@@ -3633,45 +3652,10 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
+ 			value: await getStoredToken(opts.storeTokens, token, "refresh_token")
+ 		}]
+ 	});
+-	if (!refreshToken) throw new APIError$1("BAD_REQUEST", {
+-		error_description: "token not found",
+-		error: "invalid_request"
+-	});
+-	if (refreshToken.revoked) {
+-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+-		throw new APIError$1("BAD_REQUEST", {
+-			error_description: "refresh token revoked",
+-			error: "invalid_request"
+-		});
+-	}
+-	if (!refreshToken.clientId || refreshToken.clientId !== clientId) return null;
+-	const iat = Math.floor(Date.now() / 1e3);
+-	if (!await ctx.context.adapter.incrementOne({
+-		model: "oauthRefreshToken",
+-		where: [{
+-			field: "id",
+-			value: refreshToken.id
+-		}, {
+-			field: "revoked",
+-			operator: "eq",
+-			value: null
+-		}],
+-		increment: {},
+-		set: { revoked: /* @__PURE__ */ new Date(iat * 1e3) }
+-	})) {
+-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+-		throw new APIError$1("BAD_REQUEST", {
+-			error_description: "refresh token revoked",
+-			error: "invalid_request"
+-		});
+-	}
+-	await ctx.context.adapter.deleteMany({
+-		model: "oauthAccessToken",
+-		where: [{
+-			field: "refreshId",
+-			value: refreshToken.id
+-		}]
+-	});
++	if (!refreshToken || refreshToken.clientId !== clientId) return null;
++	// Delete the family, including rotation replay rows: a revocation must
++	// never enter the refresh endpoint's rotation reuse interval.
++	await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+ }
+ /**
+ * We don't know the access token format so we try to validate it
+@@ -3735,7 +3719,7 @@ async function revokeEndpoint(ctx, opts) {
+ 	} catch (error) {
+ 		if (error instanceof APIError$1) {
+ 			if (error.body?.error === "unsupported_token_type") throw error;
+-			if (error.name === "BAD_REQUEST") return null;
++			if (error.status === "BAD_REQUEST") return null;
+ 			throw error;
+ 		} else if (error instanceof Error) {
+ 			logger.error("Introspection error:", error.message, error.stack);
+@@ -5528,8 +5512,8 @@ function getIssuer(ctx, opts) {
+ * Error page url if redirect_uri has not been verified yet
+ * Generates Url for custom error page
+ */
+-function getErrorURL(ctx, error, description) {
+-	return formatErrorURL(ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`, error, description);
++function getErrorURL(ctx, error, description, opts) {
++	return formatErrorURL(ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`, error, description, void 0, getIssuer(ctx, opts));
+ }
+ /**
+ * Based on the loopback port matching approach in node-oidc-provider.
+@@ -5591,13 +5575,24 @@ function findRegisteredRedirectUri(registered, requested) {
+ 	const hasFragment = requested.includes("#");
+ 	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
+ 	if (hasFragment || hasUserinfo) return;
+-	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
++	const requestedLoopback = canonicalNativeLoopbackRedirect(requested);
+ 	return registered.find((url) => {
+ 		if (url === requested) return true;
+-		if (!requestedWithoutPort) return false;
+-		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
++		if (!requestedLoopback) return false;
++		return canonicalNativeLoopbackRedirect(url) === requestedLoopback;
+ 	});
+ }
++/**
++* RFC 8252: fold the IP-literal loopback hosts and port for native redirects.
++* Keep localhost separate and match every remaining character exactly.
++*/
++function canonicalNativeLoopbackRedirect(uri) {
++	const withoutPort = stripLoopbackRedirectPort(uri);
++	if (!withoutPort) return;
++	const match = /^http:\/\/(?:127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
++	if (!match) return withoutPort;
++	return `http://loopback-ip${withoutPort.slice(match[0].length)}`;
++}
+ /** Keep URI syntax and credential checks outside the custom trust decision. */
+ function isSafeCustomRedirectUri(uri) {
+ 	if (!SafeUrlSchema.safeParse(uri).success) return false;
+@@ -5648,7 +5643,7 @@ function authorizeRedirectOnError(opts) {
+ 		const raw = ctx.query ?? {};
+ 		const trusted = await resolveTrustedRedirectUri(ctx, opts, typeof raw.client_id === "string" ? raw.client_id : void 0, typeof raw.redirect_uri === "string" ? raw.redirect_uri : void 0);
+ 		if (trusted) return handleRedirect(ctx, formatErrorURL(trusted, error, error_description, typeof raw.state === "string" ? raw.state : void 0, getIssuer(ctx, opts), deriveResponseMode(raw)));
+-		return handleRedirect(ctx, getErrorURL(ctx, error, error_description));
++		return handleRedirect(ctx, getErrorURL(ctx, error, error_description, opts));
+ 	};
+ }
+ async function authorizeEndpoint(ctx, opts, settings) {
+@@ -5717,12 +5712,12 @@ async function authorizeEndpoint(ctx, opts, settings) {
+ 	});
+ 	const promptSet = ctx.query?.prompt ? parsePrompt(ctx.query?.prompt) : void 0;
+ 	const promptNone = promptSet?.has("none") ?? false;
+-	if (promptSet?.has("select_account") && !opts.selectAccount?.page) return handleRedirect(ctx, getErrorURL(ctx, `unsupported_prompt_select_account`, "unsupported prompt type"));
+-	if (!(query.response_type === "code")) return handleRedirect(ctx, getErrorURL(ctx, "unsupported_response_type", "unsupported response type"));
++	if (promptSet?.has("select_account") && !opts.selectAccount?.page) return handleRedirect(ctx, getErrorURL(ctx, `unsupported_prompt_select_account`, "unsupported prompt type", opts));
++	if (!(query.response_type === "code")) return handleRedirect(ctx, getErrorURL(ctx, "unsupported_response_type", "unsupported response type", opts));
+ 	const client = await getClient(ctx, opts, query.client_id);
+-	if (!client) return handleRedirect(ctx, getErrorURL(ctx, "invalid_client", "client not found"));
+-	if (client.disabled) return handleRedirect(ctx, getErrorURL(ctx, "client_disabled", "client is disabled"));
+-	if (!clientAllowsGrant(client, "authorization_code")) return handleRedirect(ctx, getErrorURL(ctx, "unauthorized_client", "client is not authorized to use the authorization_code grant"));
++	if (!client) return handleRedirect(ctx, getErrorURL(ctx, "invalid_client", "client not found", opts));
++	if (client.disabled) return handleRedirect(ctx, getErrorURL(ctx, "client_disabled", "client is disabled", opts));
++	if (!clientAllowsGrant(client, "authorization_code")) return handleRedirect(ctx, getErrorURL(ctx, "unauthorized_client", "client is not authorized to use the authorization_code grant", opts));
+ 	const registeredUris = client.redirectUris ?? [];
+ 	let isValidRedirectUri = false;
+ 	if (query.redirect_uri) {
+@@ -5734,7 +5729,7 @@ async function authorizeEndpoint(ctx, opts, settings) {
+ 		}
+ 		else if (!opts.validateRedirectUri) isValidRedirectUri = defaultResult;
+ 	}
+-	if (!isValidRedirectUri) return handleRedirect(ctx, getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"));
++	if (!isValidRedirectUri) return handleRedirect(ctx, getErrorURL(ctx, "invalid_redirect", "invalid redirect uri", opts));
+ 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
+ 	if (requestedScopes) {
+ 		const validScopes = new Set(client.scopes ?? opts.scopes);
+diff --git a/dist/introspect-DeWu79D4.mjs b/dist/introspect-DeWu79D4.mjs
+index 7f69e12..beda8e5 100644
+--- a/dist/introspect-DeWu79D4.mjs
++++ b/dist/introspect-DeWu79D4.mjs
+@@ -409,7 +409,15 @@ const clientRegistrationRequestSchema = z.object({
+ 	client_name: z.string().refine((value) => value.trim().length > 0, "client_name cannot be empty").optional(),
+ 	client_uri: z.string().optional(),
+ 	logo_uri: z.string().optional(),
+-	contacts: z.array(z.string().min(1)).min(1).optional(),
++	/**
++	 * RFC 7591 §2 makes `contacts` optional, so an empty array states nothing
++	 * that an absent member does not already state. Rejecting it fails the
++	 * registration of clients that always send the key, before authorization can
++	 * start. The empty array therefore normalizes to absent; a non-empty array
++	 * keeps its per-element validation and every other registration check is
++	 * untouched.
++	 */
++	contacts: z.array(z.string().min(1)).optional().transform((value) => value?.length ? value : void 0),
+ 	tos_uri: z.string().optional(),
+ 	policy_uri: z.string().optional(),
+ 	software_id: z.string().optional(),
+@@ -1004,6 +1012,7 @@ async function seedResources(ctx, opts) {
+ 	const inputs = collectResourceInputs(opts);
+ 	if (inputs.length === 0) return;
+ 	const mode = opts.resourceSeedMode ?? "insertOnly";
++	if (mode === "none") return;
+ 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
+ 	for (const rawInput of inputs) {
+ 		const check = await checkIdentifier(opts, rawInput.identifier);
+@@ -1278,7 +1287,17 @@ const JWT_ACCESS_TOKEN_TYPE = "at+jwt";
+ * Handles the /oauth2/token endpoint by delegating
+ * the grant types
+ */
++// Internal observation only; never included in the OAuth response body.
++const OAUTH_TOKEN_OBSERVATION = Symbol.for("stella.oauth.token-refusal");
++function observeOAuthToken(ctx, fields) {
++	Object.assign(ctx.context[OAUTH_TOKEN_OBSERVATION] ??= {}, fields);
++}
++function oauthTokenError(ctx, reason, status, body) {
++	observeOAuthToken(ctx, { reason });
++	return new APIError(status, body);
++}
+ async function tokenEndpoint(ctx, opts) {
++	ctx.context[OAUTH_TOKEN_OBSERVATION] = { clientId: ctx.body.client_id ?? null, familyId: null };
+ 	const grantType = ctx.body.grant_type;
+ 	if (!getSupportedGrantTypes(opts).includes(grantType)) throw new APIError("BAD_REQUEST", {
+ 		error_description: `unsupported grant_type ${grantType}`,
+@@ -1564,7 +1583,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
+ 		authTime,
+ 		confirmation,
+ 		requestedUserInfoClaims: requestedUserInfoClaims?.length ? requestedUserInfoClaims : void 0,
+-		scopes,
++		scopes: originalRefresh?.scopes.includes("offline_access") && !scopes.includes("offline_access") ? [...scopes, "offline_access"] : scopes,
+ 		resources,
+ 		createdAt: /* @__PURE__ */ new Date(iat * 1e3),
+ 		expiresAt: /* @__PURE__ */ new Date(exp * 1e3)
+@@ -1595,7 +1614,7 @@ async function createRefreshToken(ctx, opts, user, referenceId, authorizationCod
+ 		}],
+ 		increment: {},
+ 		set: rotationUpdate
+-	})) throw new APIError("BAD_REQUEST", {
++	})) throw oauthTokenError(ctx, "rotation_conflict", "BAD_REQUEST", {
+ 		error_description: "invalid refresh token",
+ 		error: "invalid_grant"
+ 	});
+@@ -1899,10 +1918,11 @@ async function createUserTokens(ctx, opts, params) {
+ /** Checks verification value */
+ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri, resource) {
+ 	const authorizationCodeId = await storeToken(opts.storeTokens, code, "authorization_code");
++	observeOAuthToken(ctx, { familyId: authorizationCodeId });
+ 	const verification = await ctx.context.internalAdapter.consumeVerificationValue(authorizationCodeId);
+ 	if (!verification) {
+ 		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+-		throw new APIError("BAD_REQUEST", {
++		throw oauthTokenError(ctx, "code_invalid", "BAD_REQUEST", {
+ 			error_description: "invalid code",
+ 			error: "invalid_grant"
+ 		});
+@@ -1911,32 +1931,32 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+ 	try {
+ 		rawValue = JSON.parse(verification.value);
+ 	} catch {
+-		throw new APIError("BAD_REQUEST", {
++		throw oauthTokenError(ctx, "code_malformed", "BAD_REQUEST", {
+ 			error_description: "malformed verification value",
+ 			error: "invalid_grant"
+ 		});
+ 	}
+ 	const parsed = verificationValueSchema.safeParse(rawValue);
+-	if (!parsed.success) throw new APIError("BAD_REQUEST", {
++	if (!parsed.success) throw oauthTokenError(ctx, "code_malformed", "BAD_REQUEST", {
+ 		error_description: "malformed verification value",
+ 		error: "invalid_grant"
+ 	});
+ 	const verificationValue = parsed.data;
+-	if (verificationValue.query.client_id !== client_id) throw new APIError("BAD_REQUEST", {
++	if (verificationValue.query.client_id !== client_id) throw oauthTokenError(ctx, "client_mismatch", "BAD_REQUEST", {
+ 		error_description: "invalid client_id",
+ 		error: "invalid_grant"
+ 	});
+ 	const boundRedirectUri = verificationValue.query.redirect_uri;
+ 	if (boundRedirectUri) {
+-		if (!redirect_uri) throw new APIError("BAD_REQUEST", {
++		if (!redirect_uri) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 			error_description: "redirect_uri is required",
+ 			error: "invalid_request"
+ 		});
+-		if (boundRedirectUri !== redirect_uri) throw new APIError("BAD_REQUEST", {
++		if (boundRedirectUri !== redirect_uri) throw oauthTokenError(ctx, "redirect_mismatch", "BAD_REQUEST", {
+ 			error_description: "redirect_uri mismatch",
+ 			error: "invalid_grant"
+ 		});
+-	} else if (redirect_uri) throw new APIError("BAD_REQUEST", {
++	} else if (redirect_uri) throw oauthTokenError(ctx, "redirect_mismatch", "BAD_REQUEST", {
+ 		error_description: "redirect_uri mismatch",
+ 		error: "invalid_grant"
+ 	});
+@@ -1945,7 +1965,7 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+ 	if (resource && storedResources) {
+ 		const requestedSet = new Set(resource);
+ 		const authorizedSet = new Set(storedResources);
+-		for (const r of requestedSet) if (!authorizedSet.has(r)) throw new APIError("BAD_REQUEST", {
++		for (const r of requestedSet) if (!authorizedSet.has(r)) throw oauthTokenError(ctx, "resource_mismatch", "BAD_REQUEST", {
+ 			error_description: "requested resource not authorized",
+ 			error: "invalid_target"
+ 		});
+@@ -1962,19 +1982,20 @@ async function checkVerificationValue(ctx, opts, code, client_id, redirect_uri,
+ */
+ async function handleAuthorizationCodeGrant(ctx, opts) {
+ 	const { clientId: client_id, clientSecret: client_secret, preVerified, authMethod } = destructureCredentials(await extractClientCredentials(ctx, opts, `${ctx.context.baseURL}/oauth2/token`));
++	observeOAuthToken(ctx, { clientId: client_id ?? null });
+ 	const { code, code_verifier, redirect_uri, resource } = ctx.body;
+ 	const resources = toResourceList(resource);
+-	if (!client_id) throw new APIError("BAD_REQUEST", {
++	if (!client_id) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "client_id is required",
+ 		error: "invalid_request"
+ 	});
+-	if (!code) throw new APIError("BAD_REQUEST", {
++	if (!code) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "code is required",
+ 		error: "invalid_request"
+ 	});
+ 	const isAuthCodeWithSecret = client_id && client_secret;
+ 	const isAuthCodeWithPkce = client_id && code && code_verifier;
+-	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerified) throw new APIError("BAD_REQUEST", {
++	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce && !preVerified) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "Either code_verifier or client_secret is required",
+ 		error: "invalid_request"
+ 	});
+@@ -1985,7 +2006,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+ 	/** Get and check Verification Value */
+ 	const { verificationValue, effectiveResources, authorizedResources, authorizationCodeId } = await checkVerificationValue(ctx, opts, code, client_id, redirect_uri, resources);
+ 	const scopes = verificationValue.query.scope?.split(" ");
+-	if (!scopes) throw new APIError("INTERNAL_SERVER_ERROR", {
++	if (!scopes) throw oauthTokenError(ctx, "server_configuration", "INTERNAL_SERVER_ERROR", {
+ 		error_description: "verification scope unset",
+ 		error: "invalid_scope"
+ 	});
+@@ -1994,11 +2015,11 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+ 		scopes: (verificationValue.query?.scope)?.split(" ") || [],
+ 		nonce: verificationValue.query?.nonce
+ 	})) {
+-		if (!isAuthCodeWithPkce) throw new APIError("BAD_REQUEST", {
++		if (!isAuthCodeWithPkce) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 			error_description: "PKCE is required for this client",
+ 			error: "invalid_request"
+ 		});
+-	} else if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerified)) throw new APIError("BAD_REQUEST", {
++	} else if (!(isAuthCodeWithPkce || isAuthCodeWithSecret || preVerified)) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "Either PKCE (code_verifier) or client authentication (client_secret or client_assertion) is required",
+ 		error: "invalid_request"
+ 	});
+@@ -2006,26 +2027,26 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+ 	const pkceUsedInAuth = !!verificationValue.query?.code_challenge;
+ 	const pkceUsedInToken = !!code_verifier;
+ 	if (pkceUsedInAuth || pkceUsedInToken) {
+-		if (pkceUsedInAuth && !pkceUsedInToken) throw new APIError("BAD_REQUEST", {
++		if (pkceUsedInAuth && !pkceUsedInToken) throw oauthTokenError(ctx, "pkce_mismatch", "BAD_REQUEST", {
+ 			error_description: "code_verifier required because PKCE was used in authorization",
+ 			error: "invalid_request"
+ 		});
+-		if (!pkceUsedInAuth && pkceUsedInToken) throw new APIError("BAD_REQUEST", {
++		if (!pkceUsedInAuth && pkceUsedInToken) throw oauthTokenError(ctx, "pkce_mismatch", "BAD_REQUEST", {
+ 			error_description: "code_verifier provided but PKCE was not used in authorization",
+ 			error: "invalid_request"
+ 		});
+-		if ((verificationValue.query?.code_challenge_method === "S256" ? await generateCodeChallenge(code_verifier) : void 0) !== verificationValue.query?.code_challenge) throw new APIError("BAD_REQUEST", {
++		if ((verificationValue.query?.code_challenge_method === "S256" ? await generateCodeChallenge(code_verifier) : void 0) !== verificationValue.query?.code_challenge) throw oauthTokenError(ctx, "pkce_mismatch", "BAD_REQUEST", {
+ 			error_description: "code verification failed",
+ 			error: "invalid_grant"
+ 		});
+ 	}
+ 	/** Get user */
+-	if (!verificationValue.userId) throw new APIError("BAD_REQUEST", {
++	if (!verificationValue.userId) throw oauthTokenError(ctx, "user_unavailable", "BAD_REQUEST", {
+ 		error_description: "missing user, user may have been deleted",
+ 		error: "invalid_user"
+ 	});
+ 	const user = await ctx.context.internalAdapter.findUserById(verificationValue.userId);
+-	if (!user) throw new APIError("BAD_REQUEST", {
++	if (!user) throw oauthTokenError(ctx, "user_unavailable", "BAD_REQUEST", {
+ 		error_description: "missing user, user may have been deleted",
+ 		error: "invalid_user"
+ 	});
+@@ -2036,7 +2057,7 @@ async function handleAuthorizationCodeGrant(ctx, opts) {
+ 			value: verificationValue.sessionId
+ 		}]
+ 	});
+-	if (!session || session.expiresAt < /* @__PURE__ */ new Date()) throw new APIError("BAD_REQUEST", {
++	if (!session || session.expiresAt < /* @__PURE__ */ new Date()) throw oauthTokenError(ctx, "session_unavailable", "BAD_REQUEST", {
+ 		error_description: "session no longer exists",
+ 		error: "invalid_request"
+ 	});
+@@ -2109,13 +2130,14 @@ async function handleClientCredentialsGrant(ctx, opts) {
+ */
+ async function handleRefreshTokenGrant(ctx, opts) {
+ 	const { clientId: client_id, clientSecret: client_secret, preVerified, authMethod } = destructureCredentials(await extractClientCredentials(ctx, opts, `${ctx.context.baseURL}/oauth2/token`));
++	observeOAuthToken(ctx, { clientId: client_id ?? null });
+ 	const { refresh_token, scope, resource } = ctx.body;
+ 	const resources = toResourceList(resource);
+-	if (!client_id) throw new APIError("BAD_REQUEST", {
++	if (!client_id) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "Missing required client_id",
+ 		error: "invalid_request"
+ 	});
+-	if (!refresh_token) throw new APIError("BAD_REQUEST", {
++	if (!refresh_token) throw oauthTokenError(ctx, "request_invalid", "BAD_REQUEST", {
+ 		error_description: "Missing a required refresh_token for refresh_token grant",
+ 		error: "invalid_request"
+ 	});
+@@ -2131,27 +2153,51 @@ async function handleRefreshTokenGrant(ctx, opts) {
+ 			value: await getStoredToken(opts.storeTokens, decodedRefresh.token, "refresh_token")
+ 		}]
+ 	});
+-	if (!refreshToken) throw new APIError("BAD_REQUEST", {
++	observeOAuthToken(ctx, { familyId: refreshToken?.authorizationCodeId ?? null });
++	if (!refreshToken) throw oauthTokenError(ctx, "unknown_token", "BAD_REQUEST", {
+ 		error_description: "session not found",
+ 		error: "invalid_grant"
+ 	});
+-	if (refreshToken.clientId !== client_id) throw new APIError("BAD_REQUEST", {
++	if (refreshToken.clientId !== client_id) throw oauthTokenError(ctx, "client_mismatch", "BAD_REQUEST", {
+ 		error_description: "invalid refresh token",
+ 		error: "invalid_grant"
+ 	});
+-	if (refreshToken.expiresAt < /* @__PURE__ */ new Date()) throw new APIError("BAD_REQUEST", {
++	if (refreshToken.expiresAt < /* @__PURE__ */ new Date()) throw oauthTokenError(ctx, "expired", "BAD_REQUEST", {
+ 		error_description: "invalid refresh token",
+ 		error: "invalid_grant"
+ 	});
+-	if (resources && refreshToken.resources && !resources.every((v) => refreshToken.resources?.includes(v))) throw new APIError("BAD_REQUEST", {
++	if (resources && refreshToken.resources && !resources.every((v) => refreshToken.resources?.includes(v))) throw oauthTokenError(ctx, "resource_mismatch", "BAD_REQUEST", {
+ 		error_description: "requested resource invalid",
+ 		error: "invalid_target"
+ 	});
+ 	const scopes = refreshToken?.scopes;
++	if (!scopes.includes("offline_access")) throw oauthTokenError(ctx, "scope_mismatch", "BAD_REQUEST", {
++		error_description: "stored grant cannot refresh",
++		error: "invalid_grant"
++	});
++	// Validate the stored grant independently of any scope reduction in this request.
++	let storedPolicy;
++	try {
++		storedPolicy = await resolveResourcePolicy(ctx, opts, {
++			resource: refreshToken.resources,
++			clientId: client.clientId,
++			requestedScopes: scopes
++		});
++	} catch (error) {
++		if (error instanceof APIError && error.body?.error === "invalid_scope") throw oauthTokenError(ctx, "scope_mismatch", "BAD_REQUEST", {
++			error_description: "stored grant scopes are not allowed for this resource",
++			error: "invalid_grant"
++		});
++		throw error;
++	}
++	if (!storedPolicy.effectiveScopes.includes("offline_access")) throw oauthTokenError(ctx, "scope_mismatch", "BAD_REQUEST", {
++		error_description: "stored grant cannot refresh for this resource",
++		error: "invalid_grant"
++	});
+ 	const requestedScopes = scope?.split(" ");
+ 	if (requestedScopes) {
+ 		const validScopes = new Set(scopes);
+-		for (const requestedScope of requestedScopes) if (!validScopes.has(requestedScope)) throw new APIError("BAD_REQUEST", {
++		for (const requestedScope of requestedScopes) if (!validScopes.has(requestedScope)) throw oauthTokenError(ctx, "scope_mismatch", "BAD_REQUEST", {
+ 			error_description: `unable to issue scope ${requestedScope}`,
+ 			error: "invalid_scope"
+ 		});
+@@ -2166,19 +2212,19 @@ async function handleRefreshTokenGrant(ctx, opts) {
+ 				resources: resources ?? refreshToken.resources
+ 			}));
+ 			if (replay) return replayRefreshTokenRotationResponse(ctx, replay);
+-			throw new APIError("BAD_REQUEST", {
++			throw oauthTokenError(ctx, "rotation_replay_mismatch", "BAD_REQUEST", {
+ 				error_description: "invalid refresh token",
+ 				error: "invalid_grant"
+ 			});
+ 		}
+ 		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+-		throw new APIError("BAD_REQUEST", {
++		throw oauthTokenError(ctx, refreshToken.rotatedAt ? "rotated_outside_replay" : "revoked", "BAD_REQUEST", {
+ 			error_description: "invalid refresh token",
+ 			error: "invalid_grant"
+ 		});
+ 	}
+ 	const user = await ctx.context.internalAdapter.findUserById(refreshToken.userId);
+-	if (!user) throw new APIError("BAD_REQUEST", {
++	if (!user) throw oauthTokenError(ctx, "user_unavailable", "BAD_REQUEST", {
+ 		error_description: "user not found",
+ 		error: "invalid_request"
+ 	});
+diff --git a/dist/oauth-DXiqbRzK.d.mts b/dist/oauth-DXiqbRzK.d.mts
+index 82f827d..faf7848 100644
+--- a/dist/oauth-DXiqbRzK.d.mts
++++ b/dist/oauth-DXiqbRzK.d.mts
+@@ -1170,6 +1170,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+   /**
+    * Controls whether boot-time `resources` config overwrites DB-edited rows.
+    *
++   * - `"none"`: never seeds resources at runtime. Use when committed migrations
++   *   provision and validate every configured resource before application boot.
+    * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
+    *   not already present. Existing rows are untouched — admin edits via CRUD
+    *   are never reverted on restart.
+@@ -1183,7 +1185,7 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+    *
+    * @default "insertOnly"
+    */
+-  resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
++  resourceSeedMode?: "none" | "insertOnly" | "merge" | "overwrite";
+   /**
+    * Opt-in cache membership for resources by `identifier`. Mirrors the
+    * {@link OAuthOptions.cachedTrustedClients} pattern.
+@@ -1351,6 +1353,14 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+    * @default false
+    */
+   allowUnauthenticatedClientRegistration?: boolean;
++  /**
++   * Exact native private-use redirect URIs accepted although their scheme is
++   * not a reverse-domain name or they carry a naming authority (RFC 8252
++   * §7.1). Every other native redirect rule still applies.
++   *
++   * @default []
++   */
++  nativeRedirectUriExceptions?: readonly string[];
+   /**
+    * Allow dynamic client registration (RFC 7591) at `POST /oauth2/register`.
+    *

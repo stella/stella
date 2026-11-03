@@ -173,6 +173,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "AI returned an invalid time narrative",
         }),
       );

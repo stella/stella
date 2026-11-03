@@ -1,14 +1,26 @@
 import { describe, expect, test } from "bun:test";
 
-import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_TARGET_METADATA,
+  type BrowserControlCommand,
+} from "@stll/api-contract/browser-control";
 
 import { checkCommandIdentity, type SnapshotState } from "./snapshot-guard";
 
 const URL_A = "https://example.com/";
+const ABSENT_TARGET_METADATA = {
+  type: BROWSER_CONTROL_TARGET_METADATA.absent,
+} as const;
 const click = {
   action: "click",
   page: { revision: "revision-1", url: URL_A },
-  target: { name: "Submit", ref: "e:2:1", role: "button" },
+  target: {
+    context: ABSENT_TARGET_METADATA,
+    href: ABSENT_TARGET_METADATA,
+    name: "Submit",
+    ref: "e:2:1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const snapshot = {
   documents: { "0": "document-top", "2": "document-frame" },

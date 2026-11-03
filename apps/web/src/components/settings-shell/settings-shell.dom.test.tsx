@@ -1,9 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { Role } from "@/lib/auth-client";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
 // Beta availability otherwise reads the request host through the server
@@ -11,6 +12,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
   VITE_BETA_FEATURES_ENABLED: "true",
+  VITE_FEATURE_USAGE: "true",
 });
 const originalFetch = globalThis.fetch;
 
@@ -21,6 +23,7 @@ const { cleanup, render, waitFor } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
+const { env } = await import("@/env");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { AuthenticatedUserProvider } =
@@ -46,6 +49,7 @@ afterEach(() => {
   }
   clients.length = 0;
   globalThis.fetch = originalFetch;
+  Reflect.set(env, "VITE_FEATURE_USAGE", true);
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -176,4 +180,11 @@ test("members without management access see only their account", async () => {
     expect(hrefs(view)).toContain("/settings/account/profile"),
   );
   expect(hrefs(view).filter((href) => href?.startsWith("/admin"))).toEqual([]);
+});
+
+test("usage settings stay hidden when the usage feature is disabled", async () => {
+  Reflect.set(env, "VITE_FEATURE_USAGE", false);
+  const { view } = await renderShell("en", "owner");
+  await waitFor(() => expect(hrefs(view)).toContain("/admin/general"));
+  expect(hrefs(view)).not.toContain("/admin/usage");
 });

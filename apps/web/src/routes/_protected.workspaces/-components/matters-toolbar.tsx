@@ -3,7 +3,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
@@ -14,7 +13,6 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuGroup,
@@ -23,13 +21,14 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
@@ -41,12 +40,16 @@ import { useConfigStore } from "@/stores/config-store";
 const routeApi = getRouteApi("/_protected");
 
 type MattersToolbarProps = {
+  status: "active" | "archived";
+  onStatusChange: (status: "active" | "archived") => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
 };
 
 export const MattersToolbar = ({
+  status,
+  onStatusChange,
   search,
   onSearchChange,
   searchRef,
@@ -63,15 +66,34 @@ export const MattersToolbar = ({
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
-        onChange={(e) => onSearchChange(e.currentTarget.value)}
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={onSearchChange}
         placeholder={t("common.search")}
         ref={searchRef}
         size="sm"
         value={search}
       />
 
+      <Menu>
+        <MenuTrigger render={<Button size="xs" variant="ghost" />}>
+          {status === "archived"
+            ? t("memory.views.archived")
+            : t("common.active")}
+        </MenuTrigger>
+        <MenuPopup>
+          <MenuItem onClick={() => onStatusChange("active")}>
+            {t("common.active")}
+            {status === "active" && <CheckIcon />}
+          </MenuItem>
+          <MenuItem onClick={() => onStatusChange("archived")}>
+            {t("memory.views.archived")}
+            {status === "archived" && <CheckIcon />}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
       <ToolbarSeparator />
 
       <Menu>
@@ -194,7 +216,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   const data = dataView.type === "items" ? dataView.items : undefined;
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
@@ -205,9 +227,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     return <QueryViewFeedback view={dataView} />;
   }
 
-  const isLimitReached =
-    data.workspaces.length >= WORKSPACES_PER_ORGANIZATION_MAX;
-  if (isLimitReached) {
+  if (!data.creationCapacity.canCreate) {
     return null;
   }
 
@@ -217,7 +237,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
       <Button
         aria-label={t("common.newMatter")}
         className={className}
-        onClick={() => openCreateMatter()}
+        onClick={(event) => openCreateMatter({ opener: event.currentTarget })}
         size="xs"
         title={t("common.newMatter")}
       >

@@ -5,9 +5,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DecisionReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -85,13 +85,16 @@ const analysisNote: MarginItem = {
 
 const ownComment: MarginItem = {
   author: { image: null, name: "Reader" },
+  createdAt: "2026-09-01T10:00:00.000Z",
   id: "comment-1",
   kind: "comment",
   mine: true,
   onDelete: () => undefined,
   onToggleVisibility: () => undefined,
   startAnchorId: "p-1",
+  targetType: "decision",
   text: "My own words.",
+  updatedAt: "2026-09-01T10:00:00.000Z",
   visibility: "private",
 };
 
@@ -128,7 +131,7 @@ describe("notes drawn in the text's own flow", () => {
 
 const provision = {
   document: {
-    country: "CZ",
+    country: "CZE",
     eli: "/eli/cz/sb/2012/89",
     id: "act-1",
     slug: "civil-code",

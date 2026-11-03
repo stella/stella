@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/workspaces/activity-scope";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
@@ -185,6 +186,8 @@ const readWorkspaceActivity = createSafeHandler(
               cursorActivityAt: threadCursorActivityAt,
               id: chatThreads.id,
               title: chatThreads.title,
+              titleSource: chatThreads.titleSource,
+              subjectDecisionId: chatThreads.subjectDecisionId,
             })
             .from(chatThreads)
             .where(
@@ -210,6 +213,11 @@ const readWorkspaceActivity = createSafeHandler(
       }),
     );
 
+    const projection = yield* Result.await(
+      Result.tryPromise(async () =>
+        readWithdrawnCopyProjection({ values: threadRows }),
+      ),
+    );
     const merged: InternalActivity[] = [];
     for (const row of entityRows) {
       merged.push({
@@ -232,7 +240,7 @@ const readWorkspaceActivity = createSafeHandler(
         activityAt: row.activityAt,
         cursorActivityAt: row.cursorActivityAt,
         id: row.id,
-        title: row.title,
+        title: projection.thread(row).title,
         type: "thread",
       });
     }

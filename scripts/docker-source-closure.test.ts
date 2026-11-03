@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -9,9 +9,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
+import { CI_INSTALL_PREINSTALL_FILES } from "./ci-install-preinstall-files";
 import {
   BUN_FLAGS,
   checkDockerSource,
@@ -41,6 +41,37 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
+  test("pre-install tooling imports only built-ins and dependency-free owners", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "..");
+    const allowedOwners = new Set([
+      "../packages/scripts/src/child-exit-status",
+      // This dependency-free owner is copied into the pre-install Docker stage.
+      "../packages/sha256/src/bun",
+    ]);
+    for (const file of CI_INSTALL_PREINSTALL_FILES) {
+      const source = readFileSync(path.join(repositoryRoot, file), "utf-8");
+      const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(source);
+      const invalid = imports
+        .map(({ path: specifier }) => specifier)
+        .filter((specifier) => {
+          if (specifier.startsWith("node:") || specifier.startsWith("bun:")) {
+            return false;
+          }
+          if (allowedOwners.has(specifier)) {
+            return false;
+          }
+          if (!specifier.startsWith("./")) {
+            return true;
+          }
+          const target = path.posix.normalize(
+            path.posix.join(path.posix.dirname(file), specifier),
+          );
+          return !/^scripts\/ci-install(?:-[\w-]+)?(?:\.ts)?$/u.test(target);
+        });
+      expect(invalid, `${file} must remain install-free`).toEqual([]);
+    }
+  });
+
   test("API install tooling COPY lines match the complete runtime import closure", () => {
     updateInstallToolingCopies(path.resolve(import.meta.dir, ".."), false);
   });
@@ -1701,11 +1732,12 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const parsed = ts.parseConfigFileTextToJson(
-        configuration,
-        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+      const parsed = Result.try(() =>
+        Bun.JSONC.parse(
+          readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+        ),
       );
-      expect(parsed.error, configuration).toBeUndefined();
+      expect(parsed.isOk(), configuration).toBe(true);
       const config = v.parse(
         v.looseObject({
           compilerOptions: v.optional(
@@ -1714,7 +1746,7 @@ describe("Docker source closure", () => {
             }),
           ),
         }),
-        parsed.config,
+        parsed.unwrapOr(undefined),
       );
       for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
         patterns.add(pattern);

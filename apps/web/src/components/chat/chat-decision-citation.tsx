@@ -26,7 +26,7 @@ import {
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { inlineDecisionCitationPresentation } from "@/components/references/decision-citation-chip.logic";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
@@ -40,7 +40,6 @@ import {
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
-import { useQueryView } from "@/lib/use-query-view";
 
 type CitationCacheRequest =
   | { type: "id"; key: string; options: ReturnType<typeof decisionOptions> }
@@ -117,7 +116,8 @@ const CitationView = ({
     return (
       <>
         {presentation.before}
-        <DecisionCitationChip
+        <CitationChip
+          kind="decision"
           decision={decision}
           onOpen={onOpen}
           presentation="inline"
@@ -135,7 +135,8 @@ const CitationView = ({
           {presentation.kind === "chip-after-text"
             ? presentation.label
             : passage}{" "}
-          <DecisionCitationChip
+          <CitationChip
+            kind="decision"
             decision={decision}
             onOpen={onOpen}
             presentation="inline"
@@ -143,7 +144,8 @@ const CitationView = ({
           />
         </>
       ) : (
-        <DecisionCitationChip
+        <CitationChip
+          kind="decision"
           decision={decision}
           passage={passage}
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
@@ -161,7 +163,7 @@ const ActiveChatDecisionCitation = ({
 }: ChatDecisionCitationProps) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.reads.get(decisionId);
-  const view = useQueryView(
+  const view = queryView(
     useQuery({
       ...decisionOptions(decisionId),
       enabled: scopedRead?.type !== "source",
@@ -199,7 +201,7 @@ const ActiveChatRouteDecisionCitation = ({
 }) => {
   const answer = useContext(AnswerDecisionContext);
   const scopedRead = answer?.routes.get(createCaseLawDecisionPath(params));
-  const view = useQueryView(
+  const view = queryView(
     useQuery({ ...options, enabled: scopedRead?.type !== "source" }),
   );
   const { open } = useOpenDecisionTab();

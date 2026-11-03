@@ -88,6 +88,7 @@ const updateRateEntry = createSafeHandler(
             columns: {
               userId: true,
               role: true,
+              activityCodeId: true,
               effectiveFrom: true,
               effectiveTo: true,
             },
@@ -134,6 +135,9 @@ const updateRateEntry = createSafeHandler(
             locked.role === null
               ? isNull(rateEntries.role)
               : eq(rateEntries.role, locked.role),
+            locked.activityCodeId === null
+              ? isNull(rateEntries.activityCodeId)
+              : eq(rateEntries.activityCodeId, locked.activityCodeId),
             ne(rateEntries.id, body.id),
             overlapToCondition,
           ];

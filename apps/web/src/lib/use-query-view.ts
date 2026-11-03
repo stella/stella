@@ -1,18 +1,11 @@
 import { useRef } from "react";
 
-import type { UseQueryResult } from "@tanstack/react-query";
-
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NotApiErrorEnvelope } from "@/lib/analytics/types";
-import { queryView, queryViewError } from "@/lib/query-view.logic";
-import type { QueryView, QueryViewOptions } from "@/lib/query-view.logic";
-
-export const useQueryView = <TData, TError>(
-  query: UseQueryResult<TData, TError>,
-  options?: QueryViewOptions<TData>,
-): QueryView<TData, TError> => queryView(query, options);
+import { queryViewError } from "@/lib/query-view.logic";
+import type { QueryView } from "@/lib/query-view.logic";
 
 // The envelope guard sits on the parameter because a conditional constraint on
 // TError itself is circular; `captureError<TError>` keeps the guarded

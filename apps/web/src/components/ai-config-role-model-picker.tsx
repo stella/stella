@@ -38,6 +38,7 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 
 type AIConfigRoleModelPickerProps = {
   className?: string;
@@ -163,6 +164,7 @@ export const AIConfigRoleModelPicker = ({
                   <Combobox<ModelSelection>
                     autoHighlight
                     disabled={disabled || !selectedProvider}
+                    filter={matchesComboboxItem}
                     items={modelOptions}
                     itemToStringLabel={(option) => option.modelId}
                     onInputValueChange={(value) => {

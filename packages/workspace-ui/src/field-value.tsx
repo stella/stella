@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -10,6 +10,7 @@ import { cn } from "@stll/ui/utils";
 
 import { emptyColor, resolveOptionColor } from "./colors";
 import { getClipFieldValueLabel } from "./field-value-logic";
+import { useFormatter, useFormattingLocale } from "./formatting";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
 export type FieldValueVariant = "default" | "table" | "kanban";
@@ -159,7 +160,7 @@ export const MoneyFieldValue = ({
   content: Extract<WorkspaceFieldContent, { type: "money" }>;
   variant?: FieldValueVariant;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const resolvedVariant = variant ?? "default";
 
   return (

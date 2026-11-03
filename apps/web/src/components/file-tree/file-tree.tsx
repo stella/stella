@@ -212,7 +212,7 @@ export const FileTree = ({
               </FileTreeNameCell>
             </div>
             {renderActions && (
-              <span className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible">
+              <span className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible pointer-coarse:visible">
                 {renderActions(node)}
               </span>
             )}

@@ -11,6 +11,7 @@ import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
+import { routePresentation } from "@/routes/-route-presentation";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
 // be readable without an account. Until that is switched on it keeps exactly
@@ -22,6 +23,11 @@ const guarded = !isPublicKnowledgeEnabled();
 
 export const Route = createFileRoute("/knowledge")({
   staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "navigation.knowledge",
+      to: "/knowledge",
+    }),
     appFrame: APP_FRAME_SCOPE.knowledge,
     providerScopes: MEMBER_PROVIDER_SCOPES,
   },

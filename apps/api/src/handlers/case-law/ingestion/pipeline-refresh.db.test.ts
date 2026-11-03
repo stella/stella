@@ -28,11 +28,6 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  DOCUMENT_DELIVERY,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -40,6 +35,11 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
@@ -233,13 +233,15 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-${suffix}`;
       const id = await insertHydratedDecision(caseNumber);
 
-      const outcome = await processDecision({
-        input: metadataOnlyResult(caseNumber),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      const outcome = (
+        await processDecision({
+          input: metadataOnlyResult(caseNumber),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       expect(outcome.inserted).toBe(true);
 
@@ -297,16 +299,18 @@ if (!databaseUrl || !runPostgresTests) {
           return await scopedDb(callback);
         };
 
-        await processDecision({
-          input: plainTextIngestionResult({
-            ...metadataOnlyResult(caseNumber),
-            documentDelivery,
-          }),
-          observationOrder: 1n,
-          sourceId,
-          scopedDb: racingDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        });
+        (
+          await processDecision({
+            input: plainTextIngestionResult({
+              ...metadataOnlyResult(caseNumber),
+              documentDelivery,
+            }),
+            observationOrder: 1n,
+            sourceId,
+            scopedDb: racingDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          })
+        ).unwrap();
 
         // If the sequence ever changes, the injection no longer lands in
         // the window and this test would pass without exercising it.
@@ -332,26 +336,30 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-deferred-${suffix}`;
       const id = await insertEmptyDecision(caseNumber);
 
-      await processDecision({
-        input: metadataOnlyResult(caseNumber),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: metadataOnlyResult(caseNumber),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       expect(await isUnpublished(id)).toBe(false);
     });
 
     test("an inline decision with no document is stored unpublished until one arrives", async () => {
       const caseNumber = `refresh-inline-new-${suffix}`;
-      await processDecision({
-        input: inlineResultWithoutDocument(caseNumber),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: inlineResultWithoutDocument(caseNumber),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
       const stored = await db.query.caseLawDecisions.findFirst({
         where: { sourceId: { eq: sourceId }, caseNumber },
         columns: { id: true },
@@ -362,17 +370,19 @@ if (!databaseUrl || !runPostgresTests) {
       created.push(stored.id);
       expect(await isUnpublished(stored.id)).toBe(true);
 
-      await processDecision({
-        input: plainTextIngestionResult({
-          ...inlineResultWithoutDocument(caseNumber),
-          fulltext: STORED_TEXT,
-          rawHash: "hash-with-document",
-        }),
-        observationOrder: 2n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-08-01T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...inlineResultWithoutDocument(caseNumber),
+            fulltext: STORED_TEXT,
+            rawHash: "hash-with-document",
+          }),
+          observationOrder: 2n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-08-01T12:00:00.000Z"),
+        })
+      ).unwrap();
       expect(await isUnpublished(stored.id)).toBe(false);
       expect((await readDecision(stored.id))?.fulltext).toBe(STORED_TEXT);
     });
@@ -385,16 +395,18 @@ if (!databaseUrl || !runPostgresTests) {
       const id = await insertEmptyDecision(caseNumber);
 
       const observe = async (observationOrder: bigint) =>
-        await processDecision({
-          input: plainTextIngestionResult({
-            ...inlineResultWithoutDocument(caseNumber),
-            rawHash: "hash-before",
-          }),
-          observationOrder,
-          sourceId,
-          scopedDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        });
+        (
+          await processDecision({
+            input: plainTextIngestionResult({
+              ...inlineResultWithoutDocument(caseNumber),
+              rawHash: "hash-before",
+            }),
+            observationOrder,
+            sourceId,
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          })
+        ).unwrap();
 
       await observe(1n);
       expect(await isUnpublished(id)).toBe(true);
@@ -409,13 +421,15 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-inline-hydrated-${suffix}`;
       const id = await insertHydratedDecision(caseNumber);
 
-      await processDecision({
-        input: inlineResultWithoutDocument(caseNumber),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: inlineResultWithoutDocument(caseNumber),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       expect(await isUnpublished(id)).toBe(false);
       expect((await readDecision(id))?.fulltext).toBe(STORED_TEXT);
@@ -427,16 +441,18 @@ if (!databaseUrl || !runPostgresTests) {
       const caseNumber = `refresh-doc-${suffix}`;
       const id = await insertHydratedDecision(caseNumber);
 
-      await processDecision({
-        input: plainTextIngestionResult({
-          ...metadataOnlyResult(caseNumber),
-          fulltext: "Rozsudok\n\nOdôvodnenie:\n\nRevidovaný text.",
-        }),
-        observationOrder: 1n,
-        sourceId,
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
+      (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...metadataOnlyResult(caseNumber),
+            fulltext: "Rozsudok\n\nOdôvodnenie:\n\nRevidovaný text.",
+          }),
+          observationOrder: 1n,
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
 
       const row = await readDecision(id);
       expect(row?.fulltext).toContain("Revidovaný");

@@ -16,7 +16,7 @@ import type {
   FieldContent,
 } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUFFER_INTENT_DELETE_TIMEOUT_MS,
@@ -415,7 +415,9 @@ export const initFileDerivativeWorker = () => {
   // Bound late: the controller pauses the worker that runs the processor.
   let pauseTarget: { pause: () => void; resume: () => void } | null = null;
   const pausing = createPressurePause({
-    gate: memory,
+    gate: {
+      read: () => memory.read(LIMITS.fileDerivativeSourceMaxBytes),
+    },
     pause: () => pauseTarget?.pause(),
     resume: () => pauseTarget?.resume(),
     recheckMs: LIMITS.fileDerivativeDeferDelayMs,
@@ -450,20 +452,28 @@ export const initFileDerivativeWorker = () => {
     // Local pause without waiting: it is called from inside the processor,
     // which must still finish the job in hand.
     pause: () => {
-      worker.pause(true).catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.pause(true).catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.pause",
+      );
     },
     resume: () => {
-      worker.resume().catch((error: unknown) => {
-        observeFailure(error, {
-          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
-          ctx: { queue: QUEUE_NAME },
-        });
-      });
+      detached(
+        async () =>
+          worker.resume().catch((error: unknown) => {
+            observeFailure(error, {
+              sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+              ctx: { queue: QUEUE_NAME },
+            });
+          }),
+        "file-derivative-queue.resume",
+      );
     },
   };
 
@@ -471,33 +481,41 @@ export const initFileDerivativeWorker = () => {
     const exhausted =
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-      markImageThumbnailFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markThumbnailFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        async () =>
+          markImageThumbnailFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markThumbnailFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-image-thumbnail-failed",
+      );
     } else if (exhausted) {
-      markPdfDerivativeFailed(
-        job.data,
-        DERIVATIVE_FAILURE_REASON.PROCESSING,
-      ).catch((markError: unknown) => {
-        captureError(
-          markError,
-          handlerErrorContext("fileDerivative.markPdfFailed", {
-            entityId: job.data.entityId,
-            fieldId: job.data.fieldId,
-            workspaceId: job.data.workspaceId,
+      detached(
+        async () =>
+          markPdfDerivativeFailed(
+            job.data,
+            DERIVATIVE_FAILURE_REASON.PROCESSING,
+          ).catch((markError: unknown) => {
+            captureError(
+              markError,
+              handlerErrorContext("fileDerivative.markPdfFailed", {
+                entityId: job.data.entityId,
+                fieldId: job.data.fieldId,
+                workspaceId: job.data.workspaceId,
+              }),
+            );
           }),
-        );
-      });
+        "file-derivative-queue.mark-pdf-derivative-failed",
+      );
     }
 
     captureError(
@@ -568,7 +586,10 @@ export const createFileDerivativeProcessor =
     processThumbnail: (data: FileDerivativeJobData) => Promise<void>;
   }) =>
   async (job: FileDerivativeProcessorJob): Promise<void> => {
-    const pressure = memory.read();
+    // Reserve the full admitted input budget before claiming converter work.
+    // Every backend enforces this same cap, so even legacy jobs without a
+    // recorded source size receive conservative byte-weighted admission.
+    const pressure = memory.read(LIMITS.fileDerivativeSourceMaxBytes);
     if (pressure.cause !== null) {
       pausing.closed(pressure);
       await job.moveToDelayed(
@@ -756,7 +777,9 @@ const buildPdfDerivative = async (
   if (source.type === "refused") {
     return source;
   }
-  const conversion = await convertToPdf(source.source, { retry: "caller" });
+  const conversion = await convertToPdf(source.source, {
+    retry: "caller",
+  });
   if (Result.isError(conversion)) {
     if (conversion.error instanceof ConversionInputError) {
       const conversionRefusal = displayableConversionRefusal(

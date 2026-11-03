@@ -11,7 +11,10 @@ import {
   SkillBindingBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 
 /**
  * Minimal display fields shared by onboarding (`LoadedCatalogueEntry`)
@@ -74,6 +77,11 @@ export const CatalogueRow = ({
     kind: display.kind,
   });
   const displayName = labelKey ? t(labelKey) : display.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: display.slug,
+    kind: display.kind,
+  });
+  const description = descriptionKey ? t(descriptionKey) : display.description;
 
   return (
     <ContextMenu actions={contextActions}>
@@ -115,12 +123,12 @@ export const CatalogueRow = ({
             {isFirstParty && <FirstPartyMark />}
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>
-          {display.description.length > 0 && (
+          {description.length > 0 && (
             <p
               className="text-muted-foreground line-clamp-1 text-xs"
               dir="auto"
             >
-              {display.description}
+              {description}
             </p>
           )}
           {notice !== undefined && (

@@ -12,8 +12,6 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 
-const DOCUMENT_ROUTE_SUFFIX = "/document";
-
 const dateOnlyEpoch = (value: string): number =>
   Temporal.PlainDate.from(value).toZonedDateTime({
     plainTime: Temporal.PlainTime.from("00:00"),
@@ -26,9 +24,6 @@ const instantEpoch = (value: string): number =>
 type InternalColId = "select" | "add-property";
 
 export const getInternalColId = (col: InternalColId): InternalColId => col;
-
-export const isWorkspaceDocumentRoutePath = (pathname: string) =>
-  pathname.endsWith(DOCUMENT_ROUTE_SUFFIX);
 
 // -- Internal property IDs (metadata columns stored in view config) --
 

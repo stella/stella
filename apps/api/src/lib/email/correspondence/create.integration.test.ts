@@ -30,6 +30,7 @@ import getMatterInboundAddress from "@/api/handlers/workspaces/correspondence/ad
 import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
 import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
 import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
@@ -120,6 +121,7 @@ const parsedMessage = (provenance: CorrespondenceDeliveryProvenance) =>
   ({
     direction: "in",
     channel: "email",
+    dataBox: null,
     messageId: `<${Bun.randomUUIDv7()}@example.test>`,
     contentHash: "a".repeat(64),
     from: { address: "sender@example.test", name: null },
@@ -140,13 +142,15 @@ const commonContext = () => ({
   workspaceId: ids.wsA1,
   memberRole: sessionMemberRole("owner"),
   request: new Request("https://api.example.test/v1/correspondence"),
-  route: "/v1/correspondence",
+  route: "/v1/workspaces/:workspaceId/correspondence" satisfies ApiRoutePath,
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
 });
 
-const fileMessage = async (parsed: ParsedCorrespondence) => {
+const fileMessage = async (
+  parsed: Extract<ParsedCorrespondence, { source: "delivery" }>,
+) => {
   const result = await createCorrespondence({
     safeDb: safeDbFor(ids.userA1, ids.wsA1),
     workspaceId: ids.wsA1,
@@ -196,6 +200,7 @@ describe("matter correspondence", () => {
     expect(duplicate).toEqual({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: false,
     });
@@ -247,7 +252,8 @@ describe("matter correspondence", () => {
       workspaceId: ids.wsA1,
       memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
-      route: "/v1/correspondence",
+      route:
+        "/v1/workspaces/:workspaceId/correspondence" satisfies ApiRoutePath,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),
@@ -310,7 +316,8 @@ describe("matter correspondence", () => {
       safeDb: safeDbFor(ids.userAdmin, ids.wsA1),
       memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
-      route: "/v1/correspondence",
+      route:
+        "/v1/organization-settings/correspondence/allowed-senders" satisfies ApiRoutePath,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       recordAuditEvent: recorderFor(ids.userAdmin, null),
@@ -360,6 +367,7 @@ describe("matter correspondence", () => {
     expect(mailboxFiling).toMatchObject({
       type: "ok",
       id: first.id,
+      contentHash: parsed.contentHash,
       created: false,
       filerAdded: true,
     });
@@ -438,7 +446,8 @@ describe("matter correspondence", () => {
         workspaceId: ids.wsA1,
         memberRole: sessionMemberRole("owner"),
         request: new Request("https://api.example.test/v1/correspondence"),
-        route: "/v1/correspondence",
+        route:
+          "/v1/workspaces/:workspaceId/correspondence/address" satisfies ApiRoutePath,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         recordAuditEvent: recorderFor(ids.userA1, ids.wsA1),

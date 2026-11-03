@@ -12,9 +12,9 @@ import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-vers
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://self-hosted.example.test/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =
@@ -31,7 +31,7 @@ const { ProvisionsCited } =
 const { ProvisionVersionBasisLabel } =
   await import("./provision-version-basis");
 const { CitingDecisionItem } =
-  await import("@/features/statutes/components/provision-citing-decisions");
+  await import("@/features/statutes/components/citing-decision-item");
 const { decisionProvisionsInfiniteOptions } =
   await import("@/features/case-law/queries/provisions");
 const en = (await import("@/i18n/langs/en.json")).default;

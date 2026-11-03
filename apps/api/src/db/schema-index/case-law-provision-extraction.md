@@ -20,8 +20,8 @@ case_law_provision_extraction_scopes.generation  bigint   not null  case-law-pro
 The durable job behind one scope transition: which generation it applies, and how far through the scope's decisions (by id) it has got.
 
 ```text
-case_law_provision_scope_transitions.country             varchar      not null          case-law-provision-extraction.ts:143
-case_law_provision_scope_transitions.language            varchar      not null          case-law-provision-extraction.ts:144
+case_law_provision_scope_transitions.country             varchar      fk,not null       case-law-provision-extraction.ts:143
+case_law_provision_scope_transitions.language            varchar      fk,not null       case-law-provision-extraction.ts:144
 case_law_provision_scope_transitions.generation          bigint       not null          case-law-provision-extraction.ts:145
 case_law_provision_scope_transitions.action              text         not null          case-law-provision-extraction.ts:146
 case_law_provision_scope_transitions.cursor_decision_id  safeUuid     null              case-law-provision-extraction.ts:147
@@ -67,8 +67,8 @@ case_law_provision_extraction_revisions_registry.registered_at        timestampt
 The revision each jurisdiction extracts at, and the oldest revision whose output still counts as current.
 
 ```text
-case_law_provision_extraction_revisions.jurisdiction          varchar      pk,not null       case-law-provision-extraction.ts:257
-case_law_provision_extraction_revisions.desired_revision      integer      not null          case-law-provision-extraction.ts:258
+case_law_provision_extraction_revisions.jurisdiction          varchar      pk,fk,not null    case-law-provision-extraction.ts:257
+case_law_provision_extraction_revisions.desired_revision      integer      fk,not null       case-law-provision-extraction.ts:258
 case_law_provision_extraction_revisions.min_current_revision  integer      not null          case-law-provision-extraction.ts:259
 case_law_provision_extraction_revisions.changed_at            timestamptz  default,not null  case-law-provision-extraction.ts:260
 ```
@@ -78,7 +78,7 @@ case_law_provision_extraction_revisions.changed_at            timestamptz  defau
 One row per decision the provision extraction owes or has published.
 
 ```text
-case_law_provision_extractions.decision_id                  safeUuid     pk,not null       case-law-provision-extraction.ts:298
+case_law_provision_extractions.decision_id                  safeUuid     pk,fk,not null    case-law-provision-extraction.ts:298
 case_law_provision_extractions.jurisdiction                 varchar      not null          case-law-provision-extraction.ts:299
 case_law_provision_extractions.desired_input_digest         bytea        not null          case-law-provision-extraction.ts:300
 case_law_provision_extractions.lane                         text         not null          case-law-provision-extraction.ts:301
@@ -98,8 +98,8 @@ case_law_provision_extractions.generation                   bigint       default
 case_law_provision_extractions.outcome                      text         null              case-law-provision-extraction.ts:320
 case_law_provision_extractions.terminal_reason              text         null              case-law-provision-extraction.ts:321
 case_law_provision_extractions.published_input_digest       bytea        null              case-law-provision-extraction.ts:324
-case_law_provision_extractions.published_jurisdiction       varchar      null              case-law-provision-extraction.ts:325
-case_law_provision_extractions.published_revision           integer      null              case-law-provision-extraction.ts:326
+case_law_provision_extractions.published_jurisdiction       varchar      fk,null           case-law-provision-extraction.ts:325
+case_law_provision_extractions.published_revision           integer      fk,null           case-law-provision-extraction.ts:326
 case_law_provision_extractions.published_projection_digest  bytea        null              case-law-provision-extraction.ts:327
 case_law_provision_extractions.payload_class                text         null              case-law-provision-extraction.ts:328
 case_law_provision_extractions.payload_class_input_digest   bytea        null              case-law-provision-extraction.ts:331

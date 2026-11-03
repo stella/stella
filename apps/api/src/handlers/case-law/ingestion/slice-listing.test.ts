@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { expect, spyOn, test } from "bun:test";
+import { afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import {
   listReconciliationSlice,
@@ -12,6 +12,11 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 type ReconciliationListSlicePage = SourceReconciliation["listSlicePage"];
 

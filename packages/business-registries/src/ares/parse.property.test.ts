@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -58,7 +58,8 @@ const record = fc.record(
 test(
   "RES and search records preserve source identifiers and optional fields",
   () => {
-    fc.assert(
+    assertProperty(
+      "RES and search records preserve source identifiers and optional fields",
       fc.property(record, registryExtras, (raw, extra) => {
         const company = expectRegistryOutcome(() =>
           parseResRecord({ ...extra, ...raw }),
@@ -78,7 +79,7 @@ test(
           expectNullableString(parsed?.postalCode);
         }
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -87,7 +88,8 @@ test(
 test(
   "response boundaries return typed entities or registry failures for nested mutations",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "response boundaries return typed entities or registry failures for nested mutations",
       fc.asyncProperty(record, registryString, async (raw, text) => {
         const base = {
           icoId: "00006947",
@@ -183,7 +185,7 @@ test(
           );
         }
       }),
-      propertyConfig({ numRuns: 2, seed: propertySeed() }),
+      { numRuns: 2, seed: propertySeed() },
     );
   },
   propertyTestTimeout(30_000),
@@ -192,7 +194,8 @@ test(
 test(
   "VR enrichment retains unknown currencies and Unicode source values",
   () => {
-    fc.assert(
+    assertProperty(
+      "VR enrichment retains unknown currencies and Unicode source values",
       fc.property(
         record,
         registryString,
@@ -239,7 +242,7 @@ test(
           expectNullableString(enriched?.actingClause);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -248,7 +251,8 @@ test(
 test(
   "search boundaries retain typed projections for every response field mutation",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "search boundaries retain typed projections for every response field mutation",
       fc.asyncProperty(record, async (raw) => {
         const searchEntry = { ...raw, ico: raw.ico || "00006947" };
         const payload = { pocetCelkem: 1, ekonomickeSubjekty: [searchEntry] };
@@ -269,7 +273,7 @@ test(
           }
         });
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 5 }),
+      { seed: propertySeed(), numRuns: 5 },
     );
   },
   propertyTestTimeout(10_000),

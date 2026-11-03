@@ -31,6 +31,7 @@ import { AIProviderRows } from "@/routes/_protected.admin/-components/organizati
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";
+import { AIProviderSettingsBoundary } from "./ai-provider-settings-boundary";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import { DeepLKeyCard } from "./deepl-key-card";
 import { DocumentProcessingCard } from "./document-processing-card";
@@ -40,7 +41,13 @@ import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
 import { WebSearchKeysCard } from "./web-search-keys-card";
 
-export const AIConfigCard = () => {
+export const AIConfigCard = () => (
+  <AIProviderSettingsBoundary>
+    <AIConfigCardContent />
+  </AIProviderSettingsBoundary>
+);
+
+const AIConfigCardContent = () => {
   const t = useTranslations();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",

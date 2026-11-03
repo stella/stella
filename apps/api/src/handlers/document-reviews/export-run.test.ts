@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { SPREADSHEET_EXPORT_LIMITS } from "@/api/lib/views/table-export";
@@ -155,7 +156,8 @@ describe("document review run export", () => {
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export",
+      route:
+        "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "xlsx" },
@@ -345,7 +347,8 @@ describe("document review run export", () => {
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export",
+      route:
+        "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "csv" },

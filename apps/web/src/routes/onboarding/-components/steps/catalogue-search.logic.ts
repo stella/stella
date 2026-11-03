@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 type SearchableCatalogueEntry = {
   description: string;
@@ -10,6 +10,7 @@ type SearchableCatalogueEntry = {
 type FilterCatalogueEntriesOptions<T extends SearchableCatalogueEntry> = {
   compareName: (left: string, right: string) => number;
   jurisdictionFilter: ReadonlySet<string>;
+  localizedDescription: (entry: T) => string;
   localizedName: (entry: T) => string;
   otherEntries: readonly T[];
   query: string;
@@ -21,12 +22,13 @@ export const filterOnboardingCatalogueEntries = <
 >({
   compareName,
   jurisdictionFilter,
+  localizedDescription,
   localizedName,
   otherEntries,
   query,
   recommendedEntries,
 }: FilterCatalogueEntriesOptions<T>): T[] => {
-  const normalised = query.trim().toLowerCase();
+  const matches = createSearchQueryMatcher(query);
   const matchesSearch = (entry: T) => {
     if (jurisdictionFilter.size > 0 && entry.jurisdictions.length > 0) {
       const hasMatch = entry.jurisdictions.some((code) =>
@@ -36,16 +38,12 @@ export const filterOnboardingCatalogueEntries = <
         return false;
       }
     }
-    if (normalised === "") {
-      return true;
-    }
     return (
-      containsSearchMatchKey(entry.displayName.toLowerCase(), normalised) ||
-      containsSearchMatchKey(localizedName(entry).toLowerCase(), normalised) ||
-      containsSearchMatchKey(entry.description.toLowerCase(), normalised) ||
-      entry.tags.some((tag) =>
-        containsSearchMatchKey(tag.toLowerCase(), normalised),
-      )
+      matches(entry.displayName) ||
+      matches(localizedName(entry)) ||
+      matches(entry.description) ||
+      matches(localizedDescription(entry)) ||
+      entry.tags.some(matches)
     );
   };
 

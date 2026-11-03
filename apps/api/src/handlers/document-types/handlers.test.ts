@@ -15,11 +15,13 @@ import deleteDocumentType from "@/api/handlers/document-types/delete";
 import listDocumentTypes from "@/api/handlers/document-types/list";
 import reorderDocumentTypes from "@/api/handlers/document-types/reorder";
 import updateDocumentType from "@/api/handlers/document-types/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -56,8 +58,12 @@ const createOrgContext = (
     memberRole: sessionMemberRole("owner"),
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/document-types"),
-    route: "/document-types",
+    route: "/v1/document-types" satisfies ApiRoutePath,
     safeDb,
+    scopedDb: createOrganizationScopedTestDb(testDb, {
+      organizationId,
+      userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   };

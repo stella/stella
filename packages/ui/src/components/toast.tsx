@@ -55,10 +55,19 @@ type ToastOptions = Omit<
   actionProps?: ToastActionProps;
 };
 
-type ToastUpdateOptions = Partial<ToastOptions> & {
+type ToastUpdateFields = Partial<Omit<ToastOptions, "timeout">> & {
   title?: React.ReactNode | undefined;
-  type?: ToastType | undefined;
 };
+
+type ToastUpdateOptions =
+  | (ToastUpdateFields & {
+      type: ToastType;
+      timeout?: number | undefined;
+    })
+  | (ToastUpdateFields & {
+      type?: undefined;
+      timeout?: number | undefined;
+    });
 
 type ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;
 
@@ -467,10 +476,13 @@ function toastDedupeId({
   description,
   title,
   type,
-}: Pick<
-  ToastAddOptions,
-  "action" | "actionProps" | "description" | "title" | "type"
->): string | undefined {
+}: {
+  action?: ToastAction | undefined;
+  actionProps?: ToastActionProps | undefined;
+  description?: React.ReactNode | undefined;
+  title: React.ReactNode;
+  type?: ToastType | undefined;
+}): string | undefined {
   if (
     type === "loading" ||
     action !== undefined ||
@@ -543,20 +555,54 @@ function normalizeToastUpdateOptions(
     }),
     ...(type === undefined ? {} : { type }),
   };
-  const timeoutPolicy =
-    timeout === undefined
-      ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
-      : toastTimeoutPolicy(timeout);
   return {
     ...update,
     data: {
       ...(Object.hasOwn(options, "data") ? data : previous.data),
-      timeoutPolicy,
+      timeoutPolicy:
+        timeout === undefined
+          ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
+          : toastTimeoutPolicy(timeout),
     },
-    timeout:
-      timeoutPolicy.type === "explicit"
-        ? timeoutPolicy.timeout
-        : getDefaultToastTimeout({ ...previous, ...update }),
+    ...resolveToastUpdateTimeout(options, previous),
+  };
+}
+
+function resolveToastUpdateTimeout(
+  options: ToastUpdateOptions,
+  previous: Pick<
+    ToastObject<ToastData>,
+    "actionProps" | "data" | "description" | "title" | "type"
+  >,
+): { timeout?: number } {
+  if (options.timeout !== undefined) {
+    return { timeout: normalizeToastTimeout(options.timeout) };
+  }
+
+  const timeoutPolicy = previous.data?.timeoutPolicy;
+  if (timeoutPolicy?.type === "explicit") {
+    return { timeout: timeoutPolicy.timeout };
+  }
+
+  if (previous.type === "loading" && options.type === undefined) {
+    return {};
+  }
+
+  const { action, actionProps, type, ...updateOptions } = options;
+  const update = {
+    ...updateOptions,
+    ...normalizeToastActionProps({
+      action,
+      actionProps,
+      includeEmptyActionProps:
+        Object.hasOwn(options, "action") ||
+        Object.hasOwn(options, "actionProps"),
+    }),
+    ...(type === undefined ? {} : { type }),
+  };
+
+  return {
+    timeout: getDefaultToastTimeout({ ...previous, ...update }),
   };
 }
 
@@ -728,4 +774,5 @@ export {
   AnchoredToastProvider,
   toastCountdownMs,
   toastDedupeId,
+  resolveToastUpdateTimeout,
 };

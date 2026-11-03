@@ -73,7 +73,8 @@ test("package and probe execution precede conditional write credential minting",
   const token = requiredStep("Mint app token");
   const probe = requiredStep("Probe dated entries");
   const publish = requiredStep("Publish healing results");
-  const condition = "steps.probe.outputs.write_needed == 'true'";
+  const condition =
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true";
   expect(steps.indexOf(requiredStep("Install dependencies"))).toBeLessThan(
     steps.indexOf(probe),
   );
@@ -87,14 +88,19 @@ test("package and probe execution precede conditional write credential minting",
   for (const step of steps.slice(0, steps.indexOf(token))) {
     expect(JSON.stringify(step)).not.toContain("app-token.outputs.token");
   }
-  expect(token.with).toMatchObject({
+  expect(
+    Object.fromEntries(
+      Object.entries(token.with ?? {}).filter(([key]) =>
+        key.startsWith("permission-"),
+      ),
+    ),
+  ).toEqual({
     "permission-contents": "write",
-    "permission-pull-requests": "write",
     "permission-issues": "write",
+    "permission-pull-requests": "write",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
-  expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 
 test("probe evidence stays local and public output does not expose failed probes", () => {
@@ -146,8 +152,42 @@ test("the shared probe deadline preserves a separate publication budget", () => 
     expect(requiredStep(name)["timeout-minutes"]).toBeGreaterThan(0);
   }
   expect(requiredStep("Publish healing results").if).toBe(
-    "steps.probe.outputs.write_needed == 'true'",
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true",
   );
+});
+
+test("a dispatched dry run probes and checks but never mints a write token", () => {
+  const writeSteps = [
+    "Validate private task configuration",
+    "Mint app token",
+    "Publish healing results",
+  ].map(requiredStep);
+  const runs = (inputs: Record<string, boolean>) =>
+    writeSteps.map(({ if: condition }) =>
+      evaluate(condition ?? "true", {
+        values: {
+          "steps.probe.outputs.write_needed": "true",
+          ...Object.fromEntries(
+            Object.entries(inputs).map(([key, value]) => [
+              `inputs.${key}`,
+              value,
+            ]),
+          ),
+        },
+        fallback: (name) => (name.startsWith("inputs.") ? null : undefined),
+      }),
+    );
+  // A schedule has no inputs; a plain dispatch publishes like the schedule.
+  expect(runs({})).toEqual([true, true, true]);
+  expect(runs({ dry_run: false })).toEqual([true, true, true]);
+  expect(runs({ dry_run: true })).toEqual([false, false, false]);
+  expect(requiredStep("Probe dated entries").if).toBeUndefined();
+  expect(
+    requiredStep("Check every dated waiver on the default branch").if,
+  ).toBe(`\${{ !cancelled() }}`);
+  expect(workflow.on.workflow_dispatch).toMatchObject({
+    inputs: { dry_run: { type: "boolean", default: false } },
+  });
 });
 
 test("every healing job has an explicit main event policy", () => {
@@ -306,9 +346,9 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   // Offline, over the tracked tree, always scoped to the run's change: an
   // unset list fails the check instead of widening it to every waiver.
   expect(check?.run).toBe(
-    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"',
+    'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES" --base-files "$RUNNER_TEMP/dated-waiver-base-files"',
   );
-  for (const step of expiry.steps) {
+  for (const step of guardSteps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
   }
@@ -338,9 +378,11 @@ test("CI expiry runs list the files their change touched", () => {
   const list = quickChecks.find(
     ({ name }) => name === "dated-waiver-expiry: List files the change touches",
   )?.run;
-  if (list === undefined) {
-    throw new TypeError("Missing dated waiver change listing");
-  }
+  expect(list?.trim()).toBe("bash scripts/dated-waiver-changed-files.sh");
+  const listing = readFileSync(
+    new URL("dated-waiver-changed-files.sh", import.meta.url),
+    "utf-8",
+  );
   const directory = mkdtempSync(path.join(tmpdir(), "dated-waiver-scope-"));
   const runnerTemp = mkdtempSync(path.join(tmpdir(), "dated-waiver-runner-"));
   try {
@@ -367,23 +409,44 @@ test("CI expiry runs list the files their change touched", () => {
     const listed = (event: string, env: Record<string, string> = {}) => {
       const githubEnv = path.join(runnerTemp, `${event}.env`);
       writeFileSync(githubEnv, "");
-      const run = Bun.spawnSync(["bash", "-euo", "pipefail", "-c", list], {
-        cwd: directory,
-        env: {
-          ...process.env,
-          GITHUB_ENV: githubEnv,
-          GITHUB_EVENT_NAME: event,
-          RUNNER_TEMP: runnerTemp,
-          TARGET_REF: "",
-          PUSH_BEFORE: "",
-          ...env,
+      const run = Bun.spawnSync(
+        [
+          "bash",
+          "-euo",
+          "pipefail",
+          "-c",
+          listing.replace(
+            /^.*bun scripts\/dated-waiver-base\.ts.*$/mu,
+            'printf "%s" "$base" > "$RUNNER_TEMP/base-ref"',
+          ),
+        ],
+        {
+          cwd: directory,
+          env: {
+            ...process.env,
+            GITHUB_ENV: githubEnv,
+            GITHUB_EVENT_NAME: event,
+            RUNNER_TEMP: runnerTemp,
+            TARGET_REF: "",
+            PUSH_BEFORE: "",
+            ...env,
+          },
         },
-      });
+      );
       expect(run.stderr.toString(), event).toBe("");
       expect(run.exitCode, event).toBe(0);
       const changed = path.join(runnerTemp, "dated-waiver-changed-files");
       expect(readFileSync(githubEnv, "utf-8"), event).toBe(
         `DATED_WAIVER_CHANGED_FILES=${changed}\n`,
+      );
+      const expectedBase =
+        event === "pull_request" ||
+        event === "merge_group" ||
+        (event === "push" && env["PUSH_BEFORE"] === before)
+          ? before
+          : "";
+      expect(readFileSync(path.join(runnerTemp, "base-ref"), "utf-8")).toBe(
+        expectedBase,
       );
       return readFileSync(changed, "utf-8");
     };
@@ -391,10 +454,9 @@ test("CI expiry runs list the files their change touched", () => {
     expect(listed("push", { PUSH_BEFORE: before })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );
-    // A pushed-from commit outside the checkout lists every tracked file.
-    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe(
-      "readme.md\0unrelated.ts\0waivers.ts\0",
-    );
+    // A pushed-from commit outside the checkout lists nothing: the merge group
+    // already checked the change, and an expiry alone never fails main.
+    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe("");
     expect(listed("pull_request", { TARGET_REF: "main" })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );

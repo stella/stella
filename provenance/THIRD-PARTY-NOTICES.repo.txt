@@ -6,40 +6,47 @@ These files are inventories of detected third-party components and declared lice
 Some licenses may require additional attribution text or redistribution steps.
 
 Project: root
-- @ag-ui/core 1.0.2 — MIT
+- @ag-ui/core 1.0.3 — MIT
 - @anthropic-ai/sdk 0.97.1 — MIT
-- @astrojs/react 7.0.1 — MIT
+- @astrojs/react 7.1.1 — MIT
 - @astrojs/sitemap 3.7.4 — MIT
 - @astrojs/starlight 0.42.6 — MIT
 - @atlaskit/pragmatic-drag-and-drop 4.0.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.2.1 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-hitbox 3.0.0 — Apache-2.0
 - @atlaskit/pragmatic-drag-and-drop-live-region 2.1.0 — Apache-2.0
-- @aws-sdk/client-bedrock-runtime 3.1147.0 — Apache-2.0
-- @aws-sdk/client-cloudwatch 3.1147.0 — Apache-2.0
-- @aws-sdk/client-lambda 3.1147.0 — Apache-2.0
-- @aws-sdk/client-s3 3.1147.0 — Apache-2.0
-- @aws-sdk/client-sesv2 3.1147.0 — Apache-2.0
-- @aws-sdk/client-sqs 3.1147.0 — Apache-2.0
-- @aws-sdk/client-sts 3.1147.0 — Apache-2.0
-- @aws-sdk/s3-request-presigner 3.1147.0 — Apache-2.0
-- @base-ui/react 1.8.0 — MIT
-- @better-auth/api-key 1.7.6 — MIT
-- @better-auth/cimd 1.7.6 — MIT
-- @better-auth/core 1.7.6 — MIT
-- @better-auth/oauth-provider 1.7.6 — MIT
+- @aws-sdk/client-bedrock-runtime 3.1156.0 — Apache-2.0
+- @aws-sdk/client-cloudwatch 3.1156.0 — Apache-2.0
+- @aws-sdk/client-lambda 3.1156.0 — Apache-2.0
+- @aws-sdk/client-s3 3.1156.0 — Apache-2.0
+- @aws-sdk/client-sesv2 3.1156.0 — Apache-2.0
+- @aws-sdk/client-sqs 3.1156.0 — Apache-2.0
+- @aws-sdk/client-ssm 3.1147.0 — Apache-2.0
+- @aws-sdk/client-sts 3.1156.0 — Apache-2.0
+- @aws-sdk/s3-request-presigner 3.1156.0 — Apache-2.0
+- @base-ui/react 1.9.0 — MIT
+- @better-auth/api-key 1.7.12 — MIT
+- @better-auth/cimd 1.7.12 — MIT
+- @better-auth/core 1.7.12 — MIT
+- @better-auth/oauth-provider 1.7.12 — MIT
+- @dnd-kit/core 6.3.1 — MIT
+- @dnd-kit/sortable 10.0.0 — MIT
 - @embedpdf/pdfium 2.15.1 — MIT
+- @expo-google-fonts/dm-sans 0.4.2 — MIT AND OFL-1.1
+- @expo/fingerprint 0.21.6 — MIT
+- @expo/ui 58.0.22 — MIT
+- @expo/vector-icons 15.1.1 — MIT
 - @firecrawl/anydoc 0.2.4 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
-- @formatjs/icu-messageformat-parser 3.5.20 — MIT
+- @formatjs/icu-messageformat-parser 3.5.22 — MIT
 - @gdp-ts/core 0.1.0 — MIT
-- @google/genai 2.27.0 — Apache-2.0
+- @google/genai 2.31.0 — Apache-2.0
 - @happy-dom/global-registrator 21.0.4 — MIT
-- @hocuspocus/extension-redis 4.7.0 — MIT
-- @hocuspocus/provider 4.7.0 — MIT
-- @hocuspocus/server 4.7.0 — MIT
+- @hocuspocus/extension-redis 4.7.1 — MIT
+- @hocuspocus/provider 4.7.1 — MIT
+- @hocuspocus/server 4.7.1 — MIT
 - @jitl/quickjs-wasmfile-release-asyncify 0.32.0 — MIT
-- @libpdf/core 0.5.2 — MIT
+- @libpdf/core 0.5.3 — MIT
 - @litko/yara-x 0.7.5 — MIT
 - @modelcontextprotocol/client 2.3.1 — Apache-2.0
 - @modelcontextprotocol/ext-apps 2.0.3 — MIT
@@ -48,16 +55,9 @@ Project: root
 - @neftaly/editcontext-polyfill 0.1.1 — MIT
 - @nodable/entities 3.1.0 — MIT
 - @openrouter/sdk 0.13.67 — Apache-2.0
-- @opentelemetry/api 1.9.1 — Apache-2.0
-- @opentelemetry/api-logs 0.223.0 — Apache-2.0
-- @opentelemetry/exporter-logs-otlp-http 0.223.0 — Apache-2.0
-- @opentelemetry/resources 2.12.0 — Apache-2.0
-- @opentelemetry/sdk-logs 0.223.0 — Apache-2.0
 - @playwright/test 1.63.0 — Apache-2.0
-- @react-email/components 1.0.12 — MIT
-- @react-email/render 2.1.0 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
-- @silurus/ooxml 0.88.0 — MIT
+- @silurus/ooxml 0.89.2 — MIT
 - @smithy/fetch-http-handler 5.8.0 — Apache-2.0
 - @sparticuz/chromium-min 153.0.0 — MIT
 - @standard-schema/spec 1.1.0 — MIT
@@ -93,31 +93,31 @@ Project: root
 - @tanstack/react-table-devtools 9.3.1 — MIT
 - @tanstack/react-virtual 3.14.21 — MIT
 - @tanstack/router-generator 1.167.45 — MIT
-- @tauri-apps/api 2.12.3 — Apache-2.0 OR MIT
+- @tauri-apps/api 2.12.4 — Apache-2.0 OR MIT
 - @testing-library/react 16.3.3 — MIT
-- @tiptap/core 3.31.4 — MIT
-- @tiptap/extension-bold 3.31.4 — MIT
-- @tiptap/extension-document 3.31.4 — MIT
-- @tiptap/extension-hard-break 3.31.4 — MIT
-- @tiptap/extension-heading 3.31.4 — MIT
-- @tiptap/extension-italic 3.31.4 — MIT
-- @tiptap/extension-list 3.31.4 — MIT
-- @tiptap/extension-mention 3.31.4 — MIT
-- @tiptap/extension-paragraph 3.31.4 — MIT
-- @tiptap/extension-text 3.31.4 — MIT
-- @tiptap/extensions 3.31.4 — MIT
-- @tiptap/pm 3.31.4 — MIT
-- @tiptap/react 3.31.4 — MIT
-- @tiptap/suggestion 3.31.4 — MIT
+- @tiptap/core 3.32.0 — MIT
+- @tiptap/extension-bold 3.32.0 — MIT
+- @tiptap/extension-document 3.32.0 — MIT
+- @tiptap/extension-hard-break 3.32.0 — MIT
+- @tiptap/extension-heading 3.32.0 — MIT
+- @tiptap/extension-italic 3.32.0 — MIT
+- @tiptap/extension-list 3.32.0 — MIT
+- @tiptap/extension-mention 3.32.0 — MIT
+- @tiptap/extension-paragraph 3.32.0 — MIT
+- @tiptap/extension-text 3.32.0 — MIT
+- @tiptap/extensions 3.32.0 — MIT
+- @tiptap/pm 3.32.0 — MIT
+- @tiptap/react 3.32.0 — MIT
+- @tiptap/suggestion 3.32.0 — MIT
 - @valibot/to-json-schema 1.8.0 — MIT
 - @vscode/diff 0.0.2-0 — MIT
 - @vscode/markdown-editor 0.0.2-123 — MIT
 - @vscode/observables 0.1.1-0 — MIT
 - asn1js 3.0.10 — BSD-3-Clause
-- astro 7.3.8 — MIT
-- better-auth 1.7.6 — MIT
+- astro 7.4.2 — MIT
+- better-auth 1.7.12 — MIT
 - better-result 3.0.1 — MIT
-- bullmq 6.3.11 — MIT
+- bullmq 6.4.1 — MIT
 - cheerio 1.2.0 — MIT
 - class-variance-authority 0.7.1 — Apache-2.0
 - client-zip 2.5.1 — MIT
@@ -128,63 +128,83 @@ Project: root
 - diff 9.0.0 — BSD-3-Clause
 - disposable-email-domains-js 1.26.0 — CC0-1.0
 - domhandler 6.0.1 — BSD-2-Clause
-- driver.js 1.9.0 — MIT
+- driver.js 1.10.2 — MIT
+- drizzle-kit 1.0.0-rc.4 — MIT
 - drizzle-orm 1.0.0-rc.4 — Apache-2.0
 - entities 8.1.0 — BSD-2-Clause
-- expo-router 57.0.25 — MIT
-- expo-status-bar 57.0.1 — MIT
+- expo 58.0.17 — MIT
+- expo-audio 58.0.10 — MIT
+- expo-constants 58.0.13 — MIT
+- expo-crypto 58.0.7 — MIT
+- expo-document-picker 58.0.4 — MIT
+- expo-file-system 58.0.10 — MIT
+- expo-glass-effect 58.0.4 — MIT
+- expo-linking 58.0.14 — MIT
+- expo-notifications 58.1.6 — MIT
+- expo-router 58.0.25 — MIT
+- expo-secure-store 58.0.2 — MIT
+- expo-status-bar 58.0.4 — MIT
+- expo-web-browser 58.0.6 — MIT
+- expo-widgets 58.0.22 — MIT
 - fast-check 4.10.2 — MIT
-- fast-xml-parser 5.11.2 — MIT
 - franc 6.2.0 — MIT
 - happy-dom 21.0.4 — MIT
-- hyparquet 1.31.2 — MIT
-- immer 11.1.21 — MIT
+- hyparquet 1.31.5 — MIT
+- immer 11.2.9 — MIT
 - input-otp 1.5.0 — MIT
 - ioredis 6.0.0 — MIT
 - isbot 5.2.2 — Unlicense
-- jose 6.2.12 — MIT
+- jose 6.2.13 — MIT
 - jszip 3.10.2 — (MIT OR GPL-3.0-or-later)
 - katex 0.16.47 — MIT
+- lightningcss 1.33.0 — MPL-2.0
 - linkify-it 6.1.0 — MIT
-- lucide-react 1.41.0 — ISC
+- lucide-react 1.61.0 — ISC
+- lucide-react-native 1.41.0 — ISC
+- lucide-static 1.41.0 — ISC
 - lzma1 0.4.0 — Apache-2.0
 - mailauth 7.1.1 — MIT
 - mdast-util-from-markdown 2.1.0 — MIT
 - mdast-util-gfm 3.1.0 — MIT
 - micromark-extension-gfm 3.0.0 — MIT
-- nodemailer 10.0.15 — MIT-0
+- nodemailer 10.2.1 — MIT-0
 - onnxruntime-node 1.30.0 — MIT
 - openai 6.49.0 — Apache-2.0
+- oxc-parser 0.155.0 — MIT
 - oxc-transform-react 0.152.0 — MIT
 - oxlint 1.87.0 — MIT
+- oxlint-tailwindcss 1.16.0 — MIT
 - parse5 7.3.0 — MIT
 - parse5-htmlparser2-tree-adapter 7.1.0 — MIT
 - pdfjs-dist 6.4.299 — Apache-2.0
-- pele 1.5.2 — MIT
-- pkijs 3.4.1 — BSD-3-Clause
+- pele 1.9.0 — MIT
+- pkijs 3.4.2 — BSD-3-Clause
 - playwright-core 1.63.0 — Apache-2.0
 - postal-mime 4.0.11 — MIT-0
 - postcss 8.5.29 — MIT
-- posthog-js 1.438.2 — (Apache-2.0 AND MIT)
-- posthog-node 5.55.0 — MIT
+- posthog-js 1.438.21 — (Apache-2.0 AND MIT)
 - prism-react-renderer 2.4.1 — MIT
 - quickjs-emscripten-core 0.32.0 — MIT
 - re2-wasm 1.0.2 — Apache-2.0
-- react 19.3.0 — MIT
-- react-dom 19.3.0 — MIT
-- react-native 0.86.3 — MIT
+- react 19.3.1 — MIT
+- react-dom 19.3.1 — MIT
+- react-native 0.88.0 — MIT
 - react-native-safe-area-context 5.10.1 — MIT
+- react-native-screens 4.30.0 — MIT
+- react-native-svg 15.16.0 — MIT
 - saxes 6.0.0 — ISC
 - scslre 0.3.0 — MIT
+- sharp 0.35.5 — Apache-2.0
 - shell-quote 1.12.0 — MIT
 - slimdom 4.3.5 — MIT
 - ssf 0.11.2 — Apache-2.0
-- streamdown 2.7.0 — Apache-2.0
+- streamdown 2.7.1 — Apache-2.0
 - tailwind-merge 3.7.0 — MIT
 - temporal-polyfill 1.0.5 — MIT
-- tldts 7.4.18 — MIT
+- tldts 7.4.19 — MIT
 - tsrs 0.18.0-ts7.1.0-dev.20260929 — Apache-2.0
 - unified 11.0.5 — MIT
+- uniwind 1.13.0 — MIT
 - uqr 0.1.3 — MIT
 - use-debounce 10.1.1 — MIT
 - use-intl 4.14.9 — MIT
@@ -206,11 +226,12 @@ Project: desktop-tauri
 - aho-corasick 1.1.5 — MIT OR Unlicense
 - alloc-no-stdlib 3.0.0 — BSD-3-Clause
 - alloc-stdlib 0.3.0 — BSD-3-Clause
+- alsa 0.11.0 — Apache-2.0/MIT
+- alsa-sys 0.4.0 — MIT
 - ammonia 4.2.4 — Apache-2.0 OR MIT
 - android_system_properties 0.1.6 — Apache-2.0 OR MIT
 - anyhow 1.0.104 — Apache-2.0 OR MIT
 - apple-native-keyring-store 1.0.2 — Apache-2.0 OR MIT
-- arbitrary 1.4.2 — Apache-2.0 OR MIT
 - arboard 3.6.1 — Apache-2.0 OR MIT
 - async-broadcast 0.7.2 — Apache-2.0 OR MIT
 - async-channel 2.5.0 — Apache-2.0 OR MIT
@@ -270,7 +291,7 @@ Project: desktop-tauri
 - cipher 0.4.4 — Apache-2.0 OR MIT
 - cipher 0.5.2 — Apache-2.0 OR MIT
 - clipboard-rs 0.3.5 — MIT
-- clipboard-win 5.4.1 — BSL-1.0
+- clipboard-win 5.4.3 — BSL-1.0
 - cmake 0.1.58 — Apache-2.0 OR MIT
 - cmov 0.5.4 — Apache-2.0 OR MIT
 - color_quant 1.1.0 — MIT
@@ -285,6 +306,8 @@ Project: desktop-tauri
 - core-foundation-sys 0.8.7 — Apache-2.0 OR MIT
 - core-graphics 0.25.0 — Apache-2.0 OR MIT
 - core-graphics-types 0.2.0 — Apache-2.0 OR MIT
+- coreaudio-rs 0.14.2 — MIT/Apache-2.0
+- cpal 0.18.2 — Apache-2.0
 - cpubits 0.1.1 — Apache-2.0 OR MIT
 - cpufeatures 0.2.17 — Apache-2.0 OR MIT
 - cpufeatures 0.3.0 — Apache-2.0 OR MIT
@@ -304,10 +327,10 @@ Project: desktop-tauri
 - darling 0.23.0 — MIT
 - darling_core 0.23.0 — MIT
 - darling_macro 0.23.0 — MIT
+- dasp_sample 0.11.0 — Apache-2.0 OR MIT
 - data-url 0.3.2 — Apache-2.0 OR MIT
 - dbus 0.9.12 — Apache-2.0/MIT
 - deranged 0.5.8 — Apache-2.0 OR MIT
-- derive_arbitrary 1.4.2 — Apache-2.0 OR MIT
 - derive_more 2.1.1 — MIT
 - derive_more-impl 2.1.1 — MIT
 - dhat 0.3.3 — Apache-2.0 OR MIT
@@ -347,7 +370,7 @@ Project: desktop-tauri
 - filetime 0.2.29 — MIT/Apache-2.0
 - find-msvc-tools 0.1.10 — Apache-2.0 OR MIT
 - fixedbitset 0.5.7 — Apache-2.0 OR MIT
-- flate2 1.1.9 — Apache-2.0 OR MIT
+- flate2 1.1.10 — Apache-2.0 OR MIT
 - fnv 1.0.7 — Apache-2.0 / MIT
 - foldhash 0.1.5 — Zlib
 - foldhash 0.2.0 — Zlib
@@ -356,7 +379,6 @@ Project: desktop-tauri
 - foreign-types-shared 0.3.1 — MIT/Apache-2.0
 - form_urlencoded 1.2.2 — Apache-2.0 OR MIT
 - fs_extra 1.3.0 — MIT
-- fsevent-sys 4.1.0 — MIT
 - futures-channel 0.3.33 — Apache-2.0 OR MIT
 - futures-core 0.3.34 — Apache-2.0 OR MIT
 - futures-executor 0.3.33 — Apache-2.0 OR MIT
@@ -418,7 +440,7 @@ Project: desktop-tauri
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
 - iana-time-zone-haiku 0.1.2 — Apache-2.0 OR MIT
 - icns 0.5.0 — MIT
-- ico 0.5.0 — MIT
+- ico 0.6.0 — MIT
 - icu_collections 2.2.0 — Unicode-3.0
 - icu_locale_core 2.2.0 — Unicode-3.0
 - icu_normalizer 2.2.0 — Unicode-3.0
@@ -462,7 +484,7 @@ Project: desktop-tauri
 - lazy_static 1.5.0 — Apache-2.0 OR MIT
 - libappindicator 0.9.0 — Apache-2.0 OR MIT
 - libappindicator-sys 0.9.0 — Apache-2.0 OR MIT
-- libc 0.2.189 — Apache-2.0 OR MIT
+- libc 0.2.191 — Apache-2.0 OR MIT
 - libdbus-sys 0.2.7 — Apache-2.0/MIT
 - libloading 0.7.4 — ISC
 - libm 0.2.16 — MIT
@@ -473,6 +495,7 @@ Project: desktop-tauri
 - log 0.4.33 — Apache-2.0 OR MIT
 - lru-slab 0.1.2 — Apache-2.0 OR MIT OR Zlib
 - mac-notification-sys 0.6.15 — MIT/Apache-2.0
+- mach2 0.6.0 — Apache-2.0 OR BSD-2-Clause OR MIT
 - maplit 1.0.2 — MIT/Apache-2.0
 - markup5ever 0.39.0 — Apache-2.0 OR MIT
 - markup5ever 0.40.0 — Apache-2.0 OR MIT
@@ -484,6 +507,7 @@ Project: desktop-tauri
 - mime_guess 2.0.5 — MIT
 - minisign-verify 0.3.0 — MIT
 - miniz_oxide 0.8.9 — Apache-2.0 OR MIT OR Zlib
+- miniz_oxide 0.9.1 — Apache-2.0 OR MIT OR Zlib
 - mintex 0.1.4 — Apache-2.0
 - mio 1.2.2 — MIT
 - moxcms 0.8.1 — Apache-2.0 OR BSD-3-Clause
@@ -495,7 +519,7 @@ Project: desktop-tauri
 - nix 0.31.3 — MIT
 - nom 8.0.0 — MIT
 - normpath 1.5.1 — Apache-2.0 OR MIT
-- notify 8.2.0 — CC0-1.0
+- notify 8.2.1 — CC0-1.0
 - notify-rust 4.18.0 — Apache-2.0 OR MIT
 - notify-types 2.1.0 — Apache-2.0 OR MIT
 - nu-ansi-term 0.50.3 — MIT
@@ -503,6 +527,7 @@ Project: desktop-tauri
 - num-bigint 0.4.8 — Apache-2.0 OR MIT
 - num-complex 0.4.6 — Apache-2.0 OR MIT
 - num-conv 0.2.2 — Apache-2.0 OR MIT
+- num-derive 0.4.2 — Apache-2.0 OR MIT
 - num-integer 0.1.46 — Apache-2.0 OR MIT
 - num-iter 0.1.46 — Apache-2.0 OR MIT
 - num-rational 0.4.2 — Apache-2.0 OR MIT
@@ -511,12 +536,17 @@ Project: desktop-tauri
 - num_enum_derive 0.7.6 — Apache-2.0 OR BSD-3-Clause OR MIT
 - objc2 0.6.5 — MIT
 - objc2-app-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-audio-toolbox 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-avf-audio 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-cloud-kit 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-core-audio 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-core-audio-types 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-data 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-foundation 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-graphics 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-image 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-location 0.3.2 — Apache-2.0 OR MIT OR Zlib
+- objc2-core-services 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-text 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-core-video 0.3.2 — Apache-2.0 OR MIT OR Zlib
 - objc2-encode 4.1.0 — MIT
@@ -561,14 +591,12 @@ Project: desktop-tauri
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
 - pkg-config 0.3.33 — Apache-2.0 OR MIT
-- plist 1.10.2 — MIT
-- png 0.17.16 — Apache-2.0 OR MIT
+- plist 1.10.3 — MIT
 - png 0.18.1 — Apache-2.0 OR MIT
 - polling 3.11.0 — Apache-2.0 OR MIT
 - polyval 0.7.3 — Apache-2.0 OR MIT
 - potential_utf 0.1.5 — Unicode-3.0
 - powerfmt 0.2.0 — Apache-2.0 OR MIT
-- ppv-lite86 0.2.21 — Apache-2.0 OR MIT
 - precomputed-hash 0.1.1 — MIT
 - proc-macro-crate 1.3.1 — Apache-2.0 OR MIT
 - proc-macro-crate 2.0.2 — Apache-2.0 OR MIT
@@ -587,10 +615,7 @@ Project: desktop-tauri
 - r-efi 5.3.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
 - r-efi 6.0.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
 - rand 0.10.2 — Apache-2.0 OR MIT
-- rand 0.9.5 — Apache-2.0 OR MIT
-- rand_chacha 0.9.0 — Apache-2.0 OR MIT
 - rand_core 0.10.1 — Apache-2.0 OR MIT
-- rand_core 0.9.5 — Apache-2.0 OR MIT
 - rand_pcg 0.10.2 — Apache-2.0 OR MIT
 - raw-window-handle 0.6.2 — Apache-2.0 OR MIT OR Zlib
 - redox_syscall 0.5.18 — MIT
@@ -602,7 +627,7 @@ Project: desktop-tauri
 - regex-syntax 0.8.11 — Apache-2.0 OR MIT
 - reqwest 0.13.5 — Apache-2.0 OR MIT
 - ring 0.17.14 — Apache-2.0 AND ISC
-- rust-ini 0.21.3 — MIT
+- rust-ini 0.21.1 — MIT
 - rustc-demangle 0.1.28 — MIT/Apache-2.0
 - rustc-hash 1.1.0 — Apache-2.0/MIT
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
@@ -682,20 +707,20 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.4 — Apache-2.0 OR MIT
-- tauri-build 2.7.3 — Apache-2.0 OR MIT
-- tauri-codegen 2.7.3 — Apache-2.0 OR MIT
-- tauri-macros 2.7.3 — Apache-2.0 OR MIT
+- tauri 2.12.5 — Apache-2.0 OR MIT
+- tauri-build 2.7.4 — Apache-2.0 OR MIT
+- tauri-codegen 2.7.4 — Apache-2.0 OR MIT
+- tauri-macros 2.7.4 — Apache-2.0 OR MIT
 - tauri-plugin 2.7.1 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.5.0 — Apache-2.0 OR MIT
-- tauri-plugin-deep-link 2.6.2 — Apache-2.0 OR MIT
+- tauri-plugin-deep-link 2.6.3 — Apache-2.0 OR MIT
 - tauri-plugin-global-shortcut 2.4.1 — Apache-2.0 OR MIT
-- tauri-plugin-notification 2.7.0 — Apache-2.0 OR MIT
+- tauri-plugin-notification 2.8.0 — Apache-2.0 OR MIT
 - tauri-plugin-opener 2.7.2 — Apache-2.0 OR MIT
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
-- tauri-plugin-single-instance 2.5.4 — Apache-2.0 OR MIT
-- tauri-plugin-updater 2.14.0 — Apache-2.0 OR MIT
+- tauri-plugin-single-instance 2.5.5 — Apache-2.0 OR MIT
+- tauri-plugin-updater 2.14.1 — Apache-2.0 OR MIT
 - tauri-runtime 2.12.2 — Apache-2.0 OR MIT
 - tauri-runtime-wry 2.12.3 — Apache-2.0 OR MIT
 - tauri-utils 2.10.2 — Apache-2.0 OR MIT
@@ -718,7 +743,7 @@ Project: desktop-tauri
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.12.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.53.3 — MIT
+- tokio 1.54.1 — MIT
 - tokio-macros 2.7.2 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
 - tokio-util 0.7.19 — MIT
@@ -740,12 +765,15 @@ Project: desktop-tauri
 - tracing-core 0.1.36 — MIT
 - tracing-log 0.2.0 — MIT
 - tracing-subscriber 0.3.23 — MIT
+- transcribe-cpp 0.4.1 — MIT
+- transcribe-cpp-sys 0.4.1 — MIT
 - tray-icon 0.25.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
+- trim-in-place 0.1.8 — MIT
 - try-lock 0.2.5 — MIT
 - ts-rs 12.0.1 — MIT
 - ts-rs-macros 12.0.1 — MIT
-- typed-path 0.12.3 — Apache-2.0 OR MIT
+- typed-path 0.13.0 — Apache-2.0 OR MIT
 - typeid 1.0.3 — Apache-2.0 OR MIT
 - typenum 1.20.1 — Apache-2.0 OR MIT
 - uds_windows 1.2.1 — MIT
@@ -758,7 +786,7 @@ Project: desktop-tauri
 - url 2.5.8 — Apache-2.0 OR MIT
 - urlpattern 0.6.0 — MIT
 - utf8_iter 1.0.4 — Apache-2.0 OR MIT
-- uuid 1.28.0 — Apache-2.0 OR MIT
+- uuid 1.29.0 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0
@@ -888,8 +916,8 @@ Project: desktop-tauri
 - zerotrie 0.2.4 — Unicode-3.0
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
-- zip 4.6.1 — MIT
-- zip 9.0.5 — MIT
+- zip 9.1.3 — MIT
+- zlib-rs 0.6.8 — Zlib
 - zmij 1.0.23 — MIT
 - zune-core 0.5.3 — Apache-2.0 OR MIT OR Zlib
 - zune-jpeg 0.5.15 — Apache-2.0 OR MIT OR Zlib

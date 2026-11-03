@@ -13,7 +13,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
-import { clearedCaseLawFilters } from "@/features/case-law/case-law-index-search.logic";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   toCaseLawCountryParam,
@@ -75,15 +74,16 @@ const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
       );
       return;
     }
-    // A court, a year or a source belongs to one corpus; carrying it into
-    // another would filter by a value that corpus never uses.
+    // The destination route validates facets against its country and reports
+    // the removed selections; dates and values shared by both countries stay.
     detached(
       navigate({
         to: "/law/cases",
         search: (previous) => ({
           ...previous,
-          ...clearedCaseLawFilters(),
           country: next,
+          page: undefined,
+          filterNotice: undefined,
           // A rewrite was judged against the previous corpus, not this one.
           rewrite: undefined,
           rewrittenFrom: undefined,

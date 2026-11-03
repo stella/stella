@@ -1,0 +1,6 @@
+{
+  "metric": "implicit-root-connection-shapes",
+  "file": "apps/api/src/lib/auth/unlink-account-runtime.ts",
+  "delta": 1,
+  "reason": "The Better Auth request hook binds the root connection only at the account-unlink operation, before organization scope exists. The separate runtime owner keeps the account-unlink transaction factory injectable and free of connection initialization; the factory checks the authoritative user and audits the serialized deletion."
+}

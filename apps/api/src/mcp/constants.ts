@@ -12,6 +12,7 @@ import {
   type McpOAuthScope,
   REQUEST_ID_HEADER,
 } from "@stll/api-contract";
+import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 
 import { env } from "@/api/env";
 import {
@@ -156,6 +157,9 @@ export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
 /** Access-token claim naming the membership row the token was issued under. */
 export const MCP_MEMBER_ID_CLAIM = "member_id";
 
+/** The `purpose` claim that marks an access token minted for one agent run. */
+export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
+
 /**
  * Why an authenticated tools/list projection left a static tool out. A client
  * diffs its baked-in registry against that projection, so an omission the
@@ -189,6 +193,8 @@ export const MCP_EXPOSE_HEADERS = [
     (reason) => STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
   ),
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
+  // The tool-list projection version, so a browser client can compare it.
+  MCP_REGISTRY_VERSION_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

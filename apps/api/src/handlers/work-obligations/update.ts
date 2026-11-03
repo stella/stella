@@ -25,6 +25,7 @@ import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import { workTask } from "@/api/lib/tasks/work-task";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
@@ -512,7 +513,7 @@ const updateWorkObligation = createSafeHandler(
               and(
                 eq(entities.id, params.entityId),
                 eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "task"),
+                workTask(entities),
               ),
             );
         }

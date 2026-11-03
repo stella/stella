@@ -20,7 +20,7 @@ import {
 import type { FieldValueVariant } from "@stll/workspace-ui/field-value";
 
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 
 export type { FieldValueVariant } from "@stll/workspace-ui/field-value";
@@ -160,7 +160,7 @@ const MoneyFieldValue = ({
   content: Extract<WorkspaceFieldContent, { type: "money" }>;
   variant?: FieldValueVariant;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const resolvedVariant = variant ?? "default";
 
   return (
