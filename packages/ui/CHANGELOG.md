@@ -1,5 +1,29 @@
 # @stll/ui
 
+## 0.65.0
+
+### Minor Changes
+
+- [#7816](https://github.com/stella/stella/pull/7816) [`b94d282`](https://github.com/stella/stella/commit/b94d282e58eb483f7abf6cc7e81b859c7709ce3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `DictateIcon`, the microphone for dictating a message.
+
+## 0.64.0
+
+### Minor Changes
+
+- Add a searchable court-tier filter and a touch-size button variant. Preserve control labels inside fields and minimum touch targets across font sizes.
+
+- Add `MiddleTruncate` (`@stll/ui/middle-truncate`): one line of text that, when it does not fit, keeps its end and cuts its middle after a whole character, with the ellipsis flush against both sides. The tail starts on a word when one lies within reach of the cut, cuts never split a grapheme, and the cut follows the text direction.
+
+## 0.63.0
+
+### Minor Changes
+
+- Add `BrowserControlIcon` to `@stll/ui/icons`: a browser window for stella acting in the user's own browser, distinct from the globe used for web search and page fetches.
+
+- Remove the `reading`, `readingStrong`, `readingEmphasis` and `readingStrongEmphasis` text roles and the serif and italic text faces.
+
+- Separator adds `ResizeSeparator`, a focusable strip that resizes the column beside it by pointer and arrow keys, and the sidebar adds `SidebarIdentityButton` for the footer's sign-in trigger.
+
 ## 0.62.0
 
 ### Minor Changes
