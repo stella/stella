@@ -7,15 +7,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import {
-  encodeTemplateListCursor,
-  listTemplatesHandler,
-} from "@/api/handlers/templates/list";
+import { listTemplatesHandler } from "@/api/handlers/templates/list";
+import { encodeTemplateListCursor } from "@/api/handlers/templates/list-cursor";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
@@ -28,12 +26,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-// Exercises the real keyset SQL in listTemplatesHandler against PGlite, not
-// just the cursor codec. The boundary is resolved in-DB by id (the cursor
-// carries no timestamp), so rows sharing the exact same `created_at` must
-// still page without gaps or duplicates, ordered by id alone as the
-// tiebreaker.
-
+// Exercises the shared full-precision template cursor and keyset SQL against PGlite.
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
@@ -172,6 +165,60 @@ describe("templates list cursor ordering", () => {
     expect(new Set(collectedIds).size).toBe(rows.length);
   });
 
+  test("deleting the page boundary preserves older rows and microsecond ordering", async () => {
+    const timestamps = [
+      "2027-07-10T08:15:30.123459Z",
+      "2027-07-10T08:15:30.123458Z",
+      "2027-07-10T08:15:30.123457Z",
+      "2027-07-10T08:15:30.123456Z",
+    ];
+    const rows = [];
+    for (const createdAt of timestamps) {
+      rows.push(
+        await seedTemplate({
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          createdAt,
+          name: "Microsecond boundary",
+        }),
+      );
+    }
+    const first = await Result.gen(() =>
+      listTemplatesHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        query: { limit: 2 },
+      }),
+    );
+    if (Result.isError(first)) {
+      throw first.error;
+    }
+    expect(first.value.items.map(({ id }) => id)).toEqual(
+      rows.slice(0, 2).map(({ id }) => id),
+    );
+    const boundary = first.value.items.at(-1);
+    const cursor = first.value.nextCursor;
+    expect(boundary).toBeDefined();
+    expect(cursor).not.toBeNull();
+    if (boundary === undefined || cursor === null) {
+      throw new TypeError("Expected a second page");
+    }
+    await testDb.delete(templates).where(eq(templates.id, boundary.id));
+    const next = await Result.gen(() =>
+      listTemplatesHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        query: { limit: 2, cursor },
+      }),
+    );
+    if (Result.isError(next)) {
+      throw next.error;
+    }
+    expect(next.value.items.map(({ id }) => id)).toEqual(
+      rows.slice(2).map(({ id }) => id),
+    );
+  });
+
   test("rejects a malformed cursor", async () => {
     const result = await Result.gen(() =>
       listTemplatesHandler({
@@ -187,7 +234,7 @@ describe("templates list cursor ordering", () => {
     }
   });
 
-  test("a cursor referencing another org's template resolves to an empty page instead of leaking its boundary", async () => {
+  test("a foreign organization cursor never exposes foreign templates", async () => {
     const foreignTemplate = await seedTemplate({
       organizationId: ids.orgB,
       userId: ids.userB1,
@@ -210,17 +257,18 @@ describe("templates list cursor ordering", () => {
       ownPage.value.items.some((item) => item.id === foreignTemplate.id),
     ).toBe(true);
 
-    // The boundary lookup is scoped to organizationId, so a foreign id
-    // resolves to no row and the tuple comparison yields no matches — an
-    // empty page, not an error and not org A's real templates.
     const result = await readPage(
       safeDb,
-      encodeTemplateListCursor(foreignTemplate.id),
+      encodeTemplateListCursor({
+        id: foreignTemplate.id,
+        cursorCreatedAt: "2026-07-10T09:00:00.000000Z",
+      }),
     );
     if (Result.isError(result)) {
       throw result.error;
     }
-    expect(result.value.items).toEqual([]);
-    expect(result.value.nextCursor).toBeNull();
+    expect(
+      result.value.items.some((item) => item.id === foreignTemplate.id),
+    ).toBe(false);
   });
 });

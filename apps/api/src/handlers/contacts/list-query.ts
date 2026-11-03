@@ -31,6 +31,11 @@ type ContactRow = typeof contacts.$inferSelect;
 const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   // Tenant scope, implied by the caller's active organization.
   "organizationId",
+  // Import provenance belongs to contacts.get.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Person-only fields the directory summary omits; full detail is on
   // contacts.get.
   "prefix",
@@ -58,6 +63,7 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "currency",
   "paymentTermDays",
   "invoiceLanguage",
+  "timeBillingFormat",
   // Attorney assignment surfaces on the matter (workspace) contact fields,
   // not the standalone directory row.
   "originatingAttorneyId",

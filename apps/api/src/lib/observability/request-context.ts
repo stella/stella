@@ -68,6 +68,7 @@ export const requireRequestExceptionScope = (
  */
 type AmbientRequestState = {
   context: RequestContext | undefined;
+  request?: Request | undefined;
   mountedRoute?: string;
   /**
    * Whether this request committed to synchronous AI inference. Read at
@@ -160,7 +161,10 @@ const generateRequestId = (): string =>
  * Start the active request's context with a fresh id. No-op outside a request
  * scope: programmatic callers that open none carry no context.
  */
-export const openRequestContext = (sessionId?: string): void => {
+export const openRequestContext = (
+  sessionId?: string,
+  request?: Request,
+): void => {
   const ambient = requestStore.getStore();
   if (!ambient) {
     return;
@@ -170,7 +174,12 @@ export const openRequestContext = (sessionId?: string): void => {
     requestId: generateRequestId(),
     ...(sessionId === undefined ? {} : { sessionId }),
   };
+  ambient.request = request;
 };
+
+/** The request handle for the active HTTP request, when one opened the scope. */
+export const getActiveRequest = (): Request | undefined =>
+  requestStore.getStore()?.request;
 
 export const enrichRequestContext = (
   update: Partial<

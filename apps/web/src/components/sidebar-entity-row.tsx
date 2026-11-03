@@ -77,7 +77,7 @@ export const SidebarEntityRow = ({
             variant="destructive"
           >
             <Trash2Icon />
-            {t("common.delete")}
+            {t("workspaces.deleteFromMatter")}
           </MenuItem>
         )}
       </>

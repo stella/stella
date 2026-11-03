@@ -32,12 +32,18 @@ export const REVIEW_RESET_KEPT_TABLES = {
   member: "Membership: the review account stays in its organization.",
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
+  account_exports:
+    "Account-owned export ledger: an organization audit archive belongs to the requesting account and keeps no reference to the organization.",
   organization_settings: "Organization settings, not reviewer content.",
+  billing_draft_user_settings:
+    "Per-user billing draft consent and preferences, not reviewer content.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:
     "The account's own feature preferences; the seed sets the ones it needs.",
   usage_allocations: "Usage ledger: budgets must survive the nightly reset.",
+  push_devices:
+    "The review account's own phone registrations for alerts; no reviewer content.",
   usage_entitlements: "Usage ledger: entitlements are operator-managed.",
   usage_events: "Usage ledger: metered history for budgets and billing.",
   usage_lane_counters: "Usage ledger: rate-limit counters.",
@@ -45,6 +51,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   action_cost_calls: "Usage ledger: action cost history.",
   action_cost_records: "Usage ledger: action cost history.",
   hosted_checkout_claims: "Billing state, never reviewer content.",
+  organization_creation_requests:
+    "Account-owned creation replay receipts; retaining them prevents duplicate organizations after a content reset.",
   organization_professional_use_acceptances:
     "The organization's professional-use acceptance; written once, never reviewer content.",
   legal_list_verification_budgets: "Usage ledger: verification budget.",
@@ -63,6 +71,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
   mcp_oauth_state: "OAuth data: never touched by the reset.",
   mcp_user_connections: "OAuth data: never touched by the reset.",
   service_oauth_clients: "OAuth data: never touched by the reset.",
+  oauth_grant_revocations: "OAuth data: never touched by the reset.",
   mcp_connectors: "Integration credentials: never touched by the reset.",
   mcp_connector_authorization_reviews:
     "Integration authorization history: never touched by the reset.",

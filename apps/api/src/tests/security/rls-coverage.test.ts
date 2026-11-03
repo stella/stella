@@ -535,6 +535,7 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
@@ -548,6 +549,11 @@ describe("policy coverage", () => {
     // one owner-only policy and every privilege is revoked from stella; the
     // dedicated assertion below covers that instead of tenant CRUD.
     "chat_content_v3_backfill_receipts",
+    // Account exports belong to the requesting account: RLS admits a row by
+    // user_id alone. An organization audit export names the organization its
+    // archive covers, but that organization_id is never a tenant scope, and
+    // the row outlives the organization so its owner can still download it.
+    "account_exports",
     // Professional-use acceptances are written once at organization creation
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
@@ -559,6 +565,10 @@ describe("policy coverage", () => {
     // rls-table-grants.test.ts).
     "desktop_runners",
     "desktop_runner_runs",
+    // Account-owned creation receipts exist before membership; organization_id
+    // is a cascade pointer. Owner-only RLS and revoked request-role grants are
+    // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
+    "organization_creation_requests",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,
@@ -570,6 +580,12 @@ describe("policy coverage", () => {
     // Its nullable matter pointer does not admit the row; the dedicated timer
     // assertion covers owner policies and the restrictive membership check.
     "time_timers",
+    // A push device belongs to the person who registered it, wherever they
+    // sign in: re-registering a phone from another organization updates the
+    // same (user, token) row, and signing out removes it from any of them, so
+    // the organization is a routing column for delivery, never a permission.
+    // The dedicated assertion below covers the user-only policies.
+    "push_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -1114,6 +1130,22 @@ describe("policy coverage", () => {
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
   });
 
+  test("push devices admit only the person who registered them", async () => {
+    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+      (p) => p.table_name === "push_devices",
+    );
+    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+      new Set(["r", "a", "w", "d"]),
+    );
+    for (const policy of tablePolicies) {
+      expect(policy.permissive).toBe(true);
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
+    }
+  });
+
   test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);
     const tablePolicies = policies.filter((p) => p.table_name === "user_files");
@@ -1549,6 +1581,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "oauth_grant_revocations",
       "service_oauth_clients",
       "mcp_web_handoff",
       "oauth_consent",

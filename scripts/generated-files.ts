@@ -3,6 +3,7 @@ import {
   CI_GENERATED_OUTPUTS,
   MCP_APP_DIRECTORY_OUTPUTS,
   MCP_APP_GENERATED_OUTPUTS,
+  MODEL_CATALOG_INPUTS,
 } from "../packages/scripts/src/generated-files";
 
 export {
@@ -33,6 +34,10 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Whether a source change should select consumers of the derived outputs. */
+  selectsConsumers?: boolean;
+  /** Ignored, disposable paths that `write` may populate as execution caches. */
+  cacheOutputs?: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   /** Inputs read only while checking generated outputs, never while writing them. */
@@ -58,28 +63,9 @@ export const effectiveGeneratorInputs = (generator: Generator) => [
   ...generator.inputs,
 ];
 
-const MODEL_CATALOG_INPUTS = [
-  ".github/workflows/ci.yml",
-  "packages/ai-catalog/package.json",
-  "packages/ai-catalog/src/capabilities-overrides.ts",
-  "packages/ai-catalog/src/capabilities.gen.ts",
-  "packages/ai-catalog/src/document-input-overrides.ts",
-  "packages/ai-catalog/src/index.ts",
-  "packages/ai-catalog/src/model-defaults-ledger.ts",
-  "packages/ai-catalog/src/model-rate-policy.ts",
-  "packages/ai-catalog/src/model-rate.ts",
-  "packages/ai-catalog/src/model-rates.gen.ts",
-  "packages/ai-catalog/src/reasoning-capabilities.ts",
-  "packages/fetch/src/connection-failure.ts",
-  "packages/fetch/src/index.ts",
-  "packages/scripts/src/model-catalog-capabilities-gen.ts",
-  "packages/scripts/src/model-catalog-capabilities.ts",
-  "packages/scripts/src/model-catalog-rates-gen.ts",
-  "packages/scripts/src/model-catalog-snapshot.ts",
-] as const;
-
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/handlers/case-law/*",
@@ -90,6 +76,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -180,7 +167,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "mobile-icons": ["packages/portable-path/src/index.ts"],
   "mobile-folio-fonts": ["packages/portable-path/src/index.ts"],
-  "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
+  "capability-catalog": [
+    "apps/api/package.json",
+    "apps/api/scripts/*",
+    "apps/api/scripts/seed-content/*",
+  ],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
     "packages/legal-ast/src/decision-identifier.ts",
@@ -191,6 +182,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "packages/html/src/*",
+    "apps/api/src/lib/imports/external-ref-limits.ts",
+    "apps/api/src/lib/imports/external-ref.ts",
+    "apps/api/src/lib/imports/upsert-by-external-id.ts",
+    "apps/api/src/lib/uploads/import-origin.ts",
     "apps/api/src/lib/idempotency/*",
     "apps/api/src/agent-auth/credential-storage.ts",
     "apps/api/src/agent-auth/credentials.ts",
@@ -208,8 +204,13 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/docx-authoring/from-legal-source.ts",
     "apps/api/src/lib/email/correspondence/access.ts",
     "apps/api/src/lib/email/correspondence/create.ts",
+    "apps/api/src/lib/email/correspondence/uploaded-content.ts",
     "apps/api/src/lib/email/correspondence/provenance.ts",
+    "apps/api/src/lib/email/correspondence/data-box/*",
     "apps/api/src/lib/email/inbound/*",
+    "apps/api/src/lib/hosted-usage-provider/client.ts",
+    "apps/api/src/lib/hosted-usage-provider/config.ts",
+    "apps/api/src/lib/hosted-usage-provider/external-account-ref.ts",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",
     "apps/api/src/lib/infosoud/client.ts",
@@ -221,6 +222,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/verification/*",
     "apps/api/src/lib/legal-search/document-builders/html-whitespace.ts",
     "apps/api/src/lib/legal-search/document-builders/inline-style.ts",
+    "apps/api/src/lib/load/request-latency-budget.ts",
     "apps/api/src/lib/load/work-admission.ts",
     "apps/api/src/lib/load/work-budget.ts",
     "apps/api/src/lib/load/work-pools.ts",
@@ -229,6 +231,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/memory/*",
     "apps/api/src/lib/observability/data-invariants/*",
     "apps/api/src/lib/ocr-local/recognize-local.ts",
+    "apps/api/src/lib/push/apns-config.ts",
+    "apps/api/src/lib/push/push-delivery-queue.ts",
     "apps/api/src/lib/review-organization/*",
     "apps/api/src/lib/scheduler/*",
     "apps/api/src/lib/scheduler/tasks/*",
@@ -248,6 +252,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/uploads/file-comparison/sweep.ts",
     "apps/api/src/lib/user-files/types.ts",
     "apps/api/src/lib/views/*",
+    "apps/api/src/lib/workspaces/creation-capacity.ts",
     "apps/api/src/lib/workspaces/list-query.ts",
     "packages/anonymize-chat/src/index.ts",
     "packages/anonymize-chat/src/normalization.ts",
@@ -256,6 +261,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/business-registries/src/cpf/index.ts",
     "packages/business-registries/src/cpf/validation.ts",
     "packages/db-load-gate/src/*",
+    "packages/decision-reader/src/reader-text-pieces.logic.ts",
     "packages/infosoud/src/*",
     "packages/template-packs/src/*",
     "apps/api/package.json",
@@ -266,6 +272,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/account-export/enqueue.ts",
+    "apps/api/src/lib/account-export/organization-audit-gate.ts",
     "apps/api/src/lib/account-export/store.ts",
     "apps/api/src/lib/agent-skills/*",
     "apps/api/src/lib/analytics/*",
@@ -336,7 +343,6 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/lists/verification/contract.ts",
     "apps/api/src/lib/lists/verification/run-cap-config.ts",
     "apps/api/src/lib/markdown/ai-tool.ts",
-    "apps/api/src/lib/markdown/html-to-markdown.ts",
     "apps/api/src/lib/markdown/sanitize-html.ts",
     "apps/api/src/lib/mcp-connectors/app-urls.ts",
     "apps/api/src/lib/mcp-connectors/catalog-metadata.ts",
@@ -380,6 +386,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/analytics-config/src/index.ts",
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
+    "packages/auth-model/src/invitation-sections.ts",
     "packages/boe/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
@@ -420,6 +427,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/catalogue/entries/skills/jurisrank/manifest.json",
     "packages/catalogue/src/*",
     "packages/chat-limits/src/index.ts",
+    "packages/chat/src/html-to-markdown.ts",
     "packages/collation/src/collation.ts",
     "packages/collation/src/index.ts",
     "packages/concurrency/src/*",
@@ -481,9 +489,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/stable-stringify/src/stable-stringify.ts",
     "packages/template-conditions/src/*",
     "packages/text-normalize/src/*",
+    "packages/transactional/components/*",
     "packages/transactional/emails/*",
     "packages/transactional/i18n/translate.ts",
     "packages/transactional/i18n/langs/*",
+    "packages/transactional/render/*",
     "packages/user-agent/src/index.ts",
     "packages/user-agent/src/parse-user-agent.ts",
     "packages/uuid-codec/src/index.ts",
@@ -534,6 +544,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "failure-tags": ["scripts/generated-artifacts.ts"],
   "mcp-app-bundles": [
+    "packages/html/src/*",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/*",
     "packages/text-normalize/src/*",
@@ -585,6 +596,16 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/uuid-codec/src/index.ts",
     "apps/api/src/lib/email/deliverability-config.ts",
     "apps/api/src/lib/email/sqs-queue-url.ts",
+    "apps/api/src/lib/case-law/doctrine.ts",
+    "apps/api/src/lib/legal-search/morphology/dictionary.ts",
+    "apps/api/src/lib/rate-limit/budget-config.ts",
+    "apps/api/src/lib/search/cursor.ts",
+    "packages/auth-model/src/contract.ts",
+    "packages/chat-limits/src/index.ts",
+    "packages/concurrency/src/event-loop.ts",
+    "packages/skills/src/format.ts",
+    "packages/skills/src/frontmatter.ts",
+    "packages/skills/src/required-tools.ts",
   ],
   "migration-lock-baseline": [
     "apps/api/src/db/code-owned-tables.ts",
@@ -608,6 +629,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/collation/src/index.ts",
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
+    "packages/scripts/src/syntax-tree.ts",
     "scripts/generated-artifacts.ts",
   ],
   selfhost: [
@@ -661,6 +683,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/handlers/case-law/*",
@@ -671,6 +694,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -767,6 +791,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/db/schema/*",
@@ -778,6 +803,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/*",
     "apps/api/src/lib/account-export/constants.ts",
     "apps/api/src/lib/bilingual/contract.ts",
+    "apps/api/src/lib/billing/narrative-language.ts",
     "apps/api/src/lib/case-law/*",
     "apps/api/src/lib/chat/ai-data-policy.ts",
     "apps/api/src/lib/chat/thread-name-kinds.ts",
@@ -890,6 +916,44 @@ const TRANSITIVE_GENERATOR_INPUTS = {
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "db-registry-entries",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/src/lib/db/aggregate-lock-entries/identities.gen.ts",
+      "apps/api/src/lib/db/read-budget-entries/registry.gen.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/registry.gen.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
+      "apps/api/src/lib/db/aggregate-chain-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/profile-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/scheduled-job-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/deadline-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/tenant-statement-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/corpus-statement-entries/registry.gen.ts",
+    ],
+    inputs: [
+      "scripts/db-registry-entries.ts",
+      "apps/api/src/lib/db/read-budget-entries/*.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-chain-entries/*.ts",
+      "apps/api/src/tests/query-perf/profile-entries/*.ts",
+      "apps/api/src/tests/query-perf/scheduled-job-entries/*.ts",
+      "apps/api/src/tests/query-perf/deadline-entries/*.ts",
+      "apps/api/src/tests/query-perf/tenant-statement-entries/*.ts",
+      "apps/api/src/tests/query-perf/corpus-statement-entries/*.ts",
+    ],
+    checkInputs: [
+      "apps/api/src/lib/db/aggregate-lock.ts",
+      "apps/api/src/lib/db/read-budgets.ts",
+      "apps/api/src/tests/query-perf/registry.ts",
+      "apps/api/src/tests/query-perf/owner-deadlines.ts",
+    ],
+    write: ["bun", "scripts/db-registry-entries.ts"],
+    check: ["bun", "scripts/db-registry-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "parser-registry",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/legal-search/parser-registry.gen.ts"],
@@ -925,8 +989,10 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "tailwind-class-cache",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [".tailwind-cache/**"],
+    // Lint consumes this through its Turbo dependency, not as package source.
+    selectsConsumers: false,
     inputs: [
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
       // sources and package versions (chat and workspace-ui use the web
@@ -964,8 +1030,9 @@ const GENERATOR_DECLARATIONS = [
       ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
     ],
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
-    check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
-    autofix: true,
+    check: null,
+    unchecked: "Derived cache is generated before lint and is never committed",
+    autofix: false,
     after: [],
   },
   {
@@ -1005,8 +1072,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/capabilities/**",
       "packages/skills/blueprints/**",
       "packages/skills/skills/**",
+      "packages/transactional/components/**",
       "packages/transactional/emails/**",
       "packages/transactional/i18n/**",
+      "packages/transactional/render/**",
       "bunfig.toml",
       ".prettierrc.yml",
       "scripts/generated-artifacts.ts",
@@ -1039,6 +1108,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/migration-lock-census.ts",
       "scripts/migration-lock-allowances/*.json",
       "scripts/online-ddl-lock-census.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/db/online-ddl.ts",
       "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
       "apps/api/drizzle/**/*.sql",
@@ -1227,6 +1297,19 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "online-migration-entries",
+    outputKind: "committed",
+    outputs: ["apps/api/src/db/online-migration-entries.gen.ts"],
+    inputs: [
+      "scripts/generate-online-migration-entries.ts",
+      "apps/api/src/db/online-migration-entries/*.ts",
+    ],
+    write: ["bun", "scripts/generate-online-migration-entries.ts"],
+    check: ["bun", "scripts/generate-online-migration-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "online-unique-index-names",
     outputKind: "committed",
     outputs: ["apps/api/src/db/online-unique-indexes.ts"],
@@ -1402,9 +1485,21 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/skills/**",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
     ],
+    cacheOutputs: [
+      ".turbo/**",
+      "apps/api/.turbo/**",
+      "packages/cli/.turbo/**",
+      ...CI_GENERATED_OUTPUTS.apiTypecheckProjects,
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+      ...CI_GENERATED_OUTPUTS.cliRuntime,
+    ],
     inputs: [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
+      "apps/api/src/lib/db/aggregate-chain-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/*.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/*.ts",
+      "apps/api/src/lib/db/read-budget-entries/*.ts",
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
@@ -1414,7 +1509,10 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "apps/api/src/lib/case-law/citation-vocabulary.ts",
+      "apps/api/src/lib/case-law/doctrine.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/legal-search/morphology/dictionary.ts",
+      "apps/api/src/lib/rate-limit/budget-config.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/document-version-upload.ts",
@@ -1428,6 +1526,8 @@ const GENERATOR_DECLARATIONS = [
     ],
     checkInputs: [
       "apps/api/src/lib/write-contract/write-contract.ts",
+      "packages/fetch/src/body-reader.ts",
+      "packages/fetch/src/race-abort.ts",
       ...TRANSITIVE_GENERATOR_INPUTS["cli-registry"],
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
@@ -1476,6 +1576,11 @@ const GENERATOR_DECLARATIONS = [
     outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
+      "apps/api/scripts/lib/mcp-app-inputs.ts",
+      "apps/api/src/mcp/**",
+      "apps/api/src/handlers/**/*-schema.ts",
+      "packages/agent-input/**",
+      "packages/legal-atlas/**",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
@@ -1563,6 +1668,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
       "packages/mcp-apps/scripts/lib/namespace-members.ts",
+      "packages/mcp-apps/scripts/lib/precompiled-messages.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1572,6 +1678,8 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/fonts.css",
       "apps/web/src/i18n/langs/*.json",
       "packages/decision-reader/**",
+      "packages/agent-input/**",
+      "packages/legal-atlas/**",
       "packages/legal-ast/**",
       "apps/web/public/fonts/**",
       "packages/ui/**",
@@ -1688,23 +1796,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "guard-rollout-manifest",
-    outputKind: "committed",
-    outputs: ["scripts/guard-rollouts.gen.ts"],
-    inputs: [
-      "scripts/generate-guard-rollouts.ts",
-      "scripts/guard-rollouts/*.ts",
-      "scripts/generated-artifacts.ts",
-      "packages/scripts/src/generated-artifact-format.ts",
-      "packages/portable-path/src/index.ts",
-    ],
-    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
-    write: ["bun", "scripts/generate-guard-rollouts.ts", "--write"],
-    check: ["bun", "scripts/generate-guard-rollouts.ts", "--check"],
-    autofix: true,
-    after: [],
-  },
-  {
     // Refreshes only the reviewed digests of jobs whose kind, qualifier and
     // privilege are unchanged since the merge base; new, reclassified and
     // privileged jobs keep failing the check until a human reviews them.
@@ -1721,11 +1812,11 @@ const GENERATOR_DECLARATIONS = [
       ".github/actions/**",
       ".github/ci-job-classification-decisions/**",
       ".github/ci-job-classification-sources.json",
+      ".github/global-rule-inputs.json",
       "scripts/check-ci-job-classification.ts",
       "scripts/ci-job-classification/**",
       "packages/collation/src/collation.ts",
       "packages/sha256/src/node.ts",
-      "packages/sha256/src/types.ts",
     ],
     write: ["bun", "scripts/check-ci-job-classification.ts", "--write"],
     check: null,
@@ -1735,6 +1826,26 @@ const GENERATOR_DECLARATIONS = [
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
     // Its outputs live under .github/, which the autofix action may not
     // modify, so pull requests refresh them by hand.
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "merge-group-parser",
+    outputKind: "committed",
+    outputs: [".github/workflows/cla.yml"],
+    blocks: [
+      {
+        path: ".github/workflows/cla.yml",
+        begin: "// BEGIN GENERATED merge-group parser",
+        end: "// END GENERATED merge-group parser",
+      },
+    ],
+    inputs: [
+      "scripts/merge-group-entries.mjs",
+      "scripts/sync-merge-group-parser.mjs",
+    ],
+    write: ["node", "scripts/sync-merge-group-parser.mjs"],
+    check: ["node", "scripts/sync-merge-group-parser.mjs", "--check"],
     autofix: false,
     after: [],
   },
@@ -1881,9 +1992,12 @@ const GENERATOR_DECLARATIONS = [
       "packages/ai-catalog/src/model-rate.ts",
       "packages/ai-catalog/src/model-rates.gen.ts",
       "packages/ai-catalog/src/reasoning-capabilities.ts",
+      "packages/fetch/src/body-reader.ts",
       "packages/fetch/src/connection-failure.ts",
       "packages/fetch/src/index.ts",
+      "packages/fetch/src/race-abort.ts",
       "packages/scripts/src/model-catalog-snapshot.ts",
+      "packages/scripts/src/offline-check-startup.ts",
       "packages/skills/src/streaming.ts",
     ],
     inputs: [
@@ -2048,6 +2162,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
@@ -2101,6 +2216,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/env*.ts",
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",
@@ -2136,6 +2252,8 @@ const GENERATOR_DECLARATIONS = [
       "packages/stable-stringify/src/index.ts",
       "packages/stable-stringify/src/stable-stringify.ts",
       "scripts/offline-network-preload.ts",
+      "scripts/offline-check-startup.ts",
+      "packages/scripts/src/offline-check-startup.ts",
     ],
     inputs: [
       "packages/catalogue/entries/**",

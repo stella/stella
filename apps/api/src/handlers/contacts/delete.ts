@@ -4,7 +4,8 @@ import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
-import { createErrorCapture } from "@/api/lib/analytics/capture";
+import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -27,6 +28,7 @@ export type DeleteContactHandlerProps = {
   organizationId: SafeId<"organization">;
   contactId: SafeId<"contact">;
   recordAuditEvent: AuditRecorder;
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
 };
 
 // Shared contact-delete logic reused by the HTTP handler and the
@@ -37,8 +39,11 @@ export const deleteContactHandler = async function* ({
   organizationId,
   contactId,
   recordAuditEvent,
+  flushWorkspaceSearchRepairs: flushRepairs,
 }: DeleteContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
+    await lockContactCapacity(tx, organizationId);
+
     const contact = await tx
       .select({ id: contacts.id, displayName: contacts.displayName })
       .from(contacts)
@@ -142,10 +147,17 @@ export const deleteContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
-    createErrorCapture(
-      handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
-    ),
+  const flushedWorkspaceIds = txResult.value.affectedWorkspaceIds;
+  detached(
+    async () =>
+      flushRepairs(flushedWorkspaceIds).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteContactHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "contacts-delete.flush-workspace-search-repairs",
   );
 
   return Result.ok({});
@@ -169,6 +181,7 @@ const deleteContactById = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       contactId: params.contactId,
       recordAuditEvent,
+      flushWorkspaceSearchRepairs,
     });
   },
 );

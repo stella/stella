@@ -12,6 +12,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { mintAuthProviderId } from "./auth-provider-id";
 import { withInterleaving } from "./transaction-interleaving";
@@ -506,7 +507,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           await owner.db.execute(sql`DROP TABLE IF EXISTS ${rows}`);
-          await owner.db.delete(organization).where(eq(organization.id, orgId));
+          await deleteOrganizationsForTest(owner.db, [orgId]);
           await owner.db.delete(user).where(eq(user.id, userId));
         }
       });

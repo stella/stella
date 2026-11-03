@@ -4,12 +4,19 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import {
+  parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml,
+  parsePlKisDocumentPdf as uncheckedParsePlKisDocumentPdf,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
+const parsePlKisDocumentPdf = guardParser(uncheckedParsePlKisDocumentPdf);
 
 const ADAPTER_FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 
@@ -96,6 +103,78 @@ const textLeaves = (blocks: readonly Block[]): string[] => {
 };
 
 describe("source whitespace", () => {
+  test("preserves structured blocks around printed-line runs", () => {
+    const { documentAst } = parse(
+      "<h2>Heading</h2><p>First paragraph.</p><p>Second paragraph.</p>",
+    );
+
+    expect(
+      documentAst.blocks.map(({ type, plainText }) => [type, plainText]),
+    ).toEqual([
+      ["heading", "Heading"],
+      ["paragraph", "First paragraph."],
+      ["paragraph", "Second paragraph."],
+    ]);
+  });
+
+  test("joins an inline printed-line run without absorbing surrounding blocks", () => {
+    const { documentAst } = parse(
+      "<p>Before.</p>First line<br>second line.<p>After.</p>",
+    );
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Before.",
+      "First line second line.",
+      "After.",
+    ]);
+  });
+
+  test.each(["\n", " "])(
+    "treats two printed-line breaks separated by %j as a paragraph boundary",
+    (separator) => {
+      const { documentAst } = parse(`First<br>${separator}<br>Second`);
+
+      expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+        "First",
+        "Second",
+      ]);
+    },
+  );
+
+  test("keeps a single printed-line break within one paragraph", () => {
+    const { documentAst } = parse("First<br>Second");
+
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "First Second",
+    ]);
+  });
+
+  test.each([
+    [
+      "czynności, o których mowa w art. 5, są klasyfikowane według Nomenklatury scalonej (CN)",
+      "lub klasyfikacji wydanych na podstawie przepisów o statystyce publicznej.",
+    ],
+    [
+      "Podstawową właściwością tych produktów jest to, że powracają one do stanu ciekłego",
+      "lub półciekłego, w temperaturze otoczenia zbliżonej do 0 °C.",
+    ],
+    [
+      "1) następującym po dniu doręczenia decyzji o zmianie WIS albo decyzji o uchyleniu WIS,",
+      "albo",
+    ],
+  ])(
+    "a word-processor line break does not cut its Polish sentence",
+    (above, below) => {
+      const { documentAst } = parse(`${above} <br>${below}`);
+      expect(documentAst.blocks.map((block) => block.plainText)).toContain(
+        `${above} ${below}`,
+      );
+      expect(documentAst.blocks.map((block) => block.plainText)).not.toContain(
+        below,
+      );
+    },
+  );
+
   test("the fixtures carry the export's line wraps inside paragraphs", async () => {
     // A wrap between two words, inside one element: what the parse must fold.
     expect(await htmlOf(WRAPPED)).toMatch(/\p{L}\n\p{L}/u);
@@ -135,7 +214,7 @@ describe("ordered lists", () => {
     const html = await htmlOf(
       new URL("pl-kis-detail-05-objas.json.gz", ADAPTER_FIXTURES),
     );
-    const $ = cheerio.load(html);
+    const $ = load(html);
     const items = $("ol[style*='list-style-type: none'] > li")
       .toArray()
       .map((item) => $(item).text().replace(/\s+/gu, " ").trim())
@@ -178,7 +257,7 @@ describe("ordered lists", () => {
     "%s: an item of a plain ordered list opens with its count",
     async (_name, detail) => {
       const html = await htmlOf(detail);
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const items = $(
         "ol:not([type]):not([start]):not([reversed]):not([style*='list-style'])",
       )
@@ -206,4 +285,22 @@ describe("ordered lists", () => {
       }
     },
   );
+});
+
+test("the recorded PDF rendition satisfies the reader contract", async () => {
+  const parsed = await parsePlKisDocumentPdf({
+    pdfBytes: await Bun.file(
+      new URL("pl-kis-document-05-objas.pdf", ADAPTER_FIXTURES),
+    ).bytes(),
+    caseNumber: "recorded-pdf",
+    court: "Minister Finansow",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: "https://eureka.mf.gov.pl/informacje/podglad/1",
+    documentUrl: "https://eureka.mf.gov.pl/informacje/podglad/1",
+    documentId: "1",
+    keywords: [],
+    statutes: [],
+  });
+  expect(parsed.fulltext).toContain("waloryzacji");
 });

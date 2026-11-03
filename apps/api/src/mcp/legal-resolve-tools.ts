@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import {
   PUBLIC_COUNTRIES,
@@ -14,15 +13,16 @@ import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
 import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
-import { LIMITS } from "@/api/lib/limits";
 
+import {
+  LEGAL_RESOLVE_INPUT_NORMALIZATION,
+  resolveDecisionArgsSchema,
+  resolveLawArgsSchema,
+} from "./legal-resolve-input";
 import { defineMcpToolSet } from "./tool-types";
 import type { TypedMcpToolHandler } from "./tool-types";
 import {
-  countryInputSchema,
-  countryNormalization,
   featureDisabledHint,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
@@ -59,84 +59,9 @@ const defaultResolveLawCitation: typeof resolveLawCitation = async (...input) =>
     await import("@/api/handlers/legal-resolve/law")
   ).resolveLawCitation(...input);
 
-const citationText = v.pipe(
-  v.string(),
-  v.nonEmpty(),
-  v.maxLength(LIMITS.caseLawIdentifierMaxLength),
-);
 const supportedLawCountries = PUBLIC_COUNTRIES.filter(
   (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
 ).join(", ");
-const lawCountrySchema = countryInputSchema(
-  "Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
-);
-const decisionCountrySchema = countryInputSchema(
-  "Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable.",
-);
-const resolveDecisionArgsSchema = nullAsAbsent(
-  v.strictObject({
-    country: decisionCountrySchema,
-    identifier: v.pipe(
-      citationText,
-      v.description(
-        "Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions.",
-      ),
-    ),
-  }),
-);
-const resolveLawArgsSchema = nullAsAbsent(
-  v.strictObject({
-    country: lawCountrySchema,
-    source: v.pipe(
-      v.variant("type", [
-        v.strictObject({
-          type: v.pipe(
-            v.literal("citation"),
-            v.description("Resolve a written citation."),
-          ),
-          citation: v.pipe(
-            citationText,
-            v.description(
-              "Statute citation as written, e.g. zákon č. 89/2012 Sb.",
-            ),
-          ),
-        }),
-        v.strictObject({
-          type: v.pipe(
-            v.literal("structured"),
-            v.description("Resolve a gazette collection, year and act number."),
-          ),
-          collection: v.pipe(
-            citationText,
-            v.description("Gazette collection, e.g. sb, Zb. or Z. z."),
-          ),
-          year: v.pipe(
-            citationText,
-            v.description("Publication year, e.g. 2012."),
-          ),
-          number: v.pipe(citationText, v.description("Act number, e.g. 89.")),
-        }),
-      ]),
-      v.description(
-        "Choose citation for written text or structured for gazette identity.",
-      ),
-    ),
-    section: v.pipe(
-      citationText,
-      v.description("Section number, with optional §, e.g. 1729 or § 5a."),
-    ),
-    as_of: v.optional(
-      v.pipe(
-        v.string(),
-        v.isoDate(),
-        API_CALENDAR_DATE_CHECK,
-        v.description(
-          "Expression date YYYY-MM-DD; omit for the current expression.",
-        ),
-      ),
-    ),
-  }),
-);
 
 const common = {
   consumesServices: false,
@@ -146,12 +71,7 @@ const common = {
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
   scope: LAW_READ_SCOPE,
-  inputNormalization: {
-    country: {
-      ...countryNormalization({ spelling: "alpha-3" }),
-      invalidValueDisposition: "handler-owned",
-    },
-  },
+  inputNormalization: LEGAL_RESOLVE_INPUT_NORMALIZATION,
 } as const;
 
 const LEGAL_RESOLVE_TOOL_DEFINITIONS = [

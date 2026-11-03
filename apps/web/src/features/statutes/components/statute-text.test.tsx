@@ -6,8 +6,9 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteText } from "@/features/statutes/components/statute-text";
@@ -114,7 +115,7 @@ const renderStatute = (
       language="cs"
       masthead={null}
       provisionCitationCounts={new Map()}
-      statuteLists={E_SBIRKA_LIST_SCHEME}
+      statuteAnchors={E_SBIRKA_ANCHORS}
       statuteTitle={STATUTE_TITLE}
       versionCount={1}
       versionValidFrom="2024-01-01"
@@ -315,6 +316,7 @@ describe("StatuteText", () => {
           endOffset: 4,
           id: "019b0121-9dd7-7000-8000-0000000000aa",
           kind: "highlight",
+          quote: readerAnchorPiecesOf(marked).at(0)?.text.slice(0, 4) ?? "",
           startOffset: 0,
           style: "highlight",
         },
@@ -340,6 +342,10 @@ describe("StatuteText", () => {
           endOffset: 4,
           id: "019b0121-9dd7-7000-8000-0000000000bb",
           kind: "highlight",
+          quote:
+            readerAnchorPiecesOf(table)
+              .find((piece) => piece.anchorId === cellPieceId)
+              ?.text.slice(0, 4) ?? "",
           startOffset: 0,
           style: "highlight",
         },
@@ -411,7 +417,7 @@ describe("StatuteText", () => {
             language="cs"
             masthead={null}
             provisionCitationCounts={new Map()}
-            statuteLists={E_SBIRKA_LIST_SCHEME}
+            statuteAnchors={E_SBIRKA_ANCHORS}
             statuteTitle={STATUTE_TITLE}
             versionCount={3}
             versionValidFrom="2024-01-01"

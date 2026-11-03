@@ -20,6 +20,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  billingDraftUserSettings,
   chatToolGrants,
   contacts,
   correspondence,
@@ -1465,7 +1466,7 @@ const cancelMemberDesktopSessions = async ({
   }
 };
 
-type ClearMemberPresenceOptions = Pick<
+type ClearMemberScopedDataOptions = Pick<
   RemoveOrganizationMemberOptions,
   "tx" | "organizationId" | "userId" | "memberId"
 > & { recordAuditEvent: AuditRecorder };
@@ -1481,7 +1482,7 @@ const clearMemberDesktopRunners = async ({
   userId,
   memberId,
   recordAuditEvent,
-}: ClearMemberPresenceOptions) => {
+}: ClearMemberScopedDataOptions) => {
   await tx
     .delete(desktopRunners)
     .where(
@@ -1498,7 +1499,7 @@ const clearMemberDesktopRunners = async ({
   });
 };
 
-const clearMemberPresence = async (options: ClearMemberPresenceOptions) => {
+const clearMemberScopedData = async (options: ClearMemberScopedDataOptions) => {
   const { tx, organizationId, userId, memberId, recordAuditEvent } = options;
   await clearMemberDesktopRunners(options);
   await runScopedWorkInTransaction({
@@ -1515,6 +1516,24 @@ const clearMemberPresence = async (options: ClearMemberPresenceOptions) => {
             eq(desktopPresence.userId, userId),
           ),
         );
+      await scopedTx
+        .delete(billingDraftUserSettings)
+        .where(
+          and(
+            eq(billingDraftUserSettings.organizationId, organizationId),
+            eq(billingDraftUserSettings.userId, userId),
+          ),
+        );
+      await recordAuditEvent(scopedTx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        metadata: {
+          change: "member-billing-draft-settings-cleared",
+          memberId,
+          userId,
+        },
+      });
       await recordAuditEvent(scopedTx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -1523,6 +1542,36 @@ const clearMemberPresence = async (options: ClearMemberPresenceOptions) => {
       });
     },
   });
+};
+
+type ValidateOrganizationReassignmentOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId"
+> & { reassignTo: SafeId<"user"> };
+
+const validateOrganizationReassignment = async ({
+  tx,
+  organizationId,
+  userId,
+  reassignTo,
+}: ValidateOrganizationReassignmentOptions) => {
+  const replacement = await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, reassignTo),
+      ),
+    );
+  if (reassignTo === userId || replacement.length === 0) {
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this organization",
+      }),
+    );
+  }
 };
 
 /**
@@ -1560,23 +1609,12 @@ export const removeOrganizationMemberInTransaction = async (
     abortTransaction(timerClose.error);
   }
   if (reassignTo) {
-    const replacement = await tx
-      .select({ id: member.id })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, reassignTo),
-        ),
-      );
-    if (reassignTo === userId || replacement.length === 0) {
-      abortTransaction(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this organization",
-        }),
-      );
-    }
+    await validateOrganizationReassignment({
+      tx,
+      organizationId,
+      userId,
+      reassignTo,
+    });
   }
   // Workspace locks precede run, step, obligation and entity cleanup.
   await cancelMemberFlowRuns({
@@ -1618,7 +1656,7 @@ export const removeOrganizationMemberInTransaction = async (
       trigger: { type: "system", source: "membership_removal" },
     },
   });
-  await clearMemberPresence({
+  await clearMemberScopedData({
     tx,
     organizationId,
     userId,
@@ -1744,6 +1782,7 @@ export type MemberCleanupDisposition =
  * schema coverage guard derives its census from this list.
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+  [billingDraftUserSettings.userId, "cleared"],
   [requestIdempotencyReceipts.userId, "cleared"],
   [requestIdempotencyReceipts.responseBody, "cleared"],
   [member.userId, "cleared"],

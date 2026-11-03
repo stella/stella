@@ -464,13 +464,16 @@ const renew = async (state: SessionState) => {
   }
   for (const [runId, tracked] of state.tokens) {
     // A run the API ended gets no new token, whatever this socket last sent.
-    if (!renewed.running.has(runId)) {
+    if (!renewed.open.has(runId)) {
       state.tokens.delete(runId);
       continue;
     }
+    // A run started but not accepted yet keeps its token tracked, so a
+    // heartbeat after its acceptance still refreshes it.
     if (
+      renewed.running.has(runId) &&
       tracked.expiresAt - now.getTime() <
-      state.context.timing.tokenRefreshMarginMs
+        state.context.timing.tokenRefreshMarginMs
     ) {
       await sendToken(state, runId, tracked.workspaceIds);
     }
@@ -494,7 +497,7 @@ const heartbeat = (state: SessionState) => {
   state.missedPings = 0;
   state.phase.socket.ping();
   detached(
-    step(state, "heartbeat", async () => await renew(state)),
+    async () => await step(state, "heartbeat", async () => await renew(state)),
     "desktop-runner.heartbeat",
   );
 };
@@ -677,26 +680,23 @@ const onSocketClosed = (state: SessionState) => {
     state.context.timers.clearInterval(interval);
   }
   const previous = state.chain;
-  detached(
-    (async () => {
-      await previous;
-      if (!state.claimed) {
-        return;
-      }
-      const released = await Result.tryPromise(
-        async () =>
-          await releaseRunnerSession(state.context.db, {
-            binding: state.binding,
-            sessionId: state.sessionId,
-          }),
-      );
-      if (released.isErr()) {
-        // Routing ignores the runner once its heartbeat goes stale.
-        observeFailure(released.error, { sink: RELEASE_SINK });
-      }
-    })(),
-    "desktop-runner.release",
-  );
+  detached(async () => {
+    await previous;
+    if (!state.claimed) {
+      return;
+    }
+    const released = await Result.tryPromise(
+      async () =>
+        await releaseRunnerSession(state.context.db, {
+          binding: state.binding,
+          sessionId: state.sessionId,
+        }),
+    );
+    if (released.isErr()) {
+      // Routing ignores the runner once its heartbeat goes stale.
+      observeFailure(released.error, { sink: RELEASE_SINK });
+    }
+  }, "desktop-runner.release");
 };
 
 export type RunnerSession = {
@@ -704,6 +704,8 @@ export type RunnerSession = {
   readonly socketSession: ApiSocketSession;
   /** Read this socket's queue now; resolves once what was read is sent. */
   readonly deliver: () => Promise<void>;
+  /** The newest queued command this socket has sent. */
+  readonly deliveredThrough: () => number;
   /** Ask the desktop to reconnect after `afterMs` and close. */
   readonly drain: (afterMs: number) => void;
 };
@@ -772,11 +774,12 @@ export const createRunnerSession = ({
       state.queuedFrames += 1;
       state.queuedBytes += bytes;
       detached(
-        step(state, "frame", async () => {
-          state.queuedFrames -= 1;
-          state.queuedBytes -= bytes;
-          await handleFrame(state, message);
-        }),
+        async () =>
+          await step(state, "frame", async () => {
+            state.queuedFrames -= 1;
+            state.queuedBytes -= bytes;
+            await handleFrame(state, message);
+          }),
         "desktop-runner.frame",
       );
     },
@@ -785,7 +788,7 @@ export const createRunnerSession = ({
     },
     drain: () => {
       state.backpressured = false;
-      detached(deliver(state), "desktop-runner.drain");
+      detached(async () => await deliver(state), "desktop-runner.drain");
     },
     close: () => {
       onSocketClosed(state);
@@ -796,6 +799,7 @@ export const createRunnerSession = ({
     sessionId,
     socketSession,
     deliver: async () => await deliver(state),
+    deliveredThrough: () => state.deliveredThrough,
     drain: (afterMs) => drain(state, afterMs),
   };
 };

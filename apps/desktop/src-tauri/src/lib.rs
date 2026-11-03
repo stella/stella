@@ -4,11 +4,15 @@ mod activity;
 mod activity_calls;
 mod activity_commands;
 mod activity_details;
+mod activity_settings;
 mod activity_store;
 mod activity_window;
 mod app_lifecycle;
 mod app_window;
 mod autostart;
+mod billing_draft_commands;
+mod billing_draft_settings;
+mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
@@ -32,6 +36,16 @@ mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
 mod diagnostics;
+mod dictation;
+#[cfg(dictation)]
+mod dictation_audio;
+#[cfg(dictation)]
+mod dictation_engine;
+#[cfg(dictation)]
+mod dictation_input;
+#[cfg(dictation)]
+mod dictation_worker;
+mod document_sessions;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -96,6 +110,18 @@ pub fn run_codex_token_helper() -> Option<i32> {
   codex_managed_token_broker::run_token_helper(&args)
 }
 
+/// Runs the speech worker when the process was started as one, and returns
+/// its exit code; `None` for an ordinary launch.
+pub fn run_dictation_worker() -> Option<i32> {
+  #[cfg(dictation)]
+  {
+    let args = std::env::args_os().collect::<Vec<_>>();
+    dictation_worker::run_if_requested(&args)
+  }
+  #[cfg(not(dictation))]
+  None
+}
+
 pub fn run() {
   logging::init();
 
@@ -107,7 +133,13 @@ pub fn run() {
   let bridge_port = config::resolve_bridge_port();
   let allowed_origins = config::resolve_allowed_origins();
 
-  let manager = Arc::new(Mutex::new(SessionManager::new()));
+  let manager = match SessionManager::new() {
+    Ok(manager) => Arc::new(Mutex::new(manager)),
+    Err(error) => {
+      tracing::error!(error = %error, "document session initialization failed");
+      return;
+    }
+  };
   let account = Arc::new(Mutex::new(account::AccountStore::default()));
   let clipboard_manager = Arc::new(std::sync::Mutex::new(ClipboardManager::new()));
   let activity_manager: activity::ActivityAppState =
@@ -160,6 +192,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(dictation::DictationState::load())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
       clipboard_shortcut::ClipboardShortcut::load(),
     ))
@@ -256,6 +289,9 @@ pub fn run() {
                 tray::refresh(&app, &snapshot);
               });
             }
+            feature_gate::DesktopFeature::Dictation => {
+              dictation::apply_feature_gate(app, enabled);
+            }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
@@ -268,37 +304,31 @@ pub fn run() {
       // Restore sessions and build the initial tray menu off the main thread.
       // Session restore reads the OS keychain, which can block on user
       // authorization; the event loop is not running yet, so blocking setup
-      // makes macOS report the app as not responding. The guard is acquired
-      // synchronously here so every other manager consumer (bridge, deep
-      // links, tray actions) queues behind the restore instead of racing it.
+      // makes macOS report the app as not responding. Read the account before
+      // locking the session manager, following account request lock order.
+      // set_account_owner serializes restoration with other manager consumers.
       {
         let manager = Arc::clone(&manager);
-        // A second-instance notification can race this lock on Windows and
-        // Linux, so fall back to awaiting instead of panicking.
-        let setup_guard = Arc::clone(&manager).try_lock_owned();
         let handle = handle.clone();
         tauri::async_runtime::spawn(async move {
-          let mut mgr = match setup_guard {
-            Ok(guard) => guard,
-            Err(_) => {
-              tracing::warn!("session manager contended during setup");
-              Arc::clone(&manager).lock_owned().await
+          manager.lock().await.set_app_handle(handle.clone());
+          let _lease = account::lock_requests().await;
+          let account = handle.state::<account::AccountState>();
+          let owner = match account::current(&account).await {
+            Ok(account) => account.as_ref().map(document_sessions::AccountOwner::for_account),
+            Err(error) => {
+              tracing::warn!(error = %error, "document account is unavailable during restore");
+              return;
             }
           };
-          mgr.set_app_handle(handle.clone());
-          mgr.initialize().await;
-          let session_ids = mgr.session_ids_needing_watchers();
-          drop(mgr);
-
-          // Attach file watchers and SSE listeners outside the lock
-          for sid in &session_ids {
-            SessionManager::attach_watcher(&manager, sid).await;
-          }
-
           let mut mgr = manager.lock().await;
-          for sid in &session_ids {
-            mgr.ensure_sse_listener(&manager, sid);
+          if let Err(error) = mgr.set_account_owner(owner).await {
+            tracing::warn!(error = %error, "document session restore remains pending");
+            return;
           }
+          drop(mgr);
+          SessionManager::attach_pending_listeners(&manager).await;
+          let mgr = manager.lock().await;
 
           tray::refresh(&handle, &mgr.get_snapshot());
         });
@@ -389,7 +419,7 @@ pub fn run() {
                 mgr.reveal_support_root();
               }
               tray::MenuAction::OpenSessionFile(id) => {
-                let mgr = manager.lock().await;
+                let mut mgr = manager.lock().await;
                 mgr.open_session_file(&id);
               }
               tray::MenuAction::RevealSession(id) => {
@@ -549,20 +579,48 @@ pub fn run() {
 /// renders the window at this size (`tests/desktop-window-sizes.ts`).
 const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
 const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+pub(crate) const SETTINGS_WINDOW_LABEL: &str = "main";
 
-pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
+/// A Settings window tab native code opens; the ids are `PREFERENCES_TABS`
+/// in `src/mainview/App.tsx`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PreferencesTab {
+  General,
+  Activity,
+  About,
+}
+
+impl PreferencesTab {
+  #[cfg(test)]
+  const ALL: [Self; 3] = [Self::General, Self::Activity, Self::About];
+
+  const fn id(self) -> &'static str {
+    match self {
+      Self::General => "general",
+      Self::Activity => "activity",
+      Self::About => "about",
+    }
+  }
+}
+
+pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
   let _ = handle.show();
 
-  if let Some(window) = handle.get_webview_window("main") {
+  let tab = tab.id();
+  if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     let _ = window.show();
     let _ = window.set_focus();
-    let _ = handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+    let _ = handle.emit_to(
+      SETTINGS_WINDOW_LABEL,
+      "activate-tab",
+      serde_json::json!({ "tab": tab }),
+    );
     return;
   }
 
-  let builder = crate::app_window::builder(handle, "main", "index.html")
+  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .resizable(false);
@@ -589,15 +647,40 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
       });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();
-      let tab = tab.to_string();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ =
-          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+        let _ = handle.emit_to(
+          SETTINGS_WINDOW_LABEL,
+          "activate-tab",
+          serde_json::json!({ "tab": tab }),
+        );
       });
     }
     Err(e) => {
       tracing::error!(error = %e, "failed to create settings window");
+    }
+  }
+}
+
+#[cfg(test)]
+mod preferences_tab_tests {
+  use super::PreferencesTab;
+
+  #[test]
+  fn native_tabs_are_tabs_the_settings_window_declares() {
+    let source = include_str!("../../src/mainview/App.tsx");
+    let (_, declaration) = source
+      .split_once("const PREFERENCES_TABS = [")
+      .expect("App.tsx declares PREFERENCES_TABS");
+    let (declaration, _) = declaration
+      .split_once(']')
+      .expect("PREFERENCES_TABS is one array literal");
+    for tab in PreferencesTab::ALL {
+      assert!(
+        declaration.contains(&format!("\"{}\"", tab.id())),
+        "{} is not a Settings window tab",
+        tab.id()
+      );
     }
   }
 }

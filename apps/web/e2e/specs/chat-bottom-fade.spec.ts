@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const LONG_REVIEW_REQUEST = Array.from(
   { length: 24 },
@@ -12,13 +13,17 @@ test("transcript fade appears only while content remains below the viewport", as
   await page.setViewportSize({ width: 960, height: 540 });
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.fill(LONG_REVIEW_REQUEST);
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   const transcript = page.getByRole("log");
   await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   const viewport = transcript.locator('[data-slot="scroll-area-viewport"]');
   const fade = page.locator("[data-chat-bottom-fade]");
@@ -55,12 +60,16 @@ test("transcript fade appears only while content remains below the viewport", as
   await composer.fill("Stream until stopped please");
   await page.getByRole("button", { name: "Send message" }).click();
   const stop = page.getByRole("button", { name: "Stop", exact: true });
-  await expect(stop).toBeVisible({ timeout: 30_000 });
+  await expect(stop).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(
     transcript.getByText("This mock reply streams back", { exact: false }),
   ).toBeVisible();
   await expect(fade).toBeHidden();
   await stop.click();
-  await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(stop).toBeHidden({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await expect(fade).toBeHidden();
 });

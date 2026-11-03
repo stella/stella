@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  max,
   or,
   type SQL,
   sql,
@@ -32,6 +33,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  withAggregateLock,
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
@@ -229,6 +231,16 @@ export const claimRunnerSession = async (
   }: ClaimSessionOptions,
 ): Promise<ClaimSessionResult> =>
   await withAggregateTransaction(db, async (tx) => {
+    // Claims of one account are serialized before the current session is
+    // read, so overlapping claims for one runner each see the earlier claim's
+    // committed session as `previous`. Admissions stay serialized from the
+    // count through the insert, so concurrent new installations never pass
+    // the cap together.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: binding.organizationId, userId: binding.userId },
+      tx,
+    });
     const [existing] = await tx
       .select({
         sessionId: runner.sessionId,
@@ -252,6 +264,7 @@ export const claimRunnerSession = async (
       }
     }
     const values = {
+      keyId: binding.keyId,
       sessionId,
       instanceId,
       connection: "connected" as const,
@@ -382,22 +395,30 @@ type RunnerReleaseTransaction = {
   };
 };
 
-type RevokedRunnerScope = {
-  readonly userId: SafeId<"user">;
-  /** Absent: every organization the account belongs to. */
-  readonly organizationId?: SafeId<"organization">;
-  /** Absent: every device key of the account. */
-  readonly deviceJkt?: string;
-};
+type RevokedRunnerScope =
+  /** Access ended for the account, in one organization or in every one. */
+  | {
+      readonly userId: SafeId<"user">;
+      readonly organizationId?: SafeId<"organization">;
+      readonly keyId?: never;
+    }
+  /** One credential was revoked: only the runners it opened. */
+  | {
+      readonly userId: SafeId<"user">;
+      readonly organizationId: SafeId<"organization">;
+      readonly keyId: string;
+    };
 
 /**
  * A credential was revoked: its runners stop taking runs at once, and each
  * open socket closes at its next heartbeat, which re-checks the credential.
  * Runs stay bound to the runner and end through their leases and expiry.
+ * Runners another credential opened stay connected, even on the same device
+ * key.
  */
 export const releaseRevokedRunners = async (
   tx: RunnerReleaseTransaction,
-  { userId, organizationId, deviceJkt }: RevokedRunnerScope,
+  { userId, organizationId, keyId }: RevokedRunnerScope,
 ) => {
   // audit: skip - the revocation that calls this records its own audit event
   await tx
@@ -409,7 +430,7 @@ export const releaseRevokedRunners = async (
         organizationId === undefined
           ? undefined
           : eq(runner.organizationId, organizationId),
-        deviceJkt === undefined ? undefined : eq(runner.deviceJkt, deviceJkt),
+        keyId === undefined ? undefined : eq(runner.keyId, keyId),
       ),
     );
 };
@@ -431,8 +452,16 @@ type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
 type RenewResult =
   /** Another socket of the same installation and key is current. */
   | { type: "superseded" }
-  /** The runs this socket holds that are still running, read with the renewal. */
-  | { type: "current"; running: ReadonlySet<string> };
+  /**
+   * The runs this socket holds that are still open, and those of them that are
+   * running, read with the renewal. A run started but not yet accepted is open
+   * and not running.
+   */
+  | {
+      type: "current";
+      open: ReadonlySet<string>;
+      running: ReadonlySet<string>;
+    };
 
 /**
  * A heartbeat of the current socket: the runner is seen, and every open run it
@@ -488,13 +517,23 @@ export const renewRunnerSession = async (
           inArray(runs.state, DESKTOP_RUNNER_LEASED_RUN_STATES),
         ),
       );
-    const running = await tx
-      .select({ runId: runs.runId })
+    const open = await tx
+      .select({ runId: runs.runId, state: runs.state })
       .from(runs)
-      .where(and(boundTo(binding), eq(runs.state, "running")));
+      .where(
+        and(
+          boundTo(binding),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        ),
+      );
     return {
       type: "current",
-      running: new Set(running.map(({ runId }) => runId)),
+      open: new Set(open.map(({ runId }) => runId)),
+      running: new Set(
+        open
+          .filter(({ state }) => state === "running")
+          .map(({ runId }) => runId),
+      ),
     };
   });
 
@@ -984,20 +1023,15 @@ type PendingCommandsResult =
 
 /**
  * Commands queued after `afterId` for the open runs bound to this socket, in
- * queue order. A socket that is no longer the desktop's current one gets none.
+ * queue order. A socket that is no longer the desktop's current one gets none:
+ * the commands are read in the same statement that matches this socket's
+ * session on the runner row, so a takeover committed at any point leaves the
+ * superseded socket without them.
  */
 export const readPendingCommands = async (
   db: DesktopRunnerDb,
   { binding, sessionId, afterId, limit }: PendingCommandsOptions,
 ): Promise<PendingCommandsResult> => {
-  const [current] = await db
-    .select({ sessionId: runner.sessionId })
-    .from(runner)
-    .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
-    .limit(1);
-  if (current === undefined) {
-    return { type: "superseded" };
-  }
   const rows = await db
     .select({
       id: desktopRunnerCommands.id,
@@ -1008,6 +1042,7 @@ export const readPendingCommands = async (
     })
     .from(desktopRunnerCommands)
     .innerJoin(runs, eq(runs.runId, desktopRunnerCommands.runId))
+    .innerJoin(runner, and(runnerKey(binding), eq(runner.sessionId, sessionId)))
     .where(
       and(
         boundTo(binding),
@@ -1017,6 +1052,18 @@ export const readPendingCommands = async (
     )
     .orderBy(asc(desktopRunnerCommands.id))
     .limit(limit);
+  if (rows.length === 0) {
+    // No command in a snapshot where this socket was current, or none at all
+    // because it was not: the runner row says which.
+    const [current] = await db
+      .select({ sessionId: runner.sessionId })
+      .from(runner)
+      .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
+      .limit(1);
+    if (current === undefined) {
+      return { type: "superseded" };
+    }
+  }
   return {
     type: "current",
     commands: rows.map((row) => ({
@@ -1026,24 +1073,35 @@ export const readPendingCommands = async (
   };
 };
 
-type SessionsWithCommandsOptions = {
+type QueuedCommandsOptions = {
   instanceId: string;
-  /** How far back, on the database's clock, a queued command still counts. */
-  windowMs: number;
+  /** Resume after this socket, so successive sweeps page across every one. */
+  afterSessionId: string | null;
   limit: number;
 };
 
+type QueuedCommands = {
+  readonly sessionId: string;
+  /** The newest command queued for the socket's open runs. */
+  readonly newestCommandId: number;
+};
+
 /**
- * The sockets this API task holds whose open runs had a command queued within
- * the window: the ones a lost doorbell ring may have left waiting.
+ * The connected sockets this API task holds whose open runs have commands,
+ * each with its newest command, in socket order after `afterSessionId`. A
+ * socket that has not sent through that command is one a lost doorbell ring
+ * left waiting, however long ago the command was queued.
  */
-export const readSessionsWithQueuedCommands = async (
+export const readNewestQueuedCommands = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { instanceId, windowMs, limit }: SessionsWithCommandsOptions,
-): Promise<string[]> =>
+  { instanceId, afterSessionId, limit }: QueuedCommandsOptions,
+): Promise<QueuedCommands[]> =>
   (
     await db
-      .select({ sessionId: runner.sessionId })
+      .select({
+        sessionId: runner.sessionId,
+        newestCommandId: max(desktopRunnerCommands.id),
+      })
       .from(runner)
       .innerJoin(
         runs,
@@ -1063,12 +1121,20 @@ export const readSessionsWithQueuedCommands = async (
           eq(runner.instanceId, instanceId),
           eq(runner.connection, "connected"),
           inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-          sql`${desktopRunnerCommands.createdAt} >= now() - ${windowMs}::double precision * interval '1 millisecond'`,
+          afterSessionId === null
+            ? undefined
+            : gt(runner.sessionId, afterSessionId),
         ),
       )
       .groupBy(runner.sessionId)
+      .orderBy(asc(runner.sessionId))
       .limit(limit)
-  ).map(({ sessionId }) => sessionId);
+  ).map(({ sessionId, newestCommandId }) => ({
+    sessionId,
+    // The inner join gives every group at least one command.
+    newestCommandId:
+      newestCommandId ?? panic("A queued socket group has no command"),
+  }));
 
 type ReadyRunnersOptions = {
   userId: SafeId<"user">;
@@ -1244,7 +1310,8 @@ export type InsertedCommand =
 
 /**
  * Queue one command for an open run of `owner`. The command key makes a
- * repeat a duplicate; the holder is returned only while its socket is open.
+ * repeat a duplicate, also once the run holds its cap; the holder is returned
+ * only while its socket is open.
  */
 export const insertRunCommand = async (
   db: DesktopRunnerDb,
@@ -1252,6 +1319,14 @@ export const insertRunCommand = async (
 ): Promise<InsertedCommand> =>
   await withAggregateTransaction(db, async (tx) => {
     const { owner, runId } = options;
+    // Commands for the account's runs are serialized from the cap count
+    // through the insert, so concurrent commands never pass a run's cap
+    // together.
+    await withAggregateLock({
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId: owner.organizationId, userId: owner.userId },
+      tx,
+    });
     const [run] = await tx
       .select({
         state: runs.state,
@@ -1282,6 +1357,20 @@ export const insertRunCommand = async (
     }
     if (!DESKTOP_RUNNER_OPEN_RUN_STATES.some((state) => state === run.state)) {
       return { type: "run_ended", state: run.state };
+    }
+    const [repeat] = await tx
+      .select({ id: desktopRunnerCommands.id })
+      .from(desktopRunnerCommands)
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, options.kind),
+          eq(desktopRunnerCommands.commandKey, options.commandKey),
+        ),
+      )
+      .limit(1);
+    if (repeat !== undefined) {
+      return { type: "duplicate" };
     }
     const [queued] = await tx
       .select({ count: sql<number>`count(*)::int` })

@@ -1,4 +1,4 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result, TaggedError } from "better-result";
 
 import {
@@ -13,8 +13,13 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { formatAppError, LocalizedAppError } from "../shared/app-error";
-import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
+import {
+  applyUploadHostStyles,
+  createViewportApp,
+  parseAppToolPayload,
+} from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import { mountAppViewport } from "../shared/size";
 import {
   bindUploadSdkErrors,
   connectUploadApp,
@@ -170,7 +175,7 @@ const uploadSelectedFile = async ({
 };
 
 export const createDocumentUploadRuntime = (
-  app = new App({ name: "stella document upload", version: "1.0.0" }),
+  app: App = createViewportApp("stella document upload"),
 ) => {
   let locale = appLocale(undefined);
   const t = createUploadTranslator(() => locale);
@@ -348,11 +353,23 @@ export const createDocumentUploadRuntime = (
       }
       publish({ uploadPhase: "idle" });
     },
-    connect: async () =>
+    connect: async (onConnected?: () => void) =>
       await connectUploadApp({
         app,
         onContext: applyHostContext,
         onError: (message) => setStatus(() => message, "error"),
+        onConnected,
       }),
+    /** Bounds the inline height and offers fullscreen through the shared viewport. */
+    mountViewport: () => {
+      const stopViewport = mountAppViewport({
+        app,
+        onFailure: () => setStatus(() => t("bridgeUnavailable"), "error"),
+      });
+      app.onteardown = () => {
+        stopViewport();
+        return {};
+      };
+    },
   };
 };

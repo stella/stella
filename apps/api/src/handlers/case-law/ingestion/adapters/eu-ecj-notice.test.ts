@@ -9,8 +9,6 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
 import JSZip from "jszip";
 
 import {
@@ -18,6 +16,9 @@ import {
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
 import { writeZipEntry } from "@stll/docx-utils";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { Element } from "@stll/html/nodes";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -68,11 +69,15 @@ import type {
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -160,31 +165,34 @@ const decisionFrom = async (notice: string | undefined) => {
 };
 
 describe("notice publication outcomes", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   beforeEach(() => {
     Bun.sleep = async () => {};
   });
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
   test("a 500 notice rejects the item and a later attempt can build it", async () => {
     let noticeRequests = 0;
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      if (
-        (input instanceof Request ? input.url : String(input)).includes(
-          "/resource/celex/",
-        )
-      ) {
-        noticeRequests += 1;
-        return new Response(null, { status: noticeRequests === 1 ? 500 : 404 });
-      }
-      return new Response(documentEn, {
-        headers: { "Content-Type": "application/xhtml+xml" },
-      });
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        if (
+          (input instanceof Request ? input.url : String(input)).includes(
+            "/resource/celex/",
+          )
+        ) {
+          noticeRequests += 1;
+          return new Response(null, {
+            status: noticeRequests === 1 ? 500 : 404,
+          });
+        }
+        return new Response(documentEn, {
+          headers: { "Content-Type": "application/xhtml+xml" },
+        });
+      }),
+    );
 
     const initial = await Result.tryPromise({
       try: async () => buildDecision(binding, AbortSignal.timeout(5000)),
@@ -247,17 +255,19 @@ describe("notice publication outcomes", () => {
     "a notice refusal %s retains the row and a later publication changes its hash",
     async (status) => {
       let noticeStatus: number = status;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          return new Response(noticeStatus === 200 ? noticeEn : null, {
-            status: noticeStatus,
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            return new Response(noticeStatus === 200 ? noticeEn : null, {
+              status: noticeStatus,
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const refused = await buildDecision(binding, AbortSignal.timeout(5000));
       expect(refused?.fulltext?.length).toBeGreaterThan(100);
       expect(refused?.judges).toBeUndefined();
@@ -287,23 +297,25 @@ describe("notice publication outcomes", () => {
     "a Formex HTTP %s permits only terminal reads and later content changes the hash",
     async (status) => {
       let formexStatus: number = status;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          return new Response(noticeEn, {
-            headers: { "Content-Type": "application/xml" },
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            return new Response(noticeEn, {
+              headers: { "Content-Type": "application/xml" },
+            });
+          }
+          if (url.endsWith("/DOC_1")) {
+            return new Response(formexStatus === 200 ? formexEn : null, {
+              status: formexStatus,
+              headers: { "Content-Type": "application/xml" },
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        if (url.endsWith("/DOC_1")) {
-          return new Response(formexStatus === 200 ? formexEn : null, {
-            status: formexStatus,
-            headers: { "Content-Type": "application/xml" },
-          });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const initial = buildDecision(binding, AbortSignal.timeout(5000));
       if ([408, 429, 500, 503].includes(status)) {
         const outcome = await Result.tryPromise({
@@ -392,24 +404,26 @@ describe("notice publication outcomes", () => {
     "a refused %s observation preserves complete metadata and raw; complete reads enrich earlier refusals",
     async (refusedPart) => {
       let status = 200;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = input instanceof Request ? input.url : String(input);
-        if (url.includes("/resource/celex/")) {
-          const noticeStatus = refusedPart === "notice" ? status : 200;
-          return new Response(noticeStatus === 200 ? noticeEn : null, {
-            status: noticeStatus,
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/resource/celex/")) {
+            const noticeStatus = refusedPart === "notice" ? status : 200;
+            return new Response(noticeStatus === 200 ? noticeEn : null, {
+              status: noticeStatus,
+            });
+          }
+          if (url.endsWith("/DOC_1")) {
+            const formexStatus = refusedPart === "formex" ? status : 200;
+            return new Response(formexStatus === 200 ? formexEn : null, {
+              status: formexStatus,
+            });
+          }
+          return new Response(documentEn, {
+            headers: { "Content-Type": "application/xhtml+xml" },
           });
-        }
-        if (url.endsWith("/DOC_1")) {
-          const formexStatus = refusedPart === "formex" ? status : 200;
-          return new Response(formexStatus === 200 ? formexEn : null, {
-            status: formexStatus,
-          });
-        }
-        return new Response(documentEn, {
-          headers: { "Content-Type": "application/xhtml+xml" },
-        });
-      });
+        }),
+      );
       const read = async () => {
         const result = await buildDecision(binding, AbortSignal.timeout(5000));
         if (result === undefined) {
@@ -476,7 +490,11 @@ describe("notice publication outcomes", () => {
           observations.push(event);
         },
         fetchPage: async () =>
-          Result.ok({ decisions: [refused], nextCursor: null }),
+          Result.ok({
+            decisions: [refused],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          }),
       });
       expect(observations.at(-1)).toMatchObject({
         filled: 1,
@@ -712,7 +730,7 @@ describe("the branch notice is read per expression", () => {
   });
 
   test("retains every repeated work and expression value in source order", () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const work = $("NOTICE > WORK").first();
     const expression = $("NOTICE > EXPRESSION").first();
     const dossierEvent = work
@@ -941,7 +959,7 @@ describe("stored Formex refresh", () => {
       }),
     ).toEqual({ type: "notice-missing" });
 
-    const $notice = cheerio.load(noticeEn, { xml: true });
+    const $notice = load(noticeEn, { xml: true });
     $notice("NOTICE > MANIFESTATION").remove();
     expect(
       await refreshEcjStoredFormex({
@@ -1320,7 +1338,7 @@ for (const candidate of [
   "mailto:publisher@example.org",
 ]) {
   test(`notice manifestation URI provenance: ${candidate}`, async () => {
-    const $ = cheerio.load(noticeEn, { xml: true });
+    const $ = load(noticeEn, { xml: true });
     const manifestations = $("NOTICE > MANIFESTATION");
     expect(manifestations.length).toBeGreaterThan(0);
     manifestations.each((_, element) => {

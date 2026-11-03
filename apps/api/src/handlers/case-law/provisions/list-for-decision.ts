@@ -24,6 +24,7 @@ import {
   paginationCursorSchema,
   paginationLimitSchema,
 } from "@/api/lib/custom-schema";
+import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -71,8 +72,6 @@ type ListDecisionProvisionsOptions = {
   subject: RedistributableDecisionSubject;
   query: ListDecisionProvisionsQuery;
 };
-
-const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 type ProvisionCursor = {
   generation: string;

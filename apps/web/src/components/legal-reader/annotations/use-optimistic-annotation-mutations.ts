@@ -72,6 +72,8 @@ const pendingRows = ({
     kind: input.kind,
     mine: true,
     quote: span.quote,
+    quotePrefix: span.quotePrefix,
+    quoteSuffix: span.quoteSuffix,
     startOffset: span.startOffset,
     style: input.kind === "highlight" ? input.style : null,
     updatedAt: now,
@@ -98,8 +100,8 @@ const rowsOfSame = <TRow extends MarkRow>(
   const target = rows.find((row) => row.id === id);
   return (row) =>
     row.id === id ||
-    (target?.groupId !== null &&
-      target !== undefined &&
+    (target !== undefined &&
+      target.groupId !== null &&
       row.groupId === target.groupId);
 };
 
