@@ -786,8 +786,10 @@ type CurrentResearchRevisionOptions = {
 
 /**
  * The revision the serving generation records as applied for the decision,
- * or null when it holds no current copy (pending, queued for erasure, or
- * never projected). Passages are read from that revision's copy only.
+ * or null when it holds no current copy (an upsert or erasure queued, or
+ * never projected). Passages are read from that revision's copy only, and
+ * their court paragraph numbers come from the current AST, so a copy one
+ * parse old must not answer: research falls back to the AST instead.
  */
 const readCurrentResearchRevisionTx = async (
   tx: CaseLawPublicReadTransaction,
