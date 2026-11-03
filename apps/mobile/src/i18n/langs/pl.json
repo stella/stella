@@ -191,6 +191,7 @@
       "openFailed": "Tego dokumentu nie można teraz edytować",
       "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
       "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
+      "notStored": "Nie udało się zapisać ostatnich zmian. Zostań, aby spróbować ponownie, albo wyjdź bez nich.",
       "stay": "Zostań",
       "leave": "Wyjdź"
     }

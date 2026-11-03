@@ -7,7 +7,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
-import type { FormFile } from "@/state/form-file";
+import type { FormPart } from "@/state/form-part";
 
 /** The longest recording one transcription takes; recording stops there. */
 export const DICTATION_MAX_SECONDS = MAX_TRANSCRIPTION_AUDIO_SECONDS;
@@ -29,19 +29,15 @@ const transcriptionSchema = v.object({ text: v.string() });
 export const transcribeRecording = async ({
   fetch,
   source,
-  uri,
+  audio,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
-  readonly uri: string;
+  /** The recording: on the phone, Expo's `File`. */
+  readonly audio: FormPart;
 }): Promise<Result<string, ApiError>> => {
   const form = new FormData();
-  const file: FormFile = {
-    uri,
-    name: "dictation.m4a",
-    type: "audio/mp4",
-  };
-  form.append("file", file);
+  form.append("file", audio);
   const transcribed = await requestApi({
     fetch,
     source,

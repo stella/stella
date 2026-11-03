@@ -5,8 +5,7 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
-import { DOCX_MIME_TYPE } from "@/state/document-file";
-import type { FormFile } from "@/state/form-file";
+import type { FormPart } from "@/state/form-part";
 
 /**
  * Editing a document, the web's way: opening takes the document's edit lock
@@ -75,24 +74,20 @@ const checkpointSchema = v.object({
 });
 
 /**
- * Stores the edited file, read from `uri` on the phone. The session the next
- * request must use comes back: the server may rotate its token.
+ * Stores the edited file: on the phone, Expo's `File`, whose type the server
+ * checks is a Word document's. The session
+ * the next request must use comes back: the server may rotate its token.
  */
 export const checkpointEditSession = async ({
   fetch,
   source,
   session,
-  uri,
+  file,
 }: Caller & {
   readonly session: EditSession;
-  readonly uri: string;
+  readonly file: FormPart;
 }): Promise<Result<EditSession, ApiError>> => {
   const form = new FormData();
-  const file: FormFile = {
-    uri,
-    name: session.fileName,
-    type: DOCX_MIME_TYPE,
-  };
   form.append("file", file);
   form.append("sessionToken", session.sessionToken);
   const stored = await requestApi({

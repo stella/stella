@@ -6,6 +6,7 @@ import {
   createSessionStore,
   type StoredSession,
 } from "@/connection/session";
+import { DOCX_MIME_TYPE } from "@/state/document-file";
 
 import {
   checkpointEditSession,
@@ -76,6 +77,12 @@ const EDITING = {
   fileName: "Smlouva.docx",
 } as const;
 
+// The edited document as the phone hands it over: a file with the Word
+// type the server checks.
+const EDITED = new File([new Uint8Array([80, 75, 3, 4])], "edit.docx", {
+  type: DOCX_MIME_TYPE,
+});
+
 describe("opening a document for editing", () => {
   test("asks the matter's edit lock for the document's file column and hands back the session and its working copy", async () => {
     const { fetch, sent } = server(() =>
@@ -125,7 +132,7 @@ describe("storing a checkpoint", () => {
       fetch,
       source: sourceFor(fetch),
       session: EDITING,
-      uri: "file:///cache/edit-session-1.docx",
+      file: EDITED,
     });
 
     expect(result.unwrap()).toEqual({
@@ -141,6 +148,16 @@ describe("storing a checkpoint", () => {
     const form = request?.body instanceof FormData ? request.body : undefined;
     expect([...(form?.keys() ?? [])]).toEqual(["file", "sessionToken"]);
     expect(form?.get("sessionToken")).toBe(EDITING.sessionToken);
+    // The document itself goes up, with the Word type, not a stand-in for it.
+    const sentFile = form?.get("file");
+    expect(sentFile).toBeInstanceOf(Blob);
+    if (!(sentFile instanceof Blob)) {
+      return;
+    }
+    expect(sentFile.type).toBe(DOCX_MIME_TYPE);
+    expect(new Uint8Array(await sentFile.arrayBuffer())).toEqual(
+      new Uint8Array(await EDITED.arrayBuffer()),
+    );
   });
 
   test("keeps the token when the server does not rotate it", async () => {
@@ -150,7 +167,7 @@ describe("storing a checkpoint", () => {
       fetch,
       source: sourceFor(fetch),
       session: EDITING,
-      uri: "file:///cache/edit-session-1.docx",
+      file: EDITED,
     });
 
     expect(result.unwrap()).toEqual(EDITING);
@@ -169,7 +186,7 @@ describe("storing a checkpoint", () => {
       fetch,
       source: sourceFor(fetch),
       session: EDITING,
-      uri: "file:///cache/edit-session-1.docx",
+      file: EDITED,
     });
 
     expect(result.isErr() && sessionTakenOver(result.error)).toBe(takenOver);

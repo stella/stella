@@ -9,6 +9,16 @@ import {
 
 import { appendDictation, transcribeRecording } from "./dictation";
 
+// A recording as the phone hands it over: a file, which Expo's `fetch`
+// reads as bytes.
+const RECORDING = new File(
+  [new Uint8Array([0, 0, 0, 24, 102, 116])],
+  "rec.m4a",
+  {
+    type: "audio/mp4",
+  },
+);
+
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
@@ -75,7 +85,7 @@ describe("transcribing a recording", () => {
     const result = await transcribeRecording({
       fetch,
       source: sourceFor(fetch),
-      uri: "file:///cache/recording.m4a",
+      audio: RECORDING,
     });
 
     expect(result.unwrap()).toBe("Prosím o návrh smlouvy.");
@@ -91,6 +101,16 @@ describe("transcribing a recording", () => {
     expect(request?.body).toBeInstanceOf(FormData);
     const form = request?.body instanceof FormData ? request.body : undefined;
     expect([...(form?.keys() ?? [])]).toEqual(["file"]);
+    // The recording itself goes up, with its type, not a stand-in for it.
+    const sentFile = form?.get("file");
+    expect(sentFile).toBeInstanceOf(Blob);
+    if (!(sentFile instanceof Blob)) {
+      return;
+    }
+    expect(sentFile.type).toBe("audio/mp4");
+    expect(new Uint8Array(await sentFile.arrayBuffer())).toEqual(
+      new Uint8Array(await RECORDING.arrayBuffer()),
+    );
   });
 
   test("a refusal keeps the server's status and words", async () => {
@@ -107,7 +127,7 @@ describe("transcribing a recording", () => {
     const result = await transcribeRecording({
       fetch,
       source: sourceFor(fetch),
-      uri: "file:///cache/recording.m4a",
+      audio: RECORDING,
     });
 
     expect(result.isErr()).toBe(true);
