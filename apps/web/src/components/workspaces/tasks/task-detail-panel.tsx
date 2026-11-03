@@ -24,6 +24,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 import { notifyTaskCompletion } from "@/components/workspaces/tasks/task-completion-toast";
 import {
   isListItemType,
@@ -125,10 +126,9 @@ const TaskDetailPanelContent = ({
     data: task,
     error: taskError,
     isLoading,
-  } = useQuery({
-    ...taskDetailOptions(workspaceId, taskId),
-    enabled: creationStatus === "ready",
-  });
+  } = useQuery(
+    taskTabDetailOptions({ creationStatus, id: taskId, workspaceId }),
+  );
 
   useExternalSyncEffect(() => {
     if (APIError.is(taskError) && taskError.status === 404) {
