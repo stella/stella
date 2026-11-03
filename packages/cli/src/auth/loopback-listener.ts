@@ -6,10 +6,17 @@
 // matches on hostname/pathname/protocol/search only, so any ephemeral port
 // still satisfies the registered redirect_uri.
 
+import { panic } from "better-result";
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { LOOPBACK_REDIRECT_PATH } from "./constants.js";
+import { sha256Base64Url } from "../sha256.js";
+import {
+  CLIENT_NAME,
+  LOOPBACK_REDIRECT_PATH,
+  SIGN_IN_COMPLETION_TIMEOUT_MS,
+} from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 
 export type LoopbackCallback =
@@ -21,29 +28,99 @@ export type LoopbackCallback =
       readonly state?: string;
     };
 
+/**
+ * What the CLI reports once it has used a verified code: the browser waiting
+ * on the redirect is answered with this, never with success before it.
+ */
+export type SignInOutcome =
+  | { readonly kind: "signed_in" }
+  | { readonly kind: "failed"; readonly step: "exchange" | "save" };
+
 export type LoopbackListener = {
   readonly port: number;
   readonly redirectUri: string;
   readonly waitForCallback: (
     timeoutMs: number,
   ) => Promise<LoopbackCallback | LoopbackTimeoutError>;
+  /**
+   * Answers the browser held on the verified redirect with `outcome`, then
+   * closes the listener. Only the first call answers; it resolves once the
+   * page is handed to the socket (or the browser is already gone).
+   */
+  readonly finish: (outcome: SignInOutcome) => Promise<void>;
+  /**
+   * Stops listening. A browser still held on the redirect is told the sign-in
+   * was not confirmed.
+   */
   readonly close: () => void;
 };
 
-const renderCallbackPage = (ok: boolean): string => {
-  const title = ok ? "Signed in" : "Sign-in failed";
-  const message = ok
-    ? "Return to your terminal to continue."
-    : "Return to the terminal for details.";
+/** A success redirect whose `state` matched this sign-in. */
+type VerifiedCallback = {
+  readonly kind: "verified";
+  readonly code: string;
+  readonly state: string;
+  readonly organizationName: string | null;
+};
+
+/**
+ * Why the failure page is shown. `redirect`: the redirect itself carried an
+ * error or did not match this sign-in. `exchange` / `save`: the CLI could not
+ * redeem the code or store the credential. `unconfirmed`: the CLI reported no
+ * outcome within the completion bound.
+ */
+type FailureReason = "redirect" | "exchange" | "save" | "unconfirmed";
+
+// Only a verified callback carries query text onto the page; every failure
+// page renders fixed text.
+type CallbackPageOptions =
+  | { readonly status: "success"; readonly callback: VerifiedCallback }
+  | { readonly status: "failure"; readonly reason: FailureReason };
+
+const RETRY = `Return to your terminal for details, then run stella auth login to try again.`;
+
+const failureText = (
+  reason: FailureReason,
+): { readonly title: string; readonly message: string } => {
+  switch (reason) {
+    case "redirect":
+      return {
+        message: `Return to your terminal for details, then try signing in to ${CLIENT_NAME} again.`,
+        title: "Sign-in failed",
+      };
+    case "exchange":
+      return {
+        message: `${CLIENT_NAME} could not finish signing in. ${RETRY}`,
+        title: "Sign-in failed",
+      };
+    case "save":
+      return {
+        message: `${CLIENT_NAME} could not save your sign-in on this computer. ${RETRY}`,
+        title: "Sign-in not saved",
+      };
+    case "unconfirmed":
+      return {
+        message: `${CLIENT_NAME} did not confirm the sign-in in time. Return to your terminal; if it is not signed in, run stella auth login to try again.`,
+        title: "Sign-in not confirmed",
+      };
+    default:
+      reason satisfies never;
+      return panic("Unhandled sign-in failure reason");
+  }
+};
+
+const renderCallbackPage = (page: CallbackPageOptions) => {
+  const ok = page.status === "success";
+  const organizationName = ok ? page.callback.organizationName : null;
+  const { title, message } = ok
+    ? {
+        message: `Return to your terminal to continue with ${CLIENT_NAME}.`,
+        title: "Signed in to stella",
+      }
+    : failureText(page.reason);
   const statusColor = ok ? "#18181b" : "#b91c1c";
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
-    <style>
+  const styles = `
       :root {
         color-scheme: light dark;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -87,9 +164,8 @@ const renderCallbackPage = (ok: boolean): string => {
         height: 28px;
         width: 28px;
       }
-      .label {
-        color: #71717a;
-        font-size: 13px;
+      .wordmark {
+        font-size: 22px;
         font-weight: 500;
         letter-spacing: 0;
         line-height: 1;
@@ -110,6 +186,9 @@ const renderCallbackPage = (ok: boolean): string => {
         margin: 10px 0 0;
         text-wrap: pretty;
       }
+      .organization {
+        overflow-wrap: anywhere;
+      }
       @media (prefers-color-scheme: dark) {
         body {
           background: #09090b;
@@ -127,7 +206,6 @@ const renderCallbackPage = (ok: boolean): string => {
         h1 {
           color: ${ok ? "#fafafa" : "#fca5a5"};
         }
-        .label,
         p {
           color: #a1a1aa;
         }
@@ -135,7 +213,23 @@ const renderCallbackPage = (ok: boolean): string => {
           fill: currentColor;
         }
       }
-    </style>
+`;
+  const escapedOrganizationName = organizationName
+    ?.replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+  return {
+    contentSecurityPolicy: `default-src 'none'; style-src 'sha256-${sha256Base64Url(styles)}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    html: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${title}</title>
+    <style>${styles}</style>
   </head>
   <body>
     <main>
@@ -144,24 +238,52 @@ const renderCallbackPage = (ok: boolean): string => {
           <path d="M6.58 11.3 16.69 5.05a5.9 5.9 0 0 1 6.62.01l14.68 9.07V9.26L25.52 1.55A11.8 11.8 0 0 0 20 0c-1.97 0-3.88.54-5.53 1.56L4.37 7.81A9.3 9.3 0 0 0 0 15.61a9.3 9.3 0 0 0 4.37 7.8l3.26 2.02-.01.01 11.15 6.9c.14.09.27.16.39.2.68.26 1.42.19 2.03-.19l9.59-5.93.1-.07 2.07-1.28-2.82-1.72-1.1-.69-9.02 5.56-.41-.24-13.01-8.05a5.57 5.57 0 0 1-2.41-4.31c0-1.79.88-3.36 2.41-4.3Z" />
           <path d="M33.34 29.25 23.24 35.5a5.9 5.9 0 0 1-6.63-.01L1.94 26.43v4.86l12.47 7.71a11.8 11.8 0 0 0 5.52 1.55c1.97 0 3.88-.54 5.53-1.56l10.1-6.25a9.3 9.3 0 0 0 4.37-7.8 9.3 9.3 0 0 0-4.37-7.8l-3.26-2.02.01-.01-11.15-6.9a1.6 1.6 0 0 0-.39-.2 1.64 1.64 0 0 0-2.03.19l-9.59 5.93-.1.07-2.07 1.28 2.82 1.72 1.1.69 9.02-5.56.41.24 13.01 8.05a5.57 5.57 0 0 1 2.41 4.31c0 1.79-.88 3.36-2.41 4.3Z" />
         </svg>
-        <span class="label">stella cli</span>
+        <span class="wordmark">stella</span>
       </div>
       <section>
         <h1>${title}</h1>
+        ${ok && escapedOrganizationName ? `<p class="organization"><bdi>${escapedOrganizationName}</bdi></p>` : ""}
         <p>${message}</p>
       </section>
     </main>
   </body>
-</html>`;
+</html>`,
+  };
 };
 
+/**
+ * Sends the page and calls `onSent` once it is handed to the socket, or at once
+ * when the browser has already gone, so a caller can close the server without
+ * cutting the page off.
+ */
 const sendCallbackPage = (
   response: ServerResponse,
-  ok: boolean,
-  onSent: () => void,
+  statusCode: 200 | 400 | 500 | 504,
+  page: CallbackPageOptions,
+  onSent: () => void = () => undefined,
 ) => {
-  response.writeHead(200, { "Content-Type": "text/html" });
-  response.end(renderCallbackPage(ok), onSent);
+  if (response.destroyed || response.writableEnded) {
+    onSent();
+    return;
+  }
+  let sent = false;
+  const settle = () => {
+    if (!sent) {
+      sent = true;
+      onSent();
+    }
+  };
+  // `close` also fires when the browser drops the connection mid-send.
+  response.once("close", settle);
+  const { html, contentSecurityPolicy } = renderCallbackPage(page);
+  response.writeHead(statusCode, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": contentSecurityPolicy,
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+  });
+  response.end(html, settle);
 };
 
 const raceWithTimeout = async (
@@ -188,21 +310,156 @@ const raceWithTimeout = async (
   }
 };
 
+const isExpectedState = (received: string, expected: string): boolean => {
+  const receivedBytes = Buffer.from(received);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    receivedBytes.length === expectedBytes.length &&
+    timingSafeEqual(receivedBytes, expectedBytes)
+  );
+};
+
+/**
+ * Reads a success redirect. The state is compared before any other query value
+ * is read, so only the redirect for this sign-in can put text on the page.
+ */
+const readSuccessCallback = (
+  url: URL,
+  expectedState: string,
+): VerifiedCallback | { readonly kind: "incomplete" | "state_mismatch" } => {
+  const state = url.searchParams.get("state");
+  if (!state) {
+    return { kind: "incomplete" };
+  }
+  if (!isExpectedState(state, expectedState)) {
+    return { kind: "state_mismatch" };
+  }
+  const code = url.searchParams.get("code");
+  if (!code) {
+    return { kind: "incomplete" };
+  }
+  return {
+    code,
+    kind: "verified",
+    organizationName: url.searchParams.get("organization_name"),
+    state,
+  };
+};
+
+type LoopbackListenerOptions = {
+  /** The `state` sent in the authorize request this listener answers. */
+  readonly expectedState: string;
+  /**
+   * How long a verified redirect is held open for the CLI's outcome before the
+   * browser is told the sign-in was not confirmed.
+   */
+  readonly completionTimeoutMs?: number;
+};
+
+/** The browser request kept open until the CLI reports how sign-in ended. */
+type HeldRedirect = {
+  readonly response: ServerResponse;
+  readonly callback: VerifiedCallback;
+  readonly timer: ReturnType<typeof setTimeout>;
+};
+
+type BrowserAnswer = SignInOutcome | { readonly kind: "unconfirmed" };
+
+const sendAnswer = (
+  held: HeldRedirect,
+  answer: BrowserAnswer,
+  onSent: () => void,
+) => {
+  switch (answer.kind) {
+    case "signed_in":
+      sendCallbackPage(
+        held.response,
+        200,
+        { callback: held.callback, status: "success" },
+        onSent,
+      );
+      return;
+    case "failed":
+      sendCallbackPage(
+        held.response,
+        500,
+        { reason: answer.step, status: "failure" },
+        onSent,
+      );
+      return;
+    case "unconfirmed":
+      sendCallbackPage(
+        held.response,
+        504,
+        { reason: "unconfirmed", status: "failure" },
+        onSent,
+      );
+      return;
+    default:
+      answer satisfies never;
+      panic("Unhandled sign-in answer");
+  }
+};
+
 /**
  * Starts the loopback HTTP listener. Resolves to `undefined` if binding fails
  * (sandboxed/offline environments) so callers can fall back to the manual
  * paste flow instead of crashing. Async because `node:http`'s `listen` reports
  * its OS-assigned port on the `listening` event, not synchronously.
+ *
+ * The listener accepts one redirect. A verified one is handed to the CLI and
+ * its browser request stays open until `finish` reports the outcome (or the
+ * completion bound passes), so the browser never reads "Signed in" before the
+ * credential is saved.
  */
-export const startLoopbackListener = async (): Promise<
-  LoopbackListener | undefined
-> => {
+export const startLoopbackListener = async ({
+  expectedState,
+  completionTimeoutMs = SIGN_IN_COMPLETION_TIMEOUT_MS,
+}: LoopbackListenerOptions): Promise<LoopbackListener | undefined> => {
   let deliver: ((callback: LoopbackCallback) => void) | undefined;
   const received = new Promise<LoopbackCallback>((resolve) => {
     deliver = resolve;
   });
 
-  const server = createServer((request, response) => {
+  const server = createServer();
+  // Set by the first redirect this sign-in acts on; every later one is refused.
+  let accepted = false;
+  let held: HeldRedirect | undefined;
+  let answered: Promise<void> | undefined;
+  let closed = false;
+
+  // The CLI just needs the port freed and no more callbacks delivered;
+  // `closeAllConnections` drops any lingering keep-alive socket so the event
+  // loop can exit, then `close` stops accepting new connections.
+  const shutDown = () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    server.closeAllConnections();
+    server.close();
+  };
+
+  // The first answer wins: a late `finish` after the completion bound, or a
+  // `close` after `finish`, waits for that answer instead of sending another.
+  const answerBrowser = (answer: BrowserAnswer) => {
+    answered ??= new Promise<void>((resolve) => {
+      const done = () => {
+        shutDown();
+        resolve();
+      };
+      const current = held;
+      held = undefined;
+      if (!current) {
+        done();
+        return;
+      }
+      clearTimeout(current.timer);
+      sendAnswer(current, answer, done);
+    });
+  };
+
+  server.on("request", (request: IncomingMessage, response: ServerResponse) => {
     // `request.url` is the path+query only; rebuild a full URL against the
     // fixed loopback host to parse the query string.
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -212,32 +469,73 @@ export const startLoopbackListener = async (): Promise<
       return;
     }
 
-    const error = url.searchParams.get("error");
-    if (error) {
-      const errorDescription = url.searchParams.get("error_description");
-      const state = url.searchParams.get("state");
-      sendCallbackPage(response, false, () => {
-        deliver?.({
-          error,
-          kind: "error",
-          ...(errorDescription ? { errorDescription } : {}),
-          ...(state ? { state } : {}),
-        });
+    if (accepted || closed) {
+      sendCallbackPage(response, 400, {
+        reason: "redirect",
+        status: "failure",
       });
       return;
     }
 
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    if (!code || !state) {
-      response.writeHead(400);
-      response.end("Missing code or state");
+    const error = url.searchParams.get("error");
+    if (error) {
+      accepted = true;
+      const errorDescription = url.searchParams.get("error_description");
+      const state = url.searchParams.get("state");
+      sendCallbackPage(
+        response,
+        200,
+        { reason: "redirect", status: "failure" },
+        () => {
+          deliver?.({
+            error,
+            kind: "error",
+            ...(errorDescription ? { errorDescription } : {}),
+            ...(state ? { state } : {}),
+          });
+        },
+      );
       return;
     }
 
-    sendCallbackPage(response, true, () => {
-      deliver?.({ code, kind: "success", state });
-    });
+    const callback = readSuccessCallback(url, expectedState);
+    switch (callback.kind) {
+      case "incomplete":
+        sendCallbackPage(response, 400, {
+          reason: "redirect",
+          status: "failure",
+        });
+        return;
+      case "state_mismatch":
+        accepted = true;
+        sendCallbackPage(
+          response,
+          400,
+          { reason: "redirect", status: "failure" },
+          () => {
+            deliver?.({ error: "invalid_state", kind: "error" });
+          },
+        );
+        return;
+      case "verified":
+        accepted = true;
+        held = {
+          callback,
+          response,
+          timer: setTimeout(() => {
+            answerBrowser({ kind: "unconfirmed" });
+          }, completionTimeoutMs),
+        };
+        deliver?.({
+          code: callback.code,
+          kind: "success",
+          state: callback.state,
+        });
+        return;
+      default:
+        callback satisfies never;
+        panic("Unhandled loopback callback");
+    }
   });
 
   const listenerPort = await new Promise<number | undefined>((resolve) => {
@@ -261,12 +559,12 @@ export const startLoopbackListener = async (): Promise<
   }
 
   return {
-    // The CLI just needs the port freed and no more callbacks delivered;
-    // `closeAllConnections` drops any lingering keep-alive socket so the
-    // event loop can exit, then `close` stops accepting new connections.
     close: () => {
-      server.closeAllConnections();
-      server.close();
+      answerBrowser({ kind: "unconfirmed" });
+    },
+    finish: async (outcome) => {
+      answerBrowser(outcome);
+      await answered;
     },
     port: listenerPort,
     redirectUri: `http://127.0.0.1:${listenerPort}${LOOPBACK_REDIRECT_PATH}`,
