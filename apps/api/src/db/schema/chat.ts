@@ -200,6 +200,13 @@ export const chatThreads = p.pgTable(
       enum: REASONING_EFFORTS,
     }),
     /**
+     * Where the thread's turns run, encoded as `"<harness>::<model>"`: a
+     * coding-agent harness on the member's computer. Null keeps stella's own
+     * model path. Checked when written and parsed again when a send reads it,
+     * so a value no harness accepts never moves a turn to the cloud.
+     */
+    chatRunTarget: p.varchar("chat_run_target", { length: 256 }),
+    /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
      * a gap (see RECAP_STALENESS_THRESHOLD_MS). Derived from the

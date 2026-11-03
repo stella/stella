@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+import { chatRunTargetSchema } from "@stll/api-contract/chat-run-target";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -15,6 +16,10 @@ import {
   isChatModelReasoningEffortAvailable,
   isChatModelSelectionAvailable,
 } from "@/api/lib/chat-model-selection";
+import {
+  decodeChatRunTarget,
+  encodeChatRunTarget,
+} from "@/api/lib/chat-run-target";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -39,8 +44,19 @@ const config = {
         v.null(),
       ]),
     ),
+    /**
+     * Where the thread's turns run, kept so a reload shows the same choice.
+     * Omitted leaves the stored target as it is.
+     */
+    runTarget: v.optional(chatRunTargetSchema),
   }),
 } satisfies HandlerConfig;
+
+/** The audit change of a run target the request set; none when it left it. */
+const runTargetChange = (
+  stored: string | null,
+  next: string | null | undefined,
+) => (next === undefined ? {} : { chatRunTarget: { old: stored, new: next } });
 
 const updateThreadModel = createSafeRootHandler(
   config,
@@ -57,6 +73,12 @@ const updateThreadModel = createSafeRootHandler(
   }) {
     const { model } = body;
     const reasoningEffort = body.reasoningEffort ?? null;
+    const runTarget =
+      body.runTarget === undefined
+        ? undefined
+        : encodeChatRunTarget(body.runTarget);
+    const runTargetSet =
+      runTarget === undefined ? {} : { chatRunTarget: runTarget };
     if (model === null && reasoningEffort !== null) {
       return Result.err(
         new HandlerError({
@@ -107,6 +129,7 @@ const updateThreadModel = createSafeRootHandler(
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
+            chatRunTarget: chatThreads.chatRunTarget,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -115,7 +138,11 @@ const updateThreadModel = createSafeRootHandler(
         if (existing) {
           await tx
             .update(chatThreads)
-            .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
+            .set({
+              chatModel: model,
+              chatReasoningEffort: reasoningEffort,
+              ...runTargetSet,
+            })
             .where(threadPredicate());
 
           await recordAuditEvent(tx, {
@@ -132,6 +159,7 @@ const updateThreadModel = createSafeRootHandler(
                 old: existing.chatReasoningEffort,
                 new: reasoningEffort,
               },
+              ...runTargetChange(existing.chatRunTarget, runTarget),
             },
           });
 
@@ -155,6 +183,7 @@ const updateThreadModel = createSafeRootHandler(
             dataWorkspaceIds,
             chatModel: model,
             chatReasoningEffort: reasoningEffort,
+            chatRunTarget: runTarget ?? null,
           })
           .onConflictDoNothing()
           .returning({ id: chatThreads.id });
@@ -172,6 +201,7 @@ const updateThreadModel = createSafeRootHandler(
                 new: {
                   chatModel: model,
                   chatReasoningEffort: reasoningEffort,
+                  chatRunTarget: runTarget ?? null,
                 },
               },
             },
@@ -185,6 +215,7 @@ const updateThreadModel = createSafeRootHandler(
             id: chatThreads.id,
             chatModel: chatThreads.chatModel,
             chatReasoningEffort: chatThreads.chatReasoningEffort,
+            chatRunTarget: chatThreads.chatRunTarget,
           })
           .from(chatThreads)
           .where(threadPredicate())
@@ -196,7 +227,11 @@ const updateThreadModel = createSafeRootHandler(
 
         await tx
           .update(chatThreads)
-          .set({ chatModel: model, chatReasoningEffort: reasoningEffort })
+          .set({
+            chatModel: model,
+            chatReasoningEffort: reasoningEffort,
+            ...runTargetSet,
+          })
           .where(threadPredicate());
 
         await recordAuditEvent(tx, {
@@ -213,6 +248,7 @@ const updateThreadModel = createSafeRootHandler(
               old: racedExisting.chatReasoningEffort,
               new: reasoningEffort,
             },
+            ...runTargetChange(racedExisting.chatRunTarget, runTarget),
           },
         });
 
@@ -229,7 +265,13 @@ const updateThreadModel = createSafeRootHandler(
       );
     }
 
-    return Result.ok({ model, reasoningEffort });
+    return Result.ok({
+      model,
+      reasoningEffort,
+      ...(runTarget === undefined
+        ? {}
+        : { runTarget: decodeChatRunTarget(runTarget) }),
+    });
   },
 );
 

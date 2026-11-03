@@ -21,6 +21,16 @@ export default {
         path: "apps/api/src/handlers/desktop-runner/connect.ts",
         reason: "Hands the upgrade request to the gateway.",
       },
+      {
+        path: "apps/api/src/handlers/chat/local-run-plan.ts",
+        reason:
+          "Routes a chat turn bound for the member's computer through the control and reads its run back.",
+      },
+      {
+        path: "apps/api/src/handlers/chat/local-runners.ts",
+        reason:
+          "Reads the member's computers and harness reports for the chat composer.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

@@ -1668,6 +1668,11 @@
     "loadEarlierMessages": "Charger les messages précédents",
     "loadEarlierMessagesError": "Impossible de charger les messages précédents",
     "loadingEarlierMessages": "Chargement des messages précédents…",
+    "localRun": {
+      "errorLimitReached": "L’agent de code de votre ordinateur a atteint sa limite d’utilisation. Réessayez une fois la limite réinitialisée.",
+      "errorNeedsLogin": "L’agent de code de votre ordinateur vous demande de vous reconnecter. Connectez-vous depuis stella desktop, puis réessayez.",
+      "errorUnavailable": "Votre ordinateur a cessé de traiter cette réponse. Vérifiez que stella desktop est ouvert et connecté, puis réessayez."
+    },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# de plus} many {+# de plus} other {+# de plus}}",

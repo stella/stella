@@ -1011,6 +1011,10 @@ const PROVIDER_OWNED_ERROR_KIND = {
   deadline_exceeded: false,
   loop_detected: false,
   empty_completion: false,
+  // Named by the computer a local turn runs on.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 

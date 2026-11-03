@@ -1,4 +1,5 @@
 import {
+  convertMessagesToModelMessages,
   EventType,
   maxIterations,
   RUN_CANCEL_REASON,
@@ -96,6 +97,7 @@ import {
   NO_DECISION_PASSAGE_NUMBERS,
 } from "@/api/handlers/chat/decision-passage-numbers";
 import type { DecisionPassageStamper } from "@/api/handlers/chat/decision-passage-numbers";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -354,6 +356,12 @@ type StreamChatProps = {
    */
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  /**
+   * A turn run by a harness on the member's computer. Its chunks replace the
+   * model's; everything after the source (storing, the run log, approvals)
+   * is the same as for a cloud turn.
+   */
+  localRun?: LocalChatRun | undefined;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   /**
@@ -600,6 +608,7 @@ export const streamChat = async ({
   reasoningEffort,
   runMode,
   sandboxRun,
+  localRun,
   usageLane,
   decisionPassageStamper = knownDecisionPassageStamper(
     NO_DECISION_PASSAGE_NUMBERS,
@@ -859,6 +868,7 @@ export const streamChat = async ({
     promptCachingEnabled,
     runMode,
     sandboxRun,
+    localRun,
     usageLane,
     runId,
     parentRunId,
@@ -1497,6 +1507,7 @@ type RunChatAttemptsProps = {
   promptCachingEnabled: boolean;
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  localRun: LocalChatRun | undefined;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   runId: string;
@@ -1529,6 +1540,7 @@ const runChatAttempts = async function* ({
   promptCachingEnabled,
   runMode,
   sandboxRun,
+  localRun,
   usageLane,
   runId,
   parentRunId,
@@ -1541,6 +1553,19 @@ const runChatAttempts = async function* ({
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
+  if (localRun !== undefined) {
+    // The harness on the member's computer answers the turn with the prompt
+    // and history the model would have received. No model is dispatched, so
+    // nothing falls back to one, and its chunks enter the same pipeline.
+    yield* localRun.stream({
+      chatRunId: runId,
+      messages: convertMessagesToModelMessages([...surfaces.messages]),
+      instructions: surfaces.system,
+      resume,
+      abortSignal,
+    });
+    return;
+  }
   const primaryState = createChatAttemptState();
   // The caller resolves an explicit agent sandbox before persisting the
   // incoming message. A normal chat never carries a plan, even when the engine

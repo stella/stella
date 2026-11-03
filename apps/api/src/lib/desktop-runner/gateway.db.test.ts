@@ -1,8 +1,15 @@
+import { EventType, RUN_CANCEL_REASON } from "@tanstack/ai";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import {
+  type HarnessEvent,
+  harnessEventsToChunks,
+  harnessSessionId,
+} from "@stll/agent-engine";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   DESKTOP_RUNNER_FEATURE_ID,
   DESKTOP_RUNNER_LIMITS,
@@ -16,11 +23,18 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { user } from "@/api/db/auth-schema";
 import {
+  chatThreads,
   desktopRunnerCommands,
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
 } from "@/api/db/schema";
+import {
+  createLocalChatRun,
+  type LocalRunContext,
+  type LocalRunPlan,
+} from "@/api/handlers/chat/local-run-chunks";
+import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import type { HttpServer } from "@/api/http/context";
 import {
   type ApiServerWebSocket,
@@ -28,11 +42,13 @@ import {
   type ApiSocketSession,
   apiWebSocketHandler,
 } from "@/api/http/websocket";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   type DesktopKeyLiveness,
   desktopKeyLiveness,
 } from "@/api/lib/business-registries/desktop/liveness";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
+import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
   createDesktopRunnerControl,
@@ -40,7 +56,9 @@ import {
 } from "@/api/lib/desktop-runner/control";
 import {
   createLocalDoorbell,
+  createLocalRunBell,
   type DesktopRunnerDoorbell,
+  type DesktopRunnerRunBell,
 } from "@/api/lib/desktop-runner/doorbell";
 import {
   type RunnerFeatureAccess,
@@ -66,8 +84,10 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { chatLocalRunnersScalingScenario } from "@/api/tests/read-scaling/chat-local-runners";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
@@ -168,6 +188,7 @@ type InstanceOverrides = {
   limits?: Partial<DesktopRunnerLimits>;
   timing?: Partial<DesktopRunnerTiming>;
   timers?: RunnerTimers;
+  runBell?: DesktopRunnerRunBell;
 };
 
 const startInstance = async (
@@ -186,6 +207,7 @@ const startInstance = async (
     timing: { ...TIMING, ...overrides.timing },
     limits: overrides.limits ?? {},
     ...(overrides.timers === undefined ? {} : { timers: overrides.timers }),
+    ...(overrides.runBell === undefined ? {} : { runBell: overrides.runBell }),
     isKeyLive,
     isRunnerEnabled,
   });
@@ -1820,5 +1842,664 @@ describe("gateway edges", () => {
       expect((await runState(runId))?.desktopId).toBe(desktopId);
     }
     await desktop.close();
+  });
+});
+
+describe("chat turns on a computer", () => {
+  const runBell = createLocalRunBell();
+  const CHAT_MODEL = MODEL;
+  let chatInstance: Instance;
+
+  beforeAll(async () => {
+    chatInstance = await startInstance("api-chat", sharedDoorbell, {
+      runBell,
+    });
+  });
+
+  const newThread = async () => {
+    const id = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    await db.insert(chatThreads).values({
+      id,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: "A turn on this computer",
+    });
+    return id;
+  };
+
+  const contextFor = (chatThreadId: SafeId<"chatThread">): LocalRunContext => ({
+    control,
+    runBell,
+    owner,
+    chatThreadId,
+    workspaceIds: [],
+    mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
+    // Rings wake the reader; the poll only bounds a lost one.
+    pollMs: 5000,
+  });
+
+  const startPlan = (desktopId: string): LocalRunPlan => ({
+    type: "start",
+    destination: {
+      desktopId,
+      harness: "codex",
+      harnessVersion: HARNESS_VERSION,
+      model: CHAT_MODEL,
+    },
+  });
+
+  /** The chunks the desktop's own mapper makes of a harness turn. */
+  const harnessChunks = async (runId: string, events: HarnessEvent[]) => {
+    const source = (async function* () {
+      yield* events;
+    })();
+    const chunks: unknown[] = [];
+    let generated = 0;
+    for await (const chunk of harnessEventsToChunks(source, {
+      harness: "codex",
+      model: CHAT_MODEL,
+      runId,
+      threadId: "desktop-thread",
+      generateId: () => {
+        generated += 1;
+        return `generated-${String(generated)}`;
+      },
+      now: () => clock.now,
+    })) {
+      chunks.push(chunk);
+    }
+    return chunks;
+  };
+
+  /** The fake desktop's side of one run: every message takes the next position. */
+  const desktopRun = (desktop: FakeDesktop, runId: string, from = 0) => {
+    const position = { seq: from };
+    const sendAcked = async (message: Record<string, unknown>) => {
+      position.seq += 1;
+      const seq = position.seq;
+      desktop.send({ ...message, runId, seq });
+      await desktop.receive(
+        "ack",
+        (ack) => ack.type === "ack" && ack.runId === runId && ack.seq === seq,
+      );
+    };
+    return {
+      position,
+      events: async (chunks: readonly unknown[]) => {
+        for (const chunk of chunks) {
+          await sendAcked({ type: "run.event", chunk });
+        }
+      },
+      approvalRequest: async (requestId: string) => {
+        await sendAcked({
+          type: "run.approval_request",
+          requestId,
+          kind: "command",
+          summary: "Run the test suite",
+        });
+      },
+      finish: async (
+        outcome: "completed" | "limit_reached" | "needs_login",
+        sessionId: string | null,
+      ) => {
+        await sendAcked({
+          type: "run.finished",
+          outcome,
+          harnessSessionId: sessionId,
+        });
+      },
+    };
+  };
+
+  /** Read a stream to its end in the background. */
+  const collect = (stream: AsyncIterable<PublicStreamChunk>) => {
+    const chunks: PublicStreamChunk[] = [];
+    const done = (async () => {
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      return chunks;
+    })();
+    return { chunks, done };
+  };
+
+  /** What a chunk says once its run, thread and call names are set aside. */
+  const meaning = (chunk: unknown) => {
+    if (!isRecord(chunk)) {
+      return chunk;
+    }
+    const {
+      runId: _runId,
+      threadId: _threadId,
+      toolCallId: _toolCallId,
+      outcome,
+      ...rest
+    } = chunk;
+    return isRecord(outcome) && Array.isArray(outcome["interrupts"])
+      ? {
+          ...rest,
+          outcome: {
+            ...outcome,
+            interrupts: outcome["interrupts"].map((interrupt: unknown) => {
+              if (!isRecord(interrupt)) {
+                return interrupt;
+              }
+              const { toolCallId: _callId, ...kept } = interrupt;
+              return kept;
+            }),
+          },
+        }
+      : { ...rest, ...(outcome === undefined ? {} : { outcome }) };
+  };
+
+  const withoutRunStarts = (chunks: readonly unknown[]) =>
+    chunks.filter(
+      (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_STARTED,
+    );
+
+  const toolCallIdsOf = (chunks: readonly unknown[]) =>
+    chunks.flatMap((chunk) =>
+      isRecord(chunk) && typeof chunk["toolCallId"] === "string"
+        ? [chunk["toolCallId"]]
+        : [],
+    );
+
+  const completedTurn: HarnessEvent[] = [
+    {
+      type: "session.started",
+      sessionId: harnessSessionId("codex-session-1"),
+      continuation: { type: "fresh" },
+    },
+    {
+      type: "tool.started",
+      toolCall: {
+        id: "item_1",
+        name: "command_execution",
+        input: { command: "ls" },
+      },
+    },
+    {
+      type: "tool.completed",
+      toolCall: {
+        id: "item_1",
+        name: "command_execution",
+        input: { command: "ls" },
+      },
+      result: { content: "brief.docx", status: "succeeded" },
+    },
+    { type: "text.delta", messageId: "msg_1", delta: "The matter holds " },
+    {
+      type: "text.completed",
+      messageId: "msg_1",
+      text: "The matter holds one brief.",
+    },
+    {
+      type: "turn.completed",
+      usage: {
+        inputTokens: 10,
+        cachedInputTokens: 0,
+        outputTokens: 5,
+        reasoningOutputTokens: 0,
+      },
+    },
+  ];
+
+  test("a turn streams what the harness produced and starts the run for the thread", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-1",
+          messages: [{ role: "user", content: "What does the matter hold?" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    expect(start).toMatchObject({
+      harness: "codex",
+      model: CHAT_MODEL,
+      harnessSessionId: null,
+      instructions: "You are stella.",
+      messages: [{ role: "user", content: "What does the matter hold?" }],
+    });
+    const [linked] = await db
+      .select({ chatThreadId: desktopRunnerRuns.chatThreadId })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, start.runId));
+    expect(linked?.chatThreadId).toBe(chatThreadId);
+
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const run = desktopRun(desktop, start.runId);
+    const sent = await harnessChunks(start.runId, completedTurn);
+    await run.events(sent);
+    await run.finish("completed", "codex-session-1");
+    const chunks = await turn.done;
+
+    expect(chunks.at(0)).toMatchObject({
+      type: EventType.RUN_STARTED,
+      runId: "chat-run-1",
+      threadId: chatThreadId,
+    });
+    expect(
+      chunks.filter(({ type }) => type === EventType.RUN_STARTED),
+    ).toHaveLength(1);
+    expect(withoutRunStarts(chunks).map(meaning)).toEqual(
+      withoutRunStarts(sent).map(meaning),
+    );
+    expect(chunks.at(-1)).toMatchObject({
+      type: EventType.RUN_FINISHED,
+      runId: "chat-run-1",
+      threadId: chatThreadId,
+    });
+    // Call ids are the run's own, so they cannot collide with the thread's.
+    const callIds = new Set(toolCallIdsOf(chunks));
+    expect(callIds.size).toBe(1);
+    expect(callIds.has("item_1")).toBe(false);
+    await desktop.close();
+  });
+
+  test("the thread's next turn on the same computer resumes the harness session", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const local = createLocalChatRun(
+      contextFor(chatThreadId),
+      startPlan(desktopId),
+    );
+    const firstTurn = collect(
+      local.stream({
+        chatRunId: "chat-run-first",
+        messages: [{ role: "user", content: "First" }],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      }),
+    );
+    const firstStart = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: firstStart.runId });
+    const firstRun = desktopRun(desktop, firstStart.runId);
+    await firstRun.events(await harnessChunks(firstStart.runId, completedTurn));
+    await firstRun.finish("completed", "codex-session-1");
+    await firstTurn.done;
+
+    const secondTurn = collect(
+      local.stream({
+        chatRunId: "chat-run-second",
+        messages: [
+          { role: "user", content: "First" },
+          { role: "assistant", content: "The matter holds one brief." },
+          { role: "user", content: "Second" },
+        ],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      }),
+    );
+    const secondStart = await desktop.receive(
+      "run.start",
+      (message) =>
+        message.type === "run.start" && message.runId !== firstStart.runId,
+    );
+    expect(secondStart.harnessSessionId).toBe("codex-session-1");
+    desktop.send({ type: "run.accepted", runId: secondStart.runId });
+    const secondRun = desktopRun(desktop, secondStart.runId);
+    await secondRun.events(
+      await harnessChunks(secondStart.runId, completedTurn.slice(3)),
+    );
+    await secondRun.finish("completed", "codex-session-1");
+    expect((await secondTurn.done).at(-1)?.type).toBe(EventType.RUN_FINISHED);
+    await desktop.close();
+  });
+
+  test("an approval pauses the turn, and its answer continues the same run", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const requestId = Bun.randomUUIDv7();
+    const pausedTurn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-paused",
+          messages: [{ role: "user", content: "Run the tests" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const toolCall = {
+      id: "item_7",
+      name: "command_execution",
+      input: { command: "bun test" },
+    };
+    const sent = await harnessChunks(start.runId, [
+      {
+        type: "session.started",
+        sessionId: harnessSessionId("codex-session-7"),
+        continuation: { type: "fresh" },
+      },
+      {
+        type: "approval.requested",
+        request: {
+          requestId,
+          kind: "command",
+          toolCall,
+          reason: "Run the test suite",
+          options: [
+            { id: "accept", decision: "approve" },
+            { id: "decline", decision: "deny" },
+          ],
+        },
+      },
+      { type: "interaction.resolved", requestId },
+      {
+        type: "tool.completed",
+        toolCall,
+        result: { content: "12 pass", status: "succeeded" },
+      },
+      { type: "text.completed", messageId: "msg_9", text: "All tests pass." },
+      { type: "turn.completed", usage: null },
+    ]);
+    const pauseAt =
+      sent.findIndex(
+        (chunk) =>
+          isRecord(chunk) &&
+          chunk["type"] === EventType.RUN_FINISHED &&
+          isRecord(chunk["outcome"]) &&
+          chunk["outcome"]["type"] === "interrupt",
+      ) + 1;
+    expect(pauseAt).toBeGreaterThan(0);
+    const run = desktopRun(desktop, start.runId);
+    await run.approvalRequest(requestId);
+    await run.events(sent.slice(0, pauseAt));
+    const paused = await pausedTurn.done;
+    expect(paused.at(-1)).toMatchObject({
+      type: EventType.RUN_FINISHED,
+      runId: "chat-run-paused",
+      outcome: { type: "interrupt", interrupts: [{ id: requestId }] },
+    });
+    // The pause is where the resumed turn continues.
+    const [stored] = await db
+      .select({ chatReadSeq: desktopRunnerRuns.chatReadSeq })
+      .from(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, start.runId));
+    expect(stored?.chatReadSeq).toBe(run.position.seq);
+
+    const resumedTurn = collect(
+      createLocalChatRun(contextFor(chatThreadId), {
+        type: "resume",
+        harness: "codex",
+      }).stream({
+        chatRunId: "chat-run-resumed",
+        messages: [],
+        instructions: "You are stella.",
+        resume: [
+          {
+            interruptId: requestId,
+            status: "resolved",
+            payload: { approved: true },
+          },
+        ],
+        abortSignal: new AbortController().signal,
+      }),
+    );
+    const answer = await desktop.receive("run.approval", ofRun(start.runId));
+    expect(answer).toMatchObject({ requestId, decision: "approve" });
+    await run.events(sent.slice(pauseAt));
+    await run.finish("completed", "codex-session-7");
+    const resumed = await resumedTurn.done;
+
+    expect(withoutRunStarts(resumed).map(meaning)).toEqual(
+      withoutRunStarts(sent.slice(pauseAt)).map(meaning),
+    );
+    expect(resumed.at(0)).toMatchObject({
+      type: EventType.RUN_STARTED,
+      runId: "chat-run-resumed",
+    });
+    // The approved call keeps the id the paused turn stored.
+    expect(toolCallIdsOf(resumed)).toEqual([...new Set(toolCallIdsOf(paused))]);
+    await desktop.close();
+  });
+
+  test("an answer from another thread does not reach the run", async () => {
+    const chatThreadId = await newThread();
+    const otherThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const requestId = Bun.randomUUIDv7();
+    const pausedTurn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-owned",
+          messages: [{ role: "user", content: "Run the tests" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const run = desktopRun(desktop, start.runId);
+    await run.approvalRequest(requestId);
+    await run.events(
+      await harnessChunks(start.runId, [
+        {
+          type: "approval.requested",
+          request: {
+            requestId,
+            kind: "command",
+            toolCall: { id: "item_2", name: "command_execution", input: {} },
+            reason: null,
+            options: [{ id: "accept", decision: "approve" }],
+          },
+        },
+      ]).then((chunks) =>
+        chunks.filter(
+          (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_ERROR,
+        ),
+      ),
+    );
+    await pausedTurn.done;
+
+    const foreign = await collect(
+      createLocalChatRun(contextFor(otherThreadId), {
+        type: "resume",
+        harness: "codex",
+      }).stream({
+        chatRunId: "chat-run-foreign",
+        messages: [],
+        instructions: "",
+        resume: [{ interruptId: requestId, status: "resolved", payload: true }],
+        abortSignal: new AbortController().signal,
+      }),
+    ).done;
+    expect(foreign.at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_unavailable,
+    });
+    expect(
+      desktop.received.filter(({ type }) => type === "run.approval"),
+    ).toEqual([]);
+    await desktop.close();
+  });
+
+  test("stopping the turn interrupts the run on the computer", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const stop = new AbortController();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-stopped",
+          messages: [{ role: "user", content: "Work for a while" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: stop.signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const run = desktopRun(desktop, start.runId);
+    await run.events(
+      (await harnessChunks(start.runId, completedTurn)).slice(0, 2),
+    );
+    stop.abort(RUN_CANCEL_REASON);
+    await turn.done;
+    expect(
+      (await desktop.receive("run.interrupt", ofRun(start.runId))).runId,
+    ).toBe(start.runId);
+    await desktop.close();
+  });
+
+  test("a run that reached its usage limit fails the turn with that reason", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-limited",
+          messages: [{ role: "user", content: "Summarize" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const run = desktopRun(desktop, start.runId);
+    await run.events(
+      await harnessChunks(start.runId, [
+        {
+          type: "turn.failed",
+          failure: {
+            type: "usage_limit",
+            message: "Usage limit reached",
+            resetsAt: null,
+          },
+        },
+      ]),
+    );
+    await run.finish("limit_reached", null);
+    const chunks = await turn.done;
+    const last = chunks.at(-1);
+    expect(last).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_limit_reached,
+    });
+    expect(
+      last?.type === EventType.RUN_ERROR ? classifyRunErrorChunk(last) : null,
+    ).toBe("local_runner_limit_reached");
+    await desktop.close();
+  });
+
+  test("a computer that refuses the run fails the turn with the reason it gave", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-refused",
+          messages: [{ role: "user", content: "Summarize" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({
+      type: "run.rejected",
+      runId: start.runId,
+      reason: "harness_needs_login",
+    });
+    expect((await turn.done).at(-1)).toMatchObject({
+      type: EventType.RUN_ERROR,
+      code: AI_FAILURE_CODES.local_runner_needs_login,
+    });
+    await desktop.close();
+  });
+
+  test("the composer's computer list reads the same however much the computers ran", async () => {
+    const counted = createDesktopRunnerControl({
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle query APIs.
+      db: asTestRaw<DesktopRunnerDb>(withQueryLogger(db, queryCountLogger)),
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+    });
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const fixture = { control: counted, owner };
+    const small = await chatLocalRunnersScalingScenario.measure(fixture);
+    for (let index = 0; index < 20; index += 1) {
+      const runId = await assignRun(desktopId);
+      await desktop.receive("run.start", ofRun(runId));
+      desktop.send({ type: "run.accepted", runId });
+      desktop.send(textEvent(runId, 1, "Working"));
+      await desktop.receive("ack", ofRun(runId));
+    }
+    const large = await chatLocalRunnersScalingScenario.measure(fixture);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+    await desktop.close();
+  });
+
+  test("a computer that goes away mid-turn keeps the turn waiting until it returns", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const turn = collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-away",
+          messages: [{ role: "user", content: "Summarize" }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        },
+      ),
+    );
+    const start = await desktop.receive("run.start");
+    desktop.send({ type: "run.accepted", runId: start.runId });
+    const sent = await harnessChunks(start.runId, completedTurn);
+    const before = desktopRun(desktop, start.runId);
+    await before.events(sent.slice(0, 3));
+    await desktop.close();
+    clock.now += TIMING.leaseMs + 1;
+    await chatInstance.gateway.sweep();
+    expect((await runState(start.runId))?.state).toBe("waiting_for_computer");
+
+    const back = await openDesktop(chatInstance, desktopId);
+    await back.hello([{ runId: start.runId, lastSeq: before.position.seq }]);
+    const after = desktopRun(back, start.runId, before.position.seq);
+    await after.events(sent.slice(3));
+    await after.finish("completed", "codex-session-1");
+    const chunks = await turn.done;
+    expect(withoutRunStarts(chunks).map(meaning)).toEqual(
+      withoutRunStarts(sent).map(meaning),
+    );
+    await back.close();
   });
 });

@@ -1,0 +1,6 @@
+{
+  "add-column": "Nullable columns without defaults, and a constant default on a table with no rows, rewrite nothing; ACCESS EXCLUSIVE acquisition is bounded by the 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The check is added to desktop_runner_runs, which the previous migration of this release creates and which holds no row, so validation scans nothing.",
+  "create-index": "The index is built on desktop_runner_runs, which holds no row yet, so the SHARE lock is held only for the empty build under the 1s lock_timeout.",
+  "add-foreign-key": "Validation scans only desktop_runner_runs, which holds no row; chat_threads takes a brief SHARE ROW EXCLUSIVE lock bounded by the 1s lock_timeout and 5s statement_timeout."
+}

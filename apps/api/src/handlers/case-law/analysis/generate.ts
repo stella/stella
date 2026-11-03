@@ -144,6 +144,10 @@ export const ANALYSIS_FAILURE_CODE_BY_KIND = {
   provider_credentials_rejected: "provider_refused",
   model_unavailable: "provider_refused",
   provider_unavailable: "provider_unavailable",
+  // Analysis never runs on a computer; a stray kind still fails plainly.
+  local_runner_needs_login: "failed",
+  local_runner_limit_reached: "failed",
+  local_runner_unavailable: "failed",
   unknown: "failed",
 } as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
 
@@ -161,6 +165,9 @@ const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
   provider_credentials_rejected: null,
   model_unavailable: null,
   provider_unavailable: null,
+  local_runner_needs_login: null,
+  local_runner_limit_reached: null,
+  local_runner_unavailable: null,
   unknown: null,
 } as const satisfies Record<
   AIErrorKind,

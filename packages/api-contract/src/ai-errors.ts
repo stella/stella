@@ -11,6 +11,10 @@ export const AI_ERROR_KINDS = [
   "deadline_exceeded",
   "loop_detected",
   "empty_completion",
+  // A chat turn run by a harness on the member's own computer.
+  "local_runner_needs_login",
+  "local_runner_limit_reached",
+  "local_runner_unavailable",
   "unknown",
 ] as const;
 
@@ -30,6 +34,9 @@ export const AI_FAILURE_CODES = {
   deadline_exceeded: "ai_deadline_exceeded",
   loop_detected: "ai_loop_detected",
   empty_completion: "ai_empty_completion",
+  local_runner_needs_login: "ai_local_runner_needs_login",
+  local_runner_limit_reached: "ai_local_runner_limit_reached",
+  local_runner_unavailable: "ai_local_runner_unavailable",
   unknown: "ai_unknown",
   role_not_configured: "ai_role_not_configured",
   own_key_required: "ai_own_key_required",

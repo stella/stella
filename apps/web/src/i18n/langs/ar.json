@@ -1668,6 +1668,11 @@
     "loadEarlierMessages": "تحميل الرسائل السابقة",
     "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
     "loadingEarlierMessages": "جارٍ تحميل الرسائل السابقة…",
+    "localRun": {
+      "errorLimitReached": "بلغ وكيل البرمجة على حاسوبك حدّ الاستخدام. حاول مرة أخرى بعد إعادة ضبط الحد.",
+      "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
+      "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى."
+    },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",

@@ -1668,6 +1668,11 @@
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
+    "localRun": {
+      "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
+      "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again."
+    },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# more} other {+# more}}",

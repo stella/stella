@@ -151,6 +151,11 @@ const REFUSED_BEFORE_OUTPUT: NotAShape = {
     "A request the provider refuses before any output (`fails-before-output`); the kind is the refusal's classification.",
 };
 
+const LOCAL_RUNNER_REPORTED: NotAShape = {
+  notAShape:
+    "Reported by the computer a local turn runs on (`local-run-chunks.ts`), not read from a model response.",
+};
+
 /** Every error a failed run is classified as. */
 export const AI_ERROR_KIND_SHAPES = {
   quota_exhausted: REFUSED_BEFORE_OUTPUT,
@@ -180,6 +185,9 @@ export const AI_ERROR_KIND_SHAPES = {
       "Read across several runs of a turn, not from one answer (`detectModelLoop`).",
   },
   empty_completion: ["empty", "whitespace", "reasoning-only"],
+  local_runner_needs_login: LOCAL_RUNNER_REPORTED,
+  local_runner_limit_reached: LOCAL_RUNNER_REPORTED,
+  local_runner_unavailable: LOCAL_RUNNER_REPORTED,
   unknown: ["mid-stream-error"],
 } as const satisfies Record<AIErrorKind, NotAShape | readonly ResponseShape[]>;
 

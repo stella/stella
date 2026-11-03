@@ -1668,6 +1668,11 @@
     "loadEarlierMessages": "Načíst starší zprávy",
     "loadEarlierMessagesError": "Starší zprávy se nepodařilo načíst",
     "loadingEarlierMessages": "Načítání starších zpráv…",
+    "localRun": {
+      "errorLimitReached": "Programovací agent ve vašem počítači vyčerpal svůj limit využití. Zkuste to znovu, až se limit obnoví.",
+      "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
+      "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu."
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",

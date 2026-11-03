@@ -141,6 +141,10 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
+import {
+  resolveChatLocalRun,
+  type ResolveChatLocalRunOptions,
+} from "@/api/handlers/chat/local-run-plan";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import { loadClientMessages } from "@/api/handlers/chat/message-page";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
@@ -1843,7 +1847,7 @@ const prepareValidatedIncomingMessage = async ({
     // tool schema without starting connector discovery. Normal streaming
     // still reuses a validation-triggered load through the memoized loader.
     const externalToolsForValidation =
-      body.runMode === CHAT_RUN_MODE.agent
+      turnRunModeOf(body) === CHAT_RUN_MODE.agent
         ? undefined
         : await resolveExternalToolsForValidation(
             body.message,
@@ -2239,6 +2243,11 @@ export type SendMessageDependencies = {
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
+  /**
+   * The gateway a turn bound for the member's computer runs through. Defaults
+   * to this process's own.
+   */
+  localRunRuntime?: ResolveChatLocalRunOptions["runtime"];
   /**
    * Rebuilds live authority when a delayed registry tool runs. Defaults to
    * fresh credential-boundary membership, matter, and database scopes.
@@ -2706,6 +2715,27 @@ export const createSendMessage = (
           webSearchProviders,
         } = preparedIncomingMessage;
 
+        // A turn bound for a computer is routed before it is admitted or
+        // stored: a computer that cannot take it refuses the send.
+        const localRun = yield* Result.await(
+          resolveChatLocalRun({
+            runTarget: body.runTarget,
+            agentSandboxRequested: body.runMode === CHAT_RUN_MODE.agent,
+            resumesPausedRun: resume !== undefined,
+            featureAccessSnapshot,
+            userId: user.id,
+            organizationId: session.activeOrganizationId,
+            chatThreadId: body.threadId,
+            workspaceIds: resolveToolWorkspaceIds({
+              pinnedIds: effectiveContextMatterIds,
+              accessibleWorkspaceIds,
+            }),
+            ...(dependencies.localRunRuntime === undefined
+              ? {}
+              : { runtime: dependencies.localRunRuntime }),
+          }),
+        );
+
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
             organizationId: session.activeOrganizationId,
@@ -3121,7 +3151,7 @@ export const createSendMessage = (
         // decides which approval-gated calls run without a prompt, and agent
         // runs keep every approval gate.
         const toolSourcesResult = shouldLoadExternalMcpToolsForStreaming(
-          body.runMode,
+          turnRunModeOf(body),
         )
           ? await loadStreamingToolSources({
               chatThreadId: body.threadId,
@@ -3380,7 +3410,7 @@ export const createSendMessage = (
                     isServerTool,
                     messages: [canonicalResponseMessage],
                     opaqueReadWorkspaceIds:
-                      body.runMode === CHAT_RUN_MODE.agent
+                      turnRunModeOf(body) === CHAT_RUN_MODE.agent
                         ? toolWorkspaceIds
                         : [],
                     refRegistry,
@@ -3467,8 +3497,9 @@ export const createSendMessage = (
                   reasoningEffort: chatReasoningEffort,
                   promptCacheKey: chatContext.promptCacheKey,
                   promptCachingEnabled,
-                  runMode: body.runMode,
+                  runMode: turnRunModeOf(body),
                   sandboxRun,
+                  localRun,
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
@@ -3672,6 +3703,17 @@ const loadStreamingToolSources = async ({
 export const shouldLoadExternalMcpToolsForStreaming = (
   runMode: ChatSendRequest["runMode"],
 ): boolean => runMode !== CHAT_RUN_MODE.agent;
+
+/**
+ * How the turn executes. A turn bound for the member's computer is harness
+ * work like an agent-sandbox turn: it reaches the workspace only through its
+ * MCP token, never falls back to a cloud model and is refused in anonymized
+ * mode, so it takes the agent mode for every decision but where it runs.
+ */
+const turnRunModeOf = (
+  body: Pick<ChatSendRequest, "runMode" | "runTarget">,
+): ChatSendRequest["runMode"] =>
+  body.runTarget?.kind === "local" ? CHAT_RUN_MODE.agent : body.runMode;
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];

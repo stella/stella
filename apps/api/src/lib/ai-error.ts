@@ -72,6 +72,16 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The run error codes a local chat turn ends with when the computer it ran on
+ * reports why it stopped (`local-run-chunks.ts`), by the kind each names.
+ */
+const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
+  [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
+  [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
+  [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+]);
+
+/**
  * The run error codes TanStack's structured-output engine and its adapters
  * report for an answer that arrived but cannot be used, by what each means.
  * A cut-off answer is incomplete however it was noticed: the adapter saw the
@@ -387,6 +397,12 @@ const classifyAIErrorInternal = (
     }
   }
 
+  if (isNonNullObject(error) && typeof error["code"] === "string") {
+    const localRunnerKind = LOCAL_RUNNER_KIND_BY_CODE.get(error["code"]);
+    if (localRunnerKind !== undefined) {
+      return localRunnerKind;
+    }
+  }
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
@@ -697,6 +713,30 @@ const aiKindHandlerError = (
         status: 502,
         message:
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
+        cause: error,
+      });
+    case "local_runner_needs_login":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The coding agent on your computer needs a new sign-in. Sign in through stella desktop, then try again.",
+        cause: error,
+      });
+    case "local_runner_limit_reached":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+        cause: error,
+      });
+    case "local_runner_unavailable":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "Your computer stopped running this request. Make sure stella desktop is open and connected, then try again.",
         cause: error,
       });
     case "unknown":

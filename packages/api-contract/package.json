@@ -169,6 +169,7 @@
     "./desktop-presence": "./src/desktop-presence.ts",
     "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./desktop-runner": "./src/desktop-runner.ts",
+    "./chat-run-target": "./src/chat-run-target.ts",
     "./agent-harness": "./src/agent-harness.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",

@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   max,
   or,
   type SQL,
@@ -1196,6 +1197,8 @@ type InsertRunOptions = {
   harnessVersion: string;
   model: string;
   workspaceIds: readonly SafeId<"workspace">[];
+  /** The chat thread whose turn starts the run, when one does. */
+  chatThreadId?: SafeId<"chatThread"> | null;
   payload: object;
   now: Date;
   leaseMs: number;
@@ -1271,6 +1274,7 @@ export const insertAssignedRun = async (
       harness,
       harnessVersion,
       workspaceIds: [...options.workspaceIds],
+      chatThreadId: options.chatThreadId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
       createdAt: now,
@@ -1491,3 +1495,164 @@ export const readStoredRunEvents = async (
     )
     .orderBy(asc(desktopRunnerEvents.seq))
     .limit(limit);
+
+type MemberRunnersOptions = { owner: RunOwner; limit: number };
+
+export type MemberRunner = {
+  readonly desktopId: string;
+  readonly connected: boolean;
+  readonly lastSeenAt: Date;
+  readonly harnesses: readonly DesktopRunnerHarnessReport[];
+};
+
+/**
+ * The runners of `owner`, connected or not, most recently seen first: one
+ * per installation, its newest device key. An account holds at most
+ * `maxRunnersPerAccount` rows, which `limit` is expected to cover.
+ */
+export const readMemberRunners = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, limit }: MemberRunnersOptions,
+): Promise<MemberRunner[]> => {
+  const rows = await db
+    .select({
+      desktopId: runner.desktopId,
+      connection: runner.connection,
+      lastSeenAt: runner.lastSeenAt,
+      harnesses: runner.harnesses,
+    })
+    .from(runner)
+    .where(
+      and(
+        eq(runner.userId, owner.userId),
+        eq(runner.organizationId, owner.organizationId),
+      ),
+    )
+    .orderBy(desc(runner.lastSeenAt), asc(runner.desktopId))
+    .limit(limit);
+  const seen = new Set<string>();
+  return rows.flatMap((row) => {
+    // Another device key may name the same installation; the newest wins.
+    if (seen.has(row.desktopId)) {
+      return [];
+    }
+    seen.add(row.desktopId);
+    return [
+      {
+        desktopId: row.desktopId,
+        connected: row.connection === "connected",
+        lastSeenAt: row.lastSeenAt,
+        harnesses: storedHarnessReports(row.harnesses),
+      },
+    ];
+  });
+};
+
+type ChatRunSessionOptions = {
+  owner: RunOwner;
+  chatThreadId: SafeId<"chatThread">;
+  desktopId: string;
+  harness: AgentHarness;
+};
+
+/**
+ * The harness session the thread's newest finished run on this computer and
+ * harness left behind, for the next turn to resume; `null` when none did.
+ */
+export const readChatRunSession = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chatThreadId, desktopId, harness }: ChatRunSessionOptions,
+): Promise<string | null> =>
+  (
+    await db
+      .select({ harnessSessionId: runs.harnessSessionId })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.chatThreadId, chatThreadId),
+          eq(runs.desktopId, desktopId),
+          eq(runs.harness, harness),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+          eq(runs.state, "finished"),
+          isNotNull(runs.harnessSessionId),
+        ),
+      )
+      .orderBy(desc(runs.updatedAt))
+      .limit(1)
+  ).at(0)?.harnessSessionId ?? null;
+
+type ChatRunForRequestOptions = {
+  owner: RunOwner;
+  chatThreadId: SafeId<"chatThread">;
+  requestId: string;
+};
+
+export type ChatRunForRequest = {
+  readonly runId: string;
+  readonly harness: AgentHarness;
+  readonly state: DesktopRunnerRunState;
+  /** Where the chat turn stopped reading the run. */
+  readonly chatReadSeq: number;
+  /** The approval request as the desktop sent it. */
+  readonly request: unknown;
+};
+
+/**
+ * The run of the thread that asked for approval `requestId`, or `null` when
+ * no run of this thread and member did.
+ */
+export const readChatRunForRequest = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { owner, chatThreadId, requestId }: ChatRunForRequestOptions,
+): Promise<ChatRunForRequest | null> =>
+  (
+    await db
+      .select({
+        runId: runs.runId,
+        harness: runs.harness,
+        state: runs.state,
+        chatReadSeq: runs.chatReadSeq,
+        request: desktopRunnerEvents.message,
+      })
+      .from(runs)
+      .innerJoin(
+        desktopRunnerEvents,
+        and(
+          eq(desktopRunnerEvents.runId, runs.runId),
+          eq(desktopRunnerEvents.requestId, requestId),
+        ),
+      )
+      .where(
+        and(
+          eq(runs.chatThreadId, chatThreadId),
+          eq(runs.userId, owner.userId),
+          eq(runs.organizationId, owner.organizationId),
+        ),
+      )
+      .limit(1)
+  ).at(0) ?? null;
+
+type ChatReadSeqOptions = { owner: RunOwner; runId: string; seq: number };
+
+/**
+ * Record how far a chat turn read the run. The position only moves forward,
+ * so a slower writer never rewinds a turn that read further.
+ */
+export const recordChatReadSeq = async (
+  db: Pick<DesktopRunnerDb, "update">,
+  { owner, runId, seq }: ChatReadSeqOptions,
+): Promise<void> => {
+  // audit: skip - read position bookkeeping; the chat turn audits the work
+  await db
+    .update(runs)
+    .set({ chatReadSeq: seq })
+    .where(
+      and(
+        eq(runs.runId, runId),
+        eq(runs.userId, owner.userId),
+        eq(runs.organizationId, owner.organizationId),
+        lt(runs.chatReadSeq, seq),
+      ),
+    );
+};

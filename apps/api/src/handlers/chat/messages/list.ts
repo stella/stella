@@ -33,6 +33,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { decodeChatRunTarget } from "@/api/lib/chat-run-target";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -231,6 +232,7 @@ const getMessages = createSafeRootHandler(
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatRunTarget: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -400,6 +402,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
+          runTarget: decodeChatRunTarget(null),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -492,6 +495,7 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
+      runTarget: decodeChatRunTarget(thread.chatRunTarget),
       context,
     });
   },

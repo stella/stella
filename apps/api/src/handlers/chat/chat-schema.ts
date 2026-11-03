@@ -35,6 +35,7 @@ import {
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
+import { chatRunTargetSchema } from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -283,6 +284,12 @@ const sendMessageCommonProperties = {
    * `"agent"` explicitly requests the configured agent sandbox.
    */
   runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
+  /**
+   * Where this turn runs. Absent or `cloud` keeps stella's own model path;
+   * `local` hands the turn to a harness on one of the member's computers and
+   * is refused, never rerouted, when no computer can take it.
+   */
+  runTarget: v.exactOptional(chatRunTargetSchema),
   userContext: v.exactOptional(userContextSchema),
   activeDraft: v.exactOptional(activeDraftSchema),
   activeFile: v.exactOptional(activeFileSchema),

@@ -81,6 +81,10 @@ export const OWNER_LOST_OUTCOME = {
 
 const AI_ERROR_RETRYABLE = {
   empty_completion: true,
+  // The member signs in or waits on their computer before a retry can help.
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: true,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -101,6 +105,9 @@ const AI_ERROR_RETRYABLE = {
  */
 export const AI_ERROR_FAILURE_CODE = {
   empty_completion: "empty-response",
+  local_runner_needs_login: "provider-error",
+  local_runner_limit_reached: "provider-error",
+  local_runner_unavailable: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",
