@@ -100,7 +100,11 @@ const renderCard = () => {
   const accepted: number[] = [];
   const view = testing.render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
-      <SelectedRangeCard onAccept={(minutes) => accepted.push(minutes)} />
+      <SelectedRangeCard
+        onAccept={(minutes) => {
+          accepted.push(minutes);
+        }}
+      />
     </DesktopIntlProvider>,
   );
   return { accepted, view };
