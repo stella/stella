@@ -53,7 +53,7 @@ import {
   SQL_PERF_LINT_EXCLUDES,
   SQL_PERF_LINT_FILES,
 } from "./scripts/sql-perf-scope.ts";
-// Defaults every lint to the committed, read-only Tailwind cache.
+// Defaults every lint to the generated, read-only Tailwind cache.
 import "./scripts/tailwind-lint-cache.ts";
 
 // All workspaces run oxlint from the repo root via:
@@ -1967,6 +1967,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
+    "./.oxlint-plugins/require-oauth-grant-admission.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
@@ -2229,6 +2230,16 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/require-oauth-grant-admission.fixture.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: {
+        "require-oauth-grant-admission/require-oauth-grant-admission": "error",
+      },
+    },
     {
       files: [
         ".oxlint-plugins/__fixtures__/no-render-phase-update.fixture.tsx",

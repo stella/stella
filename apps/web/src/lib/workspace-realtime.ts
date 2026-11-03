@@ -18,6 +18,7 @@ import {
 } from "@/lib/files/file-metadata-query.logic";
 import {
   agentSkillsQueryRoot,
+  allCorrespondenceQueryRoot,
   billingCodesQueryRoot,
   catalogueQueryRoot,
   contactsQueryRoot,
@@ -234,7 +235,11 @@ const getResourceQueryScopeKeys = (
     case RESOURCE_QUERY_SCOPE.MCP:
       return [mcpQueryRoot(), catalogueQueryRoot()];
     case RESOURCE_QUERY_SCOPE.ORGANIZATION:
-      return [organizationQueryRoot(), organizationSettingsQueryRoot()];
+      return [
+        organizationQueryRoot(),
+        organizationSettingsQueryRoot(),
+        allCorrespondenceQueryRoot(),
+      ];
     case RESOURCE_QUERY_SCOPE.PROPERTIES:
       return [propertiesQueryRoot(workspaceId)];
     case RESOURCE_QUERY_SCOPE.RATES:
