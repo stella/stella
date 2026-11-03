@@ -1029,6 +1029,20 @@ describe("harness holder over its socket", () => {
     expect(holder.received()).toEqual([]);
   });
 
+  test("fails a run whose transcript holds a message it cannot read, without starting the harness", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "tool_calls", {
+      messages: [{ role: "user", content: [{ type: "text", content: 42 }] }],
+    });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "failed",
+    });
+    expect(holder.received().map(({ method }) => method)).not.toContain(
+      "turn/start",
+    );
+  });
+
   test("refuses a second start of a held run", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);

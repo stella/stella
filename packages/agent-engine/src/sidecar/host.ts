@@ -1,4 +1,3 @@
-import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
@@ -36,6 +35,7 @@ import {
   harnessSessionId,
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
+import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import type {
   SidecarHarnessLaunchSettings,
@@ -572,6 +572,16 @@ export class SidecarHost {
     message: SidecarRunStart,
     config: Config,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
+    // The wire checks each message's role only, as the runner socket does;
+    // the turn reads more, so the rest is checked before anything starts.
+    const transcript = v.safeParse(harnessTranscriptSchema, message.messages);
+    if (!transcript.success) {
+      this.options.log("refused a run whose transcript cannot be read");
+      return Result.err({
+        type: "protocol_violation",
+        message: "The run's transcript has a message stella cannot read.",
+      });
+    }
     const binding = config.proxy.register({
       runId: message.runId,
       serverName: message.mcp.serverName,
@@ -606,11 +616,7 @@ export class SidecarHost {
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,
-      // SAFETY: the wire checks each message's role only, as the runner
-      // socket does; `buildTurnPrompt` reads the content and refuses a
-      // transcript it cannot read as `invalid_transcript`.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
-      transcript: message.messages as unknown as ModelMessage[],
+      transcript: transcript.output,
       continuation:
         message.harnessSessionId === null
           ? { type: "fresh" }
