@@ -10,9 +10,11 @@ ALTER TABLE "chat_threads"
 
 -- A run started for a chat turn names its thread, and how far the turn has
 -- read its messages, so a turn resumed after an approval continues the same
--- run. desktop_runner_runs is created by the previous migration of this
--- release and holds no row yet, so the check, the index and the foreign key
--- below scan nothing; chat_threads is only locked briefly for the reference.
+-- run. desktop_runner_runs is created by the previous migration and holds a
+-- handful of rows at most: runner sockets are invitation-only and ended runs
+-- are pruned. The check, the index and the foreign key below scan only those
+-- rows within the timeouts above; chat_threads is only locked briefly for the
+-- reference.
 ALTER TABLE "desktop_runner_runs"
   ADD COLUMN IF NOT EXISTS "chat_thread_id" uuid,
   ADD COLUMN IF NOT EXISTS "chat_read_seq" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint

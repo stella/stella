@@ -1380,7 +1380,11 @@ export const insertRunCommand = async (
       .select({ count: sql<number>`count(*)::int` })
       .from(desktopRunnerCommands)
       .where(eq(desktopRunnerCommands.runId, runId));
-    if ((queued?.count ?? 0) >= options.limits.maxCommandsPerRun) {
+    // A stop always reaches the computer: a run at its cap must still end.
+    // Its key is the run, so the duplicate check above keeps it to one each.
+    const stops =
+      options.kind === "run.interrupt" || options.kind === "run.cancel";
+    if (!stops && (queued?.count ?? 0) >= options.limits.maxCommandsPerRun) {
       return { type: "command_limit" };
     }
     if (options.answersRequestId !== null) {
@@ -1530,22 +1534,25 @@ export const readMemberRunners = async (
     )
     .orderBy(desc(runner.lastSeenAt), asc(runner.desktopId))
     .limit(limit);
-  const seen = new Set<string>();
-  return rows.flatMap((row) => {
-    // Another device key may name the same installation; the newest wins.
-    if (seen.has(row.desktopId)) {
-      return [];
+  // Another device key may name the same installation. Routing takes its
+  // newest connected key, so that one stands for the installation; without
+  // one, the newest key does.
+  const byInstallation = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    const kept = byInstallation.get(row.desktopId);
+    if (
+      kept === undefined ||
+      (kept.connection !== "connected" && row.connection === "connected")
+    ) {
+      byInstallation.set(row.desktopId, row);
     }
-    seen.add(row.desktopId);
-    return [
-      {
-        desktopId: row.desktopId,
-        connected: row.connection === "connected",
-        lastSeenAt: row.lastSeenAt,
-        harnesses: storedHarnessReports(row.harnesses),
-      },
-    ];
-  });
+  }
+  return [...byInstallation.values()].map((row) => ({
+    desktopId: row.desktopId,
+    connected: row.connection === "connected",
+    lastSeenAt: row.lastSeenAt,
+    harnesses: storedHarnessReports(row.harnesses),
+  }));
 };
 
 type ChatRunSessionOptions = {

@@ -2071,7 +2071,7 @@ const prepareValidatedIncomingMessage = async ({
       selectedChatModel !== undefined &&
       selectedChatModel !== turnLane.forcedModelSelection;
     const agentModeNeedsPool =
-      body.runMode === "agent" && turnLane.lane !== "pool";
+      turnRunModeOf(body) === CHAT_RUN_MODE.agent && turnLane.lane !== "pool";
     if (explicitSelectionNeedsPool || agentModeNeedsPool) {
       const poolCheck = yield* Result.await(
         Result.tryPromise({

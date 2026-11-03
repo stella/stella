@@ -18,6 +18,7 @@ import {
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
 } from "@stll/api-contract/desktop-runner";
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -197,8 +198,16 @@ export const approvalDecisionOf = (
  * of a local run is prefixed with the run: stable across the turn's pause and
  * resume, and unique across the thread.
  */
-const localCallId = (runnerRunId: string, toolCallId: string) =>
-  `${runnerRunId.replaceAll("-", "")}_${toolCallId}`.slice(0, 256);
+const MAX_CALL_ID_LENGTH = 256;
+
+const localCallId = (runnerRunId: string, toolCallId: string) => {
+  const prefixed = `${runnerRunId.replaceAll("-", "")}_${toolCallId}`;
+  // A harness id too long for the budget keeps its identity as a digest, so
+  // two long ids never collapse into one call.
+  return prefixed.length <= MAX_CALL_ID_LENGTH
+    ? prefixed
+    : `${runnerRunId.replaceAll("-", "")}_${sha256Hex(toolCallId)}`;
+};
 
 type RewriteContext = {
   runnerRunId: string;

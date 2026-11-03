@@ -721,7 +721,10 @@ export const streamChat = async ({
     reasoningEffort: turnModelSelection.reasoningEffort,
     task: "chat",
   });
-  run.attributeProvider(primaryModel.provider);
+  // A local turn dispatches no model; the computer's harness answers it.
+  if (localRun === undefined) {
+    run.attributeProvider(primaryModel.provider);
+  }
 
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
@@ -758,7 +761,8 @@ export const streamChat = async ({
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
-  if (modelRejectsImages(primaryModel)) {
+  // The cloud model's input limits do not bind a harness on the computer.
+  if (localRun === undefined && modelRejectsImages(primaryModel)) {
     return {
       type: "refused",
       response: new ChatTurnFailureResponse({
@@ -772,7 +776,7 @@ export const streamChat = async ({
     };
   }
 
-  if (modelRejectsAnyDocument(primaryModel)) {
+  if (localRun === undefined && modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
     // trigger for the "send without anonymization" retry, which cannot fix a
     // model that simply cannot read the attachment's format.
@@ -789,7 +793,7 @@ export const streamChat = async ({
     };
   }
 
-  if (modelRejectsStreamingTools(primaryModel)) {
+  if (localRun === undefined && modelRejectsStreamingTools(primaryModel)) {
     return {
       type: "refused",
       response: new ChatTurnFailureResponse({
