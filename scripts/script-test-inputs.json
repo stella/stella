@@ -40,6 +40,7 @@
     "scripts/baseline-paths.test.ts": ["**"],
     "scripts/baseline-shrink.test.ts": ["**"],
     "scripts/bot-refresh-auto-merge.test.ts": ["**"],
+    "scripts/bundle-worker-only-groups.test.ts": ["**"],
     "scripts/bundled-consumers.test.ts": ["**"],
     "scripts/capability-catalog-readers.test.ts": ["**"],
     "scripts/cargo-deny-fetch.test.ts": [
@@ -542,7 +543,6 @@
     ]
   },
   "noTrackedInputs": {
-    "scripts/bundle-worker-only-groups.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-instruction-references.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-marketing-content.test.ts": "Uses only temporary fixtures and its static import closure.",
