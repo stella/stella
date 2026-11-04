@@ -154,6 +154,34 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
   ...extra,
 });
 
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  item("started", {
+    ...command("call-rm", "inProgress"),
+    command: "rm draft.md",
+  }),
+  {
+    request: "item/commandExecution/requestApproval",
+    params: {
+      kind: "command",
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      itemId: "call-rm",
+      startedAtMs: 1,
+      environmentId: null,
+      reason,
+      command: "rm draft.md",
+    },
+  },
+  item("completed", {
+    ...command("call-rm", "declined"),
+    command: "rm draft.md",
+  }),
+  item("completed", agentMessage("m-2", "Left it in place.")),
+  completed(),
+];
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -301,32 +329,9 @@ const FAKE_SCENARIOS = {
     },
     completed(),
   ],
-  approval: [
-    ...freshTurn(),
-    item("started", {
-      ...command("call-rm", "inProgress"),
-      command: "rm draft.md",
-    }),
-    {
-      request: "item/commandExecution/requestApproval",
-      params: {
-        kind: "command",
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        itemId: "call-rm",
-        startedAtMs: 1,
-        environmentId: null,
-        reason: "Deletes a file",
-        command: "rm draft.md",
-      },
-    },
-    item("completed", {
-      ...command("call-rm", "declined"),
-      command: "rm draft.md",
-    }),
-    item("completed", agentMessage("m-2", "Left it in place.")),
-    completed(),
-  ],
+  approval: commandApproval("Deletes a file"),
+  /** A harness that gives no reason, here as an empty one. */
+  approval_without_reason: commandApproval(""),
   blocking_question: [
     ...freshTurn(),
     {

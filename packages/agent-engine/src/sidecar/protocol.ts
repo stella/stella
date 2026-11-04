@@ -113,7 +113,7 @@ export type SidecarHolderMode = (typeof SIDECAR_HOLDER_MODES)[number];
 export const SIDECAR_MAX_HELD_RUNS = 1000;
 
 /** Hex characters of the secret a host presents in `hello`. */
-export const SIDECAR_SECRET_HEX_LENGTH = 64;
+const SIDECAR_SECRET_HEX_LENGTH = 64;
 
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
@@ -248,7 +248,7 @@ const resumePointEntries = {
  * The fields every `hello` keeps across protocol versions, so a holder can
  * check the secret and answer a mismatch without reading the rest.
  */
-export const sidecarHelloPreambleSchema = v.object({
+const sidecarHelloPreambleSchema = v.object({
   type: v.literal(SIDECAR_HOST_MESSAGE.hello),
   protocol: protocolSchema,
   secret: secretSchema,
@@ -485,7 +485,6 @@ export const sidecarMessageSchema = v.variant("type", [
   }),
 ]);
 export type SidecarMessage = v.InferOutput<typeof sidecarMessageSchema>;
-export type SidecarHolderHello = Extract<SidecarMessage, { type: "hello" }>;
 export type SidecarRunMessage = Extract<
   SidecarMessage,
   { type: "run.event" | "run.approval_request" | "run.finished" }
@@ -564,10 +563,24 @@ export const parseSidecarHelloPreamble = (line: string) => {
   return parsed.success ? parsed.output : null;
 };
 
-/** One socket line; `null` when the message cannot be framed within limits. */
+export type SidecarEncoded =
+  | { type: "line"; line: string }
+  | { type: "refused"; reason: "invalid" | "too_large" };
+
+/**
+ * One socket line, or why the message cannot be written: it breaks the
+ * contract (a field over its bound) or exceeds the line limit. Never throws,
+ * so each caller decides what an unwritable message means for its run.
+ */
 export const encodeSidecarMessage = (
   message: SidecarMessage,
-): string | null => {
-  const line = JSON.stringify(v.parse(sidecarMessageSchema, message));
-  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES ? null : `${line}\n`;
+): SidecarEncoded => {
+  const parsed = v.safeParse(sidecarMessageSchema, message);
+  if (!parsed.success) {
+    return { type: "refused", reason: "invalid" };
+  }
+  const line = JSON.stringify(parsed.output);
+  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES
+    ? { type: "refused", reason: "too_large" }
+    : { type: "line", line: `${line}\n` };
 };

@@ -32,8 +32,10 @@ import {
   startHolderServer,
   SUN_PATH_BYTES,
 } from "./holder-server";
+import { SidecarHost } from "./host";
 import {
   SIDECAR_PROTOCOL,
+  type SidecarHostOutput,
   type SidecarMessage,
   sidecarMessageSchema,
   type SidecarRunMessage,
@@ -832,6 +834,23 @@ describe("harness holder over its socket", () => {
     expect(answer?.result).toEqual({ decision: "decline" });
   });
 
+  test("names the tool when the harness gives an empty approval reason", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "approval_without_reason");
+    const request = await client.waitFor(is("run.approval_request", runId));
+    expect(request.summary).toMatch(/^Approval required to run \S/u);
+    client.send({
+      type: "run.approval",
+      runId,
+      requestId: request.requestId,
+      decision: "deny",
+    });
+    expect(await client.waitFor(is("run.finished", runId))).toMatchObject({
+      outcome: "completed",
+    });
+  });
+
   test("answers a blocking question under the request id its pause carries", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
@@ -1119,6 +1138,76 @@ describe("harness holder over its socket", () => {
       reason: "unknown_run",
       messageType: "hello",
     });
+  });
+
+  test("a run whose message cannot be written stops, writes nothing more, and finishes failed", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-host-"));
+    const configDir = path.join(root, "codex-home");
+    const workspaceDir = path.join(root, "workspace");
+    mkdirSync(configDir);
+    mkdirSync(workspaceDir);
+    const written: SidecarHostOutput[] = [];
+    const { promise: finished, resolve } =
+      Promise.withResolvers<
+        Extract<SidecarHostOutput, { type: "run.finished" }>
+      >();
+    // The first tool call's chunk stands in for one over the line limit.
+    const refused = (message: SidecarHostOutput) =>
+      message.type === "run.event" && message.chunk.type === "TOOL_CALL_START";
+    const refusedAt: number[] = [];
+    const host = new SidecarHost({
+      send: (message) => {
+        if (refused(message)) {
+          refusedAt.push(written.length);
+          return false;
+        }
+        written.push(message);
+        if (message.type === "run.finished") {
+          resolve(message);
+        }
+        return true;
+      },
+      log: () => {},
+      environment: {
+        PATH: process.env["PATH"] ?? "",
+        FAKE_CODEX_LOG: path.join(root, "fake.log"),
+      },
+    });
+    cleanups.push(() => {
+      rmSync(root, { recursive: true, force: true });
+    });
+    host.configure("1.4.0", API_ORIGIN);
+    const runId = crypto.randomUUID();
+    host.handle({
+      type: "run.start",
+      runId,
+      threadId: "thread-1",
+      harness: "codex",
+      executable: fakeCodex(root, "interrupt_queued"),
+      configDir,
+      workspaceDir,
+      model: "gpt-test",
+      instructions: "Use the stella MCP server.",
+      messages: [{ role: "user", content: "Find the lease decision." }],
+      harnessSessionId: null,
+      policy: { network: "open", fs: "workspace" },
+      mcp: {
+        serverName: "stella",
+        url: `${API_ORIGIN}/mcp`,
+        token: RUN_TOKEN,
+        expiresAt: "2026-10-28T12:00:00.000Z",
+      },
+    });
+    expect(await finished).toEqual({
+      type: "run.finished",
+      runId,
+      outcome: "failed",
+      harnessSessionId: FAKE_THREAD_ID,
+    });
+    // One refusal, and nothing of the run after it but its end.
+    expect(refusedAt).toHaveLength(1);
+    expect(written.slice(refusedAt[0])).toEqual([await finished]);
+    await host.shutdown();
   });
 
   test("closing the connection keeps runs going; shutdown cancels them and exits", async () => {
