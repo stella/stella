@@ -5,10 +5,10 @@
 
 export const HARNESS_INSTALL_CHANGED_EVENT = "harness-install-changed";
 
-export const MANAGED_HARNESSES = ["codex", "claude-code"] as const;
+const MANAGED_HARNESSES = ["codex", "claude-code"] as const;
 export type ManagedHarness = (typeof MANAGED_HARNESSES)[number];
 
-export const HARNESS_INSTALL_FAILURES = [
+const HARNESS_INSTALL_FAILURES = [
   "download_failed",
   "oversize",
   "incomplete",
@@ -59,7 +59,7 @@ const isHarness = (value: unknown): value is ManagedHarness =>
 const isFailure = (value: unknown): value is HarnessInstallFailure =>
   HARNESS_INSTALL_FAILURES.some((failure) => failure === value);
 
-export const isHarnessInstallState = (
+const isHarnessInstallState = (
   value: unknown,
 ): value is HarnessInstallState => {
   if (!isRecord(value)) {

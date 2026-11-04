@@ -79,7 +79,7 @@ impl HarnessAutoInstall {
   }
 
   /// Waits for the current pass to end.
-  #[cfg(test)]
+  #[cfg(all(test, unix))]
   async fn finished(&self) {
     let pass = self.pass().take();
     if let Some(pass) = pass {
