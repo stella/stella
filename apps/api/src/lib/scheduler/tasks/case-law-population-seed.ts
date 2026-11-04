@@ -31,8 +31,9 @@ export const SEED_CASE_LAW_POPULATION_COUNTS_TASK =
 
 const RUN_BUDGET_MS = 45_000;
 /**
- * Room for a governed indicator read and a typical seed batch; a batch that
- * starts before this point ends within its statement timeout.
+ * Room for a governed indicator read and a typical seed batch. No batch or
+ * lock-refusal retry starts inside it, so a run overruns its budget by at most
+ * one batch's statement timeout.
  */
 const BATCH_START_RESERVE_MS = 10_000;
 
@@ -72,7 +73,17 @@ export const createCaseLawPopulationSeedTask =
     if (state.phase === "complete") {
       return Result.ok();
     }
-    const deadline = clock() + RUN_BUDGET_MS;
+    const startedAt = clock();
+    const deadline = startedAt + RUN_BUDGET_MS;
+    // `clock` is monotonic, so the wall-clock time is the claim plus the time
+    // this run has spent.
+    const continueAfter = (pauseMs: number) => {
+      scheduleContinuation(
+        new Date(
+          dueAt.claimedAtDate().getTime() + (clock() - startedAt) + pauseMs,
+        ),
+      );
+    };
     const runtime = createRuntime({
       db,
       name: CASE_LAW_POPULATION_SEED_REPAIR_NAME,
@@ -87,8 +98,10 @@ export const createCaseLawPopulationSeedTask =
       await Result.tryPromise({
         try: async (): Promise<Result<"complete" | "continued", unknown>> => {
           try {
+            let pauseMs = 0;
             while (clock() + BATCH_START_RESERVE_MS < deadline) {
               signal.throwIfAborted();
+              const deferral: { pauseMs: number | null } = { pauseMs: null };
               const seeded = await retryLockRefusal(
                 async () =>
                   await runtime.step(async ({ tx, size }) => {
@@ -110,8 +123,22 @@ export const createCaseLawPopulationSeedTask =
                     );
                     return batch;
                   }),
+                {
+                  canRetry: (backoffMs) => {
+                    const fits =
+                      clock() + backoffMs + BATCH_START_RESERVE_MS < deadline;
+                    deferral.pauseMs = fits ? null : backoffMs;
+                    return fits;
+                  },
+                },
               );
               if (seeded.isErr()) {
+                // A refusal the budget leaves no time to retry: the batch
+                // rolled back whole, so the next run takes it up.
+                if (deferral.pauseMs !== null) {
+                  pauseMs = deferral.pauseMs;
+                  break;
+                }
                 return Result.err(seeded.error);
               }
               const result = seeded.value;
@@ -125,11 +152,12 @@ export const createCaseLawPopulationSeedTask =
                 clock() + result.sleepMs + BATCH_START_RESERVE_MS >=
                 deadline
               ) {
+                pauseMs = result.sleepMs;
                 break;
               }
               await sleep(result.sleepMs, undefined, { signal });
             }
-            scheduleContinuation(dueAt.claimedAtDate());
+            continueAfter(pauseMs);
             return Result.ok("continued");
           } finally {
             await runtime.close();
