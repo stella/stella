@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { Detached } from "../turn-lifecycle";
 import {
   ClaudeOutputEnvelopeSchema,
   ControlCancelRequestSchema,
@@ -45,12 +46,6 @@ export type ClaudeCliLaunch = {
   /** Arguments placed before the adapter's own, such as a script path. */
   args: readonly string[];
 };
-
-/** Fire-and-forget work whose rejection goes to the caller's error sink. */
-export type Detached = (
-  operation: unknown,
-  context: `${string}.${string}`,
-) => void;
 
 type StartClaudeCliOptions = {
   launch: ClaudeCliLaunch;

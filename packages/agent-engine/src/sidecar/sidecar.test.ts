@@ -87,8 +87,7 @@ const spawnSidecar = (): Sidecar => {
     stderr: "pipe",
     env: {
       PATH: process.env["PATH"] ?? "",
-      FAKE_CODEX_LOG: logPath,
-      FAKE_CLAUDE_LOG: logPath,
+      FAKE_HARNESS_LOG: logPath,
     },
   });
   cleanups.push(() => {
@@ -784,7 +783,7 @@ describe("harness sidecar over stdio", () => {
       log: () => {},
       environment: {
         PATH: process.env["PATH"] ?? "",
-        FAKE_CODEX_LOG: path.join(root, "fake.log"),
+        FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
     });
     cleanups.push(() => {

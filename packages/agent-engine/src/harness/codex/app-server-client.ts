@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { Detached } from "../turn-lifecycle";
 import { createLineReader } from "./json-lines";
 import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
 
@@ -35,12 +36,6 @@ export type AppServerLaunch = {
   executable: string;
   args: readonly string[];
 };
-
-/** Fire-and-forget work whose rejection goes to the caller's error sink. */
-export type Detached = (
-  operation: unknown,
-  context: `${string}.${string}`,
-) => void;
 
 type AppServerDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
