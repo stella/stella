@@ -3,12 +3,14 @@
  * lockfile release-age check (scripts/check-lockfile-release-ages.ts) and the
  * quarantine-respecting update (scripts/cargo-update.ts).
  *
- * Cargo has no release-age gate of its own: `cargo update` takes a version
- * published seconds ago. Resolution only rewrites Cargo.lock and runs no crate
- * code (build scripts and proc macros run at build time), so checking the lock
- * between resolve and build is as strong as a resolve-time quarantine. Crates
- * are held to the root bunfig.toml's `minimumReleaseAge`; a temporary
- * `minimumReleaseAgeExcludes` entry named `cargo:<crate>` exempts one crate.
+ * Stable Cargo has no release-age gate: `cargo update` takes a version
+ * published seconds ago. (`registry.global-min-publish-age` exists only behind
+ * the unstable `-Zmin-publish-age`; stable cargo ignores it with a warning.)
+ * Resolution only rewrites Cargo.lock and runs no crate code (build scripts
+ * and proc macros run at build time), so checking the lock between resolve and
+ * build is as strong as a resolve-time quarantine. Crates are held to the root
+ * bunfig.toml's `minimumReleaseAge`; a temporary `minimumReleaseAgeExcludes`
+ * entry named `cargo:<crate>` exempts one crate.
  * npm names cannot contain a colon, so Bun never matches such an entry.
  */
 

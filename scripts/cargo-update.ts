@@ -3,9 +3,10 @@
  * quarantine, the resolve-time counterpart of the Cargo.lock release-age
  * check in scripts/check-lockfile-release-ages.ts.
  *
- * Cargo has no release-age gate: `cargo update` takes a version published
- * seconds ago. This runs `cargo update -p <crate>...`, then, for every
- * crates.io pin that is new or changed and younger than the root
+ * Stable Cargo has no release-age gate (`registry.global-min-publish-age` is
+ * unstable, behind `-Zmin-publish-age`): `cargo update` takes a version
+ * published seconds ago. This runs `cargo update -p <crate>...`, then, for
+ * every crates.io pin that is new or changed and younger than the root
  * bunfig.toml's `minimumReleaseAge` (transitive ones included), pins it back
  * with `cargo update -p <name>@<version> --precise <newest aged version>`,
  * repeating until the lock holds no young pin. When no aged version satisfies
