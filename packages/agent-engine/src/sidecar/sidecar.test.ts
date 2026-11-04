@@ -473,7 +473,7 @@ describe("harness holder over its socket", () => {
       harness: "codex",
       outcome: {
         type: "ready",
-        version: "0.165.0",
+        version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
@@ -536,7 +536,7 @@ describe("harness holder over its socket", () => {
       );
     expect((await probed(signedOut)).outcome).toEqual({
       type: "needs_login",
-      version: "0.165.0",
+      version: "0.166.0",
     });
     expect((await probed(claude)).outcome).toMatchObject({
       type: "failed",
@@ -609,15 +609,25 @@ describe("harness holder over its socket", () => {
     const { client } = await desktop(holder);
     const runId = runStart(client, holder, "approval");
     const request = await client.waitFor(is("run.approval_request", runId));
+    // A command approval names the command; the harness's reason rides along.
     expect(request).toMatchObject({
       kind: "command",
-      summary: "Deletes a file",
+      summary: "rm draft.md",
     });
     expect(request.requestId).toMatch(/^[0-9a-f-]{36}$/u);
     const pause = chunksOf(client, runId).at(-1);
     expect(pause).toMatchObject({
       type: "RUN_FINISHED",
-      outcome: { type: "interrupt", interrupts: [{ id: request.requestId }] },
+      outcome: {
+        type: "interrupt",
+        interrupts: [
+          {
+            id: request.requestId,
+            message: "rm draft.md",
+            metadata: { reason: "Deletes a file" },
+          },
+        ],
+      },
     });
     client.send({
       type: "run.approval",
@@ -637,12 +647,12 @@ describe("harness holder over its socket", () => {
     expect(answer?.result).toEqual({ decision: "decline" });
   });
 
-  test("names the tool when the harness gives an empty approval reason", async () => {
+  test("a command approval without a reason still names what it would run", async () => {
     const holder = await spawnHolder();
     const { client } = await desktop(holder);
     const runId = runStart(client, holder, "approval_without_reason");
     const request = await client.waitFor(is("run.approval_request", runId));
-    expect(request.summary).toMatch(/^Approval required to run \S/u);
+    expect(request.summary).toBe("rm draft.md");
     client.send({
       type: "run.approval",
       runId,

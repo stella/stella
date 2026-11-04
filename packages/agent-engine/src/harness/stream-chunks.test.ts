@@ -15,6 +15,8 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  approvalMessage,
+  type HarnessApprovalRequest,
   type HarnessEvent,
   type HarnessFailure,
   harnessSessionId,
@@ -444,6 +446,56 @@ describe("local harness chunks", () => {
       type: EventType.RUN_ERROR,
       code: "harness.protocol_violation",
     });
+  });
+});
+
+describe("approval messages", () => {
+  const request = (
+    overrides: Partial<HarnessApprovalRequest>,
+  ): HarnessApprovalRequest => ({
+    requestId: "request-1",
+    kind: "command",
+    toolCall: { id: "call-1", name: "command_execution", input: {} },
+    reason: "Lists the folder",
+    options: [],
+    ...overrides,
+  });
+
+  test("a command approval names the command, not the harness's summary", () => {
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "rm -rf build" },
+          },
+        }),
+      ),
+    ).toBe("rm -rf build");
+  });
+
+  test("other approvals and a command without its text keep the reason", () => {
+    expect(approvalMessage(request({ kind: "file_change" }))).toBe(
+      "Lists the folder",
+    );
+    expect(
+      approvalMessage(
+        request({
+          toolCall: {
+            id: "call-1",
+            name: "command_execution",
+            input: { command: "  " },
+          },
+        }),
+      ),
+    ).toBe("Lists the folder");
+  });
+
+  test("an approval without a reason names its tool", () => {
+    expect(approvalMessage(request({ kind: "tool", reason: " " }))).toBe(
+      "Approval required to run command_execution",
+    );
   });
 });
 
