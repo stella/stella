@@ -29,6 +29,7 @@ import {
   claimTimerActivityStart,
   forgetTimerActivityToken,
   listTimerActivityDevices,
+  verifyTimerActivityActionKey,
 } from "@/api/lib/push/timer-activity-devices";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -70,6 +71,7 @@ const registration = (
   overrides: Partial<TimerActivityDeviceRegistration> = {},
 ): TimerActivityDeviceRegistration => ({
   sequence: nextSequence(),
+  actionKey: false,
   activity: { id: "activity-1", token: tokenOf(2) },
   bundleId: "app.stll.mobile.preview",
   details: true,
@@ -118,7 +120,7 @@ const register = async (
     }),
   );
   return "registered" in result
-    ? result.registered
+    ? result
     : expect.unreachable(`register failed: ${JSON.stringify(result)}`);
 };
 
@@ -349,6 +351,60 @@ describe("registering a phone for the Lock Screen timer", () => {
         .from(timerActivityDevices)
         .where(eq(timerActivityDevices.userId, ids.userA1)),
     ).toHaveLength(1);
+  });
+
+  test("a Lock Screen key is issued only when asked, and works only on its own phone", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    expect((await register(actor)).actionKey).toBeNull();
+    const issued = (await register(actor, registration({ actionKey: true })))
+      .actionKey;
+    if (issued === null) {
+      return expect.unreachable("a signed-in phone gets a key");
+    }
+    expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now());
+
+    expect(
+      await verifyTimerActivityActionKey(ownerDb(), {
+        deviceId: PHONE,
+        key: issued.key,
+      }),
+    ).toEqual(actor);
+    for (const [deviceId, key] of [
+      [OTHER_PHONE, issued.key],
+      [PHONE, `${issued.key.slice(0, -1)}0`],
+      [PHONE, issued.key.replace(ids.userA1, () => ids.userA2)],
+      [PHONE, "not-a-key"],
+    ] as const) {
+      expect(
+        await verifyTimerActivityActionKey(ownerDb(), { deviceId, key }),
+      ).toBeNull();
+    }
+    expect((await listed(actor)).map(({ actions }) => actions)).toEqual([true]);
+  });
+
+  test("a new key replaces the old one, and signing out ends it", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    const first = (await register(actor, registration({ actionKey: true })))
+      .actionKey;
+    const second = (await register(actor, registration({ actionKey: true })))
+      .actionKey;
+    if (first === null || second === null) {
+      return expect.unreachable("a signed-in phone gets a key");
+    }
+    expect(
+      await verifyTimerActivityActionKey(ownerDb(), {
+        deviceId: PHONE,
+        key: first.key,
+      }),
+    ).toBeNull();
+
+    await unregister(actor);
+    expect(
+      await verifyTimerActivityActionKey(ownerDb(), {
+        deviceId: PHONE,
+        key: second.key,
+      }),
+    ).toBeNull();
   });
 
   test("deleting the account removes its phones", async () => {

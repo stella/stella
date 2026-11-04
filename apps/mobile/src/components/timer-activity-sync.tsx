@@ -5,6 +5,7 @@ import * as Linking from "expo-linking";
 import { addPushToStartTokenListener } from "expo-widgets";
 import type { LiveActivity } from "expo-widgets";
 import { AppState } from "react-native";
+import { Temporal } from "temporal-polyfill/full";
 import { useLocale, useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -22,11 +23,14 @@ import { useSession } from "@/connection/session-provider";
 import { APP_VARIANT } from "@/env";
 import {
   isSignedOut,
+  keepTimerActionKey,
   nextTimerActivitySequence,
   onTimerActivityDetailsChange,
   readTimerActivityDetails,
   TIMER_ACTIVITY_PUSH,
+  timerActionsLive,
   timerActivityDeviceId,
+  wantsTimerActionKey,
 } from "@/native/timer-activity-device";
 import { listMatters } from "@/state/matters";
 import { registerTimerActivityDevice } from "@/state/timer-activity-devices";
@@ -67,8 +71,9 @@ const bundleIdSchema = v.picklist(MOBILE_APP_BUNDLE_IDS);
 
 /**
  * Tells the server what this phone holds now, so a timer changed on another
- * device reaches its Lock Screen. Best effort: the next refresh sends it
- * again.
+ * device reaches its Lock Screen, asking for a new Lock Screen button key
+ * when the one held runs low. Best effort: the next refresh sends it again.
+ * Answers whether it kept a newly issued key.
  */
 const reportTimerActivity = async ({
   activity,
@@ -80,14 +85,14 @@ const reportTimerActivity = async ({
   link: string;
   locale: string;
   source: AccessTokenSource;
-}) => {
+}): Promise<boolean> => {
   const session = source.session();
   const bundleId = v.safeParse(
     bundleIdSchema,
     Constants.expoConfig?.ios?.bundleIdentifier,
   );
   if (session === undefined || !bundleId.success) {
-    return;
+    return false;
   }
   const activityToken =
     (await activity?.getPushToken().catch(() => null)) ?? null;
@@ -96,8 +101,12 @@ const reportTimerActivity = async ({
   // Signed out while this was prepared: the server would refuse it anyway,
   // once the sign-out reached it.
   if (deviceId === null || details === null || isSignedOut(session)) {
-    return;
+    return false;
   }
+  const actionKey = await wantsTimerActionKey(
+    session,
+    epochMilliseconds(),
+  ).catch(() => false);
   // Numbered, never twice the same, so the server files only the newest
   // when two cross on the way.
   const sequence = await nextTimerActivitySequence(
@@ -105,10 +114,10 @@ const reportTimerActivity = async ({
     epochMilliseconds(),
   ).catch(() => null);
   if (sequence === null) {
-    return;
+    return false;
   }
   reportedActivityToken = activityToken;
-  (
+  const issued = (
     await registerTimerActivityDevice({
       deviceId,
       fetch,
@@ -117,6 +126,7 @@ const reportTimerActivity = async ({
           activity === null || activityToken === null
             ? null
             : { id: activity.getId(), token: activityToken },
+        actionKey,
         bundleId: bundleId.output,
         details,
         environment: APP_VARIANT === "development" ? "sandbox" : "production",
@@ -127,7 +137,15 @@ const reportTimerActivity = async ({
       },
       source,
     })
-  ).unwrapOr(undefined);
+  ).unwrapOr(null);
+  return issued === null
+    ? false
+    : await keepTimerActionKey({
+        deviceId,
+        expiresAt: Temporal.Instant.from(issued.expiresAt).epochMilliseconds,
+        key: issued.key,
+        session,
+      }).catch(() => false);
 };
 
 /**
@@ -169,25 +187,33 @@ const TimerActivityRefresh = ({
         more: (count) => words("more", { count }),
         noDescription: words("noDescription"),
         noMatter: words("noMatter"),
+        pause: words("pause"),
         paused: words("paused"),
+        resume: words("resume"),
         running: words("running"),
         timer: words("timer"),
       };
       const link = Linking.createURL("/timers");
-      const activity = await showTimerActivity(
-        timerActivityOf({
-          details: "shown",
-          labels,
-          link,
-          matterNames: new Map(
-            matters?.isOk() === true
-              ? matters.value.map((matter) => [matter.id, matter.name])
-              : [],
-          ),
-          now: epochMilliseconds(),
-          timers: timers.value,
-        }),
-      );
+      const session = source.session();
+      const actions =
+        session !== undefined &&
+        (await timerActionsLive(session, epochMilliseconds()).catch(
+          () => false,
+        ));
+      const props = timerActivityOf({
+        actions,
+        details: "shown",
+        labels,
+        link,
+        matterNames: new Map(
+          matters?.isOk() === true
+            ? matters.value.map((matter) => [matter.id, matter.name])
+            : [],
+        ),
+        now: epochMilliseconds(),
+        timers: timers.value,
+      });
+      const activity = await showTimerActivity(props);
       if (gone() || !TIMER_ACTIVITY_PUSH) {
         return;
       }
@@ -198,7 +224,25 @@ const TimerActivityRefresh = ({
           onToken();
         }
       });
-      await reportTimerActivity({ activity, link, locale, source });
+      const keptKey = await reportTimerActivity({
+        activity,
+        link,
+        locale,
+        source,
+      });
+      // A first key turns the buttons on at once, without waiting for the
+      // next refresh.
+      if (
+        keptKey &&
+        !actions &&
+        props !== null &&
+        activity !== null &&
+        !gone()
+      ) {
+        await activity
+          .update({ ...props, actions: true })
+          .catch(() => undefined);
+      }
     })();
     return () => {
       unmounted.abort();

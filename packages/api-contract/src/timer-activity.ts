@@ -56,7 +56,28 @@ export type TimerActivityProps = {
   readonly status: string;
   /** Where a tap goes: the build's own link to the timers. */
   readonly link: string;
+  /** Whether this phone holds a key its Lock Screen buttons can act with. */
+  readonly actions: boolean;
+  /** The button's word: pause a running timer, resume a paused one. */
+  readonly actionLabel: string;
+  /** What the button does, as the app's native side reads it. */
+  readonly actionTarget: string;
 };
+
+/** What a Lock Screen button does to the timer it shows. */
+export const TIMER_ACTIVITY_ACTIONS = ["pause", "resume"] as const;
+export type TimerActivityAction = (typeof TIMER_ACTIVITY_ACTIONS)[number];
+
+const ACTION_TARGET_PREFIX = "stella-timer";
+
+/**
+ * The name a Lock Screen button carries to the app's native side, which
+ * reads the action and the timer from it: `stella-timer:pause:<timer id>`.
+ */
+export const timerActivityActionTarget = (
+  action: TimerActivityAction,
+  timerId: string,
+): string => `${ACTION_TARGET_PREFIX}:${action}:${timerId}`;
 
 /** The labels the activity needs, in the person's language. */
 export type TimerActivityLabels = {
@@ -66,6 +87,8 @@ export type TimerActivityLabels = {
   readonly noMatter: string;
   readonly running: string;
   readonly paused: string;
+  readonly pause: string;
+  readonly resume: string;
   readonly more: (count: number) => string;
 };
 
@@ -148,6 +171,7 @@ const named = (text: string | null | undefined): string | undefined =>
  * Null when there are no timers, which ends the activity.
  */
 export const timerActivityOf = ({
+  actions,
   details,
   labels,
   link,
@@ -155,6 +179,8 @@ export const timerActivityOf = ({
   now,
   timers,
 }: {
+  /** Whether the phone holds a key its Lock Screen buttons can act with. */
+  readonly actions: boolean;
   readonly details: TimerActivityDetails;
   readonly labels: TimerActivityLabels;
   readonly link: string;
@@ -171,6 +197,12 @@ export const timerActivityOf = ({
   const isRunning = followed.state === "running";
   const state = isRunning ? labels.running : labels.paused;
   const shared = {
+    actionLabel: isRunning ? labels.pause : labels.resume,
+    actionTarget: timerActivityActionTarget(
+      isRunning ? "pause" : "resume",
+      followed.id,
+    ),
+    actions,
     clock: clockOf(seconds),
     countingFromMs: now - seconds * 1000,
     link,
@@ -232,6 +264,8 @@ export const timerActivityDeviceRegistrationSchema = v.strictObject({
   ),
   /** Whether updates sent through Apple may name the timer's description and matter. */
   details: v.boolean(),
+  /** Whether the phone wants a new key for its Lock Screen buttons. */
+  actionKey: v.boolean(),
   /** The token that starts an activity on this phone (iOS 17.2 and later). */
   startToken: v.nullable(pushDeviceTokenSchema),
   /** The activity the phone shows now and the token that updates it. */
@@ -258,8 +292,39 @@ export const timerActivityDeviceParamsSchema = v.object({
 /** How many phones one person may keep registered; the oldest go first. */
 export const TIMER_ACTIVITY_DEVICES_PER_USER_MAX = 10;
 
+/**
+ * How long a Lock Screen button key works. The phone asks for a new one well
+ * before then, each time it registers; sign-out ends it at once.
+ */
+export const TIMER_ACTIVITY_ACTION_KEY_HOURS = 12;
+
+/** A key the phone's Lock Screen buttons act with, shown once. */
+export type TimerActivityActionKey = {
+  /** `<user id>.<64 hex>`: only the hex part's SHA-256 is kept. */
+  key: string;
+  expiresAt: string;
+};
+
 /** What a registration answers once the phone is filed. */
-export type TimerActivityDeviceRegistrationResponse = { registered: true };
+export type TimerActivityDeviceRegistrationResponse = {
+  registered: true;
+  /** The new key, when the registration asked for one and the sign-in still lasts. */
+  actionKey: TimerActivityActionKey | null;
+};
+
+/**
+ * `POST /v1/me/timer-activity-devices/:deviceId/actions`, sent by the
+ * phone's native side for a Lock Screen button, with the key as its bearer
+ * credential instead of a session.
+ */
+export const timerActivityActionSchema = v.strictObject({
+  timerId: v.pipe(v.string(), v.uuid()),
+  action: v.picklist(TIMER_ACTIVITY_ACTIONS),
+});
+
+export type TimerActivityActionRequest = v.InferOutput<
+  typeof timerActivityActionSchema
+>;
 
 /** `DELETE`: removing a phone that was not registered succeeds with `removed: false`. */
 export type TimerActivityDeviceRemovalResponse = { removed: boolean };

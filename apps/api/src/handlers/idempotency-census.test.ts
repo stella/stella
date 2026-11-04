@@ -957,6 +957,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/me/timer-activity-devices/:deviceId/actions": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/time-timers/:id/pause": {
     type: "non-replay",
     reason: "current-state",

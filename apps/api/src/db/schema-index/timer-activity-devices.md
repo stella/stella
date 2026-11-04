@@ -9,20 +9,22 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 A phone that shows the person's running timer on its Lock Screen, so a timer started, paused or saved on another device reaches it too.
 
 ```text
-timer_activity_devices.user_id          text                fk,not null       timer-activity-devices.ts:50
-timer_activity_devices.device_id        uuid                not null          timer-activity-devices.ts:55  The id the app made for this sign-in on the phone.
-timer_activity_devices.organization_id  safeOrganizationId  fk,not null       timer-activity-devices.ts:57  The firm the app is signed in to on this phone.
-timer_activity_devices.environment      text                not null          timer-activity-devices.ts:61  Which APNs gateway accepts the tokens.
-timer_activity_devices.bundle_id        text                not null          timer-activity-devices.ts:63  The app build that registered, and so the APNs topic.
-timer_activity_devices.locale           text                not null          timer-activity-devices.ts:65  The app's language as a BCP 47 tag; the activity's words are chosen from it.
-timer_activity_devices.link             text                not null          timer-activity-devices.ts:67  The build's link to its timers, which a tap on the activity opens.
-timer_activity_devices.details          boolean             not null          timer-activity-devices.ts:69  Whether updates sent through Apple may name the timer's description and matter.
-timer_activity_devices.start_token      text                null              timer-activity-devices.ts:71  The token that starts an activity on this phone; null before iOS 17.2.
-timer_activity_devices.activity_id      text                null              timer-activity-devices.ts:73  The activity the phone shows now; null when it shows none.
-timer_activity_devices.activity_token   text                null              timer-activity-devices.ts:75  The token that updates or ends that activity.
-timer_activity_devices.started_at       timestamptz         null              timer-activity-devices.ts:77  When the server last started an activity here, so it starts at most one until the app reports it.
-timer_activity_devices.sequence         bigint              not null          timer-activity-devices.ts:79  The number of the registration filed; an older one changes nothing.
-timer_activity_devices.signed_out_at    timestamptz         null              timer-activity-devices.ts:81  When this sign-in signed out; the row is then sent nothing and takes no registration.
-timer_activity_devices.created_at       timestamptz         default,not null  timer-activity-devices.ts:82
-timer_activity_devices.last_seen_at     timestamptz         default,not null  timer-activity-devices.ts:84  Last registration; the oldest phone is evicted first.
+timer_activity_devices.user_id                text                fk,not null       timer-activity-devices.ts:50
+timer_activity_devices.device_id              uuid                not null          timer-activity-devices.ts:55  The id the app made for this sign-in on the phone.
+timer_activity_devices.organization_id        safeOrganizationId  fk,not null       timer-activity-devices.ts:57  The firm the app is signed in to on this phone.
+timer_activity_devices.environment            text                not null          timer-activity-devices.ts:61  Which APNs gateway accepts the tokens.
+timer_activity_devices.bundle_id              text                not null          timer-activity-devices.ts:63  The app build that registered, and so the APNs topic.
+timer_activity_devices.locale                 text                not null          timer-activity-devices.ts:65  The app's language as a BCP 47 tag; the activity's words are chosen from it.
+timer_activity_devices.link                   text                not null          timer-activity-devices.ts:67  The build's link to its timers, which a tap on the activity opens.
+timer_activity_devices.details                boolean             not null          timer-activity-devices.ts:69  Whether updates sent through Apple may name the timer's description and matter.
+timer_activity_devices.start_token            text                null              timer-activity-devices.ts:71  The token that starts an activity on this phone; null before iOS 17.2.
+timer_activity_devices.activity_id            text                null              timer-activity-devices.ts:73  The activity the phone shows now; null when it shows none.
+timer_activity_devices.activity_token         text                null              timer-activity-devices.ts:75  The token that updates or ends that activity.
+timer_activity_devices.started_at             timestamptz         null              timer-activity-devices.ts:77  When the server last started an activity here, so it starts at most one until the app reports it.
+timer_activity_devices.sequence               bigint              not null          timer-activity-devices.ts:79  The number of the registration filed; an older one changes nothing.
+timer_activity_devices.signed_out_at          timestamptz         null              timer-activity-devices.ts:81  When this sign-in signed out; the row is then sent nothing and takes no registration.
+timer_activity_devices.action_key_hash        text                null              timer-activity-devices.ts:83  The SHA-256 hex of the key the phone's Lock Screen buttons act with; the key itself is never kept.
+timer_activity_devices.action_key_expires_at  timestamptz         null              timer-activity-devices.ts:85  When that key stops working.
+timer_activity_devices.created_at             timestamptz         default,not null  timer-activity-devices.ts:86
+timer_activity_devices.last_seen_at           timestamptz         default,not null  timer-activity-devices.ts:88  Last registration; the oldest phone is evicted first.
 ```

@@ -6,6 +6,11 @@ import type { AccessTokenSource, StoredSession } from "@/connection/session";
 import type { BeforeSessionEnd } from "@/connection/session-end";
 import { LIVE_ACTIVITIES, PUSH_NOTIFICATIONS } from "@/env";
 import { deviceAccountStore } from "@/native/account-store";
+import {
+  clearTimerActions,
+  configureTimerActions,
+  TIMER_ACTIONS_AVAILABLE,
+} from "@/native/timer-actions";
 import { keyPart } from "@/state/recent-searches";
 import { unregisterTimerActivityDevice } from "@/state/timer-activity-devices";
 
@@ -16,7 +21,10 @@ import { unregisterTimerActivityDevice } from "@/state/timer-activity-devices";
  */
 export const TIMER_ACTIVITY_PUSH = LIVE_ACTIVITIES && PUSH_NOTIFICATIONS;
 
-type SessionKeys = Pick<StoredSession, "serverUrl" | "signInId" | "userId">;
+export type SessionKeys = Pick<
+  StoredSession,
+  "serverUrl" | "signInId" | "userId"
+>;
 
 /** This sign-in's own id for the phone: a new sign-in is a new registration. */
 const deviceIdKey = ({ serverUrl, signInId }: SessionKeys) =>
@@ -42,6 +50,62 @@ export const nextTimerActivitySequence = async (
   const next = Math.max(sent + 1, now);
   await deviceAccountStore.write(sequenceKey(session), String(next));
   return next;
+};
+
+/** When the Lock Screen button key this sign-in holds stops working. */
+const actionKeyExpiryKey = ({ serverUrl, signInId }: SessionKeys) =>
+  `timer-activity-action-key.${keyPart(serverUrl)}.${keyPart(signInId)}`;
+
+/** A key is renewed once less than this is left of it. */
+const ACTION_KEY_RENEW_MS = 6 * 60 * 60 * 1000;
+
+const actionKeyExpiry = async (session: SessionKeys): Promise<number> =>
+  parseIntegerToken(
+    (await deviceAccountStore.read(actionKeyExpiryKey(session))) ?? "0",
+    { sign: "unsigned" },
+  ).unwrapOr(0);
+
+/**
+ * Whether the Lock Screen buttons work on this phone now: the build can
+ * answer them and the sign-in holds a key that has not expired.
+ */
+export const timerActionsLive = async (
+  session: SessionKeys,
+  now: number,
+): Promise<boolean> =>
+  TIMER_ACTIONS_AVAILABLE && (await actionKeyExpiry(session)) > now;
+
+/** Whether the next registration should ask for a new key. */
+export const wantsTimerActionKey = async (
+  session: SessionKeys,
+  now: number,
+): Promise<boolean> =>
+  TIMER_ACTIONS_AVAILABLE &&
+  (await actionKeyExpiry(session)) - now < ACTION_KEY_RENEW_MS;
+
+/**
+ * Hands a newly issued key to the native side, which answers the buttons,
+ * and notes when it expires. False when the key could not be kept.
+ */
+export const keepTimerActionKey = async ({
+  deviceId,
+  expiresAt,
+  key,
+  session,
+}: {
+  readonly deviceId: string;
+  readonly expiresAt: number;
+  readonly key: string;
+  readonly session: SessionKeys;
+}): Promise<boolean> => {
+  if (!configureTimerActions({ deviceId, key, serverUrl: session.serverUrl })) {
+    return false;
+  }
+  await deviceAccountStore.write(
+    actionKeyExpiryKey(session),
+    String(expiresAt),
+  );
+  return true;
 };
 
 /** The person's own choice, kept for their account on this phone. */
@@ -132,6 +196,8 @@ export const stopTimerActivityUpdates = async (
   }
   const key = deviceIdKey(session);
   signedOut.add(key);
+  // The buttons stop at once, whether or not the server hears of it.
+  clearTimerActions();
   const deviceId = await deviceAccountStore.read(key).catch(() => null);
   if (deviceId !== null) {
     (await unregisterTimerActivityDevice({ deviceId, fetch, source })).unwrapOr(
@@ -147,4 +213,5 @@ export const forgetTimerActivityDevice: BeforeSessionEnd = async (
 ) => {
   await deviceAccountStore.remove(deviceIdKey(session));
   await deviceAccountStore.remove(sequenceKey(session));
+  await deviceAccountStore.remove(actionKeyExpiryKey(session));
 };

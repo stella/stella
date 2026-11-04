@@ -79,6 +79,10 @@ export const timerActivityDevices = p.pgTable(
     sequence: p.bigint("sequence", { mode: "number" }).notNull(),
     /** When this sign-in signed out; the row is then sent nothing and takes no registration. */
     signedOutAt: timestamptz("signed_out_at"),
+    /** The SHA-256 hex of the key the phone's Lock Screen buttons act with; the key itself is never kept. */
+    actionKeyHash: p.text("action_key_hash"),
+    /** When that key stops working. */
+    actionKeyExpiresAt: timestamptz("action_key_expires_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /** Last registration; the oldest phone is evicted first. */
     lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),

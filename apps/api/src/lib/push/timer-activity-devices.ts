@@ -11,9 +11,16 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { timingSafeEqual } from "node:crypto";
 
-import { TIMER_ACTIVITY_DEVICES_PER_USER_MAX } from "@stll/api-contract/timer-activity";
-import type { TimerActivityDeviceRegistration } from "@stll/api-contract/timer-activity";
+import {
+  TIMER_ACTIVITY_ACTION_KEY_HOURS,
+  TIMER_ACTIVITY_DEVICES_PER_USER_MAX,
+} from "@stll/api-contract/timer-activity";
+import type {
+  TimerActivityActionKey,
+  TimerActivityDeviceRegistration,
+} from "@stll/api-contract/timer-activity";
 
 import type { Transaction } from "@/api/db/root";
 import { timerActivityDevices } from "@/api/db/schema";
@@ -26,6 +33,17 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import {
+  createOpaqueToken,
+  hashOpaqueToken,
+  isOpaqueTokenShape,
+} from "@/api/lib/entities/opaque-tokens";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
+import type { CredentialPrincipal } from "@/api/lib/synthetic-principal/credential-policy";
 
 type DeviceWriteTx = Pick<Transaction, "insert" | "select" | "delete">;
 
@@ -138,7 +156,11 @@ export const unregisterTimerActivityDevice = async (
     .update(timerActivityDevices)
     // The claim time stays: a late sign-out of an older sign-in must not
     // outrank a newer one on the same phone.
-    .set({ signedOutAt: sql`now()` })
+    .set({
+      signedOutAt: sql`now()`,
+      actionKeyHash: null,
+      actionKeyExpiresAt: null,
+    })
     .where(
       and(
         eq(timerActivityDevices.userId, userId),
@@ -163,6 +185,8 @@ export type TimerActivityDevice = Pick<
 > & {
   /** Whether a start the server sent still holds, so no other may be sent. */
   starting: boolean;
+  /** Whether the phone holds a live key its Lock Screen buttons can act with. */
+  actions: boolean;
   /** The registration as read, at full precision, to change it only if unchanged. */
   seenToken: TimestampCasToken;
 };
@@ -177,6 +201,8 @@ const sharesToken = (column: "startToken" | "activityToken") =>
       eq(laterClaim.activityToken, timerActivityDevices[column]),
     ),
   );
+
+const actionKeyLive = sql<boolean>`coalesce(${timerActivityDevices.actionKeyExpiresAt} > now(), false)`;
 
 const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(hours => ${TIMER_ACTIVITY_START_HOLD_HOURS}), false)`;
 
@@ -211,6 +237,7 @@ export const listTimerActivityDevices = async (
         startToken: timerActivityDevices.startToken,
         activityToken: timerActivityDevices.activityToken,
         starting: startHolds,
+        actions: actionKeyLive,
         seenToken: timestampCasToken(timerActivityDevices.lastSeenAt),
       })
       .from(timerActivityDevices)
@@ -306,4 +333,115 @@ export const forgetTimerActivityToken = async (
         : { activityId: null, activityToken: null, startedAt: null },
     )
     .where(unchanged(ref));
+};
+
+/**
+ * The secret half of a Lock Screen button key. It is a credential that acts
+ * for the person without their session, so the review account never gets
+ * one.
+ */
+export const createTimerActivityActionKeySecret = (
+  principal: CredentialPrincipal,
+): string => {
+  requireSessionCredentialIssuer("timerActivity", principal);
+  return createOpaqueToken();
+};
+
+export const hashTimerActivityActionKey = hashOpaqueToken;
+
+/**
+ * Give a signed-in phone a new key for its Lock Screen buttons, replacing
+ * any it held. The key is shown here once; only its SHA-256 is kept. Null
+ * when the phone is not registered under this sign-in, or has signed out.
+ */
+export const issueTimerActivityActionKey = async (
+  tx: Pick<Transaction, "update">,
+  {
+    deviceId,
+    organizationId,
+    userId,
+  }: {
+    deviceId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  },
+): Promise<TimerActivityActionKey | null> => {
+  const secret = createTimerActivityActionKeySecret({ userId, organizationId });
+  const keyHash = hashTimerActivityActionKey(secret);
+  // audit: skip - the person's own phone key for their own timers; using it is audited
+  const [row] = await tx
+    .update(timerActivityDevices)
+    .set({
+      actionKeyHash: keyHash,
+      actionKeyExpiresAt: sql`now() + make_interval(hours => ${TIMER_ACTIVITY_ACTION_KEY_HOURS})`,
+    })
+    .where(
+      and(
+        eq(timerActivityDevices.userId, userId),
+        eq(timerActivityDevices.deviceId, deviceId),
+        eq(timerActivityDevices.organizationId, organizationId),
+        isNull(timerActivityDevices.signedOutAt),
+      ),
+    )
+    .returning({ expiresAt: timerActivityDevices.actionKeyExpiresAt });
+  if (row === undefined || row.expiresAt === null) {
+    return null;
+  }
+  return { key: `${userId}.${secret}`, expiresAt: row.expiresAt.toISOString() };
+};
+
+const ACTION_KEY_MAX_LENGTH = 200;
+
+/**
+ * The person and organization a Lock Screen button key acts for, or null for
+ * a key that is malformed, unknown, expired or from a signed-out phone.
+ * Reads through the owner connection: the key is the only credential the
+ * request carries, so no person is known before this answers.
+ */
+export const verifyTimerActivityActionKey = async (
+  db: Pick<Transaction, "select">,
+  { deviceId, key }: { deviceId: string; key: string },
+): Promise<{
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+} | null> => {
+  if (key.length > ACTION_KEY_MAX_LENGTH) {
+    return null;
+  }
+  const separator = key.lastIndexOf(".");
+  const userId = key.slice(0, separator);
+  const secret = key.slice(separator + 1);
+  if (separator < 1 || !isOpaqueTokenShape(secret)) {
+    return null;
+  }
+  const [row] = await db
+    .select({
+      organizationId: timerActivityDevices.organizationId,
+      actionKeyHash: timerActivityDevices.actionKeyHash,
+    })
+    .from(timerActivityDevices)
+    .where(
+      and(
+        eq(timerActivityDevices.userId, userId),
+        eq(timerActivityDevices.deviceId, deviceId),
+        isNull(timerActivityDevices.signedOutAt),
+        actionKeyLive,
+      ),
+    )
+    .limit(1);
+  if (row === undefined || row.actionKeyHash === null) {
+    return null;
+  }
+  const presented = Buffer.from(hashTimerActivityActionKey(secret), "hex");
+  const stored = Buffer.from(row.actionKeyHash, "hex");
+  if (
+    presented.length !== stored.length ||
+    !timingSafeEqual(presented, stored)
+  ) {
+    return null;
+  }
+  return {
+    organizationId: brandPersistedOrganizationId(row.organizationId),
+    userId: brandPersistedUserId(userId),
+  };
 };
