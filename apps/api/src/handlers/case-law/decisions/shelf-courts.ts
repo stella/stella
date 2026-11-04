@@ -1,20 +1,19 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
-import type {
-  CaseLawPublicReadDb,
-  CaseLawPublicReadTransaction,
-} from "@/api/lib/case-law-public-read-db";
+import { caseLawPopulationCounts, caseLawSources } from "@/api/db/schema";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   type CourtWeightEntry,
   directoryCourtRankByName,
 } from "@/api/lib/case-law/court-weights";
 import { isCourtDirectoryJurisdiction } from "@/api/lib/case-law/decision-court-id-sql";
-import { caseLawPopulationRows } from "@/api/lib/case-law/population-counts";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
+import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { typedPgArray } from "@/api/lib/search/sql";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
@@ -129,31 +128,42 @@ type AdmittedCourtPageOptions = {
 
 /**
  * One page of the courts holding at least one decision a public surface may
- * serve, by stored name: the population counts under the redistribution
- * policy and the caller's source exclusions, as the browse facets read them.
- * `readCourtNames` is join-free and lists every stored court; a surface that
- * lists courts to a reader reads these instead, so a court whose every source
- * is withheld is never named. Keyset-paged on the name, so a page reads no
- * further into the country's courts than it returns.
+ * serve, by stored name, plus one court that says another page follows.
+ *
+ * One keyset walk of the folded population counts per admitted source, each
+ * stopping at the page's size, then merged and cut to it: a page reads at most
+ * its size from each source, however many courts the country holds. Folded
+ * counts hold only positive totals, and `readCourtNames` is join-free, so a
+ * surface that lists courts to a reader reads these: a court whose every source
+ * the redistribution policy withholds is never named. The policy applies when
+ * the page is read; a court's first decision lists it from the next fold.
  */
-export const admittedCourtPageQuery = (
-  tx: Pick<CaseLawPublicReadTransaction, "select">,
-  { country, excludedSourceIds, after, limit }: AdmittedCourtPageOptions,
-) => {
-  const population = caseLawPopulationRows(tx, excludedSourceIds);
-  return tx
-    .select({ court: population.value })
-    .from(population)
-    .where(
-      sql`${population.kind} = 'court'
-        AND ${population.country} = ${country}
-        AND ${population.total} > 0
-        ${after === null ? sql`` : sql`AND ${population.value} > ${after}`}`,
-    )
-    .groupBy(population.value)
-    .orderBy(population.value)
-    .limit(limit + 1);
-};
+export const admittedCourtPageStatement = ({
+  country,
+  excludedSourceIds,
+  after,
+  limit,
+}: AdmittedCourtPageOptions): SQL => sql`
+  SELECT page.court
+  FROM (
+    SELECT DISTINCT walk.value AS court
+    FROM ${caseLawSources} AS source
+    CROSS JOIN LATERAL (
+      SELECT counted.value
+      FROM ${caseLawPopulationCounts} AS counted
+      WHERE counted.kind = 'court'
+        AND counted.country = ${country}
+        AND counted.source_id = source.id
+        ${after === null ? sql`` : sql`AND counted.value > ${after}`}
+      ORDER BY counted.value
+      LIMIT ${limit + 1}
+    ) AS walk
+    WHERE ${redistributableCaseLawSourceFor(sql`source.descriptor`)}
+      AND source.id <> ALL(${typedPgArray(excludedSourceIds, "uuid")})
+  ) AS page
+  ORDER BY page.court
+  LIMIT ${limit + 1}
+`;
 
 /** The page's courts and whether more follow. */
 export const readAdmittedCourtPage = async ({
@@ -163,10 +173,15 @@ export const readAdmittedCourtPage = async ({
   courts: string[];
   more: boolean;
 }> => {
-  const rows = await caseLawDb(
-    async (tx) => await admittedCourtPageQuery(tx, options),
+  const result: unknown = await caseLawDb(
+    async (tx) => await tx.execute(admittedCourtPageStatement(options)),
   );
-  const courts = rows.map(({ court }) => court);
+  const courts = executedRows(result)
+    .filter(isRecord)
+    .flatMap((row) => {
+      const court = row["court"];
+      return typeof court === "string" ? [court] : [];
+    });
   return {
     courts: courts.slice(0, options.limit),
     more: courts.length > options.limit,

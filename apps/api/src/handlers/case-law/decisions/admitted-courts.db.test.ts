@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -99,6 +100,10 @@ beforeAll(
         sourceId: withheldSourceId,
       },
     ]);
+    // The page reads folded counts, as the scheduler's fold leaves them.
+    await db.execute(
+      sql`SELECT * FROM public.fold_case_law_population_counts(2048)`,
+    );
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );

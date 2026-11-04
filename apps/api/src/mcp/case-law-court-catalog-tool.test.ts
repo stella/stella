@@ -35,12 +35,10 @@ test("a page lists one entry per court, apex spellings merged, tiers apex first"
   ]);
   const supreme = page.courts.find(({ tierLabel }) => tierLabel === "supreme");
   expect(supreme?.courts).toHaveLength(1);
-  expect(
-    [
-      supreme?.courts[0]?.value,
-      ...(supreme?.courts[0]?.aliases ?? []),
-    ].toSorted(),
-  ).toEqual(["Najvyšší súd", "Najvyšší súd Slovenskej republiky"]);
+  const court = supreme?.courts[0];
+  expect(new Set([court?.value, ...(court?.aliases ?? [])])).toEqual(
+    new Set(["Najvyšší súd", "Najvyšší súd Slovenskej republiky"]),
+  );
   expect(
     page.courts.find(({ tierLabel }) => tierLabel === "regional")?.courts,
   ).toEqual([
