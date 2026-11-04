@@ -74,10 +74,10 @@ const WAIT_MS = 10_000;
 // timeout: each test starts real processes, the holder and the fake harness.
 setDefaultTimeout(30_000);
 
-const cleanups: (() => void)[] = [];
-afterEach(() => {
+const cleanups: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) {
-    cleanup();
+    await cleanup();
   }
 });
 
