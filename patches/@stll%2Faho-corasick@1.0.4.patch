@@ -1,0 +1,12 @@
+Use a static native-loader import so Bun embeds the NAPI binding in compiled binaries.
+Runtime regression: apps/api/src/scripts/image-smoke.ts.
+
+diff --git a/dist/index.mjs b/dist/index.mjs
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1,1 +1,1 @@
+-import { createRequire } from "node:module";
++import native from "../index.cjs";
+@@ -217,1 +217,1 @@
+-initBinding(createRequire(import.meta.url)("../index.cjs"));
++initBinding(native);

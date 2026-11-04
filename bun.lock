@@ -1768,6 +1768,7 @@
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
     "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
     "@tanstack/ai-bedrock@0.4.3": "patches/@tanstack%2Fai-bedrock@0.4.3.patch",
+    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
     "@astrojs/mdx@8.0.0": "patches/@astrojs%2Fmdx@8.0.0.patch",
     "mailauth@8.0.4": "patches/mailauth@8.0.4.patch",

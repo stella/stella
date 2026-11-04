@@ -345,6 +345,7 @@
     }
   },
   "patchedDependencies": {
+    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "mailauth@8.0.4": "patches/mailauth@8.0.4.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
