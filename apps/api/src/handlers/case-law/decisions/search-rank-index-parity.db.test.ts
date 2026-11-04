@@ -302,10 +302,8 @@ test("the index ranks a candidate set as the database does, within the bucket bo
 });
 
 test("a hit without a well-formed signal set is excluded, not ranked on a guess", async () => {
-  const [first, second] = ids;
-  if (first === undefined || second === undefined) {
-    return panic("Fixture ids missing");
-  }
+  const first = ids[0] ?? panic("Fixture ids missing");
+  const second = ids[1] ?? panic("Fixture ids missing");
   const original = projections.get(first) ?? panic("No projection");
   projections.set(first, {
     ...original,
