@@ -12,10 +12,10 @@ import {
   addCalendarDays,
   computeNominalEnd,
   DEADLINE_UNIT,
-  getTriggerOffset,
-  validateNominalInput,
   type DeadlinePeriod,
+  getTriggerOffset,
   type NominalDeadlineError,
+  validateNominalInput,
 } from "./nominal-end";
 import type { DeadlineRuleSet } from "./rules";
 

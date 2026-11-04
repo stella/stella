@@ -6,8 +6,8 @@ import { Temporal } from "@stll/time";
 import {
   computeDeadline,
   createHolidayCalendar,
-  DeadlineError,
   DEADLINE_UNIT,
+  DeadlineError,
   type DeadlinePeriod,
   type HolidayCalendar,
 } from "./compute-deadline";

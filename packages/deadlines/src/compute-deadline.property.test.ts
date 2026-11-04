@@ -10,9 +10,9 @@ import {
   createHolidayCalendar,
   DEADLINE_UNIT,
   DeadlineError,
-  HOLIDAY_COVERAGE,
   type DeadlineJurisdiction,
   type DeadlineUnit,
+  HOLIDAY_COVERAGE,
   type HolidayCalendar,
 } from "./compute-deadline";
 import { DEADLINE_RULES } from "./rules";
