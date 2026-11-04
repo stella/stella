@@ -80,7 +80,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { useUserEventRefreshes } from "@/lib/user-event-refreshes";
+import { useUserEventRefreshes } from "@/lib/user-events-sse";
 import {
   workspaceOptions,
   workspacesNavigationOptions,

@@ -7,7 +7,7 @@ import {
 
 import { contactsKeys } from "@/lib/contacts/queries";
 
-import { organizationEventQueryKeys } from "./organization-realtime.logic";
+import { organizationEventQueryKeys } from "./realtime.logic";
 
 const ORGANIZATION = "organization-one";
 

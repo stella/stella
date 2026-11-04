@@ -37,7 +37,7 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { contactsKeys } = await import("@/lib/contacts/queries");
 const { notificationsOptions } = await import("@/lib/notification-queries");
-const { useUserEventRefreshes } = await import("./user-event-refreshes");
+const { useUserEventRefreshes } = await import("./user-events-sse");
 
 afterEach(() => {
   cleanup();
@@ -56,9 +56,14 @@ const mount = () => {
     organizationId: ORGANIZATION,
     userId: USER,
   }).queryKey;
-  for (const key of [contactsList, otherFirmContacts, notifications]) {
+  for (const key of [contactsList, otherFirmContacts]) {
     queryClient.setQueryData(key, { seeded: true });
   }
+  // The notification refresh trims an infinite list to its first page.
+  queryClient.setQueryData(notifications, {
+    pages: [{ items: [], nextCursor: null, limit: 20, unreadCount: 0 }],
+    pageParams: [null],
+  });
   renderHook(
     () => useUserEventRefreshes({ organizationId: ORGANIZATION, userId: USER }),
     {
