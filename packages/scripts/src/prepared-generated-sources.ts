@@ -1,5 +1,11 @@
 import { panic, Result } from "better-result";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -297,6 +303,11 @@ export const restorePreparedGeneratedSources = (
     }
     return { file, bytes };
   });
+  // A restored directory holds exactly the producer's files: an older file left
+  // here would read as a prepared file that differs.
+  for (const { directory } of CI_GENERATED_DIRECTORIES) {
+    rmSync(path.join(root, directory), { recursive: true, force: true });
+  }
   for (const { file, bytes } of files) {
     const destination = path.join(root, file);
     mkdirSync(path.dirname(destination), { recursive: true });

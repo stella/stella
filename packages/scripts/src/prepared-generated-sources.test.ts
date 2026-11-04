@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -422,13 +423,19 @@ test("a generated directory travels by file name and bytes and is required", () 
         readFileSync(path.join(root, file), "utf-8"),
       );
     }
-    rmSync(path.join(root, TAILWIND_CLASS_CACHE.directory), {
-      recursive: true,
-    });
+    // An earlier generation's file, and a restore that replaces the directory.
+    const earlier = `${TAILWIND_CLASS_CACHE.directory}/${"c".repeat(32)}.json`;
+    write(earlier, "{}\n");
+    rmSync(path.join(root, TAILWIND_SNAPSHOT));
     restorePreparedGeneratedSources(root, source);
     expect(readFileSync(path.join(root, TAILWIND_SNAPSHOT), "utf-8")).toBe(
       "{}\n",
     );
+    expect(existsSync(path.join(root, earlier))).toBe(false);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
