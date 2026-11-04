@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { PendingInspectorScopeContext } from "@/components/inspector/pending-inspector-scope";
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -173,7 +173,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       return memberUser === undefined ? (
         <ProtectedPendingSkeleton />
       ) : (
-        <PendingInspectorScopeContext
+        <ProtectedPendingInspectorScopeContext.Provider
           value={{
             userId: memberUser.id,
             organizationId: memberUser.activeOrganizationId,
@@ -187,7 +187,7 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
               {children}
             </MemberFrame>
           </Suspense>
-        </PendingInspectorScopeContext>
+        </ProtectedPendingInspectorScopeContext.Provider>
       );
     case "public":
       return (

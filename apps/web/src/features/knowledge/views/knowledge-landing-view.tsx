@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -74,14 +75,18 @@ export const KnowledgeLandingView = ({
             <CardBody card={card} />
           </Link>
         ) : (
-          <button
-            className={cn(CARD_CLASS, "text-start")}
+          // A section that needs something first is a button; it draws the
+          // same card as the linked sections beside it.
+          <Button
+            className="flex h-full"
             key={card.key}
             onClick={card.onOpen}
-            type="button"
+            variant="plain"
           >
-            <CardBody card={card} />
-          </button>
+            <div className={cn(CARD_CLASS, "w-full")}>
+              <CardBody card={card} />
+            </div>
+          </Button>
         ),
       )}
     </div>
@@ -90,39 +95,26 @@ export const KnowledgeLandingView = ({
 );
 
 /** The section copy is already known; reserve its wrapping and card geometry. */
-export const KnowledgeLandingSkeleton = ({
-  audience,
-}: {
-  audience: "public" | "member";
-}) => {
+export const KnowledgeLandingSkeleton = () => {
   const t = useTranslations();
   return (
     <div aria-hidden="true" className={LANDING_CLASS}>
       <div className={GRID_CLASS}>
-        {knowledgeSections
-          .filter(
-            (section) =>
-              audience === "member" || section.publicAccess !== "unavailable",
-          )
-          .map((section) => (
-            <div className={CARD_CLASS} key={section.key}>
-              <CardBody
-                card={{
-                  key: section.key,
-                  icon: section.icon,
-                  title: t(section.titleKey),
-                  note:
-                    audience === "public" && section.publicAccess === "account"
-                      ? t("knowledge.landing.withAccount")
-                      : undefined,
-                  description:
-                    section.key === "styles"
-                      ? t("styleSets.description")
-                      : t(`knowledge.sections.${section.key}.description`),
-                }}
-              />
-            </div>
-          ))}
+        {knowledgeSections.map((section) => (
+          <div className={CARD_CLASS} key={section.key}>
+            <CardBody
+              card={{
+                key: section.key,
+                icon: section.icon,
+                title: t(section.titleKey),
+                description:
+                  section.key === "styles"
+                    ? t("styleSets.description")
+                    : t(`knowledge.sections.${section.key}.description`),
+              }}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );

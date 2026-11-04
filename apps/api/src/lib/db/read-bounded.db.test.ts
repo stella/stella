@@ -5,6 +5,7 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { organization } from "@/api/db/auth-schema";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   getTestDb,
   releaseTestDb,
@@ -134,9 +135,7 @@ describe("complete bounded reads", () => {
           expect(traversed).toEqual(expectedRows);
         }
       } finally {
-        await testDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(testDb, [organizationId]);
       }
     },
   );

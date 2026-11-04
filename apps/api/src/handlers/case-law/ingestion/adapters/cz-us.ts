@@ -1,11 +1,14 @@
-// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
-// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
-// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
 import { panic, Result, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
+// parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports the document AST from its package owner
@@ -76,6 +79,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -514,7 +518,7 @@ const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
 const extractAbstract = (
   html: string,
 ): Required<Pick<DecisionTextFields, "abstract" | "legalSentence">> => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return {
     abstract: fieldAboveAbstractMinimum(
       sourceTextField(
@@ -725,7 +729,7 @@ const emptyDetailFields = (): Record<NalusDetailFieldKey, string[]> => ({
  * indistinguishable from a decision the court states nothing about.
  */
 export const parseNalusDetail = (html: string): NalusDetailFields | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const rows = ownTableRows($(RECORD_CARD_SELECTOR));
   if (rows.length === 0) {
     return null;
@@ -746,7 +750,7 @@ export const parseNalusDetail = (html: string): NalusDetailFields | null => {
       ...(cells.eq(1).html() ?? "")
         .split(DETAIL_VALUE_SEPARATOR)
         .map((part) =>
-          detailText(visibleHtmlText(cheerio.load(part, null, false).root())),
+          detailText(visibleHtmlText(load(part, null, false).root())),
         )
         .filter((part) => part.length > 0),
     );
@@ -767,7 +771,7 @@ const listNalusSourceFields = (parts: SourceRawParts): readonly string[] => {
   if (recordCard === undefined) {
     return [];
   }
-  const $ = cheerio.load(recordCard);
+  const $ = load(recordCard);
   const labels: string[] = [];
   ownTableRows($(RECORD_CARD_SELECTOR)).each((_, row) => {
     const cells = $(row).children("td");
@@ -1565,7 +1569,7 @@ const rollingPageDigest = (digest: string, page: SearchPage): string =>
   );
 
 const hiddenField = (html: string, name: string): string | undefined =>
-  cheerio.load(html)(`#${name}`).attr("value");
+  load(html)(`#${name}`).attr("value");
 
 /**
  * Stable publisher-visible fields for an anomalous row that exposes neither
@@ -1688,7 +1692,7 @@ const parseResultPage = ({
     });
   }
 
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const listed: ListedDecision[] = [];
   ownTableRows($("table"))
     .filter(".resultData0, .resultData1")
@@ -2017,7 +2021,7 @@ const fetchSearchPage = async ({
   });
   if (submit.status !== 302 || !redirectsToResults(submit)) {
     if (submit.ok) {
-      const $ = cheerio.load(await submit.text());
+      const $ = load(await submit.text());
       const noResults = visibleHtmlText($("#ctl00_MainContent_lbError")).trim();
       const resultsDisabled =
         $("#ctl00_bResults").attr("disabled") === "disabled";
@@ -2309,7 +2313,7 @@ const czUsSourceHash = (payloads: CzUsSourceHashInput) => {
   const detail = payloads.detail?.replace(
     /<input\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
     (input) => {
-      const $ = cheerio.load(input);
+      const $ = load(input);
       const field = $("input");
       return field.attr("type")?.toLowerCase() === "hidden" &&
         /^__(?:VIEWSTATE(?:GENERATOR|FIELDCOUNT|\d+)?|EVENTVALIDATION)$/iu.test(
@@ -3322,7 +3326,11 @@ export const czUsAdapter = defineSourceAdapter({
             // Every closed availability day is accounted for, so there is
             // nothing to list and no request to spend. An unchanged cursor is
             // how this pipeline reads a source with nothing left.
-            return { decisions: [], nextCursor: makeCursor(state) };
+            return {
+              decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.NONE,
+              nextCursor: makeCursor(state),
+            };
           }
           state = rearmed;
         }
@@ -3337,6 +3345,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(restartSlice(state)),
             };
           }
@@ -3346,6 +3355,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (state.pass === CRAWL_PASS.VERIFY) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "listing-now-empty"),
               ),
@@ -3353,6 +3363,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3363,6 +3374,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (!sliceComplete) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor({
                 ...state,
                 page: state.page + 1,
@@ -3373,6 +3385,7 @@ export const czUsAdapter = defineSourceAdapter({
           if (digest !== state.expectedDigest) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: makeCursor(
                 afterUnconfirmedSlice(state, now, "digest-mismatch"),
               ),
@@ -3380,6 +3393,7 @@ export const czUsAdapter = defineSourceAdapter({
           }
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor(nextSlice(state, now)),
           };
         }
@@ -3393,6 +3407,7 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: makeCursor({
               ...state,
               pass: CRAWL_PASS.VERIFY,
@@ -3406,6 +3421,7 @@ export const czUsAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: makeCursor({
             ...state,
             page: state.page + 1,

@@ -14,10 +14,14 @@ import type {
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { PROCESSED_FIELD_EVIDENCE_READERS } from "@/api/tests/helpers/processed-field-evidence";
 
-import { parseNsDecisionHtml } from "./cz-ns";
-import { parseNssDecisionHtml } from "./cz-nss";
+import { parseNsDecisionHtml as uncheckedParseNsDecisionHtml } from "./cz-ns";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "./cz-nss";
+
+const parseNsDecisionHtml = guardParser(uncheckedParseNsDecisionHtml);
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 const API_FIXTURES = "src/handlers/case-law/ingestion/parsers/__fixtures__/";
@@ -255,7 +259,10 @@ describe("structure", () => {
           ? [block.plainText]
           : [],
       ),
-    ).toEqual(["ROZSUDEK", "JMÉNEM REPUBLIKY"]);
+    ).toEqual(["ROZSUDEK"]);
+    expect(
+      ast.blocks.find((block) => block.plainText === "JMÉNEM REPUBLIKY"),
+    ).toMatchObject({ type: "paragraph", role: "intro" });
   });
 
   test("Nejvyšší soud: a caption below the court's name is split into docket and title", async () => {
@@ -267,7 +274,15 @@ describe("structure", () => {
           ? [block.plainText]
           : [],
       ),
-    ).toEqual(["25 Cdo 803/2003", "ČESKÁ REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"]);
+    ).toEqual(["25 Cdo 803/2003", "ROZSUDEK"]);
+    // The state and the formula beside the title are the opening's lines.
+    expect(
+      ast.blocks.flatMap((block) =>
+        block.type === "paragraph" && block.role === "intro"
+          ? [block.plainText]
+          : [],
+      ),
+    ).toEqual(["ČESKÁ REPUBLIKA", "JMÉNEM REPUBLIKY"]);
   });
 });
 

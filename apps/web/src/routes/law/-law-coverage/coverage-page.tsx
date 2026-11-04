@@ -47,6 +47,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
+  UTC_CALENDAR_DATE_FORMAT,
 } from "@/lib/relative-time";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
@@ -520,6 +521,39 @@ const Delta = ({ value }: { value: number | null }) => {
   );
 };
 
+/**
+ * A source's freshness. A fixed snapshot states the day it was taken beside
+ * its status: that day, not the last run, is how current it can ever be.
+ */
+const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
+  const format = useFormatter();
+  const { edition } = source;
+
+  switch (edition.type) {
+    case "live":
+      return <CaseLawHealthSignal className="text-sm" health={source.health} />;
+    case "snapshot": {
+      const taken = parseDeterministicDate(edition.snapshotDate);
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <CaseLawHealthSignal className="text-sm" health={source.health} />
+          <time
+            className="text-muted-foreground text-xs"
+            dateTime={edition.snapshotDate}
+          >
+            {taken === null
+              ? edition.snapshotDate
+              : format.dateTime(taken, UTC_CALENDAR_DATE_FORMAT)}
+          </time>
+        </span>
+      );
+    }
+    default:
+      edition satisfies never;
+      return panic("Unhandled case-law source edition");
+  }
+};
+
 type CountryCardProps = PropsWithChildren<{
   /** The section's fragment, so a link from elsewhere can land on one country. */
   anchor?: string;
@@ -647,12 +681,17 @@ const CountrySection = ({
 };
 
 const CountryFreshness = ({
-  sources,
+  sources: allSources,
 }: {
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
+  // A fixed release states its own date in the row; sync freshness applies to live sources.
+  const sources = allSources.filter((source) => source.edition.type === "live");
+  if (sources.length === 0) {
+    return null;
+  }
   const exceptions = sources.filter(
     (source) => source.health !== "current",
   ).length;
@@ -816,13 +855,14 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             </a>
             {source.health !== "current" && (
               <div className="mt-1 ps-1 text-xs">
-                <CaseLawHealthSignal health={source.health} />
+                <SourceHealth source={source} />
               </div>
             )}
           </TableHead>
           <TableCell className="text-end tabular-nums">
             {format.number(source.publishedDecisions)}
           </TableCell>
+
           <TableCell className={"text-end"}>
             <Delta value={source.addedLastWeek} />
           </TableCell>

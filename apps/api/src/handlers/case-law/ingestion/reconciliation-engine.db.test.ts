@@ -75,7 +75,10 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -1788,15 +1791,17 @@ test("a real publisher session refusal never retires a listed document after rep
     nextAttemptAt: new Date(NOW.getTime() - 1),
     payload,
   });
-  const originalFetch = globalThis.fetch;
+
   let requests = 0;
-  globalThis.fetch = asFetchMock(async () => {
-    requests += 1;
-    return new Response("publisher session refused", {
-      status: 429,
-      headers: { "Retry-After": "60" },
-    });
-  });
+  testFetchState.set(
+    asFetchMock(async () => {
+      requests += 1;
+      return new Response("publisher session refused", {
+        status: 429,
+        headers: { "Retry-After": "60" },
+      });
+    }),
+  );
   try {
     let now = NOW;
     const clock = () => now;
@@ -1835,7 +1840,7 @@ test("a real publisher session refusal never retires a listed document after rep
       ),
     ).toEqual([]);
   } finally {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   }
 });
 

@@ -4,7 +4,9 @@ import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { statuteGazetteEliCollection } from "@stll/api-contract/statute-gazette";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
+import type { StatuteQueryCountry } from "@stll/api-contract/statute-query-capability";
 import {
   parseStatuteQuery,
   readStatuteQueryReferences,
@@ -15,8 +17,12 @@ import {
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { nominativeTitle } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  nominativeTitle,
+  resolveActCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import { normalizeUnicode } from "@stll/text-normalize";
+import { todayFor } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -41,9 +47,11 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
  * stores and nothing else.
  *
  * What a title does not state is not matched: an abbreviation, a long
- * official name shortened in speech. The one inflection read is the head a
- * short title opens with (`zákona o …` for `zákon o …`), declined by the
- * jurisdiction's citation profile at query time. A later deriver can
+ * official name shortened in speech. Inflection is read from the
+ * jurisdiction's citation profile at query time: the head a short title
+ * opens with (`zákona o …` for `zákon o …`), and a query that is wholly one
+ * of the profile's declined short titles (`občanského zákoníku`), which
+ * names that act by identity. A later deriver can
  * add such names as rows of its own `derivation` (with its provenance), and
  * the lookup below reads them unchanged; this module derives only what the
  * text itself says.
@@ -496,6 +504,55 @@ export const citedKeysQuery = (
     .groupBy(legislationWorkNames.country, legislationWorkNames.citedKey)
     .limit(CITED_KEY_LIMIT);
 
+/** The zone whose calendar day a jurisdiction's acts take effect on. */
+const LEGAL_DAY_TIME_ZONE = {
+  cze: "Europe/Prague",
+  svk: "Europe/Bratislava",
+} as const satisfies Record<StatuteQueryCountry, string>;
+
+const foldedTitle = (text: string) =>
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ").trim().toLowerCase();
+
+/**
+ * The act a query names when the whole query is one of the jurisdiction's
+ * short titles in any declined form (`občanského zákoníku`, `Trestného
+ * zákona`), read by the citation profile for `citedOn` so a recodified title
+ * names the act in force that day. Null for anything else: a title inside
+ * longer prose stays a text match.
+ */
+export const declinedTitleReference = (
+  query: string,
+  country: StatuteQueryCountry,
+  citedOn: string,
+): StatuteQueryReference | null => {
+  const profile = provisionCitationProfileFor(country.toUpperCase());
+  if (profile === null) {
+    return null;
+  }
+  const folded = foldedTitle(query);
+  const isTitle = profile.titles.some(({ spellings }) =>
+    spellings.some((spelling) => foldedTitle(spelling) === folded),
+  );
+  if (!isTitle) {
+    return null;
+  }
+  const read = resolveActCitation({ text: query, profile, citedOn });
+  if (read.status !== "resolved") {
+    return null;
+  }
+  const collection = statuteGazetteEliCollection(read.work.collection);
+  if (collection === null) {
+    return null;
+  }
+  return {
+    country,
+    collection,
+    number: String(read.work.number),
+    year: String(read.work.year),
+    label: null,
+  };
+};
+
 /**
  * Act identities the query names in its jurisdiction. An unscoped act number
  * addresses every admitted jurisdiction whose grammar accepts its collection;
@@ -525,8 +582,18 @@ const statuteQueryReferences = (
   }
   const scope = readStatuteQueryScope(country.toLowerCase());
   switch (scope.type) {
-    case "supported":
-      return readStatuteQueryReferences(scope.country, query);
+    case "supported": {
+      const references = readStatuteQueryReferences(scope.country, query);
+      if (references.length > 0) {
+        return references;
+      }
+      const declined = declinedTitleReference(
+        query,
+        scope.country,
+        todayFor(LEGAL_DAY_TIME_ZONE[scope.country]).toString(),
+      );
+      return declined === null ? [] : [declined];
+    }
     case "unsupported":
       return [];
     default: {

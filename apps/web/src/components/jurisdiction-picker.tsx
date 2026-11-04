@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import type { CountryCode } from "@stll/country-codes";
+import { Button } from "@stll/ui/button";
 import { CheckIcon, SearchIcon, StarIcon } from "@stll/ui/icons";
 import {
   InputGroup,
@@ -12,7 +13,6 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
-import Tooltip from "@/components/tooltip";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -113,13 +113,12 @@ export const JurisdictionPicker = ({
               )}
               key={country.code}
             >
-              <button
-                className={cn(
-                  "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
-                  !isSelected && "hover:bg-accent",
-                )}
+              <Button
+                aria-pressed={isSelected}
+                className="min-w-0 flex-1"
                 onClick={() => toggleCountry(country.code)}
-                type="button"
+                size="row"
+                variant="ghost"
               >
                 <span
                   className={cn(
@@ -129,7 +128,9 @@ export const JurisdictionPicker = ({
                 >
                   {isSelected && <CheckIcon className="size-3" />}
                 </span>
-                <span className="min-w-0 flex-1 truncate">{country.name}</span>
+                <span className="min-w-0 flex-1 truncate font-normal">
+                  {country.name}
+                </span>
                 {isSuggested && (
                   <span className="bg-muted text-muted-foreground text-3xs rounded-full px-1.5 py-0.5">
                     {t("common.suggested")}
@@ -138,32 +139,25 @@ export const JurisdictionPicker = ({
                 <span className="text-muted-foreground text-xs">
                   {country.code}
                 </span>
-              </button>
+              </Button>
               {isSelected && selected.length > 1 && (
-                <Tooltip
-                  content={t("onboarding.jurisdictionMakePrimary", {
+                // An icon button names itself in its tooltip.
+                <Button
+                  aria-label={t("onboarding.jurisdictionMakePrimary", {
                     name: country.name,
                   })}
-                  render={
-                    <button
-                      aria-label={t("onboarding.jurisdictionMakePrimary", {
-                        name: country.name,
-                      })}
-                      className={cn(
-                        "hover:bg-background/40 flex size-8 items-center justify-center rounded-md",
-                        isPrimary
-                          ? "text-primary"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                      onClick={() => makePrimary(country.code)}
-                      type="button"
-                    >
-                      <StarIcon
-                        className={cn("size-4", isPrimary && "fill-current")}
-                      />
-                    </button>
-                  }
-                />
+                  aria-pressed={isPrimary}
+                  onClick={() => makePrimary(country.code)}
+                  size="icon-sm"
+                  variant={isPrimary ? "ghost" : "muted"}
+                >
+                  <StarIcon
+                    className={cn(
+                      "size-4",
+                      isPrimary && "text-primary fill-current",
+                    )}
+                  />
+                </Button>
               )}
             </div>
           );

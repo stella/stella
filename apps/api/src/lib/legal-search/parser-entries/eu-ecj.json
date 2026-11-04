@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "EU_ECJ",
   "key": "eu-ecj",
-  "parserVersion": 20,
+  "parserVersion": 22,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; the work's language manifest and the listed manifestation type join the row's metadata, which has no feature storage of its own"
+    "reason": "The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage. A bare number after a dash in the keyword chain closes a range inside the keyword before it instead of standing as a keyword of its own; keywords have no separate feature storage."
   }
 }

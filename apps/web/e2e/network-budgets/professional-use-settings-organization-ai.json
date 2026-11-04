@@ -1,6 +1,6 @@
 {
   "route": "/admin/ai",
-  "reason": "Load professional-use acceptance before protected route data is requested; preview the resolved default models for the configured providers. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
+  "reason": "Load professional-use acceptance before protected route data is requested; preview the resolved default models for the configured providers. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The AI drafts card reads the organization's billing draft settings and the knowledge files it can bind as guidelines (one request each).",
   "budget": {
     "depth": 4,
     "requests": [
@@ -15,6 +15,8 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/ai-config",
+      "GET /v1/organization-settings/billing-drafts",
+      "GET /v1/organization-settings/billing-drafts/knowledge-files",
       "GET /v1/organization-settings/deepl-config",
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/organization-settings/web-search-config",
@@ -43,7 +45,9 @@
       "GET /v1/workspaces/navigation": 1,
       "GET /v1/me/professional-use": 1,
       "POST /v1/organization-settings/ai-config/defaults-preview": 1,
-      "GET /v1/time-entries/approval-queue": 1
+      "GET /v1/time-entries/approval-queue": 1,
+      "GET /v1/organization-settings/billing-drafts": 1,
+      "GET /v1/organization-settings/billing-drafts/knowledge-files": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,

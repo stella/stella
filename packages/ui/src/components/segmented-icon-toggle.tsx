@@ -3,8 +3,7 @@
 import type { ComponentType } from "react";
 
 import { cn } from "../lib/utils";
-import { Button } from "./button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 type SegmentedIconToggleOption<T extends string> = {
   value: T;
@@ -22,50 +21,46 @@ type SegmentedIconToggleProps<T extends string> = {
 
 /** Compact segmented control of icon buttons (e.g. table row wrap, list
  * density). One shared shell so every density/mode switch looks and behaves
- * the same across the app. */
+ * the same across the app. A `ToggleGroup` of icon items that always holds
+ * one value: clicking the chosen option keeps it. */
 export const SegmentedIconToggle = <T extends string>({
   value,
   options,
   onChange,
   size = "compact",
 }: SegmentedIconToggleProps<T>) => (
-  <div
+  <ToggleGroup<T>
     className={cn(
-      "border-border/70 bg-muted/30 inline-flex shrink-0 items-center overflow-hidden rounded-md border p-0.5",
+      "rounded-md",
       size === "touch" ? "h-7 [@media(any-pointer:coarse)]:h-12" : "h-7",
     )}
     data-slot="segmented-icon-toggle"
+    onValueChange={(next) => {
+      const [chosen] = next;
+      if (chosen !== undefined && chosen !== value) {
+        onChange(chosen);
+      }
+    }}
+    value={[value]}
   >
     {options.map((option) => {
       const Icon = option.icon;
-      const isActive = value === option.value;
       return (
-        <Tooltip key={option.value}>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-label={option.label}
-                aria-pressed={isActive}
-                className={cn(
-                  "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
-                  size === "touch" &&
-                    "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:min-h-11 [@media(any-pointer:coarse)]:w-11",
-                  isActive &&
-                    "bg-muted text-foreground ring-border/80 hover:bg-muted hover:text-foreground shadow-xs ring-1",
-                )}
-                data-control-value={option.value}
-                onClick={() => onChange(option.value)}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              />
-            }
-          >
-            <Icon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipPopup>{option.label}</TooltipPopup>
-        </Tooltip>
+        <ToggleGroupItem<T>
+          aria-label={option.label}
+          className={cn(
+            "h-6 w-7 rounded-[4px] sm:h-6",
+            size === "touch" &&
+              "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:w-11",
+          )}
+          data-control-value={option.value}
+          key={option.value}
+          size="icon-xs"
+          value={option.value}
+        >
+          <Icon className="size-3.5" />
+        </ToggleGroupItem>
       );
     })}
-  </div>
+  </ToggleGroup>
 );

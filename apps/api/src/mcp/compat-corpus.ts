@@ -21,7 +21,6 @@ import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-defe
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
-import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -51,7 +50,7 @@ import {
   buildLegislationDocumentAppUrl,
   errorResult,
   legalCitationLinkFields,
-  searchIndexUnavailableResult,
+  searchRefusalResult,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 
@@ -326,6 +325,10 @@ const searchDecisions = async ({
             query,
             limit,
             country,
+            // This tool returns links only: the facets and total the handler
+            // would aggregate over each country's whole result set are
+            // never read.
+            describeResultSet: false,
             ...(position.cursor === undefined
               ? {}
               : { cursor: position.cursor }),
@@ -349,8 +352,9 @@ const searchDecisions = async ({
     }
     // A country that failed sinks the corpus half rather than reading as "no
     // law there": those are different answers to the same question.
-    if (isSearchIndexUnavailable(result)) {
-      return { type: "failed", result: searchIndexUnavailableResult(result) };
+    const refusal = searchRefusalResult(result);
+    if (refusal !== null) {
+      return { type: "failed", result: refusal };
     }
     if (!isSearchCaseLawSuccess(result)) {
       return { type: "failed", result: errorResult("Case-law search failed") };
@@ -461,8 +465,9 @@ const searchStatutes = async ({
       page.cursors[jurisdiction] = null;
       continue;
     }
-    if (isSearchIndexUnavailable(result)) {
-      return { type: "failed", result: searchIndexUnavailableResult(result) };
+    const refusal = searchRefusalResult(result);
+    if (refusal !== null) {
+      return { type: "failed", result: refusal };
     }
     if (!isLegislationSearchSuccess(result)) {
       return {

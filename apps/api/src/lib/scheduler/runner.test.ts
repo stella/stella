@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { SQL } from "bun";
 import {
   afterAll,
@@ -129,6 +130,33 @@ const registryOf = (task: string, fn: SchedulerTask): SchedulerTaskRegistry =>
   new Map([[task, fn]]);
 
 const noopRegistry = registryOf("test.noop", () => {});
+
+test("a panicking job logs where it panicked and never what the panic said", async () => {
+  await seedJob({ id: "panic.job", task: "test.panic" });
+  const recording = installRecordingLogger();
+  try {
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: registryOf("test.panic", () => {
+        panic("invariant broken for private-value");
+      }),
+      runnerId: "runner-a",
+    });
+
+    expect(result.failed).toBe(1);
+    const failure = recording.records.find(
+      (record) => record.message === "scheduler.job_failed",
+    );
+    expect(failure?.attributes?.["error.type"]).toBe("Panic");
+    expect(String(failure?.attributes?.["error.frame"])).toContain(
+      "runner.test.ts",
+    );
+    expect(JSON.stringify(failure)).not.toContain("private-value");
+  } finally {
+    recording.restore();
+  }
+});
 
 test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () => {
   await seedJob({ id: "idle.job", task: "test.pg-failure" });

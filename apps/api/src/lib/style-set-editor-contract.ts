@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 
 const fontFamilySchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
@@ -83,12 +83,12 @@ export type StyleSetEditorSettings = v.InferOutput<
 >;
 
 export const createStyleSetFromEditorSchema = v.object({
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  name: displayNameSchema(),
   settings: styleSetEditorSettingsSchema,
 });
 
 export const updateStyleSetFromEditorSchema = v.object({
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  name: displayNameSchema(),
   expectedUpdatedAt: expectedUpdatedAtSchema,
   settings: styleSetEditorSettingsSchema,
 });

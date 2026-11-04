@@ -56,6 +56,8 @@ import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
+  PUBLISHER_CHECK,
+  type PublisherCheck,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import {
@@ -75,6 +77,7 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
@@ -231,6 +234,16 @@ const pageItemCount = ({
 }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
+/** One when the publisher answered a request for the page, else zero. */
+const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
+  publisherRequest === PUBLISHER_REQUEST.ANSWERED ? 1 : 0;
+
+/** Whether a run heard from the publisher, from the pages it answered. */
+const publisherCheckOf = (answeredPages: number): PublisherCheck =>
+  answeredPages > 0
+    ? PUBLISHER_CHECK.ANSWERED
+    : PUBLISHER_CHECK.NOT_ASKED_OR_FAILED;
+
 const PAGE_SLOT = {
   HELD: "held",
   NOT_NEEDED: "not-needed",
@@ -277,6 +290,8 @@ const runScopedIngestionPipeline = async ({
   let searchVectorFailures = 0;
   let s3UploadFailures = 0;
   let pagesProcessed = 0;
+  /** Pages the publisher answered a request for, whatever they held. */
+  let publisherAnsweredPages = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
   /**
@@ -755,6 +770,7 @@ const runScopedIngestionPipeline = async ({
     // overlapping; this durable token orders the resulting database writes.
     const { observationOrder, page } = observedPage;
     checkpointObservationOrder = observationOrder;
+    publisherAnsweredPages += publisherAnsweredCount(page);
     const observedAt = new Date();
 
     // Released before the next page fetch so external API calls don't hold
@@ -841,6 +857,7 @@ const runScopedIngestionPipeline = async ({
       id: source.id,
       leaseToken: sourceLease.leaseToken,
       observationOrder: checkpointObservationOrder,
+      publisherCheck: publisherCheckOf(publisherAnsweredPages),
       type: CORPUS_SOURCE_TYPE.CASE_LAW,
     },
   });

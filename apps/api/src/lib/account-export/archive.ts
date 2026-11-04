@@ -227,6 +227,31 @@ export const buildAccountExportArchive = async ({
     };
   };
 
+  await spoolAndPublishZip({
+    entries: entries(),
+    objectKey,
+    signal,
+    publish: deps.publish,
+  });
+};
+
+type SpoolAndPublishZipOptions = {
+  entries: Parameters<typeof makeZip>[0];
+  objectKey: string;
+  signal: AbortSignal;
+  publish: typeof putTemporaryS3ObjectWithSignal;
+};
+
+/**
+ * Stream zip entries into one bounded, private spool and publish it under the
+ * claimed object key. Every export archive goes through this one ceiling.
+ */
+export const spoolAndPublishZip = async ({
+  entries,
+  objectKey,
+  signal,
+  publish,
+}: SpoolAndPublishZipOptions): Promise<void> => {
   const directory = await mkdtemp(
     path.join(tmpdir(), "stella-account-export-"),
   );
@@ -257,18 +282,13 @@ export const buildAccountExportArchive = async ({
       },
     });
     await pipeline(
-      Readable.from(makeZip(entries())),
+      Readable.from(makeZip(entries)),
       ceiling,
       createWriteStream(archivePath, { flags: "wx", mode: 0o600 }),
       { signal },
     );
     signal.throwIfAborted();
-    await deps.publish(
-      objectKey,
-      Bun.file(archivePath),
-      "application/zip",
-      signal,
-    );
+    await publish(objectKey, Bun.file(archivePath), "application/zip", signal);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "Delivery tells a phone's live owner from an earlier one by comparing two last_seen_at columns of the same table inside one statement; no JavaScript Date is bound, so the truncated-timestamp rule's concern cannot arise, and its own guidance asks for a one-line disable with that reason."
+}

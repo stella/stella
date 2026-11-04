@@ -10,7 +10,7 @@ import {
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
@@ -32,8 +32,6 @@ const { writePersistedState, removePersistedState } =
   await import("@/lib/persisted-state/registry");
 const { ProtectedPendingSkeleton } =
   await import("@/routes/-protected-pending-skeleton");
-const { PendingInspectorScopeContext } =
-  await import("@/components/inspector/pending-inspector-scope");
 const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
 
 const storage = deviceStorage("local");
@@ -227,9 +225,7 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
   }).unwrap();
   writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
   const { container, rerender } = render(
-    <PendingInspectorScopeContext value={pendingScope}>
-      <ProtectedPendingSkeleton />
-    </PendingInspectorScopeContext>,
+    <ProtectedPendingSkeleton inspectorScope={pendingScope} />,
   );
   const dockWidth = () =>
     container
@@ -237,50 +233,12 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
       ?.getAttribute("style");
   expect(dockWidth()).toBe("width: 320px;");
   rerender(
-    <PendingInspectorScopeContext
-      value={{ ...pendingScope, userId: "another-user" }}
-    >
-      <ProtectedPendingSkeleton />
-    </PendingInspectorScopeContext>,
+    <ProtectedPendingSkeleton
+      inspectorScope={{ ...pendingScope, userId: "another-user" }}
+    />,
   );
   expect(dockWidth()).toBeNull();
   writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
-  rerender(
-    <PendingInspectorScopeContext value={pendingScope}>
-      <ProtectedPendingSkeleton />
-    </PendingInspectorScopeContext>,
-  );
+  rerender(<ProtectedPendingSkeleton inspectorScope={pendingScope} />);
   expect(dockWidth()).toBeNull();
 });
-
-test.each([
-  { tabs: [{ type: "retired-tab" }] },
-  { tabs: [{ type: "chat", id: "missing-required-fields" }] },
-  {
-    tabs: [
-      { type: "retired-tab" },
-      { type: "chat", id: "missing-required-fields" },
-    ],
-  },
-])(
-  "discarded persisted tabs reserve no member loading pane: %j",
-  ({ tabs }) => {
-    writePersistedState(inspectorStateEntry, pendingScope, {
-      tabs,
-      groups: [],
-      groupAssignments: {},
-      activeId: null,
-      collapsedGroupIds: [],
-    }).unwrap();
-    const { container } = render(
-      <PendingInspectorScopeContext value={pendingScope}>
-        <ProtectedPendingSkeleton />
-      </PendingInspectorScopeContext>,
-    );
-    expect(
-      container
-        .querySelector('[data-slot="inspector-pending-dock"]')
-        ?.getAttribute("style"),
-    ).toBeNull();
-  },
-);

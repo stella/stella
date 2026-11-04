@@ -112,6 +112,7 @@ import {
   CHAT_SEND_KEPT,
   CHAT_SEND_SENT,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type {
   ChatDraftAttachment,
@@ -1201,6 +1202,7 @@ const FileChatOverlayInner = ({
     () => getFileChatThreadRef(chatThreadId, workspaceId),
     [chatThreadId, workspaceId],
   );
+  const { insertPastedTextIntoThread } = useChatEditorManager();
   // Per-send anonymization now reads the shared per-thread store keyed by
   // `threadRef`, same as every other chat surface: the dock's shield
   // shows `useChatAnonymized(threadRef)`, the transport reads
@@ -1653,7 +1655,12 @@ const FileChatOverlayInner = ({
       // minimised it earlier — they're sending a new prompt
       // and want to see the response stream in.
       setPanelOpen(true);
-      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
+      const message = await buildChatRequestMessage({ files, html: prompt });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     },
   );
@@ -2127,26 +2134,43 @@ const FileChatOverlayInner = ({
     if (getLiveEditor(editorController.editor) === null) {
       return undefined;
     }
-    editorController.setContent(pendingFileChatDraft.markdown);
-    switch (pendingFileChatDraft.delivery) {
-      case FILE_CHAT_DRAFT_DELIVERY.draft: {
+    const { handoff } = pendingFileChatDraft;
+    switch (handoff.type) {
+      case "passage": {
+        // A selected passage joins what the reader already typed, as a chip,
+        // and the caret waits after it for the question.
+        insertPastedTextIntoThread(threadRef, handoff.quote);
         editorController.focus();
-        setPanelOpen(true);
         break;
       }
-      case FILE_CHAT_DRAFT_DELIVERY.send: {
-        detached(
-          editorController.submit(
-            async ({ files, html }) =>
-              await handlePromptSubmit({ files, prompt: html }),
-          ),
-          "file-chat-overlay.handoff-send",
-        );
+      case "prose": {
+        editorController.setContent(handoff.markdown);
+        switch (handoff.delivery) {
+          case FILE_CHAT_DRAFT_DELIVERY.draft: {
+            editorController.focus();
+            setPanelOpen(true);
+            break;
+          }
+          case FILE_CHAT_DRAFT_DELIVERY.send: {
+            detached(
+              editorController.submit(
+                async ({ files, html }) =>
+                  await handlePromptSubmit({ files, prompt: html }),
+              ),
+              "file-chat-overlay.handoff-send",
+            );
+            break;
+          }
+          default: {
+            handoff.delivery satisfies never;
+            panic("Unhandled file chat draft delivery");
+          }
+        }
         break;
       }
       default: {
-        pendingFileChatDraft.delivery satisfies never;
-        panic("Unhandled file chat draft delivery");
+        handoff satisfies never;
+        panic("Unhandled file chat handoff");
       }
     }
     useInspectorCommandStore
@@ -2157,7 +2181,9 @@ const FileChatOverlayInner = ({
     activeFileFieldId,
     editorController,
     handlePromptSubmit,
+    insertPastedTextIntoThread,
     pendingFileChatDraft,
+    threadRef,
   ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
@@ -2241,7 +2267,7 @@ const FileChatOverlayInner = ({
             threadId: createChatThreadId(),
             workspaceId,
           };
-    await startNewThreadCommandHandoff({
+    const handoff = await startNewThreadCommandHandoff({
       activeOrganizationId,
       context: {
         ...chatThreadContext,
@@ -2252,6 +2278,10 @@ const FileChatOverlayInner = ({
       queryClient,
       threadRef: newThreadRef,
     });
+    if (handoff.isErr()) {
+      notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+      return CHAT_SEND_KEPT;
+    }
     await commitNewThread(newThreadRef.threadId, pendingReview);
     return CHAT_SEND_SENT;
   };
@@ -2679,7 +2709,15 @@ const FileChatOverlayInner = ({
                     ) {
                       return CHAT_SEND_KEPT;
                     }
-                    await sendMessage(await buildChatRequestMessage(draft));
+                    const message = await buildChatRequestMessage(draft);
+                    if (message.isErr()) {
+                      notifyUserError(
+                        message.error,
+                        t("chat.sendErrorMessageEmpty"),
+                      );
+                      return CHAT_SEND_KEPT;
+                    }
+                    await sendMessage(message.value);
                     return CHAT_SEND_SENT;
                   }),
                   "file-chat-overlay.submit",

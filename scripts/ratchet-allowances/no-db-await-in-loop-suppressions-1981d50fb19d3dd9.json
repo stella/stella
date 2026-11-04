@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/account-export/organization-audit-archive.ts",
+  "delta": 1,
+  "reason": "The archive reads one bounded keyset page at a time so it streams within the export's memory and size ceilings."
+}

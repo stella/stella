@@ -134,25 +134,27 @@ export const TemplatePrefillPanel = ({
 
   return (
     <section className="rounded-lg border">
-      <button
+      <Button
         aria-expanded={expanded}
-        className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-start"
+        className="block w-full"
         onClick={() => setExpanded((prev) => !prev)}
-        type="button"
+        variant="plain"
       >
-        {expanded ? (
-          <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-        ) : (
-          <DirectionalIcon
-            className="text-muted-foreground size-4 shrink-0"
-            icon={ChevronRightIcon}
-          />
-        )}
-        <AiActionIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="text-sm font-medium">
-          {t("templates.prefillTitle")}
+        <span className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-lg px-3 py-2.5">
+          {expanded ? (
+            <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
+          ) : (
+            <DirectionalIcon
+              className="text-muted-foreground size-4 shrink-0"
+              icon={ChevronRightIcon}
+            />
+          )}
+          <AiActionIcon className="text-muted-foreground size-4 shrink-0" />
+          <span className="text-sm font-medium">
+            {t("templates.prefillTitle")}
+          </span>
         </span>
-      </button>
+      </Button>
 
       {expanded && (
         <div className="flex flex-col gap-3 border-t p-3">
@@ -162,11 +164,8 @@ export const TemplatePrefillPanel = ({
 
           {/* Drop zone / picked file */}
           {file === null ? (
-            <button
-              className={cn(
-                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
-                dragOver && "border-ring text-foreground",
-              )}
+            <Button
+              className="block w-full"
               onClick={() => {
                 openFilePicker({
                   accept: ".docx,.pdf",
@@ -183,11 +182,18 @@ export const TemplatePrefillPanel = ({
                 setDragOver(false);
                 acceptFile(e.dataTransfer.files[0]);
               }}
-              type="button"
+              variant="plain"
             >
-              <UploadIcon className="size-4 shrink-0" />
-              {t("templates.prefillDropHint")}
-            </button>
+              <span
+                className={cn(
+                  "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
+                  dragOver && "border-ring text-foreground",
+                )}
+              >
+                <UploadIcon className="size-4 shrink-0" />
+                {t("templates.prefillDropHint")}
+              </span>
+            </Button>
           ) : (
             <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
               <FileTextIcon className="text-muted-foreground size-4 shrink-0" />

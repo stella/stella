@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 
 import {
+  caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
   p,
   publicLawReaderPolicies,
@@ -606,5 +607,49 @@ export const corpusIndexProjectionStates = p.pgTable(
     // decision, so the reader role sees it under the same column grants as
     // every other public-law relation.
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * Case-law decisions whose ranking signals may have moved since their
+ * projection was derived: an authority write that moved the decision's bucket,
+ * or a publication or group-key change in its language group. Written only by
+ * the owner's triggers on `case_law_decisions`, so every writer of those
+ * columns is covered, the citation-authority sweeps included; drained by the
+ * projection append cycle (`case-law-ranking-signal-drain.ts`), which
+ * reconciles each decision's desired state and deletes the row it drained.
+ *
+ * One row per decision. A change while the row waits bumps `change_count`
+ * and releases any claim, so a drain that read an older count leaves the row
+ * for the next one. No foreign key: a decision deleted since is dropped by the
+ * drain, and the trigger never waits on a lock the decision row holds.
+ */
+export const caseLawRankingSignalChanges = p.pgTable(
+  "case_law_ranking_signal_changes",
+  {
+    decisionId: p.uuid("decision_id").primaryKey(),
+    changeCount: p
+      .bigint("change_count", { mode: "bigint" })
+      .notNull()
+      .default(sql`1`),
+    enqueuedAt: timestamptz("enqueued_at").defaultNow().notNull(),
+    /** A drain's lease on the row; null while no drain holds it. */
+    claimedUntil: timestamptz("claimed_until"),
+  },
+  (t) => [
+    p
+      .index("case_law_ranking_signal_changes_enqueued_idx")
+      .on(t.enqueuedAt, t.decisionId),
+    p.check(
+      "case_law_ranking_signal_changes_count_positive",
+      sql`${t.changeCount} > 0`,
+    ),
+    p.pgPolicy("case_law_ranking_signal_changes_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );

@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -99,6 +100,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -930,14 +932,15 @@ export const assembleHuBhgyDecision = async ({
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,
-    ...(read?.decisionDate === undefined
-      ? {}
-      : { decisionDate: read.decisionDate }),
-    ...(read?.decisionType === undefined
-      ? {}
-      : { decisionType: read.decisionType }),
-    ...(read?.fulltext === undefined ? {} : { fulltext: read.fulltext }),
-    ...(read?.sections === undefined ? {} : { sections: read.sections }),
+    // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+    ...(read?.decisionDate !== undefined
+      ? { decisionDate: read.decisionDate }
+      : {}),
+    ...(read?.decisionType !== undefined
+      ? { decisionType: read.decisionType }
+      : {}),
+    ...(read?.fulltext !== undefined ? { fulltext: read.fulltext } : {}),
+    ...(read?.sections !== undefined ? { sections: read.sections } : {}),
     ...(document === undefined ? { isListingOnly: true } : {}),
     sourceUrl: decisionUrl(row),
     documentUrl: documentUrlOf(row),
@@ -956,12 +959,12 @@ export const assembleHuBhgyDecision = async ({
     metadata: checkedDecisionMetadata({
       caseNumber,
       court,
-      ...(read?.decisionDate === undefined
-        ? {}
-        : { decisionDate: read.decisionDate }),
-      ...(read?.decisionType === undefined
-        ? {}
-        : { decisionType: read.decisionType }),
+      ...(read?.decisionDate !== undefined
+        ? { decisionDate: read.decisionDate }
+        : {}),
+      ...(read?.decisionType !== undefined
+        ? { decisionType: read.decisionType }
+        : {}),
       documentId: IndexId,
       bhgyIdentifier: row.EgyediAzonosito,
       kollegiums: huKollegiumsOf(row.Kollegium),
@@ -970,16 +973,16 @@ export const assembleHuBhgyDecision = async ({
       publishedAt: row.IndexelesIdeje,
       statutes,
       relatedProceedings: related,
-      ...(read?.documentDocket === undefined
-        ? {}
-        : { documentDocket: read.documentDocket }),
+      ...(read?.documentDocket !== undefined
+        ? { documentDocket: read.documentDocket }
+        : {}),
       ...(document === undefined
         ? {}
         : { documentContentType: document.contentType }),
-      ...(read?.relatedProceedings === undefined ||
-      read.relatedProceedings.length === 0
-        ? {}
-        : { instanceChainLines: read.relatedProceedings }),
+      ...(read?.relatedProceedings !== undefined &&
+      read.relatedProceedings.length > 0
+        ? { instanceChainLines: read.relatedProceedings }
+        : {}),
       ...(document === undefined
         ? {
             detailUnavailable:
@@ -1833,6 +1836,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -1841,6 +1845,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeHuBhgyCursor({
             ...start,
             year,
@@ -1853,6 +1858,7 @@ const sweepPage = async (
       return Result.ok({
         ...collectedPage(collected.value),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? // Every window is swept. The tip takes over from the boundary
@@ -1877,6 +1883,7 @@ const sweepPage = async (
       return Result.ok({
         decisions: [],
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encodeHuBhgyCursor({
           phase: "tip",
           walk: "head",
@@ -1893,6 +1900,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({ ...start, year, slug, offset }),
   });
 };
@@ -1944,6 +1952,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -1957,6 +1966,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -1965,6 +1975,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -1985,6 +1996,7 @@ const tipPage = async (
   return Result.ok({
     ...collectedPage(collected.value),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",
       walk: "catch-up",

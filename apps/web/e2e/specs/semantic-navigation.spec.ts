@@ -1,22 +1,11 @@
 import type { Locator, Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import * as v from "valibot";
 
 import { apiDelete, apiPut } from "../helpers/api";
 import { seedSidebarState } from "../helpers/sidebar-state";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
-
-// A padding point stays inside a cell when its column reflows before the click.
-const CELL_SPACE_INSET = 4;
-
-const cellSpacePoint = async (cell: Locator) =>
-  await cell.evaluate((element, inset) => {
-    const bounds = element.getBoundingClientRect();
-    const x = inset;
-    const y = inset;
-    const target = document.elementFromPoint(bounds.left + x, bounds.top + y);
-    return { x, y, hitsLink: target?.closest("a") !== null };
-  }, CELL_SPACE_INSET);
 
 const semanticStructure = async (page: Page) =>
   await page.evaluate(() => ({
@@ -84,6 +73,113 @@ const assertVisibleTabTargets = async (page: Page) => {
       })
       .toEqual([]);
   }
+};
+
+const blankCellPoint = async (cell: Locator) =>
+  await cell.evaluate(async (element) => {
+    const margin = 8;
+    const rectValues = (rect: DOMRect) => [
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    ];
+    const nextFrameRect = async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+      return element.getBoundingClientRect();
+    };
+
+    let cellRect = await nextFrameRect();
+    // real-time: layout stability can only be observed across rendered frames.
+    while (true) {
+      const nextRect = await nextFrameRect();
+      if (
+        rectValues(cellRect).every(
+          (value, index) => value === rectValues(nextRect)[index],
+        )
+      ) {
+        cellRect = nextRect;
+        break;
+      }
+      cellRect = nextRect;
+    }
+    // A virtualized row can replace its cell while the frames settle; a
+    // detached or unsized cell has no point to click, so the caller retries
+    // with a freshly resolved cell.
+    if (!element.isConnected || cellRect.width === 0 || cellRect.height === 0) {
+      return null;
+    }
+
+    const y = cellRect.top + cellRect.height / 2;
+    const linkRects = [...element.querySelectorAll("a")].flatMap((link) =>
+      [...link.getClientRects()].map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      })),
+    );
+    const blocked = linkRects
+      .filter((rect) => y >= rect.top - margin && y <= rect.bottom + margin)
+      .map((rect) => ({
+        left: Math.max(cellRect.left + margin, rect.left - margin),
+        right: Math.min(cellRect.right - margin, rect.right + margin),
+      }))
+      .filter((interval) => interval.left < interval.right)
+      .toSorted((first, second) => first.left - second.left);
+    const available: { left: number; right: number }[] = [];
+    let start = cellRect.left + margin;
+    for (const interval of blocked) {
+      if (interval.left > start) {
+        available.push({ left: start, right: interval.left });
+      }
+      start = Math.max(start, interval.right);
+    }
+    if (start < cellRect.right - margin) {
+      available.push({ left: start, right: cellRect.right - margin });
+    }
+    const widest = available
+      .filter((interval) => interval.right - interval.left >= margin)
+      .toSorted(
+        (first, second) =>
+          second.right - second.left - (first.right - first.left),
+      )
+      .at(0);
+    if (widest === undefined) {
+      throw new Error(
+        `No 8px blank interval in email cell ${JSON.stringify(rectValues(cellRect))}; link rects: ${JSON.stringify(linkRects)}`,
+      );
+    }
+    const x = (widest.left + widest.right) / 2;
+    const target = document.elementFromPoint(x, y);
+    const point = { x: x - cellRect.left, y: y - cellRect.top };
+    if (target === null) {
+      return { ...point, hit: "outside-viewport" };
+    }
+    return {
+      ...point,
+      hit: target.closest("a") === null ? "cell-space" : "link",
+    };
+  });
+
+const MAX_CELL_RESOLUTIONS = 20;
+
+const renderedBlankCellPoint = async (cell: Locator) => {
+  // real-time: each attempt re-resolves the locator and waits for rendered
+  // frames, so a replaced cell is measured once the new one is laid out.
+  for (let attempt = 0; attempt < MAX_CELL_RESOLUTIONS; attempt += 1) {
+    const point = await blankCellPoint(cell);
+    if (point !== null) {
+      return point;
+    }
+  }
+  throw new Error(
+    `Email cell stayed detached or unsized across ${MAX_CELL_RESOLUTIONS} resolutions`,
+  );
 };
 
 test.describe("focus target detector", () => {
@@ -186,25 +282,37 @@ for (const email of [null, "a@example.test"]) {
     page,
     request,
   }, testInfo) => {
-    const contactId = randomUUID();
-    const displayName = `Contact click ${contactId.slice(0, 8)}`;
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName,
-      ...(email === null
-        ? {}
-        : {
-            emails: [{ type: "work", address: email, isPrimary: true }],
-          }),
-    });
+    const displayName = `Contact click ${randomUUID().slice(0, 8)}`;
+    const { id: contactId } = v.parse(
+      v.object({ id: v.string() }),
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName,
+        ...(email === null
+          ? {}
+          : {
+              emails: [{ type: "work", address: email, isPrimary: true }],
+            }),
+      }),
+    );
     try {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/contacts", { waitUntil: "domcontentloaded" });
+      // The unfiltered list can already show the new contact; the debounced
+      // search then replaces its rows, so wait for the filtered page first.
+      const filtered = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          response.request().method() === "GET" &&
+          url.pathname.endsWith("/contacts") &&
+          url.searchParams.get("q") === displayName
+        );
+      });
       await page
         .getByRole("searchbox", { name: "Search contacts" })
         .fill(displayName);
+      expect((await filtered).ok()).toBe(true);
       const row = page.getByRole("row").filter({
         has: page.getByRole("link", { exact: true, name: displayName }),
       });
@@ -228,8 +336,11 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
-      const space = await cellSpacePoint(cell);
-      expect(space.hitsLink).toBe(false);
+      // elementFromPoint answers null outside the viewport; a wide table can
+      // leave the email column's edge off screen.
+      await cell.scrollIntoViewIfNeeded();
+      const space = await renderedBlankCellPoint(cell);
+      expect(space.hit).toBe("cell-space");
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
     } finally {
@@ -240,42 +351,3 @@ for (const email of [null, "a@example.test"]) {
     }
   });
 }
-
-test.describe("cell-space coordinates", () => {
-  test.use({ storageState: { cookies: [], origins: [] } });
-
-  for (const width of [80, 160, 280]) {
-    test(`stay inside a cell after its table shrinks to ${width}px`, async ({
-      page,
-    }) => {
-      await page.setContent(`
-        <table style="table-layout:fixed;width:600px;border-collapse:collapse">
-          <tr><td id="email" style="padding:10px;height:24px"></td><td>Phone</td></tr>
-        </table>
-      `);
-      const cell = page.locator("#email");
-      const point = await cellSpacePoint(cell);
-      await page.getByRole("table").evaluate((table, resizedWidth) => {
-        table.setAttribute(
-          "style",
-          `table-layout:fixed;width:${resizedWidth}px;border-collapse:collapse`,
-        );
-      }, width);
-      const bounds = await cell.boundingBox();
-      expect(point.x).toBeGreaterThan(0);
-      expect(bounds?.width).toBeGreaterThan(point.x);
-      expect(point.y).toBeGreaterThan(0);
-      expect(bounds?.height).toBeGreaterThan(point.y);
-      expect(point.hitsLink).toBe(false);
-      await cell.evaluate((element) => {
-        if (element instanceof HTMLTableCellElement) {
-          element.addEventListener("click", () => {
-            element.dataset["clicked"] = "true";
-          });
-        }
-      });
-      await cell.click({ position: { x: point.x, y: point.y } });
-      await expect(cell).toHaveAttribute("data-clicked", "true");
-    });
-  }
-});

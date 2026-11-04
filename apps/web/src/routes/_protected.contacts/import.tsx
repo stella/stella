@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -65,15 +65,17 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { routePresentation } from "@/routes/-route-presentation";
+import { ImportDoneStep } from "@/routes/_protected.contacts/-components/import-done-step";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
   IMPORT_FIELD_LABELS,
   ImportCandidateCard,
-  ImportResultsList,
   useImportReview,
 } from "@/routes/_protected.contacts/-import-review";
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/contacts/import")({
   staticData: {
@@ -200,6 +202,9 @@ function ContactImportStudio() {
   const t = useTranslations();
   const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (context) => context.user.activeOrganizationId,
+  });
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
   });
@@ -386,6 +391,7 @@ function ContactImportStudio() {
         {state.status === "review" && (
           <div className="mx-auto max-w-6xl">
             <ReviewStep
+              activeOrganizationId={activeOrganizationId}
               fields={editableFieldsForMapping(state.mapping)}
               onRestart={restart}
               review={review}
@@ -719,11 +725,13 @@ const MappingStep = ({
 };
 
 const ReviewStep = ({
+  activeOrganizationId,
   fields,
   onRestart,
   review,
   stepHeadingRef,
 }: {
+  activeOrganizationId: string;
   fields: readonly ImportEditableField[];
   onRestart: () => void;
   review: ImportReview;
@@ -734,34 +742,12 @@ const ReviewStep = ({
 
   if (results) {
     return (
-      <section className="space-y-4">
-        <div>
-          <h2
-            className="text-lg font-semibold outline-none"
-            ref={stepHeadingRef}
-            tabIndex={-1}
-          >
-            {t("common.done")}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {t("contacts.import.resultsSummary", {
-              created: results.filter(({ status }) => status === "created")
-                .length,
-              skipped: results.filter(({ status }) => status === "skipped")
-                .length,
-            })}
-          </p>
-        </div>
-        <ImportResultsList results={results} />
-        <div className="flex flex-wrap gap-2 pt-2">
-          <Button render={<Link to="/contacts" />}>
-            {t("contacts.importStudio.openContacts")}
-          </Button>
-          <Button onClick={onRestart} variant="outline">
-            {t("contacts.importStudio.importAnother")}
-          </Button>
-        </div>
-      </section>
+      <ImportDoneStep
+        activeOrganizationId={activeOrganizationId}
+        onRestart={onRestart}
+        results={results}
+        stepHeadingRef={stepHeadingRef}
+      />
     );
   }
 

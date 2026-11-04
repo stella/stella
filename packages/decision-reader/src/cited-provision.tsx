@@ -8,9 +8,9 @@ import type {
 
 import { panic } from "better-result";
 
-import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
-import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PanelRightIcon } from "@stll/ui/icons";
@@ -22,6 +22,7 @@ import {
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { BlockRenderer } from "./document-ast-text";
@@ -134,16 +135,26 @@ export const ProvisionCardHeader = ({
           {label}
         </BidiText>
         {actText !== "" && (
-          <span
-            className={cn(
-              "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
-              SEPARATED_PART,
-            )}
-            data-slot="provision-card-act"
-            title={actText}
-          >
-            <BidiText>{actText}</BidiText>
-          </span>
+          // The act's name truncates in a narrow card; the tooltip gives it
+          // back in full.
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
+                    SEPARATED_PART,
+                  )}
+                  data-slot="provision-card-act"
+                />
+              }
+            >
+              <BidiText>{actText}</BidiText>
+            </TooltipTrigger>
+            <TooltipPopup>
+              <BidiText>{actText}</BidiText>
+            </TooltipPopup>
+          </Tooltip>
         )}
         <span
           className={cn(
@@ -292,7 +303,7 @@ type ProvisionWordingProps = {
   language: string | null;
   placement: ProvisionCardPlacement;
   /** The cited statute's publisher scheme, which its anchors nest lists in. */
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
 };
 
 /**
@@ -306,7 +317,7 @@ const ProvisionWording = ({
   extent,
   language,
   placement,
-  statuteLists,
+  statuteAnchors,
 }: ProvisionWordingProps) => (
   <div
     className={cn(
@@ -336,7 +347,7 @@ const ProvisionWording = ({
             block={paragraphFromPreview(block)}
             key={block.id}
             rangesByPieceId={NO_RANGES}
-            statuteLists={statuteLists}
+            statuteAnchors={statuteAnchors}
             variant="statute"
           />
         ))}
@@ -349,12 +360,12 @@ const PassageBody = ({
   extent = "all",
   passage,
   placement = "inline",
-  statuteLists,
+  statuteAnchors,
 }: {
   extent?: ProvisionWordingExtent;
   passage: ProvisionCardPassage;
   placement?: ProvisionCardPlacement;
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
 }) => {
   const messages = useReaderMessages();
   switch (passage.type) {
@@ -371,7 +382,7 @@ const PassageBody = ({
             extent={extent}
             language={passage.language}
             placement={placement}
-            statuteLists={statuteLists}
+            statuteAnchors={statuteAnchors}
           />
           {passage.unavailable.map((provisionLabel) => (
             <span
@@ -417,14 +428,14 @@ const FullProvisionWording = ({
   outcome,
   passage,
   placement,
-  statuteLists,
+  statuteAnchors,
   wordings,
 }: {
   extent: ProvisionWordingExtent;
   outcome: FullProvisionOutcome;
   passage: ProvisionCardPassage;
   placement: ProvisionCardPlacement;
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
   wordings: readonly CitedWording[];
 }) => {
   switch (outcome.type) {
@@ -435,7 +446,7 @@ const FullProvisionWording = ({
             extent={extent}
             passage={passage}
             placement={placement}
-            statuteLists={statuteLists}
+            statuteAnchors={statuteAnchors}
           />
           <ProvisionWordingSkeleton />
         </>
@@ -447,7 +458,7 @@ const FullProvisionWording = ({
             extent={extent}
             passage={passage}
             placement={placement}
-            statuteLists={statuteLists}
+            statuteAnchors={statuteAnchors}
           />
           <ProvisionTextUnavailable scope="full" />
         </>
@@ -456,9 +467,12 @@ const FullProvisionWording = ({
       return (
         <PassageBody
           extent={extent}
-          passage={provisionCardPassage(wordings, outcome.wording)}
+          passage={provisionCardPassage(wordings, {
+            scheme: statuteAnchors,
+            wording: outcome.wording,
+          })}
           placement={placement}
-          statuteLists={statuteLists}
+          statuteAnchors={statuteAnchors}
         />
       );
     default:
@@ -543,7 +557,7 @@ export const CitedProvisionExpansion = ({
   const [expanded, setExpanded] = useState(false);
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
-  const statuteLists = statuteListSchemeFor(first.document.country);
+  const statuteAnchors = statuteAnchorSchemeFor(first.document.country);
   const passage = provisionCardPassage(wordings);
   const outcome = fullProvisionOutcome(full);
   const displaysFullText = showsFull && outcome.type === "text";
@@ -609,7 +623,7 @@ export const CitedProvisionExpansion = ({
               outcome={outcome}
               passage={passage}
               placement={placement}
-              statuteLists={statuteLists}
+              statuteAnchors={statuteAnchors}
               wordings={wordings}
             />
           ) : (
@@ -617,7 +631,7 @@ export const CitedProvisionExpansion = ({
               extent={extent}
               passage={passage}
               placement={placement}
-              statuteLists={statuteLists}
+              statuteAnchors={statuteAnchors}
             />
           )}
         </WordingFrame>
@@ -681,7 +695,7 @@ export const CitedProvisionPeek = ({
         />
         <PassageBody
           passage={passage}
-          statuteLists={statuteListSchemeFor(provision.document.country)}
+          statuteAnchors={statuteAnchorSchemeFor(provision.document.country)}
         />
       </div>
     </ScrollArea>

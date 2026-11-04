@@ -187,7 +187,7 @@ test("the Postgres search narrows to decisions citing the provision, level by le
   await client.close();
 }, 60_000);
 
-test("the provision scope includes only published redistributable decisions in its set and exact size", async () => {
+test("the provision scope includes only published redistributable decisions in its set within a bounded link read", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   const sourceId = createSafeId<"caseLawSource">();
@@ -283,7 +283,10 @@ test("the provision scope includes only published redistributable decisions in i
     })
     .from(caseLawProvisionCitations);
   expect(storedScope?.count).toBe(6);
-  const read = async (provision: CaseLawProvisionFilter, idSetMax?: number) =>
+  const read = async (
+    provision: CaseLawProvisionFilter,
+    budgets: { idSetMax?: number; linkScanMax?: number } = {},
+  ) =>
     await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
@@ -291,7 +294,7 @@ test("the provision scope includes only published redistributable decisions in i
       return await readCaseLawProvisionScope(tx, {
         jurisdiction: "CZE",
         provision,
-        ...(idSetMax === undefined ? {} : { idSetMax }),
+        ...budgets,
       });
     });
   const subsection: CaseLawProvisionFilter = {
@@ -304,13 +307,37 @@ test("the provision scope includes only published redistributable decisions in i
   expect(
     scope.type === "decisions" ? scope.decisionIds.map(String).toSorted() : [],
   ).toEqual([first.id, second.id].map(String).toSorted());
-  // Past the bound the set is not handed over, but its size is exact.
-  expect(await read({ work: "262/2006 Sb.", anchor: "par_316" }, 2)).toEqual({
-    type: "broad",
-    citingDecisions: 3,
-  });
-  // Exactly at the bound the set still fits.
-  expect((await read(subsection, 2)).type).toBe("decisions");
+  // More citing decisions than the id set holds: per-candidate probes.
+  expect(
+    await read({ work: "262/2006 Sb.", anchor: "par_316" }, { idSetMax: 2 }),
+  ).toEqual({ type: "broad" });
+  // The id set counts only decisions the list could show: a repeated link
+  // and the excluded decisions' links never spend it.
+  const withinIdSet = await read(subsection, { idSetMax: 2 });
+  expect(
+    withinIdSet.type === "decisions"
+      ? withinIdSet.decisionIds.map(String).toSorted()
+      : withinIdSet,
+  ).toEqual([first.id, second.id].map(String).toSorted());
+  expect((await read(subsection, { idSetMax: 1 })).type).toBe("broad");
+  // The physical read has its own budget: exactly at it the set still fits;
+  // one link past it, the provision is broad without further reads.
+  const [subsectionLinks] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(caseLawProvisionCitations)
+    .where(eq(caseLawProvisionCitations.anchor, "par_316-odst_2"));
+  const linkCount = subsectionLinks?.count ?? 0;
+  // Two links of the first decision, one of the second, one per excluded one.
+  expect(linkCount).toBe(3 + excludedDecisions.length);
+  const atBound = await read(subsection, { linkScanMax: linkCount });
+  expect(
+    atBound.type === "decisions"
+      ? atBound.decisionIds.map(String).toSorted()
+      : atBound,
+  ).toEqual([first.id, second.id].map(String).toSorted());
+  expect((await read(subsection, { linkScanMax: linkCount - 1 })).type).toBe(
+    "broad",
+  );
   expect(await read({ work: "262/2006 Sb.", anchor: "par_317" })).toEqual({
     type: "decisions",
     decisionIds: [],
@@ -339,6 +366,50 @@ test("the provision scope includes only published redistributable decisions in i
     anchor: "art_6",
   });
   expect(euScope).toEqual({ type: "decisions", decisionIds: [first.id] });
+  // An EU act cited mostly in another country: the other country's links
+  // never spend this country's id set, which still holds its one decision.
+  const slovakCiting = ["4", "5", "6", "7"].map((index) => ({
+    ...third,
+    id: createSafeId<"caseLawDecision">(),
+    caseNumber: `21 Cdo ${index}/2020`,
+    country: "SVK",
+  }));
+  await db.insert(caseLawDecisions).values(slovakCiting);
+  await db.insert(caseLawProvisionCitations).values(
+    slovakCiting.map(({ id }) => ({
+      ...link(id, "1", 80),
+      jurisdiction: "EU",
+      workIdentifier: "32016R0679",
+      euWorkNumber: 679,
+      euWorkYear: 2016,
+      workCollection: "EUR-Lex",
+      workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      unit: "article" as const,
+      section: 6,
+      anchor: "art_6-par_1",
+    })),
+  );
+  const gdprArticle6: CaseLawProvisionFilter = {
+    jurisdiction: "EU",
+    work: "32016R0679",
+    anchor: "art_6",
+  };
+  expect(await read(gdprArticle6, { idSetMax: 1 })).toEqual({
+    type: "decisions",
+    decisionIds: [first.id],
+  });
+  // The country whose decisions do cite it that widely is broad.
+  const slovakScope = await withPublicLawReaderRole(db, async (roleTx) => {
+    // SAFETY: the role transaction supplies the select surface the read uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+    const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+    return await readCaseLawProvisionScope(tx, {
+      jurisdiction: "SVK",
+      provision: gdprArticle6,
+      idSetMax: 1,
+    });
+  });
+  expect(slovakScope).toEqual({ type: "broad" });
   // The same work token in a national filter cannot reach EU links.
   expect(await read({ work: "32016R0679", anchor: "art_6" })).toEqual({
     type: "decisions",

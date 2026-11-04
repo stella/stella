@@ -32,9 +32,9 @@ function KnowledgeLanding() {
   return (
     <KnowledgeAudienceGate
       anonymous={() => <PublicKnowledgeLanding from={from} />}
-      checking={<KnowledgeLandingSkeleton audience="public" />}
+      checking={<KnowledgeLandingSkeleton />}
       member={() => (
-        <Suspense fallback={<KnowledgeLandingSkeleton audience="member" />}>
+        <Suspense fallback={<KnowledgeLandingSkeleton />}>
           <LazyMemberKnowledgeLanding />
         </Suspense>
       )}

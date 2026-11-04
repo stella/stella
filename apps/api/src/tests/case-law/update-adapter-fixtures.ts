@@ -125,15 +125,7 @@ const updateAdapter = async (
       recordedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
-      page: {
-        decisions: page.decisions,
-        // A page's supplements are part of what it served; a recording that
-        // kept only its decisions would drop them from every replay.
-        ...(page.supplements === undefined
-          ? {}
-          : { supplements: page.supplements }),
-        nextCursor: page.nextCursor,
-      },
+      page,
     };
 
     const filename = await writeFixture(adapterKey, record, page.sourceUrl);

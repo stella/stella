@@ -7,25 +7,6 @@ type LayoutShiftMeasurement = {
   supported: boolean;
   cls: number;
   values: number[];
-  shifts: {
-    value: number;
-    startTime: number;
-    sources: {
-      element: string | null;
-      previousRect: { x: number; y: number; width: number; height: number };
-      currentRect: { x: number; y: number; width: number; height: number };
-    }[];
-  }[];
-};
-
-type LayoutShiftEntry = PerformanceEntry & {
-  hadRecentInput: boolean;
-  value: number;
-  sources: {
-    node: Node | null;
-    previousRect: DOMRectReadOnly;
-    currentRect: DOMRectReadOnly;
-  }[];
 };
 
 declare global {
@@ -37,34 +18,15 @@ const MAX_ROUTE_CLS = 0.1;
 export const observeLayoutShift = async (page: Page) => {
   await page.addInitScript(() => {
     const values: number[] = [];
-    const shifts: LayoutShiftMeasurement["shifts"] = [];
-    const isLayoutShift = (
-      entry: PerformanceEntry,
-    ): entry is LayoutShiftEntry => entry.entryType === "layout-shift";
-    const rectangle = ({ x, y, width, height }: DOMRectReadOnly) => ({
-      x,
-      y,
-      width,
-      height,
-    });
     const collect = (entries: PerformanceEntry[]) => {
       for (const entry of entries) {
-        if (isLayoutShift(entry) && !entry.hadRecentInput) {
+        if (
+          "hadRecentInput" in entry &&
+          entry.hadRecentInput === false &&
+          "value" in entry &&
+          typeof entry.value === "number"
+        ) {
           values.push(entry.value);
-          shifts.push({
-            value: entry.value,
-            startTime: entry.startTime,
-            sources: entry.sources.map(
-              ({ node, previousRect, currentRect }) => ({
-                element:
-                  node instanceof Element
-                    ? `${node.tagName.toLowerCase()}#${node.id}.${Array.from(node.classList).join(".")}`
-                    : null,
-                previousRect: rectangle(previousRect),
-                currentRect: rectangle(currentRect),
-              }),
-            ),
-          });
         }
       }
     };
@@ -83,7 +45,6 @@ export const observeLayoutShift = async (page: Page) => {
           supported,
           cls: values.reduce((sum, value) => sum + value, 0),
           values,
-          shifts,
         };
       },
     });

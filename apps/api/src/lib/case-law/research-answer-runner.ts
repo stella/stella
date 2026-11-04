@@ -640,7 +640,11 @@ const readResearchDecision = async (
       textS3Key: publishedCaseLawDecisions.textS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
       fulltext: publishedCaseLawDecisions.fulltext,
-      source: { descriptor: caseLawSources.descriptor },
+      // Flat, not a nested `source` object: a left-joined nested object whose
+      // columns are all null reads back as null, and a source row with no
+      // descriptor (no reuse restrictions) would then look like no source.
+      sourceId: caseLawSources.id,
+      sourceDescriptor: caseLawSources.descriptor,
     })
     .from(publishedCaseLawDecisions)
     .leftJoin(
@@ -649,7 +653,14 @@ const readResearchDecision = async (
     )
     .where(eq(publishedCaseLawDecisions.id, decisionId))
     .limit(1);
-  return row ?? null;
+  if (row === undefined) {
+    return null;
+  }
+  const { sourceId, sourceDescriptor, ...decision } = row;
+  return {
+    ...decision,
+    source: sourceId === null ? null : { descriptor: sourceDescriptor },
+  };
 };
 
 /**
@@ -786,8 +797,10 @@ type CurrentResearchRevisionOptions = {
 
 /**
  * The revision the serving generation records as applied for the decision,
- * or null when it holds no current copy (pending, queued for erasure, or
- * never projected). Passages are read from that revision's copy only.
+ * or null when it holds no current copy (an upsert or erasure queued, or
+ * never projected). Passages are read from that revision's copy only, and
+ * their court paragraph numbers come from the current AST, so a copy one
+ * parse old must not answer: research falls back to the AST instead.
  */
 const readCurrentResearchRevisionTx = async (
   tx: CaseLawPublicReadTransaction,

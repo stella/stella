@@ -74,11 +74,13 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
@@ -218,7 +220,7 @@ describe("every adapter accounts for the fields its source states", () => {
       const observed = new Set<string>();
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
-        const decision = await evidence.buildDecision();
+        const decision = await guardParser(evidence.buildDecision)();
         if ("blocks" in decision.documentAst) {
           expect(
             headMatterPrecedesBody(decision.documentAst.blocks),
@@ -395,7 +397,7 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       // Fixtures stub the global fetch, so they build one at a time.
       const decision =
         await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       for (const metadataKey of Object.keys(decision.metadata)) {
         emitted.add(metadataKey);
       }

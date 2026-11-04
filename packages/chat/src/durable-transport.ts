@@ -110,7 +110,7 @@ const terminalChatResponse = ({
   onTranscript();
   onReconnectChange(false);
   return new Response(
-    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts === undefined ? {} : { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } }) })}\n\n`,
+    `data: ${JSON.stringify({ type: "RUN_FINISHED", runId, ...(resume?.pendingInterrupts !== undefined ? { outcome: { type: "interrupt", interrupts: resume.pendingInterrupts } } : {}) })}\n\n`,
     { headers: { "Content-Type": "text/event-stream" } },
   );
 };

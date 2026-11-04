@@ -183,21 +183,23 @@ const TemplatePickList = ({
         )}
         {visibleTemplates.map((template) => (
           <li key={template.id}>
-            <button
-              className="hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2.5 text-start"
+            <Button
+              className="block w-full"
               onClick={() => onPick({ id: template.id, name: template.name })}
-              type="button"
+              variant="plain"
             >
-              <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
-                <LayoutTemplateIcon className="text-muted-foreground size-4" />
-              </div>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                {template.name}
+              <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2.5">
+                <div className="bg-muted flex size-8 shrink-0 items-center justify-center rounded-lg">
+                  <LayoutTemplateIcon className="text-muted-foreground size-4" />
+                </div>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {template.name}
+                </span>
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {t("templates.fieldCount", { count: template.fieldCount })}
+                </span>
               </span>
-              <span className="text-muted-foreground shrink-0 text-xs">
-                {t("templates.fieldCount", { count: template.fieldCount })}
-              </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

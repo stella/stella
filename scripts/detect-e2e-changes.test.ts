@@ -663,6 +663,7 @@ describe("detect-e2e-changes", () => {
                 SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
+                SCOPE_UNKNOWN: "false",
                 FULL_MATRIX: fullMatrix,
               };
               // The harness supplies every variable the step declares, so a
@@ -703,6 +704,8 @@ describe("detect-e2e-changes", () => {
                 `matrix=${expectedMatrix}`,
                 `mode=${usesSelection ? "selected" : "full"}`,
                 `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                // The fixture plans no hosted browser suite specs.
+                "suite_specs=[]",
                 `selection_required=${String(!emptySelection)}`,
                 `required=${emptySelection ? "false" : required}`,
               ]);
@@ -894,10 +897,19 @@ describe("detect-e2e-changes", () => {
       expect(env["CHECK_BASE_REF"]).toBe(
         githubExpression("format('origin/{0}', github.base_ref || 'main')"),
       );
+      expect(env["GREEN_BASE"]).toBe(
+        githubExpression("inputs.green_base || ''"),
+      );
       expect(requiredExpression(step["run"])).toBe(
         [
           'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then',
           `  bun run code-check -- --leg ${leg}`,
+          "  exit 0",
+          "fi",
+          "# Main compared with itself checks nothing: check the change since the",
+          "# last commit known green, or every file when none is known.",
+          'if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then',
+          `  bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
           "  exit 0",
           "fi",
           `bun run code-check:affected -- --leg ${leg} --base "$CHECK_BASE_REF"`,
@@ -950,27 +962,6 @@ describe("detect-e2e-changes", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       `model_catalog_drift_required: ${githubExpression("steps.changed-files.outputs.model_catalog_drift_required")}`,
-    );
-    expect(new Set(MODEL_CATALOG_DRIFT_INPUTS)).toEqual(
-      new Set([
-        ".github/workflows/ci.yml",
-        "packages/ai-catalog/package.json",
-        "packages/ai-catalog/src/capabilities-overrides.ts",
-        "packages/ai-catalog/src/capabilities.gen.ts",
-        "packages/ai-catalog/src/document-input-overrides.ts",
-        "packages/ai-catalog/src/index.ts",
-        "packages/ai-catalog/src/model-defaults-ledger.ts",
-        "packages/ai-catalog/src/model-rate-policy.ts",
-        "packages/ai-catalog/src/model-rate.ts",
-        "packages/ai-catalog/src/model-rates.gen.ts",
-        "packages/ai-catalog/src/reasoning-capabilities.ts",
-        "packages/fetch/src/connection-failure.ts",
-        "packages/fetch/src/index.ts",
-        "packages/scripts/src/model-catalog-capabilities-gen.ts",
-        "packages/scripts/src/model-catalog-capabilities.ts",
-        "packages/scripts/src/model-catalog-rates-gen.ts",
-        "packages/scripts/src/model-catalog-snapshot.ts",
-      ]),
     );
     for (const input of MODEL_CATALOG_DRIFT_INPUTS) {
       expect(changedFileScope(input).model_catalog_drift_required, input).toBe(

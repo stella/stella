@@ -12,7 +12,7 @@ import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
@@ -24,7 +24,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
-  defaultVarcharSchema,
+  displayNameSchema,
   resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
@@ -216,8 +216,8 @@ const hasCircularDependency = ({
 };
 
 const updatePropertyBodySchema = v.object({
-  name: defaultVarcharSchema,
-  content: propertyContentSchema,
+  name: displayNameSchema(),
+  content: scalarPropertyContentSchema,
   tool: v.union([
     v.intersect([
       aiModelToolSchema,

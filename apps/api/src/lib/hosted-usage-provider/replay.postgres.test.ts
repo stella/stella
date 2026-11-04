@@ -28,6 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { redactCompletedWebhookEvents } from "@/api/lib/hosted-usage-provider/webhook-retention";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1091,9 +1092,7 @@ describe.skipIf(!runPostgresTests)("provider event replay on Postgres", () => {
             ),
           ).toHaveLength(1);
         } finally {
-          await owner
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(owner, [organizationId]);
           await owner
             .delete(usagePolicies)
             .where(eq(usagePolicies.policyKey, policyKey));

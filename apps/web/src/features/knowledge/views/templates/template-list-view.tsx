@@ -10,7 +10,6 @@ import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import Tooltip from "@/components/tooltip";
 import type {
   KnowledgeActions,
   KnowledgeSource,
@@ -65,11 +64,14 @@ const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
 const DENSITY_STORAGE_KEY = "stella.templates.density";
 
-/** Persisted list density; defaults to compact for fast scanning. */
+/** Compact by default, for fast scanning. */
+const DEFAULT_TEMPLATE_DENSITY: TemplateDensity = "compact";
+
+/** Persisted list density. */
 const readTemplateDensity = (): TemplateDensity =>
   deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
     ? "comfortable"
-    : "compact";
+    : DEFAULT_TEMPLATE_DENSITY;
 
 const writeTemplateDensity = (density: TemplateDensity): void => {
   deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
@@ -182,19 +184,17 @@ const TemplateListView = ({
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
                 {tagFilter}
-                <Tooltip
-                  content={t("common.remove")}
-                  render={
-                    <button
-                      aria-label={t("common.remove")}
-                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                      onClick={() => setTagFilter(null)}
-                      type="button"
-                    />
-                  }
+                <Button
+                  aria-label={t("common.remove")}
+                  className="group/plain"
+                  onClick={() => setTagFilter(null)}
+                  tooltip={t("common.remove")}
+                  variant="plain"
                 >
-                  <XIcon className="size-3" />
-                </Tooltip>
+                  <span className="text-muted-foreground group-hover/plain:text-foreground flex rounded-full p-0.5">
+                    <XIcon className="size-3" />
+                  </span>
+                </Button>
               </span>
             )}
             {catalogueTab}
@@ -271,29 +271,47 @@ const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
 const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
 const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
+/**
+ * Which chrome a loaded list renders: the member library's category sidebar,
+ * mobile filter row and toolbar, or the public catalogue's bare list.
+ */
+export const TEMPLATE_LIST_LAYOUT = {
+  library: "library",
+  catalogue: "catalogue",
+} as const;
+type TemplateListLayout =
+  (typeof TEMPLATE_LIST_LAYOUT)[keyof typeof TEMPLATE_LIST_LAYOUT];
+
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
-// shape while templates load; only the values fade in.
+// shape while templates load; only the values fade in. The server renders it
+// while the session is unknown, so the stored density applies only after
+// hydration: the server and the hydrating browser both draw the default.
 export const TemplateListSkeleton = ({
-  mobileFilters,
-}: Pick<TemplateListViewProps, "mobileFilters">) => {
+  layout,
+}: {
+  layout: TemplateListLayout;
+}) => {
   const hydrated = useHydrated();
-  const density = hydrated ? readTemplateDensity() : "compact";
+  const density = hydrated ? readTemplateDensity() : DEFAULT_TEMPLATE_DENSITY;
+  const hasLibraryChrome = layout === TEMPLATE_LIST_LAYOUT.library;
   const t = useTranslations();
   return (
     <div
       aria-hidden="true"
       className="flex min-h-0 flex-1 flex-col md:flex-row"
     >
-      <div className="hidden w-48 shrink-0 flex-col md:flex">
-        <nav className="flex-1 space-y-1 p-2">
-          <Skeleton className="h-7 w-full rounded-md" />
-          <div className="my-1 border-t" />
-          {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-            <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-          ))}
-        </nav>
-      </div>
+      {hasLibraryChrome && (
+        <div className="hidden w-48 shrink-0 flex-col md:flex">
+          <nav className="flex-1 space-y-1 p-2">
+            <Skeleton className="h-7 w-full rounded-md" />
+            <div className="my-1 border-t" />
+            {TEMPLATE_SIDEBAR_KEYS.map((key) => (
+              <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
+            ))}
+          </nav>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col md:border-s">
         <div className={TEMPLATE_TOOLBAR_CLASS}>
@@ -305,11 +323,11 @@ export const TemplateListSkeleton = ({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Skeleton className="h-8 w-16 rounded-md" />
-            <Skeleton className="h-8 w-32 rounded-md" />
+            {hasLibraryChrome && <Skeleton className="h-8 w-32 rounded-md" />}
           </div>
         </div>
 
-        {mobileFilters !== undefined && (
+        {hasLibraryChrome && (
           <div className="border-b px-3 py-2 md:hidden">
             <div className="flex gap-1 pb-0.5">
               <Skeleton className="h-8 w-32" />
@@ -335,7 +353,11 @@ export const TemplateListSkeleton = ({
                     density === "compact" ? "h-5" : "h-6",
                   )}
                 />
-                <Skeleton className="h-4 w-32 max-w-full" />
+                {/* The category, and in comfortable rows the guidance line:
+                    catalogue rows carry neither, so they never render it. */}
+                {hasLibraryChrome && (
+                  <Skeleton className="h-4 w-32 max-w-full" />
+                )}
                 {density === "comfortable" && (
                   <Skeleton className="h-4 w-40 max-w-full" />
                 )}
@@ -356,7 +378,15 @@ export const TemplateLibraryView = (props: TemplateListViewProps) => {
   const t = useTranslations();
 
   if (props.source.status === "loading") {
-    return <TemplateListSkeleton mobileFilters={props.mobileFilters} />;
+    return (
+      <TemplateListSkeleton
+        layout={
+          props.sidebar === undefined
+            ? TEMPLATE_LIST_LAYOUT.catalogue
+            : TEMPLATE_LIST_LAYOUT.library
+        }
+      />
+    );
   }
   if (props.source.status === "error") {
     return (

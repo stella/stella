@@ -1,4 +1,3 @@
-import { use } from "react";
 import type { ReactElement } from "react";
 
 import {
@@ -15,11 +14,16 @@ import {
 } from "@stll/ui/inspector";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 
-import { readPersistedInspectorPaneOpen } from "@/components/inspector/inspector-broadcast";
+import {
+  countStoredInspectorTabs,
+  isPersistedInspectorPaneOpen,
+} from "@/components/inspector/inspector-storage-keys";
+import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
-import { PendingInspectorScopeContext } from "@/components/inspector/pending-inspector-scope";
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
@@ -50,19 +54,50 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // icons, the rail toggles), so the frame is already the app; only what
 // depends on data or on the active locale shimmers: nav labels, pinned
 // matters, the account card, the breadcrumb and the page body. Intentionally
-// free of data fetching and Suspense; the first-frame owner supplies any
-// inspector storage scope. A page that is the same for every visitor can
-// take the content column's place.
+// free of data and Suspense; it tracks only the viewport and saved layout, so
+// it resizes with the frame it stands in for. A page that is the same for
+// every visitor can take the content column's place.
 export function ProtectedPendingSkeleton({
   content,
+  inspectorScope,
 }: {
   content?: ReactElement | undefined;
+  inspectorScope?: InspectorStorageScope;
 }) {
-  const inspectorScope = use(PendingInspectorScopeContext);
-  const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
+  if (inspectorScope !== undefined) {
+    return (
+      <ProtectedPendingSkeletonContent
+        content={content}
+        inspectorScope={inspectorScope}
+      />
+    );
+  }
+  return (
+    <ProtectedPendingInspectorScopeContext.Consumer>
+      {(contextScope) => (
+        <ProtectedPendingSkeletonContent
+          content={content}
+          inspectorScope={contextScope}
+        />
+      )}
+    </ProtectedPendingInspectorScopeContext.Consumer>
+  );
+}
+
+function ProtectedPendingSkeletonContent({
+  content,
+  inspectorScope,
+}: {
+  content: ReactElement | undefined;
+  inspectorScope: InspectorStorageScope | undefined;
+}) {
+  const viewportWidth = useViewportWidth();
+  // The restore policy the authenticated frame applies, on the stored tabs:
+  // the member's tab registry loads with that frame, and the store writes
+  // only tabs it would restore.
   const paneRequested =
     inspectorScope !== undefined &&
-    readPersistedInspectorPaneOpen(inspectorScope);
+    isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
   const sidebarOpen =
     (readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) &&
     !shouldForceSidebarCollapsed({

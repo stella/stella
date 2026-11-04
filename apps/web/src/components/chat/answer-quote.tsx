@@ -15,6 +15,7 @@ import {
   CopyFromMenuIcon,
 } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import {
   locateQuoteInBlocks,
@@ -112,14 +113,22 @@ const QuoteAttribution = ({
       <span aria-hidden="true" className="text-foreground-placeholder">
         ·
       </span>
-      <a
-        className="hover:text-foreground focus-visible:ring-ring rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
-        href={sanitizeHref(readerHref)}
-        onClick={openAtQuote}
-        title={t("chat.answerQuote.verifiedHint", { source: citation })}
-      >
-        <BidiText as="span">{source}</BidiText>
-      </a>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <a
+              className="hover:text-foreground focus-visible:ring-ring rounded-xs underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none"
+              href={sanitizeHref(readerHref)}
+              onClick={openAtQuote}
+            />
+          }
+        >
+          <BidiText as="span">{source}</BidiText>
+        </TooltipTrigger>
+        <TooltipPopup>
+          {t("chat.answerQuote.verifiedHint", { source: citation })}
+        </TooltipPopup>
+      </Tooltip>
       <Button
         className="-my-1"
         onClick={openAtQuote}

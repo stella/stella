@@ -296,6 +296,7 @@ const buildContext = ({
         await Promise.resolve({
           status: "available" as const,
           readBlocks: async () => await Promise.resolve([]),
+          readTextPieces: async () => await Promise.resolve([]),
         }),
     },
     safeDb,
@@ -870,6 +871,7 @@ describe("MCP anonymization canary corpus", () => {
       const organizationNameSeed = mkSeed(tool, 3);
       const emailSeed = mkSeed(tool, 4);
       const phoneSeed = mkSeed(tool, 5);
+      const externalIdSeed = mkSeed(tool, 6);
       const tx = {
         query: {
           contacts: {
@@ -886,6 +888,8 @@ describe("MCP anonymization canary corpus", () => {
               organizationName: organizationNameSeed,
               emails: [{ label: "work", address: emailSeed }],
               phones: [{ label: "mobile", number: phoneSeed }],
+              externalSource: "address-book",
+              externalId: externalIdSeed,
             }),
           },
         },
@@ -906,11 +910,12 @@ describe("MCP anonymization canary corpus", () => {
         emailSeed,
         phoneSeed,
       ];
-      expectNoSeedLeak(result, seeds);
+      expectNoSeedLeak(result, [...seeds, externalIdSeed]);
       expectSeedsQueuedForAnonymization(seeds);
       expect(result.structuredContent).toMatchObject({
         dateOfBirth: null,
         nationalityCodes: [],
+        external: null,
       });
     },
   );
@@ -1755,6 +1760,8 @@ describe("MCP anonymization canary corpus", () => {
         startOffset: 0,
         endOffset: 5,
         quote,
+        quotePrefix: "",
+        quoteSuffix: "",
         body,
         createdAt: new Date("2026-01-01"),
         updatedAt: new Date("2026-01-01"),

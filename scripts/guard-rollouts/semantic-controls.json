@@ -1,0 +1,27 @@
+{
+  "id": "semantic-controls",
+  "rules": [
+    "semantic-controls/require-context-menu-target",
+    "semantic-controls/require-menu-anchor",
+    "semantic-controls/require-specific-icon-label"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-05T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "semantic-controls/require-context-menu-target",
+    "--deny",
+    "semantic-controls/require-menu-anchor",
+    "--deny",
+    "semantic-controls/require-specific-icon-label",
+    "apps/web/src",
+    "packages/workspace-ui/src"
+  ]
+}
