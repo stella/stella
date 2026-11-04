@@ -1,4 +1,9 @@
-import { type PropsWithChildren, type ReactNode, useState } from "react";
+import {
+  type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
+  useState,
+} from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -83,7 +88,7 @@ const PropertyCellContent = ({
     { enabled: cellMetadata?.override !== undefined },
   );
   const override = tableAnalysisEnabled ? cellMetadata?.override : undefined;
-  const withOverride = (cell: ReactNode) =>
+  const withOverride = (cell: ReactElement): ReactElement =>
     override === undefined || cellMetadata === undefined ? (
       cell
     ) : (
