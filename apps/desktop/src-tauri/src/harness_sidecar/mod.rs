@@ -153,7 +153,7 @@ impl SidecarLaunch {
     self
   }
 
-  #[cfg(test)]
+  #[cfg(all(test, unix))]
   #[must_use]
   pub(crate) fn env(
     mut self,
@@ -306,8 +306,11 @@ enum Control {
   WatchProcesses(mpsc::Sender<HarnessProcess>),
   GrantProcess(String),
   #[cfg_attr(
-    not(test),
-    allow(dead_code, reason = "sent by `HarnessSidecar::shutdown` only")
+    not(all(test, unix)),
+    allow(
+      dead_code,
+      reason = "sent by `HarnessSidecar::shutdown` only, which only unix tests call"
+    )
   )]
   Shutdown(oneshot::Sender<()>),
 }
@@ -453,7 +456,7 @@ impl HarnessSidecar {
 
   /// Answers to a blocking question the run asked.
   #[cfg_attr(
-    not(test),
+    not(all(test, unix)),
     allow(
       dead_code,
       reason = "the runner socket has no answer message yet; the host relays one once it does"
@@ -522,7 +525,7 @@ impl HarnessSidecar {
   /// Stop every run, let every holder exit, and stop supervising. Quitting
   /// the app does not call this: runs keep going in the holder.
   #[cfg_attr(
-    not(test),
+    not(all(test, unix)),
     allow(
       dead_code,
       reason = "the app leaves runs to the holder; nothing in it stops holders yet"
