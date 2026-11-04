@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "runOn": "Exécuter sur",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
-      "stateUnsupported": "Cette version n’est pas prise en charge"
+      "stateUnsupported": "Cette version n’est pas prise en charge",
+      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {

@@ -11,6 +11,10 @@ import {
 } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  chatLocalRunComputerEventSchema,
+} from "@stll/api-contract/chat-run-target";
+import {
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
@@ -2011,6 +2015,17 @@ describe("chat turns on a computer", () => {
       : { ...rest, ...(outcome === undefined ? {} : { outcome }) };
   };
 
+  const isComputerEvent = (chunk: unknown) =>
+    isRecord(chunk) &&
+    chunk["type"] === EventType.CUSTOM &&
+    chunk["name"] === CHAT_LOCAL_RUN_COMPUTER_EVENT;
+
+  const computerStatus = (chunk: unknown) =>
+    v.parse(
+      chatLocalRunComputerEventSchema,
+      isRecord(chunk) ? chunk["value"] : undefined,
+    ).status;
+
   const withoutRunStarts = (chunks: readonly unknown[]) =>
     chunks.filter(
       (chunk) => !isRecord(chunk) || chunk["type"] !== EventType.RUN_STARTED,
@@ -2564,22 +2579,34 @@ describe("chat turns on a computer", () => {
     expect(readScalingViolations({ small, large })).toEqual([]);
   });
 
-  test("a computer that goes away mid-turn keeps the turn waiting until it returns", async () => {
+  test("a computer that goes away mid-turn keeps the turn waiting until it returns, and the chat is told both", async () => {
     const chatThreadId = await newThread();
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(chatInstance, desktopId);
     await desktop.hello();
-    const turn = collect(
-      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
-        {
-          chatRunId: "chat-run-away",
-          messages: [{ role: "user", content: "Summarize" }],
-          instructions: "You are stella.",
-          resume: undefined,
-          abortSignal: new AbortController().signal,
-        },
-      ),
-    );
+    // Nothing rings when a lease lapses, so the reader finds the wait on its
+    // next poll; a short one keeps the test quick.
+    const context = { ...contextFor(chatThreadId), pollMs: 10 };
+    const toldWaiting = Promise.withResolvers<undefined>();
+    const turn = (async () => {
+      const chunks: PublicStreamChunk[] = [];
+      for await (const chunk of createLocalChatRun(
+        context,
+        startPlan(desktopId),
+      ).stream({
+        chatRunId: "chat-run-away",
+        messages: [{ role: "user", content: "Summarize" }],
+        instructions: "You are stella.",
+        resume: undefined,
+        abortSignal: new AbortController().signal,
+      })) {
+        chunks.push(chunk);
+        if (isComputerEvent(chunk)) {
+          toldWaiting.resolve(undefined);
+        }
+      }
+      return chunks;
+    })();
     const start = await desktop.receive("run.start");
     desktop.send({ type: "run.accepted", runId: start.runId });
     const sent = await harnessChunks(start.runId, completedTurn);
@@ -2589,16 +2616,35 @@ describe("chat turns on a computer", () => {
     clock.now += TIMING.leaseMs + 1;
     await chatInstance.gateway.sweep();
     expect((await runState(start.runId))?.state).toBe("waiting_for_computer");
+    // The computer comes back only once the chat was told it is away; the
+    // reader keeps polling meanwhile, and every poll still finds it away.
+    await toldWaiting.promise;
 
     const back = await openDesktop(chatInstance, desktopId);
     await back.hello([{ runId: start.runId, lastSeq: before.position.seq }]);
     const after = desktopRun(back, start.runId, before.position.seq);
     await after.events(sent.slice(3));
     await after.finish("completed", "codex-session-1");
-    const chunks = await turn.done;
-    expect(withoutRunStarts(chunks).map(meaning)).toEqual(
-      withoutRunStarts(sent).map(meaning),
+    const chunks = await turn;
+    // Each change is told once, however many polls the wait lasted. Waiting
+    // follows what the computer sent before it went away; connected
+    // comes before anything it sent once back.
+    const told = chunks.flatMap((chunk, index) =>
+      isComputerEvent(chunk) ? [{ index, status: computerStatus(chunk) }] : [],
     );
+    const output = withoutRunStarts(chunks).filter(
+      (chunk) => !isComputerEvent(chunk),
+    );
+    expect(told.map(({ status }) => status)).toEqual(["waiting", "connected"]);
+    expect(withoutRunStarts(chunks.slice(0, told[0]?.index))).toHaveLength(
+      withoutRunStarts(sent.slice(0, 3)).length,
+    );
+    expect(
+      withoutRunStarts(chunks.slice(told[0]?.index, told[1]?.index)).filter(
+        (chunk) => !isComputerEvent(chunk),
+      ),
+    ).toEqual([]);
+    expect(output.map(meaning)).toEqual(withoutRunStarts(sent).map(meaning));
     await back.close();
   });
 });
