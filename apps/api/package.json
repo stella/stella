@@ -206,7 +206,7 @@
     "mdast-util-gfm": "3.1.0",
     "micromark-extension-gfm": "3.0.0",
     "nodemailer": "^10.3.1",
-    "onnxruntime-node": "1.30.0",
+    "onnxruntime-node": "1.31.1",
     "pkijs": "3.4.2",
     "postal-mime": "4.2.0",
     "prosemirror-commands": "catalog:",
