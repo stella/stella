@@ -23,14 +23,14 @@ export const getClipFieldValueLabel = ({
 };
 
 /** Renders a money value; minor units are not a readable amount. */
-export type RecordMoneyText = (money: {
+export type RecordFieldMoneyFormat = (money: {
   amountMinor: number;
   currency: string;
 }) => string;
 
 const recordText = (
   record: RecordFieldRecord,
-  formatMoney: RecordMoneyText,
+  formatMoney: RecordFieldMoneyFormat,
 ): string =>
   Object.values(record)
     .flatMap((value: RecordFieldScalar) => {
@@ -54,7 +54,7 @@ export type RecordFieldSummary =
  */
 export const summarizeRecordField = (
   state: RecordFieldState,
-  formatMoney: RecordMoneyText,
+  formatMoney: RecordFieldMoneyFormat,
 ): RecordFieldSummary => {
   switch (state.status) {
     case "input-needs-review":
