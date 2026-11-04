@@ -119,6 +119,9 @@ export const KnowledgeLandingSkeleton = ({
                   section.key === "styles"
                     ? t("styleSets.description")
                     : t(`knowledge.sections.${section.key}.description`),
+                ...(audience === "public" && section.publicAccess === "account"
+                  ? { note: t("knowledge.landing.withAccount") }
+                  : {}),
               }}
             />
           </div>

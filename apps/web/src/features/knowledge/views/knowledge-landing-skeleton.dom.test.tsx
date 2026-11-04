@@ -33,3 +33,20 @@ test("a visitor's skeleton leaves out the section no visitor can reach", () => {
   expect(titles).not.toContain(messages.common.workflows);
   expect(titles).toContain(messages.common.clauses);
 });
+
+test("only a visitor's skeleton reserves the account note", () => {
+  const notes = (audience: "member" | "public") => {
+    const { container, unmount } = render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <KnowledgeLandingSkeleton audience={audience} />
+      </IntlProvider>,
+    );
+    const count = [...container.querySelectorAll("p")].filter(
+      (line) => line.textContent === messages.knowledge.landing.withAccount,
+    ).length;
+    unmount();
+    return count;
+  };
+  expect(notes("public")).toBe(2);
+  expect(notes("member")).toBe(0);
+});
