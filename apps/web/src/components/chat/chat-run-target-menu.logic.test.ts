@@ -10,6 +10,7 @@ import {
   CHAT_LOCAL_HARNESS_NAMES,
   chatLocalHarnessOptions,
   effectiveRunTarget,
+  localRunModelLabel,
   runTargetValue,
 } from "@/components/chat/chat-run-target-menu.logic";
 
@@ -100,6 +101,22 @@ describe("the Run on choices", () => {
     });
     expect(stateOf(options, "claude-code")).toBe("not_installed");
   });
+
+  test("a harness its computer could not check reads as unavailable, never as unsupported", () => {
+    const options = chatLocalHarnessOptions({
+      status: "enabled",
+      runners: [
+        runner([
+          { id: "codex", state: "unavailable", reason: "harness_failed" },
+          { id: "claude-code", state: "unsupported", version: "1.0.0" },
+        ]),
+      ],
+    });
+    expect(options).toEqual([
+      { harness: "codex", state: "unavailable" },
+      { harness: "claude-code", state: "unsupported" },
+    ]);
+  });
 });
 
 describe("the selected run target", () => {
@@ -115,5 +132,31 @@ describe("the selected run target", () => {
 
   test("a thread without a stored target runs in the cloud", () => {
     expect(effectiveRunTarget(undefined)).toEqual({ kind: "cloud" });
+  });
+
+  test("the composer names a local model as the harness reports it, and only then", () => {
+    const target = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+    } as const;
+    expect(
+      localRunModelLabel(
+        { status: "enabled", runners: [runner([READY_CODEX])] },
+        target,
+      ),
+    ).toBe("GPT-5 Codex");
+    // Another harness offering the same id does not name it.
+    expect(
+      localRunModelLabel(
+        {
+          status: "enabled",
+          runners: [runner([{ ...READY_CODEX, id: "claude-code" }])],
+        },
+        target,
+      ),
+    ).toBeNull();
+    expect(localRunModelLabel({ status: "hidden" }, target)).toBeNull();
+    expect(localRunModelLabel(undefined, target)).toBeNull();
   });
 });

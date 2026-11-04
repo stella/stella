@@ -225,7 +225,10 @@
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
     "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
-    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie.",
+    "lockScreenTitle": "Ekran blokady",
+    "timerDetails": "Szczegóły licznika",
+    "timerDetailsHint": "Gdy licznik zmieni się na innym urządzeniu, usługa powiadomień Apple przekazuje jego opis i sprawę na ekran blokady. Po wyłączeniu widać tylko czas, dopóki nie otworzysz aplikacji."
   },
   "header": {
     "search": "Szukaj"
@@ -265,10 +268,6 @@
     "newTimer": "Nowy licznik",
     "description": "Nad czym pracujesz?",
     "matterTitle": "Sprawa",
-    "noMatter": "Bez sprawy",
-    "noDescription": "Bez opisu",
-    "running": "Działa",
-    "paused": "Wstrzymany",
     "pause": "Wstrzymaj",
     "resume": "Wznów",
     "save": "Zapisz",
@@ -279,8 +278,7 @@
     "retry": "Spróbuj ponownie",
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
-    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie.",
-    "more": "{count, plural, one {i # inny stoper} few {i # inne stopery} other {i # innych stoperów}}"
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
   },
   "scan": {
     "title": "Zeskanuj dokument",

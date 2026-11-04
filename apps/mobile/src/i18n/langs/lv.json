@@ -225,7 +225,10 @@
     "signOut": "Atslēgties",
     "deleteAccount": "Dzēst kontu",
     "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu.",
-    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz."
+    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz.",
+    "lockScreenTitle": "Bloķēšanas ekrāns",
+    "timerDetails": "Taimera informācija",
+    "timerDetailsHint": "Kad taimeris mainās citā ierīcē, Apple paziņojumu pakalpojums nogādā tā aprakstu un lietu bloķēšanas ekrānā. Izslēgtā stāvoklī redzams tikai laiks, līdz atverat lietotni."
   },
   "header": {
     "search": "Meklēt"
@@ -265,10 +268,6 @@
     "newTimer": "Jauns taimeris",
     "description": "Pie kā strādājat?",
     "matterTitle": "Lieta",
-    "noMatter": "Bez lietas",
-    "noDescription": "Bez apraksta",
-    "running": "Darbojas",
-    "paused": "Apturēts",
     "pause": "Apturēt",
     "resume": "Turpināt",
     "save": "Saglabāt",
@@ -279,8 +278,7 @@
     "retry": "Mēģināt vēlreiz",
     "unavailable": "Jūsu organizācijā laika uzskaite nav ieslēgta.",
     "startFailed": "Taimeri neizdevās sākt. Mēģiniet vēlreiz.",
-    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz.",
-    "more": "{count, plural, zero {vēl # taimeru} one {vēl # taimeris} other {vēl # taimeri}}"
+    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz."
   },
   "scan": {
     "title": "Skenēt dokumentu",

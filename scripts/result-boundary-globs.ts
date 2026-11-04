@@ -309,6 +309,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/file-derivative-queue.ts",
   // BullMQ retries an attempt only when its processor rejects.
   "apps/api/src/lib/push/push-delivery-worker.ts",
+  "apps/api/src/lib/push/timer-activity-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",

@@ -331,6 +331,8 @@ const installNativeBoundary = async (
         // No connection status: the section stays hidden, as with local agents off.
         chatgpt_auth_get_status: () => null,
         claude_code_auth_get_status: () => null,
+        // No install status either, read the same as the refusal with local agents off.
+        harness_get_status: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;
@@ -485,6 +487,25 @@ test("sign-in stays available without disabling local clipboard search", async (
     .poll(async () => await tauriInvocations(page))
     .toContainEqual({ command: "open_stella_account", args: {} });
   expect(await searches(page)).toEqual([]);
+});
+
+test("Enter while a registry search is still pending never copies a hidden clipboard result", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "defer-first-search");
+  await searchBox(page).fill("Privileged");
+  await switchScope(page, "ArrowDown");
+  // The search is asked for but never answered, so Enter lands while the
+  // registry has nothing to act on and the clips' matches are only hidden.
+  await expect.poll(async () => (await searches(page)).length).toBe(1);
+  await searchBox(page).press("Enter");
+  await searchBox(page).press("Shift+Enter");
+  expect(
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "clipboard_copy_item",
+    ),
+  ).toEqual([]);
+  await expect(searchBox(page)).toBeFocused();
 });
 
 test("keyboard activation retains the input and Enter never copies a hidden clipboard result", async ({

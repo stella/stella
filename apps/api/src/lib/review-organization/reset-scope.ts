@@ -45,6 +45,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   usage_allocations: "Usage ledger: budgets must survive the nightly reset.",
   push_devices:
     "The review account's own phone registrations for alerts; no reviewer content.",
+  timer_activity_devices:
+    "The review account's own phone registrations for its timer's Lock Screen; no reviewer content.",
   usage_entitlements: "Usage ledger: entitlements are operator-managed.",
   usage_events: "Usage ledger: metered history for budgets and billing.",
   usage_lane_counters: "Usage ledger: rate-limit counters.",

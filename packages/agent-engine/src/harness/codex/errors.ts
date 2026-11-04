@@ -86,6 +86,14 @@ const httpStatus = (info: CodexTurnError["codexErrorInfo"]): number | null => {
   return null;
 };
 
+/**
+ * The selected model was at capacity. Codex itself retries transient errors
+ * inside a turn; this one ends the turn, and a continuation on the same
+ * thread is how it resumes (approach from t3code, MIT, `CodexAdapterV2.ts`).
+ */
+export const isCapacityFailure = (error: CodexTurnError | null): boolean =>
+  errorCode(error?.codexErrorInfo ?? null) === "serverOverloaded";
+
 type ClassifyTurnFailureOptions = {
   error: CodexTurnError | null;
   rateLimits: CodexRateLimits | null;

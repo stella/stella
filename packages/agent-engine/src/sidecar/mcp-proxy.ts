@@ -24,7 +24,7 @@ import type { StellaSandboxMcpBinding } from "../sandbox";
 
 const ROUTE_PREFIX = "/mcp/";
 const SECRET_BYTES = 32;
-/** A run's transcript travels over stdio; MCP bodies stay far below this. */
+/** Transcripts travel over the holder socket; MCP bodies stay far below. */
 const MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024;
 
 /** Headers an MCP client sends that the stella server reads. */

@@ -1693,11 +1693,14 @@
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit wyczerpany do {time}",
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
-      "stateUnsupported": "Ta wersja nie jest obsługiwana"
+      "stateUnavailable": "Chwilowo niedostępne",
+      "stateUnsupported": "Ta wersja nie jest obsługiwana",
+      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {
@@ -2784,6 +2787,11 @@
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
       "undoImport": "Cofnij import ({count})",
+      "undoImportConfirm": "Trwale usunąć {count, plural, one {kontakt utworzony} few {# kontakty utworzone} many {# kontaktów utworzonych} other {# kontaktu utworzonego}} przez ten import? Tej operacji nie można cofnąć.",
+      "undoImportTitle": "Cofnąć ten import?",
+      "undoneRow": "Usunięto przez cofnięcie importu",
+      "undoneSummary": "Cofnięcie importu usunęło {count, plural, one {# utworzony kontakt} few {# utworzone kontakty} many {# utworzonych kontaktów} other {# utworzonego kontaktu}}.",
+      "undoneToast": "Import cofnięty: usunięto {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
       "warning": {
         "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",

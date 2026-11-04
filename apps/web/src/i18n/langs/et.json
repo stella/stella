@@ -1693,11 +1693,14 @@
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limiit täis kuni {time}",
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",
       "stateOffline": "Arvuti pole võrgus",
-      "stateUnsupported": "Seda versiooni ei toetata"
+      "stateUnavailable": "Praegu pole saadaval",
+      "stateUnsupported": "Seda versiooni ei toetata",
+      "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
@@ -2784,6 +2787,11 @@
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
       "undoImport": "Võta import tagasi ({count})",
+      "undoImportConfirm": "Kas kustutada selle impordiga {count, plural, one {loodud kontakt} other {loodud # kontakti}} jäädavalt? Seda toimingut ei saa tagasi võtta.",
+      "undoImportTitle": "Kas võtta see import tagasi?",
+      "undoneRow": "Eemaldati tagasivõtmisega",
+      "undoneSummary": "Tagasivõtmine eemaldas {count, plural, one {# selle impordiga loodud kontakti} other {# selle impordiga loodud kontakti}}.",
+      "undoneToast": "Import võeti tagasi: kustutati {count, plural, one {# kontakt} other {# kontakti}}",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
       "warning": {
         "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",

@@ -1693,11 +1693,14 @@
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit vyčerpaný do {time}",
       "stateNeedsLogin": "Vyžaduje prihlásenie",
       "stateNotInstalled": "Nie je nainštalované",
       "stateOffline": "Počítač je offline",
-      "stateUnsupported": "Táto verzia nie je podporovaná"
+      "stateUnavailable": "Momentálne nedostupné",
+      "stateUnsupported": "Táto verzia nie je podporovaná",
+      "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
@@ -2784,6 +2787,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
       "undoImport": "Vrátiť import ({count})",
+      "undoImportConfirm": "Natrvalo odstrániť {count, plural, one {kontakt vytvorený} few {# kontakty vytvorené} many {# kontaktu vytvoreného} other {# kontaktov vytvorených}} týmto importom? Túto akciu nemožno vrátiť späť.",
+      "undoImportTitle": "Vrátiť tento import?",
+      "undoneRow": "Odstránené vrátením importu",
+      "undoneSummary": "Vrátenie importu odstránilo {count, plural, one {# vytvorený kontakt} few {# vytvorené kontakty} many {# vytvoreného kontaktu} other {# vytvorených kontaktov}}.",
+      "undoneToast": "Import vrátený: {count, plural, one {odstránený # kontakt} few {odstránené # kontakty} many {odstránených # kontaktu} other {odstránených # kontaktov}}",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",

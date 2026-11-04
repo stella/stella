@@ -225,7 +225,10 @@
     "signOut": "Kijelentkezés",
     "deleteAccount": "Fiók törlése",
     "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné.",
-    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra."
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra.",
+    "lockScreenTitle": "Zárolási képernyő",
+    "timerDetails": "Időzítő részletei",
+    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot."
   },
   "header": {
     "search": "Keresés"
@@ -265,10 +268,6 @@
     "newTimer": "Új időzítő",
     "description": "Min dolgozik?",
     "matterTitle": "Ügy",
-    "noMatter": "Nincs ügy",
-    "noDescription": "Nincs leírás",
-    "running": "Fut",
-    "paused": "Szüneteltetve",
     "pause": "Szüneteltetés",
     "resume": "Folytatás",
     "save": "Mentés",
@@ -279,8 +278,7 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
-    "more": "{count, plural, other {még # időmérő}}"
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
   },
   "scan": {
     "title": "Dokumentum szkennelése",

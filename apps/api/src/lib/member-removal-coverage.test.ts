@@ -401,6 +401,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "push_devices.user_id":
     "The person's own device registration, holding no organization content; alerts name nothing, and the row moves when the app signs in to another organization.",
+  "timer_activity_devices.user_id":
+    "The person's own phone registration, holding no organization content; the update worker reads timers under the person's membership as it stands, so a removed member's phone is sent only the end of its activity.",
   "pending_uploads.user_id":
     "Short-lived operation; current membership is revalidated before use.",
   "playbook_definition_versions.created_by":

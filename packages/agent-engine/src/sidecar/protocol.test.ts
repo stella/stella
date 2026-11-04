@@ -3,8 +3,11 @@ import * as v from "valibot";
 
 import {
   encodeSidecarMessage,
+  parseSidecarHelloPreamble,
   parseSidecarHostLine,
+  SIDECAR_HOLDER_MODES,
   SIDECAR_HOST_MESSAGE,
+  SIDECAR_MAX_HELD_RUNS,
   SIDECAR_MAX_LINE_BYTES,
   SIDECAR_MESSAGE,
   SIDECAR_PROBE_FAILURES,
@@ -26,10 +29,12 @@ describe("sidecar protocol fixtures", () => {
     expect(fixtures.vocabulary).toEqual({
       protocol: SIDECAR_PROTOCOL,
       maxLineBytes: SIDECAR_MAX_LINE_BYTES,
+      maxHeldRuns: SIDECAR_MAX_HELD_RUNS,
       hostMessageTypes: Object.values(SIDECAR_HOST_MESSAGE),
       messageTypes: Object.values(SIDECAR_MESSAGE),
       rejections: [...SIDECAR_REJECTIONS],
       probeFailures: [...SIDECAR_PROBE_FAILURES],
+      holderModes: [...SIDECAR_HOLDER_MODES],
     });
   });
 
@@ -80,6 +85,7 @@ describe("sidecar protocol fixtures", () => {
       encodeSidecarMessage({
         type: "run.approval_request",
         runId,
+        seq: 1,
         requestId: "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         kind: "command",
         summary: "",
@@ -89,6 +95,7 @@ describe("sidecar protocol fixtures", () => {
       encodeSidecarMessage({
         type: "run.event",
         runId,
+        seq: 1,
         chunk: {
           type: "TEXT_MESSAGE_CONTENT",
           delta: "é".repeat(SIDECAR_MAX_LINE_BYTES / 2),
@@ -133,6 +140,22 @@ describe("sidecar protocol fixtures", () => {
       reason: "unknown_type",
       messageType: "x".repeat(64),
     });
+  });
+
+  test("a hello of another protocol still yields its secret and version", () => {
+    const secret = "ab".repeat(32);
+    expect(
+      parseSidecarHelloPreamble(
+        JSON.stringify({ type: "hello", protocol: 9, secret, future: [1] }),
+      ),
+    ).toEqual({ type: "hello", protocol: 9, secret });
+    for (const line of [
+      JSON.stringify({ type: "hello", protocol: 2 }),
+      JSON.stringify({ type: "ack", protocol: 2, secret }),
+      "{not json",
+    ]) {
+      expect(parseSidecarHelloPreamble(line)).toBeNull();
+    }
   });
 
   test("a line over the limit is refused before it is parsed", () => {

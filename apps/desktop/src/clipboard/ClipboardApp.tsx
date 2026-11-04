@@ -1776,6 +1776,16 @@ const ClipboardApp = () => {
     },
     [observeTimelineRail],
   );
+  // Initial focus belongs to the window attaching, not to every commit: an
+  // inline ref reruns on each render and would pull focus off the body
+  // whenever an unrelated render (a deferred filter catching up) lands.
+  const attachTimeline = useCallback((node: HTMLDivElement | null) => {
+    timelineRef.current = node;
+    focusTimeline(node);
+    return () => {
+      timelineRef.current = null;
+    };
+  }, []);
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
@@ -2041,9 +2051,13 @@ const ClipboardApp = () => {
   // deferred render is pending the rail still shows the previous query's
   // list, and acting on it would hand over the wrong clip. Resolved on
   // demand inside the key handlers so the keystroke render itself never
-  // pays for a filter; identical to the rendered list once settled.
-  const resolveActionItems = () =>
-    query === filterQuery
+  // pays for a filter; identical to the rendered list once settled. Outside
+  // the clips scope no clip is shown, so no key acts on one.
+  const resolveActionItems = () => {
+    if (searchSource !== "clips") {
+      return [];
+    }
+    return query === filterQuery
       ? filteredItems
       : filterClipboardItems(
           snapshot.items,
@@ -2051,6 +2065,7 @@ const ClipboardApp = () => {
           activeGroupId,
           searchOptions,
         );
+  };
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
@@ -2940,10 +2955,7 @@ const ClipboardApp = () => {
       className={`${CLIPBOARD_WINDOW_CLASS} text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none`}
       aria-label={t("timeline")}
       data-active-group={activeGroup ? "" : undefined}
-      ref={(node) => {
-        timelineRef.current = node;
-        focusTimeline(node);
-      }}
+      ref={attachTimeline}
       role="application"
       style={windowStyle}
       tabIndex={-1}
