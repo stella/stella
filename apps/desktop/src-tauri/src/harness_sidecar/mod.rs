@@ -603,6 +603,8 @@ fn private_dir(dir: &Path) -> std::io::Result<()> {
 }
 
 /// The program to start: in place, or a byte copy in the version's folder.
+/// An existing copy is reused only when its bytes equal the bundled
+/// program's, so a rebuild under the same version never starts a stale one.
 /// The copy is written beside the target and renamed over it, so a holder
 /// never starts from a half-written file.
 fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<PathBuf> {
@@ -610,8 +612,7 @@ fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<Path
     return Ok(launch.program.clone());
   }
   let target = dir.join(format!("{BUNDLED_NAME}{}", std::env::consts::EXE_SUFFIX));
-  let size = std::fs::metadata(&launch.program)?.len();
-  if std::fs::metadata(&target).is_ok_and(|existing| existing.len() == size) {
+  if same_bytes(&launch.program, &target)? {
     return Ok(target);
   }
   let temporary = dir.join(format!(".{BUNDLED_NAME}.{}.tmp", uuid::Uuid::new_v4()));
@@ -629,6 +630,31 @@ fn installed_program(launch: &SidecarLaunch, dir: &Path) -> std::io::Result<Path
     let _removed = std::fs::remove_file(&temporary);
   }
   copied.map(|()| target)
+}
+
+/// Whether `copy` exists with exactly the bytes of `source`.
+fn same_bytes(source: &Path, copy: &Path) -> std::io::Result<bool> {
+  use std::io::Read as _;
+  const CHUNK: usize = 64 * 1024;
+  let Ok(mut existing) = std::fs::File::open(copy) else {
+    return Ok(false);
+  };
+  let mut original = std::fs::File::open(source)?;
+  if existing.metadata()?.len() != original.metadata()?.len() {
+    return Ok(false);
+  }
+  let mut left = vec![0_u8; CHUNK];
+  let mut right = vec![0_u8; CHUNK];
+  loop {
+    let read = original.read(&mut left)?;
+    if read == 0 {
+      return Ok(true);
+    }
+    let found = &mut right[..read];
+    if existing.read_exact(found).is_err() || *found != left[..read] {
+      return Ok(false);
+    }
+  }
 }
 
 /// A plain byte copy, executable by the user alone; a signature embedded in
@@ -1198,6 +1224,7 @@ impl Supervisor {
     let role = previous.role;
     drop(previous);
     self.fail_probes(dir);
+    let mut gone = false;
     for attempt in 0..RECONNECT_ATTEMPTS {
       match self.open(dir).await {
         Ok(opened) => {
@@ -1208,15 +1235,22 @@ impl Supervisor {
           }
           return;
         }
-        Err(OpenError::Gone | OpenError::Incompatible | OpenError::NoEndpoint) => break,
+        Err(OpenError::Gone) => {
+          gone = true;
+          break;
+        }
+        Err(OpenError::Incompatible | OpenError::NoEndpoint) => break,
         Err(OpenError::Failed) => {
           tokio::time::sleep(self.settings.backoff.delay(attempt)).await; // kit-allow: reconnect backoff to a real holder process
         }
       }
     }
-    tracing::warn!(target: LOG_TARGET, "harness holder is gone; its runs failed");
+    tracing::warn!(target: LOG_TARGET, "harness holder is unreachable; its runs failed");
     self.fail_holder(dir);
-    if role == LinkRole::Draining {
+    // As in `discover`: only a holder nothing listens for any more loses its
+    // folder. One that is alive but unreachable keeps its secret and
+    // endpoint, so a later app can still reach it and resume its runs.
+    if role == LinkRole::Draining && gone {
       remove_holder_dir(dir);
     }
   }
