@@ -166,8 +166,11 @@ export const createHttp2ApnsTransport = ({
  * - `delivered`: Apple accepted it.
  * - `device_gone`: the token is dead or belongs to another app or gateway;
  *   the device is removed, and the app registers again when it next runs.
- * - `retry`: throttled, an Apple outage, an expired provider token, or the
- *   network; worth sending again later.
+ * - `retry`: Apple answered that it took nothing for now (throttled, an
+ *   outage, an expired provider token); worth sending again later.
+ * - `unconfirmed`: the network failed or timed out, so Apple may or may not
+ *   have taken it; worth sending again, as long as a second copy is
+ *   harmless.
  * - `rejected`: the request itself is wrong (payload, credentials, topic);
  *   sending it again would be refused the same way.
  */
@@ -175,7 +178,12 @@ export type ApnsOutcome =
   | { type: "delivered" }
   | { type: "device_gone"; reason: string }
   | { type: "retry"; reason: string }
+  | { type: "unconfirmed"; reason: string }
   | { type: "rejected"; reason: string; status: number };
+
+/** Whether another attempt is worth making. */
+export const isRetryableOutcome = (outcome: ApnsOutcome): boolean =>
+  outcome.type === "retry" || outcome.type === "unconfirmed";
 
 const DEAD_TOKEN_REASONS = new Set([
   "BadDeviceToken",
@@ -287,7 +295,7 @@ export const createApnsClient = ({
       body,
     });
     if (Result.isError(response)) {
-      return { type: "retry", reason: response.error.reason };
+      return { type: "unconfirmed", reason: response.error.reason };
     }
     const outcome = classifyApnsResponse(response.value);
     if (outcome.type === "retry" && outcome.reason === "ExpiredProviderToken") {

@@ -124,8 +124,22 @@ const followedTimer = <T extends TimerActivityTimer>(
   return latestRunning ?? longestPaused;
 };
 
+/**
+ * The most of a description or matter name the activity shows. The Lock
+ * Screen shows a line of each, and Apple refuses an activity whose data is
+ * past 4 KB, which a 10,000-character description would be.
+ */
+export const TIMER_ACTIVITY_TEXT_MAX_LENGTH = 120;
+
+const shortened = (text: string): string =>
+  text.length <= TIMER_ACTIVITY_TEXT_MAX_LENGTH
+    ? text
+    : `${text.slice(0, TIMER_ACTIVITY_TEXT_MAX_LENGTH - 1).trimEnd()}…`;
+
 const named = (text: string | null | undefined): string | undefined =>
-  text === null || text === undefined || text.trim() === "" ? undefined : text;
+  text === null || text === undefined || text.trim() === ""
+    ? undefined
+    : shortened(text.trim());
 
 /**
  * The timer the activity follows: the one running, the latest resumed when
@@ -155,26 +169,29 @@ export const timerActivityOf = ({
   const others = timers.length - 1;
   const isRunning = followed.state === "running";
   const state = isRunning ? labels.running : labels.paused;
-  const status = others > 0 ? labels.more(others) : state;
   const shared = {
     clock: clockOf(seconds),
     countingFromMs: now - seconds * 1000,
     link,
     running: isRunning,
-    status,
     timerId: followed.id,
   };
+  // Hidden details say nothing of the other timers either: only the clock
+  // and whether it runs.
   if (details === "hidden") {
-    return { ...shared, detail: "", title: labels.timer };
+    return { ...shared, detail: "", status: state, title: labels.timer };
   }
-  const matterName =
+  const status = others > 0 ? labels.more(others) : state;
+  const matterName = named(
     followed.matterId === null || followed.matterId === undefined
       ? undefined
-      : matterNames.get(followed.matterId);
+      : matterNames.get(followed.matterId),
+  );
   const description = named(followed.description);
   return {
     ...shared,
     detail: description === undefined ? "" : (matterName ?? labels.noMatter),
+    status,
     title: description ?? matterName ?? labels.noDescription,
   };
 };
@@ -184,10 +201,12 @@ const TIMER_ACTIVITY_ID_MAX_LENGTH = 128;
 
 /**
  * `PUT /v1/me/timer-activity-devices/:deviceId`: what this phone holds now.
- * The app sends its whole state each time, so a retried or reordered
- * registration converges on the latest.
+ * The app sends its whole state each time, numbered, so a registration that
+ * arrives after a newer one, or after the sign-out, changes nothing.
  */
 export const timerActivityDeviceRegistrationSchema = v.strictObject({
+  /** Grows with each registration from this sign-in; the server keeps only a newer one. */
+  sequence: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
   environment: v.picklist(APNS_ENVIRONMENTS),
   bundleId: v.picklist(MOBILE_APP_BUNDLE_IDS),
   /** The app's language as a BCP 47 tag; the activity's words are chosen from it. */
@@ -206,7 +225,7 @@ export const timerActivityDeviceRegistrationSchema = v.strictObject({
     v.string(),
     v.maxLength(TIMER_ACTIVITY_LINK_MAX_LENGTH),
     v.regex(
-      /^app\.stll(?:\.dev|\.preview)?:\/\/[\w./-]*timers$/u,
+      /^app\.stll(?:\.dev|\.preview)?:\/\/\/?(?:[\w.-]+\/)*timers$/u,
       "Expected the app's own link to its timers.",
     ),
   ),

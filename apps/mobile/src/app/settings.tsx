@@ -10,71 +10,13 @@ import { Text } from "@stll/ui/text";
 
 import { screenStyles } from "@/components/empty-state-screen";
 import { accountPageUrl } from "@/connection/account-page";
+import type { StoredSession } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import {
   readTimerActivityDetails,
   TIMER_ACTIVITY_PUSH,
   writeTimerActivityDetails,
 } from "@/native/timer-activity-device";
-
-/**
- * Whether a timer changed on another device reaches the Lock Screen with its
- * description and matter, which then pass through Apple's notification
- * service, or with the time alone.
- */
-const TimerDetailsSetting = () => {
-  const t = useTranslations("settings");
-  const [stored] = useState(readTimerActivityDetails);
-  const [shown, setShown] = useState<boolean | null>(null);
-
-  return (
-    <View className="gap-2">
-      <View className="px-1">
-        <Text accessibilityRole="header" variant="section">
-          {t("lockScreenTitle")}
-        </Text>
-      </View>
-      <View className="border-border bg-card flex-row items-center gap-3 rounded-xl border p-4">
-        <Text className="flex-1">{t("timerDetails")}</Text>
-        <Suspense fallback={null}>
-          <StoredSwitch
-            label={t("timerDetails")}
-            onChange={(next) => {
-              setShown(next);
-              void writeTimerActivityDetails(next);
-            }}
-            shown={shown}
-            stored={stored}
-          />
-        </Suspense>
-      </View>
-      <View className="px-1">
-        <Text variant="caption">{t("timerDetailsHint")}</Text>
-      </View>
-    </View>
-  );
-};
-
-const StoredSwitch = ({
-  label,
-  onChange,
-  shown,
-  stored,
-}: {
-  label: string;
-  onChange: (next: boolean) => void;
-  shown: boolean | null;
-  stored: Promise<boolean>;
-}) => {
-  const initial = use(stored);
-  return (
-    <Switch
-      accessibilityLabel={label}
-      checked={shown ?? initial}
-      onCheckedChange={onChange}
-    />
-  );
-};
 
 const SettingsScreen = () => {
   const t = useTranslations();
@@ -104,7 +46,9 @@ const SettingsScreen = () => {
           <Text selectable>{serverUrl}</Text>
         </View>
       </View>
-      {TIMER_ACTIVITY_PUSH ? <TimerDetailsSetting /> : null}
+      {TIMER_ACTIVITY_PUSH && session !== null ? (
+        <TimerDetailsSetting key={session.signInId} session={session} />
+      ) : null}
       {session === null ? null : (
         <View className="gap-2">
           <Button
@@ -139,5 +83,73 @@ const SettingsScreen = () => {
     </ScrollView>
   );
 };
+
+/**
+ * Whether a timer changed on another device reaches the Lock Screen with its
+ * description and matter, which then pass through Apple's notification
+ * service, or with the time alone. The account's own choice on this phone.
+ */
+const TimerDetailsSetting = ({ session }: { session: StoredSession }) => {
+  const t = useTranslations("settings");
+  // A phone whose keychain cannot be read shows the default, on.
+  const read = async () =>
+    await readTimerActivityDetails(session).catch(() => true);
+  const [stored, setStored] = useState(read);
+  const [saving, startSaving] = useTransition();
+
+  return (
+    <View className="gap-2">
+      <View className="px-1">
+        <Text accessibilityRole="header" variant="section">
+          {t("lockScreenTitle")}
+        </Text>
+      </View>
+      <View className="border-border bg-card flex-row items-center gap-3 rounded-xl border p-4">
+        <Text className="flex-1">{t("timerDetails")}</Text>
+        <Suspense fallback={null}>
+          <StoredSwitch
+            disabled={saving}
+            label={t("timerDetails")}
+            onChange={(next) => {
+              // One write at a time, and the switch then shows what was
+              // kept, so a failed write never leaves it saying otherwise.
+              startSaving(async () => {
+                await writeTimerActivityDetails(session, next).catch(
+                  () => undefined,
+                );
+                const kept = read();
+                await kept;
+                setStored(kept);
+              });
+            }}
+            stored={stored}
+          />
+        </Suspense>
+      </View>
+      <View className="px-1">
+        <Text variant="caption">{t("timerDetailsHint")}</Text>
+      </View>
+    </View>
+  );
+};
+
+const StoredSwitch = ({
+  disabled,
+  label,
+  onChange,
+  stored,
+}: {
+  disabled: boolean;
+  label: string;
+  onChange: (next: boolean) => void;
+  stored: Promise<boolean>;
+}) => (
+  <Switch
+    accessibilityLabel={label}
+    checked={use(stored)}
+    disabled={disabled}
+    onCheckedChange={onChange}
+  />
+);
 
 export default SettingsScreen;

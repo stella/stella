@@ -46,7 +46,7 @@ export const timerActivityPushFor = ({
 }: {
   device: Pick<
     TimerActivityDevice,
-    "locale" | "link" | "details" | "startToken" | "activityToken" | "startedAt"
+    "locale" | "link" | "details" | "startToken" | "activityToken" | "starting"
   >;
   matterNames: ReadonlyMap<string, string>;
   now: number;
@@ -108,7 +108,7 @@ export const timerActivityPushFor = ({
   if (
     props?.running === true &&
     device.startToken !== null &&
-    device.startedAt === null
+    !device.starting
   ) {
     return {
       type: "start",

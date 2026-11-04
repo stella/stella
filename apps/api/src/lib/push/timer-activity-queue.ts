@@ -17,6 +17,7 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createApnsClient,
   createHttp2ApnsTransport,
+  isRetryableOutcome,
 } from "@/api/lib/push/apns-client";
 import type { ApnsActivityPush, ApnsOutcome } from "@/api/lib/push/apns-client";
 import {
@@ -184,13 +185,16 @@ const updateDevice = async (
     payload: push.payload,
   });
   const tokenKind = push.type === "start" ? "start" : "activity";
+  // A start whose fate is unknown keeps its claim, so a retry cannot start a
+  // second activity; the claim lapses on its own if the first never came.
+  const refused = outcome.type === "retry" || outcome.type === "rejected";
   if (
     outcome.type === "device_gone" ||
     (push.type === "end" && outcome.type === "delivered")
   ) {
     await deps.forgetToken(owner, device, tokenKind);
   }
-  if (push.type === "start" && outcome.type !== "delivered") {
+  if (push.type === "start" && refused) {
     await deps.releaseStart(owner, device);
   }
   return outcome;
@@ -233,7 +237,7 @@ export const updateTimerActivities = async (
   return {
     status: "sent",
     sent: outcomes.filter(({ type }) => type === "delivered").length,
-    retryable: outcomes.filter(({ type }) => type === "retry").length,
+    retryable: outcomes.filter((outcome) => isRetryableOutcome(outcome)).length,
     rejected: outcomes.flatMap((outcome) =>
       outcome.type === "rejected"
         ? [{ reason: outcome.reason, status: outcome.status }]

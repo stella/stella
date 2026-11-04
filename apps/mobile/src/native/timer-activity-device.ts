@@ -1,8 +1,10 @@
 import { randomUUID } from "expo-crypto";
 
-import type { AccessTokenSource } from "@/connection/session";
+import type { AccessTokenSource, StoredSession } from "@/connection/session";
+import type { BeforeSessionEnd } from "@/connection/session-end";
 import { LIVE_ACTIVITIES, PUSH_NOTIFICATIONS } from "@/env";
 import { deviceAccountStore } from "@/native/account-store";
+import { keyPart } from "@/state/recent-searches";
 import { unregisterTimerActivityDevice } from "@/state/timer-activity-devices";
 
 /**
@@ -12,37 +14,69 @@ import { unregisterTimerActivityDevice } from "@/state/timer-activity-devices";
  */
 export const TIMER_ACTIVITY_PUSH = LIVE_ACTIVITIES && PUSH_NOTIFICATIONS;
 
-const DEVICE_ID_KEY = "timer-activity-device";
-const DETAILS_KEY = "timer-activity-details";
+type SessionKeys = Pick<StoredSession, "serverUrl" | "signInId" | "userId">;
+
+/** This sign-in's own id for the phone: a new sign-in is a new registration. */
+const deviceIdKey = ({ serverUrl, signInId }: SessionKeys) =>
+  `timer-activity-device.${keyPart(serverUrl)}.${keyPart(signInId)}`;
+
+/** The person's own choice, kept for their account on this phone. */
+const detailsKey = ({ serverUrl, userId }: SessionKeys) =>
+  `timer-activity-details.${keyPart(serverUrl)}.${keyPart(userId)}`;
+
+const pendingIds = new Map<string, Promise<string>>();
 
 /**
- * The id this phone registers its timer under, made the first time and kept
- * until the app is removed. It names a phone, not a person: when somebody
- * else signs in here, their registration is the one the server follows.
+ * The id this sign-in registers the phone under, made the first time it is
+ * needed. Callers that overlap share one id; a failed write is retried by
+ * the next caller.
  */
-export const timerActivityDeviceId = async (): Promise<string> => {
-  const stored = await deviceAccountStore.read(DEVICE_ID_KEY);
-  if (stored !== null) {
-    return stored;
+export const timerActivityDeviceId = async (
+  session: SessionKeys,
+): Promise<string> => {
+  const key = deviceIdKey(session);
+  const pending = pendingIds.get(key);
+  if (pending !== undefined) {
+    return await pending;
   }
-  const created = randomUUID();
-  await deviceAccountStore.write(DEVICE_ID_KEY, created);
-  return created;
+  const made = (async () => {
+    const stored = await deviceAccountStore.read(key);
+    if (stored !== null) {
+      return stored;
+    }
+    const created = randomUUID();
+    await deviceAccountStore.write(key, created);
+    return created;
+  })();
+  pendingIds.set(key, made);
+  // A failed write lets the next caller try again.
+  made.catch(() => pendingIds.delete(key));
+  return await made;
 };
+
+/** Sign-ins that have signed out, whose registrations must not be sent. */
+const signedOut = new Set<string>();
+
+export const isSignedOut = (session: SessionKeys): boolean =>
+  signedOut.has(deviceIdKey(session));
 
 const listeners = new Set<() => void>();
 
 /**
  * Whether updates the server sends through Apple may name the timer's
- * description and matter. On until the person turns it off in Settings.
+ * description and matter. On until the person turns it off in Settings, for
+ * their account alone.
  */
-export const readTimerActivityDetails = async (): Promise<boolean> =>
-  (await deviceAccountStore.read(DETAILS_KEY)) !== "off";
+export const readTimerActivityDetails = async (
+  session: SessionKeys,
+): Promise<boolean> =>
+  (await deviceAccountStore.read(detailsKey(session))) !== "off";
 
 export const writeTimerActivityDetails = async (
+  session: SessionKeys,
   shown: boolean,
 ): Promise<void> => {
-  await deviceAccountStore.write(DETAILS_KEY, shown ? "on" : "off");
+  await deviceAccountStore.write(detailsKey(session), shown ? "on" : "off");
   for (const listener of listeners) {
     listener();
   }
@@ -59,22 +93,33 @@ export const onTimerActivityDetailsChange = (
 };
 
 /**
- * Tells the server to stop updating this phone's timer, as the person signs
- * out. Best effort: should it fail, a later sign-in here claims the phone,
- * and the server follows the newer claim.
+ * Tells the server this sign-in is over on the phone, before the session
+ * goes. Registrations still being prepared are dropped, and one already on
+ * its way is refused by the server once the sign-out is filed. Best effort:
+ * should the request fail, the server stops on its own once a later sign-in
+ * here registers, or after two weeks without word from the phone.
  */
 export const stopTimerActivityUpdates = async (
   source: AccessTokenSource,
 ): Promise<void> => {
-  if (!TIMER_ACTIVITY_PUSH) {
+  const session = source.session();
+  if (!TIMER_ACTIVITY_PUSH || session === undefined) {
     return;
   }
-  const deviceId = await deviceAccountStore
-    .read(DEVICE_ID_KEY)
-    .catch(() => null);
+  const key = deviceIdKey(session);
+  signedOut.add(key);
+  const deviceId = await deviceAccountStore.read(key).catch(() => null);
   if (deviceId !== null) {
     (await unregisterTimerActivityDevice({ deviceId, fetch, source })).unwrapOr(
       undefined,
     );
   }
+};
+
+/** Deletes the ending sign-in's phone id, so the next sign-in registers anew. */
+export const forgetTimerActivityDevice: BeforeSessionEnd = async (
+  _reason,
+  session,
+) => {
+  await deviceAccountStore.remove(deviceIdKey(session));
 };

@@ -27,11 +27,17 @@ const PUSH_TOKEN_PATTERN = "^([0-9a-f]{2}){32,100}$";
  * A phone that shows the person's running timer on its Lock Screen, so a
  * timer started, paused or saved on another device reaches it too.
  *
- * One row per person and phone, named by an id the app makes for itself.
- * The app sends its whole state each time it changes: the token that starts
- * an activity, the activity it shows and the token that updates it, and
- * whether the person lets updates name the timer's description and matter.
- * The row names the organization the app is signed in to, and moves with it.
+ * One row per sign-in on a phone, named by an id the app makes when it
+ * signs in. The app sends its whole state each time it changes, numbered:
+ * the token that starts an activity, the activity it shows and the token
+ * that updates it, and whether the person lets updates name the timer's
+ * description and matter. The row names the organization the app is signed
+ * in to, and moves with it.
+ *
+ * Signing out keeps the row, marked, so a registration still in flight
+ * cannot bring it back, and so it still counts as the phone's latest claim:
+ * Apple's tokens name the phone, and an older sign-in that shares them is
+ * never sent anything again.
  *
  * Row security admits a person to their own rows only. The update worker
  * reads the table through the owner connection, which is the only place a
@@ -45,7 +51,7 @@ export const timerActivityDevices = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** The id the app made for this phone, kept until it signs out. */
+    /** The id the app made for this sign-in on the phone. */
     deviceId: p.uuid("device_id").notNull(),
     /** The firm the app is signed in to on this phone. */
     organizationId: safeOrganizationId("organization_id")
@@ -69,6 +75,10 @@ export const timerActivityDevices = p.pgTable(
     activityToken: p.text("activity_token"),
     /** When the server last started an activity here, so it starts at most one until the app reports it. */
     startedAt: timestamptz("started_at"),
+    /** The number of the registration filed; an older one changes nothing. */
+    sequence: p.bigint("sequence", { mode: "number" }).notNull(),
+    /** When this sign-in signed out; the row is then sent nothing and takes no registration. */
+    signedOutAt: timestamptz("signed_out_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /** Last registration; the oldest phone is evicted first. */
     lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),
@@ -78,8 +88,12 @@ export const timerActivityDevices = p.pgTable(
     p
       .index("timer_activity_devices_user_org_idx")
       .on(table.userId, table.organizationId),
-    // The update worker skips a phone somebody else registered more recently.
-    p.index("timer_activity_devices_device_idx").on(table.deviceId),
+    // The update worker skips a phone a later sign-in registered, which
+    // shares Apple's tokens with it.
+    p.index("timer_activity_devices_start_token_idx").on(table.startToken),
+    p
+      .index("timer_activity_devices_activity_token_idx")
+      .on(table.activityToken),
     p.check(
       "timer_activity_devices_environment_check",
       sql`${table.environment} IN (${sqlValues(APNS_ENVIRONMENTS)})`,
@@ -103,6 +117,10 @@ export const timerActivityDevices = p.pgTable(
     p.check(
       "timer_activity_devices_activity_token_check",
       sql`${table.activityToken} ~ ${sql.raw(`'${PUSH_TOKEN_PATTERN}'`)}`,
+    ),
+    p.check(
+      "timer_activity_devices_sequence_check",
+      sql`${table.sequence} >= 0`,
     ),
     p.check(
       "timer_activity_devices_activity_check",

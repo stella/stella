@@ -8,6 +8,7 @@ import {
   ApnsTransportError,
   classifyApnsResponse,
   createApnsClient,
+  isRetryableOutcome,
 } from "@/api/lib/push/apns-client";
 import type {
   ApnsAlert,
@@ -215,7 +216,7 @@ describe("APNs client", () => {
     expect(providerToken.expired).toBe(1);
   });
 
-  test("a network failure is worth another attempt", async () => {
+  test("a network failure is unconfirmed, and worth another attempt", async () => {
     const client = createApnsClient({
       transport: fakeGateway(
         Result.err(
@@ -225,10 +226,9 @@ describe("APNs client", () => {
       providerToken: fixedToken(),
     });
 
-    expect(await client.send(alert())).toEqual({
-      type: "retry",
-      reason: "timeout",
-    });
+    const outcome = await client.send(alert());
+    expect(outcome).toEqual({ type: "unconfirmed", reason: "timeout" });
+    expect(isRetryableOutcome(outcome)).toBe(true);
   });
 
   test("without a provider token nothing is sent", async () => {

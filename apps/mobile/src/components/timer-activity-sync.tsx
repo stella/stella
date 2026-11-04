@@ -21,6 +21,7 @@ import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { APP_VARIANT } from "@/env";
 import {
+  isSignedOut,
   onTimerActivityDetailsChange,
   readTimerActivityDetails,
   TIMER_ACTIVITY_PUSH,
@@ -35,6 +36,8 @@ import { TimerActivity } from "@/widgets/timer-activity";
 let startToken: string | null = null;
 /** The activity token the server last heard, so a repeated token reports nothing. */
 let reportedActivityToken: string | null = null;
+/** The number of the registration last sent. */
+let sequence = 0;
 
 /**
  * One activity at most: started, updated or ended to match `props`. Answers
@@ -79,19 +82,30 @@ const reportTimerActivity = async ({
   locale: string;
   source: AccessTokenSource;
 }) => {
+  const session = source.session();
   const bundleId = v.safeParse(
     bundleIdSchema,
     Constants.expoConfig?.ios?.bundleIdentifier,
   );
-  if (!bundleId.success) {
+  if (session === undefined || !bundleId.success) {
     return;
   }
   const activityToken =
     (await activity?.getPushToken().catch(() => null)) ?? null;
+  const deviceId = await timerActivityDeviceId(session).catch(() => null);
+  const details = await readTimerActivityDetails(session).catch(() => null);
+  // Signed out while this was prepared: the server would refuse it anyway,
+  // once the sign-out reached it.
+  if (deviceId === null || details === null || isSignedOut(session)) {
+    return;
+  }
   reportedActivityToken = activityToken;
+  // Numbered by time, never twice the same, so the server files only the
+  // newest when two cross on the way.
+  sequence = Math.max(sequence + 1, epochMilliseconds());
   (
     await registerTimerActivityDevice({
-      deviceId: await timerActivityDeviceId(),
+      deviceId,
       fetch,
       registration: {
         activity:
@@ -99,10 +113,11 @@ const reportTimerActivity = async ({
             ? null
             : { id: activity.getId(), token: activityToken },
         bundleId: bundleId.output,
-        details: await readTimerActivityDetails(),
+        details,
         environment: APP_VARIANT === "development" ? "sandbox" : "production",
         link,
         locale,
+        sequence,
         startToken,
       },
       source,

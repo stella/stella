@@ -32,7 +32,7 @@ const device = (
   locale: "en",
   seenToken: asTestRaw<TimestampCasToken>("2026-11-04 09:00:00+00"),
   startToken: `${deviceId}b`.padEnd(64, "b"),
-  startedAt: null,
+  starting: false,
   ...overrides,
 });
 
@@ -132,6 +132,18 @@ describe("updating a person's Lock Screens", () => {
       retryable: 1,
     });
     expect(log).toEqual(["claim p1", "send start p1", "release p1"]);
+  });
+
+  test("keeps a start's claim when the network left its fate unknown, so a retry starts no second activity", async () => {
+    const { deps, log } = fakeDeps({
+      devices: [device("p1", { activityToken: null })],
+      timers: [RUNNING],
+      outcome: () => ({ type: "unconfirmed", reason: "timeout" }),
+    });
+    expect(await updateTimerActivities(JOB, deps)).toMatchObject({
+      retryable: 1,
+    });
+    expect(log).toEqual(["claim p1", "send start p1"]);
   });
 
   test("forgets a token Apple calls dead", async () => {

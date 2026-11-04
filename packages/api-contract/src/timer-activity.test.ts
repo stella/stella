@@ -4,6 +4,7 @@ import * as v from "valibot";
 import {
   clockOf,
   elapsedSeconds,
+  TIMER_ACTIVITY_TEXT_MAX_LENGTH,
   timerActivityDeviceRegistrationSchema,
   timerActivityOf,
 } from "./timer-activity";
@@ -95,6 +96,20 @@ describe("the timer's Live Activity", () => {
     });
   });
 
+  test("with details hidden, says nothing of the other timers either", () => {
+    const shown = activity(
+      [RUNNING, timer({ accumulatedSeconds: 60, id: "t2" })],
+      "hidden",
+    );
+    expect(shown?.status).toBe("Running");
+  });
+
+  test("shortens a long description to a line the Lock Screen can carry", () => {
+    const shown = activity([{ ...RUNNING, description: "x".repeat(10_000) }]);
+    expect(shown?.title.length).toBe(TIMER_ACTIVITY_TEXT_MAX_LENGTH);
+    expect(shown?.title.endsWith("…")).toBe(true);
+  });
+
   test("with details hidden, names neither the description nor the matter", () => {
     const shown = activity([RUNNING], "hidden");
     expect(shown).toEqual({
@@ -163,6 +178,7 @@ describe("the timer's Live Activity", () => {
 
 describe("a phone's registration", () => {
   const registration = {
+    sequence: 1,
     activity: null,
     bundleId: "app.stll.mobile.preview",
     details: true,
@@ -173,9 +189,18 @@ describe("a phone's registration", () => {
   };
 
   test("accepts the app's own link to its timers", () => {
-    expect(
-      v.safeParse(timerActivityDeviceRegistrationSchema, registration).success,
-    ).toBe(true);
+    for (const link of [
+      "app.stll.preview://timers",
+      "app.stll:///timers",
+      "app.stll.dev://expo-development-client/timers",
+    ]) {
+      expect(
+        v.safeParse(timerActivityDeviceRegistrationSchema, {
+          ...registration,
+          link,
+        }).success,
+      ).toBe(true);
+    }
   });
 
   test("refuses a link to anywhere else", () => {
@@ -183,6 +208,8 @@ describe("a phone's registration", () => {
       "https://example.com/timers",
       "app.stll.preview://timers?next=https://example.com",
       "other.app://timers",
+      "app.stll://not-timers",
+      "app.stll://timers/../settings",
     ]) {
       expect(
         v.safeParse(timerActivityDeviceRegistrationSchema, {

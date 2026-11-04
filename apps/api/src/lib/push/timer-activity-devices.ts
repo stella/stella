@@ -3,10 +3,12 @@ import {
   desc,
   eq,
   gt,
+  isNotNull,
   isNull,
   ne,
   notExists,
   notInArray,
+  or,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -29,11 +31,28 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 type DeviceWriteTx = Pick<Transaction, "insert" | "select" | "delete">;
 
 /**
+ * A phone not heard from in this long is sent nothing more: the app files
+ * its state every time it opens, so only a phone that signed out without
+ * reaching the server, or stopped using the app, goes this quiet.
+ */
+const TIMER_ACTIVITY_DEVICE_QUIET_DAYS = 14;
+
+/**
+ * How long a start the server sent holds before another may be sent. The app
+ * reports the started activity when iOS wakes it for the activity's token; a
+ * start it never reports, or one interrupted before it reached Apple, is
+ * given up after this long.
+ */
+const TIMER_ACTIVITY_START_HOLD_MINUTES = 30;
+
+/**
  * File what a phone holds now. The app sends its whole state each time, so
- * the row is replaced, not merged; a registration also forgets that the
+ * the row is replaced, not merged, but only by a newer registration and
+ * only while its sign-in lasts: one that arrives late, after a newer one or
+ * after the sign-out, changes nothing. A registration also forgets that the
  * server started an activity here, since the app now reports what it shows.
- * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the phones seen longest
- * ago are dropped.
+ * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the rows seen longest ago
+ * are dropped.
  */
 export const registerTimerActivityDevice = async (
   tx: DeviceWriteTx,
@@ -60,6 +79,7 @@ export const registerTimerActivityDevice = async (
     activityId: registration.activity?.id ?? null,
     activityToken: registration.activity?.token ?? null,
     startedAt: null,
+    sequence: registration.sequence,
   };
   // audit: skip - the person's own phone address for their timer, holding no content
   await tx
@@ -68,6 +88,7 @@ export const registerTimerActivityDevice = async (
     .onConflictDoUpdate({
       target: [timerActivityDevices.userId, timerActivityDevices.deviceId],
       set: { ...device, lastSeenAt: sql`now()` },
+      setWhere: sql`${timerActivityDevices.signedOutAt} IS NULL AND ${timerActivityDevices.sequence} < excluded.sequence`,
     });
 
   await tx
@@ -91,22 +112,28 @@ export const registerTimerActivityDevice = async (
     );
 };
 
-/** Forget a phone on sign-out. False when it was not registered. */
+/**
+ * Sign a phone out: its row is kept, marked, so a registration still in
+ * flight cannot bring it back and it still outranks older sign-ins on the
+ * same phone. False when it was not registered or already signed out.
+ */
 export const unregisterTimerActivityDevice = async (
-  tx: Pick<Transaction, "delete">,
+  tx: Pick<Transaction, "update">,
   { deviceId, userId }: { deviceId: string; userId: SafeId<"user"> },
 ): Promise<boolean> => {
   // audit: skip - the person's own phone address for their timer, holding no content
-  const removed = await tx
-    .delete(timerActivityDevices)
+  const signedOut = await tx
+    .update(timerActivityDevices)
+    .set({ signedOutAt: sql`now()`, lastSeenAt: sql`now()` })
     .where(
       and(
         eq(timerActivityDevices.userId, userId),
         eq(timerActivityDevices.deviceId, deviceId),
+        isNull(timerActivityDevices.signedOutAt),
       ),
     )
     .returning({ deviceId: timerActivityDevices.deviceId });
-  return removed.length > 0;
+  return signedOut.length > 0;
 };
 
 export type TimerActivityDevice = Pick<
@@ -119,23 +146,37 @@ export type TimerActivityDevice = Pick<
   | "details"
   | "startToken"
   | "activityToken"
-  | "startedAt"
 > & {
+  /** Whether a start the server sent still holds, so no other may be sent. */
+  starting: boolean;
   /** The registration as read, at full precision, to change it only if unchanged. */
   seenToken: TimestampCasToken;
 };
 
 const laterClaim = alias(timerActivityDevices, "later_claim");
 
+const sharesToken = (column: "startToken" | "activityToken") =>
+  and(
+    isNotNull(timerActivityDevices[column]),
+    or(
+      eq(laterClaim.startToken, timerActivityDevices[column]),
+      eq(laterClaim.activityToken, timerActivityDevices[column]),
+    ),
+  );
+
+const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(mins => ${TIMER_ACTIVITY_START_HOLD_MINUTES}), false)`;
+
 /**
  * The phones to update for a person's timers in one organization.
  *
- * A device id names a phone, not a person: when somebody else signs in on
- * the same phone and registers it, their claim is the live one, and this
- * person's older row must not keep drawing their timer there. Telling the two
- * apart needs both people's rows, so this reads through the owner connection;
- * the person and organization come from the job, which the timer write that
- * queued it named.
+ * Apple's tokens name a phone, not a person: when a later sign-in on the
+ * same phone (somebody else's, or the same person's again) registered the
+ * same tokens, its claim is the live one, signed out or not, and this
+ * older row must not keep drawing a timer there. Telling them apart needs
+ * other people's rows, so this reads through the owner connection; the
+ * person and organization come from the job, which the timer write that
+ * queued it named. A signed-out row, or one not heard from in two weeks,
+ * is sent nothing.
  */
 export const listTimerActivityDevices = async (
   db: Pick<Transaction, "select">,
@@ -155,7 +196,7 @@ export const listTimerActivityDevices = async (
         details: timerActivityDevices.details,
         startToken: timerActivityDevices.startToken,
         activityToken: timerActivityDevices.activityToken,
-        startedAt: timerActivityDevices.startedAt,
+        starting: startHolds,
         seenToken: timestampCasToken(timerActivityDevices.lastSeenAt),
       })
       .from(timerActivityDevices)
@@ -163,14 +204,19 @@ export const listTimerActivityDevices = async (
         and(
           eq(timerActivityDevices.userId, userId),
           eq(timerActivityDevices.organizationId, organizationId),
+          isNull(timerActivityDevices.signedOutAt),
+          sql`${timerActivityDevices.lastSeenAt} > now() - make_interval(days => ${TIMER_ACTIVITY_DEVICE_QUIET_DAYS})`,
           notExists(
             db
               .select({ deviceId: laterClaim.deviceId })
               .from(laterClaim)
               .where(
                 and(
-                  eq(laterClaim.deviceId, timerActivityDevices.deviceId),
-                  ne(laterClaim.userId, timerActivityDevices.userId),
+                  or(
+                    ne(laterClaim.userId, timerActivityDevices.userId),
+                    ne(laterClaim.deviceId, timerActivityDevices.deviceId),
+                  ),
+                  or(sharesToken("startToken"), sharesToken("activityToken")),
                   // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement; no JS Date is bound
                   gt(laterClaim.lastSeenAt, timerActivityDevices.lastSeenAt),
                 ),
@@ -191,13 +237,15 @@ const unchanged = ({ userId, device }: DeviceRef) =>
   and(
     eq(timerActivityDevices.userId, userId),
     eq(timerActivityDevices.deviceId, device.deviceId),
+    isNull(timerActivityDevices.signedOutAt),
     timestampMatchesCasToken(timerActivityDevices.lastSeenAt, device.seenToken),
   );
 
 /**
  * Claim the start of an activity on a phone: true for the one update that
- * may start it, false when another already did or the phone registered
- * since. The claim holds until the app next reports what it shows.
+ * may start it, false when another start still holds or the phone
+ * registered since. The claim holds until the app next reports what it
+ * shows, or for half an hour.
  */
 export const claimTimerActivityStart = async (
   db: Pick<Transaction, "update">,
@@ -207,12 +255,12 @@ export const claimTimerActivityStart = async (
   const claimed = await db
     .update(timerActivityDevices)
     .set({ startedAt: sql`now()` })
-    .where(and(unchanged(ref), isNull(timerActivityDevices.startedAt)))
+    .where(and(unchanged(ref), sql`NOT ${startHolds}`))
     .returning({ deviceId: timerActivityDevices.deviceId });
   return claimed.length > 0;
 };
 
-/** Give a start claim back after Apple did not take the start. */
+/** Give a start claim back after Apple refused the start. */
 export const releaseTimerActivityStart = async (
   db: Pick<Transaction, "update">,
   ref: DeviceRef,
@@ -226,7 +274,9 @@ export const releaseTimerActivityStart = async (
 
 /**
  * Forget a token Apple called dead, or the activity the server just ended,
- * unless the phone registered again since it was read.
+ * unless the phone registered again since it was read. An activity that is
+ * gone also gives back any start claim, so the next running timer may start
+ * another.
  */
 export const forgetTimerActivityToken = async (
   db: Pick<Transaction, "update">,
@@ -238,7 +288,7 @@ export const forgetTimerActivityToken = async (
     .set(
       token === "start"
         ? { startToken: null }
-        : { activityId: null, activityToken: null },
+        : { activityId: null, activityToken: null, startedAt: null },
     )
     .where(unchanged(ref));
 };

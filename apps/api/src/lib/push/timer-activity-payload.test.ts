@@ -17,7 +17,7 @@ const device = (
   link: "app.stll.preview://timers",
   locale: "cs",
   startToken: START_TOKEN,
-  startedAt: null,
+  starting: false,
   ...overrides,
 });
 
@@ -121,7 +121,7 @@ describe("a Lock Screen update", () => {
 
   test.each([
     ["no start token", { activityToken: null, startToken: null }],
-    ["a start already sent", { activityToken: null, startedAt: new Date(NOW) }],
+    ["a start already sent", { activityToken: null, starting: true }],
   ])("sends nothing to a phone with %s", (_, overrides) => {
     expect(
       timerActivityPushFor({

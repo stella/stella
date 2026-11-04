@@ -57,9 +57,16 @@ const PHONE = "0198f7c4-0000-7000-8000-0000000000a1";
 const OTHER_PHONE = "0198f7c4-0000-7000-8000-0000000000a2";
 const tokenOf = (seed: number) => seed.toString(16).padStart(2, "0").repeat(32);
 
+let sequence = 0;
+const nextSequence = () => {
+  sequence += 1;
+  return sequence;
+};
+
 const registration = (
   overrides: Partial<TimerActivityDeviceRegistration> = {},
 ): TimerActivityDeviceRegistration => ({
+  sequence: nextSequence(),
   activity: { id: "activity-1", token: tokenOf(2) },
   bundleId: "app.stll.mobile.preview",
   details: true,
@@ -189,6 +196,34 @@ describe("registering a phone for the Lock Screen timer", () => {
     ]);
   });
 
+  test("a registration older than the one filed changes nothing", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    const late = registration({ locale: "de" });
+    await register(actor);
+    await register(actor, late);
+
+    expect((await listed(actor))[0]?.locale).toBe("cs");
+  });
+
+  test("a registration that arrives after the sign-out does not bring the phone back", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    await register(actor);
+    expect(await unregister(actor)).toBe(true);
+    await register(actor);
+
+    expect(await listed(actor)).toEqual([]);
+  });
+
+  test("a later sign-in on the same phone outranks an older one, even once signed out", async () => {
+    const first = { userId: ids.userA1, organizationId: ids.orgA };
+    const second = { userId: ids.userA2, organizationId: ids.orgA };
+    await register(first);
+    await register(second, registration(), OTHER_PHONE);
+    await unregister(second, OTHER_PHONE);
+
+    expect(await listed(first)).toEqual([]);
+  });
+
   test("updates follow the person who registered the phone last", async () => {
     const first = { userId: ids.userA1, organizationId: ids.orgA };
     const second = { userId: ids.userA2, organizationId: ids.orgA };
@@ -220,7 +255,7 @@ describe("registering a phone for the Lock Screen timer", () => {
 
     await register(actor);
     const [reported] = await listed(actor);
-    expect(reported?.startedAt).toBeNull();
+    expect(reported?.starting).toBe(false);
   });
 
   test("a token is forgotten only while the phone has not registered again", async () => {
@@ -248,10 +283,14 @@ describe("registering a phone for the Lock Screen timer", () => {
     expect((await listed(actor))[0]?.activityToken).toBeNull();
   });
 
-  test("signing out forgets the phone, and again is not an error", async () => {
+  test("signing out stops the phone, and again is not an error", async () => {
     const actor = { userId: ids.userA1, organizationId: ids.orgA };
     await register(actor);
-    await register(actor, registration(), OTHER_PHONE);
+    await register(
+      actor,
+      registration({ activity: null, startToken: tokenOf(9) }),
+      OTHER_PHONE,
+    );
 
     expect(await unregister(actor)).toBe(true);
     expect(await unregister(actor)).toBe(false);

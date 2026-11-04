@@ -2,7 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- The phones that show the person's running timer on their Lock Screen, one
--- row per person and phone. A new, empty table: nothing reads it until this
+-- row per sign-in on a phone. A new, empty table: nothing reads it until this
 -- release.
 CREATE TABLE "timer_activity_devices" (
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
@@ -17,6 +17,8 @@ CREATE TABLE "timer_activity_devices" (
   "activity_id" text,
   "activity_token" text,
   "started_at" timestamptz,
+  "sequence" bigint NOT NULL,
+  "signed_out_at" timestamptz,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "last_seen_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "timer_activity_devices_user_id_device_id_pk" PRIMARY KEY ("user_id", "device_id"),
@@ -26,10 +28,12 @@ CREATE TABLE "timer_activity_devices" (
   CONSTRAINT "timer_activity_devices_link_check" CHECK (char_length("link") BETWEEN 1 AND 200),
   CONSTRAINT "timer_activity_devices_start_token_check" CHECK ("start_token" ~ '^([0-9a-f]{2}){32,100}$'),
   CONSTRAINT "timer_activity_devices_activity_token_check" CHECK ("activity_token" ~ '^([0-9a-f]{2}){32,100}$'),
+  CONSTRAINT "timer_activity_devices_sequence_check" CHECK ("sequence" >= 0),
   CONSTRAINT "timer_activity_devices_activity_check" CHECK (("activity_id" IS NULL) = ("activity_token" IS NULL) AND char_length("activity_id") BETWEEN 1 AND 128)
 );--> statement-breakpoint
 CREATE INDEX "timer_activity_devices_user_org_idx" ON "timer_activity_devices" ("user_id", "organization_id");--> statement-breakpoint
-CREATE INDEX "timer_activity_devices_device_idx" ON "timer_activity_devices" ("device_id");--> statement-breakpoint
+CREATE INDEX "timer_activity_devices_start_token_idx" ON "timer_activity_devices" ("start_token");--> statement-breakpoint
+CREATE INDEX "timer_activity_devices_activity_token_idx" ON "timer_activity_devices" ("activity_token");--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "timer_activity_devices" TO stella;--> statement-breakpoint
 ALTER TABLE "timer_activity_devices" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "timer_activity_devices" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
