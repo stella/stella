@@ -1493,6 +1493,11 @@ export const TOOLING_ENV_KEYS = new Set([
   // started with, to the file its tests name.
   "FAKE_CODEX_LOG",
   "CODEX_HOME",
+  // The desktop's stand-in harness holder (a re-run of its own test binary)
+  // takes its folder, socket and log file from the test that starts it.
+  "STAND_IN_DIR",
+  "STAND_IN_ENDPOINT",
+  "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
