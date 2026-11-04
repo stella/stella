@@ -89,9 +89,8 @@ export const EditableField = ({
     content?.type === "unsupported" ||
     content?.type === "clip" ||
     // Money and person render, filter, sort and calculate, but have no inline
-    // editor yet; they are not offered by the property composer either
-    // (isCreatableContentType), so a workspace only holds one if the API put
-    // it there.
+    // editor yet: a money cell is filled by an AI column or the API, and a
+    // person only by the API.
     type === "money" ||
     type === "person"
   ) {

@@ -156,8 +156,8 @@ export const generateBatchMock = async ({
         });
       }
 
-      // The mock only answers what the execution plan schedules, and money,
-      // person, and file properties are never scheduled.
+      // The mock only answers what the execution plan schedules, and person
+      // and file properties are never scheduled.
       switch (content.type) {
         case "text": {
           const value = `${inputFieldValue} + ${randomElement(MOCK_WORDS)}`;
@@ -242,6 +242,26 @@ export const generateBatchMock = async ({
               type: "int",
               version: 1,
               value,
+              currency,
+            },
+          });
+          break;
+        }
+
+        case "money": {
+          const currency = content.currency ?? "EUR";
+          const amountCents = randomInteger({ min: 0, max: 100_000_000 });
+          await onPartialAnswer?.({
+            propertyId: property.id,
+            answer: `${amountCents} ${currency}`,
+          });
+          aiResults.push({
+            fieldId,
+            propertyId: property.id,
+            content: {
+              type: "money",
+              version: 1,
+              amountCents,
               currency,
             },
           });

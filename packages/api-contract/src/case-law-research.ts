@@ -14,24 +14,24 @@ import type { PropertyContentType } from "./entity-find";
 
 /**
  * What a question column expects for an answer: the property content types a
- * model can produce a value for.
+ * model can produce a value for, except money.
  *
  * Derived from `PROPERTY_CONTENT_TYPES`, not a second list: a question column
  * is a matter property asked of a decision instead of an entity, so the two
- * cannot answer "which kinds are there?" differently. The three exclusions are
- * the kinds a person enters by hand — a file is uploaded, a money amount needs
- * a currency the model cannot choose, and a person resolves to a member — and
- * they are exactly the kinds the workspace extractor never schedules.
+ * cannot answer "which kinds are there?" differently. A file is uploaded and a
+ * person resolves to a member, so neither is ever extracted; money is extracted
+ * for workspace columns but not offered here, because the answers table pins
+ * its kinds with a CHECK constraint that would need its own migration.
  *
  * There is no boolean kind in the property model, so a yes/no question is a
  * single-select over two options. The text not settling a question is the
  * `not_stated` cell state, the same for every kind.
  */
-type HandEnteredType = "file" | "money" | "person";
+type NotAskedOfDecisionsType = "file" | "money" | "person";
 
 export type CaseLawResearchAnswerType = Exclude<
   PropertyContentType,
-  HandEnteredType
+  NotAskedOfDecisionsType
 >;
 
 type CompleteAnswerTypes<T extends readonly CaseLawResearchAnswerType[]> =

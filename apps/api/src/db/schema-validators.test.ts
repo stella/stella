@@ -6,6 +6,7 @@ import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
 import {
   type AiExtractablePropertyContent,
+  type CaseLawQuestionContent,
   fieldContentSchema,
   type PropertyContent,
   type PropertyContentType,
@@ -137,12 +138,15 @@ describe("property content types", () => {
     // `Exclude`, so bind the two: a member added to `propertyContentSchema`
     // that belongs in the extractable subset, or dropped from it, fails here.
     expectTypeOf<AiExtractablePropertyContent>().toEqualTypeOf<
-      Exclude<PropertyContent, { type: "file" | "money" | "person" }>
+      Exclude<PropertyContent, { type: "file" | "person" }>
     >();
-    // A case-law question column is a property asked of a decision, so the
-    // kinds a question may take are exactly the kinds the extractor can produce.
+    // A case-law question column is a property asked of a decision: its kinds
+    // are the extractor's minus money, and exactly the contract's answer kinds.
+    expectTypeOf<CaseLawQuestionContent>().toEqualTypeOf<
+      Exclude<AiExtractablePropertyContent, { type: "money" }>
+    >();
     expectTypeOf<
-      AiExtractablePropertyContent["type"]
+      CaseLawQuestionContent["type"]
     >().toEqualTypeOf<CaseLawResearchAnswerType>();
   });
 

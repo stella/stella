@@ -222,7 +222,8 @@ export const useUpdateProperty = () => {
 type SuggestPromptVars = {
   workspaceId: string;
   name: string;
-  contentType: "text" | "single-select" | "multi-select" | "date" | "int";
+  /** The kinds a model fills: a file is uploaded, a person picked. */
+  contentType: Exclude<PropertyContentType, "file" | "person">;
   options?: { value: string }[];
   currentPrompt?: string;
   instruction: string;

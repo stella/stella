@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { toMajorUnits } from "@stll/money";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
@@ -243,6 +245,13 @@ export const prepareBatchInput = (
           ? `${content.value} ${content.currency}`
           : String(content.value),
       );
+    } else if (content.type === "money") {
+      pushTextInput(
+        field.propertyId,
+        `${toMajorUnits({ amountCents: content.amountCents, currency: content.currency })} ${content.currency}`,
+      );
+    } else if (content.type === "person") {
+      pushTextInput(field.propertyId, content.name);
     }
   }
 
