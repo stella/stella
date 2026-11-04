@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 
 use super::harness::{HarnessHost, HarnessReports};
 use super::sidecar_host::{
-  HarnessCredentials, HostSettings, InstalledHarness, LocalHarnesses,
+  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LocalHarnesses,
   SidecarHarnessHost,
 };
 use super::tests::{Connection, Gateway, Setup};
@@ -44,6 +44,8 @@ const MODELS: &[&str] = &[
 struct FakeHarnesses {
   root: PathBuf,
   credentials: Option<HarnessCredentials>,
+  /// What the host asked to hear when an install ends.
+  settled: Arc<Mutex<Option<InstallSettled>>>,
 }
 
 impl LocalHarnesses for FakeHarnesses {
@@ -61,6 +63,10 @@ impl LocalHarnesses for FakeHarnesses {
       .then(|| self.credentials.clone())
       .flatten();
     Box::pin(async move { credentials })
+  }
+
+  fn on_install_settled(&self, settled: InstallSettled) {
+    *self.settled.lock().unwrap() = Some(settled);
   }
 }
 
@@ -105,12 +111,14 @@ fn chatgpt_credentials(grants: &Arc<Grants>) -> HarnessCredentials {
 /// A host on a stand-in holder, and the probe answer it reads.
 struct Place {
   fixture: Fixture,
+  settled: Arc<Mutex<Option<InstallSettled>>>,
 }
 
 impl Place {
   fn new() -> Self {
     let place = Self {
       fixture: Fixture::new(),
+      settled: Arc::default(),
     };
     place.probe_answers(&ready());
     place
@@ -139,8 +147,20 @@ impl Place {
       Arc::new(FakeHarnesses {
         root: self.fixture.root.clone(),
         credentials,
+        settled: Arc::clone(&self.settled),
       }),
     )
+  }
+
+  /// An install of a managed CLI ends, as the installer reports it.
+  fn install_settles(&self) {
+    let settled = self
+      .settled
+      .lock()
+      .unwrap()
+      .clone()
+      .expect("the host watches installs once it serves a runner");
+    settled();
   }
 
   fn workspaces(&self) -> PathBuf {
@@ -549,6 +569,25 @@ fn a_changed_probe_reaches_the_api_and_a_run_that_needs_a_login_probes_again() {
     let changed = status(&mut connection, "needs_login").await;
     assert_eq!(changed["harness"]["version"], VERSION);
     assert!(place.received("harness.probe").len() > probes);
+    runner.stop().await;
+  });
+  stop_holders(&place);
+}
+
+#[test]
+fn an_install_that_ends_is_probed_and_reported_without_waiting_for_the_interval() {
+  let place = Place::new();
+  run(async {
+    let host = place.host(None, Duration::from_secs(3600));
+    let setup = setup(&host);
+    let gateway = Gateway::bind().await;
+    let runner = setup.start(&gateway);
+    let mut connection = connect(&gateway, &[], "ready").await;
+    // The CLI now answers differently, as an update would make it.
+    place.probe_answers(&json!({ "type": "needs_login", "version": VERSION }));
+    place.install_settles();
+    let changed = status(&mut connection, "needs_login").await;
+    assert_eq!(changed["harness"]["version"], VERSION);
     runner.stop().await;
   });
   stop_holders(&place);

@@ -1374,6 +1374,24 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
     .toBe(4);
 });
 
+test("a render while nothing holds focus leaves focus on the body", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  const mountedCards = await cards.count();
+
+  await page.getByRole("searchbox").focus();
+  await page.getByRole("searchbox").evaluate((input) => input.blur());
+  await expect(page.locator("body")).toBeFocused();
+  // A wider rail mounts more cards, so the window commits a render that has
+  // nothing to do with focus.
+  await page.setViewportSize({ height: 326, width: 1700 });
+  await expect
+    .poll(async () => await cards.count())
+    .toBeGreaterThan(mountedCards);
+  await expect(page.locator("body")).toBeFocused();
+});
+
 test("Escape closes a footer overlay whose trigger still holds focus", async ({
   page,
 }) => {

@@ -748,6 +748,20 @@
         "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
         "unavailable": "Šiame kompiuteryje nepavyko paleisti Claude Code. Bandykite dar kartą."
       }
+    },
+    "install": {
+      "notInstalled": "{name} šiame kompiuteryje dar neįdiegtas.",
+      "install": "Įdiegti",
+      "downloading": "Atsisiunčiama {name} {version}: {percent} %",
+      "verifying": "Tikrinama {name} {version}",
+      "ready": "{name} {version} įdiegtas.",
+      "retry": "Bandyti dar kartą",
+      "activeStays": "Toliau naudojama versija {version}.",
+      "failure": {
+        "download": "Nepavyko atsisiųsti {name}. Patikrinkite interneto ryšį ir bandykite dar kartą.",
+        "verification": "Nepavyko patikrinti {name}, todėl jis neįdiegtas.",
+        "storage": "Nepavyko išsaugoti {name} šiame kompiuteryje. Patikrinkite, ar diske yra laisvos vietos."
+      }
     }
   }
 }

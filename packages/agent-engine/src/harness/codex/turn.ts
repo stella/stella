@@ -24,7 +24,11 @@ import {
   settlesWithin,
 } from "../turn-lifecycle";
 import type { AppServerClient, AppServerHandlers } from "./app-server-client";
-import { classifyTurnFailure, mergeRateLimits } from "./errors";
+import {
+  classifyTurnFailure,
+  isCapacityFailure,
+  mergeRateLimits,
+} from "./errors";
 import {
   codexItemHandling,
   isToolItem,
@@ -45,6 +49,7 @@ import {
   isCodexNotificationMethod,
   isCodexServerRequestMethod,
   METHOD_NOT_FOUND,
+  TurnStartResponseSchema,
 } from "./protocol";
 
 /**
@@ -205,11 +210,23 @@ const interactionResult = (
   }
 };
 
+/**
+ * A turn that fails because the model is at capacity continues on the same
+ * thread with empty input, after a delay that doubles from `baseDelayMs` up
+ * to `maxDelayMs`, at most `maxAttempts` times.
+ */
+export type CodexCapacityRetry = {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+};
+
 type CodexTurnSessionOptions = {
   gracePeriodMs: number;
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  capacityRetry: CodexCapacityRetry;
 };
 
 export class CodexTurnSession {
@@ -225,14 +242,18 @@ export class CodexTurnSession {
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
   private unsupportedItems = 0;
+  private capacityRetries = 0;
 
   private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
   private readonly stellaServer: string;
+  private readonly capacityRetry: CodexCapacityRetry;
+  private readonly detached: Detached;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
+    capacityRetry,
   }: CodexTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
@@ -240,6 +261,8 @@ export class CodexTurnSession {
       name: "codex-turn",
     });
     this.stellaServer = stellaServer;
+    this.capacityRetry = capacityRetry;
+    this.detached = detached;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -298,10 +321,18 @@ export class CodexTurnSession {
       sessionId: harnessSessionId(options.threadId),
       continuation: options.continuation,
     });
-    this.turnId = options.turnId;
+    this.release(options.turnId, options.startedAt);
+  }
+
+  /** Route the native turn's messages, including those held until now. */
+  private release(turnId: string, startedAt: number | null) {
+    if (this.lifecycle.ended) {
+      return;
+    }
+    this.turnId = turnId;
     // A queued turn is acknowledged without a start time; it cannot be
     // interrupted until `turn/started` arrives.
-    if (options.startedAt !== null) {
+    if (startedAt !== null) {
       this.started.resolve(undefined);
     }
     for (const message of this.early.splice(0)) {
@@ -426,15 +457,14 @@ export class CodexTurnSession {
       case "interrupted":
         this.emit({ type: "turn.interrupted" });
         return;
-      case "failed":
-        this.emit({
-          type: "turn.failed",
-          failure: classifyTurnFailure({
-            error: turn.error ?? this.lastError,
-            rateLimits: this.rateLimits,
-          }),
-        });
+      case "failed": {
+        const error = turn.error ?? this.lastError;
+        if (this.retryAtCapacity(error)) {
+          return;
+        }
+        this.failWith(error);
         return;
+      }
       case "inProgress":
         this.violation("turn/completed for a turn still in progress");
         return;
@@ -442,6 +472,67 @@ export class CodexTurnSession {
         turn.status satisfies never;
         panic("Unhandled Codex turn status");
     }
+  }
+
+  private failWith(error: CodexTurnError | null) {
+    this.emit({
+      type: "turn.failed",
+      failure: classifyTurnFailure({ error, rateLimits: this.rateLimits }),
+    });
+  }
+
+  /**
+   * Continue a turn the model's capacity ended. Messages are held until the
+   * continuation's turn id is known, as they are before the first turn.
+   */
+  private retryAtCapacity(error: CodexTurnError | null): boolean {
+    const { maxAttempts, baseDelayMs, maxDelayMs } = this.capacityRetry;
+    if (
+      !isCapacityFailure(error) ||
+      this.lifecycle.interrupting ||
+      this.capacityRetries >= maxAttempts
+    ) {
+      return false;
+    }
+    this.capacityRetries += 1;
+    const delayMs = Math.min(
+      baseDelayMs * 2 ** (this.capacityRetries - 1),
+      maxDelayMs,
+    );
+    this.turnId = null;
+    this.lastError = null;
+    this.emit({
+      type: "retrying",
+      message: error?.message ?? "The model is at capacity.",
+    });
+    this.detached(this.continueAfter(delayMs, error), "codex-turn.continue");
+    return true;
+  }
+
+  private async continueAfter(delayMs: number, error: CodexTurnError | null) {
+    await Bun.sleep(delayMs);
+    const client = this.client;
+    if (
+      this.lifecycle.ended ||
+      this.lifecycle.interrupting ||
+      client === null
+    ) {
+      return;
+    }
+    const started = await client.request("turn/start", {
+      threadId: this.threadId,
+      input: [],
+    });
+    // An interrupt during the request ends the turn; `failWith` and `release`
+    // are both no-ops on an ended turn.
+    const parsed = Result.isOk(started)
+      ? v.safeParse(TurnStartResponseSchema, started.value)
+      : null;
+    if (parsed === null || !parsed.success) {
+      this.failWith(error);
+      return;
+    }
+    this.release(parsed.output.turn.id, parsed.output.turn.startedAt ?? null);
   }
 
   private tokenUsage(
@@ -801,6 +892,11 @@ export class CodexTurnSession {
   private async interrupt() {
     await this.lifecycle.interrupt(async (client) => {
       await settlesWithin(this.started.promise, this.lifecycle.gracePeriodMs);
+      if (this.turnId === null) {
+        // Between a capacity failure and its continuation no turn is running:
+        // nothing to ask, so the turn ends as interrupted at once.
+        return false;
+      }
       const requested = await client.request("turn/interrupt", {
         threadId: this.threadId,
         turnId: this.turnId,

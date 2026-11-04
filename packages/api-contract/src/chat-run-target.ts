@@ -112,3 +112,26 @@ export const chatLocalRunQuestionReplySchema = v.strictObject({
 export type ChatLocalRunQuestionReply = v.InferOutput<
   typeof chatLocalRunQuestionReplySchema
 >;
+
+/**
+ * The CUSTOM stream event a turn running on a computer sends when that
+ * computer goes away mid-turn and when it is back. The turn stays open while
+ * the computer is away and continues once it reconnects, so the chat shows
+ * the wait instead of a stalled answer. A rejoined stream replays these
+ * events from the run log, so a reload shows the same state.
+ */
+export const CHAT_LOCAL_RUN_COMPUTER_EVENT = "stella.local-run.computer";
+
+export const CHAT_LOCAL_RUN_COMPUTER_STATUSES = [
+  "waiting",
+  "connected",
+] as const;
+export type ChatLocalRunComputerStatus =
+  (typeof CHAT_LOCAL_RUN_COMPUTER_STATUSES)[number];
+
+export const chatLocalRunComputerEventSchema = v.strictObject({
+  status: v.picklist(CHAT_LOCAL_RUN_COMPUTER_STATUSES),
+});
+export type ChatLocalRunComputerEvent = v.InferOutput<
+  typeof chatLocalRunComputerEventSchema
+>;

@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
-      "stateUnsupported": "Ez a verzió nem támogatott"
+      "stateUnsupported": "Ez a verzió nem támogatott",
+      "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
