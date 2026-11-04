@@ -53,26 +53,25 @@ type BulkDeletePurpose = "selection" | "import-undo";
 
 const useBulkDeleteCopy = (purpose: BulkDeletePurpose) => {
   const t = useTranslations();
-  switch (purpose) {
-    case "selection":
-      return {
-        action: (count: number) => t("contacts.deleteSelected", { count }),
-        title: (count: number) => t("contacts.deleteSelected", { count }),
-        confirm: (count: number) =>
-          t("contacts.deleteSelectedConfirm", { count }),
-        done: (count: number) => t("contacts.deletedCount", { count }),
-      };
-    case "import-undo":
-      return {
-        action: (count: number) =>
-          t("contacts.importStudio.undoImport", { count: String(count) }),
-        title: () => t("contacts.importStudio.undoImportTitle"),
-        confirm: (count: number) =>
-          t("contacts.importStudio.undoImportConfirm", { count }),
-        done: (count: number) =>
-          t("contacts.importStudio.undoneToast", { count }),
-      };
-  }
+  const copies = {
+    selection: {
+      action: (count: number) => t("contacts.deleteSelected", { count }),
+      title: (count: number) => t("contacts.deleteSelected", { count }),
+      confirm: (count: number) =>
+        t("contacts.deleteSelectedConfirm", { count }),
+      done: (count: number) => t("contacts.deletedCount", { count }),
+    },
+    "import-undo": {
+      action: (count: number) =>
+        t("contacts.importStudio.undoImport", { count: String(count) }),
+      title: () => t("contacts.importStudio.undoImportTitle"),
+      confirm: (count: number) =>
+        t("contacts.importStudio.undoImportConfirm", { count }),
+      done: (count: number) =>
+        t("contacts.importStudio.undoneToast", { count }),
+    },
+  } satisfies Record<BulkDeletePurpose, unknown>;
+  return copies[purpose];
 };
 
 export function BulkDeleteContacts({
