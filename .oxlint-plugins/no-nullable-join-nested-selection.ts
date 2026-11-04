@@ -100,8 +100,11 @@ const tableKey = (node: unknown): string | null => {
 type ChainCall = { method: string; arguments: readonly unknown[] };
 
 // The calls chained onto `call`: `.from(x).leftJoin(y, on).where(...)`.
-const chainedCalls = (call: AstNode): ChainCall[] => {
+const chainedCalls = (call: unknown): ChainCall[] => {
   const calls: ChainCall[] = [];
+  if (!isAstNode(call)) {
+    return calls;
+  }
   let current: AstNode = call;
   for (;;) {
     let member = current.parent;
@@ -148,7 +151,7 @@ type JoinedTable = {
 
 const calleeName = (node: unknown): string | null => {
   const expression = unwrapExpression(node);
-  if (expression === null || expression.type !== "CallExpression") {
+  if (expression?.type !== "CallExpression") {
     return null;
   }
   const callee = unwrapExpression(expression.callee);
@@ -162,7 +165,7 @@ const equalityKeys = (condition: unknown, table: string): Set<string> => {
   const keys = new Set<string>();
   const visit = (node: unknown): void => {
     const expression = unwrapExpression(node);
-    if (expression === null || expression.type !== "CallExpression") {
+    if (expression?.type !== "CallExpression") {
       return;
     }
     const args = Array.isArray(expression.arguments)
