@@ -1,15 +1,14 @@
 import { panic } from "better-result";
 
-import type { VocabularyEntry } from "@stll/agent-input";
-import { normalizeVocabularyValue } from "@stll/agent-input";
+import { isAbsentPlaceholder } from "@stll/agent-input";
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
-  apexCourtAbbreviations,
-  courtAbbreviation,
-} from "@stll/api-contract/case-law-court-abbreviations";
-import {
-  ECLI_COURT_REGISTRY,
-  type RegisteredCourt,
-} from "@stll/api-contract/case-law-courts";
+  type CourtCitationIndex,
+  courtCitationIndex,
+  foldCourtText,
+  readCourtCitation,
+  storedCourtIdentity,
+} from "@stll/api-contract/court-citation-aliases";
 import { createTtlFlightCache } from "@stll/concurrency/ttl-flight-cache";
 import { Temporal } from "@stll/time";
 
@@ -18,6 +17,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { AgentCaseLawSearchWarning } from "@/api/lib/case-law/search-warnings";
 import {
   filterDroppedWarning,
+  filterNotHeldWarning,
   filterReadWarning,
   filterUnreadWarning,
 } from "@/api/lib/case-law/search-warnings";
@@ -27,123 +27,186 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 /**
- * A court filter as an agent writes it, read onto a court the corpus stores.
+ * A court filter as an agent writes it, read onto the courts the corpus
+ * stores decisions under.
  *
  * The search compares `court` by equality, so a filter that is not a stored
  * spelling returns nothing and the caller cannot tell that from "no such
- * decisions". Agents write the court the way their prompt or training did:
- * `NS`, `Constitutional Court`, `Ústavní soud České republiky`, or a country
- * where a court belongs. The corpus's own court list is the vocabulary, and
- * the shared reader decides which spellings name exactly one court. A court
- * stored under several spellings is one court, and a value naming it filters
- * by all of them. A value that names no court, or several different courts,
- * is dropped with a warning naming the courts,
- * so the search still answers: an optional filter narrows a search, it never
- * empties one.
+ * decisions". The value is read through the court identity the decision
+ * resolver holds a citation to (`court-citation-aliases.ts`): the country's
+ * court directory with every alias its grammar generates (declined names,
+ * short codes, seats in either case, Prague's numbered forms, branches), each
+ * court's ECLI code, and every name the corpus stores decisions under. Any
+ * alias the resolver reads as a court filters exactly that court, by every
+ * stored spelling of it, and never a court that merely shares words with it:
+ * a regional court's branch is its own court, never its main court.
  *
- * The reading is a function of the value and the country alone, never of the
- * page, so a continuation call carrying the same filter reads it the same way
- * and resumes the same search.
+ * A value that names no court, an alias two courts answer to, or a court no
+ * stored decision is filed under is dropped with a warning naming the stored
+ * courts nearest to it, so the search still answers: an optional filter
+ * narrows a search, it never empties one, and it never narrows to a court the
+ * caller did not name.
+ *
+ * The reading is a function of the value and the country's stored names
+ * alone, never of the page, so a continuation call carrying the same filter
+ * reads it the same way and resumes the same search.
  */
-
-/**
- * Working English names of the apex courts, keyed by the abbreviation
- * `courtAbbreviation` derives for them. The stored name is the publisher's,
- * in its own language; a model asked in English writes these.
- */
-const APEX_COURT_ENGLISH_NAMES: Readonly<Record<string, readonly string[]>> = {
-  ÚS: ["Constitutional Court"],
-  NS: ["Supreme Court"],
-  NSS: ["Supreme Administrative Court"],
-  SN: ["Supreme Court"],
-  NSA: ["Supreme Administrative Court"],
-  TK: ["Constitutional Tribunal", "Constitutional Court"],
-  AB: ["Constitutional Court"],
-  Kúria: ["Curia", "Supreme Court"],
-  CJEU: ["Court of Justice", "Court of Justice of the European Union", "ECJ"],
-  GC: ["General Court"],
-};
 
 /** How many courts a dropped filter's hint names. */
 const LISTED_COURTS = 12;
 
-/**
- * One court as the corpus stores it. A publisher spells an apex court more
- * than one way ("Najvyšší súd", "Najvyšší súd Slovenskej republiky"), and the
- * apex registry gives every spelling of one apex court the same abbreviation,
- * so only those spellings share an identity. A regional or district citation
- * code can name several courts: those remain separate identities, even when
- * their display codes match.
- */
-export type StoredCourtIdentity = {
-  abbreviation: string | undefined;
-  /** Every stored spelling, in the corpus list's order; never empty. */
-  spellings: readonly [string, ...string[]];
+/** One court a filter value can name, with the spellings decisions carry. */
+type StoredCourtIdentity = {
+  /** The court-identity key, shared with the decision resolver. */
+  key: string;
+  /** The court's directory name, or its stored name outside the directory. */
+  name: string;
+  /** Every stored spelling, in the corpus list's order; empty when none. */
+  spellings: readonly string[];
 };
 
-/** The country's stored courts, grouped by identity, apex courts first. */
-export const storedCourtIdentities = (
+/** A country's courts as the filter reads them. */
+export type StoredCourtCatalog = {
+  index: CourtCitationIndex;
+  /** Every court a value can name: the directory's first, then stored names. */
+  identities: ReadonlyMap<string, StoredCourtIdentity>;
+};
+
+const UNPLACED_KEY_INFIX = ":unplaced:";
+
+/**
+ * The country's courts, each with the stored spellings that place a decision
+ * at it. A stored name that only an alias two courts share could place is its
+ * own identity, read by that exact spelling alone.
+ */
+export const storedCourtCatalog = (
   country: string,
-  courts: readonly string[],
-): StoredCourtIdentity[] => {
-  const apexAbbreviations = new Set(apexCourtAbbreviations(country));
-  const apex = new Map<string, [string, ...string[]]>();
-  const byName: StoredCourtIdentity[] = [];
-  for (const court of courts) {
-    const abbreviation = courtAbbreviation({ country, court });
-    if (abbreviation === undefined || !apexAbbreviations.has(abbreviation)) {
-      byName.push({ abbreviation, spellings: [court] });
+  storedNames: readonly string[],
+): StoredCourtCatalog => {
+  const index = courtCitationIndex(country, storedNames);
+  // Every court the index holds, none yet with a stored spelling; the index
+  // holds every stored name, so each placed name lands on one of these.
+  const identities = new Map<
+    string,
+    StoredCourtIdentity & { spellings: string[] }
+  >(
+    [...index.courts].map(([key, { name }]) => [
+      key,
+      { key, name, spellings: [] },
+    ]),
+  );
+  for (const name of new Set(storedNames)) {
+    const { key } = storedCourtIdentity(index, { court: name, ecli: null });
+    // A name only an alias two courts share could place stays its own court.
+    const unplacedKey = `${country}${UNPLACED_KEY_INFIX}${name}`;
+    const identity =
+      key === undefined
+        ? { key: unplacedKey, name, spellings: [] }
+        : (identities.get(key) ??
+          panic(`A stored court name placed outside the index: ${name}`));
+    identity.spellings.push(name);
+    identities.set(identity.key, identity);
+  }
+  return { index, identities };
+};
+
+/**
+ * The courts a filter value names: the courts its whole text is an alias of,
+ * else the courts a citation's court words would constrain to. Words naming a
+ * court no alias reads (an unknown seat, a branch the directory lacks) name
+ * no court, never the court their known words would.
+ */
+const courtKeysNamed = (
+  catalog: StoredCourtCatalog,
+  value: string,
+): readonly string[] => {
+  // A stored spelling only an ambiguous alias could place is read by that
+  // exact spelling before the alias it shares.
+  const unplacedKey = `${catalog.index.country}${UNPLACED_KEY_INFIX}${value}`;
+  if (catalog.identities.has(unplacedKey)) {
+    return [unplacedKey];
+  }
+  const whole = catalog.index.byAlias.get(foldCourtText(value).join(" "));
+  if (whole !== undefined) {
+    return [...whole].toSorted();
+  }
+  const keys = new Set<string>();
+  for (const constraint of readCourtCitation(catalog.index, value)) {
+    if (constraint.type === "unrecognized") {
+      return [];
+    }
+    if (constraint.type === "ecli-code") {
+      if (constraint.court === undefined) {
+        return [];
+      }
+      keys.add(constraint.court);
       continue;
     }
-    const spellings = apex.get(abbreviation);
-    if (spellings === undefined) {
-      apex.set(abbreviation, [court]);
-    } else {
-      spellings.push(court);
+    for (const key of constraint.courts) {
+      keys.add(key);
     }
   }
-  // Apex courts first: they are the ones a caller names, so a dropped
-  // filter's hint leads with them.
-  return [
-    ...[...apex].map(([abbreviation, spellings]) => ({
-      abbreviation,
-      spellings,
-    })),
-    ...byName,
-  ];
+  return [...keys].toSorted();
+};
+
+type StoredCourtWords = { first: string; folded: ReadonlySet<string> };
+
+/** Each catalog's stored courts with their folded words, folded once. */
+const storedWordsByCatalog = new WeakMap<
+  StoredCourtCatalog,
+  readonly StoredCourtWords[]
+>();
+
+/** The courts a decision is stored under, in catalog order, with their words. */
+const storedCourtWords = (
+  catalog: StoredCourtCatalog,
+): readonly StoredCourtWords[] => {
+  const cached = storedWordsByCatalog.get(catalog);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const stored: StoredCourtWords[] = [];
+  for (const { name, spellings } of catalog.identities.values()) {
+    const [first] = spellings;
+    if (first !== undefined) {
+      stored.push({
+        first,
+        folded: new Set(
+          [name, ...spellings].flatMap((spelling) => foldCourtText(spelling)),
+        ),
+      });
+    }
+  }
+  storedWordsByCatalog.set(catalog, stored);
+  return stored;
 };
 
 /**
- * One vocabulary entry per court, not per spelling. The shared reader treats
- * two entries answering to one alias as two readings and asks; two spellings
- * of one court are one reading, so they share an entry, its value the first
- * spelling and the others its aliases.
+ * The stored courts nearest a value, for a dropped filter's hint: those
+ * sharing the most of its words first, then the catalog's order, in which
+ * the apex courts lead.
  */
-const registeredCourts: readonly RegisteredCourt[] = Object.values(
-  ECLI_COURT_REGISTRY,
-).flatMap((registry) => Object.values<RegisteredCourt>(registry));
+const nearestStoredCourts = (
+  catalog: StoredCourtCatalog,
+  value: string,
+): readonly string[] => {
+  const words = new Set(foldCourtText(value));
+  return storedCourtWords(catalog)
+    .map(({ first, folded }, position) => ({
+      first,
+      position,
+      score: [...folded].filter((word) => words.has(word)).length,
+    }))
+    .toSorted(
+      (left, right) =>
+        right.score - left.score || left.position - right.position,
+    )
+    .slice(0, LISTED_COURTS)
+    .map(({ first }) => first);
+};
 
-const courtVocabulary = (
-  identities: readonly StoredCourtIdentity[],
-): VocabularyEntry[] =>
-  identities.map(({ abbreviation, spellings: [value, ...others] }) => ({
-    value,
-    aliases: [
-      ...others,
-      ...registeredCourts.flatMap((court) =>
-        court.name === value && court.citationAliases !== undefined
-          ? court.citationAliases
-          : [],
-      ),
-      ...(abbreviation === undefined ? [] : apexCourtAliases(abbreviation)),
-    ],
-  }));
-
-/** An apex court's abbreviation, and its English names where it has any. */
-const apexCourtAliases = (abbreviation: string): readonly string[] =>
-  Object.hasOwn(APEX_COURT_ENGLISH_NAMES, abbreviation)
-    ? [abbreviation, ...(APEX_COURT_ENGLISH_NAMES[abbreviation] ?? [])]
-    : [abbreviation];
+const quoted = (values: readonly string[]): string =>
+  values.map((value) => `"${value}"`).join(", ");
 
 type CourtFilterReading =
   | {
@@ -157,18 +220,13 @@ type CourtFilterReading =
 /** Read one court filter against a country's stored courts. */
 export const readCourtFilter = ({
   court,
-  identities,
+  catalog,
 }: {
   court: string;
-  identities: readonly StoredCourtIdentity[];
+  catalog: StoredCourtCatalog;
 }): CourtFilterReading => {
-  const read = normalizeVocabularyValue(court, courtVocabulary(identities), {
-    label: "The stored courts",
-    expected: "a court this corpus holds",
-    maxListed: LISTED_COURTS,
-  });
   const received = JSON.stringify(court);
-  if (read.ok === "absent") {
+  if (isAbsentPlaceholder(court)) {
     return {
       type: "dropped",
       warning: filterDroppedWarning({
@@ -178,27 +236,61 @@ export const readCourtFilter = ({
       }),
     };
   }
-  if (!read.ok) {
+  const nearest = (): string => {
+    const listed = nearestStoredCourts(catalog, court);
+    return listed.length === 0
+      ? "No court is stored for this country; omit court to search every court."
+      : `The stored courts include ${quoted(listed)}.`;
+  };
+  const named = courtKeysNamed(catalog, court).map(
+    (key) =>
+      catalog.identities.get(key) ??
+      panic(`A court reading named a court outside the catalog: ${key}`),
+  );
+  const [only, ...others] = named;
+  if (only === undefined) {
     return {
       type: "dropped",
       warning: filterDroppedWarning({
         filter: "court",
         received,
-        known: read.hint,
+        known: nearest(),
       }),
     };
   }
-  const { abbreviation, spellings } =
-    identities.find((identity) => identity.spellings[0] === read.value) ??
-    panic(`Court vocabulary read a value it does not hold: ${read.value}`);
+  if (others.length > 0) {
+    return {
+      type: "dropped",
+      warning: filterDroppedWarning({
+        filter: "court",
+        received,
+        known: `It answers to ${String(named.length)} courts, ${quoted(named.map(({ name }) => name))}; name one of them.`,
+      }),
+    };
+  }
+  const [first, ...rest] = only.spellings;
+  if (first === undefined) {
+    return {
+      type: "dropped",
+      warning: filterNotHeldWarning({
+        filter: "court",
+        received,
+        value: only.name,
+        known: nearest(),
+      }),
+    };
+  }
+  const spellings: readonly [string, ...string[]] = [first, ...rest];
   return {
     type: "court",
     courts: spellings,
-    // These are the abbreviations the tool description advertises, derived
-    // from the same apex registry when the identities were built. Treating
-    // one as a repair would make the documented call noisy.
+    // The apex abbreviations the tool description advertises (`NS`, `ÚS`)
+    // are the documented call; treating one as a repair would make it noisy.
     warning:
-      court === abbreviation ? null : courtReadWarning({ court, spellings }),
+      court ===
+      courtAbbreviation({ country: catalog.index.country, court: first })
+        ? null
+        : courtReadWarning({ court, spellings }),
   };
 };
 
@@ -319,14 +411,14 @@ export const resolveCourtFilter = async ({
       warnings: [filterUnreadWarning({ filter: "court" })],
     };
   }
-  const identities = storedCourtIdentities(country, courts);
+  const catalog = cachedStoredCourtCatalog(country, courts);
   const listWarnings: AgentCaseLawSearchWarning[] = [];
   const courtReading =
-    court === undefined ? undefined : readCourtFilter({ court, identities });
+    court === undefined ? undefined : readCourtFilter({ court, catalog });
   const combined = combineCourtFilters({
     court: courtReading?.type === "court" ? courtReading.courts : undefined,
     courts: requestedCourts?.flatMap((value) => {
-      const reading = readCourtFilter({ court: value, identities });
+      const reading = readCourtFilter({ court: value, catalog });
       if (reading.warning !== null) {
         listWarnings.push(reading.warning);
       }
@@ -361,6 +453,25 @@ export const resolveCourtFilter = async ({
       return true;
     }),
   };
+};
+
+/**
+ * One catalog per court list read: the list itself is cached for minutes, so
+ * every search in that window shares the catalog built from it.
+ */
+const catalogs = new WeakMap<readonly string[], StoredCourtCatalog>();
+
+const cachedStoredCourtCatalog = (
+  country: string,
+  courts: readonly string[],
+): StoredCourtCatalog => {
+  const cached = catalogs.get(courts);
+  if (cached?.index.country === country) {
+    return cached;
+  }
+  const catalog = storedCourtCatalog(country, courts);
+  catalogs.set(courts, catalog);
+  return catalog;
 };
 
 /** The court list changes when a source adds a court, which is rare. */
