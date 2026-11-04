@@ -31,11 +31,11 @@ import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows one drain claims: one canonical repair batch. */
-export const CASE_LAW_RANKING_SIGNAL_DRAIN_BATCH =
+const CASE_LAW_RANKING_SIGNAL_DRAIN_BATCH =
   CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE;
 
 /** How long a claim holds before another drain may take the rows. */
-export const CASE_LAW_RANKING_SIGNAL_CLAIM_MS = 120_000;
+const CASE_LAW_RANKING_SIGNAL_CLAIM_MS = 120_000;
 
 export type CaseLawRankingSignalDrain = {
   /** Rows this drain claimed. */
