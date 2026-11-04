@@ -183,9 +183,10 @@ const fixture = ({
   const injectFailure = (route: string) => {
     const injected = failures.find((failure) => failure.route === route);
     // A null entry lets that call through, to fail a later one.
-    const next: unknown = injected?.errors.shift();
-    if (next !== undefined && next !== null) {
-      throw next;
+    if (injected?.errors[0] === null) {
+      injected.errors.shift();
+    } else if (injected?.errors.length) {
+      throw injected.errors.shift();
     }
     if (apiError?.route === route) {
       throw new FixtureApiError({
@@ -587,9 +588,9 @@ const fixture = ({
         setFailed: (message: string) => errors.push(message),
         summary: {
           addRaw: (text: string) => ({
-            write: () => {
+            write: async () => {
               stepSummary = text;
-              return Promise.resolve();
+              await Promise.resolve();
             },
           }),
         },
