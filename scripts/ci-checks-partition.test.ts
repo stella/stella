@@ -339,12 +339,9 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
           return true;
         }
         const glob = new Bun.Glob(path);
-        for (const file of tracked) {
-          if (file.startsWith(`${path}/`) || glob.match(file)) {
-            return true;
-          }
-        }
-        return false;
+        return [...tracked].some(
+          (file) => file.startsWith(`${path}/`) || glob.match(file),
+        );
       });
       if (kept.length === lines.length) {
         return command;
@@ -764,7 +761,7 @@ const withoutPreparedGeneration = (step: Step): Step => {
 const PACKAGE_SCOPE = "needs.ci-plan.outputs.package_checks_required == 'true'";
 const DOCUMENTATION_CHECKS = new Set([
   "Documentation source policy rule",
-  "Instruction references",
+  "Instruction policy",
 ]);
 // Documentation checks retain all prerequisites while widening beyond package scope.
 const documentationScope = (step: Step): Step => {

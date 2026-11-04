@@ -1,4 +1,3 @@
-import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
@@ -10,6 +9,7 @@ import { createDetached } from "@stll/errors";
 
 import type {
   HarnessAdapter,
+  HarnessInteractionResponse,
   HarnessProbe,
   HarnessStartError,
   HarnessTurn,
@@ -35,6 +35,7 @@ import {
   harnessSessionId,
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
+import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import {
   SIDECAR_PROTOCOL,
@@ -74,8 +75,11 @@ export type HarnessLaunch = {
 
 export type SidecarHostOptions = {
   sidecarVersion: string;
-  /** Writes one message to stdout. */
-  send: (message: SidecarMessage) => void;
+  /**
+   * Writes one message to stdout. `false` when the message cannot be written
+   * within the contract (`encodeSidecarMessage`); nothing was written then.
+   */
+  send: (message: SidecarMessage) => boolean;
   /** One log line on stderr. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
@@ -87,8 +91,11 @@ type HeldRun = {
   cancelled: boolean;
   /** Set by `run.interrupt` or `run.cancel` before the turn started. */
   stopRequested: boolean;
-  /** Runner request id (a UUID) to the harness's own request id. */
-  approvals: Map<string, string>;
+  /**
+   * Runner request id (a UUID) to the harness's own request id, for both
+   * approvals and blocking questions.
+   */
+  requests: Map<string, string>;
 };
 
 type Config = { appVersion: string; proxy: McpProxy };
@@ -144,11 +151,12 @@ const START_FAILURE: Record<
   }),
 };
 
+/** The approval's summary; a missing or blank reason names the tool. */
 const summaryOf = (reason: string | null, toolName: string) =>
-  (reason ?? `Approval required to run ${toolName}`).slice(
-    0,
-    MAX_SUMMARY_CHARS,
-  );
+  (reason === null || reason.trim() === ""
+    ? `Approval required to run ${toolName}`
+    : reason
+  ).slice(0, MAX_SUMMARY_CHARS);
 
 type ProbeOutcomeOptions = {
   harness: AgentHarness;
@@ -254,7 +262,20 @@ export class SidecarHost {
         return true;
       case "run.approval":
         this.withRun(message, (run) => {
-          this.approve(run, message.requestId, message.decision);
+          this.respond(run, message.requestId, (requestId) => ({
+            type: "approval",
+            requestId,
+            decision: message.decision,
+          }));
+        });
+        return true;
+      case "run.answer":
+        this.withRun(message, (run) => {
+          this.respond(run, message.requestId, (requestId) => ({
+            type: "answers",
+            requestId,
+            answers: message.answers,
+          }));
         });
         return true;
       case "run.interrupt":
@@ -399,12 +420,21 @@ export class SidecarHost {
             message: probed.error.message,
           } as const);
     })();
-    this.options.send({
-      type: "harness.probed",
-      requestId: message.requestId,
-      harness: message.harness,
-      outcome,
-    });
+    const probed = (reported: SidecarProbeOutcome) =>
+      this.options.send({
+        type: "harness.probed",
+        requestId: message.requestId,
+        harness: message.harness,
+        outcome: reported,
+      });
+    // A report the contract cannot carry still answers the probe.
+    if (!probed(outcome)) {
+      probed({
+        type: "failed",
+        reason: "protocol_violation",
+        message: "The harness reported more than the sidecar can relay.",
+      });
+    }
   }
 
   private start(message: SidecarRunStart, config: Config) {
@@ -416,7 +446,7 @@ export class SidecarHost {
       turn: null,
       cancelled: false,
       stopRequested: this.stopping,
-      approvals: new Map(),
+      requests: new Map(),
     };
     this.runs.set(message.runId, run);
     this.track(
@@ -434,30 +464,30 @@ export class SidecarHost {
     }
   }
 
-  private approve(
+  /**
+   * Hand an approval decision or question answers to the harness. The answer
+   * itself is never logged: it may hold a secret the question asked for.
+   */
+  private respond(
     run: HeldRun,
     requestId: string,
-    decision: "approve" | "approve_for_session" | "deny",
+    response: (nativeId: string) => HarnessInteractionResponse,
   ) {
-    const native = run.approvals.get(requestId);
+    const native = run.requests.get(requestId);
     if (native === undefined || run.turn === null) {
-      this.options.log("an approval named a request the run does not hold");
+      this.options.log("a response named a request the run does not hold");
       return;
     }
     const turn = run.turn;
     const answer = async () => {
-      const answered = await turn.respond({
-        type: "approval",
-        requestId: native,
-        decision,
-      });
+      const answered = await turn.respond(response(native));
       if (Result.isError(answered)) {
         this.options.log(
-          `the harness refused an approval: ${answered.error.reason}`,
+          `the harness refused a response: ${answered.error.reason}`,
         );
       }
     };
-    this.detached(answer(), "sidecar.approval");
+    this.detached(answer(), "sidecar.respond");
   }
 
   /** Open the turn, or the reason it could not open as a failure event. */
@@ -465,6 +495,16 @@ export class SidecarHost {
     message: SidecarRunStart,
     config: Config,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
+    // The wire checks each message's role only, as the runner socket does;
+    // the turn reads more, so the rest is checked before anything starts.
+    const transcript = v.safeParse(harnessTranscriptSchema, message.messages);
+    if (!transcript.success) {
+      this.options.log("refused a run whose transcript cannot be read");
+      return Result.err({
+        type: "protocol_violation",
+        message: "The run's transcript has a message stella cannot read.",
+      });
+    }
     const binding = config.proxy.register({
       runId: message.runId,
       serverName: message.mcp.serverName,
@@ -499,11 +539,7 @@ export class SidecarHost {
       instructions: message.instructions,
       policy: message.policy,
       mcp: binding.value,
-      // SAFETY: the wire checks each message's role only, as the runner
-      // socket does; `buildTurnPrompt` reads the content and refuses a
-      // transcript it cannot read as `invalid_transcript`.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
-      transcript: message.messages as unknown as ModelMessage[],
+      transcript: transcript.output,
       continuation:
         message.harnessSessionId === null
           ? { type: "fresh" }
@@ -527,15 +563,30 @@ export class SidecarHost {
       value: "failed",
       sessionId: null,
     };
-    const send = this.options.send;
     const runId = message.runId;
+    /**
+     * Set once one of the run's messages could not be written. The desktop
+     * would miss part of the run, so the run stops, writes nothing more and
+     * finishes `failed`.
+     */
+    const delivery = { broken: false };
+    const send = (runMessage: SidecarMessage) => {
+      if (delivery.broken || this.options.send(runMessage)) {
+        return;
+      }
+      delivery.broken = true;
+      this.options.log(
+        `a run's ${runMessage.type} message could not be written; stopping the run`,
+      );
+      this.stop(run);
+    };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
-      run.approvals.set(requestId, nativeId);
+      run.requests.set(requestId, nativeId);
       return requestId;
     };
     const runnerIdOf = (nativeId: string) => {
-      for (const [requestId, native] of run.approvals) {
+      for (const [requestId, native] of run.requests) {
         if (native === nativeId) {
           return requestId;
         }
@@ -633,11 +684,20 @@ export class SidecarHost {
       send({ type: "run.event", runId, chunk: { ...chunk } });
     }
     await run.turn?.dispose();
-    send({
+    const finished = {
       type: "run.finished",
       runId,
-      outcome: outcome.value,
+      outcome: delivery.broken ? "failed" : outcome.value,
       harnessSessionId: outcome.sessionId,
-    });
+    } as const;
+    // Every accepted run ends with one `run.finished`: a native session id
+    // the contract cannot carry fails the run instead of losing its end.
+    if (!this.options.send(finished)) {
+      this.options.send({
+        ...finished,
+        outcome: "failed",
+        harnessSessionId: null,
+      });
+    }
   }
 }

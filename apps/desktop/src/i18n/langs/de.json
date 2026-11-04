@@ -38,7 +38,7 @@
     "reconnectAccount": "Erneut mit stella web verbinden…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Änderungen bleiben lokal und werden automatisch erneut versucht",
+    "checkpointDelayedBody": "{fileName}: Änderungen bleiben lokal und werden automatisch erneut versucht",
     "checkpointDelayedTitle": "Checkpoint-Synchronisierung verzögert",
     "diagnosticsCopiedBody": "Fügen Sie sie bei Bedarf in Ihre Supportanfrage ein.",
     "diagnosticsCopiedTitle": "Diagnose kopiert",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokale Wiederherstellungsdaten wurden zurückgesetzt",
     "revisionCreatedBody": "{fileName} als Version {versionNumber} gespeichert. Desktop-Bearbeitung abgeschlossen",
     "revisionCreatedTitle": "stella-Revision erstellt",
-    "sessionClosedSaved": "{fileName} — Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
-    "sessionClosedUnsaved": "{fileName} — Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
-    "takenOverBody": "{fileName} — Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
+    "sessionClosedSaved": "{fileName}: Lokale Kopie bleibt in Temporäre Arbeitskopien erhalten",
+    "sessionClosedUnsaved": "{fileName}: Sie haben nicht gespeicherte lokale Änderungen. Ihre Kopie finden Sie in Temporäre Arbeitskopien.",
+    "takenOverBody": "{fileName}: Öffnen Sie erneut aus stella, um die Bearbeitung zurückzuholen",
     "takenOverLocalError": "Desktop-Bearbeitung auf anderes Gerät verschoben. Diese lokale Kopie bleibt erhalten.",
     "takenOverTitle": "Bearbeitung auf anderes Gerät verschoben",
     "editsSetAsideTitle": "Änderungen zurückgestellt",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Titel",
     "evidenceApps": "Apps",
     "rangeEmpty": "In diesem Zeitraum wurde nichts erfasst.",
+    "entryStart": "Beginn",
+    "entryEnd": "Ende",
+    "rangeEndBeforeStart": "Wählen Sie ein Ende nach dem Beginn.",
+    "rangeDraftedLeftOut": "{duration}, ohne bereits als Entwurf erfasste Zeit",
     "calendarHint": "Öffnen Sie einen gestrichelten Vorschlag, um ihn zu prüfen, oder ziehen Sie in der Spalte Zeiteinträge über einen beliebigen Zeitraum, um einen Eintrag zu entwerfen.",
     "aiDraftWrite": "Mit stella AI entwerfen",
     "aiDraftAgain": "Neu entwerfen",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "ChatGPT ist verbunden",
     "callbackConnectedBody": "Sie können diesen Tab schließen und zu stella zurückkehren.",
     "callbackNotConnectedTitle": "ChatGPT wurde nicht verbunden",
-    "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut."
+    "callbackNotConnectedBody": "Kehren Sie zu stella zurück, um zu sehen, was passiert ist, und versuchen Sie es erneut.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Nutzen Sie Ihr Claude-Abonnement für lokale Agenten in stella. Die Nutzung wird auf Ihren Claude-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
+      "notInstalled": "Claude Code ist auf diesem Computer noch nicht installiert.",
+      "signIn": "Mit Claude anmelden",
+      "openSignInPage": "Anmeldeseite öffnen",
+      "signedIn": "Bei Claude angemeldet",
+      "signedInAs": "Bei Claude angemeldet · {email}",
+      "signOut": "Abmelden",
+      "apiKey": "Claude Code ist mit einem API-Schlüssel angemeldet, den stella nicht verwendet. Melden Sie sich ab und danach mit Ihrem Claude-Abonnement wieder an.",
+      "failure": {
+        "notCompleted": "Die Anmeldung wurde nicht abgeschlossen. Versuchen Sie es erneut.",
+        "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
+        "unavailable": "Claude Code konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut."
+      }
+    }
   }
 }

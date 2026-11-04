@@ -38,7 +38,7 @@
     "reconnectAccount": "Se reconnecter à stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Les modifications restent locales et seront réessayées automatiquement",
+    "checkpointDelayedBody": "{fileName} : les modifications restent locales et seront réessayées automatiquement",
     "checkpointDelayedTitle": "Synchronisation du point de contrôle retardée",
     "diagnosticsCopiedBody": "Collez-les dans votre demande de support si nécessaire.",
     "diagnosticsCopiedTitle": "Diagnostics copiés",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Les données de récupération locales ont été réinitialisées",
     "revisionCreatedBody": "{fileName} enregistré en tant que version {versionNumber}. Modification sur le bureau terminée",
     "revisionCreatedTitle": "Révision stella créée",
-    "sessionClosedSaved": "{fileName} — La copie locale reste préservée dans Copies de travail temporaires",
-    "sessionClosedUnsaved": "{fileName} — Vous avez des modifications locales non enregistrées. Retrouvez votre copie dans Copies de travail temporaires.",
-    "takenOverBody": "{fileName} — Rouvrez depuis stella ici pour reprendre la modification",
+    "sessionClosedSaved": "{fileName} : la copie locale reste préservée dans Copies de travail temporaires",
+    "sessionClosedUnsaved": "{fileName} : vous avez des modifications locales non enregistrées. Retrouvez votre copie dans Copies de travail temporaires.",
+    "takenOverBody": "{fileName} : rouvrez depuis stella ici pour reprendre la modification",
     "takenOverLocalError": "La modification sur le bureau a été déplacée vers un autre appareil. Cette copie locale est préservée.",
     "takenOverTitle": "Modification déplacée vers un autre appareil",
     "editsSetAsideTitle": "Modifications mises de côté",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Titres",
     "evidenceApps": "Apps",
     "rangeEmpty": "Rien n’a été enregistré sur cette plage.",
+    "entryStart": "Début",
+    "entryEnd": "Fin",
+    "rangeEndBeforeStart": "Choisissez une heure de fin après le début.",
+    "rangeDraftedLeftOut": "{duration}, hors temps déjà en brouillon",
     "calendarHint": "Ouvrez une suggestion en pointillés pour la vérifier, ou faites glisser dans la colonne Saisies de temps pour préparer une saisie sur n’importe quelle plage.",
     "aiDraftWrite": "Rédiger avec stella AI",
     "aiDraftAgain": "Rédiger à nouveau",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "ChatGPT est connecté",
     "callbackConnectedBody": "Vous pouvez fermer cet onglet et revenir à stella.",
     "callbackNotConnectedTitle": "ChatGPT n’a pas été connecté",
-    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez."
+    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Utilisez votre abonnement Claude pour les agents locaux dans stella. L’utilisation est décomptée de votre forfait Claude, indépendamment de votre abonnement stella.",
+      "notInstalled": "Claude Code n’est pas encore installé sur cet ordinateur.",
+      "signIn": "Se connecter avec Claude",
+      "openSignInPage": "Ouvrir la page de connexion",
+      "signedIn": "Connecté à Claude",
+      "signedInAs": "Connecté à Claude · {email}",
+      "signOut": "Se déconnecter",
+      "apiKey": "Claude Code est connecté avec une clé d’API, que stella n’utilise pas. Déconnectez-vous, puis reconnectez-vous avec votre abonnement Claude.",
+      "failure": {
+        "notCompleted": "La connexion n’a pas abouti. Réessayez.",
+        "timedOut": "La connexion a pris trop de temps. Réessayez.",
+        "unavailable": "Claude Code n’a pas pu être lancé sur cet ordinateur. Réessayez."
+      }
+    }
   }
 }

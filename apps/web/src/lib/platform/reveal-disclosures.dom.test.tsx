@@ -4,8 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 

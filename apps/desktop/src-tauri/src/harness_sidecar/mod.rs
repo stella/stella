@@ -32,7 +32,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufRead
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{mpsc, oneshot};
 
-pub(crate) use protocol::{HarnessProbe, ProbeOutcome, SidecarRunStart};
+pub(crate) use protocol::{HarnessProbe, ProbeOutcome, RunAnswer, SidecarRunStart};
 use protocol::{
   HostHello, HostMessage, MAX_LINE_BYTES, SIDECAR_PROTOCOL, SidecarMessage,
 };
@@ -46,7 +46,9 @@ use crate::runner_protocol::{
 const LOG_TARGET: &str = "harness_sidecar";
 /// Bound on queued commands; beyond it a command is refused as busy.
 const COMMAND_QUEUE: usize = 256;
-/// Bound on a run's undelivered outputs before the sidecar's stdout waits.
+/// Bound on a run's undelivered outputs. The last slot is kept for the run's
+/// final message: a run whose consumer lets the others fill up ends `Failed`
+/// in it and is cancelled, so no consumer can stall the supervisor.
 const RUN_OUTPUT_QUEUE: usize = 256;
 const MAX_LOG_LINE_CHARS: usize = 2000;
 /// What the sidecar is named next to the app executable in a bundle.
@@ -153,6 +155,9 @@ pub(crate) enum SidecarUnavailable {
   Busy,
   /// The supervisor stopped.
   Stopped,
+  /// The message exceeds the protocol's line limit. The sidecar would refuse
+  /// it and the session would end, so it is refused before it is queued.
+  TooLarge,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -162,16 +167,37 @@ pub(crate) enum ProbeError {
   Unavailable(SidecarUnavailable),
 }
 
+/// One host message, serialized within the line limit, newline included.
+/// Commands are encoded before they are queued, so the session only ever
+/// writes lines within the limit and a write fails on I/O alone.
+struct HostLine(Vec<u8>);
+
+impl HostLine {
+  fn encode(message: &HostMessage) -> Result<Self, SidecarUnavailable> {
+    // Host messages hold strings, numbers and JSON objects only, which
+    // always serialize; the error arm is unreachable in practice.
+    let mut line = serde_json::to_vec(message)
+      .map_err(|_unserializable| SidecarUnavailable::TooLarge)?;
+    if line.len() > MAX_LINE_BYTES {
+      return Err(SidecarUnavailable::TooLarge);
+    }
+    line.push(b'\n');
+    Ok(Self(line))
+  }
+}
+
 enum Control {
   StartRun {
-    start: Box<SidecarRunStart>,
+    run_id: String,
+    line: HostLine,
     outputs: mpsc::Sender<SidecarRunOutput>,
   },
   Probe {
-    probe: HarnessProbe,
+    request_id: String,
+    line: HostLine,
     reply: oneshot::Sender<Result<ProbeOutcome, ProbeError>>,
   },
-  Forward(HostMessage),
+  Forward(HostLine),
   Shutdown(oneshot::Sender<()>),
 }
 
@@ -207,15 +233,22 @@ impl HarnessSidecar {
       })
   }
 
+  fn forward(&self, message: &HostMessage) -> Result<(), SidecarUnavailable> {
+    self.control(Control::Forward(HostLine::encode(message)?))
+  }
+
   /// Hand a run to the sidecar. Everything it produces arrives on the
   /// returned channel, ending with [`SidecarRunOutput::Finished`].
   pub(crate) fn start_run(
     &self,
     start: SidecarRunStart,
   ) -> Result<mpsc::Receiver<SidecarRunOutput>, SidecarUnavailable> {
+    let run_id = start.run_id.clone();
+    let line = HostLine::encode(&HostMessage::RunStart(Box::new(start)))?;
     let (outputs, receiver) = mpsc::channel(RUN_OUTPUT_QUEUE);
     self.control(Control::StartRun {
-      start: Box::new(start),
+      run_id,
+      line,
       outputs,
     })?;
     Ok(receiver)
@@ -225,19 +258,24 @@ impl HarnessSidecar {
     &self,
     approval: RunApproval,
   ) -> Result<(), SidecarUnavailable> {
-    self.control(Control::Forward(HostMessage::RunApproval(approval)))
+    self.forward(&HostMessage::RunApproval(approval))
+  }
+
+  /// Answers to a blocking question the run asked.
+  pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
+    self.forward(&HostMessage::RunAnswer(answer))
   }
 
   pub(crate) fn interrupt(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
-    self.control(Control::Forward(HostMessage::RunInterrupt(RunRef {
+    self.forward(&HostMessage::RunInterrupt(RunRef {
       run_id: run_id.to_owned(),
-    })))
+    }))
   }
 
   pub(crate) fn cancel(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
-    self.control(Control::Forward(HostMessage::RunCancel(RunRef {
+    self.forward(&HostMessage::RunCancel(RunRef {
       run_id: run_id.to_owned(),
-    })))
+    }))
   }
 
   /// A newer MCP token for the run; the sidecar's proxy uses it next.
@@ -245,7 +283,7 @@ impl HarnessSidecar {
     &self,
     refresh: RunTokenRefresh,
   ) -> Result<(), SidecarUnavailable> {
-    self.control(Control::Forward(HostMessage::RunToken(refresh)))
+    self.forward(&HostMessage::RunToken(refresh))
   }
 
   /// The harness's version, account state and models, without a prompt.
@@ -253,9 +291,16 @@ impl HarnessSidecar {
     &self,
     probe: HarnessProbe,
   ) -> Result<ProbeOutcome, ProbeError> {
+    let request_id = probe.request_id.clone();
+    let line = HostLine::encode(&HostMessage::HarnessProbe(probe))
+      .map_err(ProbeError::Unavailable)?;
     let (reply, answer) = oneshot::channel();
     self
-      .control(Control::Probe { probe, reply })
+      .control(Control::Probe {
+        request_id,
+        line,
+        reply,
+      })
       .map_err(ProbeError::Unavailable)?;
     answer.await.map_err(|_supervisor_gone| {
       ProbeError::Unavailable(SidecarUnavailable::Stopped)
@@ -361,7 +406,7 @@ impl Supervisor {
   async fn run(mut self) {
     let mut failures = 0;
     loop {
-      let started = Instant::now();
+      let started = Instant::now(); // kit-allow: restart backoff over a real process
       let end = self.session().await;
       self.fail_held();
       if matches!(end, SessionEnd::Shutdown) {
@@ -403,7 +448,7 @@ impl Supervisor {
 
   /// The restart delay; commands meanwhile are answered as failed.
   async fn wait(&mut self, delay: Duration) -> SessionEnd {
-    let sleep = tokio::time::sleep(delay);
+    let sleep = tokio::time::sleep(delay); // kit-allow: restart backoff over a real process
     tokio::pin!(sleep);
     loop {
       tokio::select! {
@@ -415,8 +460,8 @@ impl Supervisor {
             let _delivered = done.send(());
             return SessionEnd::Shutdown;
           }
-          Some(Control::StartRun { start, outputs }) => {
-            self.runs.insert(start.run_id.clone(), outputs);
+          Some(Control::StartRun { run_id, outputs, .. }) => {
+            self.runs.insert(run_id, outputs);
             self.fail_held();
           }
           Some(Control::Probe { reply, .. }) => {
@@ -430,7 +475,7 @@ impl Supervisor {
 
   async fn session(&mut self) -> SessionEnd {
     let launch = &self.settings.launch;
-    let spawned = Command::new(&launch.program)
+    let spawned = Command::new(&launch.program) // kit-allow: spawns the supervised sidecar
       .args(&launch.args)
       .envs(launch.env.iter().map(|(name, value)| (name, value)))
       .stdin(Stdio::piped())
@@ -493,31 +538,37 @@ impl Supervisor {
             let _delivered = done.send(());
             return SessionEnd::Shutdown;
           }
-          Some(Control::StartRun { start, outputs }) => {
-            let run_id = start.run_id.clone();
+          Some(Control::StartRun { run_id, line, outputs }) => {
             if self.runs.contains_key(&run_id) {
               tracing::warn!(target: LOG_TARGET, "a run was started twice");
               continue;
             }
             self.runs.insert(run_id, outputs);
-            if write_message(&mut stdin, &HostMessage::RunStart(start)).await.is_err() {
+            if write_line(&mut stdin, &line).await.is_err() {
               break;
             }
           }
-          Some(Control::Probe { probe, reply }) => {
-            self.probes.insert(probe.request_id.clone(), reply);
-            if write_message(&mut stdin, &HostMessage::HarnessProbe(probe)).await.is_err() {
+          Some(Control::Probe { request_id, line, reply }) => {
+            self.probes.insert(request_id, reply);
+            if write_line(&mut stdin, &line).await.is_err() {
               break;
             }
           }
-          Some(Control::Forward(message)) => {
-            if write_message(&mut stdin, &message).await.is_err() {
+          Some(Control::Forward(line)) => {
+            if write_line(&mut stdin, &line).await.is_err() {
               break;
             }
           }
         },
         message = messages.recv() => match message {
-          Some(Ok(message)) => self.dispatch(message).await,
+          Some(Ok(message)) => {
+            if let Some(run_id) = self.dispatch(message) {
+              let cancel = HostMessage::RunCancel(RunRef { run_id });
+              if write_message(&mut stdin, &cancel).await.is_err() {
+                break;
+              }
+            }
+          }
           Some(Err(error)) => {
             tracing::error!(target: LOG_TARGET, ?error, "harness sidecar broke the protocol");
             break;
@@ -530,42 +581,41 @@ impl Supervisor {
     SessionEnd::Ended
   }
 
-  async fn dispatch(&mut self, message: SidecarMessage) {
+  /// Route one sidecar message without waiting on any consumer. Returns a run
+  /// the sidecar must cancel because its consumer stopped draining it.
+  fn dispatch(&mut self, message: SidecarMessage) -> Option<String> {
     match message {
       SidecarMessage::Hello(_) => {
         tracing::warn!(target: LOG_TARGET, "harness sidecar repeated its hello");
+        None
       }
       SidecarMessage::HarnessProbed(probed) => {
         if let Some(reply) = self.probes.remove(&probed.request_id) {
           let _delivered = reply.send(Ok(probed.outcome));
         }
+        None
       }
       SidecarMessage::RunEvent(event) => {
-        self
-          .deliver(&event.run_id, SidecarRunOutput::Event(event.chunk.0))
-          .await;
+        self.deliver(&event.run_id, SidecarRunOutput::Event(event.chunk.0))
       }
-      SidecarMessage::RunApprovalRequest(request) => {
-        self
-          .deliver(
-            &request.run_id,
-            SidecarRunOutput::ApprovalRequest {
-              request_id: request.request_id,
-              kind: request.kind,
-              summary: request.summary,
-            },
-          )
-          .await;
-      }
+      SidecarMessage::RunApprovalRequest(request) => self.deliver(
+        &request.run_id,
+        SidecarRunOutput::ApprovalRequest {
+          request_id: request.request_id,
+          kind: request.kind,
+          summary: request.summary,
+        },
+      ),
       SidecarMessage::RunFinished(finished) => {
         if let Some(outputs) = self.runs.remove(&finished.run_id) {
-          let _delivered = outputs
-            .send(SidecarRunOutput::Finished {
-              outcome: finished.outcome,
-              harness_session_id: finished.harness_session_id,
-            })
-            .await;
+          // The reserved slot always holds the final message; a dropped
+          // receiver means nobody waits for the run any more.
+          let _queued = outputs.try_send(SidecarRunOutput::Finished {
+            outcome: finished.outcome,
+            harness_session_id: finished.harness_session_id,
+          });
         }
+        None
       }
       SidecarMessage::Rejected(rejected) => {
         tracing::warn!(
@@ -574,14 +624,31 @@ impl Supervisor {
           message_type = rejected.message_type.as_deref().unwrap_or(""),
           "harness sidecar rejected a message"
         );
+        None
       }
     }
   }
 
-  async fn deliver(&self, run_id: &str, output: SidecarRunOutput) {
-    if let Some(outputs) = self.runs.get(run_id) {
-      let _delivered = outputs.send(output).await;
+  /// Queue one output of a run, keeping the channel's last slot for its final
+  /// message. When only that slot is left, the run ends `Failed` in it, stops
+  /// being routed, and is returned for the caller to cancel in the sidecar.
+  fn deliver(&mut self, run_id: &str, output: SidecarRunOutput) -> Option<String> {
+    let outputs = self.runs.get(run_id)?;
+    if outputs.capacity() > 1 {
+      // A dropped receiver means nobody waits for the run any more.
+      let _queued = outputs.try_send(output);
+      return None;
     }
+    tracing::warn!(
+      target: LOG_TARGET,
+      "a run's outputs were not drained; cancelling the run"
+    );
+    let outputs = self.runs.remove(run_id)?;
+    let _queued = outputs.try_send(SidecarRunOutput::Finished {
+      outcome: RunOutcome::Failed,
+      harness_session_id: None,
+    });
+    Some(run_id.to_owned())
   }
 
   /// Ask the sidecar to stop its runs and exit; kill it after the grace.
@@ -603,17 +670,19 @@ async fn kill(mut child: Child) {
   }
 }
 
+/// A message the supervisor itself writes (hello, cancel, shutdown).
 async fn write_message(
   stdin: &mut ChildStdin,
   message: &HostMessage,
 ) -> Result<(), ()> {
-  let mut line = serde_json::to_vec(message).map_err(|_unserializable| ())?;
-  if line.len() > MAX_LINE_BYTES {
+  let line = HostLine::encode(message).map_err(|_too_large| {
     tracing::error!(target: LOG_TARGET, "a host message exceeded the line limit");
-    return Err(());
-  }
-  line.push(b'\n');
-  let written = stdin.write_all(&line).await;
+  })?;
+  write_line(stdin, &line).await
+}
+
+async fn write_line(stdin: &mut ChildStdin, line: &HostLine) -> Result<(), ()> {
+  let written = stdin.write_all(&line.0).await;
   let flushed = stdin.flush().await;
   written.and(flushed).map_err(|error| {
     tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "harness sidecar stdin closed");

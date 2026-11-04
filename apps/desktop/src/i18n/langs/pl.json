@@ -38,7 +38,7 @@
     "reconnectAccount": "Połącz ponownie ze stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Zmiany pozostają lokalne i zostaną automatycznie ponowione",
+    "checkpointDelayedBody": "{fileName}: zmiany pozostają lokalne i zostaną automatycznie ponowione",
     "checkpointDelayedTitle": "Synchronizacja punktu kontrolnego opóźniona",
     "diagnosticsCopiedBody": "Wklej ją do zgłoszenia wsparcia, gdy będzie potrzebna.",
     "diagnosticsCopiedTitle": "Diagnostyka skopiowana",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokalne dane odzyskiwania zostały zresetowane",
     "revisionCreatedBody": "{fileName} zapisany jako wersja {versionNumber}. Edycja pulpitu zakończona",
     "revisionCreatedTitle": "Wersja stella utworzona",
-    "sessionClosedSaved": "{fileName} — Lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
-    "sessionClosedUnsaved": "{fileName} — Masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
-    "takenOverBody": "{fileName} — Otwórz ponownie ze stella, aby odzyskać edycję",
+    "sessionClosedSaved": "{fileName}: lokalna kopia pozostaje zachowana w Tymczasowych kopiach roboczych",
+    "sessionClosedUnsaved": "{fileName}: masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
+    "takenOverBody": "{fileName}: otwórz ponownie ze stella, aby odzyskać edycję",
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie",
     "editsSetAsideTitle": "Zmiany odłożone",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Tytuły",
     "evidenceApps": "Aplikacje",
     "rangeEmpty": "W tym przedziale nic nie zapisano.",
+    "entryStart": "Początek",
+    "entryEnd": "Koniec",
+    "rangeEndBeforeStart": "Ustaw koniec później niż początek.",
+    "rangeDraftedLeftOut": "{duration}, bez czasu ujętego już w wersjach roboczych",
     "calendarHint": "Otwórz propozycję z przerywaną ramką, aby ją sprawdzić, albo przeciągnij w kolumnie Wpisy czasu, aby przygotować wpis dla dowolnego przedziału.",
     "aiDraftWrite": "Zaproponuj z stella AI",
     "aiDraftAgain": "Zaproponuj ponownie",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "ChatGPT jest połączony",
     "callbackConnectedBody": "Możesz zamknąć tę kartę i wrócić do stelli.",
     "callbackNotConnectedTitle": "Nie połączono z ChatGPT",
-    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie."
+    "callbackNotConnectedBody": "Wróć do stelli, aby zobaczyć, co się stało, i spróbuj ponownie.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Korzystaj ze swojej subskrypcji Claude w lokalnych agentach w stelli. Wykorzystanie jest liczone w ramach planu Claude, niezależnie od subskrypcji stelli.",
+      "notInstalled": "Claude Code nie jest jeszcze zainstalowany na tym komputerze.",
+      "signIn": "Zaloguj się przez Claude",
+      "openSignInPage": "Otwórz stronę logowania",
+      "signedIn": "Zalogowano do Claude",
+      "signedInAs": "Zalogowano do Claude · {email}",
+      "signOut": "Wyloguj się",
+      "apiKey": "Claude Code jest zalogowany kluczem API, którego stella nie używa. Wyloguj się, a następnie zaloguj się swoją subskrypcją Claude.",
+      "failure": {
+        "notCompleted": "Logowanie nie zostało dokończone. Spróbuj ponownie.",
+        "timedOut": "Logowanie trwało zbyt długo. Spróbuj ponownie.",
+        "unavailable": "Nie udało się uruchomić Claude Code na tym komputerze. Spróbuj ponownie."
+      }
+    }
   }
 }

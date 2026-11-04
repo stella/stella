@@ -191,6 +191,7 @@
       "openFailed": "Ahora no se puede editar este documento",
       "takenOver": "Otra persona está editando ahora este documento. Sus cambios desde el último guardado no se conservaron.",
       "finishFailed": "Sus cambios están guardados, pero aún no se han convertido en una nueva versión. Vuelva a tocar Listo o salga: la próxima edición continuará desde ellos.",
+      "notStored": "No se pudieron guardar tus últimos cambios. Quédate para intentarlo de nuevo o sal sin ellos.",
       "stay": "Quedarse",
       "leave": "Salir"
     }

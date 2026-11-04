@@ -4,7 +4,7 @@
 //! same protocol fixtures in `packages/agent-engine`.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -44,6 +44,12 @@ while read -r line; do
           exit 3 ;;
         *'"model":"garbage"'*) echo 'not json' ;;
         *'"model":"wait"'*) ;;
+        *'"model":"flood"'*)
+          i=0
+          while [ "$i" -lt 300 ]; do
+            printf '{"type":"run.event","runId":"%s","chunk":{"type":"RUN_STARTED"}}\n' "$id"
+            i=$((i + 1))
+          done ;;
         *)
           printf '{"type":"run.event","runId":"%s","chunk":{"type":"RUN_STARTED","runId":"%s"}}\n' "$id" "$id"
           printf '{"type":"run.approval_request","runId":"%s","requestId":"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f","kind":"command","summary":"Deletes a file"}\n' "$id"
@@ -61,10 +67,12 @@ impl Fixture {
   fn new() -> Self {
     let root =
       std::env::temp_dir().join(format!("stella-sidecar-{}", uuid::Uuid::new_v4()));
-    fs::create_dir_all(&root).unwrap();
-    let script = root.join("fake-sidecar");
-    fs::write(&script, FAKE_SIDECAR).unwrap();
-    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    crate::local_store::create_private_dir(&root).unwrap();
+    let mut script =
+      crate::local_store::create_harness_file(&root.join("fake-sidecar"), true)
+        .unwrap();
+    script.write_all(FAKE_SIDECAR.as_bytes()).unwrap();
+    script.sync_all().unwrap();
     Self { root }
   }
 
@@ -269,6 +277,13 @@ fn commands_for_a_run_reach_the_sidecar() {
         decision: crate::runner_protocol::ApprovalDecision::Deny,
       })
       .unwrap();
+    sidecar
+      .answer(RunAnswer {
+        run_id: run_id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+      })
+      .unwrap();
     sidecar.interrupt(&run_id).unwrap();
     sidecar.cancel(&run_id).unwrap();
     assert_eq!(
@@ -292,10 +307,97 @@ fn commands_for_a_run_reach_the_sidecar() {
       "run.start",
       "run.token",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "shutdown"
     ]
+  );
+}
+
+#[test]
+fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let start = run_start("wait");
+    let run_id = start.run_id.clone();
+    let mut outputs = sidecar.start_run(start).unwrap();
+    let answers = (0..32)
+      .map(|question| {
+        let answer = "x".repeat(16_384);
+        (format!("q{question}"), vec![answer; 64])
+      })
+      .collect();
+    assert_eq!(
+      sidecar.answer(RunAnswer {
+        run_id: run_id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        answers,
+      }),
+      Err(SidecarUnavailable::TooLarge)
+    );
+    let mut oversized = run_start("gpt-test");
+    oversized.instructions = "x".repeat(MAX_LINE_BYTES);
+    assert!(matches!(
+      sidecar.start_run(oversized),
+      Err(SidecarUnavailable::TooLarge)
+    ));
+    sidecar.cancel(&run_id).unwrap();
+    assert_eq!(
+      finish(&mut outputs).await,
+      vec![SidecarRunOutput::Finished {
+        outcome: RunOutcome::Cancelled,
+        harness_session_id: None,
+      }]
+    );
+    sidecar.shutdown().await;
+  });
+  let types: Vec<Value> = fixture
+    .received()
+    .iter()
+    .map(|message| message["type"].clone())
+    .collect();
+  assert_eq!(types, vec!["hello", "run.start", "run.cancel", "shutdown"]);
+  assert_eq!(fixture.starts(), 1);
+}
+
+#[test]
+fn a_run_nobody_drains_ends_failed_without_stalling_the_supervisor() {
+  let fixture = Fixture::new();
+  let start = run_start("flood");
+  let run_id = start.run_id.clone();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    // Nothing reads this run while the sidecar writes more than it can queue.
+    let mut flooded = sidecar.start_run(start).unwrap();
+    let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert_eq!(finish(&mut after).await.len(), 3);
+    let probed = tokio::time::timeout(
+      WAIT,
+      sidecar.probe(HarnessProbe {
+        request_id: REQUEST_ID.to_owned(),
+        harness: Harness::Codex,
+        executable: "/data/harness/codex/0.165.0/codex".to_owned(),
+        config_dir: "/data/harness-home/codex".to_owned(),
+      }),
+    )
+    .await
+    .expect("a probe is answered while a run's outputs wait");
+    assert!(probed.is_ok());
+    let outputs = finish(&mut flooded).await;
+    assert_eq!(outputs.len(), RUN_OUTPUT_QUEUE);
+    assert_eq!(outputs.last(), Some(&failed()));
+    sidecar.shutdown().await;
+  });
+  let cancels: Vec<Value> = fixture
+    .received()
+    .into_iter()
+    .filter(|message| message["type"] == "run.cancel")
+    .collect();
+  assert_eq!(
+    cancels,
+    vec![json!({ "type": "run.cancel", "runId": run_id })]
   );
 }
 
@@ -323,7 +425,7 @@ fn a_crash_fails_the_runs_it_held_and_the_sidecar_restarts() {
         completed = true;
         break;
       }
-      tokio::time::sleep(Duration::from_millis(50)).await;
+      tokio::time::sleep(Duration::from_millis(50)).await; // kit-allow: polls a real process restart
       after = sidecar.start_run(run_start("gpt-test")).unwrap();
     }
     assert!(completed, "a run completed after the restart");
@@ -351,8 +453,7 @@ fn shutdown_stops_the_sidecar_and_the_supervisor() {
   with_children(async {
     let sidecar = fixture.sidecar();
     let mut held = sidecar.start_run(run_start("wait")).unwrap();
-    // The start is written before the shutdown, in order.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // One command queue carries both, so the start is handled first.
     sidecar.shutdown().await;
     assert_eq!(finish(&mut held).await, vec![failed()]);
     assert_eq!(

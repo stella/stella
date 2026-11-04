@@ -44,6 +44,7 @@ export const SIDECAR_HOST_MESSAGE = {
   harnessProbe: "harness.probe",
   runStart: "run.start",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -83,6 +84,9 @@ export const SIDECAR_PROBE_FAILURES = [
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
+const MAX_ANSWERED_QUESTIONS = 32;
+const MAX_ANSWERS_PER_QUESTION = 64;
+const MAX_ANSWER_LENGTH = 16_384;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -183,6 +187,29 @@ export const sidecarHostMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; the request id is the one
+   * its chunk's interrupt carries. Answers name an option by its label or
+   * hold free text, keyed by question id.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: v.pipe(
+      v.record(
+        v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+        v.pipe(
+          v.array(v.pipe(v.string(), v.maxLength(MAX_ANSWER_LENGTH))),
+          v.maxLength(MAX_ANSWERS_PER_QUESTION),
+        ),
+      ),
+      v.check(
+        (answers) => Object.keys(answers).length <= MAX_ANSWERED_QUESTIONS,
+        "At most 32 questions are answered at once",
+      ),
+    ),
   }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runInterrupt),
@@ -308,8 +335,7 @@ const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 );
 const lineTypeSchema = v.object({ type: v.string() });
 
-export const utf8Length = (line: string) =>
-  new TextEncoder().encode(line).byteLength;
+const utf8Length = (line: string) => new TextEncoder().encode(line).byteLength;
 
 /**
  * Read one line the host wrote. An unknown type is its own rejection,
@@ -337,10 +363,24 @@ export const parseSidecarHostLine = (line: string): SidecarHostLine => {
     : { type: "rejected", reason: "invalid", messageType };
 };
 
-/** One stdout line; `null` when the message cannot be framed within limits. */
+export type SidecarEncoded =
+  | { type: "line"; line: string }
+  | { type: "refused"; reason: "invalid" | "too_large" };
+
+/**
+ * One stdout line, or why the message cannot be written: it breaks the
+ * contract (a field over its bound) or exceeds the line limit. Never throws,
+ * so each caller decides what an unwritable message means for its run.
+ */
 export const encodeSidecarMessage = (
   message: SidecarMessage,
-): string | null => {
-  const line = JSON.stringify(v.parse(sidecarMessageSchema, message));
-  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES ? null : `${line}\n`;
+): SidecarEncoded => {
+  const parsed = v.safeParse(sidecarMessageSchema, message);
+  if (!parsed.success) {
+    return { type: "refused", reason: "invalid" };
+  }
+  const line = JSON.stringify(parsed.output);
+  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES
+    ? { type: "refused", reason: "too_large" }
+    : { type: "line", line: `${line}\n` };
 };

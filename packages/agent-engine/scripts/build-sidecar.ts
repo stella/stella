@@ -123,16 +123,15 @@ const run = async () => {
       },
     );
     if (lipo.exitCode !== 0) {
-      return panic("build-sidecar: lipo could not join the macOS slices");
+      panic("build-sidecar: lipo could not join the macOS slices");
     }
     console.log(`build-sidecar: ${universal}`);
-    return;
+  } else if (isCompiledTriple(triple)) {
+    const file = await compile(triple, version);
+    console.log(`build-sidecar: ${file}`);
+  } else {
+    panic(`build-sidecar: no Bun target for ${triple}`);
   }
-  if (!isCompiledTriple(triple)) {
-    return panic(`build-sidecar: no Bun target for ${triple}`);
-  }
-  const file = await compile(triple, version);
-  console.log(`build-sidecar: ${file}`);
 };
 
 await run();

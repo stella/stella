@@ -4159,6 +4159,13 @@ jobs:
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
 
+      - name: Verify shared worker Postgres history and cleanup
+        if: matrix.shard == 1
+        timeout-minutes: 5
+        env:
+          STELLA_RUN_SHARED_POSTGRES_TESTS: "true"
+        run: bun --filter @stll/api test scripts/shared-test-postgres.postgres.test.ts
+
       - name: Run Postgres-gated API suites
         id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
@@ -6385,9 +6392,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6559,9 +6566,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6677,9 +6684,9 @@ jobs:
 
       - &desktop_rust_toolchain
         name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
           components: clippy
 

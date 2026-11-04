@@ -43,14 +43,14 @@ const FORWARDED_RESPONSE_HEADERS = [
   "mcp-session-id",
 ] as const;
 
-export class McpProxyRegistrationError extends TaggedError(
+class McpProxyRegistrationError extends TaggedError(
   "McpProxyRegistrationError",
 )<{
   reason: "foreign_upstream" | "duplicate_run";
   message: string;
 }> {}
 
-export type McpProxyRun = {
+type McpProxyRun = {
   runId: string;
   serverName: string;
   /** The stella MCP URL the API handed the run. */
@@ -98,10 +98,14 @@ const BEARER = /^Bearer (\S+)$/u;
 
 const presentsSecret = (request: Request, held: HeldRun) => {
   const match = BEARER.exec(request.headers.get("authorization") ?? "");
-  if (match?.[1] === undefined) {
+  if (match === null) {
     return false;
   }
-  const presented = Buffer.from(match[1]);
+  const [, bearer] = match;
+  if (bearer === undefined) {
+    return false;
+  }
+  const presented = Buffer.from(bearer);
   return (
     presented.length === held.secret.length &&
     timingSafeEqual(presented, held.secret)

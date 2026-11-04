@@ -67,12 +67,12 @@ const setup = (path = "/mcp") => {
   return { api, proxy, binding: binding.value };
 };
 
-const call = (
+const call = async (
   url: string,
   secret: string | null,
   headers: Record<string, string> = {},
 ) =>
-  fetch(url, {
+  await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -153,10 +153,11 @@ describe("loopback MCP proxy", () => {
 
   test("refuses an upstream outside the configured stella API origin", () => {
     const { api, proxy } = setup();
+    const port = api.server.port ?? panic("The stand-in API has no TCP port.");
     for (const url of [
       "https://evil.test/mcp",
-      `http://localhost:${api.server.port}/mcp`,
-      `http://user:secret@127.0.0.1:${api.server.port}/mcp`,
+      `http://localhost:${String(port)}/mcp`,
+      `http://user:secret@127.0.0.1:${String(port)}/mcp`,
       "not a url",
     ]) {
       const refused = register(proxy, url);

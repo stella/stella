@@ -2,6 +2,7 @@ import { APIError } from "better-auth/api";
 import { panic } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
@@ -42,6 +43,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   const { signInHuman } = await import("@/api/tests/helpers/human-session");
   const { grantOAuthClient, refreshOAuthGrant, registerOAuthClient } =
     await import("@/api/tests/helpers/oauth-grant");
+  const { getBetterAuthOAuthResources } =
+    await import("@/api/lib/oauth-resource-policy");
   const auth = getAuth();
   const context = await auth.$context;
   const provider =
@@ -87,6 +90,58 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     );
     const grant = await grantOAuthClient(browser, client);
     return { browser, client, grant };
+  };
+
+  const restoreAfterTest: (() => Promise<unknown>)[] = [];
+  afterEach(async () => {
+    for (const restore of restoreAfterTest.splice(0).toReversed()) {
+      await restore();
+    }
+  });
+
+  /**
+   * The provider reads a resource only as this code configures it, so a
+   * stored policy is exercised on a configured audience: its row is narrowed
+   * to the given scopes for one test and restored after it. The scopes the
+   * provider then applies are the stored ones within the configured set.
+   */
+  const withStoredResourcePolicy = async (
+    clientId: string,
+    allowedScopes: string[],
+  ) => {
+    const configured =
+      getBetterAuthOAuthResources().find(
+        (resource) =>
+          resource.allowedScopes.includes("offline_access") &&
+          resource.allowedScopes.includes("stella:read"),
+      ) ?? panic("a configured resource allows stella:read");
+    const [original] = await rootDb
+      .select({ allowedScopes: oauthResource.allowedScopes })
+      .from(oauthResource)
+      .where(eq(oauthResource.identifier, configured.identifier));
+    if (original === undefined) {
+      return panic("the configured resource is stored");
+    }
+    await rootDb
+      .update(oauthResource)
+      .set({ allowedScopes })
+      .where(eq(oauthResource.identifier, configured.identifier));
+    restoreAfterTest.push(
+      async () =>
+        await rootDb
+          .update(oauthResource)
+          .set({ allowedScopes: original.allowedScopes })
+          .where(eq(oauthResource.identifier, configured.identifier)),
+    );
+    await rootDb
+      .insert(oauthClientResource)
+      .values({
+        id: Bun.randomUUIDv7(),
+        clientId,
+        resourceId: configured.identifier,
+      })
+      .onConflictDoNothing();
+    return configured.identifier;
   };
 
   type ResourceRefreshOptions = Parameters<typeof refreshOAuthGrant>[0] & {
@@ -159,24 +214,10 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     for (const allowedScopes of [["unavailable:read"], ["stella:read"]]) {
       test(`rejects stored grants under resource policy ${allowedScopes.join(" ")}`, async () => {
         const { client, grant } = await fixture();
-        const resource = `https://resource.example.test/${Bun.randomUUIDv7()}`;
-        await rootDb.insert(oauthResource).values({
-          id: Bun.randomUUIDv7(),
-          identifier: resource,
-          name: "Refresh scope",
+        const resource = await withStoredResourcePolicy(
+          client.clientId,
           allowedScopes,
-        });
-        cleanup.push(
-          async () =>
-            await rootDb
-              .delete(oauthResource)
-              .where(eq(oauthResource.identifier, resource)),
         );
-        await rootDb.insert(oauthClientResource).values({
-          id: Bun.randomUUIDv7(),
-          clientId: client.clientId,
-          resourceId: resource,
-        });
         const changed = await rootDb
           .update(oauthRefreshToken)
           .set({ resources: [resource] })
@@ -200,24 +241,10 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     test("refuses a scope reduction outside resource policy and rotates an allowed retry", async () => {
       const { client, grant } = await fixture();
       expect(grant.scope.split(" ")).toContain("stella:templates");
-      const resource = `https://resource.example.test/${Bun.randomUUIDv7()}`;
-      await rootDb.insert(oauthResource).values({
-        id: Bun.randomUUIDv7(),
-        identifier: resource,
-        name: "Refresh scope",
-        allowedScopes: ["offline_access", "stella:read"],
-      });
-      cleanup.push(
-        async () =>
-          await rootDb
-            .delete(oauthResource)
-            .where(eq(oauthResource.identifier, resource)),
-      );
-      await rootDb.insert(oauthClientResource).values({
-        id: Bun.randomUUIDv7(),
-        clientId: client.clientId,
-        resourceId: resource,
-      });
+      const resource = await withStoredResourcePolicy(client.clientId, [
+        "offline_access",
+        "stella:read",
+      ]);
       const scopes = ["offline_access", "stella:read", "stella:templates"];
       const changed = await rootDb
         .update(oauthRefreshToken)

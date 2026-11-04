@@ -62,28 +62,75 @@ export const tailwindFailureMessages = (
   ].toSorted();
 
 /**
+ * How long one oxlint pass over the Tailwind sources may run. A cold pass
+ * takes about a minute on a CI runner; one still running after this has
+ * stalled, and is stopped so the step fails instead of hanging.
+ */
+export const lintPassTimeoutMs = 5 * 60_000;
+
+/**
+ * Runs one lint pass and returns its exit code and report. The report is read
+ * while the pass runs, so a large one cannot fill the pipe and block it. A
+ * pass still running after `timeoutMs` is killed and fails generation with a
+ * message naming the pass.
+ */
+export const runLintPass = async (
+  command: readonly string[],
+  {
+    env,
+    pass,
+    timeoutMs = lintPassTimeoutMs,
+  }: {
+    env: Record<string, string | undefined>;
+    pass: string;
+    timeoutMs?: number;
+  },
+): Promise<{ exitCode: number; stdout: string }> => {
+  const child = Bun.spawn([...command], {
+    cwd: repositoryRoot,
+    env,
+    stdout: "pipe",
+    stderr: "inherit",
+  });
+  const stdout = new Response(child.stdout).text();
+  const deadline = { passed: false };
+  const timer = setTimeout(() => {
+    deadline.passed = true;
+    child.kill("SIGKILL");
+  }, timeoutMs);
+  const exitCode = await child.exited;
+  clearTimeout(timer);
+  if (deadline.passed) {
+    panic(
+      `Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the ${pass} oxlint pass was still running after ${timeoutMs / 1000} s and was stopped. A normal pass takes about a minute; rerun the step, and if it stalls again, run the command locally: ${command.join(" ")}`,
+    );
+  }
+  return { exitCode, stdout: await stdout };
+};
+
+/**
  * Lints every Tailwind entry point and returns why its rules did not run. The
  * pass runs only the Tailwind rules (oxlint.tailwind.config.ts), which ask the
- * design system for the same classes as the repository lint.
+ * design system for the same classes as the repository lint. Oxlint's own
+ * entry runs in this Bun process's runtime directly, so a timeout kills the
+ * whole pass; `bun --bun oxlint` would start it under a wrapper process.
  */
-const tailwindFailures = async (env: Record<string, string | undefined>) => {
-  const child = Bun.spawn(
+const tailwindFailures = async (
+  env: Record<string, string | undefined>,
+  pass: string,
+) => {
+  const { exitCode, stdout } = await runLintPass(
     [
-      "bun",
-      "--bun",
-      "oxlint",
+      process.execPath,
+      path.join(repositoryRoot, "node_modules/oxlint/bin/oxlint"),
       "-c",
       "oxlint.tailwind.config.ts",
       "--format",
       "json",
       ...lintTargets,
     ],
-    { cwd: repositoryRoot, env, stdout: "pipe", stderr: "inherit" },
+    { env, pass },
   );
-  const [stdout, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    child.exited,
-  ]);
   // oxlint exits 1 when it reports findings; anything else is a crash.
   if (exitCode !== 0 && exitCode !== 1) {
     panic(`oxlint exited with ${exitCode} while linting the Tailwind sources.`);
@@ -105,7 +152,7 @@ const generate = async (cacheDirectory: string) => {
     OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory,
     OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
   };
-  const generationFailures = await tailwindFailures(env);
+  const generationFailures = await tailwindFailures(env, "cache-filling");
   if (generationFailures.length > 0) {
     panic(
       `Tailwind rules failed while generating the cache:\n${generationFailures.join("\n")}`,
@@ -123,10 +170,10 @@ const generate = async (cacheDirectory: string) => {
     }
     await Bun.write(file, `${JSON.stringify(value)}\n`);
   }
-  const missing = await tailwindFailures({
-    ...env,
-    OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1",
-  });
+  const missing = await tailwindFailures(
+    { ...env, OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1" },
+    "read-only verification",
+  );
   if (missing.length > 0) {
     panic(
       `Read-only lint misses answers in the generated Tailwind cache:\n${missing.join("\n")}`,

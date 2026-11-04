@@ -67,8 +67,34 @@ describe("sidecar protocol fixtures", () => {
       const parsed = v.parse(sidecarMessageSchema, message);
       const plain: unknown = parsed;
       expect(plain).toEqual(message);
-      expect(encodeSidecarMessage(parsed)).toBe(`${JSON.stringify(message)}\n`);
+      expect(encodeSidecarMessage(parsed)).toEqual({
+        type: "line",
+        line: `${JSON.stringify(message)}\n`,
+      });
     }
+  });
+
+  test("refuse to encode a message the contract refuses or the line limit cannot hold", () => {
+    const runId = "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f";
+    expect(
+      encodeSidecarMessage({
+        type: "run.approval_request",
+        runId,
+        requestId: "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        kind: "command",
+        summary: "",
+      }),
+    ).toEqual({ type: "refused", reason: "invalid" });
+    expect(
+      encodeSidecarMessage({
+        type: "run.event",
+        runId,
+        chunk: {
+          type: "TEXT_MESSAGE_CONTENT",
+          delta: "é".repeat(SIDECAR_MAX_LINE_BYTES / 2),
+        },
+      }),
+    ).toEqual({ type: "refused", reason: "too_large" });
   });
 
   test("reject each refused host line for its own reason", () => {

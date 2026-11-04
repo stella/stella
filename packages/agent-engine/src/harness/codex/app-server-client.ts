@@ -42,7 +42,7 @@ export type Detached = (
   context: `${string}.${string}`,
 ) => void;
 
-export type AppServerDeadlines = {
+type AppServerDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
   /** How long the process gets to exit on SIGTERM before SIGKILL. */

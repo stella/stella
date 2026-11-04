@@ -6,6 +6,8 @@
 //! relays them without a translation table. The tests round-trip every
 //! message in the sidecar's fixture file and compare each closed list with it.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -108,6 +110,8 @@ pub(crate) enum HostMessage {
   RunStart(Box<SidecarRunStart>),
   #[serde(rename = "run.approval")]
   RunApproval(RunApproval),
+  #[serde(rename = "run.answer")]
+  RunAnswer(RunAnswer),
   #[serde(rename = "run.interrupt")]
   RunInterrupt(RunRef),
   #[serde(rename = "run.cancel")]
@@ -125,11 +129,22 @@ impl HostMessage {
     "harness.probe",
     "run.start",
     "run.approval",
+    "run.answer",
     "run.interrupt",
     "run.cancel",
     "run.token",
     "shutdown",
   ];
+}
+
+/// Answers to a blocking question a run asked, keyed by question id: option
+/// labels or free text. The request id is the one the run's pause carries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RunAnswer {
+  pub(crate) run_id: String,
+  pub(crate) request_id: String,
+  pub(crate) answers: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -7,10 +7,10 @@ import {
   PROVIDER_SETUP_ERROR_CODE,
 } from "@stll/api-contract/provider-setup";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { act, cleanup, render, screen, waitFor } =

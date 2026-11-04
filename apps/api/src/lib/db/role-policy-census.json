@@ -3602,6 +3602,16 @@
   {
     "schema": "public",
     "table": "contacts",
+    "policy": "contacts_owner_organization_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('contacts'::regclass)::oid))) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('contacts'::regclass)::oid))) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "contacts",
     "policy": "organization_delete",
     "command": "DELETE",
     "roles": ["stella"],
@@ -4668,6 +4678,86 @@
     "permissive": "PERMISSIVE",
     "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
     "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_commands",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_commands",
+    "policy": "desktop_runner_commands_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_commands'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_commands'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_events",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_events",
+    "policy": "desktop_runner_events_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_events'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_events'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_runs",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runner_runs",
+    "policy": "desktop_runner_runs_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_runs'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runner_runs'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runners",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "desktop_runners",
+    "policy": "desktop_runners_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runners'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('desktop_runners'::regclass)::oid)))"
   },
   {
     "schema": "public",
@@ -9072,6 +9162,16 @@
   {
     "schema": "public",
     "table": "oauth_consent",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "oauth_grant_revocations",
     "policy": "auth_no_stella_access",
     "command": "ALL",
     "roles": ["stella"],
