@@ -2611,6 +2611,7 @@ describe("chat turns on a computer", () => {
                 { label: "Friendly", description: "For the client" },
               ],
               allowsFreeText: false,
+              multiSelect: false,
               secret: false,
             },
             {
@@ -2619,6 +2620,7 @@ describe("chat turns on a computer", () => {
               prompt: "The archive passphrase?",
               options: [],
               allowsFreeText: true,
+              multiSelect: false,
               secret: true,
             },
           ],
@@ -3784,6 +3786,7 @@ describe("chat turns on a computer", () => {
                 { label: "Slovak", description: "Slovak Civil Code" },
               ],
               allowsFreeText: false,
+              multiSelect: false,
               secret: false,
             },
           ],
