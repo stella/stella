@@ -6540,6 +6540,9 @@
       "calculating": "Skaičiuojama...",
       "errored": "Klaida",
       "formatNotSupported": "Formatas nepalaikomas",
+      "recordChoose": "{count, plural, one {Patvirtinkite # atitikmenį} few {Pasirinkite iš # atitikmenų} many {Pasirinkite iš # atitikmens} other {Pasirinkite iš # atitikmenų}}",
+      "recordCount": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}}",
+      "recordNotFound": "Nerasta",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes",
       "wholeNumberOnly": "Įveskite sveikąjį skaičių"
@@ -7232,6 +7235,7 @@
       "previewSubject": "Išbandyk pavyzdyje",
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "DI skaito iš",
+      "record": "Įrašas",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Formatas",

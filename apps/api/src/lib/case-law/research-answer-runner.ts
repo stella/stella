@@ -640,7 +640,11 @@ const readResearchDecision = async (
       textS3Key: publishedCaseLawDecisions.textS3Key,
       contentHash: publishedCaseLawDecisions.contentHash,
       fulltext: publishedCaseLawDecisions.fulltext,
-      source: { descriptor: caseLawSources.descriptor },
+      // Flat, not a nested `source` object: a left-joined nested object whose
+      // columns are all null reads back as null, and a source row with no
+      // descriptor (no reuse restrictions) would then look like no source.
+      sourceId: caseLawSources.id,
+      sourceDescriptor: caseLawSources.descriptor,
     })
     .from(publishedCaseLawDecisions)
     .leftJoin(
@@ -649,7 +653,14 @@ const readResearchDecision = async (
     )
     .where(eq(publishedCaseLawDecisions.id, decisionId))
     .limit(1);
-  return row ?? null;
+  if (row === undefined) {
+    return null;
+  }
+  const { sourceId, sourceDescriptor, ...decision } = row;
+  return {
+    ...decision,
+    source: sourceId === null ? null : { descriptor: sourceDescriptor },
+  };
 };
 
 /**

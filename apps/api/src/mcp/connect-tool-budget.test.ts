@@ -12,9 +12,10 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 // Full contact writes expose their shared validation and nested input readers,
 // the template list takes a limit and cursor like every other list, and the
 // reader annotation list says how it reports passages it can no longer place,
-// and the audit log takes a performer filter.
+// and the audit log takes a performer filter. The case-law results app pages
+// a country's courts through list_case_law_courts (844 characters).
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 133_071;
+const TOTAL_CONNECT_CHAR_BUDGET = 133_915;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

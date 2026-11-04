@@ -36,6 +36,7 @@ import {
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteCaseLawPopulationCounts,
+  installPgliteCaseLawRankingSignalChanges,
   installPgliteCaseLawSitemapChanges,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
@@ -508,8 +509,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_browse_facet_counts",
       "case_law_coverage_summaries",
       "case_law_sitemap_shard_counts",
+      "case_law_ranking_signal_changes",
       "case_law_sitemap_shards",
       "case_law_source_arrivals"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("claimed_until") ON TABLE "case_law_ranking_signal_changes"
     TO stella_ingestion
   `,
   `
@@ -878,6 +884,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCaseLawPopulationCounts(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);

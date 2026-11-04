@@ -6540,6 +6540,9 @@
       "calculating": "Calculando...",
       "errored": "Erro",
       "formatNotSupported": "Formato não suportado",
+      "recordChoose": "{count, plural, one {Confirmar # correspondência} many {Escolher entre # correspondências} other {Escolher entre # correspondências}}",
+      "recordCount": "{count, plural, one {# registro} many {# registros} other {# registros}}",
+      "recordNotFound": "Não encontrado",
       "selectAValue": "Selecione um valor",
       "selectValues": "Selecione valores",
       "wholeNumberOnly": "Insira um número inteiro"
@@ -7232,6 +7235,7 @@
       "previewSubject": "Experimente em uma amostra",
       "previewUnsupported": "A visualização não é compatível com este tipo de documento.",
       "readingFrom": "A IA lê de",
+      "record": "Registro",
       "referencesItself": "A propriedade faz referência a si mesma por meio de outras propriedades",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",

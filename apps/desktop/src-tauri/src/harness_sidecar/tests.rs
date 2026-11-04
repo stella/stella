@@ -211,20 +211,24 @@ fn run_start(model: &str) -> SidecarRunStart {
   }
 }
 
-async fn delivery(outputs: &mut mpsc::Receiver<SidecarDelivery>) -> SidecarDelivery {
+async fn delivery(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> SidecarDelivery {
   tokio::time::timeout(WAIT, outputs.recv())
     .await
     .expect("the run reported in time")
     .expect("the run channel stays open until it finishes")
 }
 
-async fn next(outputs: &mut mpsc::Receiver<SidecarDelivery>) -> SidecarRunOutput {
+async fn next(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> SidecarRunOutput {
   delivery(outputs).await.output
 }
 
 /// Every delivery up to the run's end.
 async fn deliveries(
-  outputs: &mut mpsc::Receiver<SidecarDelivery>,
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
 ) -> Vec<SidecarDelivery> {
   let mut all = Vec::new();
   loop {
@@ -238,7 +242,7 @@ async fn deliveries(
 }
 
 async fn finish(
-  outputs: &mut mpsc::Receiver<SidecarDelivery>,
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
 ) -> Vec<SidecarRunOutput> {
   deliveries(outputs)
     .await
@@ -451,13 +455,12 @@ fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
 }
 
 #[test]
-fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor() {
+fn a_burst_nobody_has_read_yet_ends_nothing_and_stalls_nothing() {
   let fixture = Fixture::new();
   let start = run_start("flood");
-  let run_id = start.run_id.clone();
   with_children(async {
     let sidecar = fixture.sidecar();
-    // Nothing reads this run while the holder sends more than it can queue.
+    // Nothing reads this run while the holder sends its burst.
     let mut flooded = sidecar.start_run(start).unwrap();
     let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
     assert_eq!(finish(&mut after).await.len(), 3);
@@ -474,48 +477,19 @@ fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor
     .await
     .expect("a probe is answered while a run's outputs wait");
     assert!(probed.is_ok());
-    let outputs = finish(&mut flooded).await;
-    assert_eq!(outputs.len(), RUN_OUTPUT_QUEUE);
-    assert_eq!(outputs.last(), Some(&ended(RunOutcome::Failed)));
-    // The cancelled run ends in the holder and is never taken over.
-    until("the holder forgot the cancelled run", || {
-      fixture
-        .received()
-        .iter()
-        .any(|message| message["type"] == "ack" && message["runId"] == run_id)
-    })
-    .await;
-    assert_eq!(
-      sidecar.resume_run(&run_id, 0).await.err(),
-      Some(ResumeError::UnknownRun)
-    );
-    assert!(
-      sidecar
-        .held_runs()
-        .await
-        .unwrap()
-        .iter()
-        .all(|held| held.run_id != run_id)
-    );
+    // All of it waits for the reader, in order.
+    for seq in 1..=300_u32 {
+      let delivered = delivery(&mut flooded).await;
+      assert_eq!(delivered.holder_seq.map(NonZeroU32::get), Some(seq));
+      assert!(matches!(delivered.output, SidecarRunOutput::Event(_)));
+    }
     sidecar.shutdown().await;
   });
-  let received = fixture.received();
-  let cancels: Vec<&Value> = received
-    .iter()
-    .filter(|message| message["type"] == "run.cancel")
-    .collect();
-  assert_eq!(
-    cancels,
-    vec![&json!({ "type": "run.cancel", "runId": run_id })]
-  );
-  let acks: Vec<&Value> = received
-    .iter()
-    .filter(|message| message["type"] == "ack" && message["runId"] == run_id)
-    .collect();
-  // 300 events and the end the cancel produced.
-  assert_eq!(
-    acks,
-    vec![&json!({ "type": "ack", "runId": run_id, "seq": 301 })]
+  assert!(
+    fixture
+      .received()
+      .iter()
+      .all(|message| message["type"] != "run.cancel")
   );
 }
 

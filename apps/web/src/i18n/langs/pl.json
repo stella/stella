@@ -6540,6 +6540,9 @@
       "calculating": "Obliczanie...",
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
+      "recordChoose": "{count, plural, one {Potwierdź # dopasowanie} few {Wybierz spośród # dopasowań} many {Wybierz spośród # dopasowań} other {Wybierz spośród # dopasowania}}",
+      "recordCount": "{count, plural, one {# rekord} few {# rekordy} many {# rekordów} other {# rekordu}}",
+      "recordNotFound": "Nie znaleziono",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości",
       "wholeNumberOnly": "Wpisz liczbę całkowitą"
@@ -7232,6 +7235,7 @@
       "previewSubject": "Wypróbuj na próbce",
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
+      "record": "Rekord",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",
