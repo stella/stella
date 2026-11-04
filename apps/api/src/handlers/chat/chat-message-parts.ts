@@ -6,7 +6,6 @@ import { deepEquals } from "bun";
 import { Buffer } from "node:buffer";
 import * as v from "valibot";
 
-import { HARNESS_QUESTION_TOOL } from "@stll/agent-engine";
 import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
@@ -17,6 +16,7 @@ import {
   isHarnessChatToolCall,
   isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
@@ -810,7 +810,7 @@ const isAwaitedHarnessQuestionCall = (part: ChatToolCallPart): boolean => {
   const name: string = part.name;
   return (
     part.state === "input-complete" &&
-    name === HARNESS_QUESTION_TOOL &&
+    name === CHAT_LOCAL_RUN_QUESTION_TOOL &&
     isHarnessChatToolCall(part)
   );
 };
