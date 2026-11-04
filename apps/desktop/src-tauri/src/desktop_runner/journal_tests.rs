@@ -320,6 +320,34 @@ fn a_compaction_cut_short_leaves_one_whole_generation() {
 }
 
 #[test]
+fn a_compaction_whose_head_write_failed_is_redone_before_the_next_append() {
+  let directory = temp_dir();
+  let mut journal = Journal::open(encrypted(&directory), 0);
+  journal
+    .insert(RUN.to_owned(), Decision::Accepted, 0)
+    .unwrap();
+  take_outputs(&mut journal, &["a", "b"]);
+  // The head cannot be replaced: a directory stands in its place.
+  let head = run_directory(&directory, RUN).join(HEAD_FILE);
+  crate::local_store::remove_private(&head).unwrap();
+  crate::local_store::create_private_dir(&head).unwrap();
+  let held = journal.runs.get_mut(RUN).unwrap();
+  assert!(compact(&directory, KEY, held).is_err());
+  // Which generation the head names is in doubt, so neither log takes an
+  // entry until a compaction succeeds.
+  assert!(held.log.torn);
+  assert_eq!(generation(&journal), 0);
+  fs::remove_dir(&head).unwrap();
+  assert_eq!(take_outputs(&mut journal, &["c"]), [3]);
+  assert_eq!(generation(&journal), 1);
+  let reopened = Journal::open(encrypted(&directory), 0);
+  assert_eq!(reopened.get(RUN), journal.get(RUN));
+  assert_eq!(outbox_seqs(&reopened), [1, 2, 3]);
+  assert_eq!(files(&directory), ["head.json", "log-1.jsonl"]);
+  fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
 fn acknowledgements_survive_a_reopen_and_compaction_keeps_the_unacknowledged() {
   let directory = temp_dir();
   let mut journal = Journal::open(encrypted(&directory), 0);

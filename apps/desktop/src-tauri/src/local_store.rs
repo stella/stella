@@ -298,10 +298,11 @@ impl EncryptedJsonLog {
     Ok(line)
   }
 
-  /// Every value the file holds; `None` when there is no file. A last line
-  /// that is cut short or is not an envelope is what an interrupted append
-  /// leaves: it is reported as `torn`, not as an error. Any other line that
-  /// does not read makes the whole file unreadable.
+  /// Every value the file holds; `None` when there is no file. Bytes after
+  /// the last newline are what an interrupted append leaves, since a line's
+  /// newline is the last byte it writes: they are reported as `torn`, not as
+  /// an error. A whole line that does not read makes the file unreadable,
+  /// as it may hold a value already acted on.
   pub fn load<T: DeserializeOwned>(
     &self,
   ) -> Result<Option<LogContents<T>>, EncryptedReadError> {
@@ -317,21 +318,12 @@ impl EncryptedJsonLog {
     };
     let mut values = Vec::new();
     let mut torn = false;
-    let mut lines = raw.split_inclusive(|byte| *byte == b'\n').peekable();
-    while let Some(line) = lines.next() {
-      let last = lines.peek().is_none();
+    for line in raw.split_inclusive(|byte| *byte == b'\n') {
       let Some(line) = line.strip_suffix(b"\n") else {
         torn = true;
         break;
       };
-      let envelope = match parse_envelope(line, label) {
-        Ok(envelope) => envelope,
-        Err(EncryptedReadError::Unreadable(_)) if last => {
-          torn = true;
-          break;
-        }
-        Err(error) => return Err(error),
-      };
+      let envelope = parse_envelope(line, label)?;
       let index = u64::try_from(values.len()).map_err(|error| {
         EncryptedReadError::Unreadable(format!("{label} holds too many lines: {error}"))
       })?;
@@ -1269,24 +1261,28 @@ mod tests {
     log.append(1, &"cut").unwrap();
     let whole = fs::read(&path).unwrap();
     let kept = whole.iter().position(|byte| *byte == b'\n').unwrap() + 1;
+    // An append ends with its newline: anything after the last one is cut.
     let mut zeros = whole[..kept].to_vec();
     zeros.extend([0; 16]);
-    zeros.push(b'\n');
     for torn in [&whole[..=kept], &whole[..whole.len() - 1], &zeros[..]] {
       fs::write(&path, torn).unwrap();
       let read = log.load::<String>().unwrap().unwrap();
       assert_eq!(read.values, ["kept"]);
       assert!(read.torn);
     }
-    // The same damage before a whole line is no interrupted append.
-    let mut middle = whole[..kept].to_vec();
-    middle.extend_from_slice(b"garbage\n");
+    // A whole line that does not read is damage, last or not: it may hold
+    // a value already acted on.
+    let mut last = whole[..kept].to_vec();
+    last.extend_from_slice(b"garbage\n");
+    let mut middle = last.clone();
     middle.extend_from_slice(&whole[kept..]);
-    fs::write(&path, &middle).unwrap();
-    assert!(matches!(
-      log.load::<String>(),
-      Err(EncryptedReadError::Unreadable(_))
-    ));
+    for damaged in [last, middle] {
+      fs::write(&path, &damaged).unwrap();
+      assert!(matches!(
+        log.load::<String>(),
+        Err(EncryptedReadError::Unreadable(_))
+      ));
+    }
     log.replace(&["again".to_owned()]).unwrap();
     let read = log.load::<String>().unwrap().unwrap();
     assert_eq!(read.values, ["again"]);

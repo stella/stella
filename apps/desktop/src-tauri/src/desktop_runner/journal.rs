@@ -275,8 +275,9 @@ struct LogState {
   entries: u64,
   /// Encoded bytes of every message the log holds, acknowledged or not.
   message_bytes: u64,
-  /// The log may end in a partial entry: it moves to the next generation
-  /// before anything is appended.
+  /// The log may end in a partial entry, or a failed compaction may have
+  /// left the head naming the next generation: the log moves to the next
+  /// generation before anything is appended.
   torn: bool,
 }
 
@@ -611,7 +612,9 @@ fn append_entry(
 /// Move a run's unacknowledged messages, with its counters, to the next log
 /// generation. The new log is written whole before the head names it, and
 /// the old one is removed after: a crash in between leaves one of the two
-/// generations whole and named.
+/// generations whole and named. A failed head write may still have replaced
+/// the head, so nothing is appended to either generation until a compaction
+/// succeeds and both agree again.
 fn compact(directory: &Path, key: [u8; 32], held: &mut Held) -> Result<(), String> {
   let record = &held.record;
   let generation = held
@@ -629,7 +632,12 @@ fn compact(directory: &Path, key: [u8; 32], held: &mut Held) -> Result<(), Strin
     tail: record.tail,
     messages,
   }])?;
-  head_file(directory, key, &record.run_id).persist(&record.head(generation))?;
+  if let Err(error) =
+    head_file(directory, key, &record.run_id).persist(&record.head(generation))
+  {
+    held.log.torn = true;
+    return Err(error);
+  }
   let previous = log_path(directory, &record.run_id, held.log.generation);
   held.log = LogState {
     generation,
