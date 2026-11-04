@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import type { Detached } from "../turn-lifecycle";
+import type { Detached, HarnessExit } from "../turn-lifecycle";
 import {
   ClaudeOutputEnvelopeSchema,
   ControlCancelRequestSchema,
@@ -24,8 +24,6 @@ class ClaudeCliRequestError extends TaggedError("ClaudeCliRequestError")<{
   message: string;
 }> {}
 
-export type ClaudeCliExit = { exitCode: number | null; signal: string | null };
-
 export type ClaudeCliHandlers = {
   /** A conversation message; `raw` is the whole line, parsed. */
   message: (type: string, raw: unknown) => void;
@@ -38,7 +36,7 @@ export type ClaudeCliHandlers = {
   controlCancel: (requestId: string) => void;
   /** The peer wrote something that is not a protocol message. */
   violation: (message: string) => void;
-  exit: (exit: ClaudeCliExit) => void;
+  exit: (exit: HarnessExit) => void;
 };
 
 export type ClaudeCliLaunch = {
@@ -67,10 +65,10 @@ export type ClaudeCliClient = {
   respond: (requestId: string, response: object) => void;
   respondError: (requestId: string, message: string) => void;
   /** Settles when the process has exited, however that happened. */
-  exited: Promise<ClaudeCliExit>;
+  exited: Promise<HarnessExit>;
   /** Ends stdin, which asks the CLI to finish and exit. */
   closeInput: () => void;
-  kill: () => Promise<ClaudeCliExit>;
+  kill: () => Promise<HarnessExit>;
 };
 
 type Pending = (result: Result<unknown, ClaudeCliRequestError>) => void;
@@ -94,13 +92,24 @@ export const startClaudeCli = ({
   const pending = new Map<string, Pending>();
   const state = { nextId: 1, closed: false };
 
+  /**
+   * Stdin is the only way to reach the CLI. Once an operation on it throws,
+   * nothing more can be sent, so the process is ended and its exit settles
+   * every pending request; a throw racing an exit already under way changes
+   * nothing, because that exit is reported through `handlers.exit` anyway.
+   */
+  const onInput = (operation: () => void) => {
+    const done = Result.try(operation);
+    if (Result.isError(done)) {
+      child.kill();
+    }
+  };
+
   const write = (message: object) => {
     if (state.closed) {
       return;
     }
-    // A write racing the process's exit fails; the exit itself is reported
-    // through `handlers.exit`, so the failed write carries no extra news.
-    Result.try(() => {
+    onInput(() => {
       detached(
         child.stdin.write(`${JSON.stringify(message)}\n`),
         "claude-cli.write",
@@ -199,7 +208,7 @@ export const startClaudeCli = ({
     dispatch(buffer + decoder.decode());
   };
 
-  const exited = (async (): Promise<ClaudeCliExit> => {
+  const exited = (async (): Promise<HarnessExit> => {
     await Promise.allSettled([readStdout(), child.exited]);
     state.closed = true;
     for (const settle of pending.values()) {
@@ -259,7 +268,7 @@ export const startClaudeCli = ({
     exited,
     closeInput: () => {
       if (!state.closed) {
-        Result.try(() => {
+        onInput(() => {
           detached(child.stdin.end(), "claude-cli.close");
         });
       }

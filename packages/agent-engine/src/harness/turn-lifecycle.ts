@@ -18,7 +18,7 @@ export type Detached = (
 export type HarnessExit = { exitCode: number | null; signal: string | null };
 
 /** What a turn needs of the harness process that hosts it to stop it. */
-export type HarnessTurnProcess = {
+type HarnessTurnProcess = {
   /** Settles when the process has exited, however that happened. */
   readonly exited: Promise<HarnessExit>;
   closeInput: () => void;
