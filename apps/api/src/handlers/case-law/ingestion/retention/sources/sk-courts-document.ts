@@ -17,6 +17,10 @@
  * document. Its full form is six rows and close to thirty words, more than
  * the missing-word tolerance, so measured as text it would report every
  * decision that prints it as lost.
+ *
+ * Leaving it out hides no value: the publisher prints the table from the
+ * record it lists, so a value the listing omits is an empty row in the PDF
+ * (5Co/387/2010), and a table with an empty row is measured whole.
  */
 import type { RetentionProjection } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { projectPdfText } from "@/api/handlers/case-law/ingestion/retention/sources/pdf-text";

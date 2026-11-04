@@ -148,6 +148,20 @@ describe("sk-courts document retention projection", () => {
     expect(withoutMetadataTable(lines)).toEqual(lines);
   });
 
+  test("a table with an empty row stays text", () => {
+    // As printed when the listing omits a value (5Co/387/2010).
+    const lines = [
+      "Súd: Krajský súd Žilina",
+      "Spisová značka: 5Co/387/2010",
+      "Identifikačné číslo súdneho spisu:",
+      "Dátum vydania rozhodnutia: 15. 03. 2011",
+      "Meno a priezvisko sudcu, VSÚ: JUDr. Miroslav Jamrich",
+      "ECLI:",
+      "ROZSUDOK V MENE",
+    ];
+    expect(withoutMetadataTable(lines)).toEqual(lines);
+  });
+
   test("labelled lines inside the decision stay text", () => {
     const lines = [
       "Rozsudok",
