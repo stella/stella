@@ -166,15 +166,20 @@ export const drainCaseLawRankingSignalChanges = async ({
   );
   const bySource = new Map<SafeId<"caseLawSource">, ClaimedChange[]>();
   const gone: ClaimedChange[] = [];
+  // A claimed decision the source read did not find was deleted since it was
+  // queued: it is dropped below, counted in `dropped`.
   for (const change of claimed) {
     const sourceId = sourceOf.get(String(change.decisionId));
     if (sourceId === undefined) {
       gone.push(change);
-      continue;
+    } else {
+      const group = bySource.get(sourceId);
+      if (group === undefined) {
+        bySource.set(sourceId, [change]);
+      } else {
+        group.push(change);
+      }
     }
-    const group = bySource.get(sourceId) ?? [];
-    group.push(change);
-    bySource.set(sourceId, group);
   }
   // One transaction per source, in source order, as every canonical writer
   // takes one source's policy lock before its decisions.
