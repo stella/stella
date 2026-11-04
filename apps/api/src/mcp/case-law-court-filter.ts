@@ -147,6 +147,38 @@ const courtKeysNamed = (
   return [...keys].toSorted();
 };
 
+type StoredCourtWords = { first: string; folded: ReadonlySet<string> };
+
+/** Each catalog's stored courts with their folded words, folded once. */
+const storedWordsByCatalog = new WeakMap<
+  StoredCourtCatalog,
+  readonly StoredCourtWords[]
+>();
+
+/** The courts a decision is stored under, in catalog order, with their words. */
+const storedCourtWords = (
+  catalog: StoredCourtCatalog,
+): readonly StoredCourtWords[] => {
+  const cached = storedWordsByCatalog.get(catalog);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const stored: StoredCourtWords[] = [];
+  for (const { name, spellings } of catalog.identities.values()) {
+    const [first] = spellings;
+    if (first !== undefined) {
+      stored.push({
+        first,
+        folded: new Set(
+          [name, ...spellings].flatMap((spelling) => foldCourtText(spelling)),
+        ),
+      });
+    }
+  }
+  storedWordsByCatalog.set(catalog, stored);
+  return stored;
+};
+
 /**
  * The stored courts nearest a value, for a dropped filter's hint: those
  * sharing the most of its words first, then the catalog's order, in which
@@ -157,19 +189,12 @@ const nearestStoredCourts = (
   value: string,
 ): readonly string[] => {
   const words = new Set(foldCourtText(value));
-  const overlap = ({ name, spellings }: StoredCourtIdentity): number =>
-    new Set(
-      [name, ...spellings].flatMap((spelling) =>
-        foldCourtText(spelling).filter((word) => words.has(word)),
-      ),
-    ).size;
-  return [...catalog.identities.values()]
-    .flatMap((identity, position) => {
-      const [first] = identity.spellings;
-      return first === undefined
-        ? []
-        : [{ first, position, score: overlap(identity) }];
-    })
+  return storedCourtWords(catalog)
+    .map(({ first, folded }, position) => ({
+      first,
+      position,
+      score: [...folded].filter((word) => words.has(word)).length,
+    }))
     .toSorted(
       (left, right) =>
         right.score - left.score || left.position - right.position,
