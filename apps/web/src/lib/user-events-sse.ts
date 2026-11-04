@@ -57,7 +57,7 @@ const reconnectDelayMs = (failures: number): number =>
  * lost data, and the workspace stream already reports connection failures for
  * the same session.
  */
-export const useUserEventsSSE = (
+const useUserEventsSSE = (
   organizationId: string,
   onEvent: (event: UserRealtimeEvent) => {
     queryKey: QueryKey;
