@@ -2041,9 +2041,13 @@ const ClipboardApp = () => {
   // deferred render is pending the rail still shows the previous query's
   // list, and acting on it would hand over the wrong clip. Resolved on
   // demand inside the key handlers so the keystroke render itself never
-  // pays for a filter; identical to the rendered list once settled.
-  const resolveActionItems = () =>
-    query === filterQuery
+  // pays for a filter; identical to the rendered list once settled. Outside
+  // the clips scope no clip is shown, so no key acts on one.
+  const resolveActionItems = () => {
+    if (searchSource !== "clips") {
+      return [];
+    }
+    return query === filterQuery
       ? filteredItems
       : filterClipboardItems(
           snapshot.items,
@@ -2051,6 +2055,7 @@ const ClipboardApp = () => {
           activeGroupId,
           searchOptions,
         );
+  };
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
