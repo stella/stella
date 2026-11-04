@@ -308,6 +308,8 @@ const installNativeBoundary = async ({
         dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
         claude_code_auth_get_status: () => null,
+        // No install status either, read the same as the refusal with local agents off.
+        harness_get_status: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&

@@ -23,13 +23,17 @@ import {
   chatToolExecutor,
 } from "@stll/api-contract/chat";
 import {
+  DESKTOP_RUNNER_CLOSE,
+  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
+  type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
@@ -105,12 +109,6 @@ import {
   createDesktopRunnerGateway,
   type DesktopRunnerGateway,
 } from "@/api/lib/desktop-runner/gateway";
-import {
-  DESKTOP_RUNNER_CLOSE,
-  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
-  DESKTOP_RUNNER_ROUTE_PREFIX,
-  type DesktopRunnerTiming,
-} from "@/api/lib/desktop-runner/protocol";
 import type {
   MintRunToken,
   RunnerTimers,
@@ -259,7 +257,7 @@ const startInstance = async (
   const instance = {
     gateway,
     server,
-    url: `http://127.0.0.1:${String(server.port)}${DESKTOP_RUNNER_ROUTE_PREFIX}`,
+    url: `http://127.0.0.1:${String(server.port)}${DESKTOP_RUNNER_PATH}`,
   };
   instances.push(instance);
   return instance;
