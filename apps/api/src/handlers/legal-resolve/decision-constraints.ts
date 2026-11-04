@@ -5,9 +5,8 @@ import {
   type CourtCitationConstraint,
   type CourtCitationIndex,
   courtCitationIndex,
-  ecliCourtCodeOf,
   readCourtCitation,
-  storedCourtKeys,
+  storedCourtIdentity,
 } from "@stll/api-contract/court-citation-aliases";
 import type { DecisionDocketGrammar } from "@stll/api-contract/decision-docket-grammar";
 import {
@@ -145,7 +144,7 @@ export const readDecisionCitation = ({
   const read = readCourtCitation(index, courtText);
   const reread = readCourtCitation(index, withNumeral);
   const names = (constraints: readonly CourtCitationConstraint[]) =>
-    constraints.some(({ type }) => type === "court") &&
+    constraints.some(({ type }) => type === "court" || type === "ecli-code") &&
     constraints.every(({ type }) => type !== "unrecognized");
   return !names(read) && names(reread)
     ? {
@@ -202,16 +201,17 @@ const namesAmbiguousCourt = (constraints: DecisionConstraints): boolean =>
 
 const courtConstraintHolds = (
   constraint: CourtCitationConstraint,
-  keys: readonly string[],
-  code: string | undefined,
+  { key, code }: { key: string | undefined; code: string | undefined },
 ): boolean => {
   switch (constraint.type) {
     case "court":
-      return (
-        keys.length > 0 && keys.every((key) => constraint.courts.includes(key))
-      );
+      return key !== undefined && constraint.courts.includes(key);
     case "ecli-code":
-      return code !== undefined && code === constraint.code;
+      // The decision's own ECLI decides; without one, the court recording
+      // the code must be the court the decision is stored under.
+      return code === undefined
+        ? constraint.court !== undefined && key === constraint.court
+        : code === constraint.code;
     case "unrecognized":
       return false;
     default:
@@ -225,10 +225,9 @@ export const atNamedCourt = (
   constraints: DecisionConstraints,
   row: ConstrainedDecision,
 ): boolean => {
-  const keys = storedCourtKeys(constraints.index, row);
-  const code = ecliCourtCodeOf(constraints.country, row.ecli);
+  const identity = storedCourtIdentity(constraints.index, row);
   return constraints.courts.every((constraint) =>
-    courtConstraintHolds(constraint, keys, code),
+    courtConstraintHolds(constraint, identity),
   );
 };
 

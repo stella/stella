@@ -3,15 +3,10 @@ import { panic } from "better-result";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
-  APEX_COUNTRY_SUFFIXES,
-  APEX_ENGLISH_SUFFIXES,
-  COURT_DIRECTORY,
-  COURT_HEADS,
+  type CourtCitationGrammar,
+  courtCitationGrammarOf,
   type CourtHead,
   type DirectoryCourt,
-  ECLI_FAMILY_CODE_PREFIXES,
-  ECLI_JURISDICTION_OF_COUNTRY,
-  isCourtDirectoryCountry,
 } from "./court-citation-directory";
 
 /**
@@ -54,8 +49,11 @@ export type CourtCitationIndex = {
 export type CourtCitationConstraint =
   /** Courts the words name; more than one is an ambiguous alias. */
   | { type: "court"; courts: readonly [string, ...string[]] }
-  /** An ECLI court code the directory does not record. */
-  | { type: "ecli-code"; code: string }
+  /**
+   * An ECLI court code, held against the decision's own ECLI; `court` is the
+   * directory court recording it, which places a decision without an ECLI.
+   */
+  | { type: "ecli-code"; code: string; court?: string | undefined }
   /** Words that name a court no alias reads. */
   | { type: "unrecognized" };
 
@@ -81,18 +79,31 @@ export const foldCourtText = (value: string): readonly string[] =>
 
 const foldedKey = (value: string): string => foldCourtText(value).join(" ");
 
+/**
+ * A country without a declared grammar reads only the names its decisions
+ * are stored under, so its citations still constrain by court name.
+ */
+const STORED_NAMES_ONLY: CourtCitationGrammar = {
+  kind: "grammar",
+  heads: {},
+  apexSuffixes: [""],
+  englishSuffixes: [""],
+  ecliJurisdiction: null,
+  ecliFamilyPrefixes: [],
+  courts: [],
+};
+
+const grammarFor = (country: string): CourtCitationGrammar =>
+  courtCitationGrammarOf(country) ?? STORED_NAMES_ONLY;
+
 const headsOf = (country: string): ReadonlyMap<string, CourtHead> =>
-  new Map(
-    isCourtDirectoryCountry(country)
-      ? Object.entries<CourtHead>(COURT_HEADS[country])
-      : [],
-  );
+  new Map(Object.entries<CourtHead>(grammarFor(country).heads));
 
 const apexSuffixesOf = (country: string): readonly string[] =>
-  isCourtDirectoryCountry(country) ? APEX_COUNTRY_SUFFIXES[country] : [""];
+  grammarFor(country).apexSuffixes;
 
 const englishSuffixesOf = (country: string): readonly string[] =>
-  isCourtDirectoryCountry(country) ? APEX_ENGLISH_SUFFIXES[country] : [""];
+  grammarFor(country).englishSuffixes;
 
 const joined = (...parts: readonly string[]): string =>
   parts.filter((part) => part !== "").join(" ");
@@ -243,9 +254,7 @@ const directoryIndex = (country: string): MutableIndex => {
     byCode: new Map(),
     maxAliasTokens: 0,
   };
-  const courts = isCourtDirectoryCountry(country)
-    ? COURT_DIRECTORY[country]
-    : [];
+  const { courts } = grammarFor(country);
   for (const court of courts) {
     addCourt(index, {
       key: `${country}:${court.name}`,
@@ -268,6 +277,13 @@ export const courtCitationIndex = (
   storedNames: readonly string[] = [],
 ): CourtCitationIndex => {
   const base = directoryIndex(country);
+  const unread = [...new Set(storedNames)].filter((name) => {
+    const folded = foldedKey(name);
+    return folded !== "" && !base.byAlias.has(folded);
+  });
+  if (unread.length === 0) {
+    return { country, ...base };
+  }
   const index: MutableIndex = {
     courts: new Map(base.courts),
     byAlias: new Map(
@@ -276,9 +292,9 @@ export const courtCitationIndex = (
     byCode: new Map(base.byCode),
     maxAliasTokens: base.maxAliasTokens,
   };
-  for (const name of new Set(storedNames)) {
+  for (const name of unread) {
     const folded = foldedKey(name);
-    if (folded === "" || index.byAlias.has(folded)) {
+    if (index.byAlias.has(folded)) {
       continue;
     }
     addCourt(index, {
@@ -303,32 +319,29 @@ export const ecliCourtCodeOf = (
     ecli === null || ecli === undefined
       ? undefined
       : ECLI_COURT_SEGMENT_RE.exec(ecli.trim().toUpperCase())?.groups;
-  const jurisdiction = isCourtDirectoryCountry(country)
-    ? ECLI_JURISDICTION_OF_COUNTRY[country]
-    : undefined;
+  const jurisdiction = grammarFor(country).ecliJurisdiction ?? undefined;
   return groups?.["jurisdiction"] === jurisdiction
     ? groups?.["code"]
     : undefined;
 };
 
 /**
- * The courts a stored decision is known to belong to: the court its stored
- * name reads as, and the court its ECLI code records. Empty when neither
- * places it; two different keys are a decision whose name and ECLI disagree.
+ * The court a stored decision belongs to, and its ECLI court code. The
+ * stored name decides where it reads as one court: a regional court's branch
+ * can publish under the main court's code, so the code places a decision
+ * only when its name does not.
  */
-export const storedCourtKeys = (
+export const storedCourtIdentity = (
   index: CourtCitationIndex,
   { court, ecli }: { court: string; ecli: string | null },
-): readonly string[] => {
+): { key: string | undefined; code: string | undefined } => {
   const named = index.byAlias.get(foldedKey(court));
   const nameKey = named?.size === 1 ? [...named][0] : undefined;
   const code = ecliCourtCodeOf(index.country, ecli);
-  const codeKey = code === undefined ? undefined : index.byCode.get(code);
-  return [
-    ...new Set(
-      [nameKey, codeKey].filter((key): key is string => key !== undefined),
-    ),
-  ];
+  return {
+    key: nameKey ?? (code === undefined ? undefined : index.byCode.get(code)),
+    code,
+  };
 };
 
 /** Nouns that name a court, folded. */
@@ -456,17 +469,15 @@ const WORD_CHARACTER_RE = /[\p{L}\p{N}]/u;
 
 /** A word without the punctuation around it (`(OS`, `6),`). */
 const bareWord = (word: string): string => {
-  const characters = [...word];
-  const first = characters.findIndex((character) =>
-    WORD_CHARACTER_RE.test(character),
-  );
+  const first = word.search(WORD_CHARACTER_RE);
   if (first === -1) {
     return "";
   }
-  const last = characters.findLastIndex((character) =>
-    WORD_CHARACTER_RE.test(character),
-  );
-  return characters.slice(first, last + 1).join("");
+  let end = word.length;
+  while (end > first && !WORD_CHARACTER_RE.test(word.slice(end - 1, end))) {
+    end -= 1;
+  }
+  return word.slice(first, end);
 };
 
 /**
@@ -483,10 +494,13 @@ const namesSomeCourt = (
 ): boolean =>
   folded.some(({ token }, index) => {
     const tokens = folded.map((entry) => entry.token);
-    if (NAMED_COURT_WORDS.has(token)) {
+    if ([...NAMED_COURT_WORDS].some((word) => token.startsWith(word))) {
       return true;
     }
-    if (!COURT_NOUNS.has(token)) {
+    const hungarianNoun = [...HUNGARIAN_COURT_NOUNS].some((noun) =>
+      token.startsWith(noun),
+    );
+    if (!COURT_NOUNS.has(token) && !hungarianNoun) {
       return false;
     }
     const before = tokens[index - 1];
@@ -500,7 +514,7 @@ const namesSomeCourt = (
       modifies(after) ||
       // A Hungarian court opens with its seat's adjective: `Debreceni
       // Ítélőtábla`.
-      (HUNGARIAN_COURT_NOUNS.has(token) && before?.endsWith("i") === true) ||
+      (hungarianNoun && before?.endsWith("i") === true) ||
       // A seat names a place, so it is capitalized: `soud v Neznámově`,
       // not `soudu ve správním řízení`.
       (after !== undefined &&
@@ -519,11 +533,11 @@ const UNKNOWN_CODE_TAIL_RE = /^[A-Z]{2,4}\d{0,2}$/u;
 
 /** A word shaped like an ECLI court code of the country's families. */
 const familyCodeOf = (country: string, word: string): string | undefined => {
-  if (!isCourtDirectoryCountry(country) || word !== word.toUpperCase()) {
+  if (word !== word.toUpperCase()) {
     return undefined;
   }
-  const prefix = ECLI_FAMILY_CODE_PREFIXES[country]
-    .map((candidate) => candidate.toUpperCase())
+  const prefix = grammarFor(country)
+    .ecliFamilyPrefixes.map((candidate) => candidate.toUpperCase())
     .find((candidate) => word.startsWith(candidate));
   return prefix !== undefined &&
     UNKNOWN_CODE_TAIL_RE.test(word.slice(prefix.length))
@@ -551,14 +565,19 @@ export const readCourtCitation = (
   const tokens: { token: string; word: number; capitalized: boolean }[] = [];
   for (const [wordIndex, word] of words.entries()) {
     const upper = word.toUpperCase();
-    const coded = upper.length >= 2 ? index.byCode.get(upper) : undefined;
+    // A word that is itself an alias (`NS`, `ÚS`) is read with the words
+    // around it (`NS ČR`), not as a lone code.
+    const coded =
+      upper.length >= 2 && !index.byAlias.has(foldedKey(word))
+        ? index.byCode.get(upper)
+        : undefined;
     // A recorded code typed in upper case, or long or numbered enough to be
-    // no word (`osph06`), names its court.
+    // no word (`osph06`), names its court by code.
     if (
       coded !== undefined &&
       (word === upper || upper.length >= 4 || /\p{N}/u.test(word))
     ) {
-      constraints.push({ type: "court", courts: [coded] });
+      constraints.push({ type: "ecli-code", code: upper, court: coded });
       continue;
     }
     const familyCode = familyCodeOf(index.country, word);
@@ -633,9 +652,3 @@ export const readCourtCitation = (
     return true;
   });
 };
-
-/** The court's display name. */
-export const citedCourtName = (
-  index: CourtCitationIndex,
-  key: string,
-): string => index.courts.get(key)?.name ?? panic(`Unknown court key ${key}`);

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -9,31 +10,46 @@ import {
   directoryCourtAliases,
   foldCourtText,
   readCourtCitation,
-  storedCourtKeys,
+  storedCourtIdentity,
 } from "./court-citation-aliases";
 import {
-  COURT_DIRECTORY,
-  ECLI_JURISDICTION_OF_COUNTRY,
+  COURT_CITATION_GRAMMARS,
+  type CourtCitationGrammar,
+  courtCitationGrammarOf,
 } from "./court-citation-directory";
+import { publicCountriesFor } from "./public-country-capability";
 
-const DIRECTORY_COUNTRIES = Object.keys(COURT_DIRECTORY).filter(
-  (country): country is keyof typeof COURT_DIRECTORY =>
-    Object.hasOwn(COURT_DIRECTORY, country),
-);
+const IDENTITY_COUNTRIES = publicCountriesFor("caseLaw", "identity");
 
-const directoryCourts = DIRECTORY_COUNTRIES.flatMap((country) =>
-  COURT_DIRECTORY[country].map((court) => ({
-    country,
-    court,
-    key: `${country}:${court.name}`,
-    aliases: directoryCourtAliases(country, court),
-  })),
+const grammarOrPanic = (country: string): CourtCitationGrammar =>
+  courtCitationGrammarOf(country) ??
+  panic(`No court citation grammar for ${country}`);
+
+const directoryCourts = Object.keys(COURT_CITATION_GRAMMARS).flatMap(
+  (country) =>
+    (courtCitationGrammarOf(country)?.courts ?? []).map((court) => ({
+      country,
+      court,
+      key: `${country}:${court.name}`,
+      aliases: directoryCourtAliases(country, court),
+    })),
 );
+const DIRECTORY_COUNTRIES = [
+  ...new Set(directoryCourts.map(({ country }) => country)),
+];
 
 const readsAs = (country: string, text: string) =>
   readCourtCitation(courtCitationIndex(country), text);
 
 describe("court citation aliases", () => {
+  test("every country with an identity surface declares a court citation grammar with courts", () => {
+    expect(IDENTITY_COUNTRIES.length).toBeGreaterThan(0);
+    for (const country of IDENTITY_COUNTRIES) {
+      const grammar = grammarOrPanic(country);
+      expect(grammar.courts.length, country).toBeGreaterThan(0);
+    }
+  });
+
   test("no alias of the directory answers to two courts", () => {
     for (const country of DIRECTORY_COUNTRIES) {
       const ambiguous = [...courtCitationIndex(country).byAlias]
@@ -52,9 +68,35 @@ describe("court citation aliases", () => {
           { type: "court", courts: [key] },
         ]);
       }
-      for (const code of court.ecliCodes.filter(({ length }) => length > 1)) {
+      const index = courtCitationIndex(country);
+      for (const code of court.ecliCodes.filter(
+        (candidate) =>
+          candidate.length > 1 &&
+          !index.byAlias.has(foldCourtText(candidate).join(" ")),
+      )) {
         expect(readsAs(country, code), `${country} ${code}`).toEqual([
-          { type: "court", courts: [key] },
+          { type: "ecli-code", code: code.toUpperCase(), court: key },
+        ]);
+      }
+    }
+  });
+
+  test("an alias any two courts share is read as both courts, never one", () => {
+    for (const { country, key, aliases } of directoryCourts) {
+      const base = courtCitationIndex(country);
+      const twin = `${key} (twin)`;
+      const shared = {
+        ...base,
+        byAlias: new Map(
+          [...base.byAlias].map(([alias, keys]) => [
+            alias,
+            keys.has(key) ? new Set([...keys, twin]) : keys,
+          ]),
+        ),
+      };
+      for (const alias of aliases) {
+        expect(readCourtCitation(shared, alias), alias).toEqual([
+          { type: "court", courts: [key, twin] },
         ]);
       }
     }
@@ -63,15 +105,19 @@ describe("court citation aliases", () => {
   test("every directory court is the court its stored name and recorded ECLI code place", () => {
     for (const { country, court, key } of directoryCourts) {
       const index = courtCitationIndex(country);
-      expect(storedCourtKeys(index, { court: court.name, ecli: null })).toEqual(
-        [key],
-      );
+      expect(
+        storedCourtIdentity(index, { court: court.name, ecli: null }),
+      ).toEqual({ key, code: undefined });
+      const jurisdiction = grammarOrPanic(country).ecliJurisdiction;
+      if (jurisdiction === null) {
+        continue;
+      }
       for (const code of court.ecliCodes) {
-        const ecli = `ECLI:${ECLI_JURISDICTION_OF_COUNTRY[country]}:${code}:2020:1`;
-        expect(
-          storedCourtKeys(index, { court: court.name, ecli }),
-          ecli,
-        ).toEqual([key]);
+        const ecli = `ECLI:${jurisdiction}:${code}:2020:1`;
+        expect(storedCourtIdentity(index, { court: "", ecli }), ecli).toEqual({
+          key,
+          code: code.toUpperCase(),
+        });
       }
     }
   });
@@ -85,7 +131,7 @@ describe("court citation aliases", () => {
     for (const [country, courts] of registries) {
       const registry = Object.entries<RegisteredCourt>(courts);
       for (const [code, { name }] of registry) {
-        const listed = COURT_DIRECTORY[country].find(
+        const listed = grammarOrPanic(country).courts.find(
           (court) => court.name === name,
         );
         expect(listed?.ecliCodes, `${country} ${code}`).toContain(code);
@@ -105,13 +151,24 @@ describe("court citation aliases", () => {
     "Obvodní soud Praha 6",
     "Obvodní soud v Praze 6",
     "ObvS Praha 6",
-    "OSPH06",
-    "osph06",
   ])("a Prague district court reads from %s", (text) => {
     expect(readsAs("CZE", text)).toEqual([
       { type: "court", courts: ["CZE:Obvodní soud pro Prahu 6"] },
     ]);
   });
+
+  test.each(["OSPH06", "osph06"])(
+    "a Prague district court's ECLI code reads as that court's code: %s",
+    (text) => {
+      expect(readsAs("CZE", text)).toEqual([
+        {
+          type: "ecli-code",
+          code: "OSPH06",
+          court: "CZE:Obvodní soud pro Prahu 6",
+        },
+      ]);
+    },
+  );
 
   test.each([
     [

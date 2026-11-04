@@ -1021,7 +1021,7 @@ const districtRow = (
 
 describe("a district court named around the docket", () => {
   const elsewhere = () =>
-    districtRow("Okresní soud v Kladně", "OSKL", "8 C 123/2024");
+    districtRow("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
   test.each([
     "8 C 123/2024 Obvodní soud pro Prahu 6",
     "8 C 123/2024 OS Praha 6",
@@ -1103,7 +1103,7 @@ describe("a district court named around the docket", () => {
     const named = await resolveDecision({
       admission,
       country: "CZE",
-      identifier: "OSKO 8 C 123/2024",
+      identifier: "OSXQ 8 C 123/2024",
       dependencies: { lookup: lookupRows([holder]) },
     });
     expect(named).toMatchObject({

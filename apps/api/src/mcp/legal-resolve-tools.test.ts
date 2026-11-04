@@ -511,7 +511,7 @@ describe("resolve_case_law_decision keeps its court promise", () => {
   ])(
     "a docket held only at another court is not_at_this_court: %s",
     async (identifier) => {
-      const kladno = holder("Okresní soud v Kladně", "OSKL", "8 C 123/2024");
+      const kladno = holder("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
       expect(await callTool(identifier, [kladno])).toEqual({
         status: "success",
         data: {
