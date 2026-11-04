@@ -27,9 +27,9 @@ const researchFetcher = (
   let lookups = 0;
   return async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input);
-    const headers = new Headers(init?.headers);
-    const method = init?.method ?? "GET";
-    const body = typeof init?.body === "string" ? init.body : "";
+    const headers = new Headers(init.headers);
+    const method = init.method ?? "GET";
+    const body = typeof init.body === "string" ? init.body : "";
     const cookie = headers.get("cookie") ?? "";
     observed.push({ method, path: url.pathname, body, cookie });
     if (url.origin !== APP_URL) {
