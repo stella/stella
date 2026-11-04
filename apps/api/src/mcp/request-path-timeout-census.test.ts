@@ -537,6 +537,22 @@ const CENSUS: readonly CensusEntry[] = [
     why: "The corpus request's timeout after the clamp every corpus request passes (`requestBoundedTimeout`: its own timeout, or what is left of the request's budget), passed to the fetch.",
   },
   {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#waiting.timeoutMs",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "A search read's wait for an engine slot, bounded by the read's own timeout after the request clamp (`requestBoundedTimeout`), so queueing never outwaits the request.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#remainingAfterWait",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "A queued search read's own timeout less the time it queued, clamped again to the request before transport.",
+  },
+  {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS)",
     path: "request",
     tools: CORPUS_SEARCH_TOOLS,
