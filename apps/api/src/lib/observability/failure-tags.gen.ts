@@ -468,6 +468,8 @@ export const FAILURE_TAGS = [
   "TestProcessSpawnError",
   "TestStderrError",
   "TimeoutError",
+  "TimerActivityRejectedError",
+  "TimerActivityRetryError",
   "TokenExchangeError",
   "TokenRefreshError",
   "ToolOutputContractDegradedError",

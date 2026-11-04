@@ -1,5 +1,7 @@
 import { randomUUID } from "expo-crypto";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { AccessTokenSource, StoredSession } from "@/connection/session";
 import type { BeforeSessionEnd } from "@/connection/session-end";
 import { LIVE_ACTIVITIES, PUSH_NOTIFICATIONS } from "@/env";
@@ -33,10 +35,11 @@ export const nextTimerActivitySequence = async (
   session: SessionKeys,
   now: number,
 ): Promise<number> => {
-  const sent = Number(
+  const sent = parseIntegerToken(
     (await deviceAccountStore.read(sequenceKey(session))) ?? "0",
-  );
-  const next = Math.max(Number.isSafeInteger(sent) ? sent + 1 : 1, now);
+    { sign: "unsigned" },
+  ).unwrapOr(0);
+  const next = Math.max(sent + 1, now);
   await deviceAccountStore.write(sequenceKey(session), String(next));
   return next;
 };

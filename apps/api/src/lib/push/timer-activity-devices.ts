@@ -2,7 +2,6 @@ import {
   and,
   desc,
   eq,
-  gt,
   isNotNull,
   isNull,
   ne,
@@ -232,8 +231,9 @@ export const listTimerActivityDevices = async (
                     ne(laterClaim.deviceId, timerActivityDevices.deviceId),
                   ),
                   or(sharesToken("startToken"), sharesToken("activityToken")),
-                  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement; no JS Date is bound
-                  gt(laterClaim.lastSeenAt, timerActivityDevices.lastSeenAt),
+                  // Column against column inside one statement, at full
+                  // precision: no JS Date is bound.
+                  sql`${laterClaim.lastSeenAt} > ${timerActivityDevices.lastSeenAt}::timestamptz`,
                 ),
               ),
           ),
