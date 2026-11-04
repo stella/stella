@@ -671,6 +671,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
+  fixtureRuleOverride("no-nullable-join-nested-selection.fixture.ts", [
+    "no-nullable-join-nested-selection/no-nullable-join-nested-selection",
+  ]),
   fixtureRuleOverride("legislation-window.fixture.ts", [
     "legislation-window/legislation-window-through-helper",
     "legislation-window/legislation-window-hint-display-only",
@@ -2111,6 +2114,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-rolled-role-set.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
     "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
+    "./.oxlint-plugins/no-nullable-join-nested-selection.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
@@ -6352,6 +6356,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows": "error",
+      },
+    },
+    {
+      // Drizzle reads a nested selection object over a left, right or full
+      // join back as null when every column in it is NULL, so a matched row
+      // with NULL values looks like no row. Joined columns are selected flat
+      // with the join key, and the object is built after the read.
+      files: ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+      rules: {
+        "no-nullable-join-nested-selection/no-nullable-join-nested-selection":
+          "error",
       },
     },
     {
