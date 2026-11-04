@@ -2849,10 +2849,11 @@ jobs:
         id: lockfile_ages
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') }}
         # Bun applies the release-age quarantine only while it resolves
-        # versions; a frozen install takes whatever bun.lock pins. This looks
-        # up the publish time of each pin new against the merge base, in every
-        # tracked lockfile, and fails one the governing bunfig.toml would not
-        # yet admit (its excludes honoured). A registry failure fails it too.
+        # versions; a frozen install takes whatever bun.lock pins, and Cargo
+        # has no quarantine at all. This looks up the publish time of each pin
+        # new against the merge base, in every tracked bun.lock and Cargo.lock,
+        # and fails one the governing bunfig.toml would not yet admit (its
+        # excludes honoured). A registry failure fails it too.
         # Runs before the install, so a quarantined pin never executes here,
         # and again on the queued tree, whose base may govern it differently.
         env:
