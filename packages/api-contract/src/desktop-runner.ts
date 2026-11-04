@@ -232,7 +232,22 @@ export const DESKTOP_RUNNER_HARNESS_STATE = {
   limitUntil: "limit_until",
   notInstalled: "not_installed",
   unsupported: "unsupported",
+  unavailable: "unavailable",
 } as const;
+
+/**
+ * Why an installed harness could not be checked, so it is neither offered nor
+ * called unsupported: the desktop only knows that it cannot run it right now.
+ *
+ * - `harness_failed`: the harness did not start, exited or stopped answering.
+ * - `unexpected_answer`: the harness answered in a way the desktop cannot read.
+ * - `probe_failed`: the desktop's own harness host could not ask it.
+ */
+export const DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS = [
+  "harness_failed",
+  "unexpected_answer",
+  "probe_failed",
+] as const;
 
 /** What a ready harness reports it can do; the API never assumes more. */
 export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
@@ -242,16 +257,22 @@ export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
   "image_input",
 ] as const;
 
-/** Why a desktop refused a run command. */
+/**
+ * Why a desktop refused a run command. `harness_unavailable` matches a harness
+ * reported `unavailable`; `run_too_large` is a `run.start` the desktop cannot
+ * hand to its harness host whole, which no retry on that computer fixes.
+ */
 export const DESKTOP_RUNNER_REJECT_REASONS = [
   "harness_not_installed",
   "harness_needs_login",
   "harness_limited",
   "harness_unsupported",
+  "harness_unavailable",
   "harness_version_unavailable",
   "model_unavailable",
   "policy_unsupported",
   "at_capacity",
+  "run_too_large",
   "unknown_run",
 ] as const;
 
@@ -376,6 +397,11 @@ const harnessReportSchema = v.variant("state", [
     state: v.literal(DESKTOP_RUNNER_HARNESS_STATE.unsupported),
     /** `null` when this desktop cannot run the harness at any version. */
     version: v.nullable(desktopVersionSchema),
+  }),
+  v.object({
+    id: harnessSchema,
+    state: v.literal(DESKTOP_RUNNER_HARNESS_STATE.unavailable),
+    reason: v.picklist(DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS),
   }),
 ]);
 export type DesktopRunnerHarnessReport = v.InferOutput<

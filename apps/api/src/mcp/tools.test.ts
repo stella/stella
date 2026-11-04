@@ -6562,6 +6562,51 @@ describe("OpenAI-compatible MCP tools", () => {
       );
     });
 
+    test.each([
+      [
+        [
+          "Krajský soud v Plzni",
+          "Krajský soud v Plzni – pobočka v Karlových Varech",
+        ],
+        { court: "Krajský soud v Plzni – pobočka v Karlových Varech" },
+      ],
+      [["Krajský soud v Plzni"], {}],
+    ] as const)(
+      "a branch filter with stored courts %p filters the branch or nothing, never its main court",
+      async (stored, sent) => {
+        const baseContext = createContext();
+        const result = await handleMcpToolCall({
+          args: {
+            queries: ["náhrada škody"],
+            country: "CZE",
+            courts: ["KS Plzeň pobočka Karlovy Vary"],
+          },
+          context: {
+            ...baseContext,
+            testDependencies: {
+              ...baseContext.testDependencies,
+              readCaseLawCourtNames: async () => stored,
+            },
+          },
+          toolName: "search_case_law",
+        });
+
+        const body = searchedBody();
+        expect(body["court"]).toBeUndefined();
+        expect(body["courts"]).toEqual(
+          "court" in sent ? [sent.court] : undefined,
+        );
+        if (!("court" in sent)) {
+          expect(searchWarnings(result)).toContainEqual(
+            expect.objectContaining({
+              code: "filter_dropped",
+              message: expect.stringContaining("no stored decision"),
+            }),
+          );
+        }
+      },
+    );
+
     test("a several-spelling court the court list excludes notes only the spelling sent", async () => {
       const baseContext = createContext();
       const result = await handleMcpToolCall({

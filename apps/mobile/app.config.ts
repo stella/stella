@@ -340,7 +340,8 @@ const appConfigBase = ({
         ]
       : []),
     // A running timer on the Lock Screen and in the Dynamic Island
-    // (src/widgets/timer-activity.ios.tsx).
+    // (src/widgets/timer-activity.ios.tsx). With the push entitlement the
+    // activity takes tokens, so a timer changed on another device reaches it.
     ...(liveActivities
       ? [
           [
@@ -348,6 +349,7 @@ const appConfigBase = ({
             {
               bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
               groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
+              enablePushNotifications: pushNotifications,
             },
           ] satisfies [string, unknown],
         ]

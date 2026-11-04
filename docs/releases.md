@@ -220,7 +220,13 @@ A pull request that changes `VERSION` or migrations also runs
 `migration-upgrade-rehearsal`: it starts with the schema of the release
 production currently serves, fills registered high-volume tables with
 scale-shaped rows, runs this commit's migration entrypoint under a budget,
-reruns it, and checks schema parity. Its summary records the base release and
+reruns it, and checks schema parity. It then boots that served release's own
+API image against the upgraded database and requires readiness within 120
+seconds: production keeps serving it, and keeps replacing its tasks, until the
+candidate rolls out, so a release's migrations must stay compatible with the
+previous release's startup checks (expand first, contract in a later release).
+A refusal fails the job naming the startup check that refused and the
+migrations this commit applied. Its summary records the base release and
 timings. `scripts/rehearse-migration-upgrade.sh` runs the rehearsal locally
 against an empty database.
 

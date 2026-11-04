@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Anmeldung erforderlich",
       "stateNotInstalled": "Nicht installiert",
       "stateOffline": "Computer nicht verbunden",
+      "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
       "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
     },
@@ -2786,6 +2787,11 @@
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
       "undoImport": "Import rückgängig machen ({count})",
+      "undoImportConfirm": "{count, plural, one {Den durch diesen Import erstellten Kontakt} other {Die # durch diesen Import erstellten Kontakte}} endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "undoImportTitle": "Diesen Import rückgängig machen?",
+      "undoneRow": "Durch Rückgängigmachen entfernt",
+      "undoneSummary": "Durch das Rückgängigmachen {count, plural, one {wurde # erstellter Kontakt} other {wurden # erstellte Kontakte}} entfernt.",
+      "undoneToast": "Import rückgängig gemacht: {count, plural, one {# Kontakt} other {# Kontakte}} gelöscht",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
       "warning": {
         "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",

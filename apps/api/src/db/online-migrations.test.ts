@@ -349,8 +349,51 @@ describe("online migrations", () => {
     },
   );
 
+  test("boots beside an older repair's durable pending checkpoint", async () => {
+    const introducedBy = startupMigration;
+    const repair = {
+      name: "older-pending-fixture",
+      introducedBy,
+      readCompletion: async () =>
+        ({
+          type: "pending",
+          reason: "checkpoint remains",
+          cursor: "0190",
+          holdUntil: null,
+          heldSince: null,
+        }) as const,
+      repair: async () => {
+        throw new TypeError("Startup must never repair");
+      },
+    } satisfies OnlineRepair;
+    const newer = createHarness();
+    expect(
+      await reportOnlineMigrations(newer.pool, { repairs: [repair] }),
+    ).toEqual({
+      newestAppliedMigration: "99999999999999_later_release",
+      pending: [{ kind: "repair", name: repair.name, introducedBy }],
+    });
+    expect(newer.released()).toBe(true);
+    const codeOwned = {
+      ...repair,
+      introducedBy: {
+        type: "code",
+        owner: "src/db/better-auth-oauth-resource-repair.ts",
+      },
+    } satisfies OnlineRepair;
+    expect(
+      await rejectionOf(
+        reportOnlineMigrations(createHarness().pool, { repairs: [codeOwned] }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "owned by src/db/better-auth-oauth-resource-repair.ts is not complete",
+      ),
+    });
+  });
+
   test.each(["pending", "incomplete"] as const)(
-    "reports newest-set repair %s and rejects the older step",
+    "reports newest-set repair %s; an older one boots only with a checkpoint",
     async (type) => {
       const introducedBy = startupMigration;
       const completion: OnlineRepairCompletion =
@@ -376,6 +419,16 @@ describe("online migrations", () => {
         (await reportOnlineMigrations(newest.pool, { repairs: [repair] }))
           .pending,
       ).toEqual([{ kind: "repair", name: repair.name, introducedBy }]);
+      if (type === "pending") {
+        expect(
+          (
+            await reportOnlineMigrations(createHarness().pool, {
+              repairs: [repair],
+            })
+          ).pending,
+        ).toEqual([{ kind: "repair", name: repair.name, introducedBy }]);
+        return;
+      }
       expect(
         await rejectionOf(
           reportOnlineMigrations(createHarness().pool, { repairs: [repair] }),
@@ -448,7 +501,10 @@ describe("online migrations", () => {
       unvalidatedConstraints: [name],
     });
     expect(await reportOnlineMigrations(harness.pool, { repairs: [] })).toEqual(
-      { newestAppliedMigration: startupMigration, pending: [] },
+      {
+        newestAppliedMigration: startupMigration,
+        pending: [],
+      },
     );
     expect(await runOnlineMigrations(harness.pool, { repairs: [] })).toEqual({
       type: "complete",

@@ -61,6 +61,37 @@ test("payloads that are not field diffs are shown as values, never dropped", () 
   ]);
 });
 
+test("a record deleted or created as a whole reads as its own fields", () => {
+  expect(
+    auditChangeRows({
+      deleted: { old: { displayName: "Jana Nováková" }, new: null },
+    }),
+  ).toEqual([
+    {
+      type: "diff",
+      field: "displayName",
+      before: "Jana Nováková",
+      after: null,
+    },
+  ]);
+  expect(
+    auditChangeRows({
+      created: { old: null, new: { amount: 1200, currency: "CZK" } },
+    }),
+  ).toEqual([
+    { type: "diff", field: "amount", before: null, after: 1200 },
+    { type: "diff", field: "currency", before: null, after: "CZK" },
+  ]);
+});
+
+test("an ordinary field holding a record stays one diff row", () => {
+  expect(
+    auditChangeRows({ address: { old: { city: "Brno" }, new: null } }),
+  ).toEqual([
+    { type: "diff", field: "address", before: { city: "Brno" }, after: null },
+  ]);
+});
+
 test("no changes yields no rows", () => {
   expect(auditChangeRows(null)).toEqual([]);
   expect(auditChangeRows(undefined)).toEqual([]);
