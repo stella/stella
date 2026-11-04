@@ -114,6 +114,74 @@ export type ChatLocalRunQuestionReply = v.InferOutput<
 >;
 
 /**
+ * The tool call a local run's question is persisted as, for every harness:
+ * Codex's native item name, which a Claude Code `AskUserQuestion` takes too.
+ */
+export const CHAT_LOCAL_RUN_QUESTION_TOOL = "request_user_input";
+
+/**
+ * One question of a local run's blocking question, as its interrupt carries
+ * it (`metadata.questions`). An answer names an option by its `label`, which
+ * is the harness's native reply. `multiSelect` lets one answer pick several
+ * options; `allowsFreeText` lets it be the member's own words; a `secret`
+ * answer is never shown back.
+ */
+export const chatLocalRunQuestionSchema = v.object({
+  id: v.string(),
+  header: v.string(),
+  prompt: v.string(),
+  options: v.array(v.object({ label: v.string(), description: v.string() })),
+  allowsFreeText: v.boolean(),
+  multiSelect: v.boolean(),
+  secret: v.boolean(),
+});
+/** The questions one blocking question asks: at least one. */
+export const chatLocalRunQuestionsSchema = v.pipe(
+  v.array(chatLocalRunQuestionSchema),
+  v.minLength(1),
+);
+export type ChatLocalRunQuestion = Readonly<
+  Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">
+> & {
+  readonly options: readonly { label: string; description: string }[];
+};
+
+/**
+ * Why `answers` do not answer `questions`, or `null` when they do. Every
+ * question takes at least one answer, a single-choice question takes only one,
+ * a question without free text takes only its option labels, and only the
+ * questions asked are answered. The browser checks it before sending, the API
+ * before an answer leaves for the computer, and every harness before replying,
+ * so an answer the harness would refuse never leaves its run waiting.
+ */
+export const chatLocalRunAnswersRefusal = (
+  questions: readonly ChatLocalRunQuestion[],
+  answers: Readonly<Record<string, readonly string[]>>,
+): string | null => {
+  const asked = new Set(questions.map(({ id }) => id));
+  const unasked = Object.keys(answers).find((id) => !asked.has(id));
+  if (unasked !== undefined) {
+    return `Question ${unasked} was not asked.`;
+  }
+  for (const question of questions) {
+    const given = Object.hasOwn(answers, question.id)
+      ? (answers[question.id] ?? [])
+      : [];
+    if (given.length === 0) {
+      return `Question ${question.id} has no answer.`;
+    }
+    if (!question.multiSelect && given.length > 1) {
+      return `Question ${question.id} takes one answer.`;
+    }
+    const labels = new Set(question.options.map(({ label }) => label));
+    if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
+      return `Question ${question.id} takes one of its options.`;
+    }
+  }
+  return null;
+};
+
+/**
  * The CUSTOM stream event a turn running on a computer sends when that
  * computer goes away mid-turn and when it is back. The turn stays open while
  * the computer is away and continues once it reconnects, so the chat shows

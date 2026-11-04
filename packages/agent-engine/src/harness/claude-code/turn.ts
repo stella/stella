@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import { chatLocalRunAnswersRefusal } from "@stll/api-contract/chat-run-target";
+
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
@@ -16,7 +18,6 @@ import type {
   HarnessToolCall,
   HarnessUsage,
 } from "../events";
-import { questionAnswersRefusal } from "../question-answers";
 import { unsupportedItem } from "../tool-parts";
 import {
   type Detached,
@@ -199,7 +200,7 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
-      const refusal = questionAnswersRefusal(
+      const refusal = chatLocalRunAnswersRefusal(
         pending.questions,
         response.answers,
       );
@@ -747,6 +748,7 @@ export class ClaudeCodeTurnSession {
         options: question.options,
         // The harness always lets the user write their own answer.
         allowsFreeText: true,
+        multiSelect: question.multiSelect ?? false,
         secret: false,
       };
     });

@@ -3,19 +3,16 @@ import { EventType } from "@tanstack/ai";
 import * as v from "valibot";
 
 import {
-  harnessQuestionSchema,
-  questionAnswersRefusal,
-} from "@stll/agent-engine";
-import {
+  chatLocalRunAnswersRefusal,
   type ChatLocalRunQuestionReply,
   chatLocalRunQuestionReplySchema,
+  chatLocalRunQuestionsSchema as questionsSchema,
 } from "@stll/api-contract/chat-run-target";
 import type { DesktopRunnerChunk } from "@stll/api-contract/desktop-runner";
 
 import { isRecord } from "@/api/lib/type-guards";
 
 const requestIdSchema = v.pipe(v.string(), v.uuid());
-const questionsSchema = v.pipe(v.array(harnessQuestionSchema), v.minLength(1));
 
 type HarnessQuestions = v.InferOutput<typeof questionsSchema>;
 
@@ -94,7 +91,7 @@ export const questionPauseOf = (
 /**
  * The answers a resume payload gives a paused question, or why they are
  * refused: a payload that is not `chatLocalRunQuestionReplySchema`, or
- * answers the harness would refuse (`questionAnswersRefusal`). The chat
+ * answers the harness would refuse (`chatLocalRunAnswersRefusal`). The chat
  * continuation check and the run's answer delivery both read a reply here,
  * so the two can never disagree. The reason names question ids and payload
  * fields only, never what was answered.
@@ -114,7 +111,7 @@ export const questionReplyOf = (
         .join(", ")}`,
     };
   }
-  const refusal = questionAnswersRefusal(questions, reply.output.answers);
+  const refusal = chatLocalRunAnswersRefusal(questions, reply.output.answers);
   return refusal === null
     ? { type: "answers", answers: reply.output.answers }
     : { type: "refused", reason: refusal };

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { chatLocalRunAnswersRefusal } from "@stll/api-contract/chat-run-target";
+
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
@@ -15,7 +17,6 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "../events";
-import { questionAnswersRefusal } from "../question-answers";
 import { HARNESS_TOOL_NAMES, unsupportedItem } from "../tool-parts";
 import {
   type Detached,
@@ -122,6 +123,8 @@ const questionsFromParams = (questions: QuestionParams): HarnessQuestion[] =>
       prompt: question.question,
       options,
       allowsFreeText: question.isOther || options.length === 0,
+      // Codex states no multiple choice: an answer picks one option.
+      multiSelect: false,
       secret: question.isSecret,
     };
   });
@@ -181,7 +184,7 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
-      const refusal = questionAnswersRefusal(
+      const refusal = chatLocalRunAnswersRefusal(
         pending.questions,
         response.answers,
       );
@@ -649,6 +652,7 @@ export class CodexTurnSession {
         description: "",
       })),
       allowsFreeText: true,
+      multiSelect: false,
       secret: false,
     }));
     this.emit({

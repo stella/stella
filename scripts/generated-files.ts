@@ -198,6 +198,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/deepl/client.ts",
     "apps/api/src/lib/deepl/deepl.ts",
     "apps/api/src/lib/deepl/errors.ts",
+    "apps/api/src/lib/desktop-runner/chunk.ts",
     "apps/api/src/lib/document-translation/*",
     "apps/api/src/lib/docx-authoring/apply-ai-edits.ts",
     "apps/api/src/lib/docx-authoring/create-template-buffer.ts",
