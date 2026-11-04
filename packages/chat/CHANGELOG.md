@@ -1,5 +1,19 @@
 # @stll/chat
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7427](https://github.com/stella/stella/pull/7427) [`d05a124`](https://github.com/stella/stella/commit/d05a124a296d0426288f86684f0c77c1b1072db4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatModelSelector` now renders the `@stll/ui` select (a button and a popup list) instead of a native `<select>`: a host must load the `@stll/ui` stylesheet (`@stll/ui/theme.css` with Tailwind scanning `@stll/ui`) for it to draw. `ChatLink` shows its new-tab notice or source title as a tooltip and as the link's accessible description. The condition builder's number fields use `NumberInput` without locale grouping.
+
+### Patch Changes
+
+- [#7855](https://github.com/stella/stella/pull/7855) [`f68c520`](https://github.com/stella/stella/commit/f68c52006a9d18719b5850d35a9dd2ab42ba50ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ChatLink` takes a `fullLabel` option for tray chips whose label should keep the available width instead of the compact 20-character cap, and a tray chip's site icon is now centred on the label.
+
+- [#7199](https://github.com/stella/stella/pull/7199) [`84ac48f`](https://github.com/stella/stella/commit/84ac48f7bc54f170b72491c21c1c45dc6fb88c2b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible editor dependencies.
+- Updated dependencies [[`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6), [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d), [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190), [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583)]:
+  - @stll/ui@0.66.0
+
 ## 0.3.5
 
 ### Patch Changes
