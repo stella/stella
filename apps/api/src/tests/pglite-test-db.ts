@@ -36,6 +36,7 @@ import {
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteCaseLawPopulationCounts,
+  installPgliteCaseLawRankingSignalChanges,
   installPgliteCaseLawSitemapChanges,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
@@ -878,6 +879,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawRankingSignalChanges(db);
   await installPgliteCaseLawPopulationCounts(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
