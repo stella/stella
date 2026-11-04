@@ -296,6 +296,17 @@ export const actIssuedFrom = (eli: string): string | null => {
   return year === undefined ? null : `${year}-01-01`;
 };
 
+/** The later end of two versions of an act; an open version never ends. */
+export const laterValidityEnd = (
+  left: string | null,
+  right: string | null,
+): string | null => {
+  if (left === null || right === null) {
+    return null;
+  }
+  return left > right ? left : right;
+};
+
 /** An act a name fits, and the half-open dates a citation can mean it. */
 export type NamedActCandidate<Act> = {
   act: Act;

@@ -16,7 +16,10 @@ import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
-import { nameBeforeAmendingClause } from "@stll/legal-atlas/act-titles";
+import {
+  laterValidityEnd,
+  nameBeforeAmendingClause,
+} from "@stll/legal-atlas/act-titles";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import {
   nominativeTitle,
@@ -507,14 +510,6 @@ export type NamedLegislationWork = LegislationWorkRef & {
   validUntil: string | null;
 };
 
-/** The later end of two versions of a Work; an open version never ends. */
-const laterEnd = (left: string | null, right: string | null): string | null => {
-  if (left === null || right === null) {
-    return null;
-  }
-  return left > right ? left : right;
-};
-
 /** Versions whose own title states a name, read per lookup at most. */
 const NAMED_VERSION_LIMIT = 500;
 /** Distinct citations a name is written beside, read per lookup at most. */
@@ -844,7 +839,7 @@ export const readNamedLegislationWorks = async (
       validUntil:
         known === undefined
           ? work.validUntil
-          : laterEnd(known.validUntil, work.validUntil),
+          : laterValidityEnd(known.validUntil, work.validUntil),
     });
   }
   const chosen = chooseNamedWorks([...works.values()]);
