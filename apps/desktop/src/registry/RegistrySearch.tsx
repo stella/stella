@@ -160,8 +160,11 @@ export const RegistrySearch = ({
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
-  // The search scope the user confirmed with Enter: it skips the debounce.
-  const [confirmedScope, setConfirmedScope] = useState<string | null>(null);
+  // The search the user confirmed with Enter: it skips the debounce. A new
+  // object per Enter, so confirming the same query again retries a failure.
+  const [confirmedSearch, setConfirmedSearch] = useState<{
+    scope: string;
+  } | null>(null);
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
   const formatRequests = useRef(new Map<string, number>());
@@ -336,7 +339,7 @@ export const RegistrySearch = ({
     };
     const timer = setTimeout(
       search,
-      confirmedScope === scope ? 0 : SEARCH_DEBOUNCE_MS,
+      confirmedSearch?.scope === scope ? 0 : SEARCH_DEBOUNCE_MS,
     );
     return () => {
       clearTimeout(timer);
@@ -349,7 +352,7 @@ export const RegistrySearch = ({
     trimmedQuery,
     composing,
     scope,
-    confirmedScope,
+    confirmedSearch,
     searchError,
     roleError,
   ]);
@@ -552,7 +555,7 @@ export const RegistrySearch = ({
         // Only a search that has not started yet is brought forward, so a
         // second Enter never repeats a request already in flight or shown.
         if (currentSearch.status === "idle") {
-          setConfirmedScope(scope);
+          setConfirmedSearch({ scope });
         }
         return;
       }
