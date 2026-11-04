@@ -6472,6 +6472,10 @@
       "machineValue": "القيمة الأصلية من الذكاء الاصطناعي",
       "reasonPlaceholder": "سبب التغيير (اختياري)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "مبني على إصدار سابق من المستند (تغيّر {time})",
+      "marker": "قيمة قديمة"
+    },
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف القانوني",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "يُرجى تحديث حقول الاختيار المفرد والمتعدد لتطابق خيارات خصائصها",
       "someFieldsOutdatedTitle": "بعض الحقول غير محدّثة",
+      "staleColumnsRerun": "{count, plural, zero {لا أعمدة قديمة} one {عمود واحد قديم · إعادة التشغيل} two {عمودان قديمان · إعادة التشغيل} few {# أعمدة قديمة · إعادة التشغيل} many {# عمودًا قديمًا · إعادة التشغيل} other {# عمود قديم · إعادة التشغيل}}",
       "startedSuccessfully": "تم بدء سير العمل بنجاح",
       "starting": "جارٍ بدء سير العمل...",
       "terminated": "تم إنهاء سير العمل",

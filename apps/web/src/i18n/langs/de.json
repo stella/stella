@@ -6472,6 +6472,10 @@
       "machineValue": "Ursprünglicher KI-Wert",
       "reasonPlaceholder": "Grund der Änderung (optional)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Beruht auf einer früheren Version des Dokuments (geändert {time})",
+      "marker": "Veralteter Wert"
+    },
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Aktualisieren Sie die Einfach- und Mehrfachauswahlfelder, um den Eigenschaftsoptionen zu entsprechen",
       "someFieldsOutdatedTitle": "Einige Felder sind veraltet",
+      "staleColumnsRerun": "{count, plural, one {# Spalte veraltet · Erneut ausführen} other {# Spalten veraltet · Erneut ausführen}}",
       "startedSuccessfully": "Arbeitsablauf erfolgreich gestartet",
       "starting": "Arbeitsablauf wird gestartet...",
       "terminated": "Arbeitsablauf abgebrochen",

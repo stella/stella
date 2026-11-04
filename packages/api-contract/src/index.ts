@@ -1031,6 +1031,7 @@ export {
 export {
   AI_CELL_SETTLEMENT_TYPES,
   type AiCellSettlement,
+  type AiCellStaleness,
 } from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,

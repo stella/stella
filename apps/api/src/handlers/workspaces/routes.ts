@@ -45,6 +45,7 @@ import updateWorkspace from "@/api/handlers/workspaces/update";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
 import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import readWorkflow from "@/api/handlers/workspaces/workflow/get";
+import readStaleCells from "@/api/handlers/workspaces/workflow/stale";
 import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -129,6 +130,7 @@ export const workspacesRoute = mount(
         },
         "/vocabulary": { GET: readVocabulary },
         "/workflow": { GET: readWorkflow },
+        "/workflow/stale": { GET: readStaleCells },
         "/workflow/start": { POST: workflowStart },
         "/workflow/target-count": { POST: workflowTargetCount },
         "/cell-retry": { POST: cellRetry },

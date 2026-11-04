@@ -1,5 +1,8 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+
+import type { AiCellSettlement } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -9,11 +12,14 @@ import {
   fields,
   fileChatThreads,
   folioCollabRooms,
+  justifications,
   properties,
   workspaces,
 } from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   withAggregateParentBatch,
@@ -21,6 +27,11 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
+import {
+  carriedCellMetadata,
+  carriedJustifications,
+  carriedSettlement,
+} from "@/api/lib/entity-versions/carry-cell-state";
 import {
   lockDesktopEditTarget,
   lockDocxEditTarget,
@@ -37,6 +48,7 @@ import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
+import { readComputedDependents } from "@/api/lib/properties/dependents";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export type FileVersionWritePolicy =
@@ -290,6 +302,132 @@ const lockFileVersionParents = async ({
   return workspaceLock.rows.at(0) ?? null;
 };
 
+type CloneCellsWithStateArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  sourceVersionId: SafeId<"entityVersion">;
+  sourceFields: {
+    id: SafeId<"field">;
+    content: FieldContent;
+    propertyId: SafeId<"property">;
+    aiSettlement: AiCellSettlement | null;
+  }[];
+  fileField: { id: SafeId<"field">; content: FieldContent } | undefined;
+  filePropertyId: SafeId<"property">;
+  fieldId: SafeId<"field">;
+  replacementContent: Parameters<
+    typeof cloneFieldsForRevision
+  >[0]["replacementContent"];
+  sha256Hex: string;
+};
+
+/**
+ * The new version's cells: the source cells with their settlements and
+ * citations, the computed columns reading a changed file marked stale (see
+ * `carry-cell-state.ts`), and the context the cell metadata copy applies as
+ * well. Reads only; the version write inserts the rows.
+ */
+const planCellsWithState = async ({
+  tx,
+  workspaceId,
+  entityVersionId,
+  sourceVersionId,
+  sourceFields,
+  fileField,
+  filePropertyId,
+  fieldId,
+  replacementContent,
+  sha256Hex,
+}: CloneCellsWithStateArgs) => {
+  const carryContext = {
+    // The computed columns whose outcome the new file makes stale; none when
+    // the bytes are the ones already stored.
+    affectedPropertyIds:
+      fileField?.content.type === "file" &&
+      fileField.content.sha256Hex === sha256Hex
+        ? new Set<SafeId<"property">>()
+        : await readComputedDependents({
+            tx,
+            workspaceId,
+            rootPropertyIds: [filePropertyId],
+          }),
+    sourceVersionId,
+    now: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
+  };
+  // Ids are minted here so each source cell's citations can follow it.
+  const revisionFields = cloneFieldsForRevision({
+    currentFields: sourceFields,
+    entityVersionId,
+    propertyId: filePropertyId,
+    replacementFieldId: fieldId,
+    replacementContent,
+    workspaceId,
+  }).map((revisionField, index) => {
+    // cloneFieldsForRevision maps the source fields 1:1, in order.
+    const sourceField = sourceFields[index];
+    return {
+      ...revisionField,
+      id: revisionField.id ?? createSafeId<"field">(),
+      aiSettlement:
+        sourceField === undefined
+          ? null
+          : carriedSettlement({
+              settlement: sourceField.aiSettlement,
+              propertyId: sourceField.propertyId,
+              context: carryContext,
+            }),
+    };
+  });
+  const revisionFieldIdBySourceId = new Map(
+    sourceFields.flatMap((sourceField, index) => {
+      const revision = revisionFields[index];
+      return revision === undefined
+        ? []
+        : [[sourceField.id, revision.id] as const];
+    }),
+  );
+  if (!fileField) {
+    revisionFields.push({
+      id: fieldId,
+      content: replacementContent,
+      entityVersionId,
+      propertyId: filePropertyId,
+      workspaceId,
+      aiSettlement: null,
+    });
+  }
+  const sourceJustifications = await tx
+    .select({
+      fieldId: justifications.fieldId,
+      content: justifications.content,
+      boundingBoxes: justifications.boundingBoxes,
+      fileFieldIds: justifications.fileFieldIds,
+    })
+    .from(justifications)
+    .where(
+      and(
+        eq(justifications.workspaceId, workspaceId),
+        inArray(justifications.fieldId, [...revisionFieldIdBySourceId.keys()]),
+      ),
+    );
+  const justificationsToCarry = carriedJustifications({
+    justifications: sourceJustifications,
+    revisionFieldIdBySourceId,
+    replacedFileFieldIds: new Set(
+      fileField === undefined ? [] : [fileField.id],
+    ),
+  });
+  return {
+    carryContext,
+    revisionFields,
+    justificationRows: justificationsToCarry.map((justification) => ({
+      ...justification,
+      workspaceId,
+    })),
+  };
+};
+
 /**
  * Canonical transaction for writing an entity file version.
  *
@@ -457,7 +595,14 @@ export const writeFileVersion = async ({
     },
     columns: { versionNumber: true },
     with: {
-      fields: { columns: { id: true, content: true, propertyId: true } },
+      fields: {
+        columns: {
+          id: true,
+          content: true,
+          propertyId: true,
+          aiSettlement: true,
+        },
+      },
     },
   });
   if (!fieldSourceVersion) {
@@ -569,24 +714,23 @@ export const writeFileVersion = async ({
     }),
     ...(scanWarnings !== undefined && { scanWarnings }),
   });
-  const revisionFields = cloneFieldsForRevision({
-    currentFields: fieldSourceVersion.fields,
-    entityVersionId,
-    propertyId: filePropertyId,
-    replacementFieldId: fieldId,
-    replacementContent,
+  const cellPlan = await planCellsWithState({
+    tx,
     workspaceId,
+    entityVersionId,
+    sourceVersionId: fieldSourceVersionId,
+    sourceFields: fieldSourceVersion.fields,
+    fileField,
+    filePropertyId,
+    fieldId,
+    replacementContent,
+    sha256Hex,
   });
-  if (!fileField) {
-    revisionFields.push({
-      id: fieldId,
-      content: replacementContent,
-      entityVersionId,
-      propertyId: filePropertyId,
-      workspaceId,
-    });
+  const { carryContext } = cellPlan;
+  await tx.insert(fields).values(cellPlan.revisionFields);
+  if (cellPlan.justificationRows.length > 0) {
+    await tx.insert(justifications).values(cellPlan.justificationRows);
   }
-  await tx.insert(fields).values(revisionFields);
 
   const currentCellMetadataRows = await tx
     .select({
@@ -614,7 +758,12 @@ export const writeFileVersion = async ({
         workspaceId,
         entityVersionId,
         propertyId: row.propertyId,
-        metadata: row.metadata,
+        metadata: carriedCellMetadata({
+          metadata: row.metadata,
+          propertyId: row.propertyId,
+          context: carryContext,
+          userId,
+        }),
         createdBy: row.createdBy,
         updatedBy: row.updatedBy,
         createdAt: row.createdAt,

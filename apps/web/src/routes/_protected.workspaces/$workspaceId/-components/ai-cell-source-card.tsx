@@ -58,6 +58,11 @@ type AICellSourceCardProps = React.PropsWithChildren<{
    * cells keep clamping so a long extraction can't push the evidence away.
    */
   clampStatements?: boolean;
+  /**
+   * When the document changed after this value was settled: the value and
+   * its citations describe the earlier version until the cell is re-run.
+   */
+  staleSince?: string;
 }>;
 
 /**
@@ -75,6 +80,7 @@ export const AICellSourceCard = ({
   triggerClassName,
   title,
   clampStatements = true,
+  staleSince,
   children,
 }: AICellSourceCardProps) => {
   const t = useTranslations();
@@ -111,6 +117,13 @@ export const AICellSourceCard = ({
 
   const cardContent = (
     <>
+      {staleSince !== undefined && (
+        <span className="text-warning text-xs font-medium">
+          {t("workspaces.cellStale.fromEarlierVersion", {
+            time: formatRelativeTime(staleSince),
+          })}
+        </span>
+      )}
       {title !== undefined && (
         <span className="text-foreground text-xs font-semibold">{title}</span>
       )}
@@ -192,7 +205,7 @@ export const AICellSourceCard = ({
             // than a real <button> because some cells nest interactive flag
             // controls in `children`, which <button> cannot legally wrap.
             <div
-              className={cn(triggerClassName ?? "w-full min-w-0")}
+              className={cn("relative", triggerClassName ?? "w-full min-w-0")}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
@@ -212,7 +225,7 @@ export const AICellSourceCard = ({
             />
           ) : (
             <div
-              className={cn(triggerClassName ?? "w-full min-w-0")}
+              className={cn("relative", triggerClassName ?? "w-full min-w-0")}
               onPointerDown={() => {
                 dismissedRef.current = true;
                 setOpen(false);
@@ -225,6 +238,13 @@ export const AICellSourceCard = ({
         }
       >
         {children}
+        {staleSince !== undefined && (
+          <span
+            aria-label={t("workspaces.cellStale.marker")}
+            className="bg-warning pointer-events-none absolute end-0.5 top-0.5 size-1.5 rounded-full"
+            role="img"
+          />
+        )}
       </PreviewCardTrigger>
       <PreviewCardPopup align="start" className="w-80 p-0">
         {onOpen ? (

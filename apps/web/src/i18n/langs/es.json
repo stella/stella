@@ -6472,6 +6472,10 @@
       "machineValue": "Valor original de la IA",
       "reasonPlaceholder": "Motivo del cambio (opcional)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Basado en una versión anterior del documento (cambiado {time})",
+      "marker": "Valor desactualizado"
+    },
     "copyToMatter": {
       "copied": "Copiado al asunto",
       "copyOption": "Copiar (mantener original)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Actualice los campos de selección única y múltiple para que coincidan con las opciones de la propiedad",
       "someFieldsOutdatedTitle": "Algunos campos están desactualizados",
+      "staleColumnsRerun": "{count, plural, one {# columna desactualizada · Volver a ejecutar} many {# columnas desactualizadas · Volver a ejecutar} other {# columnas desactualizadas · Volver a ejecutar}}",
       "startedSuccessfully": "Flujo de trabajo iniciado correctamente",
       "starting": "Iniciando flujo de trabajo...",
       "terminated": "Flujo de trabajo terminado",

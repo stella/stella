@@ -6472,6 +6472,10 @@
       "machineValue": "Algne AI väärtus",
       "reasonPlaceholder": "Muudatuse põhjus (valikuline)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Põhineb dokumendi varasemal versioonil (muudetud {time})",
+      "marker": "Aegunud väärtus"
+    },
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Uuendage ühekordse ja mitmikvaliku väljad, et need vastaksid omaduse valikutele",
       "someFieldsOutdatedTitle": "Mõned väljad on aegunud",
+      "staleColumnsRerun": "{count, plural, one {# veerg on aegunud · Käivita uuesti} other {# veergu on aegunud · Käivita uuesti}}",
       "startedSuccessfully": "Töövoog edukalt käivitatud",
       "starting": "Töövoo käivitamine...",
       "terminated": "Töövoog katkestatud",

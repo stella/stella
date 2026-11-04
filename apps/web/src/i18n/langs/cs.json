@@ -6472,6 +6472,10 @@
       "machineValue": "Původní hodnota z AI",
       "reasonPlaceholder": "Důvod změny (nepovinné)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Vychází z dřívější verze dokumentu (změněno {time})",
+      "marker": "Zastaralá hodnota"
+    },
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",
       "copyOption": "Kopírovat (ponechat originál)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Aktualizujte pole jednoduchého a vícenásobného výběru tak, aby odpovídala možnostem vlastností",
       "someFieldsOutdatedTitle": "Některá pole jsou zastaralá",
+      "staleColumnsRerun": "{count, plural, one {# zastaralý sloupec · Spustit znovu} few {# zastaralé sloupce · Spustit znovu} many {# zastaralého sloupce · Spustit znovu} other {# zastaralých sloupců · Spustit znovu}}",
       "startedSuccessfully": "Pracovní postup úspěšně spuštěn",
       "starting": "Spouštění pracovního postupu...",
       "terminated": "Pracovní postup ukončen",

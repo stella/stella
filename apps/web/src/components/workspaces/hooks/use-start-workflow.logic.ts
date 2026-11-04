@@ -7,6 +7,8 @@ export type StartWorkflowArgs = {
   entityIdsOrder?: string[];
   propertyIds?: string[];
   serviceTier?: WorkflowServiceTier;
+  /** Only the cells a new document version left stale. */
+  cells?: "stale";
 };
 
 export type WorkflowServiceTier = "standard" | "flex";

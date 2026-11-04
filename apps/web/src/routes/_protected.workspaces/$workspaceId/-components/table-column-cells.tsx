@@ -40,6 +40,7 @@ import { detached } from "@/lib/detached";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
+  WorkspaceCellMetadata,
   WorkspaceEntity,
   WorkspaceField,
   WorkspaceProperty,
@@ -57,6 +58,30 @@ import {
   resolveAiCellTargets,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
+
+type CellAnalysisMarks = {
+  override: WorkspaceCellMetadata["override"];
+  staleSince: string | undefined;
+};
+
+/**
+ * The table-analysis marks a cell shows: a person's override of an AI value
+ * and a value settled before the document changed. Only a cell carrying one
+ * asks for the beta decision.
+ */
+const useCellAnalysisMarks = (
+  field: WorkspaceField | undefined,
+  cellMetadata: WorkspaceCellMetadata | undefined,
+): CellAnalysisMarks => {
+  const staleness = field?.aiSettlement?.stale;
+  const override = cellMetadata?.override;
+  const enabled = useCallerFeatureEnabled(CALLER_FEATURE.tableAnalysis, {
+    enabled: override !== undefined || staleness !== undefined,
+  });
+  return enabled
+    ? { override, staleSince: staleness?.since }
+    : { override: undefined, staleSince: undefined };
+};
 
 const PropertyCellContent = ({
   entity,
@@ -82,12 +107,7 @@ const PropertyCellContent = ({
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
-  // Only a cell that holds an override asks for the beta decision.
-  const tableAnalysisEnabled = useCallerFeatureEnabled(
-    CALLER_FEATURE.tableAnalysis,
-    { enabled: cellMetadata?.override !== undefined },
-  );
-  const override = tableAnalysisEnabled ? cellMetadata?.override : undefined;
+  const { override, staleSince } = useCellAnalysisMarks(field, cellMetadata);
   const withOverride = (cell: ReactElement): ReactElement =>
     override === undefined || cellMetadata === undefined ? (
       cell
@@ -267,6 +287,7 @@ const PropertyCellContent = ({
           cellMetadata={cellMetadata}
           entity={entity}
           justification={justification}
+          {...(staleSince !== undefined && { staleSince })}
           onOpen={() =>
             useInspectorTabsStore.getState().openFile({
               id: targets.sourceFile.fieldId,

@@ -6472,6 +6472,10 @@
       "machineValue": "Sākotnējā AI vērtība",
       "reasonPlaceholder": "Izmaiņu iemesls (neobligāti)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Balstīts uz dokumenta iepriekšējo versiju (mainīts {time})",
+      "marker": "Novecojusi vērtība"
+    },
     "copyToMatter": {
       "copied": "Nokopēts lietā",
       "copyOption": "Kopēt (saglabāt oriģinālu)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Atjauniniet vienas un vairāku izvēļu laukus, lai tie atbilstu rekvizītu opcijām",
       "someFieldsOutdatedTitle": "Daži lauki ir novecojuši",
+      "staleColumnsRerun": "{count, plural, zero {# novecojušu kolonnu · Palaist vēlreiz} one {# novecojusi kolonna · Palaist vēlreiz} other {# novecojušas kolonnas · Palaist vēlreiz}}",
       "startedSuccessfully": "Darbplūsma veiksmīgi palaista",
       "starting": "Palaiž darbplūsmu...",
       "terminated": "Darbplūsma pārtraukta",

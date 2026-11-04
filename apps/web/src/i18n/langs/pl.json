@@ -6472,6 +6472,10 @@
       "machineValue": "Pierwotna wartość z AI",
       "reasonPlaceholder": "Powód zmiany (opcjonalnie)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Oparte na wcześniejszej wersji dokumentu (zmieniono {time})",
+      "marker": "Nieaktualna wartość"
+    },
     "copyToMatter": {
       "copied": "Skopiowano do sprawy",
       "copyOption": "Kopiuj (zachowaj oryginał)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Zaktualizuj pola jednokrotnego i wielokrotnego wyboru, aby odpowiadały opcjom właściwości",
       "someFieldsOutdatedTitle": "Niektóre pola są nieaktualne",
+      "staleColumnsRerun": "{count, plural, one {# nieaktualna kolumna · Uruchom ponownie} few {# nieaktualne kolumny · Uruchom ponownie} many {# nieaktualnych kolumn · Uruchom ponownie} other {# nieaktualnej kolumny · Uruchom ponownie}}",
       "startedSuccessfully": "Proces uruchomiony pomyślnie",
       "starting": "Uruchamianie procesu...",
       "terminated": "Proces przerwany",

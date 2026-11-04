@@ -6472,6 +6472,10 @@
       "machineValue": "Original AI value",
       "reasonPlaceholder": "Reason for the change (optional)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Based on an earlier version of the document (changed {time})",
+      "marker": "Stale value"
+    },
     "copyToMatter": {
       "copied": "Copied to Matter",
       "copyOption": "Copy (keep original)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Please update Single and Multi Select fields to match their property options",
       "someFieldsOutdatedTitle": "Some fields are outdated",
+      "staleColumnsRerun": "{count, plural, one {# column stale · Re-run} other {# columns stale · Re-run}}",
       "startedSuccessfully": "Workflow started successfully",
       "starting": "Starting workflow...",
       "terminated": "Workflow terminated",

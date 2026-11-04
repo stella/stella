@@ -105,6 +105,7 @@ import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
+import { StaleCellsAction } from "@/routes/_protected.workspaces/$workspaceId/-components/view/stale-cells-action";
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
@@ -297,6 +298,7 @@ export const ViewToolbar = ({
           <TableContentModeControl viewId={view.id} workspaceId={workspaceId} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
+          <StaleCellsAction workspaceId={workspaceId} />
           <BulkAddColumns
             target={{ kind: "workspace", workspaceId }}
             triggerVariant="labelled"

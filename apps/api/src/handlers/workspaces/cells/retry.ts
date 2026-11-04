@@ -8,13 +8,15 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
+import { readComputedDependents } from "@/api/lib/properties/dependents";
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   contract: "patch",
   description:
     "Re-run the AI extraction for one cell, meaning one document's value for " +
-    "one AI column, in a matter. Refused when the property is not " +
+    "one AI column, in a matter, together with that document's cells in " +
+    "the computed columns that read it. Refused when the property is not " +
     "AI-extracted, when the document is read-only, when the cell is locked, " +
     "and while another workflow is already running in the matter.",
   permissions: { workspace: ["update"] },
@@ -131,6 +133,18 @@ const cellRetry = createSafeHandler(
       );
     }
 
+    // A new value changes what every column reading this one was computed
+    // from, so the run covers them too; their locked cells stay skipped.
+    const dependentIds = yield* Result.await(
+      safeDb((tx) =>
+        readComputedDependents({
+          tx,
+          workspaceId,
+          rootPropertyIds: [propertyId],
+        }),
+      ),
+    );
+
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -140,7 +154,7 @@ const cellRetry = createSafeHandler(
             userId: user.id,
             scopedDb,
             entityIds: [entityId],
-            propertyIds: [propertyId],
+            propertyIds: [propertyId, ...dependentIds],
             serviceTier: "standard",
             extractionRunStore: requestExtractionRunStore,
           }),

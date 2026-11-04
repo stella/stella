@@ -44,6 +44,7 @@ import {
   PROPERTY_DEPENDENCY_LIMITS,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
+import { transitiveDependents } from "@/api/lib/properties/dependents";
 import { propertyKindsForUpdate } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 import { UPDATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
@@ -113,46 +114,6 @@ const isLegacyDocumentTypeClassifier = (
     role: null,
     tool: property.tool,
   });
-
-/**
- * Collect all transitive dependents of `rootId` via BFS.
- * Returns the set of property IDs that transitively depend
- * on `rootId` (excludes `rootId` itself).
- */
-const getTransitiveDependents = (
-  rootId: SafeId<"property">,
-  allProperties: PropertyWithDeps[],
-): Set<SafeId<"property">> => {
-  const dependents = new Map<SafeId<"property">, SafeId<"property">[]>();
-  for (const prop of allProperties) {
-    for (const dep of prop.dependencies) {
-      const list = dependents.get(dep.dependsOnPropertyId);
-      if (list) {
-        list.push(prop.id);
-      } else {
-        dependents.set(dep.dependsOnPropertyId, [prop.id]);
-      }
-    }
-  }
-
-  const visited = new Set<SafeId<"property">>();
-  const storedQueue = dependents.get(rootId);
-  const queue = arrayOrEmpty(storedQueue);
-
-  for (const id of queue) {
-    if (visited.has(id)) {
-      continue;
-    }
-    visited.add(id);
-    const storedDependents = dependents.get(id);
-    const nextDependents = arrayOrEmpty(storedDependents);
-    for (const next of nextDependents) {
-      queue.push(next);
-    }
-  }
-
-  return visited;
-};
 
 const hasCircularDependency = ({
   propertyId,
@@ -557,7 +518,15 @@ const updateProperty = createSafeHandler(
         }
 
         if (isStale) {
-          const staleIds = getTransitiveDependents(propertyId, allProperties);
+          const staleIds = transitiveDependents(
+            [propertyId],
+            allProperties.flatMap((property) =>
+              property.dependencies.map(({ dependsOnPropertyId }) => ({
+                propertyId: property.id,
+                dependsOnPropertyId,
+              })),
+            ),
+          );
 
           if (staleIds.size > 0) {
             promises.push(

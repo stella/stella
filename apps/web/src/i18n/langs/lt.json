@@ -6472,6 +6472,10 @@
       "machineValue": "Pradinė DI reikšmė",
       "reasonPlaceholder": "Pakeitimo priežastis (neprivaloma)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "Pagrįsta ankstesne dokumento versija (pakeista {time})",
+      "marker": "Pasenusi reikšmė"
+    },
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Atnaujinkite vieno ir kelių pasirinkimų laukus, kad atitiktų savybių parinktis",
       "someFieldsOutdatedTitle": "Kai kurie laukai yra pasenę",
+      "staleColumnsRerun": "{count, plural, one {# pasenęs stulpelis · Paleisti iš naujo} few {# pasenę stulpeliai · Paleisti iš naujo} many {# pasenusio stulpelio · Paleisti iš naujo} other {# pasenusių stulpelių · Paleisti iš naujo}}",
       "startedSuccessfully": "Darbo eiga sėkmingai paleista",
       "starting": "Darbo eiga paleidžiama...",
       "terminated": "Darbo eiga nutraukta",

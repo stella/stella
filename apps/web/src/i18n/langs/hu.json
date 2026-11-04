@@ -6472,6 +6472,10 @@
       "machineValue": "Eredeti AI-érték",
       "reasonPlaceholder": "A módosítás indoka (nem kötelező)"
     },
+    "cellStale": {
+      "fromEarlierVersion": "A dokumentum egy korábbi változatán alapul (módosítva: {time})",
+      "marker": "Elavult érték"
+    },
     "copyToMatter": {
       "copied": "Másolva az ügyiratba",
       "copyOption": "Másolás (eredeti megtartása)",
@@ -7441,6 +7445,7 @@
       },
       "someFieldsOutdatedDescription": "Frissítse az egyszeres és többszörös választás mezőket, hogy megfeleljenek a tulajdonság opcióinak",
       "someFieldsOutdatedTitle": "Egyes mezők elavultak",
+      "staleColumnsRerun": "{count, plural, one {# elavult oszlop · Újrafuttatás} other {# elavult oszlop · Újrafuttatás}}",
       "startedSuccessfully": "Munkafolyamat sikeresen elindítva",
       "starting": "Munkafolyamat indítása...",
       "terminated": "Munkafolyamat megszakítva",
