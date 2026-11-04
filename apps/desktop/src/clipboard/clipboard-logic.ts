@@ -258,14 +258,7 @@ export type ClipboardSearchScope = (typeof CLIPBOARD_SEARCH_SCOPES)[number];
 export const clipboardActionItems = <Item>(
   scope: ClipboardSearchScope,
   items: readonly Item[],
-): readonly Item[] => {
-  switch (scope) {
-    case "clips":
-      return items;
-    case "registry":
-      return [];
-  }
-};
+): readonly Item[] => (scope === "clips" ? items : []);
 
 /**
  * Vertical arrows step through the search scopes from wherever focus is; the
