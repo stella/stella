@@ -196,7 +196,7 @@
     "diff": "catalog:",
     "disposable-email-domains-js": "catalog:",
     "drizzle-orm": "catalog:",
-    "entities": "^8.1.0",
+    "entities": "^9.0.0",
     "franc": "catalog:",
     "hyparquet": "^1.32.0",
     "jose": "^6.2.14",
