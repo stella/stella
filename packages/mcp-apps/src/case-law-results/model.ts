@@ -242,6 +242,46 @@ export const searchFilterInput = ({
   }
 };
 
+/** The search box text a call's own queries fill it with. */
+export const originalSearchQuery = (input: Record<string, unknown>) => {
+  const queries = normalizeStringList(input["queries"], { split: "never" });
+  return queries.ok ? queries.value.join(" ") : "";
+};
+
+type SearchSubmitArgs = SearchFilterArgs & {
+  /** The search box as the user left it. */
+  query: string;
+  /** The search box as the call's own queries filled it. */
+  originalQuery: string;
+};
+
+/**
+ * The search the form submits. An untouched box keeps the call's own queries,
+ * every phrasing included; an edited box is one query, and a box left empty is
+ * no query. A search needs queries or a provision, so a form with neither has
+ * nothing to send.
+ */
+export const searchSubmitInput = ({
+  query,
+  originalQuery,
+  ...filters
+}: SearchSubmitArgs) => {
+  const { queries: original, ...rest }: Record<string, unknown> =
+    searchFilterInput(filters);
+  const typed = query.trim();
+  const queries = (() => {
+    if (query === originalQuery) {
+      return original;
+    }
+    return typed === "" ? undefined : [typed];
+  })();
+  const input: Record<string, unknown> =
+    queries === undefined ? rest : { ...rest, queries };
+  return queries === undefined && rest["provision"] === undefined
+    ? ({ type: "needs_query" } as const)
+    : ({ type: "search", input } as const);
+};
+
 export const filterDefaults = (input: Record<string, unknown>) => {
   const country = normalizeCountry(input["country"]);
   if (!country.ok) {

@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",
+      "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
     },

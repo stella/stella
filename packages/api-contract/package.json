@@ -104,6 +104,8 @@
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
     "./mobile-push": "./src/mobile-push.ts",
+    "./timer-activity": "./src/timer-activity.ts",
+    "./timer-activity-messages": "./src/timer-activity-messages.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
     "./oauth-callback-error": "./src/oauth-callback-error.ts",
     "./mobile-updates": "./src/mobile-updates.ts",

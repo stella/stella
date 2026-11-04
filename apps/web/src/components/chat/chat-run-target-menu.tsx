@@ -40,6 +40,7 @@ const UNAVAILABLE_LABEL_KEY = {
   needs_login: "chat.localRun.stateNeedsLogin",
   not_installed: "chat.localRun.stateNotInstalled",
   unsupported: "chat.localRun.stateUnsupported",
+  unavailable: "chat.localRun.stateUnavailable",
   offline: "chat.localRun.stateOffline",
 } as const satisfies Record<UnavailableState, TranslationKey>;
 
@@ -102,6 +103,7 @@ export const ChatRunTargetMenu = ({
       case "needs_login":
       case "not_installed":
       case "unsupported":
+      case "unavailable":
       case "offline":
         return t(UNAVAILABLE_LABEL_KEY[option.state]);
       default:

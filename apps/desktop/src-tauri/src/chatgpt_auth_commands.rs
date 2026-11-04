@@ -46,9 +46,16 @@ pub struct ChatGptDisconnected {
   revocation_confirmed: bool,
 }
 
+/// Where the token broker records its endpoint, beside the connection.
+const BROKER_RECORD: &str = "codex-token-broker";
+
 /// The token broker, started by the first Codex run that needs it.
-#[derive(Default)]
-pub struct ChatGptTokenBroker(tokio::sync::OnceCell<CodexManagedTokenBroker>);
+pub struct ChatGptTokenBroker {
+  broker: tokio::sync::OnceCell<CodexManagedTokenBroker>,
+  /// The broker's endpoint record: every start listens where the last one
+  /// did, so runs kept through a restart still reach it.
+  record: std::path::PathBuf,
+}
 
 fn auth(
   app: &AppHandle,
@@ -146,10 +153,10 @@ pub fn manage(app: &AppHandle) {
     tracing::warn!("ChatGPT connection has no data directory");
     return;
   };
-  let path = data
+  let subscriptions = data
     .join(crate::config::APP_DATA_DIR_NAME)
-    .join("agent-subscriptions")
-    .join("chatgpt.json");
+    .join("agent-subscriptions");
+  let path = subscriptions.join("chatgpt.json");
   let http = match DesktopHttpClient::new(HttpClientOptions {
     timeout: Some(REQUEST_TIMEOUT),
     redirect: reqwest::redirect::Policy::none(),
@@ -189,7 +196,10 @@ pub fn manage(app: &AppHandle) {
     },
   );
   app.manage(auth);
-  app.manage(ChatGptTokenBroker::default());
+  app.manage(ChatGptTokenBroker {
+    broker: tokio::sync::OnceCell::new(),
+    record: subscriptions.join(BROKER_RECORD),
+  });
 }
 
 /// Turning the feature off stops a sign-in in progress; the connection
@@ -218,7 +228,12 @@ pub async fn codex_chatgpt_launch(
   ) else {
     return Err(CodexLaunchError::Broker);
   };
-  crate::codex_managed_token_broker::codex_chatgpt_launch(&auth, &broker.0).await
+  crate::codex_managed_token_broker::codex_chatgpt_launch(
+    &auth,
+    &broker.broker,
+    &broker.record,
+  )
+  .await
 }
 
 #[cfg(test)]

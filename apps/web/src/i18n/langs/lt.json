@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
+      "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma",
       "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
     },

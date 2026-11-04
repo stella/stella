@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
+      "stateUnavailable": "Indisponible pour le moment",
       "stateUnsupported": "Cette version n’est pas prise en charge",
       "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
     },

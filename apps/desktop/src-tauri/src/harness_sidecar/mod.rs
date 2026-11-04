@@ -63,14 +63,14 @@ pub(crate) use protocol::{
   RunAnswer, SidecarRunStart,
 };
 use protocol::{
-  HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProcessRef,
-  Rejection, ResumePoint, SIDECAR_PROTOCOL, SidecarHello, SidecarMessage,
+  HolderSecret, HostHello, HostMessage, MAX_HELD_RUNS, MAX_LINE_BYTES, ProbeFailure,
+  ProcessRef, Rejection, ResumePoint, SIDECAR_PROTOCOL, SidecarHello, SidecarMessage,
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject, LimitedHarness,
-  ReadyHarness, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
-  UnsupportedHarness,
+  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, HarnessUnavailableReason,
+  JsonObject, LimitedHarness, ReadyHarness, RejectReason, RunApproval, RunOutcome,
+  RunRef, RunTokenRefresh, SignedOutHarness, UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -541,7 +541,11 @@ impl HarnessSidecar {
 }
 
 /// The runner's report for a probed harness. A ready harness with no model
-/// it can offer is reported as unsupported at that version.
+/// it can offer is reported as unsupported at that version. A probe that
+/// failed is unsupported only when the sidecar has no adapter for the
+/// harness; a harness that did not start, stopped answering or answered in a
+/// way the sidecar cannot read is unavailable, since nothing says another
+/// version or another try would not run.
 pub(crate) fn harness_report(
   harness: Harness,
   outcome: &ProbeOutcome,
@@ -600,10 +604,37 @@ pub(crate) fn harness_report(
         version: Some(version.clone()),
       })
     }
-    ProbeOutcome::Failed { .. } => HarnessReport::Unsupported(UnsupportedHarness {
-      id: harness,
-      version: None,
-    }),
+    ProbeOutcome::Failed { reason, .. } => match reason {
+      ProbeFailure::Unsupported => HarnessReport::Unsupported(UnsupportedHarness {
+        id: harness,
+        version: None,
+      }),
+      ProbeFailure::HarnessUnavailable => {
+        HarnessReport::Unavailable(UnavailableHarness {
+          id: harness,
+          reason: HarnessUnavailableReason::HarnessFailed,
+        })
+      }
+      ProbeFailure::ProtocolViolation => {
+        HarnessReport::Unavailable(UnavailableHarness {
+          id: harness,
+          reason: HarnessUnavailableReason::UnexpectedAnswer,
+        })
+      }
+    },
+  }
+}
+
+impl SidecarUnavailable {
+  /// Why a `run.start` the holder could not take is refused. Only a run
+  /// beyond the line limit is too large; a full queue or a stopped
+  /// supervisor is this desktop's own capacity, which a later run may find
+  /// again.
+  pub(crate) const fn reject_reason(self) -> RejectReason {
+    match self {
+      Self::Busy | Self::Stopped => RejectReason::AtCapacity,
+      Self::TooLarge => RejectReason::RunTooLarge,
+    }
   }
 }
 

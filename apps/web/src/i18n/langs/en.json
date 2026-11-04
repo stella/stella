@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",
       "stateOffline": "Computer offline",
+      "stateUnavailable": "Not available right now",
       "stateUnsupported": "This version is not supported",
       "waitingForComputer": "Waiting for your computer to reconnect…"
     },

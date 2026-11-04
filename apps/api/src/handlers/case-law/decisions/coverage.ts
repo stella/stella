@@ -32,7 +32,7 @@ import {
 import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
-  readCaseLawCoverageCourtActivityQuery,
+  readCaseLawCourtActivityQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
 import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -61,7 +61,6 @@ import {
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { errorTag } from "@/api/lib/errors/utils";
 import {
   ADAPTER_MANIFESTS,
   type AdapterEdition,
@@ -228,6 +227,29 @@ const provisionStatusReadFailure = failureSink({
 
 const sliceCompletenessReadFailure = failureSink({
   event: "case_law.coverage.slice_completeness_unavailable",
+  expected: [],
+});
+
+// Every part the page answers without is observed with the error that cost it,
+// so the record carries the cause chain and the SQLSTATE rather than the
+// wrapper's tag alone.
+const arrivalsReadFailure = failureSink({
+  event: "case_law.coverage.arrivals_unavailable",
+  expected: [],
+});
+
+const facetsReadFailure = failureSink({
+  event: "case_law.coverage.facets_unavailable",
+  expected: [],
+});
+
+const courtsReadFailure = failureSink({
+  event: "case_law.coverage.courts_unavailable",
+  expected: [],
+});
+
+const coverageReadFailure = failureSink({
+  event: "case_law.coverage.unavailable",
   expected: [],
 });
 
@@ -682,7 +704,10 @@ export const loadCaseLawCoverage = async ({
       // number, and zero is not that: the row degrades to what is stored,
       // which is true whatever the index is doing.
       onPartialFailure("facets");
-      logger.warn("case_law.coverage.facets_unavailable", { country });
+      observeFailure(facets.error, {
+        sink: facetsReadFailure,
+        ctx: { jurisdiction: country },
+      });
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
@@ -704,9 +729,9 @@ export const loadCaseLawCoverage = async ({
     });
     if (Result.isError(courts)) {
       onPartialFailure("courts");
-      logger.warn("case_law.coverage.courts_unavailable", {
-        country,
-        "error.type": errorTag(courts.error),
+      observeFailure(courts.error, {
+        sink: courtsReadFailure,
+        ctx: { jurisdiction: country },
       });
     }
     countries.push({
@@ -859,9 +884,7 @@ export const assembleCaseLawCoverageAnswer = async ({
     // Unlike the hint beside the search box, this page IS the numbers:
     // degrading to zeros would publish a false corpus. It reports that it
     // cannot answer instead.
-    logger.warn("case_law.coverage.unavailable", {
-      "error.type": errorTag(result.error),
-    });
+    observeFailure(result.error, { sink: coverageReadFailure });
     return { answer: COVERAGE_UNAVAILABLE, complete: false };
   }
 
@@ -956,9 +979,7 @@ export const computeCaseLawCoverageAnswer = async (
           catch: coverageError("reading the week's arrivals failed"),
         });
         if (Result.isError(arrivals)) {
-          logger.warn("case_law.coverage.arrivals_unavailable", {
-            "error.type": errorTag(arrivals.error),
-          });
+          observeFailure(arrivals.error, { sink: arrivalsReadFailure });
           return null;
         }
         return arrivals.value;
@@ -986,7 +1007,7 @@ export const computeCaseLawCoverageAnswer = async (
           caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
           caseLawDb(
             async (tx) =>
-              await readCaseLawCoverageCourtActivityQuery(tx, {
+              await readCaseLawCourtActivityQuery(tx, {
                 country,
                 courts: buckets.map(({ value }) => value),
                 excludedSourceIds,
