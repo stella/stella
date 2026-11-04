@@ -14,7 +14,11 @@ import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
-import type { ChatLocalRunHarness } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  type ChatLocalRunComputerEvent,
+  type ChatLocalRunHarness,
+} from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -429,14 +433,14 @@ const finishedRunChunks = ({
 };
 
 /**
- * What an open read does once it has caught up: wait for more, read the final
- * message the run stored with its transition, or end the turn with why the
- * gateway gave the run up.
+ * What an open read does once it has caught up: wait for more (with the
+ * computer there or away), read the final message the run stored with its
+ * transition, or end the turn with why the gateway gave the run up.
  */
 const caughtUpStep = (
   run: DesktopRunnerRunView | null,
 ):
-  | { type: "wait" }
+  | { type: "wait"; computer: ChatLocalRunComputerEvent["status"] }
   | { type: "read" }
   | { type: "fail"; code: LocalRunFailure } => {
   if (run === null) {
@@ -457,9 +461,10 @@ const caughtUpStep = (
       return { type: "read" };
     case "assigned":
     case "running":
+      return { type: "wait", computer: "connected" };
     case "waiting_for_computer":
       // A computer that is away resumes the run when it reconnects.
-      return { type: "wait" };
+      return { type: "wait", computer: "waiting" };
     default:
       run.state satisfies never;
       return panic("Unknown desktop runner run state");
@@ -538,6 +543,32 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
+ * Tells the chat when its computer went away or came back. Only a change is
+ * sent, so a long wait adds one event to the run log, not one per poll; the
+ * run's start goes first when none went out yet.
+ */
+const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
+  /** Whether the turn last told the chat its computer is away. */
+  let away = false;
+  return function* (
+    status: ChatLocalRunComputerEvent["status"],
+  ): Generator<PublicStreamChunk> {
+    const nowAway = status === "waiting";
+    if (nowAway === away) {
+      return;
+    }
+    away = nowAway;
+    yield* start();
+    yield {
+      type: EventType.CUSTOM,
+      name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
+      value: { status } satisfies ChatLocalRunComputerEvent,
+      timestamp: nowMs(),
+    };
+  };
+};
+
+/**
  * The run's chunks after `afterSeq`, until the run finishes or pauses for an
  * approval. A pause records the position, so the resumed turn continues
  * after it. A computer that is away keeps the turn waiting; a run the gateway
@@ -574,6 +605,7 @@ async function* readRunChunks({
       };
     }
   };
+  const computer = computerStatusChunks(start);
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -630,6 +662,10 @@ async function* readRunChunks({
         yield* start();
         yield* storeUnavailable(page.error, rewrite);
         return;
+      }
+      if (page.value.items.length > 0) {
+        // Anything the computer stored since it was away means it is back.
+        yield* computer("connected");
       }
       for (const item of page.value.items) {
         position = item.seq;
@@ -745,6 +781,7 @@ async function* readRunChunks({
         case "read":
           continue;
         case "wait":
+          yield* computer(step.computer);
           await listener.wait({
             timeoutMs: context.pollMs ?? DEFAULT_POLL_MS,
             signal: abortSignal,

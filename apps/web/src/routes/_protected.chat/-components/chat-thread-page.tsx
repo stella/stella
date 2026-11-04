@@ -274,6 +274,7 @@ export const ChatThreadPage = ({
     isGenerating,
     reconnecting,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -766,6 +767,7 @@ export const ChatThreadPage = ({
                         showThinkingIndicator
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
+                        waitingForComputer={waitingForComputer}
                         threadRef={threadRef}
                         userMessageEdit={userMessageEdit}
                         workspaceId={workspaceId}
