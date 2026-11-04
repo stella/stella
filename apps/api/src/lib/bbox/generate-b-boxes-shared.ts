@@ -1,8 +1,6 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result, TaggedError } from "better-result";
 
-import { recordCellText } from "@stll/api-contract/record-cell";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import type {
   DocxFolioJustificationBlock,
@@ -17,6 +15,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/files/utils";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { recordText } from "@/api/lib/records/record-text";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -179,7 +178,7 @@ const getFieldContentAsString = (content?: FieldContent) => {
     case "person":
       return content.name;
     case "record":
-      return recordCellText(content.state);
+      return recordText(content.state);
     case "error":
     case "pending":
     case "unsupported":

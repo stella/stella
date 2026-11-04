@@ -152,7 +152,7 @@ describe("candidate policy", () => {
               }),
             ).toEqual({ type: "needs-review", reason: "selection-required" });
           }
-          expect(recordCellText(state)).toBe("");
+          expect(recordCellText(state, () => "money")).toBe("");
         },
       ),
       { seed: propertySeed() },

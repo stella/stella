@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 
-import { recordCellText } from "@stll/api-contract/record-cell";
-
 import type { FieldContent } from "@/api/db/schema-validators";
+import { recordText } from "@/api/lib/records/record-text";
 
 const exportDateFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -130,7 +129,7 @@ export const formatFieldContent = (
     case "clip":
       return content.url;
     case "record":
-      return recordCellText(content.state);
+      return recordText(content.state, locale);
     case "error":
       return "Error";
     case "pending":

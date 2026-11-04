@@ -1,11 +1,11 @@
 import { panic, Result } from "better-result";
 import { sleep } from "bun";
 
-import { recordCellText } from "@stll/api-contract/record-cell";
 import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/records/record-text";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -85,7 +85,7 @@ const getValueFromInputFields = (
       case "person":
         return field.name;
       case "record":
-        return recordCellText(field.state);
+        return recordText(field.state);
       default:
         throw new Unreachable({
           message: "Field type not matched",

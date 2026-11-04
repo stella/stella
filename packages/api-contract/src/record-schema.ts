@@ -129,7 +129,7 @@ const RECORD_VALUE_SCHEMAS = {
     v.string(),
     v.maxLength(RECORD_LIMITS.urlLength),
     v.url(),
-    v.regex(/^https:\/\//u, "Expected an https URL"),
+    v.regex(/^https:\/\//iu, "Expected an https URL"),
   ),
 } as const satisfies Record<RecordFieldType, v.GenericSchema>;
 

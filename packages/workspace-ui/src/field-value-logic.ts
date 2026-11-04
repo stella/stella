@@ -22,20 +22,23 @@ export const getClipFieldValueLabel = ({
   return url;
 };
 
-const recordScalarText = (value: RecordFieldScalar): string | null => {
-  if (value === null) {
-    return null;
-  }
-  if (typeof value === "object") {
-    return `${value.amountMinor} ${value.currency}`;
-  }
-  return String(value);
-};
+/** Renders a money value; minor units are not a readable amount. */
+export type RecordMoneyText = (money: {
+  amountMinor: number;
+  currency: string;
+}) => string;
 
-const recordText = (record: RecordFieldRecord): string =>
+const recordText = (
+  record: RecordFieldRecord,
+  formatMoney: RecordMoneyText,
+): string =>
   Object.values(record)
-    .map(recordScalarText)
-    .filter((text) => text !== null)
+    .flatMap((value: RecordFieldScalar) => {
+      if (value === null) {
+        return [];
+      }
+      return [typeof value === "object" ? formatMoney(value) : String(value)];
+    })
     .join(" · ");
 
 export type RecordFieldSummary =
@@ -51,6 +54,7 @@ export type RecordFieldSummary =
  */
 export const summarizeRecordField = (
   state: RecordFieldState,
+  formatMoney: RecordMoneyText,
 ): RecordFieldSummary => {
   switch (state.status) {
     case "input-needs-review":
@@ -65,12 +69,12 @@ export const summarizeRecordField = (
   }
   const { result } = state;
   if (result.kind === "one") {
-    return { type: "text", text: recordText(result.record) };
+    return { type: "text", text: recordText(result.record, formatMoney) };
   }
   const selected =
     result.selected === null ? undefined : result.records.at(result.selected);
   if (selected !== undefined) {
-    return { type: "text", text: recordText(selected) };
+    return { type: "text", text: recordText(selected, formatMoney) };
   }
   return result.kind === "candidates"
     ? { type: "choose", count: result.records.length }

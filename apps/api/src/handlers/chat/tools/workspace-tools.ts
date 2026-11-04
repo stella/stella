@@ -2,7 +2,6 @@ import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { recordCellText } from "@stll/api-contract/record-cell";
 import { parsePlainDate } from "@stll/time";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -20,6 +19,7 @@ import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { writeFieldValue } from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { recordText } from "@/api/lib/records/record-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 const refSchema = (description: string) =>
@@ -63,7 +63,7 @@ const formatFieldValue = (content: FieldContent): string => {
     case "clip":
       return "(unsupported)";
     case "record":
-      return recordCellText(content.state);
+      return recordText(content.state);
     default:
       content satisfies never;
       return panic(`Unhandled content: ${String(content)}`);

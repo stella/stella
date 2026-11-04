@@ -86,7 +86,15 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
     case "clip":
       return field.content.url;
     case "record": {
-      const summary = summarizeRecordField(field.content.state);
+      const summary = summarizeRecordField(
+        field.content.state,
+        ({ amountMinor, currency }) =>
+          formatMoneyCents({
+            amountCents: amountMinor,
+            currency,
+            locale: getFormattingLocale(),
+          }),
+      );
       return summary.type === "text" ? summary.text : "";
     }
     case "error":

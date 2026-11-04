@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { recordCellText } from "@stll/api-contract/record-cell";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
@@ -19,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { recordText } from "@/api/lib/records/record-text";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
@@ -79,7 +79,7 @@ export const askPresence = (
       if (content.state.status === "input-needs-review") {
         return "missing";
       }
-      return recordCellText(content.state).length > 0 ? "present" : "absent";
+      return recordText(content.state).length > 0 ? "present" : "absent";
     default: {
       content satisfies never;
       return panic(`Unhandled content: ${String(content)}`);
@@ -126,7 +126,7 @@ export const extractedFromContent = (
     case "person":
       return { value: content.name, text: content.name };
     case "record": {
-      const text = recordCellText(content.state);
+      const text = recordText(content.state);
       return text.length > 0 ? { value: text, text } : null;
     }
     case "file":
@@ -165,7 +165,7 @@ export const askText = (content: FieldContent | undefined): string | null => {
     case "person":
       return content.name;
     case "record": {
-      const text = recordCellText(content.state);
+      const text = recordText(content.state);
       return text.length > 0 ? text : null;
     }
     case "file":

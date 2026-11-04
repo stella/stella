@@ -124,10 +124,15 @@ export const RecordFieldValue = ({
   variant: FieldValueVariant;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   if (variant === "kanban") {
     return null;
   }
-  const summary = summarizeRecordField(content.state);
+  const summary = summarizeRecordField(
+    content.state,
+    ({ amountMinor, currency }) =>
+      formatMoneyCents({ amountCents: amountMinor, currency, locale }),
+  );
   const className =
     variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
   switch (summary.type) {

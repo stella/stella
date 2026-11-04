@@ -150,20 +150,23 @@ export type RecordCellState = v.InferOutput<typeof recordCellStateSchema>;
 
 type StoredRecord = Extract<RecordResult, { kind: "one" }>["record"];
 
-const scalarText = (value: StoredRecord[string]): string | null => {
-  if (value === null) {
-    return null;
-  }
-  if (typeof value === "object") {
-    return `${value.amountMinor} ${value.currency}`;
-  }
-  return String(value);
-};
+/** Renders a money value; minor units are not a readable amount. */
+export type RecordMoneyText = (money: {
+  amountMinor: number;
+  currency: string;
+}) => string;
 
-const recordText = (record: StoredRecord): string =>
+const recordText = (
+  record: StoredRecord,
+  formatMoney: RecordMoneyText,
+): string =>
   Object.values(record)
-    .map(scalarText)
-    .filter((text) => text !== null)
+    .flatMap((value) => {
+      if (value === null) {
+        return [];
+      }
+      return [typeof value === "object" ? formatMoney(value) : String(value)];
+    })
     .join("; ");
 
 /**
@@ -171,7 +174,10 @@ const recordText = (record: StoredRecord): string =>
  * every record a reader would take as the cell's answer. An unselected
  * candidate list has no answer yet, so it has no text.
  */
-export const recordCellText = (state: RecordCellState): string => {
+export const recordCellText = (
+  state: RecordCellState,
+  formatMoney: RecordMoneyText,
+): string => {
   switch (state.status) {
     case "input-needs-review":
     case "not-found":
@@ -185,15 +191,17 @@ export const recordCellText = (state: RecordCellState): string => {
   const { result } = state;
   switch (result.kind) {
     case "one":
-      return recordText(result.record);
+      return recordText(result.record, formatMoney);
     case "many":
-      return result.records.map(recordText).join(" | ");
+      return result.records
+        .map((record) => recordText(record, formatMoney))
+        .join(" | ");
     case "candidates": {
       const selected =
         result.selected === null
           ? undefined
           : result.records.at(result.selected);
-      return selected === undefined ? "" : recordText(selected);
+      return selected === undefined ? "" : recordText(selected, formatMoney);
     }
     default:
       result satisfies never;

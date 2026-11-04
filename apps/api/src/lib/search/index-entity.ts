@@ -3,7 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { documentReferenceBase } from "@stll/api-contract";
-import { recordCellText } from "@stll/api-contract/record-cell";
 import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
@@ -20,6 +19,7 @@ import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
+import { recordText } from "@/api/lib/records/record-text";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
@@ -108,7 +108,7 @@ const extractFieldText = (content: FieldContent): string => {
     case "person":
       return content.name;
     case "record":
-      return recordCellText(content.state);
+      return recordText(content.state);
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":

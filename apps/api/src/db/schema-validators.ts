@@ -234,6 +234,10 @@ export const scalarPropertyContentSchema = v.union(
   scalarPropertyContentSchemas,
 );
 
+export type ScalarPropertyContent = v.InferOutput<
+  typeof scalarPropertyContentSchema
+>;
+
 export type PropertyContent = v.InferOutput<typeof propertyContentSchema>;
 
 export const isAiExtractablePropertyContent = (
