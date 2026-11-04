@@ -96,7 +96,7 @@ describe("record schema", () => {
     expect(v.is(schema, companyRecord)).toBe(false);
   });
 
-  test("decimals are canonical strings", () => {
+  test("canonical decimals survive a numeric round trip unchanged", () => {
     assertProperty(
       "canonical decimals survive a numeric round trip unchanged",
       fc.property(
@@ -123,7 +123,7 @@ describe("record schema", () => {
 });
 
 describe("candidate policy", () => {
-  test("an unselected candidate list never projects a value", () => {
+  test("unselected candidates always need review for every select", () => {
     assertProperty(
       "unselected candidates always need review for every select",
       fc.property(

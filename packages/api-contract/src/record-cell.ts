@@ -31,7 +31,7 @@ export type RecordProvenance = v.InferOutput<typeof recordProvenanceSchema>;
 
 const recordScalarShapeSchema = v.union([
   v.pipe(v.string(), v.maxLength(RECORD_LIMITS.textValueLength)),
-  v.pipe(v.number(), v.finite()),
+  v.number(),
   v.boolean(),
   v.strictObject({
     amountMinor: v.pipe(v.number(), v.safeInteger()),
