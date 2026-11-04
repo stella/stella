@@ -616,6 +616,22 @@ const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
   await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
 };
 
+/**
+ * The coverage refresh reads every source's counts, so a fixture for another
+ * read's budget leaves this measurement's clone before it starts.
+ */
+const removeCourtCatalogPopulation = async (database: GatedTestDb) => {
+  await database.execute(
+    sql`DELETE FROM case_law_population_counts WHERE country = ${COURT_CATALOG_COUNTRY}`,
+  );
+  for (const sourceId of COURT_CATALOG_SOURCE_IDS) {
+    // db-await-in-loop: three fixed sources, after the counts that reference them.
+    await database.execute(
+      sql`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`,
+    );
+  }
+};
+
 export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
   await withSeededTableMaintenance(database, async () => {
     await database.insert(corpusIndexGenerations).values([
@@ -995,6 +1011,7 @@ export const prepareCoverageRefreshMeasurement = async (
   options: SeedSitemapReadBudgetOptions,
 ) => {
   const { database } = options;
+  await removeCourtCatalogPopulation(database);
   await seedCoverageDecisions(options);
   const found = await readCoverageRefreshState(database);
   await replaceCoverageRefreshState(
