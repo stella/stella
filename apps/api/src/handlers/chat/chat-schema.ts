@@ -82,6 +82,10 @@ import {
 } from "@/api/lib/chat/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  questionInterruptOf,
+  questionReplyOf,
+} from "@/api/lib/desktop-runner/chunk";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { LIMITS } from "@/api/lib/limits";
@@ -675,6 +679,7 @@ export const validateMessage = async ({
       persistedMessage,
       refRegistry,
       resume,
+      toolCallOwnership,
       tools,
     });
     if (Result.isError(partsResult)) {
@@ -822,12 +827,14 @@ const validateIncomingChatParts = ({
   persistedMessage,
   refRegistry,
   resume,
+  toolCallOwnership,
   tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
   refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
+  toolCallOwnership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
@@ -865,6 +872,7 @@ const validateIncomingChatParts = ({
       persistedMessage: canonicalMessage,
       refRegistry,
       resume,
+      toolCallOwnership,
       tools,
     });
     if (Result.isError(continuationResult)) {
@@ -953,7 +961,11 @@ const applyValidatedContinuationTransitions = ({
  * A client continuation may supply the result of an awaited interaction, but it
  * must not change which call was made or with what input: id, name, and input
  * value stay server-authored, and only output, state, and the approval response
- * may move.
+ * may move. A harness question's call never moves: its answer is the resume
+ * payload, checked against the questions its interrupt asked. Every awaited
+ * call is answered only by a turn of its own executor: a call a harness on the
+ * member's computer holds is answered only on that computer, a cloud call only
+ * by a cloud turn.
  *
  * How the input is spelled is not part of that property. The persisted v3 part
  * keeps only the adapter-normalized input and recomputes `arguments` from it,
@@ -971,12 +983,14 @@ const validateContinuationToolCallIntegrity = ({
   persistedMessage,
   refRegistry,
   resume,
+  toolCallOwnership,
   tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedMessage: ChatMessage;
   refRegistry: ChatRefRegistry;
   resume: AgUiResume | undefined;
+  toolCallOwnership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
@@ -1030,16 +1044,52 @@ const validateContinuationToolCallIntegrity = ({
   ) {
     return invalidContinuationToolCall();
   }
+  if (
+    awaitedInteractions.some(({ toolCallId }) => {
+      const call = canonicalCallsById.get(toolCallId);
+      return (
+        call === undefined ||
+        (isHarnessChatToolCall(call) ? "harness" : "cloud") !==
+          toolCallOwnership
+      );
+    }) ||
+    // A harness question is answered only through its interrupt.
+    (resume === undefined &&
+      awaitedInteractions.some(({ type }) => type === "harness-question"))
+  ) {
+    return invalidContinuationToolCall();
+  }
   if (resume !== undefined) {
+    const pendingInterrupts =
+      persistedMessage.metadata?.resumeSnapshot?.pendingInterrupts ?? [];
     const awaitedInterrupts: {
       interaction: (typeof awaitedInteractions)[number];
       interruptId: string;
     }[] = [];
+    const harnessQuestions = new Map<
+      string,
+      Parameters<typeof questionReplyOf>[1]
+    >();
     for (const awaited of awaitedInteractions) {
       const call = canonicalCalls.find(
         (candidate) => candidate.id === awaited.toolCallId,
       );
       if (call === undefined) {
+        continue;
+      }
+      if (awaited.type === "harness-question") {
+        // The question the stored turn paused on, from its server-owned
+        // resume snapshot: the request id an answer names and the questions
+        // the answer is checked against.
+        const pause = questionInterruptOf(pendingInterrupts);
+        if (pause.type !== "question" || pause.toolCallId !== call.id) {
+          continue;
+        }
+        awaitedInterrupts.push({
+          interaction: awaited,
+          interruptId: pause.requestId,
+        });
+        harnessQuestions.set(pause.requestId, pause.questions);
         continue;
       }
       if (awaited.type === "approval") {
@@ -1088,6 +1138,14 @@ const validateContinuationToolCallIntegrity = ({
         );
         if (resolution.status === "cancelled") {
           return transition !== undefined;
+        }
+        if (awaited.interaction.type === "harness-question") {
+          const questions = harnessQuestions.get(resolution.interruptId);
+          return (
+            transition !== undefined ||
+            questions === undefined ||
+            questionReplyOf(resolution.payload, questions).type === "refused"
+          );
         }
         if (transition === undefined) {
           return true;

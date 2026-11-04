@@ -1,3 +1,0 @@
-{
-  "add-constraint": "The widened command kind and event request CHECKs are added NOT VALID without scanning existing desktop runner rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released."
-}

@@ -218,12 +218,22 @@ const TURN_POSITION_NAMES = Object.keys(TURN_POSITIONS).filter(
   (position): position is TurnPosition => position in TURN_POSITIONS,
 );
 
+/** An interaction whose answer no model response continues. */
+type NotAPosition = { notAPosition: string };
+
 /** Every interaction a turn can wait on, by the position that answers it. */
 export const INTERACTION_POSITIONS = {
   "ask-user": ["after-ask-user"],
   approval: ["after-approval", "after-denial"],
   "client-tool": ["after-client-tool"],
-} as const satisfies Record<ChatTurnInteractionType, readonly TurnPosition[]>;
+  "harness-question": {
+    notAPosition:
+      "Answered on the computer a local turn runs on: the continuation reads the harness's run (`local-run-chunks.ts`, covered by `gateway.db.test.ts`), not a model response.",
+  },
+} as const satisfies Record<
+  ChatTurnInteractionType,
+  NotAPosition | readonly TurnPosition[]
+>;
 
 // --- Surfaces -----------------------------------------------------------------
 

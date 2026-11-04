@@ -9,16 +9,12 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { questionAnswersRefusal } from "@stll/agent-engine";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   CHAT_TOOL_EXECUTOR,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
 } from "@stll/api-contract/chat";
-import {
-  type ChatLocalRunHarness,
-  chatLocalRunQuestionReplySchema,
-} from "@stll/api-contract/chat-run-target";
+import type { ChatLocalRunHarness } from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -32,7 +28,10 @@ import { Temporal } from "@stll/time";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
-import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
+import {
+  questionPauseOf,
+  questionReplyOf,
+} from "@/api/lib/desktop-runner/chunk";
 import type {
   DesktopRunnerControl,
   DesktopRunnerControlError,
@@ -870,9 +869,9 @@ const queuedCommandFailure = (
 };
 
 /**
- * An answer to a blocking question that does not answer it: a payload that
- * is not `chatLocalRunQuestionReplySchema`, or answers the harness would
- * refuse. The reason names question ids only, never what was answered.
+ * An answer to a blocking question that does not answer it
+ * (`questionReplyOf`). The reason names question ids only, never what was
+ * answered.
  */
 class LocalRunAnswerRefused extends TaggedError("LocalRunAnswerRefused")<{
   message: string;
@@ -882,29 +881,6 @@ const LOCAL_RUN_ANSWER_SINK = failureSink({
   event: "chat.local_run_answer_refused",
   expected: [],
 });
-
-/** The answers a resume gives the paused question, or why they are refused. */
-const questionAnswersOf = (
-  item: RunAgentResumeItem,
-  questions: Parameters<typeof questionAnswersRefusal>[0],
-):
-  | { type: "answers"; answers: Record<string, string[]> }
-  | { type: "refused"; reason: string } => {
-  const reply = v.safeParse(chatLocalRunQuestionReplySchema, item.payload);
-  if (!reply.success) {
-    // The issue paths name the payload's fields, never its values.
-    return {
-      type: "refused",
-      reason: `The answer is not a question reply: ${reply.issues
-        .map((issue) => v.getDotPath(issue) ?? "payload")
-        .join(", ")}`,
-    };
-  }
-  const refusal = questionAnswersRefusal(questions, reply.output.answers);
-  return refusal === null
-    ? { type: "answers", answers: reply.output.answers }
-    : { type: "refused", reason: refusal };
-};
 
 /** What the paused run receives for the member's answer. */
 type ResumeCommand =
@@ -955,7 +931,7 @@ const answerPausedRun = async (
       if (pause?.type !== "question" || pause.requestId !== item.interruptId) {
         return panic("A stored question pause no longer reads as one");
       }
-      const answered = questionAnswersOf(item, pause.questions);
+      const answered = questionReplyOf(item.payload, pause.questions);
       if (answered.type === "refused") {
         return Result.ok({ type: "refused", reason: answered.reason });
       }

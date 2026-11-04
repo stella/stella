@@ -49,6 +49,7 @@ export {
 } from "./harness/question-answers";
 export {
   HARNESS_CONTINUATION_EVENT,
+  HARNESS_QUESTION_TOOL,
   harnessEventsToChunks,
 } from "./harness/stream-chunks";
 export type {

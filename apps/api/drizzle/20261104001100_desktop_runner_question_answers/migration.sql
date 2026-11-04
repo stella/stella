@@ -14,4 +14,12 @@ ALTER TABLE "desktop_runner_commands" ADD CONSTRAINT "desktop_runner_commands_ki
 -- squawk-ignore ban-drop-constraint
 ALTER TABLE "desktop_runner_events" DROP CONSTRAINT IF EXISTS "desktop_runner_events_request_check";--> statement-breakpoint
 ALTER TABLE "desktop_runner_events" ADD CONSTRAINT "desktop_runner_events_request_check"
-  CHECK (("type" <> 'run.approval_request' OR "request_id" IS NOT NULL) AND ("type" <> 'run.finished' OR "request_id" IS NULL)) NOT VALID;
+  CHECK (("type" <> 'run.approval_request' OR "request_id" IS NOT NULL) AND ("type" <> 'run.finished' OR "request_id" IS NULL)) NOT VALID;--> statement-breakpoint
+-- A chat turn can now wait on a local run's blocking question, a turn
+-- interaction of its own ('harness-question'): the answer is the resume
+-- payload of the question's interrupt, not a change to the call.
+-- stella-migration-safety: reviewed drop-constraint - the interaction type check is immediately replaced by a wider NOT VALID check that also accepts harness-question; every existing row still satisfies it, and it is validated online.
+-- squawk-ignore ban-drop-constraint
+ALTER TABLE "chat_turns" DROP CONSTRAINT IF EXISTS "chat_turns_interaction_values_check";--> statement-breakpoint
+ALTER TABLE "chat_turns" ADD CONSTRAINT "chat_turns_interaction_values_check"
+  CHECK ("interaction_type" IS NULL OR "interaction_type" IN ('ask-user', 'approval', 'client-tool', 'harness-question')) NOT VALID;
