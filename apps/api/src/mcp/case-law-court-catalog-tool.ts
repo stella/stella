@@ -28,7 +28,7 @@ import {
   LIST_CASE_LAW_COURTS_TOOL,
   listCaseLawCourtsArgsSchema,
 } from "@/api/mcp/case-law-court-catalog-input";
-import { storedCourtIdentities } from "@/api/mcp/case-law-court-filter";
+import { storedCourtCatalog } from "@/api/mcp/case-law-court-filter";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
@@ -91,12 +91,19 @@ export const courtCatalogPage = ({
   nextCursor: string | null;
   tierOf: (court: string) => CourtTierLabel;
 }): CourtCatalog => {
-  const entries = storedCourtIdentities(country, courts).map(
-    ({ spellings: [value, ...aliases] }) => ({
-      value,
-      aliases: aliases.toSorted(compareCodeUnit),
-      tier: tierOf(value),
-    }),
+  // A directory court the page holds no spelling of is not on this page.
+  const entries = [
+    ...storedCourtCatalog(country, courts).identities.values(),
+  ].flatMap(({ spellings: [value, ...aliases] }) =>
+    value === undefined
+      ? []
+      : [
+          {
+            value,
+            aliases: aliases.toSorted(compareCodeUnit),
+            tier: tierOf(value),
+          },
+        ],
   );
   return {
     country,
