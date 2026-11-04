@@ -461,9 +461,10 @@ const PropertyComposerBody = ({
   const { initialContentType, editingCurrency } =
     composerContentOf(editingProperty);
   // An existing money column keeps its chip for everyone; offering money for
-  // a new AI column is the table-analysis beta.
+  // an AI column is the table-analysis beta, so only the AI composer asks.
   const tableAnalysisEnabled = useCallerFeatureEnabled(
     CALLER_FEATURE.tableAnalysis,
+    { enabled: showAiSections },
   );
   const offerMoney = tableAnalysisEnabled || initialContentType === "money";
   const initialPromptHtml =
