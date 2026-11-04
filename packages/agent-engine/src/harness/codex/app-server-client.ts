@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import type { Detached, HarnessExit } from "../turn-lifecycle";
 import { createLineReader } from "./json-lines";
 import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
 
@@ -21,26 +22,18 @@ class AppServerRequestError extends TaggedError("AppServerRequestError")<{
   message: string;
 }> {}
 
-export type AppServerExit = { exitCode: number | null; signal: string | null };
-
 export type AppServerHandlers = {
   notification: (method: string, params: unknown) => void;
   request: (id: CodexRequestId, method: string, params: unknown) => void;
   /** The peer wrote something that is not a protocol message. */
   violation: (message: string) => void;
-  exit: (exit: AppServerExit) => void;
+  exit: (exit: HarnessExit) => void;
 };
 
 export type AppServerLaunch = {
   executable: string;
   args: readonly string[];
 };
-
-/** Fire-and-forget work whose rejection goes to the caller's error sink. */
-export type Detached = (
-  operation: unknown,
-  context: `${string}.${string}`,
-) => void;
 
 type AppServerDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
@@ -69,11 +62,11 @@ export type AppServerClient = {
   /** The server process's id. */
   pid: number;
   /** Settles when the process has exited, however that happened. */
-  exited: Promise<AppServerExit>;
+  exited: Promise<HarnessExit>;
   /** Ends stdin, which asks the server to flush its state and exit. */
   closeInput: () => void;
   /** SIGTERM, then SIGKILL once the termination deadline passes. */
-  kill: () => Promise<AppServerExit>;
+  kill: () => Promise<HarnessExit>;
 };
 
 type Pending = (result: Result<unknown, AppServerRequestError>) => void;
@@ -202,7 +195,7 @@ export const startAppServer = ({
     lines.end();
   };
 
-  const exited = (async (): Promise<AppServerExit> => {
+  const exited = (async (): Promise<HarnessExit> => {
     await Promise.allSettled([readStdout(), child.exited]);
     state.closed = true;
     for (const settle of pending.values()) {

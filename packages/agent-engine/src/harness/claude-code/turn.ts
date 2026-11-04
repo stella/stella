@@ -2,12 +2,11 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
-import {
-  type HarnessInteractionResponse,
+import type {
+  HarnessInteractionResponse,
   HarnessRespondError,
-  type HarnessTurn,
+  HarnessTurn,
 } from "../adapter";
-import { createEventQueue } from "../event-queue";
 import type {
   HarnessApprovalOption,
   HarnessContinuation,
@@ -19,12 +18,13 @@ import type {
 } from "../events";
 import { questionAnswersRefusal } from "../question-answers";
 import { unsupportedItem } from "../tool-parts";
-import type {
-  ClaudeCliClient,
-  ClaudeCliExit,
-  ClaudeCliHandlers,
-  Detached,
-} from "./cli-client";
+import {
+  type Detached,
+  HarnessTurnLifecycle,
+  respondError,
+  settlesWithin,
+} from "../turn-lifecycle";
+import type { ClaudeCliClient, ClaudeCliHandlers } from "./cli-client";
 import { blockingReset, classifyResultFailure } from "./errors";
 import {
   approvalKindForTool,
@@ -164,12 +164,6 @@ const usageOf = (result: ClaudeResultMessage): HarnessUsage | null => {
   };
 };
 
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
-
-const respondError = (reason: HarnessRespondError["reason"], message: string) =>
-  Result.err(new HarnessRespondError({ reason, message }));
-
 /** The `can_use_tool` reply for an answer, or why the answer does not fit. */
 const interactionResult = (
   pending: PendingInteraction,
@@ -241,13 +235,7 @@ type ClaudeCodeTurnSessionOptions = {
 };
 
 export class ClaudeCodeTurnSession {
-  private readonly queue = createEventQueue<HarnessEvent>();
-  private readonly terminal = Promise.withResolvers<undefined>();
-  private readonly gracePeriodMs: number;
-  private client: ClaudeCliClient | null = null;
   private began = false;
-  private ended = false;
-  private interrupting = false;
   private assistantError: string | null = null;
   private readonly rejectedResets: Temporal.Instant[] = [];
   private readonly early: EarlyMessage[] = [];
@@ -263,7 +251,7 @@ export class ClaudeCodeTurnSession {
   private reasoningBlocks = 0;
   private unsupportedItems = 0;
 
-  private readonly detached: Detached;
+  private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
 
   constructor({
@@ -271,8 +259,11 @@ export class ClaudeCodeTurnSession {
     detached,
     stellaServer,
   }: ClaudeCodeTurnSessionOptions) {
-    this.gracePeriodMs = gracePeriodMs;
-    this.detached = detached;
+    this.lifecycle = new HarnessTurnLifecycle({
+      gracePeriodMs,
+      detached,
+      name: "claude-turn",
+    });
     this.stellaServer = stellaServer;
   }
 
@@ -310,12 +301,16 @@ export class ClaudeCodeTurnSession {
       this.violation(message);
     },
     exit: (exit) => {
-      this.exited(exit);
+      this.lifecycle.exited(exit);
     },
   };
 
   attach(client: ClaudeCliClient) {
-    this.client = client;
+    this.lifecycle.attach(client);
+  }
+
+  private get client(): ClaudeCliClient | null {
+    return this.lifecycle.client;
   }
 
   /** The session is open: announce it and release held messages. */
@@ -353,70 +348,22 @@ export class ClaudeCodeTurnSession {
 
   /** The turn never started; nothing more is emitted. */
   abandon() {
-    this.ended = true;
-    this.queue.close();
+    this.lifecycle.abandon();
   }
 
   turn(): HarnessTurn {
-    return {
-      events: this.queue.items,
-      respond: async (response) =>
-        await Promise.resolve(this.respond(response)),
+    return this.lifecycle.turn({
+      respond: (response) => this.respond(response),
       interrupt: async () => this.interrupt(),
-      dispose: async () => this.dispose(),
-    };
+    });
   }
 
   private emit(event: HarnessEvent) {
-    if (this.ended) {
-      return;
-    }
-    this.queue.push(event);
-    if (
-      event.type === "turn.completed" ||
-      event.type === "turn.interrupted" ||
-      event.type === "turn.failed"
-    ) {
-      this.ended = true;
-      this.queue.close();
-      this.terminal.resolve(undefined);
-      this.detached(this.shutdown(), "claude-turn.shutdown");
-    }
+    this.lifecycle.emit(event);
   }
 
   private violation(message: string) {
-    this.emit({
-      type: "turn.failed",
-      failure: { type: "protocol_violation", message },
-    });
-  }
-
-  private exited({ exitCode, signal }: ClaudeCliExit) {
-    if (this.interrupting) {
-      this.emit({ type: "turn.interrupted" });
-      return;
-    }
-    this.emit({
-      type: "turn.failed",
-      failure: {
-        type: "harness_exited",
-        message: "The harness stopped before the turn finished.",
-        exitCode,
-        signal,
-      },
-    });
-  }
-
-  /** Ask the process to exit cleanly so its session is saved, then kill it. */
-  private async shutdown() {
-    const client = this.client;
-    if (client === null) {
-      return;
-    }
-    client.closeInput();
-    if (!(await settlesWithin(client.exited, this.gracePeriodMs))) {
-      await client.kill();
-    }
+    this.lifecycle.violation(message);
   }
 
   private parse<TSchema extends v.GenericSchema>(
@@ -688,7 +635,7 @@ export class ClaudeCodeTurnSession {
       return;
     }
     // Whatever the CLI reports after an interrupt, the user stopped the turn.
-    if (this.interrupting) {
+    if (this.lifecycle.interrupting) {
       this.emit({ type: "turn.interrupted" });
       return;
     }
@@ -842,7 +789,8 @@ export class ClaudeCodeTurnSession {
     if (interaction === undefined) {
       return respondError("unknown_request", "No pending request has this id.");
     }
-    if (this.ended || this.client === null) {
+    const client = this.client;
+    if (this.lifecycle.ended || client === null) {
       return respondError("turn_ended", "The turn has already ended.");
     }
     const result = interactionResult(interaction, response);
@@ -850,29 +798,20 @@ export class ClaudeCodeTurnSession {
       return respondError("invalid_response", result.error);
     }
     // The call's own result follows from the harness once it has run.
-    this.client.respond(interaction.controlId, result.value);
+    client.respond(interaction.controlId, result.value);
     this.settle(requestId);
     return Result.ok();
   }
 
   private async interrupt() {
-    const client = this.client;
-    if (this.ended || this.interrupting || client === null) {
-      return;
-    }
-    this.interrupting = true;
-    await settlesWithin(client.request("interrupt"), this.gracePeriodMs);
-    if (!(await settlesWithin(this.terminal.promise, this.gracePeriodMs))) {
-      // The harness did not confirm; the shutdown that follows kills it.
-      this.emit({ type: "turn.interrupted" });
-    }
-  }
-
-  private async dispose() {
-    if (!this.ended) {
-      this.interrupting = true;
-      this.emit({ type: "turn.interrupted" });
-    }
-    await this.shutdown();
+    await this.lifecycle.interrupt(async (client) => {
+      // The CLI confirms an interrupt with its result, not with this reply;
+      // the lifecycle waits for that result either way.
+      await settlesWithin(
+        client.request("interrupt"),
+        this.lifecycle.gracePeriodMs,
+      );
+      return true;
+    });
   }
 }

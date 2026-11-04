@@ -28,8 +28,8 @@ import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
  *   another runtime folder still finds it;
  * - `holder.log`: the holder's log, rotated once at `MAX_LOG_BYTES`.
  *
- * The secret and the endpoint file are written atomically and removed on
- * exit. The endpoint is the path the desktop passes, never derived here: a
+ * The secret and the endpoint file are written atomically, the endpoint
+ * first, and removed on exit. The endpoint is the path the desktop passes, never derived here: a
  * Unix socket in the user's short runtime folder (Windows: a named pipe). A
  * socket path must fit `sun_path`, so a longer one is refused rather than
  * shortened.
@@ -252,8 +252,9 @@ export const startHolderServer = async (
     return owned;
   }
   const secret = randomBytes(SECRET_BYTES).toString("hex");
-  writePrivate(dir, HOLDER_SECRET_FILE, secret);
+  // The secret last: once it exists, so does the endpoint record.
   writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
+  writePrivate(dir, HOLDER_SECRET_FILE, secret);
   const { promise: exited, resolve } = Promise.withResolvers<null>();
   const sockets = new Set<net.Socket>();
   /** Flush what was written, then drop the connection. */

@@ -44,12 +44,19 @@ import {
   nextSuggestion,
   segmentTitles,
 } from "./activity-calendar-logic";
-import type { ActivitySuggestion } from "./activity-calendar-logic";
+import type {
+  ActivityBlock,
+  ActivitySuggestion,
+} from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivitySuggestionCard } from "./ActivitySuggestionCard";
-import type { DraftAssistView, SuggestionEdit } from "./ActivitySuggestionCard";
+import type {
+  DraftAssistView,
+  SuggestionEdit,
+  SuggestionTimes,
+} from "./ActivitySuggestionCard";
 import {
   cardDraftEntry,
   cardDraftFrom,
@@ -86,11 +93,14 @@ export type ActivityReviewStatus = Submission["type"];
 type DraftedEntries = ActivityDaySnapshot["draftedEntries"];
 
 /** Which suggestion's card is open: a matched group, or a range the user
- * selected in the Activity column. */
+ * selected in the Time entries column. A range keeps the id it opened with
+ * while the user moves it, so the card keeps what was typed into it. */
 type OpenCard =
   | { type: "closed" }
   | { id: string; type: "suggestion" }
-  | { range: DayCalendarRange; type: "range" };
+  | { id: string; range: DayCalendarRange; type: "range" };
+
+type RangeCard = Extract<OpenCard, { type: "range" }>;
 
 /** View preferences that outlive one day: the grid. */
 export type ActivityCalendarPreferences = {
@@ -319,6 +329,13 @@ export const ActivityDayCalendar = ({
     captureDetails: snapshot.captureDetails,
   });
 
+  const rangeSuggestion = ({ id, range }: RangeCard) =>
+    manualSuggestion({
+      drafted: draftedEntries,
+      id,
+      range,
+      segments: day.segments,
+    });
   const openSuggestion = (() => {
     switch (openCard.type) {
       case "closed":
@@ -326,7 +343,7 @@ export const ActivityDayCalendar = ({
       case "suggestion":
         return suggestions.find(({ id }) => id === openCard.id) ?? null;
       case "range":
-        return manualSuggestion(day.segments, openCard.range);
+        return rangeSuggestion(openCard);
       default:
         openCard satisfies never;
         return panic("Unhandled activity card");
@@ -450,6 +467,12 @@ export const ActivityDayCalendar = ({
       <ActivitySuggestionCard
         key={openSuggestion.id}
         suggestion={openSuggestion}
+        times={cardTimes({
+          date: snapshot.date,
+          openCard,
+          setOpenCard,
+          timeZone,
+        })}
         edit={narratives.editFor(openSuggestion)}
         candidates={matters}
         editable={editable}
@@ -539,16 +562,16 @@ export const ActivityDayCalendar = ({
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
             ...(snapshot.date === snapshot.today ? [nowMs] : []),
+            // A range set on its card stays in view wherever it is moved.
+            ...rangeEdges(openCard),
           ],
         })}
         locale={locale}
         nowMs={nowMs}
         onSelectRange={(columnId, range) => {
           if (columnId === ENTRIES_COLUMN_ID) {
-            open(
-              { range, type: "range" },
-              manualSuggestion(day.segments, range),
-            );
+            const selected = rangeCard(range);
+            open(selected, rangeSuggestion(selected));
           }
         }}
         selection={
@@ -569,6 +592,43 @@ export const ActivityDayCalendar = ({
     </div>
   );
 };
+
+/** The card for a range selected on the grid, named by the range it opened
+ * with. */
+const rangeCard = (range: DayCalendarRange): RangeCard => ({
+  id: `manual:${String(range.startMs)}:${String(range.endMs)}`,
+  range,
+  type: "range",
+});
+
+const rangeEdges = (openCard: OpenCard) =>
+  openCard.type === "range"
+    ? [openCard.range.startMs, openCard.range.endMs]
+    : [];
+
+/** A selected range is set on its card; a matched suggestion's time is what
+ * was recorded. */
+const cardTimes = ({
+  date,
+  openCard,
+  setOpenCard,
+  timeZone,
+}: {
+  date: string;
+  openCard: OpenCard;
+  setOpenCard: (card: OpenCard) => void;
+  timeZone: string;
+}): SuggestionTimes =>
+  openCard.type === "range"
+    ? {
+        date,
+        onRangeChange: (range) =>
+          setOpenCard({ id: openCard.id, range, type: "range" }),
+        range: openCard.range,
+        timeZone,
+        type: "selected",
+      }
+    : { type: "recorded" };
 
 type CalendarColumnsOptions = {
   segments: readonly MatchedSegment[];
@@ -636,23 +696,22 @@ function useCalendarColumns({
           0,
         ),
       );
-      const onlyApp = block.apps.length === 1 ? block.sources.at(0) : undefined;
-      const onCall =
-        onlyApp !== undefined && block.sources.every(({ call }) => call);
-      // A block on one app names the app and shows its icon; one that moved
-      // between apps lists them under its topic.
+      // A block is named by the topic that sets its colour: the app its topic
+      // was held in, with its icon, or a call there; time it took in from
+      // other apps is listed under it, never named.
+      const { topicApp } = block;
       let appName: string | null = null;
       let appIcon: ReactNode = null;
-      if (onlyApp !== undefined && onCall) {
-        appName = t("callIn", { app: onlyApp.appName });
+      if (topicApp?.call === true) {
+        appName = t("callIn", { app: topicApp.appName });
         appIcon = (
           <PhoneIcon aria-hidden="true" className="size-3.5 shrink-0" />
         );
-      } else if (onlyApp !== undefined) {
-        appName = onlyApp.appName;
+      } else if (topicApp !== null) {
+        appName = topicApp.appName;
         appIcon = (
           <ActivitySourceIcon
-            appIdentifier={onlyApp.appIdentifier}
+            appIdentifier={topicApp.appIdentifier}
             sourceAppVisuals={sourceAppVisuals}
           />
         );
@@ -664,9 +723,10 @@ function useCalendarColumns({
       const label = [topic, duration, detail]
         .filter((part) => part !== null)
         .join(" · ");
-      const switching = block.matter === null && onlyApp === undefined;
+      const switching = block.matter === null && block.topic === null;
       // The apps are the caption unless the block is named by its one app.
-      const namedByApp = block.matter === null && onlyApp !== undefined;
+      const namedByApp =
+        block.matter === null && topicApp !== null && block.apps.length === 1;
       return {
         accessibleLabel: switching
           ? t("mixedActivityLabel", { apps, range })
@@ -674,9 +734,10 @@ function useCalendarColumns({
               .filter((part) => part !== null)
               .join(" · ")}, ${range}`,
         caption: namedByApp ? range : apps,
-        endMs: block.endMs,
+        endMs: block.drawnEndMs,
         id: block.id,
-        kind: switching ? "mixed" : "segment",
+        // Time no one topic held reads as quick switching, in the quiet tone.
+        kind: block.topic === null ? "mixed" : "segment",
         startMs: block.startMs,
         title: (
           <span className="flex min-w-0 items-center gap-1.5">
@@ -684,7 +745,7 @@ function useCalendarColumns({
             <bdi className="truncate">{label}</bdi>
           </span>
         ),
-        tone: matterTone(block.matter),
+        tone: activityTone(block),
         tooltip,
       };
     },
@@ -767,6 +828,19 @@ function useCalendarColumns({
       type: "blocks",
     },
   ];
+}
+
+/** A matter's time in its colour; other time in its topic's, so one document
+ * reads alike all day; time no one topic held in the neutral tone. */
+function activityTone(
+  block: Pick<ActivityBlock, "matter" | "topic">,
+): DayCalendarTone {
+  if (block.matter !== null) {
+    return matterTone(block.matter);
+  }
+  return block.topic === null
+    ? { type: "neutral" }
+    : { key: block.topic, type: "topic" };
 }
 
 function matterTone(

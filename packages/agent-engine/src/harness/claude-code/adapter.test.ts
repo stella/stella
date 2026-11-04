@@ -105,7 +105,7 @@ const harnessFor = (scenario: FakeScenarioName) => {
     claudeConfigDir,
     environment: {
       ...STRAY_ENVIRONMENT,
-      FAKE_CLAUDE_LOG: logPath,
+      FAKE_HARNESS_LOG: logPath,
       PATH: process.env["PATH"] ?? "",
     },
     gracePeriodMs: 1000,
@@ -246,7 +246,7 @@ const codexEvents = async (scenario: FakeCodexScenario) => {
     launch: { executable: process.execPath, args: [FAKE_CODEX, scenario] },
     codexHome,
     environment: {
-      FAKE_CODEX_LOG: path.join(root, "fake.log"),
+      FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       PATH: process.env["PATH"] ?? "",
     },
     clientVersion: "0.0.1",

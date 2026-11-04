@@ -412,6 +412,51 @@ fn commands_for_a_run_reach_the_holder() {
 }
 
 #[test]
+fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
+  let fixture = Fixture::new();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let start = run_start("wait");
+    let run_id = start.run_id.clone();
+    let mut outputs = sidecar.start_run(start).unwrap();
+    assert_eq!(next(&mut outputs).await, started(&run_id));
+    let answers = (0..32)
+      .map(|question| {
+        let answer = "x".repeat(16_384);
+        (format!("q{question}"), vec![answer; 64])
+      })
+      .collect();
+    assert_eq!(
+      sidecar.answer(RunAnswer {
+        run_id: run_id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        answers,
+      }),
+      Err(SidecarUnavailable::TooLarge)
+    );
+    let mut oversized = run_start("gpt-test");
+    oversized.instructions = "x".repeat(MAX_LINE_BYTES);
+    assert!(matches!(
+      sidecar.start_run(oversized),
+      Err(SidecarUnavailable::TooLarge)
+    ));
+    sidecar.cancel(&run_id).unwrap();
+    assert_eq!(
+      finish(&mut outputs).await,
+      vec![ended(RunOutcome::Cancelled)]
+    );
+    sidecar.shutdown().await;
+  });
+  let types: Vec<Value> = fixture
+    .received()
+    .iter()
+    .map(|message| message["type"].clone())
+    .collect();
+  assert_eq!(types, vec!["hello", "run.start", "run.cancel", "shutdown"]);
+  assert_eq!(fixture.starts(), 1);
+}
+
+#[test]
 fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor() {
   let fixture = Fixture::new();
   let start = run_start("flood");

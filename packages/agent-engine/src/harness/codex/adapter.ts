@@ -17,6 +17,7 @@ import {
   type HarnessTurnInput,
 } from "../adapter";
 import { buildTurnPrompt } from "../transcript-handoff";
+import { settlesWithin } from "../turn-lifecycle";
 import {
   type AppServerClient,
   type AppServerHandlers,
@@ -106,9 +107,6 @@ const capabilities = (): HarnessCapability[] =>
 
 const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CODEX_CAPABILITIES, value);
-
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
 
 const validateOptions = (options: CodexHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {
