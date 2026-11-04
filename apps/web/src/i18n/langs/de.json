@@ -6468,6 +6468,10 @@
       "noProperties": "Keine Eigenschaft zum Berechnen",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Ursprünglicher KI-Wert",
+      "reasonPlaceholder": "Grund der Änderung (optional)"
+    },
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",

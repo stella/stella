@@ -217,6 +217,16 @@ export type WorkspaceCellMetadata = {
     lockedByImage: string | null;
     reason: "manual-edit" | "explicit";
   };
+  /** A person's value over the one a run produced; absent once a run settles
+   *  the cell again. */
+  override?: {
+    machine: { content: WorkspaceFieldContent; settledAt: string };
+    editedBy: string;
+    editedByName: string | null;
+    editedByImage: string | null;
+    editedAt: string;
+    reason: string | null;
+  };
 };
 
 export type EntityField = {

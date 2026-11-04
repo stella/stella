@@ -6468,6 +6468,10 @@
       "noProperties": "لا توجد خاصية لحسابها",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "القيمة الأصلية من الذكاء الاصطناعي",
+      "reasonPlaceholder": "سبب التغيير (اختياري)"
+    },
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف القانوني",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",

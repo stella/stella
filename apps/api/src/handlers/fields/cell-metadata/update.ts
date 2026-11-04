@@ -4,18 +4,26 @@ import * as v from "valibot";
 
 import { REVIEW_FLAGS, REVIEW_FLAGS_MAX_ITEMS } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
+import { CELL_OVERRIDE_ABSENT_CODE } from "@stll/api-contract/property-policy";
 
+import type { Transaction } from "@/api/db/root";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
-import type { CellMetadata } from "@/api/db/schema-validators";
+import { cellOverrideReasonSchema } from "@/api/db/schema-validators";
+import type { CellMetadata, CellOverride } from "@/api/db/schema-validators";
 import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  carriedCellMetadata,
+  hasCarriedCellMetadata,
+} from "@/api/lib/fields/cell-override";
 
 // The wire vocabulary is the column's vocabulary: a flag the cell control
 // cannot render is one this endpoint refuses rather than stores.
@@ -31,7 +39,9 @@ const config = {
     "value for one property. manualFlags is merged against baseManualFlags " +
     "rather than overwritten, so flags added or removed by someone else " +
     "since you read the cell survive; when no flags remain and the cell is " +
-    "not locked, the metadata row is deleted. Use fields.upsert to " +
+    "not locked, the metadata row is deleted. overrideReason sets or clears " +
+    "why a person replaced the value a run produced; it is refused on a " +
+    "cell that holds no such replacement. Use fields.upsert to " +
     "change the cell's value itself, and fields.column-flag.update to flag a " +
     "whole column at once.",
   permissions: {
@@ -50,11 +60,13 @@ const config = {
     baseManualFlags: v.exactOptional(manualFlagsSchema),
     manualFlags: manualFlagsSchema,
     locked: v.exactOptional(v.boolean()),
+    overrideReason: v.exactOptional(v.nullable(cellOverrideReasonSchema)),
   }),
 } satisfies WorkspaceHandlerConfig;
 
 type UpdateCellMetadataResult =
   | { status: "ok" }
+  | { status: "no-override" }
   | { status: "entity-not-found" }
   | { status: "entity-read-only" }
   | { status: "property-not-found" };
@@ -113,6 +125,79 @@ const resolveLockProvenance = ({
     reason: "explicit",
   };
 };
+
+/**
+ * What the rebuilt metadata carries over, with the override's reason replaced
+ * when one was sent; null when a reason was sent for a cell with no override.
+ */
+const carriedWithReason = ({
+  existing,
+  overrideReason,
+}: {
+  existing: CellMetadata | undefined;
+  overrideReason: string | null | undefined;
+}): Pick<CellMetadata, "override"> | null => {
+  if (overrideReason === undefined) {
+    return carriedCellMetadata(existing);
+  }
+  if (existing === undefined || existing.override === undefined) {
+    return null;
+  }
+  const override: CellOverride = {
+    machine: existing.override.machine,
+    editedBy: existing.override.editedBy,
+    editedAt: existing.override.editedAt,
+    reason: overrideReason,
+  };
+  return { override };
+};
+
+type UpsertCellMetadataArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  entityVersionId: SafeId<"entityVersion">;
+  propertyId: SafeId<"property">;
+  metadata: CellMetadata;
+  userId: string;
+};
+
+const upsertCellMetadata = async ({
+  tx,
+  workspaceId,
+  entityVersionId,
+  propertyId,
+  metadata,
+  userId,
+}: UpsertCellMetadataArgs) => {
+  // audit: skip - the caller records the FIELD event for this change.
+  await tx
+    .insert(cellMetadata)
+    .values({
+      workspaceId,
+      entityVersionId,
+      propertyId,
+      metadata,
+      createdBy: userId,
+      updatedBy: userId,
+    })
+    .onConflictDoUpdate({
+      target: [cellMetadata.entityVersionId, cellMetadata.propertyId],
+      set: {
+        metadata,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      },
+    });
+};
+
+const cellOverrideAbsentRefusal = () =>
+  new HandlerError({
+    status: 409,
+    code: CELL_OVERRIDE_ABSENT_CODE,
+    retryable: false,
+    message: "The cell holds no replaced machine value to explain",
+    hint: "Read the cell again: a run settled it, or nobody replaced its value.",
+  });
 
 const updateCellMetadata = createSafeHandler(
   config,
@@ -206,7 +291,25 @@ const updateCellMetadata = createSafeHandler(
           changes["locked"] = { old: wasLocked, new: nextLocked };
         }
 
-        if (manualFlags.length === 0 && !nextLocked) {
+        const carried = carriedWithReason({
+          existing: existingMetadata,
+          overrideReason: body.overrideReason,
+        });
+        if (carried === null) {
+          return { status: "no-override" };
+        }
+        if (body.overrideReason !== undefined) {
+          changes["overrideReason"] = {
+            old: existingMetadata?.override?.reason ?? null,
+            new: body.overrideReason,
+          };
+        }
+
+        if (
+          manualFlags.length === 0 &&
+          !nextLocked &&
+          !hasCarriedCellMetadata(existingMetadata)
+        ) {
           await tx
             .delete(cellMetadata)
             .where(
@@ -254,26 +357,17 @@ const updateCellMetadata = createSafeHandler(
           ),
           ...(nextLocked && { locked: true }),
           ...(lockProvenance && { lockProvenance }),
+          ...carried,
         };
 
-        await tx
-          .insert(cellMetadata)
-          .values({
-            workspaceId,
-            entityVersionId,
-            propertyId: property.id,
-            metadata,
-            createdBy: user.id,
-            updatedBy: user.id,
-          })
-          .onConflictDoUpdate({
-            target: [cellMetadata.entityVersionId, cellMetadata.propertyId],
-            set: {
-              metadata,
-              updatedBy: user.id,
-              updatedAt: new Date(),
-            },
-          });
+        await upsertCellMetadata({
+          tx,
+          workspaceId,
+          entityVersionId,
+          propertyId: property.id,
+          metadata,
+          userId: user.id,
+        });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -308,6 +402,10 @@ const updateCellMetadata = createSafeHandler(
           message: "Property not found in workspace",
         }),
       );
+    }
+
+    if (txResult.status === "no-override") {
+      return Result.err(cellOverrideAbsentRefusal());
     }
 
     if (txResult.status === "entity-read-only") {

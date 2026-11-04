@@ -6468,6 +6468,10 @@
       "noProperties": "Aucune propriété à calculer",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Valeur d’origine de l’IA",
+      "reasonPlaceholder": "Motif de la modification (facultatif)"
+    },
     "copyToMatter": {
       "copied": "Copié dans le dossier",
       "copyOption": "Copier (conserver l'original)",
