@@ -6534,6 +6534,9 @@
       "calculating": "جارٍ الحساب...",
       "errored": "حدث خطأ",
       "formatNotSupported": "التنسيق غير مدعوم",
+      "recordChoose": "{count, plural, zero {لا توجد تطابقات} one {أكّد التطابق} two {اختر من تطابقَين} few {اختر من # تطابقات} many {اختر من # تطابقًا} other {اختر من # تطابق}}",
+      "recordCount": "{count, plural, zero {لا توجد سجلات} one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}}",
+      "recordNotFound": "غير موجود",
       "selectAValue": "اختر قيمة",
       "selectValues": "اختر القيم",
       "wholeNumberOnly": "أدخل عددًا صحيحًا"
@@ -7226,6 +7229,7 @@
       "previewSubject": "جرِّبه على عينة",
       "previewUnsupported": "المعاينة غير مدعومة لهذا النوع من المستندات.",
       "readingFrom": "يقرأ الذكاء الاصطناعي من",
+      "record": "سجل",
       "referencesItself": "الخاصية تشير إلى نفسها عبر خصائص أخرى",
       "resultType": "نوع النتيجة",
       "returnsLabel": "التنسيق",

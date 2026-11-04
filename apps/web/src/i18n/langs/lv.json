@@ -6534,6 +6534,9 @@
       "calculating": "Aprēķina...",
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
+      "recordChoose": "{count, plural, zero {Izvēlieties no # atbilstībām} one {Apstipriniet # atbilstību} other {Izvēlieties no # atbilstībām}}",
+      "recordCount": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}}",
+      "recordNotFound": "Nav atrasts",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības",
       "wholeNumberOnly": "Ievadiet veselu skaitli"
@@ -7226,6 +7229,7 @@
       "previewSubject": "Izmēģini paraugā",
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
+      "record": "Ieraksts",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",

@@ -6534,6 +6534,9 @@
       "calculating": "Calculating...",
       "errored": "Errored",
       "formatNotSupported": "Format not supported",
+      "recordChoose": "{count, plural, one {Confirm # match} other {Choose from # matches}}",
+      "recordCount": "{count, plural, one {# record} other {# records}}",
+      "recordNotFound": "Not found",
       "selectAValue": "Select a value",
       "selectValues": "Select values",
       "wholeNumberOnly": "Enter a whole number"
@@ -7226,6 +7229,7 @@
       "previewSubject": "Try it on a sample",
       "previewUnsupported": "Preview unsupported for this document type.",
       "readingFrom": "AI reads from",
+      "record": "Record",
       "referencesItself": "Property references itself through other properties",
       "resultType": "Result type",
       "returnsLabel": "Format",

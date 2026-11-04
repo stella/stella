@@ -6534,6 +6534,9 @@
       "calculating": "Počíta sa...",
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
+      "recordChoose": "{count, plural, one {Potvrďte # zhodu} few {Vyberte z # zhôd} many {Vyberte z # zhody} other {Vyberte z # zhôd}}",
+      "recordCount": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamov}}",
+      "recordNotFound": "Nenájdené",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty",
       "wholeNumberOnly": "Zadajte celé číslo"
@@ -7226,6 +7229,7 @@
       "previewSubject": "Vyskúšaj na vzorke",
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
+      "record": "Záznam",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",

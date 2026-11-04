@@ -1,5 +1,7 @@
 import { PDF } from "@libpdf/core";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+
+import { recordCellText } from "@stll/api-contract/record-cell";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type {
@@ -176,6 +178,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordCellText(content.state);
     case "error":
     case "pending":
     case "unsupported":
@@ -183,7 +187,8 @@ const getFieldContentAsString = (content?: FieldContent) => {
     case "clip":
       return null;
     default:
-      return null;
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { sleep } from "bun";
 
+import { recordCellText } from "@stll/api-contract/record-cell";
 import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -83,6 +84,8 @@ const getValueFromInputFields = (
         return `${field.amountCents} ${field.currency}`;
       case "person":
         return field.name;
+      case "record":
+        return recordCellText(field.state);
       default:
         throw new Unreachable({
           message: "Field type not matched",

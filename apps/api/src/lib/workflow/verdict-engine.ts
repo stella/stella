@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { recordCellText } from "@stll/api-contract/record-cell";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
@@ -73,6 +74,12 @@ export const askPresence = (
     case "file":
     case "clip":
       return "present";
+    // A refused tool input never reached its source: no answer to grade.
+    case "record":
+      if (content.state.status === "input-needs-review") {
+        return "missing";
+      }
+      return recordCellText(content.state).length > 0 ? "present" : "absent";
     default: {
       content satisfies never;
       return panic(`Unhandled content: ${String(content)}`);
@@ -118,6 +125,10 @@ export const extractedFromContent = (
     }
     case "person":
       return { value: content.name, text: content.name };
+    case "record": {
+      const text = recordCellText(content.state);
+      return text.length > 0 ? { value: text, text } : null;
+    }
     case "file":
     case "clip":
     case "error":
@@ -153,6 +164,10 @@ export const askText = (content: FieldContent | undefined): string | null => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record": {
+      const text = recordCellText(content.state);
+      return text.length > 0 ? text : null;
+    }
     case "file":
     case "clip":
     case "error":

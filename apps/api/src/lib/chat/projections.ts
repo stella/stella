@@ -23,6 +23,7 @@ import {
 } from "@stll/api-contract/legal-reader-annotations";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
+import { recordCellStateSchema } from "@stll/api-contract/record-cell";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_MATCH_BASES,
@@ -479,6 +480,16 @@ const documentFieldContentProjection = v.variant("type", [
       citation: v.exactOptional(v.string()),
       jurisdiction: v.exactOptional(v.string()),
       sourceType: v.exactOptional(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("record"),
+      schemaVersion: v.number(),
+      // Typed values (a register entry, a list of proceedings) and their
+      // source provenance; nothing in it is a reference the model resolves.
+      state: recordCellStateSchema,
     }),
   ),
 ]);

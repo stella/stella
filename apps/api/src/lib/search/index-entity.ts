@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { documentReferenceBase } from "@stll/api-contract";
+import { recordCellText } from "@stll/api-contract/record-cell";
 import { compareCodeUnit } from "@stll/collation";
 
 import { rootDb } from "@/api/db/root";
@@ -106,6 +107,8 @@ const extractFieldText = (content: FieldContent): string => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordCellText(content.state);
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":

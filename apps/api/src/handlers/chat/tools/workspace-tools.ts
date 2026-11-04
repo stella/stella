@@ -2,6 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { recordCellText } from "@stll/api-contract/record-cell";
 import { parsePlainDate } from "@stll/time";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -61,8 +62,11 @@ const formatFieldValue = (content: FieldContent): string => {
     case "unsupported":
     case "clip":
       return "(unsupported)";
+    case "record":
+      return recordCellText(content.state);
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 
@@ -189,6 +193,10 @@ export const fieldContentForValue = ({
     case "person":
       return invalid(
         `Property is "${propType}"; set it from the workspace UI.`,
+      );
+    case "record":
+      return invalid(
+        'Property is "record"; its value comes from its data source or AI column, not a write.',
       );
     case "text": {
       if (typeof value !== "string") {

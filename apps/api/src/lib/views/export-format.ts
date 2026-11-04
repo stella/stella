@@ -1,4 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
+
+import { recordCellText } from "@stll/api-contract/record-cell";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 
@@ -127,6 +129,8 @@ export const formatFieldContent = (
       return content.name;
     case "clip":
       return content.url;
+    case "record":
+      return recordCellText(content.state);
     case "error":
       return "Error";
     case "pending":
@@ -134,6 +138,7 @@ export const formatFieldContent = (
     case "unsupported":
       return "Unsupported";
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };

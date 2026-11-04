@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { recordCellText } from "@stll/api-contract/record-cell";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
@@ -93,6 +95,8 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
       return false;
     case "person":
       return content.name.trim().length === 0;
+    case "record":
+      return recordCellText(content.state).length === 0;
     default:
       throw new Unreachable({
         message: "Field type not matched",
@@ -236,6 +240,8 @@ export const prepareBatchInput = (
       pushTextInput(field.propertyId, content.value.join(", "));
     } else if (content.type === "date" && content.value) {
       pushTextInput(field.propertyId, content.value);
+    } else if (content.type === "record") {
+      pushTextInput(field.propertyId, recordCellText(content.state));
     } else if (content.type === "int") {
       pushTextInput(
         field.propertyId,

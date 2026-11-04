@@ -6534,6 +6534,9 @@
       "calculating": "Számítás...",
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
+      "recordChoose": "{count, plural, one {# találat megerősítése} other {Válasszon # találat közül}}",
+      "recordCount": "{count, plural, one {# rekord} other {# rekord}}",
+      "recordNotFound": "Nem található",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket",
       "wholeNumberOnly": "Adjon meg egy egész számot"
@@ -7226,6 +7229,7 @@
       "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
+      "record": "Rekord",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",

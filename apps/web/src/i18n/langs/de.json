@@ -6534,6 +6534,9 @@
       "calculating": "Berechnung...",
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
+      "recordChoose": "{count, plural, one {# Treffer bestätigen} other {Aus # Treffern auswählen}}",
+      "recordCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+      "recordNotFound": "Nicht gefunden",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen",
       "wholeNumberOnly": "Ganze Zahl eingeben"
@@ -7226,6 +7229,7 @@
       "previewSubject": "Auf einem Beispiel testen",
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
+      "record": "Datensatz",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
