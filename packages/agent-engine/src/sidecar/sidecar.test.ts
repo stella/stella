@@ -22,6 +22,7 @@ import {
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
+import { settlesWithin } from "../harness/turn-lifecycle";
 import { SidecarHost } from "./host";
 import {
   SIDECAR_PROTOCOL,
@@ -71,12 +72,15 @@ type Sidecar = {
   }[];
 };
 
-const cleanups: (() => void)[] = [];
-afterEach(() => {
+const cleanups: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) {
-    cleanup();
+    await cleanup();
   }
 });
+
+/** How long a sidecar gets to stop its runs once its input closes. */
+const SIDECAR_EXIT_MS = 5000;
 
 const spawnSidecar = (): Sidecar => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-"));
@@ -90,8 +94,21 @@ const spawnSidecar = (): Sidecar => {
       FAKE_HARNESS_LOG: logPath,
     },
   });
-  cleanups.push(() => {
-    child.kill();
+  let inputOpen = true;
+  const closeInput = () => {
+    if (inputOpen) {
+      inputOpen = false;
+      void child.stdin.end();
+    }
+  };
+  cleanups.push(async () => {
+    // Closed input is how the desktop ends the sidecar: every run stops and
+    // its harness exits first. A signal would leave a harness that is still
+    // stopping behind the test.
+    closeInput();
+    if (!(await settlesWithin(child.exited, SIDECAR_EXIT_MS))) {
+      child.kill("SIGKILL");
+    }
     rmSync(root, { recursive: true, force: true });
   });
   const messages: SidecarMessage[] = [];
@@ -145,9 +162,7 @@ const spawnSidecar = (): Sidecar => {
       });
       return promise;
     },
-    closeInput: () => {
-      void child.stdin.end();
-    },
+    closeInput,
     exited: child.exited,
     stderr: async () => new Response(child.stderr).text(),
     received: () =>
