@@ -2849,10 +2849,11 @@ jobs:
         id: lockfile_ages
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') }}
         # Bun applies the release-age quarantine only while it resolves
-        # versions; a frozen install takes whatever bun.lock pins. This looks
-        # up the publish time of each pin new against the merge base, in every
-        # tracked lockfile, and fails one the governing bunfig.toml would not
-        # yet admit (its excludes honoured). A registry failure fails it too.
+        # versions; a frozen install takes whatever bun.lock pins, and Cargo
+        # has no quarantine at all. This looks up the publish time of each pin
+        # new against the merge base, in every tracked bun.lock and Cargo.lock,
+        # and fails one the governing bunfig.toml would not yet admit (its
+        # excludes honoured). A registry failure fails it too.
         # Runs before the install, so a quarantined pin never executes here,
         # and again on the queued tree, whose base may govern it differently.
         env:
@@ -6610,6 +6611,22 @@ jobs:
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Install cargo-deny
+        timeout-minutes: 10
+        uses: ./.github/actions/cargo-deny
+
+      # As for the desktop crate: licenses, bans and sources read only the
+      # resolved graph, fetched for every target with bounded retries, then
+      # checked once offline. Advisories run on the Dependency Audit schedule.
+      - name: Fetch license audit inputs
+        timeout-minutes: 10
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+
+      - name: License audit
+        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
 
       - name: Save Rust build cache
         if: success()
