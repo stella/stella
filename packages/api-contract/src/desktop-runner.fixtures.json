@@ -5,6 +5,10 @@
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
+    "runLimits": {
+      "maxMessagesPerRun": 20000,
+      "maxMessageBytesPerRun": 67108864
+    },
     "path": "/v1/desktop/runner",
     "desktopIdHeader": "stella-desktop-id",
     "close": {

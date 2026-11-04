@@ -19,16 +19,6 @@
 //! Ported from t3code's `CodexManagedTokenBroker`, `CodexManagedTokenProtocol`
 //! and `managedChatGptToken` helper (MIT).
 
-// The desktop runner's harness host takes the launch and its grant; until it
-// lands only the tests do.
-#![cfg_attr(
-  not(all(test, unix)),
-  allow(
-    dead_code,
-    reason = "the desktop runner's harness host consumes the launch"
-  )
-)]
-
 use std::{
   collections::HashMap,
   future::Future,

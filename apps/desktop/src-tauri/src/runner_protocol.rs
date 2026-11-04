@@ -14,6 +14,10 @@ use serde_json::{Map, Value};
 pub(crate) const PROTOCOL: u32 = 1;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+/// Sequenced messages one run may store; the API refuses more.
+pub(crate) const MAX_MESSAGES_PER_RUN: u32 = 20_000;
+/// UTF-8 bytes of sequenced messages one run may store.
+pub(crate) const MAX_MESSAGE_BYTES_PER_RUN: u64 = 64 * 1024 * 1024;
 /// Where the runner socket lives under the API base URL.
 pub(crate) const PATH: &str = "/v1/desktop/runner";
 /// Names the installation the socket belongs to.
@@ -535,6 +539,15 @@ mod tests {
     assert_eq!(
       fixtures["vocabulary"]["maxFrameBytes"].as_u64(),
       u64::try_from(MAX_FRAME_BYTES).ok()
+    );
+    let limits = &fixtures["vocabulary"]["runLimits"];
+    assert_eq!(
+      limits["maxMessagesPerRun"].as_u64(),
+      Some(u64::from(MAX_MESSAGES_PER_RUN))
+    );
+    assert_eq!(
+      limits["maxMessageBytesPerRun"].as_u64(),
+      Some(MAX_MESSAGE_BYTES_PER_RUN)
     );
   }
 

@@ -14,6 +14,7 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
@@ -101,6 +102,10 @@ describe("desktop runner fixtures", () => {
     expect(fixtures.vocabulary).toEqual({
       protocol: DESKTOP_RUNNER_PROTOCOL,
       maxFrameBytes: DESKTOP_RUNNER_MAX_FRAME_BYTES,
+      runLimits: {
+        maxMessagesPerRun: DESKTOP_RUNNER_LIMITS.maxMessagesPerRun,
+        maxMessageBytesPerRun: DESKTOP_RUNNER_LIMITS.maxMessageBytesPerRun,
+      },
       path: DESKTOP_RUNNER_PATH,
       desktopIdHeader: DESKTOP_RUNNER_DESKTOP_ID_HEADER,
       close: DESKTOP_RUNNER_CLOSE,
@@ -156,6 +161,7 @@ describe("desktop runner fixtures", () => {
     const {
       protocol,
       maxFrameBytes,
+      runLimits: _runLimits,
       path: _path,
       desktopIdHeader: _desktopIdHeader,
       close: _close,

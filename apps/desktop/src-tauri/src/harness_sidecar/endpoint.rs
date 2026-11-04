@@ -32,7 +32,7 @@ pub(super) const ENDPOINT_FILE: &str = "endpoint";
 /// `sun_path` bytes, its terminating NUL included.
 #[cfg(target_os = "linux")]
 pub(super) const SUN_PATH_BYTES: usize = 108;
-#[cfg(not(target_os = "linux"))]
+#[cfg(all(unix, not(target_os = "linux")))]
 pub(super) const SUN_PATH_BYTES: usize = 104;
 
 /// Longest pipe name Windows accepts.
