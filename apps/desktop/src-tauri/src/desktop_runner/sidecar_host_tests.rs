@@ -742,9 +742,13 @@ fn a_restarted_app_resumes_a_held_run_after_its_journal_without_a_repeat_or_a_ga
       .count()
   };
   assert_eq!(granted_for_run(), 1);
+  let run_process = *grants.authorized.lock().unwrap().last().unwrap();
+  // A restarted app has a broker of its own that trusts nothing the first
+  // one authorized: it must authorize the kept run's process itself.
+  let restarted = Arc::new(Grants::default());
   run(async {
     let host = place.host(
-      Some(chatgpt_credentials(&grants)),
+      Some(chatgpt_credentials(&restarted)),
       Duration::from_secs(3600),
     );
     let mut setup = setup(&host);
@@ -762,6 +766,12 @@ fn a_restarted_app_resumes_a_held_run_after_its_journal_without_a_repeat_or_a_ga
       granted_for_run() == 2
     })
     .await;
+    assert_eq!(
+      restarted.authorized.lock().unwrap().last(),
+      Some(&run_process),
+      "the restarted app's own credential authorized the run's process"
+    );
+    assert!(*restarted.held.lock().unwrap() >= 1);
     connection
       .send(json!({"type": "run.cancel", "runId": id}))
       .await;
@@ -781,6 +791,10 @@ fn a_restarted_app_resumes_a_held_run_after_its_journal_without_a_repeat_or_a_ga
     assert_eq!(messages[0]["outcome"], "cancelled");
     until("the holder was acked through the end", || {
       place.acks(&id) == vec![1, 2]
+    })
+    .await;
+    until("the resumed run's grant was released", || {
+      *restarted.held.lock().unwrap() == 0
     })
     .await;
     runner.stop().await;
