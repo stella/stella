@@ -246,11 +246,21 @@ describe("court citation aliases", () => {
     },
   );
 
-  test("a code-shaped word the directory lacks constrains by ECLI code", () => {
-    expect(readsAs("CZE", "OSXY")).toEqual([
-      { type: "ecli-code", code: "OSXY" },
-    ]);
-  });
+  test.each(["OSXY", "OSPH99", "osph99"])(
+    "a code-shaped word the directory lacks constrains by ECLI code: %s",
+    (word) => {
+      expect(readsAs("CZE", word)).toEqual([
+        { type: "ecli-code", code: word.toUpperCase() },
+      ]);
+    },
+  );
+
+  test.each(["show us", "ns", "us"])(
+    "a lone short code in lower case is a word, not a court: %s",
+    (text) => {
+      expect(readsAs("CZE", text)).toEqual([]);
+    },
+  );
 
   test("an alias two stored courts answer to is read as both, never one", () => {
     const index = courtCitationIndex("CZE", [
@@ -286,6 +296,14 @@ describe("court citation aliases", () => {
             ascii: foldCourtText(alias).join(" "),
             "as-is": alias,
           }[casing];
+          // A lone short code reads only in capitals (`ÚS`, not `us`).
+          const [only, ...more] = foldCourtText(alias);
+          const bareCode =
+            only !== undefined && more.length === 0 && only.length <= 3;
+          if (bareCode && cased !== cased.toLocaleUpperCase("und")) {
+            expect(readsAs(country, cased)).toEqual([]);
+            return;
+          }
           const spelled = `${cased.split(" ").join(space)}${trailing}`;
           const reading = readsAs(country, spelled);
           // Upper case turns a short code's letters into a code word only

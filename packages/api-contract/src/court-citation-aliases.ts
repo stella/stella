@@ -533,17 +533,22 @@ const UNKNOWN_CODE_TAIL_RE = /^[A-Z]{2,4}\d{0,2}$/u;
 
 /** A word shaped like an ECLI court code of the country's families. */
 const familyCodeOf = (country: string, word: string): string | undefined => {
-  if (word !== word.toUpperCase()) {
+  const upper = word.toUpperCase();
+  // Typed in upper case, or numbered so it is no word (`osph99`).
+  if (word !== upper && !/\p{N}/u.test(word)) {
     return undefined;
   }
   const prefix = grammarFor(country)
     .ecliFamilyPrefixes.map((candidate) => candidate.toUpperCase())
-    .find((candidate) => word.startsWith(candidate));
+    .find((candidate) => upper.startsWith(candidate));
   return prefix !== undefined &&
-    UNKNOWN_CODE_TAIL_RE.test(word.slice(prefix.length))
-    ? word
+    UNKNOWN_CODE_TAIL_RE.test(upper.slice(prefix.length))
+    ? upper
     : undefined;
 };
+
+/** A bare short code no longer than this is read only as typed in capitals. */
+const BARE_CODE_MAX_LETTERS = 3;
 
 type Match = { start: number; end: number; keys: ReadonlySet<string> };
 
@@ -562,7 +567,12 @@ export const readCourtCitation = (
     .split(/\s+/u)
     .map(bareWord)
     .filter((word) => word !== "");
-  const tokens: { token: string; word: number; capitalized: boolean }[] = [];
+  const tokens: {
+    token: string;
+    word: number;
+    capitalized: boolean;
+    upper: boolean;
+  }[] = [];
   for (const [wordIndex, word] of words.entries()) {
     const upper = word.toUpperCase();
     // A word that is itself an alias (`NS`, `ÚS`) is read with the words
@@ -590,6 +600,7 @@ export const readCourtCitation = (
         token,
         word: wordIndex,
         capitalized: /^\p{Lu}/u.test(word),
+        upper: word === word.toUpperCase(),
       });
     }
   }
@@ -602,7 +613,12 @@ export const readCourtCitation = (
         .map(({ token }) => token)
         .join(" ");
       const keys = index.byAlias.get(phrase);
-      if (keys !== undefined) {
+      // A lone short code in lower case is a word (`show us`), not `ÚS`.
+      const lowerBareCode =
+        end - start === 1 &&
+        phrase.length <= BARE_CODE_MAX_LETTERS &&
+        tokens[start]?.upper !== true;
+      if (keys !== undefined && !lowerBareCode) {
         matches.push({ start, end, keys });
       }
     }

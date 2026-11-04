@@ -470,8 +470,11 @@ const citedCourtIssues = (
   });
   const expectedCourt = `CZE:${court}`;
   return [
+    // A sheet the brief did not cite would constrain the decision too.
     ...(exactDecisionMatches(intent, [{ caseNumber: docket, ecli: null }])
-      .length === 1
+      .length === 1 &&
+    intent.kind === "docket" &&
+    intent.selector.kind === "none"
       ? []
       : [`identifier: expected docket ${docket}, read ${intent.value}`]),
     ...(courts.length === 1 &&
