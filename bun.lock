@@ -1837,8 +1837,8 @@
     "@oxlint/plugins": "1.90.0",
     "@shadcn/lint": "0.2.3",
     "@silurus/ooxml": "0.89.7",
-    "@stll/aho-corasick": "2.0.1",
-    "@stll/aho-corasick-wasm": "2.0.1",
+    "@stll/aho-corasick": "2.0.2",
+    "@stll/aho-corasick-wasm": "2.0.2",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
@@ -3257,21 +3257,21 @@
 
     "@stll/agent-input": ["@stll/agent-input@workspace:packages/agent-input"],
 
-    "@stll/aho-corasick": ["@stll/aho-corasick@2.0.1", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "2.0.1", "@stll/aho-corasick-darwin-x64": "2.0.1", "@stll/aho-corasick-linux-arm64-gnu": "2.0.1", "@stll/aho-corasick-linux-x64-gnu": "2.0.1", "@stll/aho-corasick-wasm32-wasi": "2.0.1", "@stll/aho-corasick-win32-x64-msvc": "2.0.1" } }, "sha512-pFGAW+t2JMU8aMpe2HSXeKCGTq4Zq+O9C1jZQ018ZrUeYuCquIJjEGUoZFvTU52RvOYlmavUHxZ3T9VQl9/Gbg=="],
+    "@stll/aho-corasick": ["@stll/aho-corasick@2.0.2", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "2.0.2", "@stll/aho-corasick-darwin-x64": "2.0.2", "@stll/aho-corasick-linux-arm64-gnu": "2.0.2", "@stll/aho-corasick-linux-x64-gnu": "2.0.2", "@stll/aho-corasick-wasm32-wasi": "2.0.2", "@stll/aho-corasick-win32-x64-msvc": "2.0.2" } }, "sha512-9F8LGlTnQdVNngb/dw/lAd7te/4F+yjh0KyusZS2F8YT/0od302effnfa05FMuuDSy+cHmCD79TFS6hGYdzUTg=="],
 
-    "@stll/aho-corasick-darwin-arm64": ["@stll/aho-corasick-darwin-arm64@2.0.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-DFYsYTb/Ip57bPL5rD2RkBU921AJgvkw8JGKTqKnHSPRh2neZfI25S/OUfUf/baVL+IsiuUmA/AlavOdR1eG5g=="],
+    "@stll/aho-corasick-darwin-arm64": ["@stll/aho-corasick-darwin-arm64@2.0.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-L7kybndiNDN8Y0An0rIl1ZPSm8wrEZzhwi5+ui66uojHoPq5mZCwGAKSH4XeTOyjVj+14fSmUdEnStE1Gy7+7Q=="],
 
-    "@stll/aho-corasick-darwin-x64": ["@stll/aho-corasick-darwin-x64@2.0.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-aXAc8/ZTNzGDsHdfyTsZIxAsbAW0+qeIwrSDQrWtNBo8osqggIExQ2HQgEfSsS1GhUVV3+8g9AAJGu7YGQ3iEg=="],
+    "@stll/aho-corasick-darwin-x64": ["@stll/aho-corasick-darwin-x64@2.0.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-Xsq92l3xKmKcbXCIniSa0nsBK62itBvBaK72HOCbtN6Tm3O/KxDB4XH1C41tOAfJ2qK3NwlKED0EHfkaYW6nAw=="],
 
-    "@stll/aho-corasick-linux-arm64-gnu": ["@stll/aho-corasick-linux-arm64-gnu@2.0.1", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-oDrDQWDojUnuxdnaDCvy0yaevoCN9q65Z96cnFqp5lH7xQpCjaPwGZZHv3WTUeInV4r/NoAI4NyvhdmRpC6Efw=="],
+    "@stll/aho-corasick-linux-arm64-gnu": ["@stll/aho-corasick-linux-arm64-gnu@2.0.2", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-tyuzrWWxGSWZS8r+wdhhxbdXajK1d9jA2//fN87wqnYyYl5QldEuyl1/y4jL9qea94gNObjvYShnm66Ze5iiWA=="],
 
-    "@stll/aho-corasick-linux-x64-gnu": ["@stll/aho-corasick-linux-x64-gnu@2.0.1", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-2QO7SOeufOtziXZXRYoCRg31pNefnawg4Y71sqzuNyEi5t70pKLPePR0bK1kDtcCU6vZua8frGkJuxpTLWoOpw=="],
+    "@stll/aho-corasick-linux-x64-gnu": ["@stll/aho-corasick-linux-x64-gnu@2.0.2", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-8mPsXTVlZcIDQcpQ46ZTARYeepoxZe7FgwPU462u4PSJxuwa8tunbngDTUSIbV8kxXYIYllLFBVQvkMqPCi64A=="],
 
-    "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@2.0.1", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.5" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-lAIPi9Ql0mC0Jiy3WMTLtRp21rTVtO9sZ/KWhgpmFT76ZLMbKY19uXyCLt//wZeA8jyPG9b4u1EPIazfoLBTFQ=="],
+    "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@2.0.2", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.5" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-0pBZNpxclHvxFc6NnLGdBEcpRr+1+ab0okqDQDdOYf79PzOEn1+m98jAn1JJxVEoYxpxl6Mu8wJUBBRzc/T3+Q=="],
 
-    "@stll/aho-corasick-wasm32-wasi": ["@stll/aho-corasick-wasm32-wasi@2.0.1", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.5" }, "cpu": "none" }, "sha512-OingxkFh+v3gFKZ1PSNofKUAtd6NnqzzB6xW6MXqnWFXOwV6VQZiiEkTM3IWhuKFQdRuhALH8eeYVpAWMLn8cQ=="],
+    "@stll/aho-corasick-wasm32-wasi": ["@stll/aho-corasick-wasm32-wasi@2.0.2", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.5" }, "cpu": "none" }, "sha512-palMneqYvNmefYpe6cazBEGScrryThZxzFxSL3pQgqOj897oyHmtvb8+WS+T5SbESxyy/nexhRYtIiB4ehBhaA=="],
 
-    "@stll/aho-corasick-win32-x64-msvc": ["@stll/aho-corasick-win32-x64-msvc@2.0.1", "", { "os": "win32", "cpu": "x64" }, "sha512-NHKlwJOQcbkTk2jg8towrM4KWMfc2Yr+xpxcUT88uG0jenC/SMnUJoa1ZQ7A/ow8GuKunNe2vhr2D62Db2ua6Q=="],
+    "@stll/aho-corasick-win32-x64-msvc": ["@stll/aho-corasick-win32-x64-msvc@2.0.2", "", { "os": "win32", "cpu": "x64" }, "sha512-lkwZuaAk3XxP5o5aZ+qwwyps4jJtYcqPWCdcEG3hAdsf8/Zrk6O1U+wlB+aZaI8sFuH3KLL73l0kprAL7P9EiA=="],
 
     "@stll/ai-catalog": ["@stll/ai-catalog@workspace:packages/ai-catalog"],
 
