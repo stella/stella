@@ -124,7 +124,7 @@ describe("local run question answers", () => {
       Array.from({ length: count }, (_, index) => `q${String(index)}`);
     const longest = "q".repeat(maxQuestionIdLength);
     // Every pause the schema takes is answerable within the answer's limits.
-    for (const ids of [numbered(maxQuestions), [longest]]) {
+    for (const ids of [numbered(maxQuestions), [longest], ["toString"]]) {
       expect(v.is(chatLocalRunQuestionsSchema, asking(ids))).toBe(true);
       expect(v.is(desktopRunnerQuestionAnswersSchema, answering(ids))).toBe(
         true,
@@ -139,6 +139,10 @@ describe("local run question answers", () => {
       [""],
       // One answer per id: two questions under one id could not differ.
       ["tone", "law", "tone"],
+      // Answers are a record, which drops these keys: no answer could name them.
+      ["__proto__"],
+      ["prototype"],
+      ["constructor"],
     ]) {
       expect(v.is(chatLocalRunQuestionsSchema, asking(ids))).toBe(false);
     }

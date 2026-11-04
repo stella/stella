@@ -330,14 +330,26 @@ export const DESKTOP_RUNNER_ANSWER_LIMITS = {
   maxQuestionIdLength: 256,
 } as const;
 
+/** The keys `v.record` leaves out of what it parses, without an issue. */
+const RECORD_DROPPED_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
 /**
  * The id a blocking question names one of its questions by, in the pause
- * that asks it and in the answers alike.
+ * that asks it and in the answers alike. Answers are a record keyed by this
+ * id, so an id the record would drop could never be answered.
  */
 export const desktopRunnerQuestionIdSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
+  v.check(
+    (id) => !RECORD_DROPPED_KEYS.has(id),
+    "A question id must survive as an answer key",
+  ),
 );
 
 /**
