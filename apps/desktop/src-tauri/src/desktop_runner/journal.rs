@@ -255,7 +255,6 @@ fn record_file(
 
 /// What [`SharedJournal::update`] does with the changed record.
 pub(crate) enum Change {
-  Unchanged,
   Store,
   Forget,
 }
@@ -353,7 +352,6 @@ impl SharedJournal {
     };
     let (write, result) = change(&mut record);
     match write {
-      Change::Unchanged => {}
       Change::Store => journal.put(record)?,
       Change::Forget => journal.remove(run_id)?,
     }

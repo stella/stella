@@ -2774,7 +2774,14 @@ describe("chat turns on a computer", () => {
   test("a queued answer that no longer opens cancels its run instead of holding back the commands after it", async () => {
     const chatThreadId = await newThread();
     const desktopId = Bun.randomUUIDv7();
-    const desktop = await openDesktop(chatInstance, desktopId);
+    // Its own key: this test opens two sockets, and the account's key has a
+    // rate limit the tests around it spend.
+    const own = await createRlsDesktopCredentials(db, ids);
+    const desktop = await openDesktop(
+      chatInstance,
+      desktopId,
+      await upgradeRequest(chatInstance, desktopId, own.a),
+    );
     await desktop.hello();
     const { runId, requestId, run } = await pausedForQuestion({
       desktop,
@@ -2816,7 +2823,11 @@ describe("chat turns on a computer", () => {
     expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
       type: "queued",
     });
-    const back = await openDesktop(chatInstance, desktopId);
+    const back = await openDesktop(
+      chatInstance,
+      desktopId,
+      await upgradeRequest(chatInstance, desktopId, own.a),
+    );
     await back.hello([{ runId, lastSeq: run.position.seq }]);
     await back.receive("run.interrupt", ofRun(runId));
     expect(
