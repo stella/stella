@@ -12,7 +12,14 @@ import { cn } from "@stll/ui/utils";
 
 import { mermaidDiagramRenderer } from "@/components/ai-elements/mermaid-diagram-block";
 import { messageComponents } from "@/components/ai-elements/message-response-components";
+import {
+  AnswerBlock,
+  answerTreeIdPrefix,
+  AnswerTreeIds,
+  withAnswerLinkIds,
+} from "@/components/ai-elements/message-response-link-ids";
 import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-source-offsets";
+import { rehypeNumberAnswerLinks } from "@/components/chat/rehype-number-answer-links";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
@@ -38,6 +45,15 @@ export const MessageResponseImpl = memo(
     sourceOffsets = false,
     ...props
   }: MessageResponseProps) => {
+    // A settled answer parses as one tree, so the answer names its links;
+    // a streamed one names them per block (`AnswerBlock`).
+    const parsedWhole = sourceOffsets || props.mode === "static";
+    const source = typeof props.children === "string" ? props.children : "";
+    const treeIdPrefix = useMemo(
+      () => (parsedWhole ? answerTreeIdPrefix(0, source) : undefined),
+      [parsedWhole, source],
+    );
+    const link = components?.a ?? messageComponents.a;
     const effectiveRehypePlugins = useMemo(
       () => [
         // Streamdown's raw HTML, sanitize and harden chain always runs first:
@@ -49,52 +65,59 @@ export const MessageResponseImpl = memo(
         ...(rehypePlugins ?? EMPTY_REHYPE_PLUGINS),
         ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
         rehypeChatLinks,
+        rehypeNumberAnswerLinks,
       ],
       [rehypePlugins, sourceOffsets],
     );
+    // Streamdown's internal memo doesn't compare `rehypePlugins`, so
+    // a re-render with a new plugin set is silently skipped and the
+    // unified processor is never rebuilt. Tying the key to plugin
+    // identity plus tuple options forces a fresh mount whenever the
+    // rehype chain actually changes — without this, the anonymization plugin
+    // wouldn't run for messages whose children text was identical
+    // when first rendered with no plugins.
     return (
-      // Streamdown's internal memo doesn't compare `rehypePlugins`, so
-      // a re-render with a new plugin set is silently skipped and the
-      // unified processor is never rebuilt. Tying the key to plugin
-      // identity plus tuple options forces a fresh mount whenever the
-      // rehype chain actually changes — without this, the anonymization plugin
-      // wouldn't run for messages whose children text was identical
-      // when first rendered with no plugins.
-      <Streamdown
-        // Chat content can be any language regardless of the UI locale, so let
-        // each message resolve its own direction (Latin -> LTR, Arabic -> RTL)
-        // instead of inheriting the RTL shell and reordering Latin punctuation.
-        dir="auto"
-        key={rehypePluginsKey(effectiveRehypePlugins)}
-        className={cn(
-          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-          "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5",
-          "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5",
-          // `inline` keeps the loose-list `<p>` next to the list marker
-          // (Tailwind would otherwise need to scan streamdown's compiled
-          // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
-          "[&_li]:my-1 [&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
-          className,
-        )}
-        plugins={streamdownPlugins}
-        allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
-        components={{
-          ...messageComponents,
-          ...components,
-          img: components?.img ?? messageComponents.img,
-        }}
-        rehypePlugins={effectiveRehypePlugins}
-        {...props}
-        // Streaming parses each block separately, yielding block-local positions.
-        // Settled editable answers need one parse of the unchanged full source.
-        {...(sourceOffsets
-          ? ({
-              mode: "static",
-              parseIncompleteMarkdown: false,
-              normalizeHtmlIndentation: false,
-            } as const)
-          : {})}
-      />
+      <AnswerTreeIds prefix={treeIdPrefix}>
+        <Streamdown
+          // Chat content can be any language regardless of the UI locale, so let
+          // each message resolve its own direction (Latin -> LTR, Arabic -> RTL)
+          // instead of inheriting the RTL shell and reordering Latin punctuation.
+          dir="auto"
+          key={rehypePluginsKey(effectiveRehypePlugins)}
+          className={cn(
+            "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+            "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:ps-5",
+            "[&_ul]:my-2 [&_ul]:list-disc [&_ul]:ps-5",
+            // `inline` keeps the loose-list `<p>` next to the list marker
+            // (Tailwind would otherwise need to scan streamdown's compiled
+            // JS to pick up its own `[&>p]:inline` utility on each `<li>`).
+            "[&_li]:my-1 [&_li>p]:my-0 [&_li>p]:inline [&_li>p+p]:mt-2",
+            className,
+          )}
+          plugins={streamdownPlugins}
+          allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
+          BlockComponent={AnswerBlock}
+          components={{
+            ...messageComponents,
+            ...components,
+            // Links take ids from their place in the answer, so a streamed
+            // answer and its reload name them alike.
+            a: typeof link === "string" ? link : withAnswerLinkIds(link),
+            img: components?.img ?? messageComponents.img,
+          }}
+          rehypePlugins={effectiveRehypePlugins}
+          {...props}
+          // Streaming parses each block separately, yielding block-local positions.
+          // Settled editable answers need one parse of the unchanged full source.
+          {...(sourceOffsets
+            ? ({
+                mode: "static",
+                parseIncompleteMarkdown: false,
+                normalizeHtmlIndentation: false,
+              } as const)
+            : {})}
+        />
+      </AnswerTreeIds>
     );
   },
   // Children covers streaming text deltas; `isAnimating` marks the last

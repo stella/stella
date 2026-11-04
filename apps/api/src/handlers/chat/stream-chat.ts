@@ -873,6 +873,7 @@ export const streamChat = async ({
     runMode,
     sandboxRun,
     localRun,
+    chatTurnId: run.execution.id,
     usageLane,
     runId,
     parentRunId,
@@ -1516,6 +1517,8 @@ type RunChatAttemptsProps = {
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
   localRun: LocalChatRun | undefined;
+  /** The turn this attempt produces for. */
+  chatTurnId: SafeId<"chatTurn">;
   /** Budget lane the pre-flight resolved for this turn. */
   usageLane: UsageEventLane;
   runId: string;
@@ -1549,6 +1552,7 @@ const runChatAttempts = async function* ({
   runMode,
   sandboxRun,
   localRun,
+  chatTurnId,
   usageLane,
   runId,
   parentRunId,
@@ -1567,10 +1571,13 @@ const runChatAttempts = async function* ({
     // nothing falls back to one, and its chunks enter the same pipeline.
     yield* localRun.stream({
       chatRunId: runId,
+      chatTurnId,
       messages: convertMessagesToModelMessages([...surfaces.messages]),
       instructions: surfaces.system,
       resume,
-      abortSignal,
+      // The run's own cut, as the provider gets it: a stop on any task, the
+      // deadline, a lost owner or admission, a failed production.
+      abortSignal: abortController.signal,
     });
     return;
   }

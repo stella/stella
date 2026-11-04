@@ -27,12 +27,14 @@ import {
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
+  chatTurns,
   desktopRunnerCommands,
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { CHAT_TURN_RUN_ENDING_STATUSES } from "@/api/lib/chat/turn-status";
 import {
   withAggregateLock,
   withAggregateTransaction,
@@ -1028,6 +1030,71 @@ export const expireAbandonedRuns = async (
   });
 };
 
+/**
+ * Queue a cancel for every open run whose chat turn no longer holds it
+ * (`CHAT_TURN_RUN_ENDING_STATUSES`): the turn was stopped, failed, superseded
+ * or ended while its run still waited or worked. A turn may end on any API
+ * task, or with no task alive, so the sweep finds these from the rows rather
+ * than from whoever ended the turn. One statement queues them all; a run
+ * keeps one cancel (its key is the run), so a later sweep queues nothing more.
+ * Returns where to ring for the cancels whose computer is connected.
+ */
+export const cancelRunsOfEndedChatTurns = async (
+  db: Pick<DesktopRunnerDb, "select" | "insert">,
+  { limit }: { limit: number },
+): Promise<RunHolder[]> => {
+  const ended = db
+    .select({
+      runId: runs.runId,
+      kind: sql<"run.cancel">`'run.cancel'`.as("kind"),
+      commandKey: sql<string>`${runs.runId}`.as("command_key"),
+      payload:
+        sql<object>`jsonb_build_object('type', 'run.cancel', 'runId', ${runs.runId}::text)`.as(
+          "payload",
+        ),
+    })
+    .from(runs)
+    .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+    .where(
+      and(
+        inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+        inArray(chatTurns.status, CHAT_TURN_RUN_ENDING_STATUSES),
+        // A run with its cancel queued is not read again.
+        sql`NOT EXISTS (SELECT 1 FROM ${desktopRunnerCommands} WHERE ${desktopRunnerCommands.runId} = ${runs.runId} AND ${desktopRunnerCommands.kind} = 'run.cancel')`,
+      ),
+    )
+    .orderBy(asc(runs.updatedAt))
+    .limit(limit);
+  // audit: skip - runner socket bookkeeping; the chat turn that ended audits the work
+  const queued = await db
+    .insert(desktopRunnerCommands)
+    .select(ended)
+    .onConflictDoNothing()
+    .returning({ runId: desktopRunnerCommands.runId });
+  if (queued.length === 0) {
+    return [];
+  }
+  return await db
+    .select({ sessionId: runner.sessionId, instanceId: runner.instanceId })
+    .from(runs)
+    .innerJoin(
+      runner,
+      and(
+        eq(runner.userId, runs.userId),
+        eq(runner.organizationId, runs.organizationId),
+        eq(runner.desktopId, runs.desktopId),
+        eq(runner.deviceJkt, runs.deviceJkt),
+        eq(runner.connection, "connected"),
+      ),
+    )
+    .where(
+      inArray(
+        runs.runId,
+        queued.map(({ runId }) => runId),
+      ),
+    );
+};
+
 export type PendingCommand = {
   readonly id: number;
   readonly runId: string;
@@ -1211,6 +1278,15 @@ export type RunOwner = {
   readonly organizationId: SafeId<"organization">;
 };
 
+/**
+ * The chat turn a run is started for. The turn reads the run; the run lives
+ * as long as the turn holds it (`CHAT_TURN_RUN_ENDING_STATUSES`).
+ */
+export type ChatRunBinding = {
+  readonly threadId: SafeId<"chatThread">;
+  readonly turnId: SafeId<"chatTurn">;
+};
+
 type InsertRunOptions = {
   owner: RunOwner;
   runId: string;
@@ -1219,8 +1295,8 @@ type InsertRunOptions = {
   harnessVersion: string;
   model: string;
   workspaceIds: readonly SafeId<"workspace">[];
-  /** The chat thread whose turn starts the run, when one does. */
-  chatThreadId?: SafeId<"chatThread"> | null;
+  /** The chat turn that starts and reads the run, when one does. */
+  chat?: ChatRunBinding | null;
   payload: object;
   now: Date;
   leaseMs: number;
@@ -1296,7 +1372,8 @@ export const insertAssignedRun = async (
       harness,
       harnessVersion,
       workspaceIds: [...options.workspaceIds],
-      chatThreadId: options.chatThreadId ?? null,
+      chatThreadId: options.chat?.threadId ?? null,
+      chatTurnId: options.chat?.turnId ?? null,
       state: "assigned",
       leaseExpiresAt: leaseUntil(now, options.leaseMs),
       createdAt: now,
@@ -1624,7 +1701,7 @@ export const readChatRunSession = async (
 
 type ChatRunForRequestOptions = {
   owner: RunOwner;
-  chatThreadId: SafeId<"chatThread">;
+  chat: ChatRunBinding;
   requestId: string;
 };
 
@@ -1641,12 +1718,13 @@ export type ChatRunForRequest = {
 };
 
 /**
- * The run of the thread that asked request `requestId` (an approval or a
- * blocking question), or `null` when no run of this thread and member did.
+ * The run of the chat turn that asked request `requestId` (an approval or a
+ * blocking question), or `null` when no run of this turn, thread and member
+ * did.
  */
 export const readChatRunForRequest = async (
   db: Pick<DesktopRunnerDb, "select">,
-  { owner, chatThreadId, requestId }: ChatRunForRequestOptions,
+  { owner, chat, requestId }: ChatRunForRequestOptions,
 ): Promise<ChatRunForRequest | null> =>
   (
     await db
@@ -1668,7 +1746,8 @@ export const readChatRunForRequest = async (
       )
       .where(
         and(
-          eq(runs.chatThreadId, chatThreadId),
+          eq(runs.chatThreadId, chat.threadId),
+          eq(runs.chatTurnId, chat.turnId),
           eq(runs.userId, owner.userId),
           eq(runs.organizationId, owner.organizationId),
         ),

@@ -4185,11 +4185,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::scripts/nightly-exact-base.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::scripts/ownership.test.ts::<module>::test timeout",
     "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
