@@ -64,7 +64,7 @@ CREATE FUNCTION "log_case_law_ranking_signal_authority_change"()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
   INSERT INTO public.case_law_ranking_signal_changes (decision_id)
@@ -88,7 +88,7 @@ CREATE FUNCTION "log_case_law_ranking_signal_group_change"()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public, pg_temp
+SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
   IF TG_OP <> 'INSERT' AND OLD.language_group_key IS NOT NULL THEN
