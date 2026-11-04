@@ -2786,6 +2786,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
       "undoImport": "Vrátiť import ({count})",
+      "undoImportConfirm": "Natrvalo odstrániť {count, plural, one {kontakt vytvorený} few {# kontakty vytvorené} many {# kontaktu vytvoreného} other {# kontaktov vytvorených}} týmto importom? Túto akciu nemožno vrátiť späť.",
+      "undoImportTitle": "Vrátiť tento import?",
+      "undoneRow": "Odstránené vrátením importu",
+      "undoneSummary": "Vrátenie importu odstránilo {count, plural, one {# vytvorený kontakt} few {# vytvorené kontakty} many {# vytvoreného kontaktu} other {# vytvorených kontaktov}}.",
+      "undoneToast": "Import vrátený: {count, plural, one {odstránený # kontakt} few {odstránené # kontakty} many {odstránených # kontaktu} other {odstránených # kontaktov}}",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",

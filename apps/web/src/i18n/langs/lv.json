@@ -2786,6 +2786,11 @@
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
       "undoImport": "Atsaukt importēšanu ({count})",
+      "undoImportConfirm": "Neatgriezeniski dzēst ar šo importēšanu {count, plural, zero {izveidotās # kontaktpersonas} one {izveidoto # kontaktpersonu} other {izveidotās # kontaktpersonas}}? Šo darbību nevar atsaukt.",
+      "undoImportTitle": "Atsaukt šo importēšanu?",
+      "undoneRow": "Noņemts, atsaucot importēšanu",
+      "undoneSummary": "Atsaucot importēšanu, {count, plural, zero {noņemtas # izveidotās kontaktpersonas} one {noņemta # izveidotā kontaktpersona} other {noņemtas # izveidotās kontaktpersonas}}.",
+      "undoneToast": "Importēšana atsaukta: {count, plural, zero {izdzēstas # kontaktpersonas} one {izdzēsta # kontaktpersona} other {izdzēstas # kontaktpersonas}}",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
       "warning": {
         "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",

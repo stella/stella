@@ -2786,6 +2786,11 @@
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
       "undoImport": "Importálás visszavonása ({count})",
+      "undoImportConfirm": "Véglegesen törli az importálással létrehozott {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+      "undoImportTitle": "Visszavonja ezt az importálást?",
+      "undoneRow": "Visszavonással eltávolítva",
+      "undoneSummary": "A visszavonás {count, plural, one {# létrehozott névjegyet} other {# létrehozott névjegyet}} távolított el.",
+      "undoneToast": "Importálás visszavonva: {count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
