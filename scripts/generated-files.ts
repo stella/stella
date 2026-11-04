@@ -234,6 +234,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/ocr-local/recognize-local.ts",
     "apps/api/src/lib/push/apns-config.ts",
     "apps/api/src/lib/push/push-delivery-queue.ts",
+    "apps/api/src/lib/push/timer-activity-queue.ts",
     "apps/api/src/lib/review-organization/*",
     "apps/api/src/lib/scheduler/*",
     "apps/api/src/lib/scheduler/tasks/*",
