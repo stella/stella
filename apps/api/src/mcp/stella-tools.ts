@@ -119,6 +119,7 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { externalRefFromColumns } from "@/api/lib/imports/external-ref";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { runInCorpusSearchLane } from "@/api/lib/legal-search/corpus-index-admission";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
@@ -2786,16 +2787,20 @@ const settleCaseLawQueryPages = async (
 /**
  * Run one phrasing's search and keep its promise: a statement the time budget
  * cancelled rejects rather than answers, and whether that rejection is this
- * phrasing's alone is decided once every phrasing has settled.
+ * phrasing's alone is decided once every phrasing has settled. Its index
+ * reads queue in lane `lane` (`corpus-index-admission.ts`), so under load
+ * the first phrasings finish before the last instead of all of them
+ * finishing late together.
  */
 const runCaseLawPhrasing = async (
   subCursor: string | null | undefined,
+  lane: number,
   start: () => Promise<Parameters<typeof readCaseLawSearchAnswer>[0]>,
 ): Promise<CaseLawSearchCallOutcome> => {
   if (subCursor === null) {
     return { type: "exhausted" };
   }
-  const run = start();
+  const run = runInCorpusSearchLane(lane, start);
   const answered = await Result.tryPromise({
     try: async () => await run,
     catch: (cause) => cause,
@@ -2963,11 +2968,12 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     };
   });
   const outcomes = await mapWithConcurrency({
-    items: requests,
+    items: requests.map((request, lane) => ({ ...request, lane })),
     limit: LIMITS.caseLawSearchQueriesMax,
-    operation: async ({ body, subCursor }) =>
+    operation: async ({ body, subCursor, lane }) =>
       await runCaseLawPhrasing(
         subCursor,
+        lane,
         async () =>
           await search({
             body,
