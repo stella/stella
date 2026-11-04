@@ -86,9 +86,10 @@ export const chatLocalHarnessOptions = (
 };
 
 /**
- * The name a harness reports for the thread's model, from any connected
- * computer that offers it; `null` while no computer reports it, so the
- * composer shows the model id instead.
+ * The name a harness reports for the thread's model, from any computer whose
+ * last report offers it. A disconnected computer's report still names the
+ * model correctly, so the composer keeps the name while the computer is away;
+ * `null` while no computer reports it, so the composer shows the model id.
  */
 export const localRunModelLabel = (
   readiness: ChatLocalRunReadiness | undefined,
