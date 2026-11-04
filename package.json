@@ -243,7 +243,7 @@
     "@libpdf/core": "0.5.3",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.90.0",
-    "@shadcn/lint": "0.1.0",
+    "@shadcn/lint": "0.2.3",
     "@silurus/ooxml": "0.89.7",
     "@stll/aho-corasick": "1.0.4",
     "@stll/aho-corasick-wasm": "1.0.4",
