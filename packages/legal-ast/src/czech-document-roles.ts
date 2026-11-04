@@ -1,4 +1,4 @@
-import { normalizeUnicode } from "@stll/text-normalize";
+import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
 
@@ -51,17 +51,24 @@ export const CZ_TAKTO = "takto:";
 export const isCzechTaktoLine = (text: string): boolean =>
   TAKTO_LINE_RE.test(text.trim());
 
+// parser-output-unchanged: [cz-nss] only the cz-ns adapter calls normalizeCzechJudgeName.
+// parser-output-unchanged: [cz-us] only the cz-ns adapter calls normalizeCzechJudgeName.
+// parser-output-unchanged: [cz-regional] only the cz-ns adapter calls normalizeCzechJudgeName.
 // Matched after whitespace collapses to single spaces, so each separator is at
 // most one space: unbounded `\s*` runs here would backtrack super-linearly.
 const JUDGE_SIGNATURE_SUFFIX_RE = / ?,? ?v\. ?r\.$/iu;
 
 /**
  * A judge's name as the signature block prints it: layout whitespace
- * collapsed and the `v. r.` (vlastní rukou) signature mark removed. The mark
- * says how the decision was signed, not who signed it.
+ * collapsed, a letter-spaced surname (`I š t v á n e k`) joined, and the
+ * `v. r.` (vlastní rukou) signature mark removed. Letter spacing is how the
+ * signature emphasises the name, not part of it; the mark says how the
+ * decision was signed, not who signed it.
  */
 export const normalizeCzechJudgeName = (printed: string): string =>
-  printed
+  // Spaced letters are joined before whitespace collapses: one space
+  // separates the letters of a spaced word, a wider gap separates words.
+  collapseSpacedLetters(printed.replaceAll(/[^\S ]/gu, " "))
     .replaceAll(/\s+/gu, " ")
     .trim()
     .replace(JUDGE_SIGNATURE_SUFFIX_RE, "")
