@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Cette conversation est trop longue pour être transmise à votre ordinateur. Commencez une nouvelle conversation pour l’y exécuter.",
       "refusalUnavailable": "L’exécution des conversations sur votre ordinateur n’est pas disponible pour votre compte.",
       "runOn": "Exécuter sur",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limite atteinte jusqu’à {time}",
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
-      "stateUnsupported": "Cette version n’est pas prise en charge"
+      "stateUnsupported": "Cette version n’est pas prise en charge",
+      "waitingForComputer": "En attente de la reconnexion de votre ordinateur…"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {
@@ -2784,6 +2786,11 @@
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
       "undoImport": "Annuler l’importation ({count})",
+      "undoImportConfirm": "Supprimer définitivement {count, plural, one {le contact créé} many {les # contacts créés} other {les # contacts créés}} par cette importation ? Cette action est irréversible.",
+      "undoImportTitle": "Annuler cette importation ?",
+      "undoneRow": "Supprimé par l’annulation",
+      "undoneSummary": "L’annulation a supprimé {count, plural, one {# contact créé} many {# contacts créés} other {# contacts créés}} par cette importation.",
+      "undoneToast": "Importation annulée : {count, plural, one {# contact supprimé} many {# contacts supprimés} other {# contacts supprimés}}",
       "validateFailed": "Impossible de vérifier ces contacts.",
       "warning": {
         "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",

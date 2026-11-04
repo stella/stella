@@ -12,7 +12,7 @@ import {
 } from "@stll/api-contract";
 import {
   chatToolExecutor,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
   isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
 import {
@@ -925,7 +925,7 @@ export const getAwaitingUserInteractions = (
     }
     if (
       (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-        !isServerChatToolCall(part)) ||
+        isBrowserResolvedChatToolCall(part)) ||
       isApprovedClientCallAwaitingResult(part)
     ) {
       interactions.push({

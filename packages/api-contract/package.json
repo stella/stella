@@ -72,6 +72,8 @@
     "./sk-court-tiers": "./src/sk-court-tiers.ts",
     "./case-law-filter-scope": "./src/case-law-filter-scope.ts",
     "./case-law-courts": "./src/case-law-courts.ts",
+    "./court-citation-aliases": "./src/court-citation-aliases.ts",
+    "./court-citation-directory": "./src/court-citation-directory.ts",
     "./case-law-court-abbreviations": "./src/case-law-court-abbreviations.ts",
     "./case-law-court-year": "./src/case-law-court-year.ts",
     "./law-year": "./src/law-year.ts",

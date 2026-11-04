@@ -326,6 +326,7 @@ const e2eRequired = (scope: "core" | "landing", files: readonly string[]) => {
 
 const desktopRustRequired = (files: readonly string[]) =>
   anyMatches(files, [
+    ".github/actions/cargo-deny/*",
     "apps/desktop/rust-toolchain.toml",
     "apps/desktop/src-tauri/*",
     "apps/desktop/fixtures/*",
@@ -963,10 +964,15 @@ export const OUTPUT_RULES = {
         p([
           "bun.lock",
           "*/bun.lock",
+          "Cargo.lock",
+          "*/Cargo.lock",
+          "Cargo.toml",
+          "*/Cargo.toml",
           "scripts/check-lockfile-release-ages.ts",
           "scripts/check-lockfile-release-ages.test.ts",
           "scripts/check-stll-quarantine-excludes.ts",
           "scripts/bun-lock-text.ts",
+          "scripts/crates-io-release-age.ts",
         ]),
       ),
     ),
@@ -998,6 +1004,7 @@ export const OUTPUT_RULES = {
           "scripts/rehearse-migration-upgrade.sh",
           "scripts/resolve-promoted-release.ts",
           "scripts/migration-rehearsal-db.ts",
+          "scripts/migration-rehearsal-startup-refusal.ts",
           ".github/workflows/ci.yml",
         ]),
       ),
@@ -1070,7 +1077,12 @@ export const OUTPUT_RULES = {
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
-        p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
+        p([
+          "packages/scan-engine/*",
+          ".github/actions/cargo-deny/*",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
       ),
     ),
   stack_redaction_browsers_required: (facts) =>
