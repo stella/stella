@@ -766,7 +766,11 @@ describe("run messages", () => {
   });
 
   test("a question pause an answer could not name is refused unstored", async () => {
-    const pause = (id: string, questions: unknown) => ({
+    const pause = (
+      id: string,
+      questions: unknown,
+      call: { toolCallId?: string },
+    ) => ({
       type: "RUN_FINISHED",
       runId: "desktop-run",
       threadId: "desktop-thread",
@@ -776,7 +780,7 @@ describe("run messages", () => {
           {
             id,
             reason: "user_input",
-            toolCallId: "item_q",
+            ...call,
             metadata: { kind: "question", questions },
           },
         ],
@@ -788,14 +792,18 @@ describe("run messages", () => {
       prompt: "Formal or friendly?",
       options: [],
       allowsFreeText: true,
+      multiSelect: false,
       secret: false,
     };
+    const named = { toolCallId: "item_q" };
     const desktopId = Bun.randomUUIDv7();
     for (const chunk of [
       // The harness's own id, not relabelled to a UUID.
-      pause("codex-request-number-7", [question]),
-      pause(Bun.randomUUIDv7(), [{ id: "tone" }]),
-      pause(Bun.randomUUIDv7(), []),
+      pause("codex-request-number-7", [question], named),
+      pause(Bun.randomUUIDv7(), [{ id: "tone" }], named),
+      pause(Bun.randomUUIDv7(), [], named),
+      // No tool call for the chat continuation to answer.
+      pause(Bun.randomUUIDv7(), [question], {}),
     ]) {
       // One installation throughout: the account holds few runners.
       const desktop = await openDesktop(first, desktopId);
@@ -2760,6 +2768,63 @@ describe("chat turns on a computer", () => {
     expect(
       back.received.filter((message) => message.type === "run.answer"),
     ).toHaveLength(1);
+    await back.close();
+  });
+
+  test("a queued answer that no longer opens cancels its run instead of holding back the commands after it", async () => {
+    const chatThreadId = await newThread();
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(chatInstance, desktopId);
+    await desktop.hello();
+    const { runId, requestId, run } = await pausedForQuestion({
+      desktop,
+      desktopId,
+      chatThreadId,
+      chatRunId: "chat-run-unreadable",
+    });
+    await desktop.close();
+    expect(
+      (
+        await control.answerQuestion({
+          owner,
+          runId,
+          requestId,
+          answers: ANSWERS,
+        })
+      ).unwrap(),
+    ).toMatchObject({ type: "queued" });
+    // The stored answers open to something that is not answers.
+    await db
+      .update(desktopRunnerCommands)
+      .set({
+        payload: {
+          type: "run.answer",
+          runId,
+          requestId,
+          sealedAnswers: {
+            ciphertext: Buffer.from("not answers").toString("base64"),
+            iv: Buffer.alloc(12).toString("base64"),
+          },
+        },
+      })
+      .where(
+        and(
+          eq(desktopRunnerCommands.runId, runId),
+          eq(desktopRunnerCommands.kind, "run.answer"),
+        ),
+      );
+    expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
+      type: "queued",
+    });
+    const back = await openDesktop(chatInstance, desktopId);
+    await back.hello([{ runId, lastSeq: run.position.seq }]);
+    await back.receive("run.interrupt", ofRun(runId));
+    expect(
+      back.received
+        .filter(ofRun(runId))
+        .map(({ type }) => type)
+        .filter((type) => type !== "run.token" && type !== "ack"),
+    ).toEqual(["run.cancel", "run.interrupt"]);
     await back.close();
   });
 

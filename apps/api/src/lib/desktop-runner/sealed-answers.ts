@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -9,6 +10,7 @@ import {
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * A question's answers may hold what the member typed for a secret (a
@@ -51,24 +53,49 @@ export const sealRunAnswer = async (
   };
 };
 
-/** The frame a stored `run.answer` is sent as; `null` when it no longer opens. */
+/** A stored `run.answer` as its frame, or that it will never open again. */
+type OpenedRunAnswer =
+  { type: "opened"; message: RunAnswerMessage } | { type: "unreadable" };
+
+/**
+ * The frame a stored `run.answer` is sent as. It is `unreadable` when the
+ * organization's key does not open it or what it opens to is not answers.
+ * Without a content key at all nothing opens yet, so that panics: the socket
+ * closes and the next one tries again once the deployment has its key.
+ */
 export const openRunAnswer = async (
   organizationId: SafeId<"organization">,
   { sealedAnswers, ...message }: StoredRunAnswer,
-): Promise<RunAnswerMessage | null> => {
-  const plaintext = await decryptContent(
-    organizationId,
-    Buffer.from(sealedAnswers.ciphertext, "base64"),
-    Buffer.from(sealedAnswers.iv, "base64"),
-  );
+): Promise<OpenedRunAnswer> => {
+  const decrypted = await Result.tryPromise({
+    try: async () =>
+      await decryptContent(
+        organizationId,
+        Buffer.from(sealedAnswers.ciphertext, "base64"),
+        Buffer.from(sealedAnswers.iv, "base64"),
+      ),
+    catch: (cause) => cause,
+  });
+  if (decrypted.isErr()) {
+    if (decrypted.error instanceof ConfigurationError) {
+      return panic(
+        "Queued answers cannot open: no content key",
+        decrypted.error,
+      );
+    }
+    return { type: "unreadable" };
+  }
   const answers = v.safeParse(
     v.pipe(v.string(), v.parseJson(), desktopRunnerQuestionAnswersSchema),
-    plaintext,
+    decrypted.value,
   );
   return answers.success
     ? {
-        ...message,
-        answers: answers.output satisfies DesktopRunnerQuestionAnswers,
+        type: "opened",
+        message: {
+          ...message,
+          answers: answers.output satisfies DesktopRunnerQuestionAnswers,
+        },
       }
-    : null;
+    : { type: "unreadable" };
 };

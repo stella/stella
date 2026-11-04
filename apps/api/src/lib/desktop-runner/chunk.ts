@@ -21,8 +21,8 @@ export type QuestionPause = {
   type: "question";
   /** The request id an answer names; the interrupt's id. */
   requestId: string;
-  /** The tool call the question is persisted as, when the interrupt names it. */
-  toolCallId: string | undefined;
+  /** The tool call the question is persisted as; the answer continues it. */
+  toolCallId: string;
   questions: HarnessQuestions;
 };
 
@@ -30,10 +30,12 @@ export type QuestionPause = {
  * The blocking question among a pause's interrupts: the one whose
  * `metadata.kind` is `"question"`. Its id is the request id an answer names;
  * the desktop mints it as a UUID, so a question without one cannot be
- * answered and is malformed, as is one whose `metadata.questions` an answer
- * cannot be checked against. The harness asks one question request at a
- * time, so two are malformed too. The live chunk and a stored turn's resume
- * snapshot carry the same interrupts, so both read alike.
+ * answered and is malformed. So is one without the `toolCallId` its tool call
+ * is persisted as, since the chat continuation answers that call, and one
+ * whose `metadata.questions` an answer cannot be checked against. The harness
+ * asks one question request at a time, so two are malformed too. The live
+ * chunk and a stored turn's resume snapshot carry the same interrupts, so
+ * both read alike.
  */
 export const questionInterruptOf = (
   interrupts: readonly unknown[],
@@ -57,7 +59,7 @@ export const questionInterruptOf = (
   );
   return rest.length === 0 &&
     v.is(requestIdSchema, requestId) &&
-    (toolCallId === undefined || typeof toolCallId === "string") &&
+    typeof toolCallId === "string" &&
     questions.success
     ? {
         type: "question",
