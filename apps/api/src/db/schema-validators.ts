@@ -185,7 +185,7 @@ export type CaseLawQuestionContent = v.InferOutput<
  * below have no branch for them. A money answer carries the currency the
  * source states, falling back to the column's default currency.
  */
-export const aiExtractablePropertyContentSchema = v.union([
+const aiExtractablePropertyContentSchema = v.union([
   ...caseLawQuestionContentSchema.options,
   moneyPropertyContentSchema,
 ]);

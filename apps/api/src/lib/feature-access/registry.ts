@@ -125,6 +125,14 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   // the columns already in a matter keep running for every member.
   [TABLE_ANALYSIS_FEATURE_ID]: {
     enrolment: "invitation",
+    ownership: {
+      handlerDirectories: [],
+      tableSchemaFiles: [],
+      coreModules: [],
+      conditionalModules: [
+        "apps/api/src/lib/properties/table-analysis-access.ts",
+      ],
+    },
   },
   [GENERATED_VIEWS_FEATURE_ID]: {
     enrolment: "general-availability",

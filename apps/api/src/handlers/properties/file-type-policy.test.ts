@@ -238,7 +238,12 @@ test("file column updates preserve document references", async () => {
         const after = await db.query.properties.findFirst({
           where: { id: { eq: propertyId } },
         });
-        if (
+        // An AI money column is the table-analysis feature, which this caller
+        // was not granted: admission refuses it before the file policy runs.
+        if (content.type === "money" && ai) {
+          expect(response).toMatchObject({ code: 404 });
+          expect(after).toEqual(before);
+        } else if (
           file !== (content.type === "file") ||
           (content.type === "file" && ai)
         ) {
