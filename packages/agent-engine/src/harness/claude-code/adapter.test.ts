@@ -92,7 +92,10 @@ const LogEntrySchema = v.looseObject({
   ),
 });
 
-const harnessFor = (scenario: FakeScenarioName) => {
+const harnessFor = (
+  scenario: FakeScenarioName,
+  { requestTimeoutMs = 10_000 }: { requestTimeoutMs?: number } = {},
+) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-claude-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
   const claudeConfigDir = path.join(root, "claude-config");
@@ -109,6 +112,7 @@ const harnessFor = (scenario: FakeScenarioName) => {
       PATH: process.env["PATH"] ?? "",
     },
     gracePeriodMs: 1000,
+    requestTimeoutMs,
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
@@ -757,10 +761,13 @@ describe("Claude Code adapter over stream-json stdio", () => {
       sessionId: harnessSessionId(FAKE_RESUMED_SESSION_ID),
       continuation: { type: "resumed" },
     });
-    expect(received().find(({ type }) => type === "user")?.message).toEqual({
-      role: "user",
-      content: [{ type: "text", text: "Search both." }],
-    });
+    expect(
+      received()
+        .filter(({ type }) => type === "user")
+        .map(({ message }) => message),
+    ).toEqual([
+      { role: "user", content: [{ type: "text", text: "Search both." }] },
+    ]);
   });
 
   test("a signed-out harness, or one that would bill an API key, refuses the turn before any server or prompt", async () => {
@@ -886,7 +893,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       ],
       capabilities: ["approvals", "interrupt", "resume"],
       // The exhausted model-specific window does not count.
-      usageLimit: { resetsAt: "2026-10-28T14:00:00Z" },
+      usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
     });
     expect(harness.startups()[0]?.cwd).toBe(
       realpathSync(harness.claudeConfigDir),
@@ -902,9 +909,10 @@ describe("Claude Code adapter over stream-json stdio", () => {
   });
 
   test("a probe with plan headroom reports no limit; a signed-out one reads no usage", async () => {
-    const available = harnessFor("probe_available");
-    const ready = await available.adapter.probe();
-    expect(Result.isOk(ready) && ready.value.usageLimit).toBeNull();
+    for (const scenario of ["probe_available", "probe_reset_passed"] as const) {
+      const ready = await harnessFor(scenario).adapter.probe();
+      expect(Result.isOk(ready) && ready.value.usageLimit).toBeNull();
+    }
     for (const scenario of ["probe_signed_out", "api_key"] as const) {
       const harness = harnessFor(scenario);
       const probed = await harness.adapter.probe();
@@ -915,6 +923,15 @@ describe("Claude Code adapter over stream-json stdio", () => {
       });
       expect(harness.controlRequests("get_usage")).toEqual([]);
     }
+  });
+
+  test("a CLI that never answers initialize is ended by the request deadline", async () => {
+    const harness = harnessFor("unresponsive", { requestTimeoutMs: 300 });
+    const probed = await harness.adapter.probe();
+    expect(Result.isError(probed) && probed.error).toMatchObject({
+      reason: "harness_unavailable",
+      message: "The harness did not answer initialize in time.",
+    });
   });
 
   test("a default the CLI does not list is reported once, under its own id", async () => {
@@ -941,6 +958,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       claudeConfigDir,
       environment: {},
       gracePeriodMs: 100,
+      requestTimeoutMs: 10_000,
       onBackgroundError: (error) => {
         backgroundErrors.push(error);
       },
@@ -970,6 +988,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
         claudeConfigDir: path.join(process.env["HOME"] ?? "/", ".claude"),
         environment: {},
         gracePeriodMs: 10,
+        requestTimeoutMs: 10_000,
         onBackgroundError: () => undefined,
       }),
     ).toThrow("CLAUDE_CONFIG_DIR must be stella's");

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { homedir } from "node:os";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
@@ -69,8 +70,13 @@ export type ClaudeCodeHarnessAdapterOptions = {
   claudeConfigDir: string;
   /** Base environment; credential and endpoint overrides are dropped. */
   environment: Readonly<Record<string, string>>;
-  /** How long an interrupt or a shutdown waits before the process is killed. */
+  /**
+   * How long an interrupt or a shutdown waits before the process is killed,
+   * and how long a killed process gets before SIGKILL.
+   */
   gracePeriodMs: number;
+  /** How long any control request to the harness waits for its answer. */
+  requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
 };
@@ -222,6 +228,10 @@ const connect = async ({
       launch: options.launch,
       args,
       detached: createDetached(options.onBackgroundError),
+      deadlines: {
+        requestMs: options.requestTimeoutMs,
+        terminateMs: options.gracePeriodMs,
+      },
       cwd,
       env: childEnvironment(options),
       handlers: {
@@ -338,7 +348,9 @@ const readUsageLimit = async (
   }
   const { rate_limits_available: available, rate_limits: windows } =
     parsed.output;
-  const resetsAt = available ? usageLimitResetsAt(windows) : null;
+  const resetsAt = available
+    ? usageLimitResetsAt(windows, Temporal.Now.instant())
+    : null;
   return resetsAt === null ? null : { resetsAt };
 };
 
