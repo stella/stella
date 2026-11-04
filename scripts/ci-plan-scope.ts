@@ -326,6 +326,7 @@ const e2eRequired = (scope: "core" | "landing", files: readonly string[]) => {
 
 const desktopRustRequired = (files: readonly string[]) =>
   anyMatches(files, [
+    ".github/actions/cargo-deny/*",
     "apps/desktop/rust-toolchain.toml",
     "apps/desktop/src-tauri/*",
     "apps/desktop/fixtures/*",
@@ -1075,7 +1076,12 @@ export const OUTPUT_RULES = {
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
-        p(["packages/scan-engine/*", "bun.lock", ".github/workflows/ci.yml"]),
+        p([
+          "packages/scan-engine/*",
+          ".github/actions/cargo-deny/*",
+          "bun.lock",
+          ".github/workflows/ci.yml",
+        ]),
       ),
     ),
   stack_redaction_browsers_required: (facts) =>

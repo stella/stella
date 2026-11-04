@@ -6612,6 +6612,22 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+      - name: Install cargo-deny
+        timeout-minutes: 10
+        uses: ./.github/actions/cargo-deny
+
+      # As for the desktop crate: licenses, bans and sources read only the
+      # resolved graph, fetched for every target with bounded retries, then
+      # checked once offline. Advisories run on the Dependency Audit schedule.
+      - name: Fetch license audit inputs
+        timeout-minutes: 10
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+
+      - name: License audit
+        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
+
       - name: Save Rust build cache
         if: success()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
