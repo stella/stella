@@ -1,6 +1,6 @@
-import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -13,7 +13,7 @@ import {
  * and protocol handling run unmodified in tests without a model provider.
  * Its startup (arguments, working directory, the environment variables the
  * adapter controls) and every message it receives are appended to
- * `$FAKE_CLAUDE_LOG` for the test to inspect.
+ * `$FAKE_HARNESS_LOG` for the test to inspect.
  *
  * Usage: `bun scripts/fake-claude-code-cli.ts <scenario> [CLI arguments]`.
  */
@@ -666,7 +666,6 @@ const IncomingSchema = v.looseObject({
   request: v.optional(v.looseObject({ subtype: v.string() })),
   response: v.optional(v.looseObject({ request_id: v.optional(v.string()) })),
 });
-type Incoming = v.InferOutput<typeof IncomingSchema>;
 
 /** Environment variables the adapter sets or must drop, as the CLI saw them. */
 const OBSERVED_ENV =
@@ -676,69 +675,27 @@ const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
 ) => {
-  const requests: Incoming[] = [];
-  const responses: Incoming[] = [];
-  const users: Incoming[] = [];
-  const state: { wake: (() => void) | null; closed: boolean } = {
-    wake: null,
-    closed: false,
-  };
-  const write = (message: object) => {
-    process.stdout.write(`${JSON.stringify(message)}\n`);
-  };
-  const wakeReader = () => {
-    const wake = state.wake;
-    state.wake = null;
-    if (wake !== null) {
-      wake();
-    }
-  };
-
-  const reading = (async () => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const bytes of Bun.stdin.stream()) {
-      buffer += decoder.decode(bytes, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        const raw: unknown = JSON.parse(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-        log({ received: raw });
-        const message = v.parse(IncomingSchema, raw);
-        if (message.type === "control_request") {
-          requests.push(message);
-        } else if (message.type === "control_response") {
-          responses.push(message);
-        } else if (message.type === "user") {
-          users.push(message);
-        }
-        wakeReader();
+  const { reading, take, write } = openFakeHarnessPeer({
+    schema: IncomingSchema,
+    queueOf: (message) => {
+      switch (message.type) {
+        case "control_request":
+          return "requests";
+        case "control_response":
+          return "responses";
+        case "user":
+          return "users";
+        default:
+          return null;
       }
-    }
-    state.closed = true;
-    wakeReader();
-  })();
-
-  const take = async (queue: Incoming[]): Promise<Incoming | null> => {
-    for (;;) {
-      const message = queue.shift();
-      if (message !== undefined) {
-        return message;
-      }
-      if (state.closed) {
-        return null;
-      }
-      const { promise, resolve } = Promise.withResolvers<undefined>();
-      state.wake = () => resolve(undefined);
-      await promise;
-    }
-  };
+    },
+    log,
+  });
 
   let cliRequestId = 0;
   for (const step of steps) {
     if ("expect" in step) {
-      const message = await take(requests);
+      const message = await take("requests");
       if (message === null) {
         return;
       }
@@ -762,7 +719,7 @@ const run = async (
               },
       });
     } else if ("expectUser" in step) {
-      if ((await take(users)) === null) {
+      if ((await take("users")) === null) {
         return;
       }
     } else if ("emit" in step) {
@@ -774,7 +731,7 @@ const run = async (
         request_id: `cli-${String(cliRequestId)}`,
         request: step.control,
       });
-      if ((await take(responses)) === null) {
+      if ((await take("responses")) === null) {
         return;
       }
     } else if ("cancelLast" in step) {
@@ -794,10 +751,7 @@ const run = async (
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
   const args = process.argv.slice(3);
-  const logPath = process.env["FAKE_CLAUDE_LOG"] ?? "";
-  const log = (entry: object) => {
-    appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
-  };
+  const log = fakeHarnessLog();
   log({
     startup: {
       args,

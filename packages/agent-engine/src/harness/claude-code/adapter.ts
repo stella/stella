@@ -24,6 +24,7 @@ import {
   harnessSessionId,
 } from "../events";
 import { buildTurnPrompt } from "../transcript-handoff";
+import { settlesWithin } from "../turn-lifecycle";
 import {
   type ClaudeCliClient,
   type ClaudeCliHandlers,
@@ -153,9 +154,6 @@ const DEFAULT_MODEL_ROW = "default";
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 /** Missing-session refusals, in the CLI's wording. */
 const SESSION_MISSING = /no conversation found/iu;
-
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
 
 const validateOptions = (options: ClaudeCodeHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {

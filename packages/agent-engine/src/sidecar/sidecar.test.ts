@@ -164,8 +164,7 @@ const spawnHolder = async (at: Place = place()): Promise<HolderProcess> => {
       stderr: "ignore",
       env: {
         PATH: process.env["PATH"] ?? "",
-        FAKE_CODEX_LOG: at.fakeLog,
-        FAKE_CLAUDE_LOG: at.fakeLog,
+        FAKE_HARNESS_LOG: at.fakeLog,
         OPENAI_API_KEY: "inherited-key",
       },
     },
@@ -1170,7 +1169,7 @@ describe("harness holder over its socket", () => {
       log: () => {},
       environment: {
         PATH: process.env["PATH"] ?? "",
-        FAKE_CODEX_LOG: path.join(root, "fake.log"),
+        FAKE_HARNESS_LOG: path.join(root, "fake.log"),
       },
       processGrantTimeoutMs: WAIT_MS,
     });
@@ -1288,7 +1287,7 @@ describe("holder limits and timers", () => {
       sidecarVersion: "1.4.0",
       environment: {
         PATH: process.env["PATH"] ?? "",
-        FAKE_CODEX_LOG: at.fakeLog,
+        FAKE_HARNESS_LOG: at.fakeLog,
       },
       idleExitMs: 60_000,
       helloTimeoutMs: 5000,

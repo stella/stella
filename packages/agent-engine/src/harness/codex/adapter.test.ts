@@ -85,7 +85,7 @@ const harnessFor = (scenario: FakeScenario) => {
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
     codexHome,
-    environment: { FAKE_CODEX_LOG: logPath, PATH: process.env["PATH"] ?? "" },
+    environment: { FAKE_HARNESS_LOG: logPath, PATH: process.env["PATH"] ?? "" },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
@@ -491,7 +491,7 @@ describe("Codex adapter over a stdio app-server", () => {
       }),
       deadlines: { requestMs: 300, terminateMs: 300 },
       cwd: root,
-      env: { FAKE_CODEX_LOG: log, PATH: process.env["PATH"] ?? "" },
+      env: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
       handlers: {
         notification: (method) => {
           if (method === "fake/ready") {

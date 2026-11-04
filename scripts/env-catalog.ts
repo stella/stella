@@ -1489,9 +1489,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
-  // The fake Codex app server logs what it receives, and the CODEX_HOME it
-  // started with, to the file its tests name.
-  "FAKE_CODEX_LOG",
+  // The fake harness CLIs log how they started and what they receive to the
+  // file their tests name; the fake Codex app server also logs its CODEX_HOME.
+  "FAKE_HARNESS_LOG",
   "CODEX_HOME",
   // The desktop's stand-in harness holder (a re-run of its own test binary)
   // takes its folder, socket and log file from the test that starts it.
