@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit vyčerpán do {time}",
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
-      "stateUnsupported": "Tato verze není podporována"
+      "stateUnsupported": "Tato verze není podporována",
+      "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
