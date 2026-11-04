@@ -15,7 +15,7 @@ import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixt
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 /** The page the scaling case reads, at both fixture sizes. */
-export const COURT_CATALOG_SCALING_PAGE = 10;
+const COURT_CATALOG_SCALING_PAGE = 10;
 
 const sourceIdFor = (size: number) =>
   `01990000-00c5-7000-8000-${size.toString(16).padStart(12, "0")}`;
