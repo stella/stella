@@ -83,6 +83,12 @@ export const timerActivityDevices = p.pgTable(
     actionKeyHash: p.text("action_key_hash"),
     /** When that key stops working. */
     actionKeyExpiresAt: timestamptz("action_key_expires_at"),
+    /** The key issued before it, which keeps working until it expires, for a phone that missed the newer one. */
+    previousActionKeyHash: p.text("previous_action_key_hash"),
+    /** When the previous key stops working. */
+    previousActionKeyExpiresAt: timestamptz("previous_action_key_expires_at"),
+    /** Whether the phone said it holds a live key, so updates may show its buttons. */
+    actionKeyHeld: p.boolean("action_key_held").notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /** Last registration; the oldest phone is evicted first. */
     lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),

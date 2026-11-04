@@ -15,6 +15,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import {
   TIMER_ACTIVITY_ACTION_KEY_HOURS,
+  TIMER_ACTIVITY_ACTION_KEY_MARGIN_HOURS,
   TIMER_ACTIVITY_DEVICES_PER_USER_MAX,
 } from "@stll/api-contract/timer-activity";
 import type {
@@ -67,8 +68,9 @@ const TIMER_ACTIVITY_START_HOLD_HOURS = 8;
  * File what a phone holds now. The app sends its whole state each time, so
  * the row is replaced, not merged, but only by a newer registration and
  * only while its sign-in lasts: one that arrives late, after a newer one or
- * after the sign-out, changes nothing. A registration also forgets that the
- * server started an activity here, since the app now reports what it shows.
+ * after the sign-out, changes nothing, and answers false. A registration
+ * also forgets that the server started an activity here, since the app now
+ * reports what it shows.
  * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the signed-in rows seen
  * longest ago are dropped. A sign-out's mark is kept for two weeks, longer
  * than any registration can be on its way, and as long as a silent phone is
@@ -87,7 +89,7 @@ export const registerTimerActivityDevice = async (
     registration: TimerActivityDeviceRegistration;
     userId: SafeId<"user">;
   },
-): Promise<void> => {
+): Promise<boolean> => {
   const device = {
     organizationId,
     environment: registration.environment,
@@ -100,16 +102,18 @@ export const registerTimerActivityDevice = async (
     activityToken: registration.activity?.token ?? null,
     startedAt: null,
     sequence: registration.sequence,
+    actionKeyHeld: registration.actionKeyHeld,
   };
   // audit: skip - the person's own phone address for their timer, holding no content
-  await tx
+  const filed = await tx
     .insert(timerActivityDevices)
     .values({ ...device, userId, deviceId })
     .onConflictDoUpdate({
       target: [timerActivityDevices.userId, timerActivityDevices.deviceId],
       set: { ...device, lastSeenAt: sql`now()` },
       setWhere: sql`${timerActivityDevices.signedOutAt} IS NULL AND ${timerActivityDevices.sequence} < excluded.sequence`,
-    });
+    })
+    .returning({ deviceId: timerActivityDevices.deviceId });
 
   await tx.delete(timerActivityDevices).where(
     and(
@@ -140,6 +144,7 @@ export const registerTimerActivityDevice = async (
       ),
     ),
   );
+  return filed.length > 0;
 };
 
 /**
@@ -160,6 +165,9 @@ export const unregisterTimerActivityDevice = async (
       signedOutAt: sql`now()`,
       actionKeyHash: null,
       actionKeyExpiresAt: null,
+      previousActionKeyHash: null,
+      previousActionKeyExpiresAt: null,
+      actionKeyHeld: false,
     })
     .where(
       and(
@@ -185,7 +193,10 @@ export type TimerActivityDevice = Pick<
 > & {
   /** Whether a start the server sent still holds, so no other may be sent. */
   starting: boolean;
-  /** Whether the phone holds a live key its Lock Screen buttons can act with. */
+  /**
+   * Whether the Lock Screen buttons may show: the phone said it holds a key,
+   * and the key outlives any activity shown now.
+   */
   actions: boolean;
   /** The registration as read, at full precision, to change it only if unchanged. */
   seenToken: TimestampCasToken;
@@ -203,6 +214,8 @@ const sharesToken = (column: "startToken" | "activityToken") =>
   );
 
 const actionKeyLive = sql<boolean>`coalesce(${timerActivityDevices.actionKeyExpiresAt} > now(), false)`;
+
+const actionKeyShown = sql<boolean>`${timerActivityDevices.actionKeyHeld} AND coalesce(${timerActivityDevices.actionKeyExpiresAt} > now() + make_interval(hours => ${TIMER_ACTIVITY_ACTION_KEY_MARGIN_HOURS}), false)`;
 
 const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(hours => ${TIMER_ACTIVITY_START_HOLD_HOURS}), false)`;
 
@@ -237,7 +250,7 @@ export const listTimerActivityDevices = async (
         startToken: timerActivityDevices.startToken,
         activityToken: timerActivityDevices.activityToken,
         starting: startHolds,
-        actions: actionKeyLive,
+        actions: actionKeyShown,
         seenToken: timestampCasToken(timerActivityDevices.lastSeenAt),
       })
       .from(timerActivityDevices)
@@ -350,9 +363,12 @@ export const createTimerActivityActionKeySecret = (
 export const hashTimerActivityActionKey = hashOpaqueToken;
 
 /**
- * Give a signed-in phone a new key for its Lock Screen buttons, replacing
- * any it held. The key is shown here once; only its SHA-256 is kept. Null
- * when the phone is not registered under this sign-in, or has signed out.
+ * Give a signed-in phone a new key for its Lock Screen buttons. The key is
+ * shown here once; only its SHA-256 is kept. The key it held stays working
+ * until it expires, so a phone that misses this answer, or keeps an older
+ * one, is not locked out; the buttons show again once the phone says it
+ * holds a key. Null when the phone is not registered under this sign-in, or
+ * has signed out.
  */
 export const issueTimerActivityActionKey = async (
   tx: Pick<Transaction, "update">,
@@ -372,8 +388,11 @@ export const issueTimerActivityActionKey = async (
   const [row] = await tx
     .update(timerActivityDevices)
     .set({
+      previousActionKeyHash: sql`${timerActivityDevices.actionKeyHash}`,
+      previousActionKeyExpiresAt: sql`${timerActivityDevices.actionKeyExpiresAt}`,
       actionKeyHash: keyHash,
       actionKeyExpiresAt: sql`now() + make_interval(hours => ${TIMER_ACTIVITY_ACTION_KEY_HOURS})`,
+      actionKeyHeld: false,
     })
     .where(
       and(
@@ -394,7 +413,8 @@ const ACTION_KEY_MAX_LENGTH = 200;
 
 /**
  * The person and organization a Lock Screen button key acts for, or null for
- * a key that is malformed, unknown, expired or from a signed-out phone.
+ * a key that is malformed, unknown, expired or from a signed-out phone. The
+ * phone's current key and the one before it both work until they expire.
  * Reads through the owner connection: the key is the only credential the
  * request carries, so no person is known before this answers.
  */
@@ -417,7 +437,12 @@ export const verifyTimerActivityActionKey = async (
   const [row] = await db
     .select({
       organizationId: timerActivityDevices.organizationId,
-      actionKeyHash: timerActivityDevices.actionKeyHash,
+      current: sql<
+        string | null
+      >`CASE WHEN ${actionKeyLive} THEN ${timerActivityDevices.actionKeyHash} END`,
+      previous: sql<
+        string | null
+      >`CASE WHEN ${timerActivityDevices.previousActionKeyExpiresAt} > now() THEN ${timerActivityDevices.previousActionKeyHash} END`,
     })
     .from(timerActivityDevices)
     .where(
@@ -425,20 +450,21 @@ export const verifyTimerActivityActionKey = async (
         eq(timerActivityDevices.userId, userId),
         eq(timerActivityDevices.deviceId, deviceId),
         isNull(timerActivityDevices.signedOutAt),
-        actionKeyLive,
       ),
     )
     .limit(1);
-  const storedHash = row?.actionKeyHash ?? null;
-  if (row === undefined || storedHash === null) {
+  if (row === undefined) {
     return null;
   }
   const presented = Buffer.from(hashTimerActivityActionKey(secret), "hex");
-  const stored = Buffer.from(storedHash, "hex");
-  if (
-    presented.length !== stored.length ||
-    !timingSafeEqual(presented, stored)
-  ) {
+  // Both live keys are compared, in constant time each.
+  const matches = [row.current, row.previous].map((storedHash) => {
+    const stored = Buffer.from(storedHash ?? "", "hex");
+    return (
+      stored.length === presented.length && timingSafeEqual(presented, stored)
+    );
+  });
+  if (!matches.includes(true)) {
     return null;
   }
   return {

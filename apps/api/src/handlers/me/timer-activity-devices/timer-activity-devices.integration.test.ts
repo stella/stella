@@ -72,6 +72,7 @@ const registration = (
 ): TimerActivityDeviceRegistration => ({
   sequence: nextSequence(),
   actionKey: false,
+  actionKeyHeld: false,
   activity: { id: "activity-1", token: tokenOf(2) },
   bundleId: "app.stll.mobile.preview",
   details: true,
@@ -371,7 +372,10 @@ describe("registering a phone for the Lock Screen timer", () => {
     ).toEqual(actor);
     for (const [deviceId, key] of [
       [OTHER_PHONE, issued.key],
-      [PHONE, `${issued.key.slice(0, -1)}0`],
+      [
+        PHONE,
+        `${issued.key.slice(0, -1)}${issued.key.endsWith("0") ? "1" : "0"}`,
+      ],
       [PHONE, issued.key.replace(ids.userA1, () => ids.userA2)],
       [PHONE, "not-a-key"],
     ] as const) {
@@ -379,24 +383,38 @@ describe("registering a phone for the Lock Screen timer", () => {
         await verifyTimerActivityActionKey(ownerDb(), { deviceId, key }),
       ).toBeNull();
     }
+    // The buttons show only once the phone says it holds the key.
+    expect((await listed(actor)).map(({ actions }) => actions)).toEqual([
+      false,
+    ]);
+    await register(actor, registration({ actionKeyHeld: true }));
     expect((await listed(actor)).map(({ actions }) => actions)).toEqual([true]);
   });
 
-  test("a new key replaces the old one, and signing out ends it", async () => {
+  test("a registration that arrives after a newer one gets no key", async () => {
     const actor = { userId: ids.userA1, organizationId: ids.orgA };
-    const first = (await register(actor, registration({ actionKey: true })))
-      .actionKey;
-    const second = (await register(actor, registration({ actionKey: true })))
-      .actionKey;
+    const late = registration({ actionKey: true });
+    await register(actor);
+    expect((await register(actor, late)).actionKey).toBeNull();
+  });
+
+  test("the key before the newest keeps working, one older does not, and signing out ends both", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    const issue = async () =>
+      (await register(actor, registration({ actionKey: true }))).actionKey;
+    const first = await issue();
+    const second = await issue();
     if (first === null || second === null) {
       expect.unreachable("a signed-in phone gets a key");
     }
-    expect(
-      await verifyTimerActivityActionKey(ownerDb(), {
-        deviceId: PHONE,
-        key: first.key,
-      }),
-    ).toBeNull();
+    const verify = async (key: string) =>
+      await verifyTimerActivityActionKey(ownerDb(), { deviceId: PHONE, key });
+    // A phone that missed the second answer still holds a working key.
+    expect(await verify(first.key)).toEqual(actor);
+    expect(await verify(second.key)).toEqual(actor);
+    await issue();
+    expect(await verify(first.key)).toBeNull();
+    expect(await verify(second.key)).toEqual(actor);
 
     await unregister(actor);
     expect(

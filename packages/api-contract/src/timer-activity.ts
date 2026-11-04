@@ -265,7 +265,9 @@ export const timerActivityDeviceRegistrationSchema = v.strictObject({
   /** Whether updates sent through Apple may name the timer's description and matter. */
   details: v.boolean(),
   /** Whether the phone wants a new key for its Lock Screen buttons. */
-  actionKey: v.boolean(),
+  actionKey: v.optional(v.boolean(), false),
+  /** Whether the phone holds a live key, so updates may show its buttons. */
+  actionKeyHeld: v.optional(v.boolean(), false),
   /** The token that starts an activity on this phone (iOS 17.2 and later). */
   startToken: v.nullable(pushDeviceTokenSchema),
   /** The activity the phone shows now and the token that updates it. */
@@ -293,10 +295,21 @@ export const timerActivityDeviceParamsSchema = v.object({
 export const TIMER_ACTIVITY_DEVICES_PER_USER_MAX = 10;
 
 /**
- * How long a Lock Screen button key works. The phone asks for a new one well
- * before then, each time it registers; sign-out ends it at once.
+ * How long a Lock Screen button key works; sign-out ends it at once. A new
+ * key leaves the one before it working until it expires too, so a phone that
+ * missed the answer, or kept an older one, is not locked out.
  */
-export const TIMER_ACTIVITY_ACTION_KEY_HOURS = 12;
+export const TIMER_ACTIVITY_ACTION_KEY_HOURS = 24;
+
+/**
+ * How much of a key must be left for the buttons to show: iOS runs an
+ * activity for at most eight hours and leaves it on the Lock Screen for up
+ * to four more, so a button shown now never outlives its key.
+ */
+export const TIMER_ACTIVITY_ACTION_KEY_MARGIN_HOURS = 12;
+
+/** The phone asks for a new key once less than this is left of its key. */
+export const TIMER_ACTIVITY_ACTION_KEY_RENEW_HOURS = 16;
 
 /** A key the phone's Lock Screen buttons act with, shown once. */
 export type TimerActivityActionKey = {

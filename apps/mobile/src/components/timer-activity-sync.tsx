@@ -28,6 +28,8 @@ import {
   onTimerActivityDetailsChange,
   readTimerActivityDetails,
   TIMER_ACTIVITY_PUSH,
+  timerActionKeyHeld,
+  timerActionKeyRenewalIn,
   timerActionsLive,
   timerActivityDeviceId,
   wantsTimerActionKey,
@@ -69,6 +71,9 @@ const showTimerActivity = async (
 
 const bundleIdSchema = v.picklist(MOBILE_APP_BUNDLE_IDS);
 
+/** The longest a timer may wait; longer ones fire at once on some engines. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /**
  * Tells the server what this phone holds now, so a timer changed on another
  * device reaches its Lock Screen, asking for a new Lock Screen button key
@@ -107,6 +112,10 @@ const reportTimerActivity = async ({
     session,
     epochMilliseconds(),
   ).catch(() => false);
+  const actionKeyHeld = await timerActionKeyHeld(
+    session,
+    epochMilliseconds(),
+  ).catch(() => false);
   // Numbered, never twice the same, so the server files only the newest
   // when two cross on the way.
   const sequence = await nextTimerActivitySequence(
@@ -127,6 +136,7 @@ const reportTimerActivity = async ({
             ? null
             : { id: activity.getId(), token: activityToken },
         actionKey,
+        actionKeyHeld,
         bundleId: bundleId.output,
         details,
         environment: APP_VARIANT === "development" ? "sandbox" : "production",
@@ -138,14 +148,19 @@ const reportTimerActivity = async ({
       source,
     })
   ).unwrapOr(null);
-  return issued === null
-    ? false
-    : await keepTimerActionKey({
-        deviceId,
-        expiresAt: Temporal.Instant.from(issued.expiresAt).epochMilliseconds,
-        key: issued.key,
-        session,
-      }).catch(() => false);
+  // A key that arrives after the sign-out is not kept: the sign-out has
+  // already taken the buttons back.
+  if (issued === null || isSignedOut(session)) {
+    return false;
+  }
+  const kept = await keepTimerActionKey({
+    deviceId,
+    expiresAt: Temporal.Instant.from(issued.expiresAt).epochMilliseconds,
+    key: issued.key,
+    sequence,
+    session,
+  }).catch(() => "unconfigured" as const);
+  return kept === "kept";
 };
 
 /**
@@ -170,6 +185,7 @@ const TimerActivityRefresh = ({
     // the value it had before the await, though unmounting can change it.
     const gone = () => unmounted.signal.aborted;
     let tokenSubscription: { remove: () => void } | undefined;
+    let renewal: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
       const timers = await listTimers({ fetch, source });
       // Time tracking off, or offline: the activity stays as it was.
@@ -200,6 +216,9 @@ const TimerActivityRefresh = ({
         (await timerActionsLive(session, epochMilliseconds()).catch(
           () => false,
         ));
+      if (gone()) {
+        return;
+      }
       const props = timerActivityOf({
         actions,
         details: "shown",
@@ -230,23 +249,30 @@ const TimerActivityRefresh = ({
         locale,
         source,
       });
-      // A first key turns the buttons on at once, without waiting for the
-      // next refresh.
-      if (
-        keptKey &&
-        !actions &&
-        props !== null &&
-        activity !== null &&
-        !gone()
-      ) {
-        await activity
-          .update({ ...props, actions: true })
-          .catch(() => undefined);
+      if (gone()) {
+        return;
+      }
+      // A new key: refresh at once, which reads the timers afresh, shows
+      // the buttons, and tells the server the phone holds the key.
+      if (keptKey) {
+        onToken();
+        return;
+      }
+      // While the app stays open, renew the key before it runs low.
+      const renewIn =
+        session === undefined
+          ? null
+          : await timerActionKeyRenewalIn(session, epochMilliseconds()).catch(
+              () => null,
+            );
+      if (renewIn !== null && !gone()) {
+        renewal = setTimeout(onToken, Math.min(renewIn, MAX_TIMEOUT_MS));
       }
     })();
     return () => {
       unmounted.abort();
       tokenSubscription?.remove();
+      clearTimeout(renewal);
     };
   }, [locale, onToken, source, words]);
 

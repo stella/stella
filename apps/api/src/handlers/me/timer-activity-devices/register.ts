@@ -23,7 +23,7 @@ const config = {
     "the timer's Live Activity, and whether updates may name the timer's " +
     "description and matter. Asked for, it answers a new key the phone's " +
     "Lock Screen buttons pause and resume the caller's own timers with, " +
-    "for 12 hours or until sign-out. Idempotent per device id.",
+    "for 24 hours or until sign-out. Idempotent per device id.",
   // permissions-exempt: the write touches only the caller's own phone rows
   // (user-scoped RLS); workspace:read is the access floor every member has.
   permissions: { workspace: ["read"] },
@@ -52,12 +52,14 @@ const registerTimerActivityDeviceEndpoint = createSafeRootHandler(
     };
     const actionKey = yield* Result.await(
       safeDb(async (tx) => {
-        await registerTimerActivityDevice(tx, {
+        const filed = await registerTimerActivityDevice(tx, {
           ...owner,
           deviceId: params.deviceId,
           registration: body,
         });
-        return body.actionKey
+        // A registration that arrived after a newer one gets no key: the
+        // phone keeps the newer registration's.
+        return filed && body.actionKey
           ? await issueTimerActivityActionKey(tx, {
               ...owner,
               deviceId: params.deviceId,
