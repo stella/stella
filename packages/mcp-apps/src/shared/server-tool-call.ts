@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 export type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
-export type AppServerToolCall =
+type AppServerToolCall =
   | { status: "answered"; result: AppToolResult }
   | { status: "unreachable"; error: unknown };
 
@@ -60,7 +60,7 @@ const MCP_ERROR_PREFIX = /^MCP error -?\d+: /u;
  * in its JSON-RPC `data` or serialized in its message, that error is the
  * answer; only a rejection without one means the server was never reached.
  */
-export const rejectedServerToolResult = (
+const rejectedServerToolResult = (
   error: unknown,
 ): AppToolResult | undefined => {
   if (!isRecord(error)) {
