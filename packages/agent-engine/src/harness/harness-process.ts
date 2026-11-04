@@ -39,6 +39,8 @@ type StartHarnessProcessOptions<TError> = {
 };
 
 type HarnessProcess<TId, TError> = {
+  /** The harness process's id, for the desktop to track it. */
+  pid: number;
   /** Writes one message; dropped once the process has exited. */
   write: (message: object) => void;
   /**
@@ -178,6 +180,7 @@ export const startHarnessProcess = <TId, TError>({
   })();
 
   return {
+    pid: child.pid,
     write,
     request: async (id, label, outgoing) => {
       if (state.closed) {

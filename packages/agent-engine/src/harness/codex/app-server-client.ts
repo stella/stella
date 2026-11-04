@@ -117,7 +117,7 @@ export const startAppServer = ({
   });
 
   return {
-    pid: child.pid,
+    pid: server.pid,
     request: async (method, params) => {
       const id = state.nextId;
       state.nextId += 1;
