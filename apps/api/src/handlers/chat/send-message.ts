@@ -2425,6 +2425,7 @@ export const createSendMessage = (
         ]),
       );
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });

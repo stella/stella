@@ -252,6 +252,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });

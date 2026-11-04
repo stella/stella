@@ -76,6 +76,7 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
     user,
   }): SafeHandlerGenerator<Response | ChatTurnResumeProbe> {
     const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
       getWorkspaceAccess,
       workspaceId,
     });

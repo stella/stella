@@ -47,6 +47,7 @@ export const readEditableMessageOnTx = async ({
   if (
     !row ||
     !(await hasChatWorkspaceAccess({
+      admitted: "active-or-archived",
       workspaceId: row.thread.workspaceId,
       getWorkspaceAccess,
     }))

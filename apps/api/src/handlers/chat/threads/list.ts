@@ -208,6 +208,7 @@ export const createGetThreads = ({
       // matter-scoped chat call, so a matter the caller cannot open (or one
       // being deleted) is a 404 rather than a silently empty list.
       const scope = yield* resolveChatScope({
+        admitted: "active-or-archived",
         getWorkspaceAccess,
         workspaceId: query.workspaceId,
       });
