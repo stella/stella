@@ -12129,9 +12129,9 @@
       },
       "deepseek/deepseek-v4-flash-0731": {
         "cost": {
-          "cache_read": 0.0238,
-          "input": 0.119,
-          "output": 0.238
+          "cache_read": 0.035,
+          "input": 0.059,
+          "output": 0.3
         },
         "limit": {
           "output": 943718
@@ -12249,7 +12249,7 @@
       },
       "deepseek/deepseek-v4.1-flash": {
         "cost": {
-          "cache_read": 0.006,
+          "cache_read": 0.012,
           "input": 0.045,
           "output": 0.5
         },
@@ -12280,9 +12280,9 @@
       },
       "deepseek/deepseek-v4.1-flash-1017": {
         "cost": {
-          "cache_read": 0.006,
-          "input": 0.3,
-          "output": 1.2
+          "cache_read": 0.003,
+          "input": 0.15,
+          "output": 0.6
         },
         "limit": {
           "output": 393216
@@ -13250,9 +13250,9 @@
       },
       "google/gemma-4-26b-a4b-it": {
         "cost": {
-          "cache_read": 0.012,
-          "input": 0.023,
-          "output": 0.069
+          "cache_read": 0.038,
+          "input": 0.077,
+          "output": 0.23
         },
         "limit": {
           "output": 32768
@@ -13742,11 +13742,11 @@
       },
       "meta-llama/llama-3.1-70b-instruct": {
         "cost": {
-          "input": 0.4,
-          "output": 0.4
+          "input": 0.72,
+          "output": 0.72
         },
         "limit": {
-          "output": 16384
+          "output": 8192
         },
         "modalities": {
           "input": [
@@ -13756,7 +13756,7 @@
         "reasoning": false,
         "release_date": "2024-07-23",
         "temperature": true,
-        "tool_call": true
+        "tool_call": false
       },
       "meta-llama/llama-3.1-8b-instruct": {
         "cost": {
@@ -13815,11 +13815,12 @@
       },
       "meta-llama/llama-3.3-70b-instruct": {
         "cost": {
-          "input": 0.1,
-          "output": 0.32
+          "cache_read": 0.1,
+          "input": 0.2,
+          "output": 0.52
         },
         "limit": {
-          "output": 16384
+          "output": 128000
         },
         "modalities": {
           "input": [
@@ -14099,7 +14100,7 @@
           "output": 4.25
         },
         "limit": {
-          "output": 131072
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -14348,9 +14349,9 @@
       },
       "minimax/minimax-m3.1-flash": {
         "cost": {
-          "cache_read": 0.015,
-          "input": 0.15,
-          "output": 0.6
+          "cache_read": 0.0075,
+          "input": 0.075,
+          "output": 0.3
         },
         "limit": {
           "output": 524288
@@ -14982,8 +14983,8 @@
       },
       "moonshotai/kimi-k3": {
         "cost": {
-          "cache_read": 0.182,
-          "input": 0.192,
+          "cache_read": 0.19,
+          "input": 0.2,
           "output": 15
         },
         "limit": {
@@ -15139,42 +15140,6 @@
         "release_date": "2026-09-08",
         "temperature": true,
         "tool_call": true
-      },
-      "nousresearch/hermes-3-llama-3.1-405b": {
-        "cost": {
-          "input": 1,
-          "output": 1
-        },
-        "limit": {
-          "output": 16384
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2024-08-16",
-        "temperature": true,
-        "tool_call": false
-      },
-      "nousresearch/hermes-3-llama-3.1-70b": {
-        "cost": {
-          "input": 0.7,
-          "output": 0.7
-        },
-        "limit": {
-          "output": 16384
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2024-08-18",
-        "temperature": true,
-        "tool_call": false
       },
       "nousresearch/hermes-4-405b": {
         "cost": {
@@ -17376,12 +17341,12 @@
       },
       "openai/gpt-oss-20b": {
         "cost": {
-          "cache_read": 0.009,
-          "input": 0.018,
-          "output": 0.09
+          "cache_read": 0.03,
+          "input": 0.03,
+          "output": 0.13
         },
         "limit": {
-          "output": 32768
+          "output": 117964
         },
         "modalities": {
           "input": [
@@ -17954,11 +17919,12 @@
       },
       "qwen/qwen3-235b-a22b-2507": {
         "cost": {
-          "input": 0.09,
-          "output": 0.55
+          "cache_read": 0.05,
+          "input": 0.14,
+          "output": 0.8
         },
         "limit": {
-          "output": 16384
+          "output": 117964
         },
         "modalities": {
           "input": [
@@ -18154,11 +18120,12 @@
       },
       "qwen/qwen3-next-80b-a3b-instruct": {
         "cost": {
-          "input": 0.09,
+          "cache_read": 0.07,
+          "input": 0.1,
           "output": 1.1
         },
         "limit": {
-          "output": 16384
+          "output": 235929
         },
         "modalities": {
           "input": [
@@ -19439,9 +19406,9 @@
       },
       "tencent/hy3": {
         "cost": {
-          "cache_read": 0.033,
-          "input": 0.132,
-          "output": 0.528
+          "cache_read": 0.020625,
+          "input": 0.0825,
+          "output": 0.33
         },
         "limit": {
           "output": 128000
@@ -19497,9 +19464,9 @@
       },
       "tencent/hy4-preview": {
         "cost": {
-          "cache_read": 0.042,
-          "input": 0.834,
-          "output": 2.501
+          "cache_read": 0.0378,
+          "input": 0.7506,
+          "output": 2.2509
         },
         "limit": {
           "output": 64000
@@ -20632,9 +20599,9 @@
       },
       "z-ai/glm-5.3-flash": {
         "cost": {
-          "cache_read": 0.0285,
-          "input": 0.0285,
-          "output": 0.0923
+          "cache_read": 0.03,
+          "input": 0.0313,
+          "output": 0.0846
         },
         "limit": {
           "output": 131072
@@ -20663,7 +20630,7 @@
       },
       "z-ai/glm-5.3-flashx": {
         "cost": {
-          "cache_read": 0.09,
+          "cache_read": 0.075,
           "input": 0.37,
           "output": 1.25
         },
@@ -20689,6 +20656,37 @@
           }
         ],
         "release_date": "2026-09-18",
+        "temperature": true,
+        "tool_call": true
+      },
+      "z-ai/glm-5.3-flashx-legal": {
+        "cost": {
+          "cache_read": 0.075,
+          "input": 0.37,
+          "output": 1.25
+        },
+        "limit": {
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-11-02",
         "temperature": true,
         "tool_call": true
       },
@@ -20898,9 +20896,9 @@
       },
       "~deepseek/deepseek-flash-latest": {
         "cost": {
-          "cache_read": 0.005,
+          "cache_read": 0.006,
           "input": 0.035,
-          "output": 0.5
+          "output": 0.315
         },
         "limit": {
           "output": 943718
@@ -21077,9 +21075,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.07475,
-          "input": 0.1495,
-          "output": 7.15
+          "cache_read": 0.19,
+          "input": 0.2,
+          "output": 15
         },
         "limit": {
           "output": 943718
@@ -21373,8 +21371,10 @@
       "~x-ai/grok-latest": {
         "cost": {
           "cache_read": 0.5,
+          "cache_write": 0,
           "context_over_200k": {
             "cache_read": 1,
+            "cache_write": 0,
             "input": 4,
             "output": 12
           },
@@ -21383,6 +21383,7 @@
           "tiers": [
             {
               "cache_read": 1,
+              "cache_write": 0,
               "input": 4,
               "output": 12,
               "tier": {
@@ -21420,9 +21421,9 @@
       },
       "~z-ai/glm-flash-latest": {
         "cost": {
-          "cache_read": 0.0285,
-          "input": 0.0285,
-          "output": 0.0923
+          "cache_read": 0.03,
+          "input": 0.0313,
+          "output": 0.0846
         },
         "limit": {
           "output": 131072
