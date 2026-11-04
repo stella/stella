@@ -7,6 +7,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,7 +24,7 @@ const config = {
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: v.object({
-    name: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    name: displayNameSchema({ maxLength: 128 }),
     narrative: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
     narrativeLanguage: v.optional(narrativeLanguageSchema),
   }),

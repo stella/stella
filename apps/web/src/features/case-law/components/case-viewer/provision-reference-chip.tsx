@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { useReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import { ReferencePeek } from "@stll/decision-reader/reference-peek";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorNesting } from "@stll/legal-ast/statute-anchor-scheme";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -30,7 +31,7 @@ type ProvisionReferenceChipProps = {
     | { type: "external"; href: string };
   label: string;
   /** What the cited anchor is cut on to find its provision's heading. */
-  anchorSeparator: string | null;
+  anchorNesting: StatuteAnchorNesting;
   provision: ProvisionGroup;
   /** The cited work's title and jurisdiction, as the side panel names them. */
   statuteTitle: string;
@@ -40,7 +41,7 @@ type ProvisionReferenceChipProps = {
 
 type ProvisionReferenceBodyProps = {
   document: ProvisionDocument | null;
-  anchorSeparator: string | null;
+  anchorNesting: StatuteAnchorNesting;
   provision: ProvisionGroup;
 };
 
@@ -51,7 +52,7 @@ type ProvisionReferenceBodyProps = {
  */
 const ProvisionReferenceBody = ({
   document,
-  anchorSeparator,
+  anchorNesting,
   provision,
 }: ProvisionReferenceBodyProps) => {
   const t = useTranslations();
@@ -62,7 +63,7 @@ const ProvisionReferenceBody = ({
     refetch,
   } = useQuery({
     ...provisionPreviewOptions({
-      anchor: provisionHeadingAnchor(provision.anchor, anchorSeparator),
+      anchor: provisionHeadingAnchor(provision.anchor, anchorNesting),
       citedAnchor: provision.anchor,
       documentId: document?.id ?? "",
     }),
@@ -114,7 +115,7 @@ const ProvisionReferenceBody = ({
 export const ProvisionReferenceChip = ({
   target,
   label,
-  anchorSeparator,
+  anchorNesting,
   provision,
   statuteTitle,
   jurisdiction,
@@ -125,13 +126,13 @@ export const ProvisionReferenceChip = ({
   const format = useFormatter();
   const { openProvision } = useReaderAdapters();
   const count = provision.occurrences.length;
-  const anchorId = provisionHeadingAnchor(provision.anchor, anchorSeparator);
+  const anchorId = provisionHeadingAnchor(provision.anchor, anchorNesting);
 
   return (
     <ReferencePeek
       body={
         <ProvisionReferenceBody
-          anchorSeparator={anchorSeparator}
+          anchorNesting={anchorNesting}
           document={document}
           provision={provision}
         />

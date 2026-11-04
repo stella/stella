@@ -75,8 +75,8 @@
   "allowWebsiteAccess": {
     "message": "Permitir acceso a sitios web"
   },
-  "connectTab": {
-    "message": "Conectar esta pestaña de stella"
+  "connectStella": {
+    "message": "Conectar stella"
   },
   "adoptTab": {
     "message": "Usar esta pestaña con stella"
@@ -97,9 +97,9 @@
     "message": "Comprobando la conexión…"
   },
   "statusConnectedElsewhere": {
-    "message": "Hay otra pestaña de stella conectada"
+    "message": "stella está conectada en otra dirección"
   },
-  "connectTabInstead": {
-    "message": "Conectar esta pestaña de stella en su lugar"
+  "connectStellaInstead": {
+    "message": "Conectar stella aquí en su lugar"
   }
 }

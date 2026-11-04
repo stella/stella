@@ -54,6 +54,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -276,9 +277,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
           fixture.organizationId,
         ),
       );
-    await database
-      .delete(organization)
-      .where(eq(organization.id, fixture.organizationId));
+    await deleteOrganizationsForTest(database, [fixture.organizationId]);
     await database.delete(user).where(eq(user.id, fixture.userId));
     await releaseTestDb();
   });

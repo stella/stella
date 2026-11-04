@@ -34,8 +34,13 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -72,6 +77,7 @@ import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -125,6 +131,18 @@ const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
 
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
+
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
@@ -136,6 +154,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
   "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "search-history/list.ts": {
     kind: "keyed",
@@ -601,6 +625,24 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
+  },
   "sharepoint/list-drive-root.ts": {
     kind: "no-web-caller",
     calls: ["api.sharepoint.drive.root.get"],
@@ -672,6 +714,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       timeApprovalQueueOptions(ORG, USER, {}).queryKey,
       timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
+  },
+  "time-entries/report/get.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].report.get'],
+    files: ["routes/_protected.time_.report/-components/report-query.ts"],
+    keys: () => [
+      timeReportOptions(ORG, USER, {
+        bucket: "day",
+        from: "2026-10-26",
+        groupBy: "member",
+        to: "2026-11-01",
+      }).queryKey,
     ],
   },
   "time-entries/me/list.ts": {

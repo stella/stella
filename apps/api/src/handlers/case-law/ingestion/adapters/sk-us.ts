@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -107,6 +108,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -3097,6 +3099,7 @@ export const skUsAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor:
               year < currentYear
                 ? encodeCursor({ year: year + 1, offset: 0 })
@@ -3109,12 +3112,14 @@ export const skUsAdapter = defineSourceAdapter({
             // Move to next year
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
             };
           }
           // Current year exhausted; park at current offset
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset }),
           };
         }
@@ -3227,6 +3232,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -3237,6 +3243,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -3254,6 +3261,7 @@ export const skUsAdapter = defineSourceAdapter({
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           ...unreadPage(unreadItems),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeCursor({
             year,
             offset: offset + items.length,

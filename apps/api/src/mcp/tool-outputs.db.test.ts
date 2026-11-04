@@ -69,6 +69,9 @@ const OBJECT_STORAGE = "reads or writes DOCX files in object storage";
 const TOOL_COVERAGE = {
   search: excluded(SEARCH_INDEX),
   fetch: excluded(SEARCH_INDEX),
+  create_organization: excluded(
+    "dispatches the organizations.create HTTP capability; its output is covered by the organization creation PostgreSQL tests",
+  ),
   list_matters: RUN,
   read_contact: RUN,
   read_content_across_matters: excluded(SEARCH_INDEX),

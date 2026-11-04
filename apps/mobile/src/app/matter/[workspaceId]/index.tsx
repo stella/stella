@@ -4,14 +4,16 @@ import { useTranslations } from "use-intl";
 import { useRevision } from "@/components/changes";
 import { MatterEntities } from "@/components/matter-entities";
 import { barGlyph } from "@/components/ui/bar-glyph";
+import { usePickDocument } from "@/components/use-pick-document";
 import { useScan } from "@/components/use-scan";
 import { useSession } from "@/connection/session-provider";
 import { canScan } from "@/native/document-scanner";
 
 /**
  * One matter, titled with the name its row carried so the header shows
- * before the load returns. Its "+" adds to it: a scanned document, where the
- * device has the document camera, or a task. Its list loads afresh after.
+ * before the load returns. Its "+" adds to it: a document from Files, a
+ * scanned one where the device has the document camera, or a task. Its list
+ * loads afresh after.
  */
 const MatterScreen = () => {
   const { workspaceId, name } = useLocalSearchParams<{
@@ -41,12 +43,16 @@ const AddMenu = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations("matter");
   const router = useRouter();
   const scan = useScan(workspaceId);
+  const pick = usePickDocument(workspaceId);
 
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu>
         {barGlyph("plus")}
         <Stack.Toolbar.Label>{t("add")}</Stack.Toolbar.Label>
+        <Stack.Toolbar.MenuAction onPress={pick}>
+          {t("uploadDocument")}
+        </Stack.Toolbar.MenuAction>
         {canScan() ? (
           <Stack.Toolbar.MenuAction onPress={scan}>
             {t("scanDocument")}

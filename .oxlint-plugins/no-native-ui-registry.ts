@@ -88,14 +88,19 @@ const AVATAR_RULE = "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive";
 
 export const NO_NATIVE_UI_REGISTRY = {
   ".": notComponent("the package barrel; each module has its own row"),
-  accordion: native("Accordion from @stll/ui/accordion", {
-    elements: ["details", "summary"],
-  }),
+  accordion: native(
+    "Collapsible from @stll/ui/collapsible for one disclosure, or Accordion " +
+      "from @stll/ui/accordion for a set of sections",
+    { elements: ["details", "summary"] },
+  ),
   "ai-label": noNative("a badge marking AI-generated content"),
   "alert-dialog": native("AlertDialog from @stll/ui/alert-dialog", {
     roles: ["alertdialog"],
   }),
   "animated-count": noNative("animates a number's digits"),
+  "animated-preview": noNative(
+    "cross-fades a feature preview's stages; HTML has no element for it",
+  ),
   "application-rail": noNative("app navigation chrome built from Button"),
   avatar: owned(AVATAR_RULE, "user avatars render through UserIdentity"),
   badge: noNative(
@@ -135,6 +140,10 @@ export const NO_NATIVE_UI_REGISTRY = {
   "color-picker": native("ColorPicker from @stll/ui/color-picker", {
     inputTypes: ["color"],
   }),
+  collapsible: owned(
+    nativeRuleId("accordion"),
+    "one disclosure; native details and summary are the accordion rule's",
+  ),
   combobox: native("Combobox from @stll/ui/combobox", {
     elements: ["datalist"],
     roles: ["combobox"],
@@ -154,6 +163,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     "a Button with clipboard feedback; its markup is the button rule's",
   ),
   "court-badge": noNative("a domain badge for a court"),
+  "court-filter": noNative(
+    "a court picker composed from shared fields and controls",
+  ),
   "data-table": owned(
     nativeRuleId("table"),
     "native table markup is reported by the table rule",
@@ -191,11 +203,13 @@ export const NO_NATIVE_UI_REGISTRY = {
   }),
   "directional-icon": noNative("mirrors an icon under a right-to-left UI"),
   "document-identity-badge": noNative("a domain badge for a document"),
+  "document-mark": noNative("file format artwork drawn as SVG"),
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
   field: owned(
     nativeRuleId("label"),
     "Field pairs a Label with a control; the native label is the label rule's",
   ),
+  "field-trigger": notComponent("shared field trigger style tokens"),
   "file-input": owned(FILE_INPUT_RULE, "native file inputs are reported there"),
   "file-picker": notComponent(
     "an imperative file chooser; native file inputs are no-raw-file-input's",
@@ -254,6 +268,9 @@ export const NO_NATIVE_UI_REGISTRY = {
     nativeRuleId("menu"),
     "a labelled group inside Menu; native menus are the menu rule's",
   ),
+  "middle-truncate": noNative(
+    "a truncated name; plain text cut at its end is the other rule's",
+  ),
   "number-input": native("NumberInput from @stll/ui/number-input", {
     roles: ["spinbutton"],
     inputTypes: ["number"],
@@ -307,8 +324,8 @@ export const NO_NATIVE_UI_REGISTRY = {
     inputTypes: ["password"],
   }),
   "segmented-icon-toggle": noNative(
-    "a row of pressed-state Buttons; native radio groups have no @stll/ui " +
-      "counterpart yet, so radios stay allowed",
+    "an icon ToggleGroup; native radio groups have no @stll/ui counterpart " +
+      "yet, so radios stay allowed",
   ),
   select: native("Select from @stll/ui/select", {
     elements: ["select", "option", "optgroup"],
@@ -371,9 +388,22 @@ export const NO_NATIVE_UI_REGISTRY = {
     elements: ["textarea"],
   }),
   "theme.css": notComponent("the design-system stylesheet"),
+  "time-field": owned(
+    DATE_INPUT_RULE,
+    "the native time inputs are reported there",
+  ),
   toast: owned(
     "stella-toast/stella-toast",
     "toasts go through stellaToast; the browser's alert() is no-alert's",
+  ),
+  toggle: owned(
+    nativeRuleId("button"),
+    "a pressed-state Button; a native button with aria-pressed is the " +
+      "button rule's",
+  ),
+  "toggle-group": owned(
+    nativeRuleId("button"),
+    "a row of Toggles; their native buttons are the button rule's",
   ),
   "toolbar-icon-action": owned(
     nativeRuleId("button"),
@@ -400,6 +430,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   "use-content-dir": notComponent("a React hook"),
   "use-latest": notComponent("a React hook"),
   "use-mobile": notComponent("a React hook"),
+  "use-prefers-reduced-motion": notComponent("a React hook"),
   "use-viewport-width": notComponent("a React hook"),
   utils: notComponent("class name helpers"),
   "view-toolbar": noNative(

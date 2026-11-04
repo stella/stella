@@ -1,10 +1,10 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
-import type { CheerioAPI } from "cheerio";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
@@ -12,6 +12,8 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
+import { load } from "@stll/html";
+import type { CheerioAPI } from "@stll/html";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
@@ -81,6 +83,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -2840,9 +2843,10 @@ export const buildCzNssDecision = async ({
             row,
             content: {
               ...content,
-              ...(recovered.content?.recovery === undefined
-                ? {}
-                : { recovery: recovered.content.recovery }),
+              // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+              ...(recovered.content?.recovery !== undefined
+                ? { recovery: recovered.content.recovery }
+                : {}),
             },
             detail,
             detailHtml,
@@ -3372,7 +3376,11 @@ export const czNssAdapter = defineSourceAdapter({
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: cursorFor(today, 0) };
+          return {
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.NONE,
+            nextCursor: cursorFor(today, 0),
+          };
         }
 
         // 1. Get or reuse session
@@ -3392,6 +3400,7 @@ export const czNssAdapter = defineSourceAdapter({
             });
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encodeCursor({
                 date,
                 page,
@@ -3410,6 +3419,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: 1 },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor: encodeCursor({
               date: next <= today ? next : today,
               page: 0,
@@ -3430,6 +3440,7 @@ export const czNssAdapter = defineSourceAdapter({
           const next = nextDay(date);
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(next <= today ? next : today, 0),
           };
         }
@@ -3529,6 +3540,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(date, page + 1),
           };
         }
@@ -3538,6 +3550,7 @@ export const czNssAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursorFor(next <= today ? next : today, 0),
         };
       },

@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The element vocabulary of Austria's RIS decision XML, and the one reader
  * of it.
@@ -12,9 +13,9 @@
  * purpose: it is the independent reading this one is checked against.
  */
 import { panic } from "better-result";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";

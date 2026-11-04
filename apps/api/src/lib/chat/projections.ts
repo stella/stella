@@ -35,6 +35,7 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -320,6 +321,10 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
  */
 export const READ_CONTACT_PROJECTION = v.strictObject({
   contactId: chatRef("contact"),
+  /** Source system and id when the contact was imported; else null. */
+  external: v.nullable(
+    v.strictObject({ source: v.string(), id: passthroughId() }),
+  ),
   type: v.string(),
   displayName: v.string(),
   firstName: v.nullable(v.string()),
@@ -1469,6 +1474,17 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
           v.strictObject({
             adapterKey: v.string(),
             name: v.string(),
+            // `snapshot` sources hold one fixed release: nothing after
+            // `snapshotDate` can arrive, whatever `lastSyncAt` says.
+            edition: v.variant("type", [
+              projectionBranch(v.strictObject({ type: v.literal("live") })),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("snapshot"),
+                  snapshotDate: v.string(),
+                }),
+              ),
+            ]),
             lastSyncAt: v.nullable(v.string()),
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),
@@ -2549,7 +2565,7 @@ export const LIST_TEMPLATES_LIST_PROJECTION = v.strictObject({
       whenNotToUse: v.nullable(v.string()),
     }),
   ),
-  // Opaque `[templateId]` cursor, base64url-encoded.
+  // Opaque full-precision creation time and template id, base64url-encoded.
   nextCursor: v.nullable(passthroughId()),
 });
 
@@ -2587,6 +2603,28 @@ const readerAnnotationPassageProjection = v.strictObject({
   quote: v.string(),
 });
 
+/**
+ * A listed mark's passage in the document's current text: placed at the
+ * anchor where its quote now is, or orphaned when the text no longer has its
+ * words in one place it can be told by.
+ */
+const listedReaderAnnotationPassageProjection = v.variant("placement", [
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("placed"),
+      anchor: v.string(),
+      quote: v.string(),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      placement: v.literal("orphaned"),
+      reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
+      quote: v.string(),
+    }),
+  ),
+]);
+
 /** list_reader_annotations: one entry per mark, its passages grouped. */
 export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
   annotations: v.array(
@@ -2600,7 +2638,7 @@ export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
       mine: v.boolean(),
       authorName: v.string(),
       createdAt: v.string(),
-      passages: v.array(readerAnnotationPassageProjection),
+      passages: v.array(listedReaderAnnotationPassageProjection),
     }),
   ),
   nextCursor: v.nullable(v.string()),

@@ -9,7 +9,8 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
+  isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -343,9 +344,25 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 
+/**
+ * Actions a coding agent on the member's computer takes itself, persisted
+ * under the harness-native names the agent engine gives them
+ * (`HARNESS_TOOL_NAMES` in `@stll/agent-engine`). Its MCP calls to stella use
+ * the registry names above and need no entry here.
+ */
+const HARNESS_TOOL_TITLE_KEYS = {
+  command_execution: "chat.tool.command_execution",
+  file_change: "chat.tool.file_change",
+  harness_web_search: "chat.tool.harness_web_search",
+  request_user_input: "chat.tool.request_user_input",
+  request_permissions: "chat.tool.request_permissions",
+  harness_unsupported_item: "chat.tool.harness_unsupported_item",
+} as const satisfies Record<string, TranslationKey>;
+
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
+  ...HARNESS_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -734,7 +751,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -829,7 +846,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -919,7 +936,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );
@@ -1385,7 +1402,14 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ * Pasted-text parts are attachments of the message, not its text, so they
+ * stay out: joined in, they would mix plain text into the composer markup.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];
@@ -1398,7 +1422,11 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
+      if (
+        part.type === "text" &&
+        !isChatPastedTextPart(part) &&
+        part.content.trim()
+      ) {
         textParts.push(part.content);
       }
     }

@@ -21,6 +21,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -777,6 +778,26 @@ describe("buildSendRequestBody", () => {
       sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
+  });
+
+  test("carries a computer run target and leaves the cloud default unsent", () => {
+    const threadId = toChatThreadId("thread-A");
+    const bodyFor = (runTarget: ChatRunTarget | undefined) =>
+      buildSendRequestBody({
+        context:
+          runTarget === undefined ? {} : { getRunTarget: () => runTarget },
+        key: { scope: "global", threadId },
+        messages: [createMessage()],
+        run: { runId: "run-A", threadId },
+      });
+    const local: ChatRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+    };
+    expect(bodyFor(local).runTarget).toEqual(local);
+    expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
+    expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 
   test("forwards the complete native AG-UI interrupt continuation", () => {

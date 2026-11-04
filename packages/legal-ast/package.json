@@ -139,6 +139,10 @@
       "types": "./src/quote-locate.ts",
       "import": "./src/quote-locate.ts"
     },
+    "./reader-text-quote": {
+      "types": "./src/reader-text-quote.ts",
+      "import": "./src/reader-text-quote.ts"
+    },
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
@@ -150,6 +154,10 @@
     "./spot-place": {
       "types": "./src/spot-place.ts",
       "import": "./src/spot-place.ts"
+    },
+    "./statute-anchor-scheme": {
+      "types": "./src/statute-anchor-scheme.ts",
+      "import": "./src/statute-anchor-scheme.ts"
     },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
@@ -166,6 +174,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./separate-opinion-heading": {
+      "types": "./src/separate-opinion-heading.ts",
+      "import": "./src/separate-opinion-heading.ts"
     }
   },
   "scripts": {

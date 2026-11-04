@@ -376,16 +376,11 @@ export const AssigneePicker = ({
       ))}
       {unassignedMembers.length > 0 && (
         <Popover onOpenChange={setAddOpen} open={addOpen}>
-          <PopoverTrigger
-            render={
-              <button
-                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm"
-                type="button"
-              />
-            }
-          >
-            <PlusIcon className="size-3.5" />
-            <span>{t("addAssignee")}</span>
+          <PopoverTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm">
+              <PlusIcon className="size-3.5" />
+              <span>{t("addAssignee")}</span>
+            </span>
           </PopoverTrigger>
           <PopoverPopup padding="sm" side="bottom">
             <div className="w-72">

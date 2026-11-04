@@ -23,6 +23,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./agent-input-readers": {
+      "types": "./src/agent-input-readers.ts",
+      "import": "./src/agent-input-readers.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"

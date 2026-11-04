@@ -5,8 +5,11 @@ import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clos
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { flexRender } from "@tanstack/react-table";
+import { useTranslations } from "use-intl";
 
-import { CheckIcon, GripVerticalIcon, MinusIcon } from "@stll/ui/icons";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { GripVerticalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { SelectAllState } from "@/components/workspaces/table/select-all.logic";
@@ -45,6 +48,7 @@ type DraggableHeaderCellProps<TRow extends TableRowData> = {
   expandedColumnId: string | null;
   onToggleSelectAll: () => void;
   selectAllState: SelectAllState;
+  selectAllLabel?: string | undefined;
   /** Replaces the column's own header content, e.g. a section's add-column trigger. */
   headerTrigger?: ReactNode;
 };
@@ -56,6 +60,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
   expandedColumnId,
   onToggleSelectAll,
   selectAllState,
+  selectAllLabel,
   headerTrigger,
 }: DraggableHeaderCellProps<TRow>) => {
   const headerRef = useRef<HTMLDivElement>(null);
@@ -147,7 +152,11 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
     // numbers alone, so there is nothing for a select-all to act on.
     headerContent =
       header.table.options.enableRowSelection === false ? null : (
-        <SelectAllHeader onToggle={onToggleSelectAll} state={selectAllState} />
+        <SelectAllHeader
+          label={selectAllLabel}
+          onToggle={onToggleSelectAll}
+          state={selectAllState}
+        />
       );
   } else if (!header.isPlaceholder) {
     headerContent = flexRender(
@@ -201,55 +210,38 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
       )}
       {headerContent}
       {header.column.getCanResize() && (
-        <button
-          className="absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none py-1 select-none group-hover/table-head:flex"
+        <Button
+          className="absolute top-0 -right-2 z-30 hidden h-full w-4 cursor-col-resize touch-none select-none group-hover/table-head:flex"
           data-row-expansion-ignore
           onDoubleClick={() => header.column.resetSize()}
           onMouseDown={header.getResizeHandler()}
           onTouchStart={header.getResizeHandler()}
-          type="button"
+          variant="plain"
         >
-          <span className="bg-primary/25 mr-auto h-full w-1 rounded" />
-        </button>
+          <span className="bg-primary/25 my-1 mr-auto w-1 rounded" />
+        </Button>
       )}
     </WorkspaceGridHead>
   );
 };
 
 type SelectAllHeaderProps = {
+  label?: string | undefined;
   state: SelectAllState;
   onToggle: () => void;
 };
 
-const SelectAllHeader = ({ state, onToggle }: SelectAllHeaderProps) => {
-  const ariaChecked = state.indeterminate ? "mixed" : state.checked;
-
+const SelectAllHeader = ({ label, state, onToggle }: SelectAllHeaderProps) => {
+  const t = useTranslations();
   return (
     <div className="flex items-center justify-center">
-      <button
-        aria-checked={ariaChecked}
-        className={cn(
-          "ring-ring focus-visible:ring-offset-background inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs/5 outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
-          (state.checked || state.indeterminate) &&
-            "bg-primary border-primary text-primary-foreground shadow-none",
-          !(state.checked || state.indeterminate) &&
-            "border-input bg-background",
-        )}
+      <Checkbox
+        aria-label={label ?? t("common.selectAll")}
+        checked={state.checked}
         data-select-all-state={state.key}
-        onClick={onToggle}
-        role="checkbox"
-        type="button"
-      >
-        {(() => {
-          if (state.indeterminate) {
-            return <MinusIcon className="size-3" strokeWidth={3} />;
-          }
-          if (state.checked) {
-            return <CheckIcon className="size-3" strokeWidth={3} />;
-          }
-          return null;
-        })()}
-      </button>
+        indeterminate={state.indeterminate}
+        onCheckedChange={onToggle}
+      />
     </div>
   );
 };

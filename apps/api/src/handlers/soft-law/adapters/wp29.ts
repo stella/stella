@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import {
   excludedSourceField,
@@ -25,6 +26,8 @@ import type {
   SoftLawSourceAdapter,
   SoftLawStage,
 } from "@/api/lib/legal-search/soft-law-types";
+
+import { listingOnlyCoverage } from "./listing-only";
 
 const ORIGIN = "https://ec.europa.eu";
 const ARCHIVE = `${ORIGIN}/justice/article-29/documentation/opinion-recommendation/index_en.htm`;
@@ -137,7 +140,7 @@ const metadata = ({
 
 /** The archive carries years and partial dates; none are promoted to adoption dates. */
 export const parseWp29Archive = (html: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const sections = $(".contentsection.block").filter((_, node) =>
     /^\d{4}$/u.test(normalize($(node).children("h2").text())),
   );
@@ -247,7 +250,7 @@ export const parseWp29Archive = (html: string) => {
 };
 
 export const parseWp29NewsroomIndex = (html: string, url: string) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   if (!$("#main-content").length || !$("#leftentityselect").length) {
     return Result.err(invalid("WP29 newsroom category structure is missing"));
   }
@@ -313,7 +316,7 @@ export const parseWp29NewsroomDocument = ({
   url,
   indexUrl,
 }: ParseWp29NewsroomOptions) => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const title = normalize($("#main-content h1.ecl-page-header__title").text());
   const reference = sourceReference(title);
   if (!title) {
@@ -532,7 +535,7 @@ const listWp29Assets = (entry: SoftLawEntry) => {
     if (!listing) {
       return Result.err(invalid("WP29 archive raw is missing"));
     }
-    const $ = cheerio.load(
+    const $ = load(
       Buffer.from(listing.contentBase64, "base64").toString("utf-8"),
     );
     const row = $(".contentsection.block > ul > li").filter((_, node) =>
@@ -587,20 +590,16 @@ export const wp29Adapter = {
     userAgent: "Stella/1.0 (+https://github.com/stella/stella)",
     window: { type: "any_time" },
   },
-  getTotalCount: async () =>
-    await Promise.resolve({ type: "no-count-endpoint" as const }),
-  sliceWalk: {
-    type: "unsupported",
-    reason:
-      "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
-  },
+  ...listingOnlyCoverage(
+    "WP29 has overlapping archive and newsroom indexes without a stable date slice endpoint.",
+  ),
   sourceFields: {
     status: "declared",
     fields,
     listSourceFields: (parts) => {
       const discovered = new Set<string>();
       for (const html of Object.values(parts)) {
-        const $ = cheerio.load(html);
+        const $ = load(html);
         if ($("h1.ecl-page-header__title, .contentsection a.link-ico").length) {
           discovered.add("title");
         }

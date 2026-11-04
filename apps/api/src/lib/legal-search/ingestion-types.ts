@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
 // parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
@@ -653,7 +654,26 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+  /**
+   * Whether the publisher was heard while building this page. Required, so
+   * an adapter cannot leave it to a default: only `answered` moves the
+   * source's `last_sync_at`, which coverage reads as how current it is.
+   */
+  publisherRequest: PublisherRequest;
 };
+
+/** What a page says about asking the publisher. */
+export const PUBLISHER_REQUEST = {
+  /** A request reached the publisher and it answered, whatever it held. */
+  ANSWERED: "answered",
+  /** Nothing was asked: the cursor is parked, waiting, or past the end. */
+  NONE: "none",
+  /** Every request this page made failed; recovery may advance the cursor. */
+  FAILED: "failed",
+} as const;
+
+export type PublisherRequest =
+  (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<

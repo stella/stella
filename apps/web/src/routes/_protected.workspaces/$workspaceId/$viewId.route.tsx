@@ -29,6 +29,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -63,7 +64,12 @@ import {
   type CurrentWorkspaceDocument,
   getCurrentWorkspaceDocument,
 } from "@/lib/workspaces/use-workspace-view-params";
-import { isWorkspaceViewId } from "@/lib/workspaces/view-params.logic";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+  workspaceViewRouteIds,
+  workspaceViewsInclude,
+} from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -115,11 +121,16 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await ensureRouteQueryData(
-      queryClient,
-      viewsOptions(workspaceId),
-    );
-    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    const views = await loadRouteResource({
+      ids: workspaceViewRouteIds(workspaceId, viewId),
+      load: async () =>
+        await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+      exists: (loadedViews) => workspaceViewsInclude(loadedViews, viewId),
+    });
+    const activeView =
+      viewId === DEFAULT_WORKSPACE_VIEW_ID
+        ? selectAvailableWorkspaceView(views, viewId)
+        : views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
@@ -513,7 +524,7 @@ function ViewChromeRow({
 }) {
   const navigate = Route.useNavigate();
   return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+    <div className="flex min-w-0 flex-col border-b md:flex-row md:flex-wrap md:items-center md:justify-between">
       <div
         className={cn(
           "flex min-w-0 items-center",

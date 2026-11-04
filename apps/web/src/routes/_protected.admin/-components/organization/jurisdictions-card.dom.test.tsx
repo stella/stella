@@ -3,9 +3,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",
@@ -152,11 +152,11 @@ const mountCard = async () => {
 };
 
 // The picker renders a "make primary" star for every selected country once
-// two or more are selected; its pressed styling marks the primary one.
+// two or more are selected; its pressed state marks the primary one.
 const displayedSelection = (view: ReturnType<typeof testing.render>) =>
   view.queryAllByLabelText(/^Make .* primary/u).map((star) => ({
     name: star.getAttribute("aria-label"),
-    isPrimary: star.className.split(/\s+/u).includes("text-primary"),
+    isPrimary: star.getAttribute("aria-pressed") === "true",
   }));
 
 const EXPECTED_DISPLAY = [

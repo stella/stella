@@ -13,7 +13,7 @@ import {
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
 import type { PermissionInput } from "@stll/permissions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -724,17 +724,33 @@ const anonymizedTools: readonly McpToolDefinition[] =
   ANONYMIZED_MCP_TOOL_DEFINITIONS;
 
 describe("MCP registry access coherence", () => {
-  test("catalog-delegated writes use only the write executor on every audience", () => {
-    for (const { definitions } of SURFACES) {
+  test("delegated writes are exactly the capability executor and account creation entry point", () => {
+    const expectedDelegatedNames = {
+      advanced: ["create_organization", MCP_CAPABILITY_EXECUTORS.write],
+      default: [],
+      documents: [MCP_CAPABILITY_EXECUTORS.write],
+      anonymized: [],
+      law: [],
+    } as const satisfies Record<(typeof MCP_MODES)[number], readonly string[]>;
+    for (const { mode, definitions } of SURFACES) {
       const delegated = definitions.filter(
         (tool) =>
           tool.access === "write" &&
           tool.permissions.type === "delegated" &&
           isMcpToolVisibleTo(tool, "model"),
       );
+      expect(delegated.map(({ name }) => name).toSorted()).toEqual([
+        ...expectedDelegatedNames[mode],
+      ]);
       for (const tool of delegated) {
-        expect(tool.name).toBe(MCP_CAPABILITY_EXECUTORS.write);
         expect(tool.readClass).toBeUndefined();
+        if (tool.name === "create_organization") {
+          expect(tool).toMatchObject({
+            access: "write",
+            accountAccess: ACCOUNT_ACCESS.accountControl,
+            scope: "stella:organization_create",
+          });
+        }
       }
       for (const tool of definitions) {
         if (tool.name === MCP_CAPABILITY_EXECUTORS.read) {
@@ -1127,7 +1143,8 @@ describe("MCP wire schemas under an independent validator", () => {
       const acceptsUncompacted = compileWireSchema(validator, uncompacted);
       let accepted = 0;
       let rejected = 0;
-      fc.assert(
+      assertProperty(
+        "every output schema accepts exactly what its uncompacted projection accepts",
         fc.property(
           schemaComparisonArbitrary([uncompacted, outputSchema]),
           (value) => {
@@ -1141,7 +1158,7 @@ describe("MCP wire schemas under an independent validator", () => {
             }
           },
         ),
-        propertyConfig({ numRuns: 200 }),
+        { numRuns: 200 },
       );
       // Both verdicts must occur, or the comparison proved nothing.
       expect(accepted, `${tool} accepted no drawn value`).toBeGreaterThan(0);

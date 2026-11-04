@@ -152,7 +152,7 @@ type Messages = {
         "title": "Legal data, ready for your work.";
       };
       "tabular-review": {
-        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
+        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter, sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
         "discover": "Discover Tabular Review";
         "eyebrow": "Tabular Review";
         "title": "Turn a pile of documents into a table you can review.";
@@ -663,7 +663,7 @@ type Messages = {
           "title": "Built for scale";
         };
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.";
+          "body": "Take the table with you in standard formats: no lock-in on your own work product.";
           "title": "Export anywhere";
         };
       };
@@ -687,7 +687,7 @@ type Messages = {
       "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.";
       "metaTitle": "Tabular document review for due diligence | stella";
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
+        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions, for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
         "question": "How does Tabular Review work?";
       };
       "sections": {

@@ -3,12 +3,15 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 
 import { getVerifiedOAuthOrigins } from "@/api/lib/auth/oauth-consent-info";
 import {
   grantableScopes,
   inferredApplicationType,
   NATIVE_REDIRECT_URI_EXCEPTIONS,
+  refusesFirstPartyRedirect,
   registrableScope,
   requiresNativeClientConsent,
 } from "@/api/lib/auth/oauth-registration-policy";
@@ -63,6 +66,11 @@ const policy = {
   providerScopes: ALL_SCOPES,
 };
 
+const CLI_DOCUMENT = cliClientMetadataUrl("https://stella.example") ?? "";
+const MOBILE_DOCUMENT = mobileClientMetadataUrl("https://stella.example") ?? "";
+const CONNECTOR_DOCUMENT =
+  "https://stella.example/v1/mcp/oauth/client-metadata.json";
+
 const registered = (scopes?: string[]) => ({
   clientId: "example-client",
   clientDiscoveryId: null,
@@ -113,7 +121,11 @@ describe("grantableScopes", () => {
       ["https://claude.ai/oauth/mcp-oauth-client-metadata", false],
       ["https://chatgpt.com/oauth/client.json", true],
       ["https://chatgpt.com/oauth/codex/client.json", true],
-      ["https://stella.example/oauth/client.json", true],
+      [CLI_DOCUMENT, true],
+      [MOBILE_DOCUMENT, true],
+      [CONNECTOR_DOCUMENT, true],
+      // Other documents on stella's own origin are not first-party clients.
+      ["https://stella.example/oauth/client.json", false],
       ["https://connector.example/oauth/client.json", false],
       ["https://claude.ai/oauth/other-client-metadata", false],
       ["https://user@stella.example/oauth/client.json", false],
@@ -163,6 +175,49 @@ describe("grantableScopes", () => {
         policy,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("first-party redirects", () => {
+  const refuses = (clientId: string, redirectUri: unknown) =>
+    refusesFirstPartyRedirect({
+      clientId,
+      redirectUri,
+      verifiedOrigins: policy.verifiedOrigins,
+    });
+
+  test("a first-party client id with a redirect outside its shape is refused", () => {
+    for (const [clientId, redirectUri] of [
+      [CLI_DOCUMENT, "https://connector.example/callback"],
+      [CLI_DOCUMENT, "http://127.0.0.1:43123/other"],
+      [MOBILE_DOCUMENT, "com.example.app:/oauth/callback"],
+      [CONNECTOR_DOCUMENT, "https://connector.example/v1/mcp/oauth/callback"],
+    ] as const) {
+      expect(refuses(clientId, redirectUri), redirectUri).toBe(true);
+    }
+  });
+
+  test("a first-party client keeps its own redirects", () => {
+    for (const [clientId, redirectUri] of [
+      [CLI_DOCUMENT, "http://127.0.0.1:43123/callback"],
+      [MOBILE_DOCUMENT, "app.stll:/oauth/callback"],
+      [CONNECTOR_DOCUMENT, "https://stella.example/v1/mcp/oauth/callback"],
+    ] as const) {
+      expect(refuses(clientId, redirectUri), redirectUri).toBe(false);
+    }
+  });
+
+  test("other clients are left to the provider's redirect checks", () => {
+    for (const clientId of [
+      "registered-client",
+      "https://connector.example/oauth/client.json",
+      CLI_DOCUMENT.replace("https://stella.example", "https://other.example"),
+    ]) {
+      expect(refuses(clientId, "https://connector.example/callback")).toBe(
+        false,
+      );
+    }
+    expect(refuses(CLI_DOCUMENT, undefined)).toBe(false);
   });
 });
 

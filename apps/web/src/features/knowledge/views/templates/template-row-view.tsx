@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -21,14 +22,14 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
+import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplateRowActions,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
-
-export type TemplateDensity = "compact" | "comfortable";
 
 type TemplateRowViewProps = {
   template: KnowledgeTemplate;
@@ -132,10 +133,11 @@ export const TemplateRowView = ({
 }: TemplateRowViewProps) => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
+  const nameId = useId();
 
   // Trailing cluster — fixed width so it lines up across rows. `relative z-10`
-  // keeps Use / ⋯ clickable above the row-wide open affordance (the name
-  // button's stretched ::after). Opening the template is the whole-row click,
+  // keeps Use / ⋯ clickable above the row-wide open affordance (the cover
+  // button laid over the row, earlier in the DOM). Opening the template is the whole-row click,
   // mirroring the clause list; Use (fill) stays an explicit CTA.
   const trailing = (
     <div className="relative z-10 flex shrink-0 items-center gap-2">
@@ -189,13 +191,20 @@ export const TemplateRowView = ({
       <ContextMenu actions={actions.menu}>
         <div
           className={cn(
-            density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
+            "hover:bg-muted/50 relative flex cursor-pointer gap-3 px-4",
+            TEMPLATE_ROW_SPACING[density],
           )}
           draggable={actions.dragStart !== undefined}
           onDragStart={actions.dragStart}
         >
+          {/* Opening the template is the whole-row click: the button covers
+              the row and takes its name from the visible title. */}
+          <Button
+            aria-labelledby={nameId}
+            className="absolute inset-0 z-10"
+            onClick={actions.open}
+            variant="plain"
+          />
           <TemplateMonogram
             categoryId={template.categoryId}
             name={template.name}
@@ -203,12 +212,12 @@ export const TemplateRowView = ({
 
           {density === "compact" ? (
             <>
-              <button
-                className="flex min-w-0 flex-1 items-baseline gap-2 text-start after:absolute after:inset-0"
-                onClick={actions.open}
-                type="button"
-              >
-                <span className="truncate text-sm font-medium" dir="auto">
+              <div className="flex min-w-0 flex-1 items-baseline gap-2 text-start">
+                <span
+                  className="truncate text-sm font-medium"
+                  dir="auto"
+                  id={nameId}
+                >
                   {template.name}
                 </span>
                 {categoryName !== null && (
@@ -219,21 +228,21 @@ export const TemplateRowView = ({
                     {categoryName}
                   </span>
                 )}
-              </button>
+              </div>
               {trailing}
             </>
           ) : (
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div className="flex items-center gap-3">
-                <button
-                  className="flex min-w-0 flex-1 text-start after:absolute after:inset-0"
-                  onClick={actions.open}
-                  type="button"
-                >
-                  <span className="truncate text-sm font-medium" dir="auto">
+                <div className="flex min-w-0 flex-1 text-start">
+                  <span
+                    className="truncate text-sm font-medium"
+                    dir="auto"
+                    id={nameId}
+                  >
                     {template.name}
                   </span>
-                </button>
+                </div>
                 {trailing}
               </div>
               <RowDescription
@@ -337,16 +346,18 @@ const RowDescription = ({
   const detail = (() => {
     if (onDescribe) {
       return (
-        <button
-          className="hover:text-foreground relative z-10 inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+        <Button
+          className="group/plain relative z-10 flex min-w-0"
           onClick={onDescribe}
-          type="button"
+          variant="plain"
         >
-          <PencilLineIcon className="size-3 shrink-0" />
-          <span className="truncate">
-            {guidance === "" ? t("templates.describeWhenToUse") : guidance}
+          <span className="group-hover/plain:text-foreground inline-flex min-w-0 items-center gap-1 underline-offset-2 group-hover/plain:underline">
+            <PencilLineIcon className="size-3 shrink-0" />
+            <span className="truncate">
+              {guidance === "" ? t("templates.describeWhenToUse") : guidance}
+            </span>
           </span>
-        </button>
+        </Button>
       );
     }
     if (guidance !== "") {

@@ -24,9 +24,9 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  corpusIndexBudgetExpiry,
   CorpusIndexError,
   getCorpusIndexClient,
-  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusAppliedProjection,
@@ -46,8 +46,9 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";
-import { searchIndexUnavailableError } from "@/api/lib/legal-search/search-index-unavailable";
+import { corpusIndexReadRefusal } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { requestBoundedTimeout } from "@/api/lib/load/request-latency-budget";
 
 /**
  * The client answers a failed search with a typed `CorpusIndexError` so its
@@ -62,23 +63,45 @@ import { LIMITS } from "@/api/lib/limits";
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
  * An engine that could not be reached at all, or that does not hold the
- * index, answers with the typed `search_index_unavailable` refusal, which
- * every search route and tool maps to the same actionable answer.
+ * index, answers with the typed `search_index_unavailable` refusal, and a
+ * request whose latency budget ran out with the public read timeout
+ * (`corpusIndexReadRefusal`), which every search route and tool maps to the
+ * same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  isCorpusIndexUnavailable(error)
-    ? searchIndexUnavailableError(error)
-    : new HandlerError({
+  corpusIndexReadRefusal(
+    error,
+    (answered) =>
+      new HandlerError({
         code: "internal_error",
         status:
-          error.status === undefined ||
-          error.status === 429 ||
-          error.status >= 500
+          answered.status === undefined ||
+          answered.status === 429 ||
+          answered.status >= 500
             ? 503
             : 502,
         message: "Search is temporarily unavailable",
-        cause: error,
-      });
+        cause: answered,
+      }),
+  );
+
+/**
+ * Highlighting ran out of the window its searches share: the request's latency
+ * budget when that window ends with the request, else its own.
+ */
+const highlightWindowSpent = (
+  endsAtRequestDeadline: boolean,
+): CorpusIndexError => {
+  const spent = new CorpusIndexError({
+    message: "Corpus page highlighting exhausted its shared search budget.",
+    reach: "unreachable",
+  });
+  return (
+    (endsAtRequestDeadline
+      ? corpusIndexBudgetExpiry({ label: "page highlighting", cause: spent })
+      : undefined) ?? spent
+  );
+};
 
 /**
  * A page boundary as the scan means it. `corpus-search-cursor` owns how it
@@ -505,17 +528,14 @@ const readPageSnippets = async ({
   }
 
   const startedAt = performance.now();
-  const deadline = startedAt + CORPUS_INDEX_SEARCH_TIMEOUT_MS;
+  const highlightWindow = requestBoundedTimeout(CORPUS_INDEX_SEARCH_TIMEOUT_MS);
+  const deadline = startedAt + highlightWindow.timeoutMs;
   const search = async (clause: string, maxHits: number) => {
     const remainingMs = deadline - performance.now();
     const result =
       remainingMs <= 0
         ? Result.err(
-            new CorpusIndexError({
-              message:
-                "Corpus page highlighting exhausted its shared search budget.",
-              reach: "unreachable",
-            }),
+            highlightWindowSpent(highlightWindow.endsAtRequestDeadline),
           )
         : await getCorpusIndexClient(cluster).search({
             observer,
@@ -576,16 +596,35 @@ const readPageSnippets = async ({
     }
   };
   recordResults(fastResults);
-  const missing = clauses.filter(({ id }) => !seen.has(id));
   // A superseded scan chunk can vanish under the applied-revision filter.
   // Optional snippet/anchor metadata does not make a returned passage missing.
+  const missingAfter = (from: typeof clauses) =>
+    from.filter(({ id }) => !seen.has(id));
+  const missing = missingAfter(clauses);
+  // Several missing documents are re-selected in one request: hits come best
+  // first, and each document's revision-narrowed clause scores its own
+  // passages alike, so a document's first hit there is the passage its own
+  // request would have chosen. A document whose passages the others crowd
+  // out of the batch falls back to a request of its own, so the batch can
+  // only remove requests: one engine round instead of one per document,
+  // which is what a page reached mid-refresh would otherwise cost.
+  if (missing.length > 1) {
+    rounds += 1;
+    recordResults([
+      await search(
+        missing.map(({ document }) => document).join(" OR "),
+        missing.length * PASSAGE_OVER_FETCH,
+      ),
+    ]);
+  }
+  const unresolved = missingAfter(missing);
   const fallbackResults = await mapWithConcurrency({
-    items: missing,
+    items: unresolved,
     limit: LIMITS.corpusIndexHighlightConcurrency,
     operation: async ({ document }) => search(document, 1),
   });
   recordResults(fallbackResults);
-  rounds += missing.length;
+  rounds += unresolved.length;
   hitDispositions.record({ malformed });
   return {
     indexMs: performance.now() - startedAt,

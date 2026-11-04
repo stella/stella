@@ -1,5 +1,9 @@
+import { panic } from "better-result";
+
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { BrowserExtensionStatus } from "./browser-control";
+import type { ChatRunTarget } from "./chat-run-target";
 import type { SafeId } from "./safe-id";
 
 export type ChatTurnTiming =
@@ -92,8 +96,23 @@ export const isUnsupportedChatPart = (
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
+/**
+ * Who runs a tool call. `server`: the API runs it during the turn. `client`:
+ * the browser resolves it (a client tool, or a question the user answers).
+ * `harness`: a coding-agent harness on the member's computer ran it during a
+ * turn routed there. The API never runs a harness call; it stores what the
+ * harness reported and forwards approval answers to the computer.
+ */
+export const CHAT_TOOL_EXECUTOR = {
+  server: "server",
+  client: "client",
+  harness: "harness",
+} as const;
+export type ChatToolExecutor =
+  (typeof CHAT_TOOL_EXECUTOR)[keyof typeof CHAT_TOOL_EXECUTOR];
+
 /** Ownership is recorded by the runtime and does not depend on later tool sets. */
-export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
+export const chatToolExecutor = (part: unknown): ChatToolExecutor | null => {
   if (
     typeof part !== "object" ||
     part === null ||
@@ -113,6 +132,8 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
         return "server";
       case "client":
         return "client";
+      case "harness":
+        return "harness";
       default:
         break;
     }
@@ -122,6 +143,31 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
 
 export const isServerChatToolCall = (part: unknown): boolean =>
   chatToolExecutor(part) === "server";
+
+/** Whether a member's computer ran the call; see `CHAT_TOOL_EXECUTOR`. */
+export const isHarnessChatToolCall = (part: unknown): boolean =>
+  chatToolExecutor(part) === "harness";
+
+/**
+ * Whether the browser resolves the call. A server or harness call is run by
+ * the API or by the member's computer, so the browser never answers it with
+ * an output; a call stored before ownership was recorded reads as the
+ * browser's, as it always has.
+ */
+export const isBrowserResolvedChatToolCall = (part: unknown): boolean => {
+  const executor = chatToolExecutor(part);
+  switch (executor) {
+    case "server":
+    case "harness":
+      return false;
+    case "client":
+    case null:
+      return true;
+    default:
+      executor satisfies never;
+      return panic(`Unknown chat tool executor: ${String(executor)}`);
+  }
+};
 
 /**
  * Title a thread is persisted with until its first message generates a real
@@ -142,9 +188,18 @@ export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+/**
+ * What a turn that rewrites stored history asks for: `regenerate` answers the
+ * latest user message again; `edit` replaces one of the user's own messages
+ * (named by `truncateAfterMessageId`) and drops every later turn.
+ */
 export const CHAT_TURN_INTENT = {
+  edit: "edit",
   regenerate: "regenerate",
 } as const;
+
+export type ChatTurnIntent =
+  (typeof CHAT_TURN_INTENT)[keyof typeof CHAT_TURN_INTENT];
 
 /**
  * Response header naming the server turn a chat request runs, so the page can
@@ -272,21 +327,26 @@ type ChatSendRequestBase = {
     templateId: SafeId<"template">;
   };
   /**
-   * The extension protocol the client speaks. Any version is accepted so a
-   * stale tab can still chat; the server offers the browser tool only when it
-   * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
+   * Any positive integer protocol version is accepted so a stale tab can still
+   * chat; the server offers the browser tool only for its own
+   * `BROWSER_CONTROL_PROTOCOL_VERSION`. Status must be known.
    */
-  browserClient?: { protocolVersion: number };
+  browserExtension?: {
+    protocolVersion: number;
+    status: BrowserExtensionStatus;
+  };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";
   editApplyMode?: "manual" | "auto";
   runMode?: ChatRunMode;
+  /** Where the turn runs; absent runs it on stella's own models. */
+  runTarget?: ChatRunTarget;
   /** AG-UI run correlation minted by TanStack ChatClient. */
   runId: string;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];
+  turnIntent?: ChatTurnIntent;
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {

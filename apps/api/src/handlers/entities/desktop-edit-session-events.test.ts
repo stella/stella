@@ -76,7 +76,7 @@ describe("desktop edit session events", () => {
     });
 
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
@@ -139,7 +139,7 @@ describe("desktop edit session events", () => {
 
     const response = await responsePromise;
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }

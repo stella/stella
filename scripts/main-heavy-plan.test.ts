@@ -1039,6 +1039,7 @@ test("heavy queue evidence follows Git tree identity and remains conservative wh
       paginate: async (_method: unknown, options: { run_id: number }) =>
         options.run_id === 100 ? [job] : [queueJob],
       rest: {
+        checks: { listAnnotations: async () => ({ data: [] }) },
         actions: {
           listJobsForWorkflowRun: "current-jobs",
           listJobsForWorkflowRunAttempt: "queue-jobs",
@@ -1137,6 +1138,7 @@ test("heavy classification uses passing evidence from any matching-tree run", as
           return run_id === 200 ? first.jobs : second.jobs;
         },
         rest: {
+          checks: { listAnnotations: async () => ({ data: [] }) },
           actions: {
             listJobsForWorkflowRun: "current-jobs",
             listJobsForWorkflowRunAttempt: "queue-jobs",

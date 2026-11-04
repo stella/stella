@@ -1,0 +1,9 @@
+{
+  "timer": "Taimer",
+  "running": "Käib",
+  "paused": "Peatatud",
+  "noMatter": "Asjata",
+  "noDescription": "Kirjelduseta",
+  "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}",
+  "startedElsewhere": "Teises seadmes käivitati taimer"
+}

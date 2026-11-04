@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
@@ -11,7 +12,6 @@ import {
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
-import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 import {
   Accordion,
   AccordionItem,
@@ -177,7 +177,10 @@ export const ProvisionsCited = ({
           </Button>
         </div>
       )}
+      {/* Closed is the resting state: a group's reference chips render only
+          once it is opened, not for every collapsed work on the page. */}
       <Accordion
+        hiddenUntilFound={false}
         multiple
         value={expandedGroups}
         onValueChange={(values) => {
@@ -243,19 +246,21 @@ export const ProvisionsCited = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setLocalOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        {t("caseLaw.viewer.provisionsCited")}
-      </button>
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("caseLaw.viewer.provisionsCited")}
+        </span>
+      </Button>
       {content}
     </section>
   );
@@ -395,9 +400,7 @@ const WorkReferences = ({
                     provision,
                     renderPart,
                   )}
-                  anchorSeparator={provisionAnchorSeparatorFor(
-                    group.jurisdiction,
-                  )}
+                  anchorNesting={statuteAnchorNestingFor(group.jurisdiction)}
                   jurisdiction={group.jurisdiction}
                   provision={provision}
                   statuteTitle={title}

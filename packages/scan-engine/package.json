@@ -1,6 +1,6 @@
 {
   "name": "@stll/scan-engine",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Document scan cleanup engine (Rust, WebAssembly): deskew, content crop and binarization off the main thread, plus a per-page review state machine",
   "keywords": [
     "binarization",
@@ -48,6 +48,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scan-engine",
     "format:rust": "cargo fmt",
     "build:wasm": "bash scripts/build-wasm.sh",
+    "build:wasm:container": "bash scripts/build-wasm-container.sh",
     "check:wasm": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-wasm.ts",
     "generate:fixtures": "bun scripts/generate-fixtures.ts",
     "check:fixtures": "bun scripts/generate-fixtures.ts --check",

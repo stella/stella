@@ -106,6 +106,7 @@ import {
   usePrefetchedDecisionPage,
 } from "@/features/case-law/queries/decisions";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import {
   QuestionColumnControls,
   useQuestionColumns,
@@ -116,7 +117,6 @@ import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
-import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -135,6 +135,7 @@ import {
 } from "@/routes/law/-components/public-law-list-failure";
 
 import { caseLawResultsFeedback } from "./-case-law-filter-notice";
+import { usePageSelection } from "./-case-law-page-selection";
 import {
   type CaseLawSearchChange,
   nextCaseLawIndexSearch,
@@ -143,7 +144,6 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
 
 /** Stable empties, so an unchanged page does not hand the table new arrays. */
-const EMPTY_SELECTION: readonly string[] = [];
 const NO_SHOWN_QUESTIONS: readonly string[] = [];
 const EMPTY_DECISIONS: readonly Decision[] = [];
 const NO_BROWSE_FACETS: CaseLawBrowseFacets = {
@@ -239,7 +239,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useMessageLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const search = Route.useSearch({
     select: ({
       country,
@@ -344,12 +344,17 @@ export function PublicCaseLawIndex({
   // search required. On the first page it is the page on screen as well, and
   // the two reads are one query.
   const firstPageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: 1, pageSize }),
+    ...decisionsPageOptions({ filters, page: 1, pageSize, readingLanguages }),
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
   const pageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
+    ...decisionsPageOptions({
+      filters,
+      page: wantedPage,
+      pageSize,
+      readingLanguages,
+    }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
@@ -424,6 +429,7 @@ export function PublicCaseLawIndex({
     filters,
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
+    readingLanguages,
   });
   // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
@@ -473,17 +479,12 @@ export function PublicCaseLawIndex({
     });
   };
 
-  // Picked rows narrow a run to them; the page they belong to is the only
-  // page they mean anything on, so a step forward clears them.
   const openDecision = useOpenDecisionInspector(rowsQuery);
-  const [selectedIds, setSelectedIds] =
-    useState<readonly string[]>(EMPTY_SELECTION);
-  const [selectionPage, setSelectionPage] = useState(pager.currentPage);
-  if (selectionPage !== pager.currentPage) {
-    setSelectionPage(pager.currentPage);
-    setSelectedIds(EMPTY_SELECTION);
-  }
   const pageDecisionIds = decisions.map((decision) => decision.id);
+  const [selectedIds, setSelectedIds] = usePageSelection(
+    pager.currentPage,
+    pageDecisionIds,
+  );
   const questions = useQuestionColumns({
     // The results page is where questions are authored, so the columns are
     // read whether or not this particular search returned anything.
@@ -659,7 +660,7 @@ export function PublicCaseLawIndex({
         navigate: routerNavigate,
         queryClient,
         search: { ...scopedSearch, q: entry },
-        uiLocale,
+        readingLanguages,
       }),
       "cases.open-match",
     );

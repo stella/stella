@@ -5,9 +5,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import type { DecisionReaderAdapters } from "@stll/decision-reader/reader-adapters";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, waitFor } =

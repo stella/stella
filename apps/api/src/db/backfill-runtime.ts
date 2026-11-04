@@ -8,7 +8,6 @@ import {
 import {
   backfillHeartbeat,
   combine,
-  defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
 import type {
@@ -30,6 +29,8 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
+import { admitCaseLawPopulationMaintenance } from "@/api/lib/case-law/population-maintenance-admission";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
@@ -368,6 +369,33 @@ const throwIfBackfillDeferred = ({
   }
 };
 
+type SettledMaintenanceVerdictReaderOptions = Omit<
+  Parameters<typeof admitCaseLawPopulationMaintenance>[0],
+  "query" | "verdict"
+> & {
+  indicators: { query: Query; settle: () => Promise<void> };
+  readHealth: () => Promise<Verdict>;
+};
+
+/** Finish cancelled indicator reads before the reserved session starts work. */
+const createSettledMaintenanceVerdictReader =
+  ({
+    indicators,
+    readHealth,
+    ...admission
+  }: SettledMaintenanceVerdictReaderOptions) =>
+  async () => {
+    try {
+      return await admitCaseLawPopulationMaintenance({
+        ...admission,
+        query: indicators.query,
+        verdict: await readHealth(),
+      });
+    } finally {
+      await indicators.settle();
+    }
+  };
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
@@ -378,7 +406,7 @@ const createRuntime = <BatchTransaction>({
   transactionQuery,
   slot,
   close,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
   readEbsSignal,
@@ -405,13 +433,14 @@ const createRuntime = <BatchTransaction>({
       config,
       sharedReadEbsSignal: readEbsSignal,
     });
-  const readSettledVerdict = async () => {
-    try {
-      return await readHealth();
-    } finally {
-      await indicatorQueries.settle();
-    }
-  };
+  const readSettledVerdict = createSettledMaintenanceVerdictReader({
+    indicators: indicatorQueries,
+    readHealth,
+    tableName,
+    tableContention,
+    name,
+    clock,
+  });
   const readCheckpoint = async (tx: BatchTransaction) => {
     const q = transactionQuery(tx);
     await setSharedQueryTimeouts(q, {
@@ -601,7 +630,7 @@ export const createScriptBackfillHealthReader = ({
   db,
   tableName,
   clock,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
 }: {
   db: { transaction: IngestionTransactionRunner<Transaction> };
   tableName: string;
@@ -613,13 +642,20 @@ export const createScriptBackfillHealthReader = ({
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
     readTimeoutMs: config.readTimeoutMs,
   });
+  const readHealth = createVerdictReader({
+    query: bounded.query,
+    tableName,
+    clock,
+    config,
+  });
   return {
-    readVerdict: createVerdictReader({
-      query: bounded.query,
-      tableName,
-      clock,
-      config,
-    }),
+    readVerdict: async () =>
+      await admitCaseLawPopulationMaintenance({
+        query: bounded.query,
+        tableName,
+        clock,
+        verdict: await readHealth(),
+      }),
     settle: bounded.settle,
   };
 };
@@ -709,7 +745,7 @@ type DatabaseLoadVerdictReaderOptions = {
 export const createDatabaseLoadVerdictReader = ({
   db,
   tableName,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbsSignal,
   warn,
@@ -779,7 +815,12 @@ export const createDatabaseLoadVerdictReader = ({
           warn,
         });
       }
-      return verdict;
+      return await admitCaseLawPopulationMaintenance({
+        query: indicators.query,
+        tableName,
+        clock,
+        verdict,
+      });
     });
     await indicators.settle();
     if (Result.isError(result)) {
@@ -808,6 +849,16 @@ export const createDatabaseLoadVerdictReader = ({
   };
 };
 
+/** The runtime's batch bounds always admit its initial size. */
+const sizedRuntimeConfig = ({
+  config = loadGateHealthConfig(),
+  initialSize,
+}: Pick<RuntimeOptions, "config" | "initialSize">): HealthConfig => ({
+  ...config,
+  minSize: Math.min(initialSize, config.minSize),
+  maxSize: Math.max(initialSize, config.maxSize),
+});
+
 export const createScriptBackfillRuntime = ({
   db,
   slot: injectedSlot,
@@ -835,17 +886,7 @@ export const createScriptBackfillRuntime = ({
   return createRuntime({
     ...options,
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction: db.transaction.bind(db),
     slot,
     close: async () => await Promise.resolve(),
@@ -897,17 +938,7 @@ export const createBackfillRuntime = (
     transactionQuery: (
       tx: Pick<OnlineMigrationConnection, "execute" | "query">,
     ) => tx.query,
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction,
     close: slot.close,
   });

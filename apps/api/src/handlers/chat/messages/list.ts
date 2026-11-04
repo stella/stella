@@ -12,6 +12,7 @@ import {
 import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
+  chatThreadScopeMismatchError,
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -33,6 +34,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
+import {
+  decodeChatRunTarget,
+  localRunTargetField,
+} from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -230,6 +235,7 @@ const getMessages = createSafeRootHandler(
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatRunTarget: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -294,7 +300,10 @@ const getMessages = createSafeRootHandler(
             }),
           )
         ) {
-          return { kind: "scope-mismatch" as const };
+          return {
+            kind: "scope-mismatch" as const,
+            workspaceId: thread.workspaceId ?? null,
+          };
         }
 
         // The most-recent page is loaded first; older pages are fetched on
@@ -396,6 +405,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
+          ...localRunTargetField(decodeChatRunTarget(null)),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -420,10 +430,15 @@ const getMessages = createSafeRootHandler(
 
     if (reads.kind === "scope-mismatch") {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
+        yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await chatThreadScopeMismatchError({
+                workspaceId: reads.workspaceId,
+                getWorkspaceAccess,
+              }),
+          ),
+        ),
       );
     }
 
@@ -483,6 +498,8 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
+      // Present only for a thread whose turns run on a computer; absent is cloud.
+      ...localRunTargetField(decodeChatRunTarget(thread.chatRunTarget)),
       context,
     });
   },

@@ -11,6 +11,7 @@
  */
 
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
+import { SLOV_LEX_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
@@ -421,14 +422,5 @@ export const SK_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: ".",
-    render: {
-      section: (value) => `paragraf-${value}`,
-      article: (value) => `clanok-${value}`,
-      subsection: (value) => `odsek-${value}`,
-      letter: (value) => `pismeno-${value}`,
-      point: (value) => `bod-${value}`,
-    },
-  },
+  anchor: SLOV_LEX_ANCHORS,
 } as const satisfies JurisdictionProfile;

@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { DayCalendar } from "./day-calendar";
 import type { DayCalendarColumn } from "./day-calendar";
 import {
@@ -29,7 +31,7 @@ const activityColumn = {
   blocks: [
     {
       accessibleLabel: "Editor, contract review",
-      detail: "08:05–08:40",
+      caption: "08:05–08:40",
       endMs: at(8, 40),
       id: "editor",
       kind: "segment",
@@ -94,7 +96,7 @@ afterAll(async () => {
   } else {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type CalendarProps = ComponentProps<typeof DayCalendar>;
@@ -363,6 +365,95 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
+  test("a block shorter than one label line draws no text but keeps its label", async () => {
+    const block = (id: string, minutes: number) =>
+      ({
+        accessibleLabel: `${id} label`,
+        caption: `${id} caption`,
+        endMs: at(12) + minutes * MINUTE_MS,
+        id,
+        kind: "mixed",
+        startMs: at(12),
+        title: `${id} title`,
+        tone: { type: "neutral" },
+      }) as const;
+    // At the 15-minute grid a slot is 22 px: 10 minutes is under one line.
+    const tooShort = block("brief", 10);
+    const oneLine = {
+      ...block("line", 15),
+      startMs: at(13),
+      endMs: at(13, 15),
+    };
+    const { cleanup, container } = await renderCalendar({
+      columns: [{ ...activityColumn, blocks: [tooShort, oneLine] }],
+    });
+    const surface = (label: string) =>
+      container.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+
+    expect(surface("brief label")?.textContent).toBe("");
+    expect(surface("line label")?.textContent).toBe("line titleline caption");
+    await cleanup();
+  });
+
+  test("a topic block tints in its topic's swatch without a matter's edge, and switching stays plain", async () => {
+    const block = (
+      id: string,
+      hour: number,
+      kind: "mixed" | "segment",
+      tone:
+        | { key: string; type: "topic" }
+        | { color: null; matterId: string; type: "matter" }
+        | { type: "neutral" },
+    ) =>
+      ({
+        accessibleLabel: id,
+        endMs: at(hour, 30),
+        id,
+        kind,
+        startMs: at(hour),
+        title: id,
+        tone,
+      }) as const;
+    const { cleanup, container } = await renderCalendar({
+      columns: [
+        {
+          ...activityColumn,
+          blocks: [
+            block("topic", 9, "segment", { key: "title:lease", type: "topic" }),
+            block("same topic", 11, "segment", {
+              key: "title:lease",
+              type: "topic",
+            }),
+            block("matter", 13, "segment", {
+              color: null,
+              matterId: "lease",
+              type: "matter",
+            }),
+            block("switching", 15, "mixed", { type: "neutral" }),
+          ],
+        },
+      ],
+    });
+    const surface = (label: string) => {
+      const element = container.querySelector<HTMLElement>(
+        `[aria-label="${label}"]`,
+      );
+      if (element === null) {
+        throw new TypeError(`Missing block ${label}`);
+      }
+      return element;
+    };
+
+    // The tint itself is a `color-mix` the DOM under test drops; the swatch
+    // comes from the matter palette's stable key hash.
+    expect(surface("topic").className).not.toContain("bg-muted");
+    expect(surface("topic").className).toBe(surface("same topic").className);
+    expect(surface("topic").className).not.toContain("border-s-[3px]");
+    expect(surface("matter").className).toContain("border-s-[3px]");
+    expect(surface("switching").className).toContain("bg-muted");
+    await cleanup();
+  });
+
   test("a column without range selection takes no focus and ignores drags", async () => {
     const { cleanup, container, selected } = await renderCalendar();
     const surface = surfaceOf(container, "entries");
@@ -371,6 +462,66 @@ describe("DayCalendar", () => {
     await pointer(surface, "pointerup", pixelsAt(120, 15));
 
     expect(surface.hasAttribute("tabindex")).toBe(false);
+    expect(selected).toEqual([]);
+    await cleanup();
+  });
+
+  test("a suggestion is a dashed button that acts without starting a range selection", async () => {
+    const activated: string[] = [];
+    const { cleanup, container, selected } = await renderCalendar({
+      columns: [
+        activityColumn,
+        {
+          ...entriesColumn,
+          blocks: [
+            ...entriesColumn.blocks,
+            {
+              accessibleLabel: "Suggested: Service agreement, 1.0 h",
+              endMs: at(9, 5),
+              id: "suggestion-service-agreement",
+              kind: "entry",
+              onActivate: () => {
+                activated.push("suggestion-service-agreement");
+              },
+              startMs: at(8, 5),
+              state: "suggestion",
+              title: "Service agreement",
+              tone: { type: "neutral" },
+            },
+          ],
+          rangeSelection: { label: "Select a range", type: "enabled" },
+        },
+      ],
+    });
+    const suggestion = container.querySelector<HTMLButtonElement>(
+      '[data-block-id="suggestion-service-agreement"]',
+    );
+    const draft = container.querySelector<HTMLElement>(
+      '[data-block-id="entry-lease"]',
+    );
+    expect(suggestion?.tagName).toBe("BUTTON");
+    expect(suggestion?.dataset["state"]).toBe("suggestion");
+    expect(suggestion?.className).toContain("border-dashed");
+    expect(draft?.tagName).toBe("ARTICLE");
+    expect(draft?.dataset["state"]).toBe("draft");
+    if (suggestion === null) {
+      throw new Error("The suggestion did not render");
+    }
+    surfaceOf(container, "entries");
+    await pointer(suggestion, "pointerdown", pixelsAt(10, 15));
+    await pointer(suggestion, "pointerup", pixelsAt(10, 15));
+    await act(async () => suggestion.click());
+
+    expect(activated).toEqual(["suggestion-service-agreement"]);
+    expect(selected).toEqual([]);
+    expect(
+      container.querySelector('[data-slot="day-calendar-selection"]'),
+    ).toBeNull();
+
+    // A keyboard range drafted in the column stays a draft when Enter is
+    // pressed on the suggestion.
+    await key(surfaceOf(container, "entries"), "ArrowDown");
+    await key(suggestion, "Enter");
     expect(selected).toEqual([]);
     await cleanup();
   });

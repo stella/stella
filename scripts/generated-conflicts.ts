@@ -1636,6 +1636,28 @@ export const resolveDerived = ({
           env: { ...process.env, STELLA_LOCAL_AUTOFIX: "true" },
         }).exitCode,
     );
+    const generatedCaches = run([
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
+    ])
+      .stdout.toString()
+      .split("\0")
+      .filter(
+        (file) =>
+          file !== "" &&
+          !ignoredBefore.has(file) &&
+          selected.some(({ cacheOutputs = [] }) =>
+            cacheOutputs.some((output) => matchesGeneratedGlob(output, file)),
+          ),
+      );
+    for (const file of generatedCaches) {
+      rmSync(path.join(repo, file));
+    }
     // Stage even a failed generator's writes so ordinary merge --abort can
     // restore tracked files rather than refusing unstaged output edits.
     run(["add", "-A", "--", "."]);

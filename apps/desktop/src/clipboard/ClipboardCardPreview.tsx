@@ -8,6 +8,7 @@ import {
   clipboardSearchPreviewText,
   highlightClipboardText,
 } from "./clipboard-logic";
+import type { ClipboardSearchOptions } from "./clipboard-logic";
 import type { ClipboardCopyFormat, ClipboardItem } from "./clipboard-types";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
@@ -19,6 +20,7 @@ type ClipboardCardPreviewProps = {
   item: ClipboardItem;
   onImagePreviewStatusChange: (status: ClipboardImagePreviewStatus) => void;
   query: string;
+  searchOptions: ClipboardSearchOptions;
 };
 
 export const ClipboardCardPreview = ({
@@ -27,6 +29,7 @@ export const ClipboardCardPreview = ({
   item,
   onImagePreviewStatusChange,
   query,
+  searchOptions,
 }: ClipboardCardPreviewProps) => {
   const t = useTranslations("clipboard");
   if (item.type === "image") {
@@ -64,8 +67,16 @@ export const ClipboardCardPreview = ({
     );
   }
   if (query) {
-    const searchPreview = clipboardSearchPreviewText(item, query);
-    const highlightedText = highlightClipboardText(searchPreview.text, query);
+    const searchPreview = clipboardSearchPreviewText(
+      item,
+      query,
+      searchOptions,
+    );
+    const highlightedText = highlightClipboardText(
+      searchPreview.text,
+      query,
+      searchOptions,
+    );
     return (
       <div className={previewClassName} dir="auto">
         {searchPreview.truncated ? (

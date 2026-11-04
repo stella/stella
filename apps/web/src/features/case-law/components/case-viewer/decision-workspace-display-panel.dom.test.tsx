@@ -3,8 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 
