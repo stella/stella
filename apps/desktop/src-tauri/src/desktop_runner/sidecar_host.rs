@@ -322,22 +322,6 @@ async fn emit(sink: &RunSink, output: &RunOutput) {
   }
 }
 
-/// Move a run's outputs from the supervisor's channel to `queue` as they
-/// arrive, so a journal write that takes a while never makes the run look
-/// undrained to the supervisor. The queue holds only what the holder has not
-/// been acked for, which the holder bounds by the run's storage limits.
-async fn drain(
-  mut outputs: mpsc::Receiver<SidecarDelivery>,
-  queue: mpsc::UnboundedSender<SidecarDelivery>,
-) {
-  while let Some(delivery) = outputs.recv().await {
-    let last = matches!(delivery.output, SidecarRunOutput::Finished { .. });
-    if queue.send(delivery).is_err() || last {
-      return;
-    }
-  }
-}
-
 /// What a batch of holder outputs did to the run.
 struct Batch {
   outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
@@ -354,19 +338,17 @@ async fn pump(
   shared: Arc<Shared>,
   sidecar: HarnessSidecar,
   run_id: String,
-  outputs: mpsc::Receiver<SidecarDelivery>,
+  mut outputs: mpsc::UnboundedReceiver<SidecarDelivery>,
   sink: RunSink,
   lease: Option<Box<dyn Send + Sync>>,
 ) {
-  let (queue_tx, mut queue) = mpsc::unbounded_channel();
-  tokio::spawn(drain(outputs, queue_tx));
   let (model, thread_id) = locked(&shared.runs)
     .get(&run_id)
     .map(|run| (run.model.clone(), run.thread_id.clone()))
     .unwrap_or_default();
   let mut limited = false;
   let outcome = loop {
-    let first = queue.recv().await.unwrap_or_else(|| {
+    let first = outputs.recv().await.unwrap_or_else(|| {
       // The supervisor always ends a run's channel with its end; a channel
       // closed without one is a run nobody can finish any more.
       tracing::warn!(target: LOG_TARGET, "a run's channel closed before its end");
@@ -385,7 +367,7 @@ async fn pump(
         Some(SidecarRunOutput::Finished { .. })
       )
     {
-      match queue.try_recv() {
+      match outputs.try_recv() {
         Ok(delivery) => deliveries.push(delivery),
         Err(_empty) => break,
       }
@@ -611,7 +593,7 @@ impl SidecarHarnessHost {
     &self,
     sidecar: HarnessSidecar,
     run_id: String,
-    outputs: mpsc::Receiver<SidecarDelivery>,
+    outputs: mpsc::UnboundedReceiver<SidecarDelivery>,
     sink: RunSink,
     lease: Option<Box<dyn Send + Sync>>,
   ) {
