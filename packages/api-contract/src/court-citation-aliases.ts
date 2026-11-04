@@ -486,14 +486,11 @@ const bareWord = (word: string): string => {
  * court's short code. A court noun on its own (`rozhodnutí soudu`) is the
  * generic word and names none.
  */
-type FoldedToken = { token: string; capitalized: boolean };
-
 const namesSomeCourt = (
-  folded: readonly FoldedToken[],
+  tokens: readonly string[],
   words: readonly string[],
 ): boolean =>
-  folded.some(({ token }, index) => {
-    const tokens = folded.map((entry) => entry.token);
+  tokens.some((token, index) => {
     if ([...NAMED_COURT_WORDS].some((word) => token.startsWith(word))) {
       return true;
     }
@@ -515,12 +512,12 @@ const namesSomeCourt = (
       // A Hungarian court opens with its seat's adjective: `Debreceni
       // Ítélőtábla`.
       (hungarianNoun && before?.endsWith("i") === true) ||
-      // A seat names a place, so it is capitalized: `soud v Neznámově`,
-      // not `soudu ve správním řízení`.
+      // A court noun with a seat after it, in any case (`soud v neznámově`).
+      // Reading generic prose this way only withholds a resolution; missing
+      // a seat would resolve another court's decision.
       (after !== undefined &&
         SEAT_PREPOSITIONS.has(after) &&
-        (folded[index + 2]?.capitalized === true ||
-          modifies(tokens[index + 2])))
+        tokens[index + 2] !== undefined)
     );
   }) ||
   words.some(
@@ -570,7 +567,6 @@ export const readCourtCitation = (
   const tokens: {
     token: string;
     word: number;
-    capitalized: boolean;
     upper: boolean;
   }[] = [];
   for (const [wordIndex, word] of words.entries()) {
@@ -599,7 +595,6 @@ export const readCourtCitation = (
       tokens.push({
         token,
         word: wordIndex,
-        capitalized: /^\p{Lu}/u.test(word),
         upper: word === word.toUpperCase(),
       });
     }
@@ -652,7 +647,7 @@ export const readCourtCitation = (
   );
   if (
     namesSomeCourt(
-      leftover.map(({ token, capitalized }) => ({ token, capitalized })),
+      leftover.map(({ token }) => token),
       leftoverWords,
     )
   ) {

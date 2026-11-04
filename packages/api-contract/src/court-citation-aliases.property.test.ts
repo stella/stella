@@ -235,7 +235,10 @@ describe("court citation aliases", () => {
 
   test.each([
     "soud v Neznámově",
+    "soud v neznámově",
+    "rozsudek soudu ve městě neznámov",
     "súdu vo Zvolene",
+    "súdu vo zvolene",
     "Okresní soud v Neznámově",
     "Krajský soud",
     "OS Neznámov",
