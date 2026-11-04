@@ -39,7 +39,7 @@ export const MCP_APPS = [
     callableTools: [
       MCP_WEB_HANDOFF_TOOL_NAME,
       "search_case_law",
-      "read_case_law_courts",
+      "list_case_law_courts",
       "resolve_case_law_decision",
       "open_case_law_decision",
       "read_case_law_decision_blocks",

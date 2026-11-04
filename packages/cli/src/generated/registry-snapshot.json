@@ -2589,8 +2589,8 @@
       "scope": "read",
       "feature": "FEATURE_PUBLIC_LAW"
     },
-    "name": "read_case_law_courts",
-    "description": "Widget-only list of every court the corpus holds for a country, grouped by tier, for the search court filter.",
+    "name": "list_case_law_courts",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
@@ -2605,9 +2605,25 @@
             "country": {
               "spelling": "alpha-3",
               "admitted": ["CZE", "EU", "HUN", "POL", "SVK"],
-              "tool": "read_case_law_courts"
+              "tool": "list_case_law_courts"
             }
           }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     },
@@ -2637,9 +2653,12 @@
             "required": ["tierLabel", "courts"],
             "additionalProperties": false
           }
+        },
+        "nextCursor": {
+          "type": ["string", "null"]
         }
       },
-      "required": ["country", "courts"],
+      "required": ["country", "courts", "nextCursor"],
       "additionalProperties": false
     },
     "annotations": {

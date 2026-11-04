@@ -84,6 +84,7 @@ import { appLocale } from "../shared/locale";
 import { SearchNotice } from "../shared/notice";
 import { getAppToolArrayLimit } from "../shared/tool-input";
 import {
+  appendCourtCatalogPage,
   courtPickerGroups,
   filterDefaults,
   originalSearchQuery,
@@ -92,6 +93,9 @@ import {
 } from "./model";
 import type { CaseLawView, ResultRow, ResultSort } from "./model";
 import { parseCourtCatalog } from "./parse";
+
+/** Pages of a country's courts the picker reads before asking for a search. */
+const COURT_CATALOG_PAGE_CAP = 20;
 
 export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
@@ -473,22 +477,41 @@ const SearchControls = ({
     const requested = country;
     bridge.detached(
       (async () => {
-        const result = await bridge.requestTool({
-          name: "read_case_law_courts",
-          arguments: { country: requested },
-        });
-        const parsed =
-          result.isError === true
-            ? undefined
-            : parseCourtCatalog(parseAppToolPayload(result));
-        if (parsed === undefined) {
-          // Unreadable: the facets stand in, and the next opening asks again.
-          setCatalogRequested((current) =>
-            current === requested ? null : current,
-          );
-          return;
+        // One bounded page per call, appended as it arrives; the list stops
+        // at a page cap, past which the reader narrows by searching.
+        let cursor: string | null = null;
+        for (
+          let pageIndex = 0;
+          pageIndex < COURT_CATALOG_PAGE_CAP;
+          pageIndex += 1
+        ) {
+          // In turn: each page starts from the previous page's cursor.
+          const result = await bridge.requestTool({
+            name: "list_case_law_courts",
+            arguments: {
+              country: requested,
+              ...(cursor === null ? {} : { cursor }),
+            },
+          });
+          const parsed =
+            result.isError === true
+              ? undefined
+              : parseCourtCatalog(parseAppToolPayload(result));
+          if (parsed === undefined) {
+            if (pageIndex === 0) {
+              // Unreadable: the facets stand in, and the next opening asks again.
+              setCatalogRequested((current) =>
+                current === requested ? null : current,
+              );
+            }
+            return;
+          }
+          setCatalog((current) => appendCourtCatalogPage(current, parsed));
+          cursor = parsed.nextCursor;
+          if (cursor === null) {
+            return;
+          }
         }
-        setCatalog(parsed);
       })(),
       "caseLawResults.courts",
     );

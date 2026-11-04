@@ -122,8 +122,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
     DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
   preview_cited_provision:
     DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
-  read_case_law_courts:
-    CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.read_case_law_courts,
+  list_case_law_courts:
+    CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

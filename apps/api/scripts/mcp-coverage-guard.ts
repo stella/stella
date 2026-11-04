@@ -134,7 +134,7 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: app-only MCP reader page stream over the same public decision read, citations and provision previews (apps/api/src/handlers/case-law/decisions/reader.ts)",
   preview_cited_provision:
     "no dedicated endpoint: app-only MCP preview over the existing consolidated provision preview service (apps/api/src/mcp/decision-reader-tools.ts)",
-  read_case_law_courts:
+  list_case_law_courts:
     "no dedicated endpoint: app-only MCP court list over the court-filter vocabulary search_case_law already reads (apps/api/src/mcp/case-law-court-filter.ts)",
   read_provision_history:
     "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",

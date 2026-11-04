@@ -6,8 +6,8 @@ import type { PresentationApp } from "@stll/mcp-apps/manifest";
 
 import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
 import {
-  READ_CASE_LAW_COURTS_INPUT_NORMALIZATION,
-  readCaseLawCourtsArgsSchema,
+  LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION,
+  listCaseLawCourtsArgsSchema,
 } from "./case-law-court-catalog-input";
 import { searchCaseLawTexts } from "./case-law-search-guidance";
 import {
@@ -54,9 +54,9 @@ const MCP_APP_TOOL_INPUTS = {
   read_case_law_citations: { inputSchema: readCaseLawCitationsArgsSchema },
   read_case_law_decision_blocks: { inputSchema: readDecisionBlocksArgs },
   preview_cited_provision: { inputSchema: previewProvisionArgs },
-  read_case_law_courts: {
-    inputSchema: readCaseLawCourtsArgsSchema,
-    inputNormalization: READ_CASE_LAW_COURTS_INPUT_NORMALIZATION,
+  list_case_law_courts: {
+    inputSchema: listCaseLawCourtsArgsSchema,
+    inputNormalization: LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION,
   },
   read_provision_history: {
     inputSchema: readProvisionHistoryArgsSchema,

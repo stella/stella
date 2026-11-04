@@ -478,7 +478,7 @@ const mountReader = async ({
               break;
             }
             // No court catalog here: the court filter falls back to the facets.
-            if (name === "read_case_law_courts") {
+            if (name === "list_case_law_courts") {
               reply({
                 jsonrpc: "2.0",
                 id,

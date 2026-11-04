@@ -182,6 +182,14 @@
       "estimatedTokens": 561
     },
     {
+      "name": "list_case_law_courts",
+      "nameChars": 20,
+      "descriptionChars": 82,
+      "inputSchemaChars": 742,
+      "totalChars": 844,
+      "estimatedTokens": 344
+    },
+    {
       "name": "list_clauses",
       "nameChars": 12,
       "descriptionChars": 441,
@@ -364,14 +372,6 @@
       "inputSchemaChars": 1140,
       "totalChars": 1930,
       "estimatedTokens": 739
-    },
-    {
-      "name": "read_case_law_courts",
-      "nameChars": 20,
-      "descriptionChars": 109,
-      "inputSchemaChars": 398,
-      "totalChars": 527,
-      "estimatedTokens": 209
     },
     {
       "name": "read_case_law_decision",
@@ -639,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 133598,
-    "estimatedTokens": 53102
+    "characters": 133915,
+    "estimatedTokens": 53237
   }
 }

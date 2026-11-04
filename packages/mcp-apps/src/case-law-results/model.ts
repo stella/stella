@@ -3,6 +3,10 @@ import { panic } from "better-result";
 import { normalizeCountry } from "@stll/agent-input/country";
 import { normalizeDateBound } from "@stll/agent-input/date-value";
 import { normalizeStringList } from "@stll/agent-input/string-list";
+import {
+  COURT_TIER_LABELS,
+  type CourtTierLabel,
+} from "@stll/api-contract/case-law-court-tiers";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
@@ -201,6 +205,34 @@ type CourtFacets = NonNullable<
 type CourtPickerGroup = {
   tierLabel: CourtCatalog["courts"][number]["tierLabel"];
   courts: { value: string; count: number | null }[];
+};
+
+/**
+ * Pages of one country's catalog joined into one: each tier's courts in page
+ * order, tiers apex first. Pages run by court name, so an apex court can
+ * arrive on a later page than a regional one; the tier order is fixed rather
+ * than taken from arrival.
+ */
+export const appendCourtCatalogPage = (
+  catalog: CourtCatalog | null,
+  page: CourtCatalog,
+): CourtCatalog => {
+  if (catalog === null || catalog.country !== page.country) {
+    return page;
+  }
+  const courtsOf = (tierLabel: CourtTierLabel) =>
+    [catalog, page].flatMap(
+      ({ courts }) =>
+        courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? [],
+    );
+  return {
+    country: page.country,
+    courts: COURT_TIER_LABELS.flatMap((tierLabel) => {
+      const courts = courtsOf(tierLabel);
+      return courts.length === 0 ? [] : [{ tierLabel, courts }];
+    }),
+    nextCursor: page.nextCursor,
+  };
 };
 
 /**

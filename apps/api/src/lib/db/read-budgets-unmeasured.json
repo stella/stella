@@ -248,10 +248,6 @@
     "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
   },
   {
-    "id": "mcp:read_case_law_courts",
-    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
-  },
-  {
     "id": "mcp:preview_cited_provision",
     "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
   },

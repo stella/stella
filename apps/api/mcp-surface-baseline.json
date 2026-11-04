@@ -99,6 +99,12 @@
     "list_capabilities": {
       "advanced": {"title": 17, "description": 602, "inputSchema": 851, "outputSchema": 875, "annotations": 95, "payloadUtf8Bytes": 2589}
     },
+    "list_case_law_courts": {
+      "advanced": {"title": 20, "description": 82, "inputSchema": 742, "outputSchema": 469, "annotations": 98, "payloadUtf8Bytes": 1589},
+      "anonymized": {"title": 20, "description": 82, "inputSchema": 742, "outputSchema": 469, "annotations": 98, "payloadUtf8Bytes": 1589},
+      "default": {"title": 20, "description": 82, "inputSchema": 742, "outputSchema": 469, "annotations": 98, "payloadUtf8Bytes": 1589},
+      "law": {"title": 20, "description": 82, "inputSchema": 742, "outputSchema": 469, "annotations": 98, "payloadUtf8Bytes": 1589}
+    },
     "list_clauses": {
       "advanced": {"title": 12, "description": 441, "inputSchema": 1027, "outputSchema": 2052, "annotations": 90, "payloadUtf8Bytes": 3764},
       "anonymized": {"title": 12, "description": 441, "inputSchema": 1027, "outputSchema": 2052, "annotations": 90, "payloadUtf8Bytes": 3764},
@@ -213,12 +219,6 @@
       "anonymized": {"title": 23, "description": 767, "inputSchema": 1140, "outputSchema": 1368, "annotations": 101, "payloadUtf8Bytes": 3631},
       "default": {"title": 23, "description": 767, "inputSchema": 1140, "outputSchema": 1368, "annotations": 101, "payloadUtf8Bytes": 3631},
       "law": {"title": 23, "description": 767, "inputSchema": 1140, "outputSchema": 1368, "annotations": 101, "payloadUtf8Bytes": 3631}
-    },
-    "read_case_law_courts": {
-      "advanced": {"title": 20, "description": 109, "inputSchema": 398, "outputSchema": 416, "annotations": 98, "payloadUtf8Bytes": 1219},
-      "anonymized": {"title": 20, "description": 109, "inputSchema": 398, "outputSchema": 416, "annotations": 98, "payloadUtf8Bytes": 1219},
-      "default": {"title": 20, "description": 109, "inputSchema": 398, "outputSchema": 416, "annotations": 98, "payloadUtf8Bytes": 1219},
-      "law": {"title": 20, "description": 109, "inputSchema": 398, "outputSchema": 416, "annotations": 98, "payloadUtf8Bytes": 1219}
     },
     "read_case_law_decision": {
       "advanced": {"title": 22, "description": 558, "inputSchema": 2623, "outputSchema": 408, "annotations": 100, "payloadUtf8Bytes": 3865},

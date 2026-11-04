@@ -4,7 +4,12 @@ import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-fie
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
 
-import { courtPickerGroups, filterDefaults, searchView } from "./model";
+import {
+  appendCourtCatalogPage,
+  courtPickerGroups,
+  filterDefaults,
+  searchView,
+} from "./model";
 
 const CATALOG = {
   country: "SVK",
@@ -26,7 +31,61 @@ const CATALOG = {
       ],
     },
   ],
+  nextCursor: null,
 };
+
+test("catalog pages join tier by tier, apex first whichever page names it", () => {
+  const first = {
+    country: "SVK",
+    courts: [
+      {
+        tierLabel: "regional" as const,
+        courts: [{ value: "Krajský súd v Bratislave", aliases: [] }],
+      },
+    ],
+    nextCursor: "next",
+  };
+  const second = {
+    country: "SVK",
+    courts: [
+      {
+        tierLabel: "constitutional" as const,
+        courts: [{ value: "Ústavný súd", aliases: [] }],
+      },
+      {
+        tierLabel: "regional" as const,
+        courts: [{ value: "Krajský súd v Košiciach", aliases: [] }],
+      },
+    ],
+    nextCursor: null,
+  };
+  const joined = appendCourtCatalogPage(
+    appendCourtCatalogPage(null, first),
+    second,
+  );
+  expect(joined).toEqual({
+    country: "SVK",
+    courts: [
+      {
+        tierLabel: "constitutional",
+        courts: [{ value: "Ústavný súd", aliases: [] }],
+      },
+      {
+        tierLabel: "regional",
+        courts: [
+          { value: "Krajský súd v Bratislave", aliases: [] },
+          { value: "Krajský súd v Košiciach", aliases: [] },
+        ],
+      },
+    ],
+    nextCursor: null,
+  });
+  // A page of another country starts over rather than mixing courts.
+  expect(appendCourtCatalogPage(joined, { ...first, country: "CZE" })).toEqual({
+    ...first,
+    country: "CZE",
+  });
+});
 
 test("a search with no results still lists every court of the country", () => {
   expect(

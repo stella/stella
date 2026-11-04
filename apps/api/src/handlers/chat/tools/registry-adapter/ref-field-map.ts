@@ -165,7 +165,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   open_case_law_decision: { chatProjectable: false },
   read_case_law_decision_blocks: { chatProjectable: false },
   preview_cited_provision: { chatProjectable: false },
-  read_case_law_courts: { chatProjectable: false },
+  list_case_law_courts: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields

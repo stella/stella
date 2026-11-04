@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   type CourtWeightEntry,
   directoryCourtRankByName,
@@ -114,36 +117,60 @@ export const readCourtNames = async ({
     });
 };
 
-type ReadAdmittedCourtNamesOptions = ReadCourtNamesOptions & {
+type AdmittedCourtPageOptions = {
+  country: string;
   /** The sources a public surface may not count or serve. */
   excludedSourceIds: readonly string[];
+  /** The last court of the previous page; the page starts after it. */
+  after: string | null;
+  /** Courts to read; one more is read to tell whether a page follows. */
+  limit: number;
 };
 
 /**
- * The courts holding at least one decision a public surface may serve: the
- * population counts under the redistribution policy and the caller's source
- * exclusions, as the browse facets read them. `readCourtNames` is join-free
- * and lists every stored court; a surface that lists courts to a reader
- * keeps only these, so a court whose every source is withheld is never named.
+ * One page of the courts holding at least one decision a public surface may
+ * serve, by stored name: the population counts under the redistribution
+ * policy and the caller's source exclusions, as the browse facets read them.
+ * `readCourtNames` is join-free and lists every stored court; a surface that
+ * lists courts to a reader reads these instead, so a court whose every source
+ * is withheld is never named. Keyset-paged on the name, so a page reads no
+ * further into the country's courts than it returns.
  */
-export const readAdmittedCourtNames = async ({
+export const admittedCourtPageQuery = (
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
+  { country, excludedSourceIds, after, limit }: AdmittedCourtPageOptions,
+) => {
+  const population = caseLawPopulationRows(tx, excludedSourceIds);
+  return tx
+    .select({ court: population.value })
+    .from(population)
+    .where(
+      sql`${population.kind} = 'court'
+        AND ${population.country} = ${country}
+        AND ${population.total} > 0
+        ${after === null ? sql`` : sql`AND ${population.value} > ${after}`}`,
+    )
+    .groupBy(population.value)
+    .orderBy(population.value)
+    .limit(limit + 1);
+};
+
+/** The page's courts and whether more follow. */
+export const readAdmittedCourtPage = async ({
   caseLawDb,
-  country,
-  excludedSourceIds,
-}: ReadAdmittedCourtNamesOptions): Promise<ReadonlySet<string>> => {
-  const rows = await caseLawDb(async (tx) => {
-    const population = caseLawPopulationRows(tx, excludedSourceIds);
-    return await tx
-      .select({ court: population.value })
-      .from(population)
-      .where(
-        sql`${population.kind} = 'court'
-          AND ${population.country} = ${country}
-          AND ${population.total} > 0`,
-      )
-      .groupBy(population.value);
-  });
-  return new Set(rows.map(({ court }) => court));
+  ...options
+}: AdmittedCourtPageOptions & { caseLawDb: CaseLawPublicReadDb }): Promise<{
+  courts: string[];
+  more: boolean;
+}> => {
+  const rows = await caseLawDb(
+    async (tx) => await admittedCourtPageQuery(tx, options),
+  );
+  const courts = rows.map(({ court }) => court);
+  return {
+    courts: courts.slice(0, options.limit),
+    more: courts.length > options.limit,
+  };
 };
 
 type CourtDocketSizesOptions = {

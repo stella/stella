@@ -1091,7 +1091,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
-    "name": "read_case_law_courts",
+    "name": "list_case_law_courts",
     "scope": "stella:read",
     "access": "read",
     "annotationReasons": {
@@ -1100,7 +1100,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Widget-only list of every court the corpus holds for a country, grouped by tier, for the search court filter.",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
     "annotations": {
       "title": "List case-law courts",
       "readOnlyHint": true,
@@ -1129,9 +1129,25 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 "POL",
                 "SVK"
               ],
-              "tool": "read_case_law_courts"
+              "tool": "list_case_law_courts"
             }
           }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }
@@ -8426,7 +8442,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "read_case_law_courts",
+    "name": "list_case_law_courts",
     "scope": "stella:read",
     "access": "read",
     "annotationReasons": {
@@ -8435,7 +8451,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Widget-only list of every court the corpus holds for a country, grouped by tier, for the search court filter.",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
     "annotations": {
       "title": "List case-law courts",
       "readOnlyHint": true,
@@ -8464,9 +8480,25 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 "POL",
                 "SVK"
               ],
-              "tool": "read_case_law_courts"
+              "tool": "list_case_law_courts"
             }
           }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }
@@ -16187,7 +16219,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
-    "name": "read_case_law_courts",
+    "name": "list_case_law_courts",
     "scope": "stella:read_anonymized",
     "access": "read",
     "annotationReasons": {
@@ -16196,7 +16228,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Widget-only list of every court the corpus holds for a country, grouped by tier, for the search court filter.",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
     "annotations": {
       "title": "List case-law courts",
       "readOnlyHint": true,
@@ -16225,9 +16257,25 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
                 "POL",
                 "SVK"
               ],
-              "tool": "read_case_law_courts"
+              "tool": "list_case_law_courts"
             }
           }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }
@@ -18218,7 +18266,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     }
   },
   {
-    "name": "read_case_law_courts",
+    "name": "list_case_law_courts",
     "scope": "stella:read",
     "access": "read",
     "annotationReasons": {
@@ -18227,7 +18275,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Widget-only list of every court the corpus holds for a country, grouped by tier, for the search court filter.",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
     "annotations": {
       "title": "List case-law courts",
       "readOnlyHint": true,
@@ -18256,9 +18304,25 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
                 "POL",
                 "SVK"
               ],
-              "tool": "read_case_law_courts"
+              "tool": "list_case_law_courts"
             }
           }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }

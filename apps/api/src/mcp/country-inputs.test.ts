@@ -135,7 +135,7 @@ describe("MCP country inputs are read by the shared reader", () => {
     expect(countryProperties.map(({ path }) => path).toSorted()).toEqual([
       "case_law_coverage.country",
       "check_counterparty.subject.country",
-      "read_case_law_courts.country",
+      "list_case_law_courts.country",
       "resolve_case_law_decision.country",
       "resolve_law_citation.country",
       "save_contact.addresses[].country",

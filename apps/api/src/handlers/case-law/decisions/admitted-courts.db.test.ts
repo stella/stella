@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
-  readAdmittedCourtNames,
+  readAdmittedCourtPage,
   readCourtNames,
 } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -107,7 +107,7 @@ afterAll(async () => {
   await client.close();
 });
 
-// timeout: the population view and the vocabulary walk run on an embedded Postgres.
+// timeout: the population view and the vocabulary walk run on an embedded Postgres, page by page.
 test(
   "a court whose only source is withheld is stored but not admitted",
   async () => {
@@ -121,15 +121,38 @@ test(
       (await readCourtNames({ caseLawDb, country: "SVK" })).toSorted(),
     ).toEqual([OPEN_COURT, SHARED_COURT, WITHHELD_COURT].toSorted());
 
-    const admitted = await readAdmittedCourtNames({
+    const admitted = await readAdmittedCourtPage({
       caseLawDb,
       country: "SVK",
       excludedSourceIds,
+      after: null,
+      limit: 10,
     });
-    expect([...admitted].toSorted()).toEqual(
-      [OPEN_COURT, SHARED_COURT].toSorted(),
-    );
-    expect(admitted.has(WITHHELD_COURT)).toBe(false);
+    expect(admitted).toEqual({
+      courts: [OPEN_COURT, SHARED_COURT].toSorted(),
+      more: false,
+    });
+    expect(admitted.courts).not.toContain(WITHHELD_COURT);
+
+    // Keyset pages: one court a page, each starting after the last.
+    const first = await readAdmittedCourtPage({
+      caseLawDb,
+      country: "SVK",
+      excludedSourceIds,
+      after: null,
+      limit: 1,
+    });
+    const second = await readAdmittedCourtPage({
+      caseLawDb,
+      country: "SVK",
+      excludedSourceIds,
+      after: first.courts.at(-1) ?? null,
+      limit: 1,
+    });
+    expect([first, second]).toEqual([
+      { courts: [[OPEN_COURT, SHARED_COURT].toSorted()[0]], more: true },
+      { courts: [[OPEN_COURT, SHARED_COURT].toSorted()[1]], more: false },
+    ]);
   },
   DB_TEST_TIMEOUT_MS,
 );

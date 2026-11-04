@@ -510,7 +510,7 @@ const readCachedCourtNames = async (
  * null list leaves the filter as sent, and the search reports it with a
  * `filter_unread` warning rather than waiting the list out.
  */
-export const loadCaseLawCourtNames = async (
+const loadCaseLawCourtNames = async (
   context: McpRequestContext,
   country: string,
 ): Promise<readonly string[] | null> => {

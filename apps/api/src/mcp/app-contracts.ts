@@ -75,7 +75,7 @@ export const MCP_APP_OUTPUT_CONTRACTS = {
     access: "read",
     outputSchemaSource: SEARCH_CASE_LAW_PROJECTION,
   },
-  read_case_law_courts: {
+  list_case_law_courts: {
     access: "read",
     outputSchemaSource: CASE_LAW_COURT_CATALOG_PROJECTION,
   },

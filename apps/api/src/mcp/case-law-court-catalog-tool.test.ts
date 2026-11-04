@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 
-import { courtCatalog } from "@/api/mcp/case-law-court-catalog-tool";
+import { courtCatalogPage } from "@/api/mcp/case-law-court-catalog-tool";
 
 const COURTS = [
-  "Krajský súd v Košiciach",
-  "Najvyšší súd Slovenskej republiky",
-  "Najvyšší súd",
-  "Ústavný súd",
   "Krajský súd v Bratislave",
+  "Krajský súd v Košiciach",
+  "Najvyšší súd",
+  "Najvyšší súd Slovenskej republiky",
+  "Ústavný súd",
 ];
 const TIERS: Partial<Record<string, CourtTierLabel>> = {
   "Najvyšší súd": "supreme",
@@ -18,23 +18,22 @@ const TIERS: Partial<Record<string, CourtTierLabel>> = {
 };
 const tierOf = (court: string) => TIERS[court] ?? "regional";
 
-test("lists one entry per court, apex spellings merged, tiers apex first", () => {
-  const catalog = courtCatalog({
-    admitted: new Set(COURTS),
+test("a page lists one entry per court, apex spellings merged, tiers apex first", () => {
+  const page = courtCatalogPage({
     country: "SVK",
     courts: COURTS,
+    nextCursor: null,
     tierOf,
   });
 
-  expect(catalog.country).toBe("SVK");
-  expect(catalog.courts.map(({ tierLabel }) => tierLabel)).toEqual([
+  expect(page.country).toBe("SVK");
+  expect(page.nextCursor).toBeNull();
+  expect(page.courts.map(({ tierLabel }) => tierLabel)).toEqual([
     "constitutional",
     "supreme",
     "regional",
   ]);
-  const supreme = catalog.courts.find(
-    ({ tierLabel }) => tierLabel === "supreme",
-  );
+  const supreme = page.courts.find(({ tierLabel }) => tierLabel === "supreme");
   expect(supreme?.courts).toHaveLength(1);
   expect(
     [
@@ -43,34 +42,28 @@ test("lists one entry per court, apex spellings merged, tiers apex first", () =>
     ].toSorted(),
   ).toEqual(["Najvyšší súd", "Najvyšší súd Slovenskej republiky"]);
   expect(
-    catalog.courts.find(({ tierLabel }) => tierLabel === "regional")?.courts,
+    page.courts.find(({ tierLabel }) => tierLabel === "regional")?.courts,
   ).toEqual([
     { value: "Krajský súd v Bratislave", aliases: [] },
     { value: "Krajský súd v Košiciach", aliases: [] },
   ]);
 });
 
-test("never names a court or spelling the source policy withholds", () => {
-  // Ústavný súd's only source is withheld, as is one spelling of the apex
-  // court; Krajský súd v Košiciach holds admitted decisions.
-  const catalog = courtCatalog({
-    admitted: new Set([
-      "Najvyšší súd",
-      "Krajský súd v Bratislave",
-      "Krajský súd v Košiciach",
-    ]),
+test("a page carries the cursor the next page starts from", () => {
+  const page = courtCatalogPage({
     country: "SVK",
-    courts: COURTS,
+    courts: COURTS.slice(0, 2),
+    nextCursor: "cursor",
     tierOf,
   });
-
-  const listed = catalog.courts.flatMap(({ courts }) =>
-    courts.flatMap(({ value, aliases }) => [value, ...aliases]),
-  );
-  expect(listed).not.toContain("Ústavný súd");
-  expect(listed).not.toContain("Najvyšší súd Slovenskej republiky");
-  expect(catalog.courts.map(({ tierLabel }) => tierLabel)).toEqual([
-    "supreme",
-    "regional",
+  expect(page.nextCursor).toBe("cursor");
+  expect(page.courts).toEqual([
+    {
+      tierLabel: "regional",
+      courts: [
+        { value: "Krajský súd v Bratislave", aliases: [] },
+        { value: "Krajský súd v Košiciach", aliases: [] },
+      ],
+    },
   ]);
 });

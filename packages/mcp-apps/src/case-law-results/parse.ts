@@ -44,7 +44,7 @@ export const createCaseLawParser = () => {
   };
 };
 
-/** A `read_case_law_courts` answer, or undefined when it is not one. */
+/** A `list_case_law_courts` answer, or undefined when it is not one. */
 export const parseCourtCatalog = (
   payload: unknown,
 ): CourtCatalog | undefined => {
