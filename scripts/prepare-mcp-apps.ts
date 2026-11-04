@@ -29,6 +29,9 @@ if (!hasPreparedGeneratedSources(root)) {
       "apps/api/src/**",
       "packages/**",
       "package.json",
+      // The bundles inline dependency code, so a lockfile-only version move
+      // (a transitive update) must rebuild them too.
+      "bun.lock",
       "bunfig.toml",
       "patches/**",
       "scripts/prepare-mcp-apps.ts",
