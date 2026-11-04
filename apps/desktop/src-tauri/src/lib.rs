@@ -16,6 +16,8 @@ mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
+mod claude_code_auth;
+mod claude_code_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -31,6 +33,7 @@ mod config;
 mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
+mod desktop_runner;
 mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
@@ -53,9 +56,14 @@ mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
 mod harness_archive;
+mod harness_auto_install;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
+// Runs once the desktop runner's harness host lands; the runner protocol it
+// shares types with is test-only until then too.
+#[cfg(test)]
+mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
@@ -71,7 +79,6 @@ mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
-#[cfg(test)]
 mod runner_protocol;
 mod session_manager;
 mod session_store;
@@ -203,6 +210,7 @@ pub fn run() {
       managed_policy::current().blocked_features(),
     ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(desktop_runner::DesktopRunnerControl::default())
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
@@ -269,7 +277,9 @@ pub fn run() {
       if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
         app.manage(installation);
       }
+      harness_commands::manage(&handle);
       chatgpt_auth_commands::manage(&handle);
+      claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -294,6 +304,8 @@ pub fn run() {
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
+              desktop_runner::apply_feature_gate(app, enabled);
+              claude_code_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );
@@ -485,6 +497,7 @@ pub fn run() {
       }
 
       presence::start(handle.clone());
+      desktop_runner::watch_state(&handle);
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));

@@ -105,8 +105,34 @@ type ChatModelOptionsMenuProps = {
   open: boolean;
 };
 
-/** The single model-picker body shared by the composer (+) menu and dock. */
+/**
+ * The single model-picker body shared by the composer (+) menu and dock. A
+ * thread that runs on the member's computer uses the model its harness
+ * offers, chosen under Run on, so stella's own models are not offered as if
+ * they applied; choosing stella cloud brings them back.
+ */
 export const ChatModelOptionsMenu = ({
+  enabled,
+  models,
+  open,
+}: ChatModelOptionsMenuProps) => (
+  <>
+    {models.runTarget && (
+      <ChatRunTargetMenu
+        activeOrganizationId={models.activeOrganizationId}
+        enabled={enabled}
+        onSelect={models.runTarget.select}
+        selected={models.runTarget.selected}
+      />
+    )}
+    {models.runTarget?.selected.kind !== "local" && (
+      <CloudModelOptions enabled={enabled} models={models} open={open} />
+    )}
+  </>
+);
+
+/** stella's own models: Auto routing or an explicit model and effort. */
+const CloudModelOptions = ({
   enabled,
   models,
   open,
@@ -268,14 +294,6 @@ export const ChatModelOptionsMenu = ({
 
   return (
     <>
-      {models.runTarget && (
-        <ChatRunTargetMenu
-          activeOrganizationId={activeOrganizationId}
-          enabled={enabled}
-          onSelect={models.runTarget.select}
-          selected={models.runTarget.selected}
-        />
-      )}
       <ComposerSubmenuSearch
         onChange={setSearch}
         placeholder={t("organization.aiConfig.modelIdPlaceholder")}

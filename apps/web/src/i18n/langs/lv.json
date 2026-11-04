@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "runOn": "Palaist",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limits sasniegts līdz {time}",
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",
-      "stateUnsupported": "Šī versija netiek atbalstīta"
+      "stateUnsupported": "Šī versija netiek atbalstīta",
+      "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {

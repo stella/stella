@@ -15,9 +15,10 @@
 # change?" decision so both the workflow and its test exercise the
 # exact same logic.
 #
-# The desktop app bundles only its own settings UI plus its single
-# workspace dependency @stll/ui (packages/ui), which itself has no
-# runtime workspace deps. It does NOT embed apps/web or the
+# The desktop app bundles its own settings UI with its workspace
+# dependency @stll/ui (packages/ui), which itself has no runtime
+# workspace deps, and the harness sidecar compiled from
+# packages/agent-engine. It does NOT embed apps/web or the
 # @stll/folio-* editor packages: desktop<->web compatibility is guaranteed by the
 # bridge protocol version handshake (BRIDGE_VERSION in
 # apps/desktop/src-tauri/src/types.rs vs MIN_DESKTOP_BRIDGE_VERSION
@@ -92,9 +93,14 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 # because it ends up inside the shipped binary or drives the release
 # pipeline that produces it:
 #   - apps/desktop/                          the app itself
-#   - packages/ui/                           its only workspace dep
-#                                            (verified: no transitive
+#   - packages/ui/                           the settings UI's workspace
+#                                            dep (verified: no transitive
 #                                            runtime workspace deps)
+#   - packages/agent-engine/, packages/errors/ and the api-contract
+#     modules listed below                   the bundled harness sidecar;
+#                                            build-sidecar.test.ts checks
+#                                            every workspace file the
+#                                            sidecar bundles is listed
 #   - scripts/rename-desktop-artifacts.sh    stable artifact naming
 #   - scripts/build-updater-manifest.sh      latest.json generation
 #   - scripts/release-channel.sh             channel routing
@@ -109,8 +115,9 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #   - Root package.json / bun.lock: these change with nearly every
 #     release (repo-wide dependency maintenance), so including them
 #     would also defeat the skip. This is an accepted staleness
-#     window: a root catalog bump of a settings-webview JS dep does
-#     not rebuild the desktop until the next in-path change. The
+#     window: a root catalog or lockfile bump of a settings-webview JS
+#     dep, or of an npm package the harness sidecar bundles, does not
+#     rebuild the desktop until the next in-path change. The
 #     shipped native binary's dependencies are pinned in-tree
 #     (apps/desktop/src-tauri/Cargo.lock) and therefore ARE covered;
 #     when a root-level bump must ship immediately, a manual
@@ -118,6 +125,16 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 rebuild_paths=(
   "apps/desktop/"
   "packages/ui/"
+  "packages/agent-engine/"
+  "packages/errors/"
+  "packages/api-contract/src/agent-harness.ts"
+  "packages/api-contract/src/api-date.ts"
+  "packages/api-contract/src/api-version.ts"
+  "packages/api-contract/src/chat-tool-policy.ts"
+  "packages/api-contract/src/desktop-presence.ts"
+  "packages/api-contract/src/desktop-runner.ts"
+  "packages/api-contract/src/mcp-chat-tool-policy.gen.ts"
+  "packages/api-contract/src/mcp-tool-names.gen.ts"
   "scripts/rename-desktop-artifacts.sh"
   "scripts/build-updater-manifest.sh"
   "scripts/release-channel.sh"

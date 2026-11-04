@@ -247,6 +247,8 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "VERSION",
   "apps/desktop/*",
+  "packages/agent-engine/package.json",
+  "packages/agent-engine/scripts/build-sidecar.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -336,6 +338,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-presence-policy.json",
     "packages/api-contract/src/desktop-presence-request.fixture.json",
     "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/agent-engine/src/sidecar/protocol.fixtures.json",
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
@@ -983,6 +986,12 @@ export const OUTPUT_RULES = {
           "apps/api/drizzle/*",
           "apps/api/src/db/*",
           "apps/api/src/lib/db/*",
+          // The OAuth resource policy the boot census and its online repair
+          // compare the stored policy against.
+          "apps/api/src/mcp/resource-policy-contract.ts",
+          "apps/api/src/lib/auth/oauth-own-client-links.ts",
+          "packages/api-contract/src/mcp.ts",
+          "packages/api-contract/src/api-oauth-resource.ts",
           "apps/api/src/lib/decision-date-bounds-sql.ts",
           "apps/api/src/handlers/case-law/citation-resolution.ts",
           "apps/api/src/scripts/*",

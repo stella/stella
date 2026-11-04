@@ -32,7 +32,7 @@ import {
   TurnStartResponseSchema,
 } from "./protocol";
 import { openThread } from "./thread";
-import { CodexTurnSession } from "./turn";
+import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
  * Codex over `codex app-server` (JSON-RPC on stdio), one process per turn.
@@ -67,6 +67,15 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** How a turn ended by the model's capacity continues; defaults below. */
+  capacityRetry?: CodexCapacityRetry;
+};
+
+/** As t3code (MIT) retries: five continuations, 2 s doubling to 30 s. */
+const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
+  maxAttempts: 5,
+  baseDelayMs: 2000,
+  maxDelayMs: 30_000,
 };
 
 const CLIENT_NAME = "stella";
@@ -324,6 +333,7 @@ const startTurn = async (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
+    capacityRetry: options.capacityRetry ?? DEFAULT_CAPACITY_RETRY,
   });
   const connected = await connect({
     options,

@@ -11,7 +11,7 @@ import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
-import { resolveMatterColor } from "../lib/matter-colors";
+import { getMatterColor, resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
   boundsHeight,
@@ -34,9 +34,14 @@ import type {
   DayCalendarRange,
 } from "./day-calendar.logic";
 
-/** A block paints in its matter's colour, or in the neutral surface tone. */
+/**
+ * A block paints in its matter's colour; in a topic's colour, a lighter tint
+ * from the same palette keyed by a stable topic key and without the matter's
+ * edge; or in the neutral surface tone.
+ */
 export type DayCalendarTone =
   | { color: string | null; matterId: string; type: "matter" }
+  | { key: string; type: "topic" }
   | { type: "neutral" };
 
 /**
@@ -681,24 +686,29 @@ const DayCalendarBlockView = ({
   );
 };
 
-const MIXED_STRIPES =
-  "repeating-linear-gradient(135deg, var(--muted) 0 6px, transparent 6px 12px)";
-
 /** A suggestion's tint is half an entry's, so proposed time reads lighter. */
 const TONE_TINT_PERCENT = {
   entry: 16,
   suggestion: 8,
 } as const;
 
+/** A topic is not a matter yet: its tint sits between a suggestion's and an
+ * entry's. */
+const TOPIC_TINT_PERCENT = 12;
+
 function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
   const tone = block.tone;
-  const stripes = block.kind === "mixed" ? MIXED_STRIPES : undefined;
   const suggestion = block.kind === "entry" && block.state === "suggestion";
   switch (tone.type) {
     case "neutral": {
       return {
         backgroundColor: suggestion ? "transparent" : undefined,
-        backgroundImage: stripes,
+      };
+    }
+    case "topic": {
+      const color = getMatterColor(tone.key);
+      return {
+        backgroundColor: `color-mix(in srgb, ${color} ${String(TOPIC_TINT_PERCENT)}%, var(--card))`,
       };
     }
     case "matter": {
@@ -708,7 +718,6 @@ function blockSurfaceStyle(block: DayCalendarBlock): CSSProperties {
         : TONE_TINT_PERCENT.entry;
       return {
         backgroundColor: `color-mix(in srgb, ${color} ${String(tint)}%, var(--card))`,
-        backgroundImage: stripes,
         borderColor: suggestion ? color : undefined,
         borderInlineStartColor: color,
       };

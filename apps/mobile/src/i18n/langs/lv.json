@@ -189,6 +189,8 @@
       "notSaved": "Vēl nav saglabāts",
       "done": "Gatavs",
       "openFailed": "Šo dokumentu pašlaik nevar rediģēt",
+      "resumed": "Šim dokumentam ir nepabeigts labojums, tāpēc tas turpinās no turienes. Tikko ierakstītais netika saglabāts.",
+      "newerVersion": "Pa to laiku tika saglabāta jaunāka šī dokumenta versija, tāpēc labošana turpinās no tās. Tikko ierakstītais netika saglabāts.",
       "takenOver": "Šo dokumentu tagad rediģē kāds cits. Jūsu izmaiņas kopš pēdējās saglabāšanas netika saglabātas.",
       "finishFailed": "Jūsu izmaiņas ir saglabātas, bet no tām vēl nav izveidota jauna versija. Vēlreiz pieskarieties Gatavs vai izejiet: nākamā rediģēšana turpināsies no tām.",
       "notStored": "Pēdējās izmaiņas neizdevās saglabāt. Palieciet, lai mēģinātu vēlreiz, vai aizejiet bez tām.",

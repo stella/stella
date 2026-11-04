@@ -21,6 +21,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { decodeChatRunTarget } from "@/api/lib/chat/run-target";
 import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -264,6 +265,7 @@ const getSuggestedPrompts = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            chatRunTarget: true,
             workspaceId: true,
             usedAnonymization: true,
           },
@@ -291,6 +293,13 @@ const getSuggestedPrompts = createSafeRootHandler(
     yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
+    // A thread whose turns run on the member's computer never reaches
+    // stella's cloud models for them, so its follow-ups are not written by one
+    // either: the member chose where the conversation goes.
+    if (decodeChatRunTarget(thread.chatRunTarget).kind === "local") {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
