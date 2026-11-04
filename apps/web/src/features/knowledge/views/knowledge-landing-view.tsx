@@ -95,12 +95,20 @@ export const KnowledgeLandingView = ({
 );
 
 /** The section copy is already known; reserve its wrapping and card geometry. */
-export const KnowledgeLandingSkeleton = () => {
+export const KnowledgeLandingSkeleton = ({
+  audience,
+}: {
+  audience: "public" | "member";
+}) => {
   const t = useTranslations();
+  const sections = knowledgeSections.filter(
+    (section) =>
+      audience === "member" || section.publicAccess !== "unavailable",
+  );
   return (
     <div aria-hidden="true" className={LANDING_CLASS}>
       <div className={GRID_CLASS}>
-        {knowledgeSections.map((section) => (
+        {sections.map((section) => (
           <div className={CARD_CLASS} key={section.key}>
             <CardBody
               card={{
