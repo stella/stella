@@ -11,7 +11,9 @@
 //! to group or others, or a symlink is refused, and so is a path that does
 //! not fit: there is no shortened or truncated fallback.
 //!
-//! On Windows the endpoint is a named pipe derived from the holder's folder.
+//! On Windows the endpoint is a named pipe in a namespace derived from the
+//! holders' root folder (per user, since the root is in the user's app data),
+//! named after the sidecar version like the Unix socket.
 //!
 //! Finding a running holder must not depend on the environment matching the
 //! launch that started it, so the holder records its endpoint next to its
@@ -36,6 +38,10 @@ pub(super) const SUN_PATH_BYTES: usize = 104;
 /// Longest pipe name Windows accepts.
 #[cfg(windows)]
 const MAX_PIPE_NAME_CHARS: usize = 256;
+
+/// Every holder pipe name starts with this, then the root's namespace.
+#[cfg(windows)]
+const PIPE_NAME_BASE: &str = r"\\.\pipe\stella-agent-holder-";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EndpointError {
@@ -62,6 +68,9 @@ pub(super) struct Endpoints {
   /// The folder fresh sockets go in; an error leaves only recorded ones.
   #[cfg(unix)]
   fresh: Result<PathBuf, EndpointError>,
+  /// The prefix of every pipe a holder below this root listens on.
+  #[cfg(windows)]
+  pipe_prefix: String,
 }
 
 impl Endpoints {
@@ -82,9 +91,13 @@ impl Endpoints {
     }
     #[cfg(windows)]
     {
+      use sha2::{Digest, Sha256};
       let _unused = socket_dir;
       crate::local_store::create_private_dir(holder_root)?;
-      Ok(Self {})
+      let digest = Sha256::digest(holder_root.as_os_str().as_encoded_bytes());
+      Ok(Self {
+        pipe_prefix: format!("{PIPE_NAME_BASE}{}-", hex::encode(&digest[..16])),
+      })
     }
   }
 
@@ -95,7 +108,7 @@ impl Endpoints {
     #[cfg(unix)]
     let usable = usable_socket(Path::new(&text), self.uid);
     #[cfg(windows)]
-    let usable = usable_pipe(&text);
+    let usable = self.usable_pipe(&text);
     match usable {
       Ok(()) => Some(OsString::from(text)),
       Err(error) => {
@@ -118,30 +131,33 @@ impl Endpoints {
     }
     #[cfg(windows)]
     {
-      use sha2::{Digest, Sha256};
-      let digest = Sha256::digest(holder_dir.as_os_str().as_encoded_bytes());
-      let name = format!(
-        r"\\.\pipe\stella-agent-holder-{}",
-        hex::encode(&digest[..16])
-      );
-      usable_pipe(&name)?;
+      let version = holder_dir
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+      let name = format!("{}{version}", self.pipe_prefix);
+      self.usable_pipe(&name)?;
       Ok(OsString::from(name))
     }
   }
-}
 
-#[cfg(windows)]
-fn usable_pipe(name: &str) -> Result<(), EndpointError> {
-  if !name.starts_with(r"\\.\pipe\stella-agent-holder-") {
-    return Err(EndpointError::Insecure);
+  /// A pipe in this root's namespace whose name Windows accepts.
+  #[cfg(windows)]
+  fn usable_pipe(&self, name: &str) -> Result<(), EndpointError> {
+    let version = name
+      .strip_prefix(self.pipe_prefix.as_str())
+      .ok_or(EndpointError::Insecure)?;
+    if version.is_empty() || version.contains('\\') {
+      return Err(EndpointError::Insecure);
+    }
+    if name.len() > MAX_PIPE_NAME_CHARS {
+      return Err(EndpointError::TooLong {
+        bytes: name.len(),
+        limit: MAX_PIPE_NAME_CHARS,
+      });
+    }
+    Ok(())
   }
-  if name.len() > MAX_PIPE_NAME_CHARS {
-    return Err(EndpointError::TooLong {
-      bytes: name.len(),
-      limit: MAX_PIPE_NAME_CHARS,
-    });
-  }
-  Ok(())
 }
 
 /// The socket of a sidecar version in `dir`, or why it cannot be one.
