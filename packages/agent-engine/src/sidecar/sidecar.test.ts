@@ -288,7 +288,7 @@ describe("harness sidecar over stdio", () => {
       harness: "codex",
       outcome: {
         type: "ready",
-        version: "0.165.0",
+        version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
@@ -351,7 +351,7 @@ describe("harness sidecar over stdio", () => {
       );
     expect((await probed(signedOut)).outcome).toEqual({
       type: "needs_login",
-      version: "0.165.0",
+      version: "0.166.0",
     });
     expect((await probed(claude)).outcome).toMatchObject({
       type: "failed",
