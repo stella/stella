@@ -265,6 +265,17 @@ describe("court citation aliases", () => {
     },
   );
 
+  test("a branch no alias reads, after its main court's name, is an unrecognized court", () => {
+    for (const text of [
+      "KS Plzeň pobočka v Chebu",
+      "Krajský soud v Plzni, pobočka Cheb",
+    ]) {
+      expect(readsAs("CZE", text), text).toContainEqual({
+        type: "unrecognized",
+      });
+    }
+  });
+
   test("an alias two stored courts answer to is read as both, never one", () => {
     const index = courtCitationIndex("CZE", [
       "Okresní soud Neznámov",

@@ -629,6 +629,7 @@ const EU_COURTS: readonly DirectoryCourt[] = [
     ecliCodes: ["T"],
     extraAliases: [
       "General Court of the European Union",
+      "GC",
       "Court of First Instance",
       "Tribunál",
       "Tribunál Evropské unie",
