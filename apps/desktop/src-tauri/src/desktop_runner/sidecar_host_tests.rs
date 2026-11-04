@@ -20,7 +20,7 @@ use super::sidecar_host::{
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
-use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, RUN_OUTPUT_QUEUE};
+use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar};
 use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -619,7 +619,7 @@ fn a_harness_process_runs_only_once_its_credential_authorized_it() {
 }
 
 #[test]
-fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
+fn a_burst_during_a_runner_outage_is_journaled_whole_and_resent() {
   let place = Place::new();
   let id = run_id();
   run(async {
@@ -637,16 +637,14 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
     .await;
     runner.stop().await;
 
-    // With no runner and no socket, the harness produces more than the
-    // supervisor's channel for the run can hold.
+    // With no runner and no socket, the harness produces a burst.
     host.approval(RunApproval {
       run_id: id.clone(),
       request_id: REQUEST_ID.to_owned(),
       decision: ApprovalDecision::Approve,
     });
-    // What the stand-in sends on the approval: more than the channel holds.
+    // What the stand-in sends on the approval.
     let flooded: u64 = 300;
-    assert!(flooded > u64::try_from(RUN_OUTPUT_QUEUE).unwrap());
     until(
       "the journal took every output and the holder was acked for it",
       || place.acks(&id).last() == Some(&(flooded + 1)),
