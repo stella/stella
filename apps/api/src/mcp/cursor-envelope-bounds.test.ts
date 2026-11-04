@@ -26,6 +26,7 @@ import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import {
@@ -157,6 +158,10 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   ),
   "advanced.read_content_across_matters.nextCursor": offsetCursor,
   "advanced.read_case_law_citations.nextCursor": idCursor,
+  // The longest stored court name, every character escaped by JSON.
+  "advanced.list_case_law_courts.nextCursor": encodeCourtCursor(
+    "\u0001".repeat(512),
+  ),
   "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "advanced.search_legislation.nextCursor": statuteCursor,
   "advanced.read_statute.nextCursor": offsetCursor,
