@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode, SyntheticEvent } from "react";
+import type { ReactElement, ReactNode, SyntheticEvent } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -57,7 +57,7 @@ const MatterColorPickerContent = ({
 
 type MatterColorPickerProps = {
   /** The matter icon; the picker supplies the named trigger button. */
-  children: ReactNode;
+  children: ReactElement;
   className?: string;
   label: string;
   matter: MatterColorIdentity;
