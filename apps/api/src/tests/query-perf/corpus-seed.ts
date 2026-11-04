@@ -602,7 +602,7 @@ const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
   for (const [index, sourceId] of COURT_CATALOG_SOURCE_IDS.entries()) {
     // db-await-in-loop: three fixed sources, each with its own court rows.
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-      VALUES (${sourceId}::uuid, ${FACET_SOURCE_KEYS[index] ?? ADAPTER_KEYS.CZ_NS},
+      VALUES (${sourceId}::uuid, ${`query-perf-court-catalog-${String(index + 1)}`},
         ${`Court catalog fixture ${String(index + 1)}`}, false)
       ON CONFLICT (id) DO NOTHING`);
     // db-await-in-loop: the source's court rows follow the source row they reference.

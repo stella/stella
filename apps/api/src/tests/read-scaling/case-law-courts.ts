@@ -25,9 +25,9 @@ const countryFor = (size: number) =>
   `XR${String.fromCodePoint(65 + (Math.floor(size / 10) % 26))}`;
 
 /**
- * One page of a country's courts while the country holds as many courts as
- * the fixture holds rows: the page, its statements and its bytes stay the
- * same whatever the country holds.
+ * One page of a country's courts while the country holds one more court than
+ * the fixture holds rows, so every page names a next one: the page, its
+ * statements and its bytes stay the same whatever the country holds.
  */
 export const measureCourtCatalogTool = async (fixture: ReadFixture) => {
   const { db, size } = fixture;
@@ -40,7 +40,7 @@ export const measureCourtCatalogTool = async (fixture: ReadFixture) => {
     (kind, country, source_id, value, total)
     SELECT 'court', ${country}, ${sourceId}::uuid,
       'Scaling court ' || lpad(n::text, 5, '0'), 1
-    FROM generate_series(1, ${size}) n
+    FROM generate_series(1, ${size + 1}) n
     ON CONFLICT DO NOTHING`);
   try {
     // The fixture's transaction supplies the select surface the reader uses.
@@ -52,40 +52,43 @@ export const measureCourtCatalogTool = async (fixture: ReadFixture) => {
           async (tx) => await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
         ),
     );
+    const readPage = async () =>
+      await CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts({
+        args: { country, limit: COURT_CATALOG_SCALING_PAGE },
+        context: asTestRaw<
+          Parameters<
+            typeof CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts
+          >[0]["context"]
+        >({
+          testDependencies: {
+            readAdmittedCaseLawCourtPage: async (request: {
+              country: string;
+              after: string | null;
+              limit: number;
+            }) =>
+              await readAdmittedCourtPage({
+                caseLawDb,
+                excludedSourceIds: [],
+                ...request,
+              }),
+          },
+        }),
+      });
+    // The court tiers come from the public corpus configuration, which a
+    // running server holds in its cache; the measured read is a warm one.
+    await readPage();
     return await runWithMeasuredQueryCounter(async (counter) => {
-      const response =
-        await CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts({
-          args: { country, limit: COURT_CATALOG_SCALING_PAGE },
-          context: asTestRaw<
-            Parameters<
-              typeof CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.list_case_law_courts
-            >[0]["context"]
-          >({
-            testDependencies: {
-              readAdmittedCaseLawCourtPage: async (request: {
-                country: string;
-                after: string | null;
-                limit: number;
-              }) =>
-                await readAdmittedCourtPage({
-                  caseLawDb,
-                  excludedSourceIds: [],
-                  ...request,
-                }),
-            },
-          }),
-        });
-      if (
-        !("egress" in response) ||
-        response.egress !== "structured" ||
-        !isRecord(response.payload) ||
-        !isUnknownArray(response.payload["courts"])
-      ) {
+      const response = await readPage();
+      const payload: unknown =
+        isRecord(response) && response["status"] === "success"
+          ? response["data"]
+          : undefined;
+      if (!isRecord(payload) || !isUnknownArray(payload["courts"])) {
         return panic(
-          "list_case_law_courts scaling requires a successful egress payload",
+          `list_case_law_courts scaling requires a successful page; got ${JSON.stringify(response).slice(0, 1000)}`,
         );
       }
-      const rows = response.payload["courts"].reduce<number>(
+      const rows = payload["courts"].reduce<number>(
         (sum, tier) =>
           sum +
           (isRecord(tier) && isUnknownArray(tier["courts"])
@@ -96,7 +99,7 @@ export const measureCourtCatalogTool = async (fixture: ReadFixture) => {
       return {
         statements: counter.count,
         transactionRoundTrips: counter.transactions,
-        responseBytes: Buffer.byteLength(JSON.stringify(response.payload)),
+        responseBytes: Buffer.byteLength(JSON.stringify(payload)),
         rows,
       };
     });
