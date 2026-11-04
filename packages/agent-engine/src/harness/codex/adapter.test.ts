@@ -699,7 +699,7 @@ describe("Codex adapter over a stdio app-server", () => {
       throw probed.error;
     }
     expect(probed.value).toEqual({
-      version: "0.165.0",
+      version: "0.166.0",
       auth: { type: "signed_in", method: "chatgpt", plan: "plus" },
       models: [
         {

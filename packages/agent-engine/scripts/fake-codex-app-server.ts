@@ -52,7 +52,7 @@ const signedIn = {
 
 const handshake = (
   account: unknown = signedIn,
-  version = "0.165.0",
+  version = "0.166.0",
 ): FakeStep[] => [
   {
     expect: "initialize",

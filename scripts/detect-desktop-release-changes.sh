@@ -129,6 +129,7 @@ rebuild_paths=(
   "packages/errors/"
   "packages/api-contract/src/agent-harness.ts"
   "packages/api-contract/src/api-date.ts"
+  "packages/api-contract/src/api-version.ts"
   "packages/api-contract/src/chat-tool-policy.ts"
   "packages/api-contract/src/desktop-presence.ts"
   "packages/api-contract/src/desktop-runner.ts"
