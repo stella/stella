@@ -98,7 +98,7 @@ describe("cargo dependency resolution", () => {
       cargo(
         [
           "cargo check --workspace --locked",
-          "cargo +1.99.0 test --locked",
+          "cargo +1.99.1 test --locked",
           "cargo clippy --all-targets --locked -- -D warnings",
           "cargo doc --no-deps --locked",
           "cargo deny check advisories",

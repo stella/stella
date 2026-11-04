@@ -44,20 +44,51 @@ const requestBulkDelete = async (
       ).outcomes,
   );
 
+/**
+ * What the deletion is for. Undoing an import deletes the contacts that
+ * import created, so its button, confirmation and receipt say so instead of
+ * reusing the wording for an arbitrary selection.
+ */
+type BulkDeletePurpose = "selection" | "import-undo";
+
+const useBulkDeleteCopy = (purpose: BulkDeletePurpose) => {
+  const t = useTranslations();
+  const copies = {
+    selection: {
+      action: (count: number) => t("contacts.deleteSelected", { count }),
+      title: (count: number) => t("contacts.deleteSelected", { count }),
+      confirm: (count: number) =>
+        t("contacts.deleteSelectedConfirm", { count }),
+      done: (count: number) => t("contacts.deletedCount", { count }),
+    },
+    "import-undo": {
+      action: (count: number) =>
+        t("contacts.importStudio.undoImport", { count: String(count) }),
+      title: () => t("contacts.importStudio.undoImportTitle"),
+      confirm: (count: number) =>
+        t("contacts.importStudio.undoImportConfirm", { count }),
+      done: (count: number) =>
+        t("contacts.importStudio.undoneToast", { count }),
+    },
+  } satisfies Record<BulkDeletePurpose, unknown>;
+  return copies[purpose];
+};
+
 export function BulkDeleteContacts({
   contactIds,
   deleteContacts = requestBulkDelete,
   organizationId,
   onResolved,
-  labelKey = "contacts.deleteSelected",
+  purpose = "selection",
 }: {
   contactIds: readonly string[];
   deleteContacts?: DeleteContacts | undefined;
   organizationId: string;
   onResolved: (resolvedIds: readonly string[]) => void;
-  labelKey?: "contacts.deleteSelected" | "contacts.importStudio.undoImport";
+  purpose?: BulkDeletePurpose;
 }) {
   const t = useTranslations();
+  const copy = useBulkDeleteCopy(purpose);
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -114,7 +145,7 @@ export function BulkDeleteContacts({
       return;
     }
     stellaToast.add({
-      title: t("contacts.deletedCount", { count: deletedIds.length }),
+      title: copy.done(deletedIds.length),
       type: "success",
     });
   };
@@ -133,11 +164,7 @@ export function BulkDeleteContacts({
           variant="destructive"
         >
           <Trash2Icon />
-          {labelKey === "contacts.deleteSelected"
-            ? t("contacts.deleteSelected", { count: contactIds.length })
-            : t("contacts.importStudio.undoImport", {
-                count: String(contactIds.length),
-              })}
+          {copy.action(contactIds.length)}
         </Button>
         {exceedsLimit ? (
           <p className="text-muted-foreground mt-1 text-xs">
@@ -150,13 +177,9 @@ export function BulkDeleteContacts({
       <AlertDialog onOpenChange={setOpen} open={open}>
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t("contacts.deleteSelected", { count: contactIds.length })}
-            </AlertDialogTitle>
+            <AlertDialogTitle>{copy.title(contactIds.length)}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("contacts.deleteSelectedConfirm", {
-                count: contactIds.length,
-              })}
+              {copy.confirm(contactIds.length)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -186,28 +209,30 @@ export function BulkDeleteContacts({
   );
 }
 
+/**
+ * Undo for a finished import. Stateless on purpose: the results step owns
+ * which created contacts the undo removed, so its summary and list can never
+ * disagree with this button.
+ */
 export function ImportUndoContacts({
   contactIds,
   deleteContacts,
+  onUndone,
   organizationId,
 }: {
+  /** The contacts this import created that still exist. */
   contactIds: readonly string[];
   deleteContacts?: DeleteContacts | undefined;
+  onUndone: (removedIds: readonly string[]) => void;
   organizationId: string;
 }) {
-  const [remainingIds, setRemainingIds] = useState(contactIds);
-
   return (
     <BulkDeleteContacts
-      contactIds={remainingIds}
+      contactIds={contactIds}
       deleteContacts={deleteContacts}
-      labelKey="contacts.importStudio.undoImport"
-      onResolved={(resolvedIds) =>
-        setRemainingIds((currentIds) =>
-          currentIds.filter((contactId) => !resolvedIds.includes(contactId)),
-        )
-      }
+      onResolved={onUndone}
       organizationId={organizationId}
+      purpose="import-undo"
     />
   );
 }

@@ -49,9 +49,10 @@ export type HarnessContinuation =
     };
 
 /**
- * A tool the harness ran itself. `name` follows the cloud engine's naming:
- * MCP tools are `mcp__<server>__<tool>`, harness-native actions use the
- * native item kind (`command_execution`, `file_change`, `web_search`).
+ * A tool the harness ran itself. `name` is the name a cloud chat turn gives
+ * the same tool, built by `tool-parts.ts`: a stella tool by its registry name,
+ * any other MCP tool as `mcp__<server>__<tool>`, and a harness-native action
+ * by a name no stella tool uses (`HARNESS_TOOL_NAMES`).
  */
 export type HarnessToolCall = {
   id: string;
@@ -81,6 +82,30 @@ export type HarnessApprovalRequest = {
   toolCall: HarnessToolCall;
   reason: string | null;
   options: readonly HarnessApprovalOption[];
+};
+
+/**
+ * What an approval asks the user to allow. A command approval names the
+ * command itself, since that is what runs, not the harness's summary of it
+ * (as t3code, MIT, shows command approvals); anything else uses the
+ * harness's reason, or names the tool.
+ */
+export const approvalMessage = (request: HarnessApprovalRequest): string => {
+  const { input } = request.toolCall;
+  if (
+    request.kind === "command" &&
+    typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    input.command.trim() !== ""
+  ) {
+    return input.command;
+  }
+  if (request.reason !== null && request.reason.trim() !== "") {
+    return request.reason;
+  }
+  return `Approval required to run ${request.toolCall.name}`;
 };
 
 export type HarnessQuestion = {

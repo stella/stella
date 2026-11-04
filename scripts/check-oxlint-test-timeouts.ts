@@ -19,6 +19,8 @@ const TEST_DIRECTORY = path.resolve(
 const TIMEOUT_ALLOWLIST: Readonly<Record<string, string>> = {
   "confine-owner.test.ts":
     "11.36s shuffled runtime; the changed-test gate invokes Bun directly",
+  "case-law-replay-writer-registry.test.ts":
+    "12.73s runtime auditing every replay writer; the changed-test gate invokes Bun directly",
 };
 const TEST_APIS = new Set(["test", "it", "describe", "setDefaultTimeout"]);
 

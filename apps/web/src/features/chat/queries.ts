@@ -12,6 +12,7 @@ import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -133,6 +134,8 @@ type ThreadFetch = {
   model: string | null;
   /** Explicit effort for a manual model; null in Auto/provider-default mode. */
   reasoningEffort: ReasoningEffort | null;
+  /** Where the thread's turns run; absent where only the cloud is offered. */
+  runTarget?: ChatRunTarget | undefined;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
@@ -215,6 +218,7 @@ const fetchThreadMessages = async (
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
     reasoningEffort: data.reasoningEffort,
+    runTarget: data.runTarget,
     context: data.context,
   };
 };
@@ -530,6 +534,12 @@ export type ChatThreadFetched = {
    *  `webSearchEnabled` above. */
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /**
+   * Where the thread's turns run when that is a computer; absent runs them
+   * on stella's own models. Changed with the model, through
+   * PATCH /chat/threads/:id/model.
+   */
+  runTarget?: ChatRunTarget | undefined;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -868,6 +878,7 @@ export const chatContextCapabilityFingerprint = (
     getEditApplyMode: context?.getEditApplyMode,
     getSendMode: context?.getSendMode,
     getUserContext: context?.getUserContext,
+    getRunTarget: context?.getRunTarget,
     getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
   } satisfies {
     [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
@@ -1052,6 +1063,21 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryKey: chatKeys.modelOptions(activeOrganizationId),
     staleTime: STALE_TIME.FIVE.MINUTES,
     queryFn: async () => await fetchChatModelOptions(),
+  });
+
+const fetchChatLocalRunners = async (signal: AbortSignal) =>
+  unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
+
+/**
+ * The member's computers and the harnesses a turn can run on. Read when the
+ * Models submenu opens, like the model options, and kept briefly: a computer
+ * signing in or reaching a limit shows on the next open.
+ */
+export const localRunnersOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    queryKey: chatKeys.localRunners(activeOrganizationId),
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
   });
 
 export const groupedChatThreadsOptions = ({
@@ -1306,22 +1332,36 @@ export const invalidateChatThreadAcrossScopes = async ({
 export const applyChatModelChange = ({
   model,
   reasoningEffort,
+  runTarget,
   queryClient,
   queryKey,
   threadId,
 }: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /** Absent when the change left where turns run as it was. */
+  runTarget?: ChatRunTarget | undefined;
   queryClient: QueryClient;
   queryKey: DataTag<
     QueryKey,
-    { model: string | null; reasoningEffort: ReasoningEffort | null },
+    {
+      model: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      runTarget?: ChatRunTarget | undefined;
+    },
     Error
   >;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>
-    prev ? { ...prev, model, reasoningEffort } : prev,
+    prev
+      ? {
+          ...prev,
+          model,
+          reasoningEffort,
+          ...(runTarget === undefined ? {} : { runTarget }),
+        }
+      : prev,
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),

@@ -53,7 +53,6 @@
   "apps/web/src/components/workspaces/table/row-host.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/web/src/lib/dom-dataset.dom.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/dynamic-validation.test.ts": ["no-classified-reachability"],
   "apps/web/src/lib/organization/ai-config-queries.test.ts": [
     "no-classified-reachability"

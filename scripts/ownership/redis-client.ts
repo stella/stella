@@ -26,6 +26,16 @@ export default {
           "Admission clients check and periodically refresh the non-eviction policy before issuing coordination commands.",
       },
       {
+        path: "apps/api/src/lib/desktop-runner/doorbell.ts",
+        reason:
+          "Desktop runner doorbell over pub/sub; a lost ring waits for the periodic sweep or the desktop's reconnect, which read the queue from Postgres.",
+      },
+      {
+        path: "apps/api/src/lib/desktop-runner/runtime.ts",
+        reason:
+          "Hands the API factory to the desktop runner doorbell; without Redis the doorbell stays in process.",
+      },
+      {
         path: "apps/api/src/lib/bullmq-queue.ts",
         reason:
           "Queue transport. The shared facade owns lazy producer connections; BullMQ owns the key layout under its own prefix.",
@@ -64,6 +74,11 @@ export default {
         path: "apps/api/src/lib/push/push-delivery-worker.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection; during an outage alerts are skipped and the in-app notification stands.",
+      },
+      {
+        path: "apps/api/src/lib/push/timer-activity-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection; during an outage the Lock Screen waits for the app to redraw it when it opens.",
       },
       {
         path: "apps/api/src/lib/account-export/queue.ts",

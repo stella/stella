@@ -32,6 +32,7 @@ import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
+import { Form } from "@stll/ui/form";
 import {
   CaseLawIcon,
   ChevronRightIcon,
@@ -80,7 +81,12 @@ import type { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
 import { SearchNotice } from "../shared/notice";
 import { getAppToolArrayLimit } from "../shared/tool-input";
-import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
+import {
+  filterDefaults,
+  originalSearchQuery,
+  searchSubmitInput,
+  sortResultRows,
+} from "./model";
 import type { CaseLawView, ResultRow, ResultSort } from "./model";
 
 export type CaseLawBridge = ReturnType<
@@ -150,7 +156,7 @@ const ResultTableRow = ({
               kind: "decision",
               courtAbbreviation: row.courtAbbreviation,
             }}
-            title={`${row.caseNumber} — ${row.court}`}
+            title={`${row.caseNumber}: ${row.court}`}
           />
           <PreviewCard>
             <PreviewCardTrigger
@@ -432,10 +438,7 @@ const SearchControls = ({
   const locale = useLocale();
   const format = useFormatter();
   const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
-  const initialQueries = normalizeStringList(input["queries"], {
-    split: "never",
-  });
-  const originalQuery = initialQueries.ok ? initialQueries.value.join(" ") : "";
+  const originalQuery = originalSearchQuery(input);
   const [query, setQuery] = useState(originalQuery);
   const [country, setCountry] = useState(defaults.country);
   const [from, setFrom] = useState(defaults.from);
@@ -467,27 +470,27 @@ const SearchControls = ({
     nextDecadeLabel: t("nextDecade"),
     outOfRangeLabel: t("outOfRange"),
   };
+  const submission = searchSubmitInput({
+    input,
+    query,
+    originalQuery,
+    country,
+    court:
+      courts.length === 0 ? { type: "all" } : { type: "courts", names: courts },
+    from,
+    to,
+  });
   return (
-    <form
-      className="space-y-4"
+    <Form
       onSubmit={(event) => {
         event.preventDefault();
+        if (submission.type !== "search") {
+          return;
+        }
         bridge.detached(
           bridge.call({
             name: "search_case_law",
-            arguments: {
-              ...searchFilterInput({
-                input,
-                country,
-                court:
-                  courts.length === 0
-                    ? { type: "all" }
-                    : { type: "courts", names: courts },
-                from,
-                to,
-              }),
-              queries: query === originalQuery ? input["queries"] : [query],
-            },
+            arguments: submission.input,
           }),
           "caseLawResults.filter",
         );
@@ -506,6 +509,7 @@ const SearchControls = ({
           type="submit"
           variant="outline"
           className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
+          disabled={submission.type !== "search"}
         >
           {t("search")}
         </Button>
@@ -603,11 +607,16 @@ const SearchControls = ({
           onFromChange={(value) => setFrom(value ?? "")}
           onToChange={(value) => setTo(value ?? "")}
         />
-        <Button type="submit" variant="outline" className="max-sm:col-span-2">
+        <Button
+          type="submit"
+          variant="outline"
+          className="max-sm:col-span-2"
+          disabled={submission.type !== "search"}
+        >
           {t("filter")}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };
 

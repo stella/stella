@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 // The same order as the other DOM tests here: register, then load the
 // libraries that read the document, and unregister when the file is done.
 // Queries come from render(), not `screen`: `screen` binds the body of
@@ -17,7 +19,7 @@ afterEach(() => {
 
 afterAll(async () => {
   cleanup();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("Form server errors", () => {

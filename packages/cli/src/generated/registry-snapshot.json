@@ -62,7 +62,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -729,7 +729,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -2735,7 +2735,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },

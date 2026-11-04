@@ -412,6 +412,7 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       unresolvedCandidateDecisionRowsStatement(tx, {
+        admission: "indexed",
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -446,6 +447,7 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) =>
       unresolvedPageDecisionRowsStatement(tx, {
+        admission: "indexed",
         body: { country: sampleCountry },
         generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
         ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
@@ -816,7 +818,8 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtActivity]: {
     type: "excluded",
-    reason: "Court activity has a date-window-dependent aggregate shape.",
+    reason:
+      "Seed-sized partial-index stats cannot model a court's rows; court-activity-plan.db.test.ts measures the rows each lateral reads on a reparsed court.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount]: {
     type: "excluded",

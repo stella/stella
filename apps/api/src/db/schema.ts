@@ -59,6 +59,7 @@ export * from "./schema/workflow";
 export * from "./schema/signals";
 export * from "./schema/notifications";
 export * from "./schema/push-devices";
+export * from "./schema/timer-activity-devices";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/feature-enrolments";
@@ -162,6 +163,7 @@ export * from "./schema/soft-law";
 
 export * from "./schema/desktop-presence";
 export * from "./schema/desktop-device-proof-replay";
+export * from "./schema/desktop-runner";
 
 export * from "./schema/mcp-web-handoff";
 
