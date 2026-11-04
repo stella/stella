@@ -38,7 +38,7 @@ type StartHarnessProcessOptions<TError> = {
   exit: (exit: HarnessExit) => void;
 };
 
-export type HarnessProcess<TId, TError> = {
+type HarnessProcess<TId, TError> = {
   /** Writes one message; dropped once the process has exited. */
   write: (message: object) => void;
   /**
