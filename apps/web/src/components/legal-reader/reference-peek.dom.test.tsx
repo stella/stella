@@ -14,9 +14,8 @@ import {
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { ReferencePeekTarget } from "@stll/decision-reader/reference-peek.logic";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // The peek shell lives in the reader package; it is exercised here, under the
 // app's own providers and DOM test run, the way every host mounts it.
