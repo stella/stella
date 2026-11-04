@@ -1663,6 +1663,12 @@ export const buildSendRequestBody = ({
 
   applyChatContext({ body, context });
 
+  // Cloud is the default and travels as an absent field.
+  const runTarget = context?.getRunTarget?.();
+  if (runTarget?.kind === "local") {
+    body.runTarget = runTarget;
+  }
+
   const { editApplyMode, docxEditRepresentation } =
     resolveChatRequestDocxEditPreferences({
       context,

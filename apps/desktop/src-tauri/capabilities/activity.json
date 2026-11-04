@@ -24,6 +24,7 @@
     "allow-billing-draft-grant-consent",
     "allow-billing-draft-withdraw-consent",
     "allow-billing-draft-set-preference",
-    "allow-billing-draft-create-confirmed"
+    "allow-billing-draft-create-confirmed",
+    "core:window:allow-start-dragging"
   ]
 }
