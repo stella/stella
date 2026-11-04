@@ -83,6 +83,8 @@ describe("judge name", () => {
     ["JUDr. František I š t v á n e k, v. r.", "JUDr. František Ištvánek"],
     ["JUDr. Pavel  P a v l í k, v. r.", "JUDr. Pavel Pavlík"],
     ["JUDr. P a v e l   P a v l í k", "JUDr. Pavel Pavlík"],
+    ["JUDr. P a v e l\nP a v l í k", "JUDr. Pavel Pavlík"],
+    ["JUDr. P a v e l\tP a v l í k, v. r.", "JUDr. Pavel Pavlík"],
     ["Mgr. Jan Novák, v. r.", "Mgr. Jan Novák"],
   ])("%j is %j", (printed, name) => {
     expect(normalizeCzechJudgeName(printed)).toBe(name);

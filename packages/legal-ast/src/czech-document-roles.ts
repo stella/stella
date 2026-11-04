@@ -68,7 +68,8 @@ const JUDGE_SIGNATURE_SUFFIX_RE = / ?,? ?v\. ?r\.$/iu;
 export const normalizeCzechJudgeName = (printed: string): string =>
   // Spaced letters are joined before whitespace collapses: one space
   // separates the letters of a spaced word, a wider gap separates words.
-  collapseSpacedLetters(printed.replaceAll(/[^\S ]/gu, " "))
+  // Any other whitespace (a line break, a tab) is a word gap.
+  collapseSpacedLetters(printed.replaceAll(/[^\S ]+/gu, "  "))
     .replaceAll(/\s+/gu, " ")
     .trim()
     .replace(JUDGE_SIGNATURE_SUFFIX_RE, "")
