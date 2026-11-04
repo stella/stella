@@ -748,6 +748,20 @@
         "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
         "unavailable": "Claude Code se na tomto počítači nepodařilo spustit. Zkuste to znovu."
       }
+    },
+    "install": {
+      "notInstalled": "{name} zatím není na tomto počítači nainstalován.",
+      "install": "Nainstalovat",
+      "downloading": "Stahování {name} {version}: {percent} %",
+      "verifying": "Kontrola {name} {version}",
+      "ready": "{name} {version} je nainstalován.",
+      "retry": "Zkusit znovu",
+      "activeStays": "Dál se používá verze {version}.",
+      "failure": {
+        "download": "{name} se nepodařilo stáhnout. Zkontrolujte připojení k internetu a zkuste to znovu.",
+        "verification": "{name} se nepodařilo ověřit, proto nebyl nainstalován.",
+        "storage": "{name} se nepodařilo uložit do tohoto počítače. Zkontrolujte, zda je na disku volné místo."
+      }
     }
   }
 }

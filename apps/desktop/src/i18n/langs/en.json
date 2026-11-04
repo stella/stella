@@ -748,6 +748,20 @@
         "timedOut": "The sign-in took too long. Try again.",
         "unavailable": "Claude Code could not be started on this computer. Try again."
       }
+    },
+    "install": {
+      "notInstalled": "{name} is not installed on this computer yet.",
+      "install": "Install",
+      "downloading": "Downloading {name} {version}: {percent}%",
+      "verifying": "Checking {name} {version}",
+      "ready": "{name} {version} is installed.",
+      "retry": "Try again",
+      "activeStays": "Version {version} stays in use.",
+      "failure": {
+        "download": "{name} could not be downloaded. Check your internet connection and try again.",
+        "verification": "{name} could not be verified, so it was not installed.",
+        "storage": "{name} could not be saved on this computer. Check that the disk has free space."
+      }
     }
   }
 }
