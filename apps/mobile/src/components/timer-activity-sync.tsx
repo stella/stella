@@ -75,6 +75,12 @@ const bundleIdSchema = v.picklist(MOBILE_APP_BUNDLE_IDS);
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 /**
+ * The soonest a renewal is tried again: a renewal that did not take (offline,
+ * no key issued, a newer one kept) waits this long rather than looping.
+ */
+const RENEWAL_RETRY_MS = 10 * 60 * 1000;
+
+/**
  * Tells the server what this phone holds now, so a timer changed on another
  * device reaches its Lock Screen, asking for a new Lock Screen button key
  * when the one held runs low. Best effort: the next refresh sends it again.
@@ -266,7 +272,10 @@ const TimerActivityRefresh = ({
               () => null,
             );
       if (renewIn !== null && !gone()) {
-        renewal = setTimeout(onToken, Math.min(renewIn, MAX_TIMEOUT_MS));
+        renewal = setTimeout(
+          onToken,
+          Math.min(Math.max(renewIn, RENEWAL_RETRY_MS), MAX_TIMEOUT_MS),
+        );
       }
     })();
     return () => {
