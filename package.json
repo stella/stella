@@ -258,7 +258,7 @@
     "@stll/fuzzy-search": "1.4.0",
     "@stll/regex-set": "1.0.9",
     "@stll/regex-set-wasm": "1.0.9",
-    "@stll/text-search": "1.1.0",
+    "@stll/text-search": "2.0.0",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -345,7 +345,6 @@
     }
   },
   "patchedDependencies": {
-    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "mailauth@8.0.4": "patches/mailauth@8.0.4.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
