@@ -2786,6 +2786,11 @@
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
       "undoImport": "Võta import tagasi ({count})",
+      "undoImportConfirm": "Kas kustutada selle impordiga {count, plural, one {loodud kontakt} other {loodud # kontakti}} jäädavalt? Seda toimingut ei saa tagasi võtta.",
+      "undoImportTitle": "Kas võtta see import tagasi?",
+      "undoneRow": "Eemaldati tagasivõtmisega",
+      "undoneSummary": "Tagasivõtmine eemaldas {count, plural, one {# selle impordiga loodud kontakti} other {# selle impordiga loodud kontakti}}.",
+      "undoneToast": "Import võeti tagasi: kustutati {count, plural, one {# kontakt} other {# kontakti}}",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
       "warning": {
         "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
