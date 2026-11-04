@@ -16,6 +16,8 @@ mod billing_draft_submit;
 mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
+mod claude_code_auth;
+mod claude_code_auth_commands;
 mod clipboard;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
@@ -56,6 +58,10 @@ mod harness_archive;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
+// Runs once the desktop runner's harness host lands; the runner protocol it
+// shares types with is test-only until then too.
+#[cfg(test)]
+mod harness_sidecar;
 mod http_client;
 mod i18n;
 mod idle_time;
@@ -270,6 +276,7 @@ pub fn run() {
         app.manage(installation);
       }
       chatgpt_auth_commands::manage(&handle);
+      claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -294,6 +301,7 @@ pub fn run() {
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
+              claude_code_auth_commands::apply_feature_gate(app, enabled);
             }
           }),
         );

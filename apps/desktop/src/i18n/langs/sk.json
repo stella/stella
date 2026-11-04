@@ -501,6 +501,10 @@
     "evidenceTitles": "Názvy",
     "evidenceApps": "Aplikácie",
     "rangeEmpty": "V tomto úseku sa nič nezaznamenalo.",
+    "entryStart": "Začiatok",
+    "entryEnd": "Koniec",
+    "rangeEndBeforeStart": "Nastavte koniec až po začiatku.",
+    "rangeDraftedLeftOut": "{duration}, čas už zahrnutý v konceptoch sa nepočíta",
     "calendarHint": "Otvorením prerušovaného návrhu ho skontrolujete; ťahaním v stĺpci Časové záznamy vytvoríte záznam pre ľubovoľný úsek.",
     "aiDraftWrite": "Navrhnúť pomocou stella AI",
     "aiDraftAgain": "Navrhnúť znova",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "ChatGPT je pripojený",
     "callbackConnectedBody": "Túto kartu môžete zavrieť a vrátiť sa do stelly.",
     "callbackNotConnectedTitle": "ChatGPT sa nepripojil",
-    "callbackNotConnectedBody": "Vráťte sa do stelly, zistite, čo sa stalo, a skúste to znova."
+    "callbackNotConnectedBody": "Vráťte sa do stelly, zistite, čo sa stalo, a skúste to znova.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Používajte svoje predplatné Claude pre lokálnych agentov v stelle. Využitie sa započítava do plánu Claude, oddelene od predplatného stelly.",
+      "notInstalled": "Claude Code ešte nie je na tomto počítači nainštalovaný.",
+      "signIn": "Prihlásiť sa cez Claude",
+      "openSignInPage": "Otvoriť stránku prihlásenia",
+      "signedIn": "Prihlásené do Claude",
+      "signedInAs": "Prihlásené do Claude · {email}",
+      "signOut": "Odhlásiť sa",
+      "apiKey": "Claude Code je prihlásený kľúčom API, ktorý stella nepoužíva. Odhláste sa a potom sa prihláste so svojím predplatným Claude.",
+      "failure": {
+        "notCompleted": "Prihlásenie sa nedokončilo. Skúste to znova.",
+        "timedOut": "Prihlásenie trvalo príliš dlho. Skúste to znova.",
+        "unavailable": "Claude Code sa na tomto počítači nepodarilo spustiť. Skúste to znova."
+      }
+    }
   }
 }

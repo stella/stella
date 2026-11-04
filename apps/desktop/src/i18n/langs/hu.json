@@ -501,6 +501,10 @@
     "evidenceTitles": "Címek",
     "evidenceApps": "Alkalmazások",
     "rangeEmpty": "Ebben az időszakban semmi sem lett rögzítve.",
+    "entryStart": "Kezdés",
+    "entryEnd": "Befejezés",
+    "rangeEndBeforeStart": "Válasszon a kezdésnél későbbi befejezést.",
+    "rangeDraftedLeftOut": "{duration}, a már piszkozatban lévő idő nélkül",
     "calendarHint": "Nyisson meg egy szaggatott javaslatot az ellenőrzéshez, vagy húzza végig az Időbejegyzések oszlopban, hogy bármely időszakhoz bejegyzést készítsen.",
     "aiDraftWrite": "Javaslat stella AI-jal",
     "aiDraftAgain": "Új javaslat",
@@ -728,6 +732,22 @@
     "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
     "callbackConnectedBody": "Bezárhatja ezt a lapot, és visszatérhet a stellába.",
     "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
-    "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra."
+    "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Használja Claude-előfizetését a stella helyi ügynökeihez. A használat a Claude-csomagját terheli, a stella-előfizetésétől külön.",
+      "notInstalled": "A Claude Code még nincs telepítve ezen a számítógépen.",
+      "signIn": "Bejelentkezés Claude-dal",
+      "openSignInPage": "Bejelentkezési oldal megnyitása",
+      "signedIn": "Bejelentkezve a Claude-ba",
+      "signedInAs": "Bejelentkezve a Claude-ba · {email}",
+      "signOut": "Kijelentkezés",
+      "apiKey": "A Claude Code API-kulccsal van bejelentkezve, amelyet a stella nem használ. Jelentkezzen ki, majd jelentkezzen be Claude-előfizetésével.",
+      "failure": {
+        "notCompleted": "A bejelentkezés nem fejeződött be. Próbálja újra.",
+        "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
+        "unavailable": "A Claude Code nem indítható el ezen a számítógépen. Próbálja újra."
+      }
+    }
   }
 }
