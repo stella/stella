@@ -748,6 +748,20 @@
         "timedOut": "La connexion a pris trop de temps. Réessayez.",
         "unavailable": "Claude Code n’a pas pu être lancé sur cet ordinateur. Réessayez."
       }
+    },
+    "install": {
+      "notInstalled": "{name} n’est pas encore installé sur cet ordinateur.",
+      "install": "Installer",
+      "downloading": "Téléchargement de {name} {version} : {percent} %",
+      "verifying": "Vérification de {name} {version}",
+      "ready": "{name} {version} est installé.",
+      "retry": "Réessayer",
+      "activeStays": "La version {version} reste utilisée.",
+      "failure": {
+        "download": "Impossible de télécharger {name}. Vérifiez votre connexion Internet et réessayez.",
+        "verification": "Impossible de vérifier {name} : il n’a donc pas été installé.",
+        "storage": "Impossible d’enregistrer {name} sur cet ordinateur. Vérifiez qu’il reste de l’espace libre sur le disque."
+      }
     }
   }
 }

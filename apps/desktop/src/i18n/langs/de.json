@@ -748,6 +748,20 @@
         "timedOut": "Die Anmeldung hat zu lange gedauert. Versuchen Sie es erneut.",
         "unavailable": "Claude Code konnte auf diesem Computer nicht gestartet werden. Versuchen Sie es erneut."
       }
+    },
+    "install": {
+      "notInstalled": "{name} ist auf diesem Computer noch nicht installiert.",
+      "install": "Installieren",
+      "downloading": "{name} {version} wird heruntergeladen: {percent} %",
+      "verifying": "{name} {version} wird geprüft",
+      "ready": "{name} {version} ist installiert.",
+      "retry": "Erneut versuchen",
+      "activeStays": "Version {version} bleibt in Verwendung.",
+      "failure": {
+        "download": "{name} konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+        "verification": "{name} konnte nicht verifiziert werden und wurde daher nicht installiert.",
+        "storage": "{name} konnte auf diesem Computer nicht gespeichert werden. Prüfen Sie, ob auf dem Datenträger genügend Speicherplatz frei ist."
+      }
     }
   }
 }
