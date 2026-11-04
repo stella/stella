@@ -1156,6 +1156,26 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
+  test("captureError records a native fetch deadline as one transient signal", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new DOMException("signal timed out", "TimeoutError"),
+      {
+        fingerprintKey: "auth.role:query",
+        scope: { type: "handler", handlerId: "auth.role" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "auth.role:query",
+      transport_kind: "timeout",
+    });
+  });
+
   test.each([
     "Failed to fetch dynamically imported module: https://app.test/a.js",
     "x is not a function",
