@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálně nedostupné",
       "stateUnsupported": "Tato verze není podporována",
       "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
     },

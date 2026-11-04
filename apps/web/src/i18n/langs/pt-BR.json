@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "É preciso entrar",
       "stateNotInstalled": "Não instalado",
       "stateOffline": "Computador offline",
+      "stateUnavailable": "Indisponível no momento",
       "stateUnsupported": "Esta versão não é compatível",
       "waitingForComputer": "Aguardando seu computador se reconectar…"
     },

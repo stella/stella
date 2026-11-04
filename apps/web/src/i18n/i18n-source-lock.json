@@ -1354,6 +1354,7 @@
   "chat.localRun.stateNeedsLogin": "Sign-in needed",
   "chat.localRun.stateNotInstalled": "Not installed",
   "chat.localRun.stateOffline": "Computer offline",
+  "chat.localRun.stateUnavailable": "Not available right now",
   "chat.localRun.stateUnsupported": "This version is not supported",
   "chat.localRun.waitingForComputer": "Waiting for your computer to reconnect…",
   "chat.maxAttachmentsReached": "Maximum {count} files per message",

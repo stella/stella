@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Hay que iniciar sesión",
       "stateNotInstalled": "No instalado",
       "stateOffline": "Ordenador sin conexión",
+      "stateUnavailable": "No disponible por ahora",
       "stateUnsupported": "Esta versión no es compatible",
       "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…"
     },
