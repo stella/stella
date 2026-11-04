@@ -93,10 +93,10 @@ AS $function$
 BEGIN
   IF TG_OP <> 'INSERT' AND OLD.language_group_key IS NOT NULL THEN
     INSERT INTO public.case_law_ranking_signal_changes (decision_id)
-    SELECT member.id
-    FROM public.case_law_decisions member
-    WHERE member.language_group_key = OLD.language_group_key
-    ORDER BY member.id
+    SELECT in_group.id
+    FROM public.case_law_decisions in_group
+    WHERE in_group.language_group_key = OLD.language_group_key
+    ORDER BY in_group.id
     LIMIT 256
     ON CONFLICT ON CONSTRAINT case_law_ranking_signal_changes_pkey DO UPDATE
       SET change_count = case_law_ranking_signal_changes.change_count + 1,
@@ -105,10 +105,10 @@ BEGIN
   END IF;
   IF TG_OP <> 'DELETE' AND NEW.language_group_key IS NOT NULL THEN
     INSERT INTO public.case_law_ranking_signal_changes (decision_id)
-    SELECT member.id
-    FROM public.case_law_decisions member
-    WHERE member.language_group_key = NEW.language_group_key
-    ORDER BY member.id
+    SELECT in_group.id
+    FROM public.case_law_decisions in_group
+    WHERE in_group.language_group_key = NEW.language_group_key
+    ORDER BY in_group.id
     LIMIT 256
     ON CONFLICT ON CONSTRAINT case_law_ranking_signal_changes_pkey DO UPDATE
       SET change_count = case_law_ranking_signal_changes.change_count + 1,
