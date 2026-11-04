@@ -475,7 +475,7 @@ const SVK_COURTS: readonly DirectoryCourt[] = Object.entries(
   if (apex) {
     return { name, head, ecliCodes: [code] };
   }
-  const located = /^v\s+(?<form>.+)$/u.exec(rest)?.groups?.["form"];
+  const located = rest.startsWith("v ") ? rest.slice(2).trim() : undefined;
   const seat: CourtSeat =
     located === undefined
       ? { nominative: rest }

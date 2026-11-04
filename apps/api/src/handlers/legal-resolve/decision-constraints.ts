@@ -23,8 +23,6 @@ import {
   legalResolveResponseSchema,
 } from "@stll/api-contract/legal-resolve";
 
-import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
-
 /**
  * A decision citation read into the constraints it carries, and the one
  * place a `resolved` answer is made.
@@ -42,6 +40,21 @@ import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/look
  */
 
 type ResolvedResponse = Extract<LegalResolveResponse, { status: "resolved" }>;
+
+/**
+ * What a constraint is checked against: the decision's own stored identity,
+ * as the identity lookup returns it.
+ */
+type ConstrainedDecision = {
+  id: string;
+  country: string;
+  court: string;
+  ecli: string | null;
+  caseNumber: string;
+  identifiers?: readonly { type: string; value: string }[] | undefined;
+  publishedCaseNumber?: string | null | undefined;
+  sheetNumber?: string | null | undefined;
+};
 type ResolvedDecisionDocument = Extract<
   ResolvedResponse["document"],
   { kind: "decision" }
@@ -63,7 +76,7 @@ const verifiedResolutionSchema = v.pipe(
 );
 
 /** A resolved decision that met every constraint its citation carried. */
-export type VerifiedResolvedDecision = ResolvedResponse &
+type VerifiedResolvedDecision = ResolvedResponse &
   v.Brand<typeof VERIFIED_AGAINST_CONSTRAINTS>;
 
 /** What the decision resolver answers: only a verified decision resolves. */
@@ -157,7 +170,7 @@ export const decisionConstraints = ({
   intent: DecisionIdentifierIntent;
   reporters: DecisionReporterGrammar | null;
   courtText: string;
-  holders: readonly DecisionIdentityRow[];
+  holders: readonly ConstrainedDecision[];
 }): DecisionConstraints => {
   const index = courtCitationIndex(
     country,
@@ -182,9 +195,7 @@ export const namesUnrecognizedCourt = (
 ): boolean => constraints.courts.some(({ type }) => type === "unrecognized");
 
 /** Whether a court alias the citation writes answers to several courts. */
-export const namesAmbiguousCourt = (
-  constraints: DecisionConstraints,
-): boolean =>
+const namesAmbiguousCourt = (constraints: DecisionConstraints): boolean =>
   constraints.courts.some(
     (constraint) => constraint.type === "court" && constraint.courts.length > 1,
   );
@@ -212,7 +223,7 @@ const courtConstraintHolds = (
 /** Whether the decision is at every court the citation names. */
 export const atNamedCourt = (
   constraints: DecisionConstraints,
-  row: DecisionIdentityRow,
+  row: ConstrainedDecision,
 ): boolean => {
   const keys = storedCourtKeys(constraints.index, row);
   const code = ecliCourtCodeOf(constraints.country, row.ecli);
@@ -221,12 +232,12 @@ export const atNamedCourt = (
   );
 };
 
-export type ConstraintViolation = "country" | "docket" | "sheet" | "court";
+type ConstraintViolation = "country" | "docket" | "sheet" | "court";
 
 /** The first constraint the decision breaks, or null when it meets all. */
-export const constraintViolation = (
+const constraintViolation = (
   constraints: DecisionConstraints,
-  row: DecisionIdentityRow,
+  row: ConstrainedDecision,
 ): ConstraintViolation | null => {
   if (row.country !== constraints.country) {
     return "country";
@@ -244,13 +255,13 @@ export const constraintViolation = (
   return atNamedCourt(constraints, row) ? null : "court";
 };
 
-type AdmitOptions = {
+type AdmitOptions<TRow extends ConstrainedDecision> = {
   constraints: DecisionConstraints;
-  row: DecisionIdentityRow;
+  row: TRow;
   /** Builds the decision's document; called only for a verified decision. */
-  document: (row: DecisionIdentityRow) => Promise<ResolvedDecisionDocument>;
-  candidate: (row: DecisionIdentityRow) => Candidate;
-  otherCourtCandidate: (row: DecisionIdentityRow) => OtherCourtCandidate;
+  document: (row: TRow) => Promise<ResolvedDecisionDocument>;
+  candidate: (row: TRow) => Candidate;
+  otherCourtCandidate: (row: TRow) => OtherCourtCandidate;
   otherCourtCandidates: readonly OtherCourtCandidate[];
 };
 
@@ -270,14 +281,14 @@ const withCandidates = <T extends object>(
  * alias leaves the decision a candidate to choose, and a decision of another
  * docket or country is not the one asked for.
  */
-export const admitResolvedDecision = async ({
+export const admitResolvedDecision = async <TRow extends ConstrainedDecision>({
   constraints,
   row,
   document,
   candidate,
   otherCourtCandidate,
   otherCourtCandidates,
-}: AdmitOptions): Promise<DecisionResolveResponse> => {
+}: AdmitOptions<TRow>): Promise<DecisionResolveResponse> => {
   const violation = constraintViolation(constraints, row);
   const others = otherCourtCandidates.filter(
     ({ decisionId }) => decisionId !== row.id,

@@ -452,8 +452,22 @@ const CASELESS_SHORT_CODES: ReadonlySet<string> = new Set([
   "obvs",
 ]);
 
-const bareWord = (word: string): string =>
-  word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+const WORD_CHARACTER_RE = /[\p{L}\p{N}]/u;
+
+/** A word without the punctuation around it (`(OS`, `6),`). */
+const bareWord = (word: string): string => {
+  const characters = [...word];
+  const first = characters.findIndex((character) =>
+    WORD_CHARACTER_RE.test(character),
+  );
+  if (first === -1) {
+    return "";
+  }
+  const last = characters.findLastIndex((character) =>
+    WORD_CHARACTER_RE.test(character),
+  );
+  return characters.slice(first, last + 1).join("");
+};
 
 /**
  * Whether words name a court, read or not: a court noun with a modifier
