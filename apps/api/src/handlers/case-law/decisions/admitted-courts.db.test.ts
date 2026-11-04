@@ -149,9 +149,10 @@ test(
       after: first.courts.at(-1) ?? null,
       limit: 1,
     });
+    // "Krajský súd v Bratislave" sorts before "Najvyšší súd".
     expect([first, second]).toEqual([
-      { courts: [[OPEN_COURT, SHARED_COURT].toSorted()[0]], more: true },
-      { courts: [[OPEN_COURT, SHARED_COURT].toSorted()[1]], more: false },
+      { courts: [OPEN_COURT], more: true },
+      { courts: [SHARED_COURT], more: false },
     ]);
   },
   DB_TEST_TIMEOUT_MS,

@@ -78,7 +78,7 @@ export const measureCourtCatalogTool = async (fixture: ReadFixture) => {
     // running server holds in its cache; the measured read is a warm one.
     await readPage();
     return await runWithMeasuredQueryCounter(async (counter) => {
-      const response = await readPage();
+      const response: unknown = await readPage();
       const payload: unknown =
         isRecord(response) && response["status"] === "success"
           ? response["data"]
