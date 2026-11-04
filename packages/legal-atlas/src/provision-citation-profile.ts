@@ -263,6 +263,11 @@ export type JurisdictionProfile = {
   titles: readonly ActTitleSpec[];
   /** Heads of short titles, with every declined form including the nominative. */
   titleHeads: readonly TitleHeadSpec[];
+  /**
+   * Words that open the clause of a title that only amends other acts (`a o
+   * změně některých zákonů`). Courts print the name before it.
+   */
+  amendingClauseOpeners: readonly string[];
   /** Ordinal words a sentence reference uses, mapped to their digit. */
   ordinalWords: Readonly<Record<string, string>>;
   /**

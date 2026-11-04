@@ -345,6 +345,7 @@ beforeAll(
             id: seed.id,
             country: "CZE",
             title: seed.title,
+            documentType: null,
           })),
         ),
     );

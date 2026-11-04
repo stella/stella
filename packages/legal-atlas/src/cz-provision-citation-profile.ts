@@ -15,12 +15,12 @@
 import { STATUTE_ACTS } from "@stll/api-contract/statute-acts";
 import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
+import { titleHeadsFor } from "./act-titles";
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   ActTitleSpec,
   CollectionSpec,
   JurisdictionProfile,
-  TitleHeadSpec,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
@@ -177,16 +177,8 @@ const HUMAN_RIGHTS_CONVENTION = [
 ]);
 
 /** `zákon` in every case a citing sentence puts it in, plus the `zák.` shorthand. */
-const ACT_HEAD = {
-  nominative: "zákon",
-  forms: ["zákon", "zákona", "zákonu", "zákonem", "zákoně", "zák."],
-} as const satisfies TitleHeadSpec;
-
-/** `zákoník práce`, `zákoníku práce`: the code a short title can open with. */
-const CODE_HEAD = {
-  nominative: "zákoník",
-  forms: ["zákoník", "zákoníku", "zákoníkem"],
-} as const satisfies TitleHeadSpec;
+const TITLE_HEADS = titleHeadsFor("cs");
+const [ACT_HEAD] = TITLE_HEADS;
 
 /**
  * A short title `zákon o …` in every form `ACT_HEAD` declines it to. Listing
@@ -903,7 +895,14 @@ export const CZ_PROFILE = {
     }),
   ],
 
-  titleHeads: [ACT_HEAD, CODE_HEAD],
+  titleHeads: TITLE_HEADS,
+  amendingClauseOpeners: [
+    "a o změně",
+    "a o doplnění",
+    "a o zrušení",
+    "a kterým se mění",
+    "a kterým se ruší",
+  ],
 
   ordinalWords: {
     první: "1",
