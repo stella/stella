@@ -1,10 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
 import { settingsNavSections } from "@/routes/_protected.settings/-components/settings-shell/settings-nav";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {

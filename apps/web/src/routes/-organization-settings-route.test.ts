@@ -3,13 +3,14 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
 import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { organizationSettingsDestination } from "@/routes/-organization-settings-route";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const EMPTY_SEARCH = {};
 
