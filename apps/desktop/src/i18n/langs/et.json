@@ -748,6 +748,20 @@
         "timedOut": "Sisselogimine võttis liiga kaua aega. Proovige uuesti.",
         "unavailable": "Claude Code’i ei õnnestunud selles arvutis käivitada. Proovige uuesti."
       }
+    },
+    "install": {
+      "notInstalled": "{name} ei ole sellesse arvutisse veel installitud.",
+      "install": "Installi",
+      "downloading": "{name} {version} allalaadimine: {percent}%",
+      "verifying": "{name} {version} kontrollimine",
+      "ready": "{name} {version} on installitud.",
+      "retry": "Proovi uuesti",
+      "activeStays": "Kasutusel jääb versioon {version}.",
+      "failure": {
+        "download": "{name} allalaadimine ebaõnnestus. Kontrollige internetiühendust ja proovige uuesti.",
+        "verification": "{name} kontrollimine ebaõnnestus, seega seda ei installitud.",
+        "storage": "{name} salvestamine sellesse arvutisse ebaõnnestus. Kontrollige, kas kettal on vaba ruumi."
+      }
     }
   }
 }

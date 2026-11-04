@@ -748,6 +748,20 @@
         "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
         "unavailable": "A Claude Code nem indítható el ezen a számítógépen. Próbálja újra."
       }
+    },
+    "install": {
+      "notInstalled": "A {name} még nincs telepítve ezen a számítógépen.",
+      "install": "Telepítés",
+      "downloading": "A {name} {version} letöltése: {percent}%",
+      "verifying": "A {name} {version} ellenőrzése",
+      "ready": "A {name} {version} telepítve van.",
+      "retry": "Újrapróbálás",
+      "activeStays": "Továbbra is ez a verzió marad használatban: {version}.",
+      "failure": {
+        "download": "A {name} letöltése nem sikerült. Ellenőrizze az internetkapcsolatot, és próbálja újra.",
+        "verification": "A {name} ellenőrzése nem sikerült, ezért nem lett telepítve.",
+        "storage": "A {name} mentése nem sikerült ezen a számítógépen. Ellenőrizze, hogy van-e szabad hely a lemezen."
+      }
     }
   }
 }

@@ -72,9 +72,12 @@ export const ChatRunTargetMenu = ({
   );
   // Until the member's computers are known, and when they cannot be read,
   // the menu offers only stella's own models, as it does without the feature.
-  const options = chatLocalHarnessOptions(
-    runnersView.type === "items" ? runnersView.items : undefined,
-  );
+  // A thread already set to run on a computer always keeps the way back to
+  // stella cloud, since stella's models are not listed while it runs there.
+  const options =
+    chatLocalHarnessOptions(
+      runnersView.type === "items" ? runnersView.items : undefined,
+    ) ?? (selected.kind === "local" ? [] : null);
   if (options === null) {
     return null;
   }
@@ -109,8 +112,9 @@ export const ChatRunTargetMenu = ({
 
   return (
     <>
-      <MenuGroupLabel>{t("chat.localRun.runOn")}</MenuGroupLabel>
       <MenuRadioGroup value={value}>
+        {/* The label names its group, so it lives inside it. */}
+        <MenuGroupLabel>{t("chat.localRun.runOn")}</MenuGroupLabel>
         <MenuRadioItem
           onClick={() => choose(CHAT_CLOUD_RUN_TARGET)}
           value={CHAT_RUN_TARGET_KIND.cloud}
@@ -170,7 +174,8 @@ export const ChatRunTargetMenu = ({
           );
         })}
       </MenuRadioGroup>
-      <MenuSeparator />
+      {/* stella's own models follow only while the turns run there. */}
+      {selected.kind === "cloud" && <MenuSeparator />}
     </>
   );
 };

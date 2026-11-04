@@ -422,15 +422,25 @@ describe("harness sidecar over stdio", () => {
     await hello(sidecar);
     const runId = runStart(sidecar, "approval");
     const request = await sidecar.waitFor(is("run.approval_request", runId));
+    // A command approval names the command; the harness's reason rides along.
     expect(request).toMatchObject({
       kind: "command",
-      summary: "Deletes a file",
+      summary: "rm draft.md",
     });
     expect(request.requestId).toMatch(/^[0-9a-f-]{36}$/u);
     const pause = chunksOf(sidecar, runId).at(-1);
     expect(pause).toMatchObject({
       type: "RUN_FINISHED",
-      outcome: { type: "interrupt", interrupts: [{ id: request.requestId }] },
+      outcome: {
+        type: "interrupt",
+        interrupts: [
+          {
+            id: request.requestId,
+            message: "rm draft.md",
+            metadata: { reason: "Deletes a file" },
+          },
+        ],
+      },
     });
     sidecar.send({
       type: "run.approval",
@@ -450,12 +460,12 @@ describe("harness sidecar over stdio", () => {
     expect(answer?.result).toEqual({ decision: "decline" });
   });
 
-  test("names the tool when the harness gives an empty approval reason", async () => {
+  test("a command approval without a reason still names what it would run", async () => {
     const sidecar = spawnSidecar();
     await hello(sidecar);
     const runId = runStart(sidecar, "approval_without_reason");
     const request = await sidecar.waitFor(is("run.approval_request", runId));
-    expect(request.summary).toMatch(/^Approval required to run \S/u);
+    expect(request.summary).toBe("rm draft.md");
     sidecar.send({
       type: "run.approval",
       runId,

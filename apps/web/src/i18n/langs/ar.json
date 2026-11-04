@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "تم بلوغ الحد حتى {time}",
       "stateNeedsLogin": "يلزم تسجيل الدخول",
       "stateNotInstalled": "غير مثبّت",
       "stateOffline": "الحاسوب غير متصل",
-      "stateUnsupported": "هذا الإصدار غير مدعوم"
+      "stateUnsupported": "هذا الإصدار غير مدعوم",
+      "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…"
     },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
