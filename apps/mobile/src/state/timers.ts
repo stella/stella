@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
@@ -148,27 +147,3 @@ export const discardTimer = async ({
     );
     return Result.ok(undefined);
   });
-
-/** The seconds a timer has counted by `now`, in epoch milliseconds. */
-export const elapsedSeconds = (timer: Timer, now: number): number => {
-  if (
-    timer.state !== "running" ||
-    timer.lastResumedAt === null ||
-    timer.lastResumedAt === undefined
-  ) {
-    return timer.accumulatedSeconds;
-  }
-  const resumedAt = Temporal.Instant.from(
-    timer.lastResumedAt,
-  ).epochMilliseconds;
-  const since = Math.floor((now - resumedAt) / 1000);
-  return timer.accumulatedSeconds + Math.max(0, since);
-};
-
-/** Seconds as a clock: 0:05:09, or 12:30:00. */
-export const clockOf = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-  const rest = String(seconds % 60).padStart(2, "0");
-  return `${hours}:${minutes}:${rest}`;
-};
