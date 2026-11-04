@@ -470,7 +470,18 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  			throw error;
  		} else if (error instanceof Error) {
  			logger.error("Introspection error:", error.message, error.stack);
-@@ -8120,8 +8150,8 @@
+@@ -7196,6 +7226,10 @@
+ 			}],
+ 			after: [{
+ 				matcher(ctx) {
++					// Authorization already ran with this session. Dispatch merges response
++					// headers into the shared context, so matching the nested
++					// /oauth2/authorize call would re-enter it without bound.
++					if (ctx.path === "/oauth2/authorize") return false;
+ 					return parseSetCookieHeader(ctx.context.responseHeaders?.get("set-cookie") || "").has(ctx.context.authCookies.sessionToken.name);
+ 				},
+ 				handler: createAuthMiddleware(async (ctx) => {
+@@ -8120,8 +8154,8 @@
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
@@ -481,7 +492,7 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  }
  /**
  * Based on the loopback port matching approach in node-oidc-provider.
-@@ -8183,13 +8213,24 @@
+@@ -8183,13 +8217,24 @@
  	const hasFragment = requested.includes("#");
  	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
  	if (hasFragment || hasUserinfo) return;
@@ -509,7 +520,7 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  /** Keep URI syntax and credential checks outside the custom trust decision. */
  function isSafeCustomRedirectUri(uri) {
  	if (!SafeUrlSchema.safeParse(uri).success) return false;
-@@ -8240,7 +8281,7 @@
+@@ -8240,7 +8285,7 @@
  		const raw = ctx.query ?? {};
  		const trusted = await resolveTrustedRedirectUri(ctx, opts, typeof raw.client_id === "string" ? raw.client_id : void 0, typeof raw.redirect_uri === "string" ? raw.redirect_uri : void 0);
  		if (trusted) return handleRedirect(ctx, formatErrorURL(trusted, error, error_description, typeof raw.state === "string" ? raw.state : void 0, getIssuer(ctx, opts), deriveResponseMode(raw)));
@@ -518,7 +529,7 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  	};
  }
  async function authorizeEndpoint(ctx, opts, settings) {
-@@ -8309,12 +8350,12 @@
+@@ -8309,12 +8354,12 @@
  	});
  	const promptSet = ctx.query?.prompt ? parsePrompt(ctx.query?.prompt) : void 0;
  	const promptNone = promptSet?.has("none") ?? false;
@@ -536,7 +547,7 @@ diff --git a/dist/authorize-BnSO_Slc.mjs b/dist/authorize-BnSO_Slc.mjs
  	const registeredUris = client.redirectUris ?? [];
  	let isValidRedirectUri = false;
  	if (query.redirect_uri) {
-@@ -8326,7 +8367,7 @@
+@@ -8326,7 +8371,7 @@
  		}
  		else if (!opts.validateRedirectUri) isValidRedirectUri = defaultResult;
  	}
