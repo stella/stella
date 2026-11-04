@@ -29,6 +29,7 @@ import {
 } from "../harness/compatibility";
 import { createEventQueue } from "../harness/event-queue";
 import {
+  approvalMessage,
   HARNESS_FAILURE_OUTCOME,
   type HarnessEvent,
   type HarnessFailure,
@@ -151,13 +152,6 @@ const START_FAILURE: Record<
     code: "start_rejected",
   }),
 };
-
-/** The approval's summary; a missing or blank reason names the tool. */
-const summaryOf = (reason: string | null, toolName: string) =>
-  (reason === null || reason.trim() === ""
-    ? `Approval required to run ${toolName}`
-    : reason
-  ).slice(0, MAX_SUMMARY_CHARS);
 
 type ProbeOutcomeOptions = {
   harness: AgentHarness;
@@ -619,9 +613,9 @@ export class SidecarHost {
               runId,
               requestId,
               kind: event.request.kind,
-              summary: summaryOf(
-                event.request.reason,
-                event.request.toolCall.name,
+              summary: approvalMessage(event.request).slice(
+                0,
+                MAX_SUMMARY_CHARS,
               ),
             });
             break;

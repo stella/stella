@@ -748,6 +748,20 @@
         "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
         "unavailable": "Claude Code šajā datorā neizdevās palaist. Mēģiniet vēlreiz."
       }
+    },
+    "install": {
+      "notInstalled": "{name} šajā datorā vēl nav instalēts.",
+      "install": "Instalēt",
+      "downloading": "Lejupielādē {name} {version}: {percent}%",
+      "verifying": "Pārbauda {name} {version}",
+      "ready": "{name} {version} ir instalēts.",
+      "retry": "Mēģināt vēlreiz",
+      "activeStays": "Joprojām tiek izmantota versija {version}.",
+      "failure": {
+        "download": "Neizdevās lejupielādēt {name}. Pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
+        "verification": "Neizdevās pārbaudīt {name}, tāpēc tas netika instalēts.",
+        "storage": "Neizdevās saglabāt {name} šajā datorā. Pārbaudiet, vai diskā ir brīva vieta."
+      }
     }
   }
 }

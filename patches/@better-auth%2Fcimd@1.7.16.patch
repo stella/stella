@@ -1,8 +1,7 @@
 diff --git a/dist/node.d.mts b/dist/node.d.mts
-index 83a470f6577a0cbe1b61bd2a4b48d4b27a0aab6c..1be790848fffbed9a6a4d2e07e2c67dd4b727904 100644
 --- a/dist/node.d.mts
 +++ b/dist/node.d.mts
-@@ -5,8 +5,9 @@ import { ClientMetadataResourceFetch } from "@better-auth/oauth-provider";
+@@ -4,8 +4,9 @@
   * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
   * connection pinning.
   *
@@ -15,18 +14,17 @@ index 83a470f6577a0cbe1b61bd2a4b48d4b27a0aab6c..1be790848fffbed9a6a4d2e07e2c67dd
   * the caller and are never followed.
   */
 diff --git a/dist/node.mjs b/dist/node.mjs
-index 59a82ecde72c618c5afedc4ff9d7ce8e88f47b33..ac05da7409bdd8880bdb02b2f359fb5c98b8353a 100644
 --- a/dist/node.mjs
 +++ b/dist/node.mjs
-@@ -4,6 +4,7 @@ import { request } from "node:https";
+@@ -4,6 +4,7 @@
  import { isIP } from "node:net";
  import { Readable } from "node:stream";
  //#region src/node.ts
 +const CONNECT_TIMEOUT_MS = 1000;
- const BODY_FORBIDDEN_RESPONSE_STATUSES = new Set([
+ const BODY_FORBIDDEN_RESPONSE_STATUSES = /* @__PURE__ */ new Set([
  	204,
  	205,
-@@ -19,8 +20,9 @@ function responseHeaders(headers) {
+@@ -19,8 +20,9 @@
  * Fetch a CIMD-owned HTTPS resource with resolve-once DNS validation and
  * connection pinning.
  *
@@ -38,7 +36,7 @@ index 59a82ecde72c618c5afedc4ff9d7ce8e88f47b33..ac05da7409bdd8880bdb02b2f359fb5c
  * and certificate-verification identity. Redirect responses are returned to
  * the caller and are never followed.
  */
-@@ -29,48 +31,83 @@ const fetchClientMetadataResource = async (input, init) => {
+@@ -29,53 +31,88 @@
  	const url = new URL(webRequest.url);
  	if (url.protocol !== "https:") throw new TypeError("CIMD Node transport requires an HTTPS URL");
  	if (webRequest.method !== "GET" && webRequest.method !== "HEAD") throw new TypeError("CIMD Node transport supports only GET and HEAD");
@@ -103,11 +101,16 @@ index 59a82ecde72c618c5afedc4ff9d7ce8e88f47b33..ac05da7409bdd8880bdb02b2f359fb5c
 -		}, (response) => {
 -			const status = response.statusCode ?? 500;
 -			const body = webRequest.method === "HEAD" || BODY_FORBIDDEN_RESPONSE_STATUSES.has(status) ? null : Readable.toWeb(response);
--			resolve(new Response(body, {
--				headers: responseHeaders(response.headers),
--				status,
--				statusText: response.statusMessage
--			}));
+-			try {
+-				resolve(new Response(body, {
+-					headers: responseHeaders(response.headers),
+-					status,
+-					statusText: response.statusMessage
+-				}));
+-			} catch (error) {
+-				response.destroy();
+-				reject(error);
+-			}
 -		});
 -		request$1.once("error", reject);
 -		request$1.end();
@@ -129,11 +132,16 @@ index 59a82ecde72c618c5afedc4ff9d7ce8e88f47b33..ac05da7409bdd8880bdb02b2f359fb5c
 +				clearTimeout(connectTimeout);
 +				const status = response.statusCode ?? 500;
 +				const body = webRequest.method === "HEAD" || BODY_FORBIDDEN_RESPONSE_STATUSES.has(status) ? null : Readable.toWeb(response);
-+				resolve(new Response(body, {
-+					headers: responseHeaders(response.headers),
-+					status,
-+					statusText: response.statusMessage
-+				}));
++				try {
++					resolve(new Response(body, {
++						headers: responseHeaders(response.headers),
++						status,
++						statusText: response.statusMessage
++					}));
++				} catch (error) {
++					response.destroy();
++					reject(error);
++				}
 +			});
 +			// Bound TCP and TLS setup without imposing a new response/body budget.
 +			const connectTimeout = setTimeout(() => {

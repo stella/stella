@@ -7,6 +7,7 @@ import type { ClaudeCodeFailure, ClaudeCodeStatus } from "./claude-code-status";
 /** The managed Claude Code sign-in: its state, and what the user can do next. */
 export const ClaudeCodeCard = ({
   status,
+  install,
   actionFailed,
   onSignIn,
   onCancel,
@@ -16,16 +17,20 @@ export const ClaudeCodeCard = ({
   const t = useTranslations("agentSubscriptions");
   const signedInWithEmail =
     status.state === "signed_in" && status.email !== null;
+  // The install line already says the CLI is missing, with its action.
+  const showStatus = status.state !== "not_installed" || install === null;
   return (
     <div className="space-y-3 px-4 py-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{t("claudeCode.title")}</p>
-          <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
-            {signedInWithEmail
-              ? t("claudeCode.signedInAs", { email: status.email ?? "" })
-              : t(statusMessage(status))}
-          </p>
+          {showStatus ? (
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
+              {signedInWithEmail
+                ? t("claudeCode.signedInAs", { email: status.email ?? "" })
+                : t(statusMessage(status))}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {status.state === "signing_in" && status.signInPage ? (
@@ -48,6 +53,7 @@ export const ClaudeCodeCard = ({
           ) : null}
         </div>
       </div>
+      {install}
       {actionFailed ? (
         <p className="text-destructive-foreground text-sm" role="alert">
           {t("notice.actionFailed")}
@@ -59,6 +65,8 @@ export const ClaudeCodeCard = ({
 
 type ClaudeCodeCardProps = {
   status: ClaudeCodeStatus;
+  /** The managed CLI's install line; `null` while its status is unknown. */
+  install: React.JSX.Element | null;
   actionFailed: boolean;
   onSignIn: () => void;
   onCancel: () => void;
