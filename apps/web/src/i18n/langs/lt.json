@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
+      "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",

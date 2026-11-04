@@ -50,6 +50,7 @@ const optionOf = (
     case "needs_login":
     case "not_installed":
     case "unsupported":
+    case "unavailable":
       return { harness, state: report.state };
     default:
       report satisfies never;

@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "يلزم تسجيل الدخول",
       "stateNotInstalled": "غير مثبّت",
       "stateOffline": "الحاسوب غير متصل",
+      "stateUnavailable": "غير متاح حاليًا",
       "stateUnsupported": "هذا الإصدار غير مدعوم"
     },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",

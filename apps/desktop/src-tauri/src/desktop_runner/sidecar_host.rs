@@ -47,8 +47,9 @@ use crate::harness_sidecar::{
   ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
 };
 use crate::runner_protocol::{
-  Harness, HarnessReport, JsonObject, MAX_FRAME_BYTES, MissingHarness, RejectReason,
-  RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  Harness, HarnessReport, HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES,
+  MissingHarness, RejectReason, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh, UnavailableHarness,
 };
 
 const LOG_TARGET: &str = "desktop_runner::host";
@@ -222,6 +223,7 @@ fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectRea
     Some(HarnessReport::NeedsLogin(_)) => Some(RejectReason::HarnessNeedsLogin),
     Some(HarnessReport::LimitUntil(_)) => Some(RejectReason::HarnessLimited),
     Some(HarnessReport::Unsupported(_)) => Some(RejectReason::HarnessUnsupported),
+    Some(HarnessReport::Unavailable(_)) => Some(RejectReason::HarnessUnavailable),
     Some(HarnessReport::Ready(ready)) => {
       if ready.version != start.harness_version {
         Some(RejectReason::HarnessVersionUnavailable)
@@ -576,9 +578,22 @@ async fn probe(shared: &Shared, sidecar: &HarnessSidecar, harness: Harness) {
         credentials,
       },
     ),
-    // The last report stands until a probe answers again.
+    // The last report stands until a probe answers again. An installed
+    // harness that has none yet is unavailable, never missing.
     Err(error) => {
       tracing::warn!(target: LOG_TARGET, ?error, "a harness could not be probed");
+      if shared.cached(harness).is_none() {
+        shared.store(
+          harness,
+          Cached {
+            report: HarnessReport::Unavailable(UnavailableHarness {
+              id: harness,
+              reason: HarnessUnavailableReason::ProbeFailed,
+            }),
+            credentials,
+          },
+        );
+      }
     }
   }
 }
@@ -820,7 +835,7 @@ impl HarnessHost for SidecarHarnessHost {
         tracing::warn!(target: LOG_TARGET, ?error, "the harness holder took no run");
         locked(&self.shared.runs).remove(&run_id);
         remove_workspace(workspace);
-        return Err(RejectReason::AtCapacity);
+        return Err(error.reject_reason());
       }
     };
     self.spawn_pump(sidecar, run_id, outputs, sink, Some(installed.lease));

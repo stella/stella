@@ -14,6 +14,7 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
@@ -115,6 +116,9 @@ describe("desktop runner fixtures", () => {
       harnesses: [...AGENT_HARNESSES],
       harnessStates: Object.values(DESKTOP_RUNNER_HARNESS_STATE),
       harnessCapabilities: [...DESKTOP_RUNNER_HARNESS_CAPABILITIES],
+      harnessUnavailableReasons: [
+        ...DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
+      ],
       runRejectReasons: [...DESKTOP_RUNNER_REJECT_REASONS],
       approvalKinds: [...DESKTOP_RUNNER_APPROVAL_KINDS],
       approvalDecisions: [...DESKTOP_RUNNER_APPROVAL_DECISIONS],
@@ -185,6 +189,9 @@ describe("desktop runner fixtures", () => {
         harnessStates: reports.map(({ state }) => state),
         harnessCapabilities: reports.flatMap((report) =>
           report.state === "ready" ? report.capabilities : [],
+        ),
+        harnessUnavailableReasons: reports.flatMap((report) =>
+          report.state === "unavailable" ? [report.reason] : [],
         ),
         runRejectReasons: desktop.flatMap((message) =>
           message.type === "run.rejected" ? [message.reason] : [],

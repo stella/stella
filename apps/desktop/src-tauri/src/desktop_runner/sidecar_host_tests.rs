@@ -404,6 +404,10 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
         json!({ "type": "unsupported", "version": VERSION, "recommendedVersion": null }),
         "harness_unsupported",
       ),
+      (
+        json!({ "type": "failed", "reason": "harness_unavailable", "message": "exited" }),
+        "harness_unavailable",
+      ),
     ] {
       place.probe_answers(&outcome);
       // The next probe changes the report, and the API hears of it.

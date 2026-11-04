@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
+      "stateUnavailable": "Jelenleg nem érhető el",
       "stateUnsupported": "Ez a verzió nem támogatott"
     },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",

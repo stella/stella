@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",
+      "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",

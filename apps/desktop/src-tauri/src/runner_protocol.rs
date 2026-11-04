@@ -139,11 +139,19 @@ wire_values!(RejectReason {
   HarnessNeedsLogin => "harness_needs_login",
   HarnessLimited => "harness_limited",
   HarnessUnsupported => "harness_unsupported",
+  HarnessUnavailable => "harness_unavailable",
   HarnessVersionUnavailable => "harness_version_unavailable",
   ModelUnavailable => "model_unavailable",
   PolicyUnsupported => "policy_unsupported",
   AtCapacity => "at_capacity",
+  RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+});
+
+wire_values!(HarnessUnavailableReason {
+  HarnessFailed => "harness_failed",
+  UnexpectedAnswer => "unexpected_answer",
+  ProbeFailed => "probe_failed",
 });
 
 wire_values!(ApprovalKind {
@@ -226,12 +234,21 @@ pub(crate) struct UnsupportedHarness {
   pub(crate) version: Option<String>,
 }
 
+/// An installed harness this desktop could not check, so it can neither offer
+/// it nor say it is unsupported.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct UnavailableHarness {
+  pub(crate) id: Harness,
+  pub(crate) reason: HarnessUnavailableReason,
+}
+
 wire_union!(HarnessReport tagged "state" {
   Ready(ReadyHarness) => "ready",
   NeedsLogin(SignedOutHarness) => "needs_login",
   LimitUntil(LimitedHarness) => "limit_until",
   NotInstalled(MissingHarness) => "not_installed",
   Unsupported(UnsupportedHarness) => "unsupported",
+  Unavailable(UnavailableHarness) => "unavailable",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -492,6 +509,14 @@ mod tests {
       (
         "harnessCapabilities",
         names(HarnessCapability::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "harnessUnavailableReasons",
+        names(
+          HarnessUnavailableReason::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
       ),
       (
         "runRejectReasons",

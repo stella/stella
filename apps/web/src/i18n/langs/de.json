@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Anmeldung erforderlich",
       "stateNotInstalled": "Nicht installiert",
       "stateOffline": "Computer nicht verbunden",
+      "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",

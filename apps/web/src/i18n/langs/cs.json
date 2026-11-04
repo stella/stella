@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálně nedostupné",
       "stateUnsupported": "Tato verze není podporována"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",

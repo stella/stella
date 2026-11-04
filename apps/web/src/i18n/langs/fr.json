@@ -1697,6 +1697,7 @@
       "stateNeedsLogin": "Connexion requise",
       "stateNotInstalled": "Non installé",
       "stateOffline": "Ordinateur hors ligne",
+      "stateUnavailable": "Indisponible pour le moment",
       "stateUnsupported": "Cette version n’est pas prise en charge"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",

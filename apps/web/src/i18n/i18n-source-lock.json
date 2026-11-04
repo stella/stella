@@ -1353,6 +1353,7 @@
   "chat.localRun.stateNeedsLogin": "Sign-in needed",
   "chat.localRun.stateNotInstalled": "Not installed",
   "chat.localRun.stateOffline": "Computer offline",
+  "chat.localRun.stateUnavailable": "Not available right now",
   "chat.localRun.stateUnsupported": "This version is not supported",
   "chat.maxAttachmentsReached": "Maximum {count} files per message",
   "chat.mcpReconnect.additional": "{count, plural, one {+# more} other {+# more}}",
