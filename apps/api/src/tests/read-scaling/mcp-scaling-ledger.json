@@ -97,6 +97,10 @@
       "reason": "Requires a read_case_law_citations fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "read_case_law_courts",
+      "reason": "Requires a read_case_law_courts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
       "id": "read_case_law_decision",
       "reason": "Requires a read_case_law_decision fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

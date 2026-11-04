@@ -10,6 +10,7 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
+import { CASE_LAW_COURT_CATALOG_TOOL_SET } from "@/api/mcp/case-law-court-catalog-tool";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
@@ -121,6 +122,8 @@ const REGISTRY_READ_TOOL_HANDLERS = {
     DECISION_READER_TOOL_SET.handlers.read_case_law_decision_blocks,
   preview_cited_provision:
     DECISION_READER_TOOL_SET.handlers.preview_cited_provision,
+  read_case_law_courts:
+    CASE_LAW_COURT_CATALOG_TOOL_SET.handlers.read_case_law_courts,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 type ProjectableRegistryReadToolName = ChatProjectableToolName<

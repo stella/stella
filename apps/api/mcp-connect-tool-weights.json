@@ -366,6 +366,14 @@
       "estimatedTokens": 739
     },
     {
+      "name": "read_case_law_courts",
+      "nameChars": 20,
+      "descriptionChars": 109,
+      "inputSchemaChars": 398,
+      "totalChars": 527,
+      "estimatedTokens": 209
+    },
+    {
       "name": "read_case_law_decision",
       "nameChars": 22,
       "descriptionChars": 558,
@@ -631,7 +639,7 @@
     }
   ],
   "totals": {
-    "characters": 133071,
-    "estimatedTokens": 52893
+    "characters": 133598,
+    "estimatedTokens": 53102
   }
 }

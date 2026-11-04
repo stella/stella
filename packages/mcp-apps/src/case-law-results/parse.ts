@@ -1,9 +1,11 @@
 import * as v from "valibot";
 
 import {
+  APP_COURT_CATALOG_SCHEMA,
   APP_RESOLVE_SCHEMA,
   APP_SEARCH_SCHEMA,
 } from "../shared/generated/contracts";
+import type { CourtCatalog } from "../shared/generated/contracts";
 import { resolveView, searchView } from "./model";
 import type { CaseLawView } from "./model";
 
@@ -40,4 +42,12 @@ export const createCaseLawParser = () => {
       searches: view.searches,
     };
   };
+};
+
+/** A `read_case_law_courts` answer, or undefined when it is not one. */
+export const parseCourtCatalog = (
+  payload: unknown,
+): CourtCatalog | undefined => {
+  const parsed = v.safeParse(APP_COURT_CATALOG_SCHEMA, payload);
+  return parsed.success ? parsed.output : undefined;
 };

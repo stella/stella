@@ -287,6 +287,11 @@ test("every read tool permission declaration stays visible in review", () => {
       },
       {
         "kind": "open-read",
+        "name": "read_case_law_courts",
+        "reason": "public case-law corpus",
+      },
+      {
+        "kind": "open-read",
         "name": "read_case_law_decision",
         "reason": "public case-law corpus",
       },

@@ -4,7 +4,89 @@ import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-fie
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
 
-import { filterDefaults, searchView } from "./model";
+import { courtPickerGroups, filterDefaults, searchView } from "./model";
+
+const CATALOG = {
+  country: "SVK",
+  courts: [
+    {
+      tierLabel: "supreme" as const,
+      courts: [
+        {
+          value: "Najvyšší súd",
+          aliases: ["Najvyšší súd Slovenskej republiky"],
+        },
+      ],
+    },
+    {
+      tierLabel: "regional" as const,
+      courts: [
+        { value: "Krajský súd v Bratislave", aliases: [] },
+        { value: "Krajský súd v Košiciach", aliases: [] },
+      ],
+    },
+  ],
+};
+
+test("a search with no results still lists every court of the country", () => {
+  expect(
+    courtPickerGroups({ catalog: CATALOG, facets: { court: [] } }),
+  ).toEqual([
+    { tierLabel: "supreme", courts: [{ value: "Najvyšší súd", count: null }] },
+    {
+      tierLabel: "regional",
+      courts: [
+        { value: "Krajský súd v Bratislave", count: null },
+        { value: "Krajský súd v Košiciach", count: null },
+      ],
+    },
+  ]);
+});
+
+test("result counts sum a court's spellings and lead their tier", () => {
+  expect(
+    courtPickerGroups({
+      catalog: CATALOG,
+      facets: {
+        court: [
+          {
+            tierLabel: "supreme",
+            courts: [
+              { value: "Najvyšší súd", count: 3 },
+              { value: "Najvyšší súd Slovenskej republiky", count: 4 },
+            ],
+          },
+          {
+            tierLabel: "regional",
+            courts: [{ value: "Krajský súd v Košiciach", count: 2 }],
+          },
+        ],
+      },
+    }),
+  ).toEqual([
+    { tierLabel: "supreme", courts: [{ value: "Najvyšší súd", count: 7 }] },
+    {
+      tierLabel: "regional",
+      courts: [
+        { value: "Krajský súd v Košiciach", count: 2 },
+        { value: "Krajský súd v Bratislave", count: null },
+      ],
+    },
+  ]);
+});
+
+test("without a catalog the picker falls back to the result facets", () => {
+  const facets = {
+    court: [
+      {
+        tierLabel: "regional" as const,
+        courts: [{ value: "Krajský súd v Košiciach", count: 2 }],
+      },
+    ],
+  };
+  expect(courtPickerGroups({ catalog: null, facets })).toEqual(facets.court);
+  expect(courtPickerGroups({ catalog: null, facets: null })).toEqual([]);
+});
 
 test.each([
   [{ country: "invalid" }, "invalidCountry"],

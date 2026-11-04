@@ -35,6 +35,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       excluded: true,
       scope: "read",
     },
+    read_case_law_courts: {
+      command: ["case-law", "courts"],
+      excluded: true,
+      scope: "read",
+    },
     search: { command: ["search"], excluded: true, scope: "search" },
     fetch: { command: ["fetch"], excluded: true, scope: "read" },
 

@@ -77,17 +77,21 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { createReaderController } from "../decision-reader/controller";
 import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
 import { ReaderView } from "../decision-reader/view";
+import { parseAppToolPayload } from "../shared/bridge";
 import type { createPresentationBridge } from "../shared/bridge";
+import type { CourtCatalog } from "../shared/generated/contracts";
 import { appLocale } from "../shared/locale";
 import { SearchNotice } from "../shared/notice";
 import { getAppToolArrayLimit } from "../shared/tool-input";
 import {
+  courtPickerGroups,
   filterDefaults,
   originalSearchQuery,
   searchSubmitInput,
   sortResultRows,
 } from "./model";
 import type { CaseLawView, ResultRow, ResultSort } from "./model";
+import { parseCourtCatalog } from "./parse";
 
 export type CaseLawBridge = ReturnType<
   typeof createPresentationBridge<CaseLawView>
@@ -455,7 +459,43 @@ const SearchControls = ({
     })();
     return [...new Set(selected)];
   });
-  const facets = page.facets;
+  // The page's facets describe the searched country; after a country switch
+  // they describe another one and name none of the chosen country's courts.
+  const facets = country === defaults.country ? page.facets : null;
+  const [catalog, setCatalog] = useState<CourtCatalog | null>(null);
+  const [catalogRequested, setCatalogRequested] = useState<string | null>(null);
+  const countryCatalog = catalog?.country === country ? catalog : null;
+  const loadCatalog = () => {
+    if (catalogRequested === country) {
+      return;
+    }
+    setCatalogRequested(country);
+    const requested = country;
+    bridge.detached(
+      (async () => {
+        const result = await bridge.requestTool({
+          name: "read_case_law_courts",
+          arguments: { country: requested },
+        });
+        const parsed =
+          result.isError === true
+            ? undefined
+            : parseCourtCatalog(parseAppToolPayload(result));
+        if (parsed === undefined) {
+          // Unreadable: the facets stand in, and the next opening asks again.
+          setCatalogRequested((current) =>
+            current === requested ? null : current,
+          );
+          return;
+        }
+        setCatalog(parsed);
+      })(),
+      "caseLawResults.courts",
+    );
+  };
+  const courtGroups = courtPickerGroups({ catalog: countryCatalog, facets });
+  const catalogPending =
+    countryCatalog === null && catalogRequested === country;
   const dateLabels = {
     locale,
     placeholderLabel: t("selectDate"),
@@ -544,7 +584,13 @@ const SearchControls = ({
           <FieldLabel className="text-muted-foreground text-xs">
             {t("court")}
           </FieldLabel>
-          <Popover>
+          <Popover
+            onOpenChange={(open) => {
+              if (open) {
+                loadCatalog();
+              }
+            }}
+          >
             <PopoverTrigger
               className={cn(
                 FIELD_TRIGGER_CLASS_NAME,
@@ -575,21 +621,22 @@ const SearchControls = ({
                   maximum: format.number(maxCourts),
                 })}
                 matchText={foldSearchMatchText}
-                groups={
-                  facets === null
-                    ? []
-                    : facets.court.map(({ tierLabel, courts: options }) => ({
-                        value: tierLabel,
-                        label: t(tierLabel),
-                        courts: options,
-                      }))
-                }
+                groups={courtGroups.map(({ tierLabel, courts: options }) => ({
+                  value: tierLabel,
+                  label: t(tierLabel),
+                  courts: options.map(({ value, count }) => ({
+                    value,
+                    ...(count === null
+                      ? {}
+                      : { badgeText: format.number(count) }),
+                  })),
+                }))}
                 selected={courts}
                 onChange={setCourts}
                 label={t("court")}
                 searchLabel={t("search")}
                 clearLabel={t("reset")}
-                emptyLabel={t("noResults")}
+                emptyLabel={catalogPending ? t("loading") : t("noResults")}
               />
             </PopoverPopup>
           </Popover>
