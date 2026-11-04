@@ -84,25 +84,27 @@ export const storedCourtCatalog = (
   storedNames: readonly string[],
 ): StoredCourtCatalog => {
   const index = courtCitationIndex(country, storedNames);
-  const spellings = new Map<string, string[]>();
-  const unplaced: StoredCourtIdentity[] = [];
+  // Every court the index holds, none yet with a stored spelling; the index
+  // holds every stored name, so each placed name lands on one of these.
+  const identities = new Map<
+    string,
+    StoredCourtIdentity & { spellings: string[] }
+  >(
+    [...index.courts].map(([key, { name }]) => [
+      key,
+      { key, name, spellings: [] },
+    ]),
+  );
   for (const name of new Set(storedNames)) {
     const { key } = storedCourtIdentity(index, { court: name, ecli: null });
-    if (key === undefined) {
-      unplaced.push({
-        key: `${country}${UNPLACED_KEY_INFIX}${name}`,
-        name,
-        spellings: [name],
-      });
-      continue;
-    }
-    spellings.set(key, [...(spellings.get(key) ?? []), name]);
-  }
-  const identities = new Map<string, StoredCourtIdentity>();
-  for (const [key, { name }] of index.courts) {
-    identities.set(key, { key, name, spellings: spellings.get(key) ?? [] });
-  }
-  for (const identity of unplaced) {
+    // A name only an alias two courts share could place stays its own court.
+    const unplacedKey = `${country}${UNPLACED_KEY_INFIX}${name}`;
+    const identity =
+      key === undefined
+        ? { key: unplacedKey, name, spellings: [] }
+        : (identities.get(key) ??
+          panic(`A stored court name placed outside the index: ${name}`));
+    identity.spellings.push(name);
     identities.set(identity.key, identity);
   }
   return { index, identities };
@@ -209,8 +211,10 @@ export const readCourtFilter = ({
   }
   const nearest = (): string =>
     `The stored courts include ${quoted(nearestStoredCourts(catalog, court))}.`;
-  const named = courtKeysNamed(catalog, court).flatMap(
-    (key) => catalog.identities.get(key) ?? [],
+  const named = courtKeysNamed(catalog, court).map(
+    (key) =>
+      catalog.identities.get(key) ??
+      panic(`A court reading named a court outside the catalog: ${key}`),
   );
   const [only, ...others] = named;
   if (only === undefined) {

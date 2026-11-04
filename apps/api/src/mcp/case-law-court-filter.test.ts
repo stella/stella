@@ -168,7 +168,7 @@ describe("court filters read a court through the resolver's court identity", () 
     }
   });
 
-  test("an alias two courts answer to is dropped and names both", () => {
+  test("search.court-filter-ambiguous-alias-names-every-court", () => {
     assertProperty(
       "search.court-filter-ambiguous-alias-names-every-court",
       fc.property(
