@@ -12,6 +12,7 @@ import {
   parseAppToolPayload,
 } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import { callAppServerTool } from "../shared/server-tool-call";
 import { mountAppViewport } from "../shared/size";
 import {
   bindUploadSdkErrors,
@@ -267,17 +268,14 @@ export const createFileComparisonRuntime = (
     if (Result.isError(targetFile)) {
       return Result.err(targetFile.error);
     }
-    const called = await Result.tryPromise(
-      async () =>
-        await app.callServerTool({
-          name: FILE_COMPARISON_TRANSPORT.prepareToolName,
-          arguments: { base: baseFile.value, target: targetFile.value },
-        }),
-    );
-    if (Result.isError(called)) {
-      return Result.err(wrapped(called.error));
+    const called = await callAppServerTool(app, {
+      name: FILE_COMPARISON_TRANSPORT.prepareToolName,
+      arguments: { base: baseFile.value, target: targetFile.value },
+    });
+    if (called.status === "unreachable") {
+      return Result.err(new LocalizedAppError({ key: "bridgeUnavailable" }));
     }
-    const result = called.value;
+    const result = called.result;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(
