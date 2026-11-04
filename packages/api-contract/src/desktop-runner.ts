@@ -310,16 +310,22 @@ export const DESKTOP_RUNNER_ANSWER_LIMITS = {
 } as const;
 
 /**
+ * The id a blocking question names one of its questions by, in the pause
+ * that asks it and in the answers alike.
+ */
+export const desktopRunnerQuestionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
+);
+
+/**
  * Answers to a blocking question, keyed by question id: option labels or
  * free text. A question may be answered by several options.
  */
 export const desktopRunnerQuestionAnswersSchema = v.pipe(
   v.record(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
-    ),
+    desktopRunnerQuestionIdSchema,
     v.pipe(
       v.array(
         v.pipe(

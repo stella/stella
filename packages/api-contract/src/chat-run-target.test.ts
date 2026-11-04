@@ -5,7 +5,12 @@ import {
   chatLocalRunAnswersRefusal,
   type ChatLocalRunQuestion,
   chatLocalRunQuestionSchema,
+  chatLocalRunQuestionsSchema,
 } from "./chat-run-target";
+import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
+  desktopRunnerQuestionAnswersSchema,
+} from "./desktop-runner";
 
 const tone: ChatLocalRunQuestion = {
   id: "tone",
@@ -107,5 +112,35 @@ describe("local run question answers", () => {
       Object.entries(tone).filter(([key]) => key !== "multiSelect"),
     );
     expect(v.is(chatLocalRunQuestionSchema, withoutChoice)).toBe(false);
+  });
+
+  test("a pause asks only what one answer can carry back", () => {
+    const { maxQuestions, maxQuestionIdLength } = DESKTOP_RUNNER_ANSWER_LIMITS;
+    const asking = (ids: readonly string[]) =>
+      ids.map((id) => ({ ...passphrase, id }));
+    const answering = (ids: readonly string[]) =>
+      Object.fromEntries(ids.map((id) => [id, ["open sesame"]]));
+    const numbered = (count: number) =>
+      Array.from({ length: count }, (_, index) => `q${String(index)}`);
+    const longest = "q".repeat(maxQuestionIdLength);
+    // Every pause the schema takes is answerable within the answer's limits.
+    for (const ids of [numbered(maxQuestions), [longest]]) {
+      expect(v.is(chatLocalRunQuestionsSchema, asking(ids))).toBe(true);
+      expect(v.is(desktopRunnerQuestionAnswersSchema, answering(ids))).toBe(
+        true,
+      );
+      expect(chatLocalRunAnswersRefusal(asking(ids), answering(ids))).toBe(
+        null,
+      );
+    }
+    for (const ids of [
+      numbered(maxQuestions + 1),
+      [`${longest}q`],
+      [""],
+      // One answer per id: two questions under one id could not differ.
+      ["tone", "law", "tone"],
+    ]) {
+      expect(v.is(chatLocalRunQuestionsSchema, asking(ids))).toBe(false);
+    }
   });
 });

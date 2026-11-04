@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { chatLocalRunAnswersRefusal } from "@stll/api-contract/chat-run-target";
+import {
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import type {
   HarnessInteractionResponse,
@@ -831,8 +834,17 @@ export class CodexTurnSession {
     if (parsed === null) {
       return;
     }
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      questionsFromParams(parsed.questions),
+      method,
+    );
+    if (questions === null) {
+      return;
+    }
     const requestId = requestIdFor(id);
-    const questions = questionsFromParams(parsed.questions);
     const toolCall = {
       id: parsed.itemId,
       name: HARNESS_TOOL_NAMES.question,

@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
-import { chatLocalRunAnswersRefusal } from "@stll/api-contract/chat-run-target";
+import {
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import type {
   HarnessInteractionResponse,
@@ -736,9 +739,8 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
-    const requestId = requestIdFor(controlId);
     const texts = new Map<string, string>();
-    const questions = parsed.questions.map((question, index) => {
+    const asked = parsed.questions.map((question, index) => {
       const id = String(index);
       texts.set(id, question.question);
       return {
@@ -752,6 +754,17 @@ export class ClaudeCodeTurnSession {
         secret: false,
       };
     });
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      asked,
+      "question",
+    );
+    if (questions === null) {
+      return;
+    }
+    const requestId = requestIdFor(controlId);
     this.pending.set(requestId, {
       type: "question",
       controlId,

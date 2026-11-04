@@ -2,9 +2,11 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
 import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_HARNESS_STATE,
   type DesktopRunnerHarnessReport,
   desktopRunnerQuestionAnswersSchema,
+  desktopRunnerQuestionIdSchema,
 } from "./desktop-runner";
 
 /**
@@ -127,7 +129,7 @@ export const CHAT_LOCAL_RUN_QUESTION_TOOL = "request_user_input";
  * answer is never shown back.
  */
 export const chatLocalRunQuestionSchema = v.object({
-  id: v.string(),
+  id: desktopRunnerQuestionIdSchema,
   header: v.string(),
   prompt: v.string(),
   options: v.array(v.object({ label: v.string(), description: v.string() })),
@@ -135,10 +137,20 @@ export const chatLocalRunQuestionSchema = v.object({
   multiSelect: v.boolean(),
   secret: v.boolean(),
 });
-/** The questions one blocking question asks: at least one. */
+/**
+ * The questions one blocking question asks: at least one, each under its own
+ * id, and no more than one answer may carry
+ * (`DESKTOP_RUNNER_ANSWER_LIMITS`), so every pause can be answered.
+ */
 export const chatLocalRunQuestionsSchema = v.pipe(
   v.array(chatLocalRunQuestionSchema),
   v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions),
+  v.check(
+    (questions) =>
+      new Set(questions.map(({ id }) => id)).size === questions.length,
+    "Each question has its own id",
+  ),
 );
 export type ChatLocalRunQuestion = Readonly<
   Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">
