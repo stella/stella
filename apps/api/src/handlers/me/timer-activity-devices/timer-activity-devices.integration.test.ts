@@ -10,7 +10,10 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import { timerActivityDeviceRegistrationSchema } from "@stll/api-contract/timer-activity";
+import {
+  TIMER_ACTIVITY_DEVICES_PER_USER_MAX,
+  timerActivityDeviceRegistrationSchema,
+} from "@stll/api-contract/timer-activity";
 import type { TimerActivityDeviceRegistration } from "@stll/api-contract/timer-activity";
 
 import { timerActivityDevices } from "@/api/db/schema";
@@ -222,6 +225,41 @@ describe("registering a phone for the Lock Screen timer", () => {
     await unregister(second, OTHER_PHONE);
 
     expect(await listed(first)).toEqual([]);
+  });
+
+  test("a late sign-out of an older sign-in does not outrank a newer one", async () => {
+    const first = { userId: ids.userA1, organizationId: ids.orgA };
+    const second = { userId: ids.userA2, organizationId: ids.orgA };
+    await register(first);
+    await register(second, registration(), OTHER_PHONE);
+    await unregister(first);
+
+    expect((await listed(second)).map(({ deviceId }) => deviceId)).toEqual([
+      OTHER_PHONE,
+    ]);
+  });
+
+  test("a sign-out's mark outlives the per-person trim, so a late registration still finds it", async () => {
+    const actor = { userId: ids.userA1, organizationId: ids.orgA };
+    await register(actor);
+    await unregister(actor);
+    const late = registration();
+    for (
+      let index = 0;
+      index < TIMER_ACTIVITY_DEVICES_PER_USER_MAX + 1;
+      index++
+    ) {
+      await register(
+        actor,
+        registration({ activity: null, startToken: tokenOf(40 + index) }),
+        `0198f7c4-0000-7000-8000-0000000001${String(index).padStart(2, "0")}`,
+      );
+    }
+    await register(actor, late);
+
+    expect(
+      (await listed(actor)).some(({ deviceId }) => deviceId === PHONE),
+    ).toBe(false);
   });
 
   test("updates follow the person who registered the phone last", async () => {

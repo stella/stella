@@ -41,9 +41,10 @@ const TIMER_ACTIVITY_DEVICE_QUIET_DAYS = 14;
  * How long a start the server sent holds before another may be sent. The app
  * reports the started activity when iOS wakes it for the activity's token; a
  * start it never reports, or one interrupted before it reached Apple, is
- * given up after this long.
+ * given up after this long, which is as long as iOS lets an activity run, so
+ * a second start never joins a first still on the Lock Screen.
  */
-const TIMER_ACTIVITY_START_HOLD_MINUTES = 30;
+const TIMER_ACTIVITY_START_HOLD_HOURS = 8;
 
 /**
  * File what a phone holds now. The app sends its whole state each time, so
@@ -51,8 +52,10 @@ const TIMER_ACTIVITY_START_HOLD_MINUTES = 30;
  * only while its sign-in lasts: one that arrives late, after a newer one or
  * after the sign-out, changes nothing. A registration also forgets that the
  * server started an activity here, since the app now reports what it shows.
- * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the rows seen longest ago
- * are dropped.
+ * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the signed-in rows seen
+ * longest ago are dropped. A sign-out's mark is kept for two weeks, longer
+ * than any registration can be on its way, and as long as a silent phone is
+ * still sent anything.
  */
 export const registerTimerActivityDevice = async (
   tx: DeviceWriteTx,
@@ -91,25 +94,35 @@ export const registerTimerActivityDevice = async (
       setWhere: sql`${timerActivityDevices.signedOutAt} IS NULL AND ${timerActivityDevices.sequence} < excluded.sequence`,
     });
 
-  await tx
-    .delete(timerActivityDevices)
-    .where(
-      and(
-        eq(timerActivityDevices.userId, userId),
-        notInArray(
-          timerActivityDevices.deviceId,
-          tx
-            .select({ deviceId: timerActivityDevices.deviceId })
-            .from(timerActivityDevices)
-            .where(eq(timerActivityDevices.userId, userId))
-            .orderBy(
-              desc(timerActivityDevices.lastSeenAt),
-              desc(timerActivityDevices.deviceId),
-            )
-            .limit(TIMER_ACTIVITY_DEVICES_PER_USER_MAX),
+  await tx.delete(timerActivityDevices).where(
+    and(
+      eq(timerActivityDevices.userId, userId),
+      // sql-perf-allow: bounded by one person's own rows, reached by the primary key's leading user_id
+      or(
+        sql`${timerActivityDevices.signedOutAt} < now() - make_interval(days => ${TIMER_ACTIVITY_DEVICE_QUIET_DAYS})`,
+        and(
+          isNull(timerActivityDevices.signedOutAt),
+          notInArray(
+            timerActivityDevices.deviceId,
+            tx
+              .select({ deviceId: timerActivityDevices.deviceId })
+              .from(timerActivityDevices)
+              .where(
+                and(
+                  eq(timerActivityDevices.userId, userId),
+                  isNull(timerActivityDevices.signedOutAt),
+                ),
+              )
+              .orderBy(
+                desc(timerActivityDevices.lastSeenAt),
+                desc(timerActivityDevices.deviceId),
+              )
+              .limit(TIMER_ACTIVITY_DEVICES_PER_USER_MAX),
+          ),
         ),
       ),
-    );
+    ),
+  );
 };
 
 /**
@@ -124,7 +137,9 @@ export const unregisterTimerActivityDevice = async (
   // audit: skip - the person's own phone address for their timer, holding no content
   const signedOut = await tx
     .update(timerActivityDevices)
-    .set({ signedOutAt: sql`now()`, lastSeenAt: sql`now()` })
+    // The claim time stays: a late sign-out of an older sign-in must not
+    // outrank a newer one on the same phone.
+    .set({ signedOutAt: sql`now()` })
     .where(
       and(
         eq(timerActivityDevices.userId, userId),
@@ -164,7 +179,7 @@ const sharesToken = (column: "startToken" | "activityToken") =>
     ),
   );
 
-const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(mins => ${TIMER_ACTIVITY_START_HOLD_MINUTES}), false)`;
+const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(hours => ${TIMER_ACTIVITY_START_HOLD_HOURS}), false)`;
 
 /**
  * The phones to update for a person's timers in one organization.

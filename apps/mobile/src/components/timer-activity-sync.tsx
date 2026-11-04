@@ -22,6 +22,7 @@ import { useSession } from "@/connection/session-provider";
 import { APP_VARIANT } from "@/env";
 import {
   isSignedOut,
+  nextTimerActivitySequence,
   onTimerActivityDetailsChange,
   readTimerActivityDetails,
   TIMER_ACTIVITY_PUSH,
@@ -36,8 +37,6 @@ import { TimerActivity } from "@/widgets/timer-activity";
 let startToken: string | null = null;
 /** The activity token the server last heard, so a repeated token reports nothing. */
 let reportedActivityToken: string | null = null;
-/** The number of the registration last sent. */
-let sequence = 0;
 
 /**
  * One activity at most: started, updated or ended to match `props`. Answers
@@ -99,10 +98,16 @@ const reportTimerActivity = async ({
   if (deviceId === null || details === null || isSignedOut(session)) {
     return;
   }
+  // Numbered, never twice the same, so the server files only the newest
+  // when two cross on the way.
+  const sequence = await nextTimerActivitySequence(
+    session,
+    epochMilliseconds(),
+  ).catch(() => null);
+  if (sequence === null) {
+    return;
+  }
   reportedActivityToken = activityToken;
-  // Numbered by time, never twice the same, so the server files only the
-  // newest when two cross on the way.
-  sequence = Math.max(sequence + 1, epochMilliseconds());
   (
     await registerTimerActivityDevice({
       deviceId,

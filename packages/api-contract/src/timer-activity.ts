@@ -11,6 +11,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import { truncateEntityName } from "./entity-options";
 import {
   APNS_ENVIRONMENTS,
   MOBILE_APP_BUNDLE_IDS,
@@ -134,7 +135,7 @@ export const TIMER_ACTIVITY_TEXT_MAX_LENGTH = 120;
 const shortened = (text: string): string =>
   text.length <= TIMER_ACTIVITY_TEXT_MAX_LENGTH
     ? text
-    : `${text.slice(0, TIMER_ACTIVITY_TEXT_MAX_LENGTH - 1).trimEnd()}…`;
+    : `${truncateEntityName(text, TIMER_ACTIVITY_TEXT_MAX_LENGTH - 1).trimEnd()}…`;
 
 const named = (text: string | null | undefined): string | undefined =>
   text === null || text === undefined || text.trim() === ""
@@ -225,7 +226,7 @@ export const timerActivityDeviceRegistrationSchema = v.strictObject({
     v.string(),
     v.maxLength(TIMER_ACTIVITY_LINK_MAX_LENGTH),
     v.regex(
-      /^app\.stll(?:\.dev|\.preview)?:\/\/\/?(?:[\w.-]+\/)*timers$/u,
+      /^app\.stll(?:\.dev|\.preview)?:\/\/\/?(?:expo-development-client\/)?timers$/u,
       "Expected the app's own link to its timers.",
     ),
   ),

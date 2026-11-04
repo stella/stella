@@ -91,9 +91,10 @@ const SettingsScreen = () => {
  */
 const TimerDetailsSetting = ({ session }: { session: StoredSession }) => {
   const t = useTranslations("settings");
-  // A phone whose keychain cannot be read shows the default, on.
+  // Unreadable, the choice is not shown at all rather than guessed: the
+  // phone then registers nothing either, so nothing passes through Apple.
   const read = async () =>
-    await readTimerActivityDetails(session).catch(() => true);
+    await readTimerActivityDetails(session).catch(() => null);
   const [stored, setStored] = useState(read);
   const [saving, startSaving] = useTransition();
 
@@ -142,14 +143,17 @@ const StoredSwitch = ({
   disabled: boolean;
   label: string;
   onChange: (next: boolean) => void;
-  stored: Promise<boolean>;
-}) => (
-  <Switch
-    accessibilityLabel={label}
-    checked={use(stored)}
-    disabled={disabled}
-    onCheckedChange={onChange}
-  />
-);
+  stored: Promise<boolean | null>;
+}) => {
+  const checked = use(stored);
+  return checked === null ? null : (
+    <Switch
+      accessibilityLabel={label}
+      checked={checked}
+      disabled={disabled}
+      onCheckedChange={onChange}
+    />
+  );
+};
 
 export default SettingsScreen;

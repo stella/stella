@@ -20,6 +20,27 @@ type SessionKeys = Pick<StoredSession, "serverUrl" | "signInId" | "userId">;
 const deviceIdKey = ({ serverUrl, signInId }: SessionKeys) =>
   `timer-activity-device.${keyPart(serverUrl)}.${keyPart(signInId)}`;
 
+/** The number of the registration this sign-in last sent. */
+const sequenceKey = ({ serverUrl, signInId }: SessionKeys) =>
+  `timer-activity-sequence.${keyPart(serverUrl)}.${keyPart(signInId)}`;
+
+/**
+ * The number for this sign-in's next registration: never below one already
+ * sent, even after a restart or a clock set back, and otherwise the time,
+ * so it keeps growing. Kept on the phone before it is used.
+ */
+export const nextTimerActivitySequence = async (
+  session: SessionKeys,
+  now: number,
+): Promise<number> => {
+  const sent = Number(
+    (await deviceAccountStore.read(sequenceKey(session))) ?? "0",
+  );
+  const next = Math.max(Number.isSafeInteger(sent) ? sent + 1 : 1, now);
+  await deviceAccountStore.write(sequenceKey(session), String(next));
+  return next;
+};
+
 /** The person's own choice, kept for their account on this phone. */
 const detailsKey = ({ serverUrl, userId }: SessionKeys) =>
   `timer-activity-details.${keyPart(serverUrl)}.${keyPart(userId)}`;
@@ -122,4 +143,5 @@ export const forgetTimerActivityDevice: BeforeSessionEnd = async (
   session,
 ) => {
   await deviceAccountStore.remove(deviceIdKey(session));
+  await deviceAccountStore.remove(sequenceKey(session));
 };

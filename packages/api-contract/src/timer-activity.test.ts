@@ -104,6 +104,13 @@ describe("the timer's Live Activity", () => {
     expect(shown?.status).toBe("Running");
   });
 
+  test("shortens on whole characters, never splitting an emoji", () => {
+    const shown = activity([
+      { ...RUNNING, description: `${"x".repeat(118)}😀${"y".repeat(20)}` },
+    ]);
+    expect(shown?.title).toBe(`${"x".repeat(118)}…`);
+  });
+
   test("shortens a long description to a line the Lock Screen can carry", () => {
     const shown = activity([{ ...RUNNING, description: "x".repeat(10_000) }]);
     expect(shown?.title.length).toBe(TIMER_ACTIVITY_TEXT_MAX_LENGTH);
@@ -209,6 +216,8 @@ describe("a phone's registration", () => {
       "app.stll.preview://timers?next=https://example.com",
       "other.app://timers",
       "app.stll://not-timers",
+      "app.stll://matters/timers",
+      "app.stll://../timers",
       "app.stll://timers/../settings",
     ]) {
       expect(
