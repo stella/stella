@@ -317,6 +317,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/extraction-runs/request-run-store.ts",
     "apps/api/src/lib/extraction-runs/store.ts",
     "apps/api/src/lib/feature-access/*",
+    "apps/api/src/lib/fields/cell-override.ts",
     "apps/api/src/lib/fields/write-field.ts",
     "apps/api/src/lib/file-scan/*",
     "apps/api/src/lib/files/*",

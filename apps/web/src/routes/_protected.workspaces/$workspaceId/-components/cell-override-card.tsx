@@ -1,8 +1,9 @@
 import { useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Input } from "@stll/ui/input";
 import {
@@ -14,6 +15,7 @@ import {
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { FieldValue } from "@/components/workspaces/field-value";
 import { api } from "@/lib/api";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -133,19 +135,27 @@ const OverrideReason = ({
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(reason ?? "");
 
-  const saveReason = useMutation({
-    mutationFn: async (nextReason: string | null) =>
+  const saveReason = useCapabilityMutation({
+    capability: "fields.cell-metadata.update",
+    target: resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE,
+      id: toSafeId<"workspace">(workspaceId),
+    }),
+    mutationFn: async (nextReason: string | null, request) =>
       unwrapApiResponse(
         await api
           .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .metadata.patch({
-            entityId: toSafeId<"entity">(entityId),
-            propertyId: toSafeId<"property">(propertyId),
-            // Flags are untouched: the base and the request are the same list.
-            baseManualFlags: manualFlags,
-            manualFlags,
-            overrideReason: nextReason,
-          }),
+          .metadata.patch(
+            {
+              entityId: toSafeId<"entity">(entityId),
+              propertyId: toSafeId<"property">(propertyId),
+              // Flags are untouched: the base and the request are one list.
+              baseManualFlags: manualFlags,
+              manualFlags,
+              overrideReason: nextReason,
+            },
+            request,
+          ),
       ),
     scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {

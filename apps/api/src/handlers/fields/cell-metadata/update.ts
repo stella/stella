@@ -9,13 +9,17 @@ import { CELL_OVERRIDE_ABSENT_CODE } from "@stll/api-contract/property-policy";
 import type { Transaction } from "@/api/db/root";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import { cellOverrideReasonSchema } from "@/api/db/schema-validators";
-import type { CellMetadata, CellOverride } from "@/api/db/schema-validators";
+import type {
+  CellMetadata,
+  CellOverride,
+  EntityKind,
+} from "@/api/db/schema-validators";
 import { fieldRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { FieldDiffs } from "@/api/lib/audit-log";
+import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -159,8 +163,12 @@ type UpsertCellMetadataArgs = {
   propertyId: SafeId<"property">;
   metadata: CellMetadata;
   userId: string;
+  recordAuditEvent: AuditRecorder;
+  changes: FieldDiffs;
+  entity: { id: SafeId<"entity">; kind: EntityKind };
 };
 
+/** Writes the cell's metadata and records the FIELD event describing it. */
 const upsertCellMetadata = async ({
   tx,
   workspaceId,
@@ -168,8 +176,10 @@ const upsertCellMetadata = async ({
   propertyId,
   metadata,
   userId,
+  recordAuditEvent,
+  changes,
+  entity,
 }: UpsertCellMetadataArgs) => {
-  // audit: skip - the caller records the FIELD event for this change.
   await tx
     .insert(cellMetadata)
     .values({
@@ -188,6 +198,19 @@ const upsertCellMetadata = async ({
         updatedAt: new Date(),
       },
     });
+
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+    resourceId: `${entityVersionId}:${propertyId}`,
+    changes,
+    metadata: {
+      entityId: entity.id,
+      entityVersionId,
+      kind: entity.kind,
+      propertyId,
+    },
+  });
 };
 
 const cellOverrideAbsentRefusal = () =>
@@ -367,19 +390,9 @@ const updateCellMetadata = createSafeHandler(
           propertyId: property.id,
           metadata,
           userId: user.id,
-        });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.FIELD,
-          resourceId: `${entityVersionId}:${property.id}`,
+          recordAuditEvent,
           changes,
-          metadata: {
-            entityId: body.entityId,
-            entityVersionId,
-            kind: entity.kind,
-            propertyId: property.id,
-          },
+          entity: { id: body.entityId, kind: entity.kind },
         });
 
         return { status: "ok" };
