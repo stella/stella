@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { sleep } from "bun";
 
+import { toMajorUnitsText } from "@stll/money";
 import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
@@ -80,7 +81,7 @@ const getValueFromInputFields = (
           ? `${field.value} ${field.currency}`
           : String(field.value);
       case "money":
-        return `${field.amountCents} ${field.currency}`;
+        return `${toMajorUnitsText(field)} ${field.currency}`;
       case "person":
         return field.name;
       default:
@@ -253,7 +254,7 @@ export const generateBatchMock = async ({
           const amountCents = randomInteger({ min: 0, max: 100_000_000 });
           await onPartialAnswer?.({
             propertyId: property.id,
-            answer: `${amountCents} ${currency}`,
+            answer: `${toMajorUnitsText({ amountCents, currency })} ${currency}`,
           });
           aiResults.push({
             fieldId,

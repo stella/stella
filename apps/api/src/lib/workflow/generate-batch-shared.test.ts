@@ -56,7 +56,7 @@ describe("prepareBatchInput", () => {
     );
 
     expect(Result.isOk(prepared) && prepared.value.textInputs).toEqual([
-      { propertyId: priceId, value: "1250000.5 CZK" },
+      { propertyId: priceId, value: "1250000.50 CZK" },
       { propertyId: ownerId, value: "Responsible lawyer" },
     ]);
   });
