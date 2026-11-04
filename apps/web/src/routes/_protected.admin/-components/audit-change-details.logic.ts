@@ -42,16 +42,52 @@ export const auditChangeRows = (changes: unknown): AuditChangeRow[] => {
   if (!isRecord(changes)) {
     return [{ type: "value", field: "", value: changes }];
   }
-  return Object.entries(changes).map(([field, value]) =>
-    isFieldDiff(value)
-      ? {
-          type: "diff",
-          field,
-          before: value.before ?? value.old,
-          after: value.after ?? value.new,
-        }
-      : { type: "value", field, value },
-  );
+  return Object.entries(changes).flatMap(([field, value]): AuditChangeRow[] => {
+    if (!isFieldDiff(value)) {
+      return [{ type: "value", field, value }];
+    }
+    const before = value.before ?? value.old;
+    const after = value.after ?? value.new;
+    return (
+      (isSnapshotField(field) ? snapshotRows(before, after) : null) ?? [
+        { type: "diff", field, before, after },
+      ]
+    );
+  });
+};
+
+const isAbsent = (value: unknown) => value === null || value === undefined;
+
+/** The fields writers use for a record created or deleted as a whole. */
+const isSnapshotField = (field: string) =>
+  field === "created" || field === "deleted";
+
+/**
+ * A record created or deleted as a whole (`{ deleted: { old: {...}, new: null
+ * } }`) reads as its own fields, one row each, rather than as one row of raw
+ * JSON.
+ */
+const snapshotRows = (
+  before: unknown,
+  after: unknown,
+): AuditChangeRow[] | null => {
+  if (isRecord(before) && isAbsent(after)) {
+    return Object.entries(before).map(([field, value]) => ({
+      type: "diff",
+      field,
+      before: value,
+      after: null,
+    }));
+  }
+  if (isAbsent(before) && isRecord(after)) {
+    return Object.entries(after).map(([field, value]) => ({
+      type: "diff",
+      field,
+      before: null,
+      after: value,
+    }));
+  }
+  return null;
 };
 
 /** Whether a value needs a block of its own rather than one inline line. */

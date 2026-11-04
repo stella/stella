@@ -17,9 +17,13 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  isHarnessChatToolCall,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -90,6 +94,7 @@ import {
   parseMessage,
   requireUserMessageContent,
   resolveBrowserExtensionCapability,
+  toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -288,6 +293,7 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
+import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
@@ -1301,6 +1307,60 @@ const createTurnVisualOrigin = ({
         : [],
   });
 
+/**
+ * Store the target a local turn runs on as the thread's own, so what reads the
+ * thread later (follow-up suggestions, a reload) treats its transcript as
+ * local even when the Run on menu's own save did not land.
+ */
+const keepThreadRunTarget = async ({
+  organizationId,
+  recordAuditEvent,
+  routedLocally,
+  runTarget,
+  safeDb,
+  thread,
+  userId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  /** Whether the turn was routed to a computer; a cloud turn keeps it as is. */
+  routedLocally: boolean;
+  runTarget: ChatRunTarget | undefined;
+  safeDb: SafeDb;
+  thread: ChatThreadState;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) => {
+  if (!routedLocally || runTarget === undefined) {
+    return Result.ok();
+  }
+  const runsOn = encodeChatRunTarget(runTarget);
+  const stored = thread.data.chatRunTarget;
+  if (stored === runsOn) {
+    return Result.ok();
+  }
+  return await safeDb(async (tx) => {
+    await tx
+      .update(chatThreads)
+      .set({ chatRunTarget: runsOn })
+      .where(
+        and(
+          eq(chatThreads.id, thread.data.id),
+          eq(chatThreads.organizationId, organizationId),
+          eq(chatThreads.userId, userId),
+        ),
+      );
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: thread.data.id,
+      workspaceId,
+      changes: { chatRunTarget: { old: stored, new: runsOn } },
+    });
+  });
+};
+
 type AcceptIncomingTurnOptions = {
   accessibleSet: ReadonlySet<string>;
   accessibleWorkspaceIds: SafeId<"workspace">[];
@@ -1930,6 +1990,7 @@ const prepareValidatedIncomingMessage = async ({
       resume,
       safeDb,
       threadId: body.threadId,
+      toolCallOwnership: toolCallOwnershipOf(body.runTarget),
       tools: validationTools,
       userId,
     });
@@ -2735,6 +2796,18 @@ export const createSendMessage = (
               : { runtime: dependencies.localRunRuntime }),
           }),
         );
+        yield* Result.await(
+          keepThreadRunTarget({
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            routedLocally: localRun !== undefined,
+            runTarget: body.runTarget,
+            safeDb,
+            thread,
+            userId: user.id,
+            workspaceId,
+          }),
+        );
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -3388,6 +3461,8 @@ export const createSendMessage = (
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
                     allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
+                    // A turn on a computer carries only what its harness ran.
+                    ownership: localRun === undefined ? "cloud" : "harness",
                     tools: streamingTools,
                   });
                   if (Result.isError(validatedToolParts)) {
@@ -4272,8 +4347,11 @@ const resolveAssistantPartRefs = ({
   unresolvedInputRefs,
   refRegistry,
 }: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  // A harness call is stored as its harness reported it: its name only
+  // collides with a registry tool's by chance, so no registry ref rule
+  // applies to it.
   const withDeclaredToolRefs: unknown =
-    part.type === "tool-call"
+    part.type === "tool-call" && !isHarnessChatToolCall(part)
       ? {
           ...part,
           ...("input" in part
@@ -4408,7 +4486,8 @@ const hydrateAssistantMessageRefs = ({
     inputState: ChatRefInputState,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
-    if (part.type !== "tool-call") {
+    // Stored as its harness reported it; see `resolveAssistantPartRefs`.
+    if (part.type !== "tool-call" || isHarnessChatToolCall(part)) {
       return part;
     }
     const rawInput: unknown = "input" in part ? part.input : undefined;

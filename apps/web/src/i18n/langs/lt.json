@@ -1693,12 +1693,14 @@
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
       "stateUnavailable": "Šiuo metu nepasiekiama",
-      "stateUnsupported": "Ši versija nepalaikoma"
+      "stateUnsupported": "Ši versija nepalaikoma",
+      "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -2785,6 +2787,11 @@
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
       "undoImport": "Atšaukti importavimą ({count})",
+      "undoImportConfirm": "Visam laikui ištrinti šiuo importavimu {count, plural, one {sukurtą # kontaktą} few {sukurtus # kontaktus} many {sukurto # kontakto} other {sukurtų # kontaktų}}? Šio veiksmo anuliuoti negalima.",
+      "undoImportTitle": "Atšaukti šį importavimą?",
+      "undoneRow": "Pašalinta atšaukus",
+      "undoneSummary": "Atšaukus importavimą pašalinta {count, plural, one {# sukurtas kontaktas} few {# sukurti kontaktai} many {# sukurto kontakto} other {# sukurtų kontaktų}}.",
+      "undoneToast": "Importavimas atšauktas: ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
       "validateFailed": "Nepavyko patikrinti šių kontaktų.",
       "warning": {
         "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",

@@ -150,6 +150,8 @@ type ChatThreadRecord = {
   webSearchEnabled: boolean;
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
+  /** The stored run target (`encodeChatRunTarget`); null runs in the cloud. */
+  chatRunTarget: string | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -240,6 +242,7 @@ const loadThreadAttempt = async ({
       webSearchEnabled: boolean;
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
+      chatRunTarget: string | null;
       rollbackToken: string | null;
     };
 
@@ -260,6 +263,7 @@ const loadThreadAttempt = async ({
             webSearchEnabled: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatRunTarget: true,
             rollbackToken: true,
           },
         }),
@@ -293,6 +297,7 @@ const loadThreadAttempt = async ({
           webSearchEnabled: existing.webSearchEnabled,
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
+          chatRunTarget: existing.chatRunTarget,
           messages: [],
           historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
@@ -514,6 +519,7 @@ const loadThreadAttempt = async ({
         webSearchEnabled: false,
         chatModel: null,
         chatReasoningEffort: null,
+        chatRunTarget: null,
         messages: [],
         historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },

@@ -1693,12 +1693,14 @@
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
       "runOn": "Executar em",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limite atingido até {time}",
       "stateNeedsLogin": "É preciso entrar",
       "stateNotInstalled": "Não instalado",
       "stateOffline": "Computador offline",
       "stateUnavailable": "Indisponível no momento",
-      "stateUnsupported": "Esta versão não é compatível"
+      "stateUnsupported": "Esta versão não é compatível",
+      "waitingForComputer": "Aguardando seu computador se reconectar…"
     },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {
@@ -2785,6 +2787,11 @@
       "taxIdSchemeNone": "Sem validação da identificação fiscal",
       "title": "Importar contatos",
       "undoImport": "Desfazer importação ({count})",
+      "undoImportConfirm": "Excluir permanentemente {count, plural, one {o contato criado} many {os # contatos criados} other {os # contatos criados}} por esta importação? Esta ação não pode ser desfeita.",
+      "undoImportTitle": "Desfazer esta importação?",
+      "undoneRow": "Removido ao desfazer",
+      "undoneSummary": "Desfazer removeu {count, plural, one {# contato criado} many {# contatos criados} other {# contatos criados}} por esta importação.",
+      "undoneToast": "Importação desfeita: {count, plural, one {# contato excluído} many {# contatos excluídos} other {# contatos excluídos}}",
       "validateFailed": "Não foi possível verificar estes contatos.",
       "warning": {
         "ignored_populated_column": "A coluna “{column}” contém dados, mas será ignorada.",
