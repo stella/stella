@@ -2,6 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { timingSafeEqual } from "node:crypto";
 import { Temporal } from "temporal-polyfill/full";
 
+import { fetchWithTimeout } from "@stll/fetch";
+
 import type { StellaSandboxMcpBinding } from "../sandbox";
 
 /**
@@ -26,6 +28,14 @@ const ROUTE_PREFIX = "/mcp/";
 const SECRET_BYTES = 32;
 /** Transcripts travel over the holder socket; MCP bodies stay far below. */
 const MAX_REQUEST_BODY_BYTES = 8 * 1024 * 1024;
+/**
+ * How long the upstream may take to send response headers. Longer than the
+ * slowest stella MCP tool's own deadline (a document comparison, ten
+ * minutes), so it only ends a wait on an upstream that never answers; the
+ * harness's own tool timeout still cancels earlier through the inbound
+ * request. A streamed body is not bounded by it.
+ */
+const UPSTREAM_HEADERS_TIMEOUT_MS = 15 * 60_000;
 
 /** Headers an MCP client sends that the stella server reads. */
 const FORWARDED_REQUEST_HEADERS = [
@@ -145,12 +155,13 @@ export const startMcpProxy = ({
     headers.set("authorization", `Bearer ${held.token}`);
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
     const upstream = await Result.tryPromise(async () =>
-      fetch(held.upstream, {
+      fetchWithTimeout(held.upstream, {
         method: request.method,
         headers,
         body: hasBody ? request.body : null,
         redirect: "manual",
         signal: request.signal,
+        timeout: { type: "headers", ms: UPSTREAM_HEADERS_TIMEOUT_MS },
       }),
     );
     if (Result.isError(upstream)) {
