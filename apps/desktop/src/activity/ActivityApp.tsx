@@ -29,6 +29,7 @@ import { PreviewPane } from "@stll/ui/preview-pane";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
@@ -90,6 +91,7 @@ const reportActivityError = (
 
 const ActivityShell = ({ children }: React.PropsWithChildren) => (
   <main className="bg-background text-foreground min-h-dvh">
+    <WindowDragRegion />
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-10 pb-8">
       {children}
     </div>

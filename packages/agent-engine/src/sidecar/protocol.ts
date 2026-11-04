@@ -329,8 +329,7 @@ const HOST_MESSAGE_TYPES: ReadonlySet<string> = new Set(
 );
 const lineTypeSchema = v.object({ type: v.string() });
 
-export const utf8Length = (line: string) =>
-  new TextEncoder().encode(line).byteLength;
+const utf8Length = (line: string) => new TextEncoder().encode(line).byteLength;
 
 /**
  * Read one line the host wrote. An unknown type is its own rejection,
@@ -358,10 +357,24 @@ export const parseSidecarHostLine = (line: string): SidecarHostLine => {
     : { type: "rejected", reason: "invalid", messageType };
 };
 
-/** One stdout line; `null` when the message cannot be framed within limits. */
+export type SidecarEncoded =
+  | { type: "line"; line: string }
+  | { type: "refused"; reason: "invalid" | "too_large" };
+
+/**
+ * One stdout line, or why the message cannot be written: it breaks the
+ * contract (a field over its bound) or exceeds the line limit. Never throws,
+ * so each caller decides what an unwritable message means for its run.
+ */
 export const encodeSidecarMessage = (
   message: SidecarMessage,
-): string | null => {
-  const line = JSON.stringify(v.parse(sidecarMessageSchema, message));
-  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES ? null : `${line}\n`;
+): SidecarEncoded => {
+  const parsed = v.safeParse(sidecarMessageSchema, message);
+  if (!parsed.success) {
+    return { type: "refused", reason: "invalid" };
+  }
+  const line = JSON.stringify(parsed.output);
+  return utf8Length(line) > SIDECAR_MAX_LINE_BYTES
+    ? { type: "refused", reason: "too_large" }
+    : { type: "line", line: `${line}\n` };
 };

@@ -1,5 +1,5 @@
-import type { ContentPart, ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { HarnessStartError } from "./adapter";
 
@@ -12,6 +12,35 @@ import { HarnessStartError } from "./adapter";
  * Approach adapted from t3code (MIT): provider switches hand over a bounded
  * summary of the history instead of the native session.
  */
+
+const contentPartSchema = v.union([
+  v.object({ type: v.literal("text"), content: v.string() }),
+  v.object({ type: v.picklist(["image", "audio", "video", "document"]) }),
+]);
+
+const transcriptMessageSchema = v.object({
+  role: v.picklist(["user", "assistant", "tool"]),
+  content: v.nullable(v.union([v.string(), v.array(contentPartSchema)])),
+  toolCalls: v.optional(
+    v.array(
+      v.object({
+        function: v.object({ name: v.string(), arguments: v.string() }),
+      }),
+    ),
+  ),
+});
+
+/**
+ * What a turn reads of each transcript message: a TanStack `ModelMessage`
+ * satisfies it, and a transcript that arrives over a wire is checked against
+ * it before a turn starts, so nothing the handoff reads is assumed.
+ */
+export const harnessTranscriptSchema = v.array(transcriptMessageSchema);
+export type HarnessTranscriptMessage = v.InferOutput<
+  typeof transcriptMessageSchema
+>;
+type ContentPart = v.InferOutput<typeof contentPartSchema>;
+type MessageContent = HarnessTranscriptMessage["content"];
 
 /** Whole-handoff budget; the newest history is kept, the oldest dropped. */
 const HANDOFF_MAX_BYTES = 64 * 1024;
@@ -52,7 +81,7 @@ const contentPartText = (part: ContentPart): string => {
   }
 };
 
-const contentText = (content: ModelMessage["content"]): string => {
+const contentText = (content: MessageContent): string => {
   if (content === null) {
     return "";
   }
@@ -63,7 +92,7 @@ const contentText = (content: ModelMessage["content"]): string => {
 };
 
 /** Only what the user typed, without the attachment placeholders. */
-const typedText = (content: ModelMessage["content"]): string => {
+const typedText = (content: MessageContent): string => {
   if (content === null) {
     return "";
   }
@@ -80,7 +109,7 @@ const typedText = (content: ModelMessage["content"]): string => {
  * belongs to the session that produced it and is never handed to another
  * harness.
  */
-const messageBlock = (message: ModelMessage): string | null => {
+const messageBlock = (message: HarnessTranscriptMessage): string | null => {
   const text = contentText(message.content).trim();
   switch (message.role) {
     case "user":
@@ -107,7 +136,9 @@ const BLOCK_SEPARATOR = "\n\n";
 const OMITTED_MARKER = "[earlier messages omitted]";
 
 /** The history, newest kept first; the whole string fits the budget. */
-const renderHistory = (history: readonly ModelMessage[]): string | null => {
+const renderHistory = (
+  history: readonly HarnessTranscriptMessage[],
+): string | null => {
   const blocks: string[] = [];
   const separatorBytes = byteLength(BLOCK_SEPARATOR);
   // Reserved up front, so the marker fits whenever it is needed.
@@ -146,7 +177,7 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
 type TurnPromptMode = "resumed" | "standalone";
 
 type BuildTurnPromptOptions = {
-  transcript: readonly ModelMessage[];
+  transcript: readonly HarnessTranscriptMessage[];
   mode: TurnPromptMode;
 };
 

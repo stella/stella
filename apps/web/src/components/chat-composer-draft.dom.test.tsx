@@ -3,11 +3,11 @@ import type { Ref } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import messages from "@/i18n/langs/en.json";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   ChatEditorController,

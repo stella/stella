@@ -302,6 +302,7 @@ export const FAILURE_TAGS = [
   "McpOrganizationAccessError",
   "McpOutputContractError",
   "McpProbeError",
+  "McpProxyRegistrationError",
   "McpTokenVerificationError",
   "MemoryWriteRefusedError",
   "MetadataUrlDefect",

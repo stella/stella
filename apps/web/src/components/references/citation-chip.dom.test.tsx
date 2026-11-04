@@ -13,13 +13,13 @@ import type {
 } from "@stll/api-contract/reader-answers";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { CitationKind } from "@/components/references/citation-chip";
 import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 
