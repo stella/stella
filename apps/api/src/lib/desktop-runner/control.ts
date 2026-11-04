@@ -19,6 +19,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type ChatRunBinding,
   type ChatRunForRequest,
   type DesktopRunnerDb,
   type DesktopRunnerRunView,
@@ -89,8 +90,8 @@ export type StartLocalRunInput = {
   mcp: Omit<RunStart["mcp"], "token" | "expiresAt">;
   /** Workspaces already authorized for this member and run. */
   workspaceIds: readonly SafeId<"workspace">[];
-  /** The chat thread whose turn starts the run, when one does. */
-  chatThreadId?: SafeId<"chatThread"> | null;
+  /** The chat turn that starts and reads the run, when one does. */
+  chat?: ChatRunBinding | null;
 };
 
 export type StartLocalRunOutcome =
@@ -244,7 +245,7 @@ const startRun = async (
         harnessVersion: input.harnessVersion,
         model: input.model,
         workspaceIds: input.workspaceIds,
-        chatThreadId: input.chatThreadId ?? null,
+        chat: input.chat ?? null,
         payload: message,
         now: deps.now(),
         leaseMs: deps.timing.leaseMs,

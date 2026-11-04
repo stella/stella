@@ -11,6 +11,10 @@ import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
+  CHAT_TOOL_EXECUTOR,
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+} from "@stll/api-contract/chat";
+import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   type ChatLocalRunComputerEvent,
   type ChatLocalRunHarness,
@@ -25,6 +29,7 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import type {
@@ -88,12 +93,21 @@ export type LocalRunContext = {
 type LocalRunStreamInput = {
   /** The chat run this attempt answers; every run event carries it. */
   chatRunId: string;
+  /**
+   * The chat turn that reads the run. The run lives as long as the turn holds
+   * it; a resumed turn answers only the run it started.
+   */
+  chatTurnId: SafeId<"chatTurn">;
   /** The thread history, as the cloud model would receive it. */
   messages: readonly ModelMessage[];
   /** The system prompt the cloud model would receive. */
   instructions: string;
   /** Answers to the approvals the run paused for; absent on a new turn. */
   resume: readonly RunAgentResumeItem[] | undefined;
+  /**
+   * The turn's own cut: a stop on any API task, its deadline, a lost owner or
+   * a failed production. It interrupts the run on the computer.
+   */
   abortSignal: AbortSignal;
 };
 
@@ -219,12 +233,71 @@ type RewriteContext = {
   threadId: string;
 };
 
-/** The chunk as this chat run carries it: its run, thread and call ids. */
+/**
+ * Which stored events a local turn carries. A harness turn is text, reasoning,
+ * tool calls and their results, and its run's start, end and custom events,
+ * as `harnessEventsToChunks` maps them. Every other event is dropped: a
+ * snapshot or a chunked tool call would write message state or call ownership
+ * past the stamping below, and nothing a harness reports needs one.
+ */
+const LOCAL_RUN_EVENT_DISPOSITION = {
+  [EventType.TEXT_MESSAGE_START]: "carry",
+  [EventType.TEXT_MESSAGE_CONTENT]: "carry",
+  [EventType.TEXT_MESSAGE_END]: "carry",
+  [EventType.TEXT_MESSAGE_CHUNK]: "drop",
+  [EventType.TOOL_CALL_START]: "carry",
+  [EventType.TOOL_CALL_ARGS]: "carry",
+  [EventType.TOOL_CALL_END]: "carry",
+  [EventType.TOOL_CALL_CHUNK]: "drop",
+  [EventType.TOOL_CALL_RESULT]: "carry",
+  [EventType.STATE_SNAPSHOT]: "drop",
+  [EventType.STATE_DELTA]: "drop",
+  [EventType.MESSAGES_SNAPSHOT]: "drop",
+  [EventType.ACTIVITY_SNAPSHOT]: "drop",
+  [EventType.ACTIVITY_DELTA]: "drop",
+  [EventType.RAW]: "drop",
+  [EventType.CUSTOM]: "carry",
+  [EventType.RUN_STARTED]: "carry",
+  [EventType.RUN_FINISHED]: "carry",
+  [EventType.RUN_ERROR]: "carry",
+  [EventType.STEP_STARTED]: "drop",
+  [EventType.STEP_FINISHED]: "drop",
+  [EventType.REASONING_START]: "carry",
+  [EventType.REASONING_MESSAGE_START]: "carry",
+  [EventType.REASONING_MESSAGE_CONTENT]: "carry",
+  [EventType.REASONING_MESSAGE_END]: "carry",
+  [EventType.REASONING_MESSAGE_CHUNK]: "drop",
+  [EventType.REASONING_END]: "carry",
+  [EventType.REASONING_ENCRYPTED_VALUE]: "drop",
+  [EventType.SUBAGENT_STARTED]: "drop",
+  [EventType.SUBAGENT_FINISHED]: "drop",
+  [EventType.SUBAGENT_ERROR]: "drop",
+} as const satisfies Record<EventType, "carry" | "drop">;
+
+/**
+ * The chunk as this chat run carries it: its run, thread and call ids, and
+ * every call owned by the harness that ran it, whatever the desktop said, so
+ * no call of a local turn ever reads as one the API or the browser runs.
+ * `null` for an event a local turn does not carry.
+ */
 const asChatChunk = (
   chunk: PublicStreamChunk,
   { runnerRunId, chatRunId, threadId }: RewriteContext,
-): PublicStreamChunk => {
+): PublicStreamChunk | null => {
+  if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
+    return null;
+  }
   const callId = (id: string) => localCallId(runnerRunId, id);
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    return {
+      ...chunk,
+      toolCallId: callId(chunk.toolCallId),
+      metadata: {
+        ...chunk.metadata,
+        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
+      },
+    };
+  }
   // Only these name a run, a thread or a call; every other chunk passes as is.
   if (chunk.type === EventType.RUN_STARTED) {
     return { ...chunk, runId: chatRunId, threadId };
@@ -252,7 +325,6 @@ const asChatChunk = (
     };
   }
   if (
-    chunk.type === EventType.TOOL_CALL_START ||
     chunk.type === EventType.TOOL_CALL_ARGS ||
     chunk.type === EventType.TOOL_CALL_END ||
     chunk.type === EventType.TOOL_CALL_RESULT
@@ -455,7 +527,8 @@ type ReadRunOptions = {
 
 /**
  * Stop the computer's turn: what a user's stop, a deadline or a lost owner
- * means for a run nobody reads any more. The run stays open for a later turn.
+ * means for a run nobody reads any more. The gateway keeps one interrupt per
+ * run, so a repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -467,6 +540,32 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   if (stopped.isErr()) {
     observeFailure(stopped.error, { sink: LOCAL_RUN_STORE_SINK });
   }
+};
+
+/**
+ * Tells the chat when its computer went away or came back. Only a change is
+ * sent, so a long wait adds one event to the run log, not one per poll; the
+ * run's start goes first when none went out yet.
+ */
+const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
+  /** Whether the turn last told the chat its computer is away. */
+  let away = false;
+  return function* (
+    status: ChatLocalRunComputerEvent["status"],
+  ): Generator<PublicStreamChunk> {
+    const nowAway = status === "waiting";
+    if (nowAway === away) {
+      return;
+    }
+    away = nowAway;
+    yield* start();
+    yield {
+      type: EventType.CUSTOM,
+      name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
+      value: { status } satisfies ChatLocalRunComputerEvent,
+      timestamp: nowMs(),
+    };
+  };
 };
 
 /**
@@ -506,30 +605,7 @@ async function* readRunChunks({
       };
     }
   };
-  /** Whether the turn last told the chat its computer is away. */
-  let computerAway = false;
-  /**
-   * Tell the chat when the computer went away or came back; only a change is
-   * sent, so a long wait adds one event to the run log, not one per poll.
-   *
-   * @yields The status event, after the run's start when none went out yet.
-   */
-  const computer = function* (
-    status: ChatLocalRunComputerEvent["status"],
-  ): Generator<PublicStreamChunk> {
-    const away = status === "waiting";
-    if (away === computerAway) {
-      return;
-    }
-    computerAway = away;
-    yield* start();
-    yield {
-      type: EventType.CUSTOM,
-      name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
-      value: { status } satisfies ChatLocalRunComputerEvent,
-      timestamp: nowMs(),
-    };
-  };
+  const computer = computerStatusChunks(start);
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -544,11 +620,34 @@ async function* readRunChunks({
       runId: runnerRunId,
       seq: position,
     });
+  /**
+   * The run is this reader's to end until it finishes or pauses for an
+   * answer. Any other way the read ends interrupts it, once: a cut of the
+   * turn while the read waits or while its consumer is not pulling, a
+   * consumer that stops reading, a store that cannot be read.
+   */
+  let holdsRun = true;
+  let interrupting: Promise<void> | null = null;
+  const stopRun = async () => {
+    if (holdsRun) {
+      holdsRun = false;
+      interrupting = interruptRun(context, runnerRunId);
+    }
+    await interrupting;
+  };
+  /** The run finished, ended on the gateway's side, or paused. */
+  const releaseRun = () => {
+    holdsRun = false;
+  };
+  const onCut = () => {
+    detached(stopRun, "local-run-chunks.interrupt");
+  };
+  abortSignal.addEventListener("abort", onCut, { once: true });
   const listener = context.runBell.listen(runnerRunId);
   try {
     for (;;) {
       if (abortSignal.aborted) {
-        await interruptRun(context, runnerRunId);
+        await stopRun();
         return;
       }
       const page = await control.readEvents({
@@ -559,7 +658,7 @@ async function* readRunChunks({
       });
       if (page.isErr()) {
         // Nobody reads this turn any more; stop the computer before reporting.
-        await interruptRun(context, runnerRunId);
+        await stopRun();
         yield* start();
         yield* storeUnavailable(page.error, rewrite);
         return;
@@ -584,6 +683,9 @@ async function* readRunChunks({
               panic("A stored desktop runner chunk no longer folds");
             }
             const chunk = asChatChunk(message.chunk, rewrite);
+            if (chunk === null) {
+              continue;
+            }
             if (chunk.type === EventType.RUN_STARTED) {
               // A run resumed after a pause opens a new segment; the chat
               // run is one.
@@ -608,7 +710,7 @@ async function* readRunChunks({
                 { ...question, toolCallId: question.toolCallId },
                 rewrite,
               );
-              await interruptRun(context, runnerRunId);
+              await stopRun();
               return;
             }
             if (chunk.outcome?.type === "interrupt") {
@@ -616,12 +718,20 @@ async function* readRunChunks({
               // answer always continues after it.
               const recorded = await pause();
               if (recorded.isErr()) {
+                await stopRun();
                 yield* storeUnavailable(recorded.error, rewrite);
                 return;
               }
+              // The paused run is the turn's now: it waits for the answer
+              // while the turn awaits it, and is cancelled once the turn ends
+              // any other way (`readRunsOfEndedChatTurns`).
+              releaseRun();
               yield chunk;
               return;
             }
+            // The harness finished its turn: nothing is left to interrupt,
+            // only the run's own end to read.
+            releaseRun();
             yield chunk;
             finished = true;
             continue;
@@ -630,6 +740,7 @@ async function* readRunChunks({
             // The chunk stream carries the interrupt the member answers.
             continue;
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished: {
+            releaseRun();
             const ending = finishedRunChunks({
               outcome: message.outcome,
               finishSent: finished,
@@ -655,6 +766,7 @@ async function* readRunChunks({
       }
       const run = await control.readRun({ owner, runId: runnerRunId });
       if (run.isErr()) {
+        await stopRun();
         yield* start();
         yield* storeUnavailable(run.error, rewrite);
         return;
@@ -662,6 +774,8 @@ async function* readRunChunks({
       const step = caughtUpStep(run.value);
       switch (step.type) {
         case "fail":
+          // The gateway already ended the run: rejected, lost, or gone.
+          releaseRun();
           yield* fail(step.code);
           return;
         case "read":
@@ -679,7 +793,10 @@ async function* readRunChunks({
       }
     }
   } finally {
+    abortSignal.removeEventListener("abort", onCut);
     listener.close();
+    // A consumer that closed the read early, or a read that threw.
+    await stopRun();
   }
 }
 
@@ -755,7 +872,7 @@ async function* startLocalRun({
       messages: messages.map((message) => ({ ...message })),
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
-      chatThreadId: context.chatThreadId,
+      chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
   let started = await start(input.messages);
   const latest = input.messages.at(-1);
@@ -867,9 +984,11 @@ async function* resumeLocalRun({
     // Approval request ids are minted as UUIDs by the runner protocol.
     failure = AI_FAILURE_CODES.local_runner_unavailable;
   } else {
+    // Only the run this turn started: an answer never reaches another
+    // turn's run, of this thread or any other.
     const found = await control.readChatRunForRequest({
       owner,
-      chatThreadId: context.chatThreadId,
+      chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
       requestId: item.interruptId,
     });
     if (found.isErr()) {
