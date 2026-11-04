@@ -91,28 +91,57 @@ const storeCheckpoint = async ({
   };
 };
 
+/**
+ * Why the working copy replaces the version on screen, as the message that
+ * says so: it holds an earlier unfinished edit, or the lock is on a version
+ * saved after the one on screen.
+ */
+type Replacement = "resumed" | "newerVersion";
+
+const replacementFor = ({
+  resumedFromCheckpoint,
+  baseVersionNumber,
+  viewedVersion,
+}: {
+  readonly resumedFromCheckpoint: boolean;
+  readonly baseVersionNumber: number;
+  readonly viewedVersion: number;
+}): Replacement | null => {
+  if (resumedFromCheckpoint) {
+    return "resumed";
+  }
+  return baseVersionNumber === viewedVersion ? null : "newerVersion";
+};
+
 type Opened =
   | {
       readonly status: "open";
       readonly session: EditSession;
-      /** The earlier unfinished edit's working copy, or null for none. */
-      readonly file: OpenedFile | null;
+      /** The working copy that replaces the version on screen, or null. */
+      readonly replacement: {
+        readonly file: OpenedFile;
+        readonly reason: Replacement;
+      } | null;
     }
   | { readonly status: "failed"; readonly detail: string | undefined };
 
 /**
  * Opens the document for editing: its edit lock, and the working copy when
- * it holds an earlier unfinished edit; otherwise the version on screen is the
- * working copy. When the copy cannot be fetched, or the screen is gone by
- * the time the lock is taken, the lock goes straight back.
+ * it holds an earlier unfinished edit or the lock is on another version than
+ * `viewedVersion`, the one on screen; otherwise the version on screen is the
+ * working copy. Edits of an older version would replace the newer one when
+ * they become a version. When the copy cannot be fetched, or the screen is
+ * gone by the time the lock is taken, the lock goes straight back.
  */
 const openForEditing = async ({
   source,
   target,
+  viewedVersion,
   alive,
 }: {
   readonly source: AccessTokenSource;
   readonly target: EditTarget;
+  readonly viewedVersion: number;
   readonly alive: () => boolean;
 }): Promise<Opened> => {
   const opened = await openEditSession({ fetch, source, ...target });
@@ -125,10 +154,17 @@ const openForEditing = async ({
           : undefined,
     };
   }
-  const { downloadUrl, resumedFromCheckpoint, ...session } = opened.value;
-  const copy = resumedFromCheckpoint
-    ? await downloadDocument(downloadUrl, session.fileName)
-    : Result.ok(null);
+  const { downloadUrl, resumedFromCheckpoint, baseVersionNumber, ...session } =
+    opened.value;
+  const reason = replacementFor({
+    resumedFromCheckpoint,
+    baseVersionNumber,
+    viewedVersion,
+  });
+  const copy =
+    reason === null
+      ? Result.ok(null)
+      : await downloadDocument(downloadUrl, session.fileName);
   if (Result.isError(copy) || !alive()) {
     await releaseEditLock({ fetch, source, ...target });
     if (Result.isOk(copy) && copy.value !== null) {
@@ -136,7 +172,14 @@ const openForEditing = async ({
     }
     return { status: "failed", detail: undefined };
   }
-  return { status: "open", session, file: copy.value };
+  return {
+    status: "open",
+    session,
+    replacement:
+      reason === null || copy.value === null
+        ? null
+        : { file: copy.value, reason },
+  };
 };
 
 /**
@@ -203,13 +246,57 @@ const joinSlices = (
 };
 
 /**
+ * The save the viewer is sending, slice by slice. From a working copy
+ * replacing the viewer until the new viewer is ready, saves from the replaced
+ * one are dropped: they would overwrite the working copy.
+ */
+const useViewerSaves = () => {
+  const replaced = useRef(false);
+  // The slices of the save the viewer is sending: `[offset, base64]`.
+  const pending = useRef<(readonly [number, string])[]>([]);
+  return {
+    replace: () => {
+      replaced.current = true;
+    },
+    ready: () => {
+      replaced.current = false;
+    },
+    replacing: () => replaced.current,
+    write: (offset: number, base64: string) => {
+      if (!replaced.current) {
+        pending.current.push([offset, base64]);
+      }
+    },
+    /** The finished save's slices, or null when its viewer was replaced. */
+    take: (): readonly (readonly [number, string])[] | null => {
+      const slices = pending.current;
+      pending.current = [];
+      return replaced.current ? null : slices;
+    },
+    clear: () => {
+      pending.current = [];
+    },
+  };
+};
+
+type DocumentEditingOptions = {
+  readonly source: AccessTokenSource | null;
+  /** What to edit, or null when the open file cannot be edited. */
+  readonly target: EditTarget | null;
+  /** The number of the version on screen, which edits start from. */
+  readonly viewedVersion: number | null;
+  readonly onFinished: () => void;
+};
+
+/**
  * Editing a Word document on the phone, as the web edits one: there is no
  * edit button. The document is editable from the start, so the first tap
  * into the text places the caret and brings up the keyboard, and the same
  * tap opens the document for editing in the background, taking its edit
  * lock. Saves wait until it is open. When an earlier unfinished edit is
- * open, its working copy replaces the version on screen and the edit
- * continues from it. When the document cannot be opened for editing, the
+ * open, or a newer version was saved since the one on screen, its working
+ * copy replaces the version on screen and the edit continues from it. When
+ * the document cannot be opened for editing, the
  * viewer reloads read-only and what was typed is dropped, said aloud. The
  * viewer saves after each pause, and each save is stored as a checkpoint. Done, or leaving the screen, saves
  * the rest and makes it the document's new version; with nothing changed it
@@ -221,13 +308,9 @@ const joinSlices = (
 export const useDocumentEditing = ({
   source,
   target,
+  viewedVersion,
   onFinished,
-}: {
-  readonly source: AccessTokenSource | null;
-  /** What to edit, or null when the open file cannot be edited. */
-  readonly target: EditTarget | null;
-  readonly onFinished: () => void;
-}) => {
+}: DocumentEditingOptions) => {
   const t = useTranslations("document.edit");
   const [phase, setPhase] = useState<EditingPhase>({ status: "viewing" });
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -251,50 +334,57 @@ export const useDocumentEditing = ({
   const alive = useRef(true);
   // The open in flight, which saves wait for.
   const opening = useRef<Promise<unknown> | null>(null);
-  // True from a resumed edit replacing the viewer until the new viewer is
-  // ready: a save from the replaced one would overwrite the resumed edit.
-  const replaced = useRef(false);
-  // The slices of the save the viewer is sending: `[offset, base64]`.
-  const pending = useRef<(readonly [number, string])[]>([]);
+  const saves = useViewerSaves();
   // What to do once finishing has settled, such as leaving the screen.
   const afterFinish = useRef<(() => void) | null>(null);
 
   const editing = phase.status !== "viewing";
 
+  // Reloads the viewer read-only, dropping what was typed into it; a tap
+  // into the text asks to edit again.
+  const reloadReadOnly = () => {
+    setRefused(true);
+    setRevision((count) => count + 1);
+  };
+
   const toViewing = () => {
     session.current = null;
     checkpointed.current = false;
-    pending.current = [];
+    saves.clear();
     setSaveState("saved");
     setPhase({ status: "viewing" });
   };
 
   const requestEdit = async () => {
-    if (phase.status !== "viewing" || source === null || target === null) {
+    if (phase.status !== "viewing" || lock === null || viewedVersion === null) {
       return;
     }
     setPhase({ status: "opening" });
     setRefused(false);
-    const open = openForEditing({ source, target, alive: () => alive.current });
+    const open = openForEditing({
+      ...lock,
+      viewedVersion,
+      alive: () => alive.current,
+    });
     opening.current = open;
     const opened = await open;
     if (!alive.current) {
       return;
     }
     if (opened.status === "failed") {
-      setRefused(true);
-      setRevision((count) => count + 1);
+      reloadReadOnly();
       setPhase({ status: "viewing" });
       Alert.alert(t("openFailed"), opened.detail);
       return;
     }
     session.current = opened.session;
-    workingCopy.current = opened.file;
-    if (opened.file !== null) {
-      replaced.current = true;
-      Alert.alert(t("resumed"));
+    const file = opened.replacement?.file ?? null;
+    workingCopy.current = file;
+    if (opened.replacement !== null) {
+      saves.replace();
+      Alert.alert(t(opened.replacement.reason));
     }
-    setPhase({ status: "editing", file: opened.file });
+    setPhase({ status: "editing", file });
   };
 
   /** Stores one save as a checkpoint. */
@@ -313,6 +403,8 @@ export const useDocumentEditing = ({
       setSaveState("saved");
     } else if (stored.outcome === "takenOver") {
       toViewing();
+      // Nothing typed into the viewer from now on could be saved.
+      reloadReadOnly();
       Alert.alert(t("takenOver"));
     } else {
       setSaveState("notSaved");
@@ -363,13 +455,6 @@ export const useDocumentEditing = ({
     }
   };
 
-  /** One slice of a save from the viewer. */
-  const writeEdit = (offset: number, base64: string) => {
-    if (!replaced.current) {
-      pending.current.push([offset, base64]);
-    }
-  };
-
   /**
    * A save from the viewer is complete: `size` bytes, or null when nothing
    * changed since the last one. A final save then finishes the editing,
@@ -380,14 +465,13 @@ export const useDocumentEditing = ({
     size: number | null,
     final: boolean,
   ): Promise<boolean> => {
-    if (replaced.current) {
-      // From the viewer a resumed edit replaced: its edits go with it.
-      pending.current = [];
+    await opening.current;
+    // None from a viewer a working copy replaced, also by the open this save
+    // waited for: its edits go with it.
+    const slices = saves.take();
+    if (slices === null) {
       return true;
     }
-    await opening.current;
-    const slices = pending.current;
-    pending.current = [];
     const outcome =
       size === null ? "stored" : await checkpoint(joinSlices(slices, size));
     if (outcome === "failed") {
@@ -414,6 +498,12 @@ export const useDocumentEditing = ({
       return;
     }
     setPhase({ status: "finishing", file: phase.file });
+    if (saves.replacing()) {
+      // The working copy's viewer is not on screen yet, so nothing was typed
+      // into it and there is nothing to save; it would miss the request.
+      void finish();
+      return;
+    }
     setSaveRequest((count) => count + 1);
   };
 
@@ -458,11 +548,10 @@ export const useDocumentEditing = ({
       void requestEdit();
     },
     requestFinish,
-    writeEdit,
+    /** One slice of a save from the viewer. */
+    writeEdit: saves.write,
     editSaved,
     /** The viewer's first page is on screen. */
-    viewerReady: () => {
-      replaced.current = false;
-    },
+    viewerReady: saves.ready,
   };
 };

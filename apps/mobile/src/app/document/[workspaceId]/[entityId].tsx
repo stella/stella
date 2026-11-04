@@ -224,6 +224,7 @@ const OpenedDocument = ({
   const editing = useDocumentEditing({
     source,
     target,
+    viewedVersion: phase.status === "open" ? phase.file.versionNumber : null,
     // The edit is the document's new version: open it afresh.
     onFinished: onRetry,
   });
