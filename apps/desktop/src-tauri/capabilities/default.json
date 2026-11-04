@@ -40,6 +40,14 @@
     "allow-chatgpt-auth-complete",
     "allow-chatgpt-auth-disconnect",
     "allow-chatgpt-auth-open-usage",
+    "allow-claude-code-auth-get-status",
+    "allow-claude-code-auth-start",
+    "allow-claude-code-auth-cancel",
+    "allow-claude-code-auth-open-sign-in-page",
+    "allow-claude-code-auth-sign-out",
+    "allow-harness-get-status",
+    "allow-harness-install",
+    "allow-harness-cancel-install",
     "allow-is-activity-enabled",
     "allow-activity-get-settings",
     "allow-activity-set-capture-details",
@@ -57,6 +65,7 @@
     "allow-billing-draft-grant-consent",
     "allow-billing-draft-withdraw-consent",
     "allow-billing-draft-set-preference",
+    "allow-desktop-runner-get-state",
     "core:window:allow-start-dragging"
   ]
 }

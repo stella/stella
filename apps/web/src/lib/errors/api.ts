@@ -22,6 +22,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import {
+  CHAT_LOCAL_RUN_REFUSAL,
+  type ChatLocalRunRefusal,
+} from "@stll/api-contract/chat-run-target";
 import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
@@ -236,11 +240,25 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
+/** Why a chat turn bound for the member's computer was refused. */
+const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
+  [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
+  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
+  [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
+    "chat.localRun.refusalConflictingRunMode",
+} as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
+  ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:

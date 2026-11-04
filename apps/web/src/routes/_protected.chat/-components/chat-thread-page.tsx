@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -40,6 +41,7 @@ import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
+import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
@@ -199,11 +201,16 @@ export const ChatThreadPage = ({
   const getActiveSkill = useLatestCallback(() => activeSkill);
   // The skill is known only after the read above, and the cache key never
   // depends on it, so this context addresses the same entry the page reads.
+  // Read at send time, so a turn carries the target the menu shows then.
+  const getRunTarget = useLatestCallback(() =>
+    effectiveRunTarget(data.runTarget),
+  );
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getContextMatterIds,
     getSendMode,
+    getRunTarget,
     ...(activeSkill ? { getActiveSkill } : {}),
   };
   const chat = useChatThreadRuntime({
@@ -267,6 +274,7 @@ export const ChatThreadPage = ({
     isGenerating,
     reconnecting,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -392,10 +400,11 @@ export const ChatThreadPage = ({
   // submit on the outcome (see `onSubmit` below) so a send can never race
   // a just-changed model onto the old, stale one.
   const modelSelection = useChatModelSelection({
-    onPersisted: ({ model, reasoningEffort }) => {
+    onPersisted: ({ model, reasoningEffort, runTarget }) => {
       applyChatModelChange({
         model,
         reasoningEffort,
+        runTarget,
         queryClient,
         queryKey: threadQueryOptions.queryKey,
         threadId: toSafeId<"chatThread">(threadRef.threadId),
@@ -403,6 +412,17 @@ export const ChatThreadPage = ({
     },
     threadRef,
   });
+  // The thread keeps where its turns run beside its model, so a reload shows
+  // the same choice; the model stays as it is.
+  const runTargetChoice = {
+    selected: effectiveRunTarget(data.runTarget),
+    select: (runTarget: ChatRunTarget) =>
+      modelSelection.selectModel({
+        model: data.model,
+        reasoningEffort: data.reasoningEffort,
+        runTarget,
+      }),
+  };
 
   // "Move to side" — re-host this thread inside the inspector
   // tab. Workspace-scoped chats land on the matter so the pane
@@ -747,6 +767,7 @@ export const ChatThreadPage = ({
                         showThinkingIndicator
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
+                        waitingForComputer={waitingForComputer}
                         threadRef={threadRef}
                         userMessageEdit={userMessageEdit}
                         workspaceId={workspaceId}
@@ -857,6 +878,7 @@ export const ChatThreadPage = ({
                       selectedModel: data.model,
                       selectedReasoningEffort: data.reasoningEffort,
                       selectModel: modelSelection.selectModel,
+                      runTarget: runTargetChoice,
                     }}
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
@@ -882,6 +904,7 @@ export const ChatThreadPage = ({
                           selectedModel: data.model,
                           selectedReasoningEffort: data.reasoningEffort,
                           selectModel: modelSelection.selectModel,
+                          runTarget: runTargetChoice,
                         }}
                         leadingContext={
                           <>

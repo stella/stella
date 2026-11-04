@@ -189,6 +189,8 @@
       "notSaved": "Jeszcze nie zapisano",
       "done": "Gotowe",
       "openFailed": "Tego dokumentu nie można teraz edytować",
+      "resumed": "Masz niedokończoną edycję tego dokumentu, więc jest ona kontynuowana. To, co przed chwilą wpisano, nie zostało zachowane.",
+      "newerVersion": "W międzyczasie zapisano nowszą wersję tego dokumentu, więc edycja jest kontynuowana od niej. To, co przed chwilą wpisano, nie zostało zachowane.",
       "takenOver": "Ktoś inny edytuje teraz ten dokument. Zmiany od ostatniego zapisu nie zostały zachowane.",
       "finishFailed": "Zmiany są zapisane, ale nie powstała z nich jeszcze nowa wersja. Stuknij ponownie Gotowe albo wyjdź: następna edycja będzie je kontynuować.",
       "notStored": "Nie udało się zapisać ostatnich zmian. Zostań, aby spróbować ponownie, albo wyjdź bez nich.",

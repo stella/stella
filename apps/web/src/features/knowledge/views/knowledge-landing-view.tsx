@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -74,14 +75,18 @@ export const KnowledgeLandingView = ({
             <CardBody card={card} />
           </Link>
         ) : (
-          <button
-            className={cn(CARD_CLASS, "text-start")}
+          // A section that needs something first is a button; it draws the
+          // same card as the linked sections beside it.
+          <Button
+            className="flex h-full"
             key={card.key}
             onClick={card.onOpen}
-            type="button"
+            variant="plain"
           >
-            <CardBody card={card} />
-          </button>
+            <div className={cn(CARD_CLASS, "w-full")}>
+              <CardBody card={card} />
+            </div>
+          </Button>
         ),
       )}
     </div>

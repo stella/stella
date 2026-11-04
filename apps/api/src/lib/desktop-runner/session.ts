@@ -2,15 +2,19 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_FRAME_REJECTION,
   DESKTOP_RUNNER_PROTOCOL,
   DESKTOP_RUNNER_SERVER_MESSAGE,
+  type DesktopRunnerClose,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
+  type DesktopRunnerTiming,
   parseDesktopRunnerFrame,
+  policyViolation,
 } from "@stll/api-contract/desktop-runner";
 
 import type {
@@ -22,12 +26,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
-import {
-  DESKTOP_RUNNER_CLOSE,
-  type DesktopRunnerClose,
-  type DesktopRunnerTiming,
-  policyViolation,
-} from "@/api/lib/desktop-runner/protocol";
 import {
   claimRunnerSession,
   type DesktopRunnerDb,
@@ -90,6 +88,8 @@ type RunnerSessionContext = {
   readonly isRunnerEnabled: RunnerFeatureAccess;
   /** Tell the socket a newer one replaced that it is no longer current. */
   readonly ringPrevious: (holder: RunHolder) => void;
+  /** Wake the readers of a run whose stored messages or state changed. */
+  readonly ringRun: (runId: string) => void;
 };
 
 type RunnerSessionOptions = {
@@ -406,6 +406,7 @@ const storeSequenced = async (
       if (message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished) {
         state.tokens.delete(message.runId);
       }
+      state.context.ringRun(message.runId);
       send(state, {
         type: DESKTOP_RUNNER_SERVER_MESSAGE.ack,
         runId: message.runId,
@@ -620,6 +621,7 @@ const handleMessage = async (
       });
       if (rejected.type === "applied") {
         state.tokens.delete(message.runId);
+        state.context.ringRun(message.runId);
       }
       closeForTransition(state, rejected);
       return;
