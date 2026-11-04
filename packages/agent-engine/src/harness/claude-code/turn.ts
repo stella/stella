@@ -620,8 +620,10 @@ export class ClaudeCodeTurnSession {
         return;
       }
       const held = this.toolUses.get(block.tool_use_id);
-      // A result always follows its call on the main thread.
+      // A result always follows its call on the main thread, once: the call
+      // is released with it.
       if (held !== undefined) {
+        this.toolUses.delete(block.tool_use_id);
         this.emit({
           type: "tool.completed",
           toolCall: held.toolCall,
