@@ -18,12 +18,21 @@ const { AgentSubscriptionsSection } =
 const { HARNESS_INSTALL_CHANGED_EVENT } =
   await import("../src/mainview/harness-install-status");
 
-afterEach(() => {
+afterEach(async () => {
+  // A command's follow-up status read settles after a test's last
+  // assertion; let React apply it while the DOM still exists.
+  await act(async () => {
+    // real-time: one macrotask lets the mocked IPC promises settle.
+    await Bun.sleep(0);
+  });
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
+  // React's scheduler runs on a macrotask; it must find the DOM it renders to.
+  // real-time: one macrotask drains it before the DOM is removed.
+  await Bun.sleep(0);
   await GlobalRegistrator.unregister();
 });
 
