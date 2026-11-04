@@ -651,8 +651,8 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
     // Each ack follows the journal: it never names a position the journal
     // does not hold yet.
     let journaled = setup.journal.get(&id).unwrap();
-    assert_eq!(u64::from(journaled.last_seq), flooded + 1);
-    assert_eq!(u64::from(journaled.source_seq), flooded + 1);
+    assert_eq!(u64::from(journaled.last_seq()), flooded + 1);
+    assert_eq!(u64::from(journaled.source_seq()), flooded + 1);
     let acks = place.acks(&id);
     assert!(acks.windows(2).all(|pair| pair[0] < pair[1]), "{acks:?}");
 
