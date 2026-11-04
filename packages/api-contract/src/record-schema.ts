@@ -54,7 +54,6 @@ export const recordFieldSchema = v.strictObject({
   key: recordFieldKeySchema,
   label: v.pipe(
     v.string(),
-    v.trim(),
     v.minLength(1),
     v.maxLength(RECORD_LIMITS.labelLength),
   ),
@@ -85,20 +84,26 @@ export const recordSchemaSchema = v.pipe(
 
 export type RecordSchema = v.InferOutput<typeof recordSchemaSchema>;
 
+/** Checks that run only at parse; published schemas keep the plain shape. */
+export const RECORD_SCHEMA_RUNTIME_ONLY_CHECKS = [
+  recordSchemaSchema.pipe[1],
+] as const;
+
 /**
  * An exact decimal, written canonically: no leading zeros, no trailing
  * fractional zeros, no exponent, at most 18 integer and 12 fractional digits.
  * Exchange rates and percentages are decimals; a float would turn 25.345 into
  * 25.344999999999999 the moment anything compared or summed it.
  */
-const CANONICAL_DECIMAL = /^-?(?:0|[1-9]\d{0,17})(?:\.\d{0,11}[1-9])?$/u;
+const CANONICAL_DECIMAL =
+  /^(?:0|-?[1-9]\d{0,17}|-?(?:0|[1-9]\d{0,17})\.\d{0,11}[1-9])$/u;
 
 export const isCanonicalDecimal = (value: string): boolean =>
-  CANONICAL_DECIMAL.test(value) && value !== "-0";
+  CANONICAL_DECIMAL.test(value);
 
 const decimalValueSchema = v.pipe(
   v.string(),
-  v.check(isCanonicalDecimal, "Expected a canonical decimal string"),
+  v.regex(CANONICAL_DECIMAL, "Expected a canonical decimal string"),
 );
 
 /** Same minor-unit rule as the money column: arithmetic stays exact. */
@@ -108,9 +113,6 @@ const moneyValueSchema = v.strictObject({
 });
 
 export type RecordMoney = v.InferOutput<typeof moneyValueSchema>;
-
-const isHttpsUrl = (value: string): boolean =>
-  URL.canParse(value) && new URL(value).protocol === "https:";
 
 const RECORD_VALUE_SCHEMAS = {
   text: v.pipe(
@@ -126,7 +128,8 @@ const RECORD_VALUE_SCHEMAS = {
   url: v.pipe(
     v.string(),
     v.maxLength(RECORD_LIMITS.urlLength),
-    v.check(isHttpsUrl, "Expected an https URL"),
+    v.url(),
+    v.regex(/^https:\/\//u, "Expected an https URL"),
   ),
 } as const satisfies Record<RecordFieldType, v.GenericSchema>;
 

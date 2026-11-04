@@ -89,6 +89,12 @@ export const recordResultSchema = v.pipe(
   ),
 );
 
+/** Checks that run only at parse; published schemas keep the plain shape. */
+export const RECORD_CELL_RUNTIME_ONLY_CHECKS = [
+  storedRecordSchema.pipe[1],
+  recordResultSchema.pipe[1],
+] as const;
+
 export type RecordResult = v.InferOutput<typeof recordResultSchema>;
 
 /** The tool input as validated (or as filled, when validation refused it). */
