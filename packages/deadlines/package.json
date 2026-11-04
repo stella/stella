@@ -16,7 +16,7 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/deadlines",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/deadlines",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "format": "bun fmt ."
   },
   "dependencies": {
     "@stll/time": "0.4.1",
