@@ -49,6 +49,7 @@ export { default as indexes_case_law_parse_pending_index } from "./online-migrat
 export { default as indexes_case_law_population_counts_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-counts-source-kind-idx";
 export { default as indexes_case_law_population_deltas_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-deltas-source-kind-idx";
 export { default as indexes_case_law_population_projection_activity_idx } from "./online-migration-entries/indexes-case-law-population-projection-activity-idx";
+export { default as indexes_case_law_population_projection_arrivals_idx } from "./online-migration-entries/indexes-case-law-population-projection-arrivals-idx";
 export { default as indexes_case_law_provision_citations_decision_work_subtree_idx } from "./online-migration-entries/indexes-case-law-provision-citations-decision-work-subtree-idx";
 export { default as indexes_case_law_provision_citations_eli_citing_idx } from "./online-migration-entries/indexes-case-law-provision-citations-eli-citing-idx";
 export { default as indexes_case_law_provision_citations_work_citing_idx } from "./online-migration-entries/indexes-case-law-provision-citations-work-citing-idx";
