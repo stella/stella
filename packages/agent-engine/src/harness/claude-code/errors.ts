@@ -68,10 +68,13 @@ export const blockingReset = (
 
 /**
  * When the plan's exhausted windows reset, from `get_usage`. `null` when no
- * main window is exhausted, or one is and its reset is unknown.
+ * main window is exhausted, or one is and its reset is unknown. A window
+ * whose reset is not after `now` has already reset, whatever its utilization
+ * snapshot says, so it limits nothing.
  */
 export const usageLimitResetsAt = (
   windows: ClaudeUsageWindows | null,
+  now: Temporal.Instant,
 ): string | null => {
   const resets: Temporal.Instant[] = [];
   for (const window of [windows?.five_hour, windows?.seven_day]) {
@@ -92,7 +95,9 @@ export const usageLimitResetsAt = (
       // One exhausted window without a readable reset: the reset is unknown.
       return null;
     }
-    resets.push(instant.value);
+    if (Temporal.Instant.compare(instant.value, now) > 0) {
+      resets.push(instant.value);
+    }
   }
   return latest(resets);
 };

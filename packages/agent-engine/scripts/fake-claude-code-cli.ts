@@ -563,6 +563,8 @@ const FAKE_SCENARIOS = {
     },
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** Alive but silent: `initialize` is never answered. */
+  unresponsive: [{ sleep: 60_000 }],
   crash: [
     ...freshTurn(),
     assistant("msg-1", [toolUse("call-x", "Bash", { command: "ls" })]),
@@ -596,7 +598,7 @@ const FAKE_SCENARIOS = {
         rate_limits: {
           five_hour: {
             utilization: 100,
-            resets_at: "2026-10-28T14:00:00+00:00",
+            resets_at: "2099-10-28T14:00:00+00:00",
           },
           seven_day: {
             utilization: 40,
@@ -622,6 +624,25 @@ const FAKE_SCENARIOS = {
           five_hour: {
             utilization: 12,
             resets_at: "2026-10-28T14:00:00+00:00",
+          },
+          seven_day: null,
+        },
+      },
+    },
+  ],
+  /** A full window whose reset has already passed: the snapshot is stale. */
+  probe_reset_passed: [
+    initialize(),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        subscription_type: "max",
+        rate_limits_available: true,
+        rate_limits: {
+          five_hour: {
+            utilization: 100,
+            resets_at: "2020-01-01T00:00:00+00:00",
           },
           seven_day: null,
         },
