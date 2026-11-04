@@ -562,6 +562,7 @@
         "$TURBO_ROOT$/oxlint.tailwind.config.ts",
         "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock"

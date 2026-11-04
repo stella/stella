@@ -18,9 +18,12 @@ import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 import { createTestState } from "@stll/test-state";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
+import { TAILWIND_CLASS_CACHE } from "./generated-files";
 import {
+  generatedDirectoryFiles,
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedDirectory,
   hasPreparedGeneratedSources,
   preparedGeneratedFile,
   preparedManifestPath,
@@ -59,6 +62,8 @@ const fixture = () => {
   for (const file of ciGeneratedFiles(root)) {
     write(file, `prepared:${file}\n`);
   }
+  // Ignored and never committed: generation names these files.
+  write(TAILWIND_SNAPSHOT, "{}\n");
   for (const args of [
     ["init", "-q"],
     [
@@ -85,14 +90,18 @@ const fixture = () => {
   const manifest = {
     ...generatedInputIdentity(root),
     files: Object.fromEntries(
-      ciGeneratedFiles(root).map((file) => [
-        file,
-        generatedFileHash(readFileSync(path.join(root, file))),
-      ]),
+      [...ciGeneratedFiles(root), ...generatedDirectoryFiles(root)].map(
+        (file) => [
+          file,
+          generatedFileHash(readFileSync(path.join(root, file))),
+        ],
+      ),
     ),
   };
   return { root, write, manifest };
 };
+
+const TAILWIND_SNAPSHOT = `${TAILWIND_CLASS_CACHE.directory}/${"a".repeat(32)}.json`;
 
 test("the identity names the compilers the generators run on", () => {
   const { root, manifest, write } = fixture();
@@ -244,20 +253,20 @@ test("restore validates the whole artifact before any writes and restores every 
   try {
     mkdirSync(source);
     writeFileSync(path.join(source, "manifest.json"), JSON.stringify(manifest));
-    for (const file of ciGeneratedFiles(root)) {
+    for (const file of Object.keys(manifest.files)) {
       write(
         `artifact/files/${file}`,
         readFileSync(path.join(root, file), "utf-8"),
       );
       write(file, "before restore");
     }
-    for (const file of ciGeneratedFiles(root)) {
+    for (const file of Object.keys(manifest.files)) {
       const original = readFileSync(path.join(source, "files", file), "utf-8");
       write(`artifact/files/${file}`, "incomplete artifact");
       expect(() => restorePreparedGeneratedSources(root, source)).toThrow(
         `Generated source artifact differs: ${file}`,
       );
-      for (const output of ciGeneratedFiles(root)) {
+      for (const output of Object.keys(manifest.files)) {
         expect(readFileSync(path.join(root, output), "utf-8")).toBe(
           "before restore",
         );
@@ -371,6 +380,95 @@ test("configured preparation fails closed and an ordinary checkout generates loc
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "Prepared generated source differs",
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a generated directory travels by file name and bytes and is required", () => {
+  const { root, manifest, write } = fixture();
+  const source = path.join(root, "artifact");
+  try {
+    const withFiles = (files: Record<string, string>) => ({
+      ...manifest,
+      files,
+    });
+    const { [TAILWIND_SNAPSHOT]: snapshotHash, ...withoutCache } =
+      manifest.files;
+    expect(snapshotHash).toBe(generatedFileHash("{}\n"));
+    expect(() =>
+      validatePreparedManifest(root, withFiles(withoutCache)),
+    ).toThrow("incomplete output inventory");
+    for (const name of [
+      `${TAILWIND_CLASS_CACHE.directory}/../input.ts`,
+      `${TAILWIND_CLASS_CACHE.directory}/notes.txt`,
+      `${TAILWIND_CLASS_CACHE.directory}/${"a".repeat(32)}.json.lock`,
+      `other/${"a".repeat(32)}.json`,
+    ]) {
+      expect(
+        () =>
+          validatePreparedManifest(
+            root,
+            withFiles({ ...manifest.files, [name]: generatedFileHash("{}") }),
+          ),
+        name,
+      ).toThrow("incomplete output inventory");
+    }
+    mkdirSync(source);
+    writeFileSync(path.join(source, "manifest.json"), JSON.stringify(manifest));
+    for (const file of Object.keys(manifest.files)) {
+      write(
+        `artifact/files/${file}`,
+        readFileSync(path.join(root, file), "utf-8"),
+      );
+    }
+    rmSync(path.join(root, TAILWIND_CLASS_CACHE.directory), {
+      recursive: true,
+    });
+    restorePreparedGeneratedSources(root, source);
+    expect(readFileSync(path.join(root, TAILWIND_SNAPSHOT), "utf-8")).toBe(
+      "{}\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a prepared generated directory is reused only with the producer's exact files", () => {
+  const { root, manifest, write } = fixture();
+  try {
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(false);
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
+    write(TAILWIND_SNAPSHOT, "{ }\n");
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${TAILWIND_SNAPSHOT}`);
+    write(TAILWIND_SNAPSHOT, "{}\n");
+    const extra = `${TAILWIND_CLASS_CACHE.directory}/${"b".repeat(32)}.decl-0f.json`;
+    write(extra, "{}\n");
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${extra}`);
+    rmSync(path.join(root, extra));
+    // Files the cache never holds, such as the writer lock, are not outputs.
+    write(`${TAILWIND_CLASS_CACHE.directory}/notes.txt`, "unrelated\n");
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
+    rmSync(path.join(root, TAILWIND_SNAPSHOT));
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${TAILWIND_SNAPSHOT}`);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
