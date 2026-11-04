@@ -287,6 +287,26 @@ async fn until(what: &str, condition: impl Fn() -> bool) {
   }
 }
 
+/// Wait for a position another process moves to reach `target`. Only a
+/// position that stops moving fails: how long many durable writes take is
+/// up to the disk, a stall is the defect.
+async fn until_reached(what: &str, target: u64, position: impl Fn() -> u64) {
+  let mut seen = position();
+  let mut deadline = tokio::time::Instant::now() + WAIT;
+  while seen < target {
+    assert!(
+      tokio::time::Instant::now() < deadline,
+      "stalled at {seen} of {target}: {what}"
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let now = position();
+    if now != seen {
+      seen = now;
+      deadline = tokio::time::Instant::now() + WAIT;
+    }
+  }
+}
+
 /// A test body on its own runtime, holding the child-process guard.
 fn run(body: impl std::future::Future<Output = ()>) {
   let _children = crate::test_child_processes::exclusive();
@@ -647,9 +667,10 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
     // What the stand-in sends on the approval: more than the channel holds.
     let flooded: u64 = 300;
     assert!(flooded > u64::try_from(RUN_OUTPUT_QUEUE).unwrap());
-    until(
+    until_reached(
       "the journal took every output and the holder was acked for it",
-      || place.acks(&id).last() == Some(&(flooded + 1)),
+      flooded + 1,
+      || place.acks(&id).last().copied().unwrap_or(0),
     )
     .await;
     // Each ack follows the journal: it never names a position the journal
