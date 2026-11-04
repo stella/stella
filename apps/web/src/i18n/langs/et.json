@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Vaja sisse logida",
       "stateNotInstalled": "Pole installitud",
       "stateOffline": "Arvuti pole võrgus",
+      "stateUnavailable": "Praegu pole saadaval",
       "stateUnsupported": "Seda versiooni ei toetata",
       "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
     },

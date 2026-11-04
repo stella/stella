@@ -1698,6 +1698,7 @@
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
+      "stateUnavailable": "Chwilowo niedostępne",
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
       "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
     },

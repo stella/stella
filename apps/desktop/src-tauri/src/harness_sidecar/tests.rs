@@ -1094,6 +1094,42 @@ fn probe_outcomes_become_runner_reports() {
       version: None,
     })
   );
+  // A harness that failed is not called unsupported: it may run next time.
+  for (reason, unavailable) in [
+    (
+      ProbeFailure::HarnessUnavailable,
+      HarnessUnavailableReason::HarnessFailed,
+    ),
+    (
+      ProbeFailure::ProtocolViolation,
+      HarnessUnavailableReason::UnexpectedAnswer,
+    ),
+  ] {
+    assert_eq!(
+      harness_report(
+        Harness::Codex,
+        &ProbeOutcome::Failed {
+          reason,
+          message: "the harness exited".to_owned(),
+        }
+      ),
+      HarnessReport::Unavailable(UnavailableHarness {
+        id: Harness::Codex,
+        reason: unavailable,
+      })
+    );
+  }
+}
+
+#[test]
+fn a_run_the_holder_cannot_take_is_refused_for_its_own_reason() {
+  assert_eq!(
+    SidecarUnavailable::TooLarge.reject_reason(),
+    RejectReason::RunTooLarge
+  );
+  for capacity in [SidecarUnavailable::Busy, SidecarUnavailable::Stopped] {
+    assert_eq!(capacity.reject_reason(), RejectReason::AtCapacity);
+  }
 }
 
 /// The stand-in holder process. The other tests start it through the

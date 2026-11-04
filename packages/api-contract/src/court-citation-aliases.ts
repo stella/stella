@@ -375,6 +375,9 @@ const NAMED_COURT_WORDS: ReadonlySet<string> = new Set([
   "alkotmanybirosag",
 ]);
 
+/** Folded stems of the nouns that name a court's branch. */
+const BRANCH_NOUN_STEMS = ["pobock"] as const;
+
 /** Hungarian court nouns a seat adjective makes one court, folded. */
 const HUNGARIAN_COURT_NOUNS: ReadonlySet<string> = new Set([
   "itelotabla",
@@ -492,6 +495,11 @@ const namesSomeCourt = (
 ): boolean =>
   tokens.some((token, index) => {
     if ([...NAMED_COURT_WORDS].some((word) => token.startsWith(word))) {
+      return true;
+    }
+    // A branch no alias read (`pobočka v Chebu`, or `pobočka` with its seat
+    // left off) is a court of its own, never its main court read before it.
+    if (BRANCH_NOUN_STEMS.some((stem) => token.startsWith(stem))) {
       return true;
     }
     const hungarianNoun = [...HUNGARIAN_COURT_NOUNS].some((noun) =>

@@ -3083,30 +3083,77 @@ describe("chat turns on a computer", () => {
   });
 
   test("a computer that refuses the run fails the turn with the reason it gave", async () => {
-    const chatThreadId = await newThread();
     const { desktopId, desktop } = shared();
-    const turn = collect(
-      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
-        {
-          chatRunId: "chat-run-refused",
+    for (const [reason, kind] of [
+      ["harness_needs_login", "local_runner_needs_login"],
+      ["harness_unavailable", "local_runner_unavailable"],
+      ["run_too_large", "local_runner_turn_too_large"],
+    ] as const) {
+      const chatThreadId = await newThread();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: `chat-run-refused-${reason}`,
           chatTurnId: turnOf(chatThreadId),
           messages: [{ role: "user", content: "Summarize" }],
           instructions: "You are stella.",
           resume: undefined,
           abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.rejected", runId: start.runId, reason });
+      const last = (await turn.done).at(-1);
+      expect({ reason, last }).toMatchObject({
+        reason,
+        last: { type: EventType.RUN_ERROR, code: AI_FAILURE_CODES[kind] },
+      });
+      expect({
+        reason,
+        kind:
+          last?.type === EventType.RUN_ERROR
+            ? classifyRunErrorChunk(last)
+            : null,
+      }).toEqual({ reason, kind });
+    }
+  });
+
+  test("a turn too long for one frame fails as too long, and no run is queued", async () => {
+    const chatThreadId = await newThread();
+    const { desktopId } = shared();
+    const chunks = await collect(
+      createLocalChatRun(contextFor(chatThreadId), startPlan(desktopId)).stream(
+        {
+          chatRunId: "chat-run-too-long",
+          chatTurnId: turnOf(chatThreadId),
+          messages: [
+            {
+              role: "user",
+              content: "x".repeat(DESKTOP_RUNNER_MAX_FRAME_BYTES),
+            },
+          ],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
         },
       ),
-    );
-    const start = await desktop.receive("run.start");
-    desktop.send({
-      type: "run.rejected",
-      runId: start.runId,
-      reason: "harness_needs_login",
-    });
-    expect((await turn.done).at(-1)).toMatchObject({
+    ).done;
+    const last = chunks.at(-1);
+    expect(last).toMatchObject({
       type: EventType.RUN_ERROR,
-      code: AI_FAILURE_CODES.local_runner_needs_login,
+      code: AI_FAILURE_CODES.local_runner_turn_too_large,
     });
+    expect(
+      last?.type === EventType.RUN_ERROR ? classifyRunErrorChunk(last) : null,
+    ).toBe("local_runner_turn_too_large");
+    expect(
+      await db
+        .select({ runId: desktopRunnerRuns.runId })
+        .from(desktopRunnerRuns)
+        .where(eq(desktopRunnerRuns.chatThreadId, chatThreadId)),
+    ).toEqual([]);
   });
 
   test("the composer's computer list reads the same however much the computers ran", async () => {

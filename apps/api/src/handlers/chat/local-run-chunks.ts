@@ -138,7 +138,8 @@ const EVENT_PAGE = 200;
 type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_needs_login
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
-  | typeof AI_FAILURE_CODES.local_runner_unavailable;
+  | typeof AI_FAILURE_CODES.local_runner_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_turn_too_large;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -147,6 +148,8 @@ const FAILURE_MESSAGE = {
     "The harness on the computer reached its usage limit.",
   [AI_FAILURE_CODES.local_runner_unavailable]:
     "The computer stopped running the turn.",
+  [AI_FAILURE_CODES.local_runner_turn_too_large]:
+    "The conversation is too long to hand to the computer.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -189,10 +192,12 @@ const LOCAL_RUN_REJECTION = {
   harness_limited: AI_FAILURE_CODES.local_runner_limit_reached,
   harness_not_installed: AI_FAILURE_CODES.local_runner_unavailable,
   harness_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
+  harness_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   harness_version_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   model_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   policy_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
+  run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
@@ -772,6 +777,7 @@ const unavailableHarnessFailure = (
     case "ready":
     case "not_installed":
     case "unsupported":
+    case "unavailable":
     case undefined:
       return AI_FAILURE_CODES.local_runner_unavailable;
     default:
@@ -876,8 +882,10 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
-    case "too_large":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
+      return;
+    case "too_large":
+      yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);
       return;
     default:
       outcome satisfies never;

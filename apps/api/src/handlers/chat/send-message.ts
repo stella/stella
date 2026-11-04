@@ -1793,7 +1793,7 @@ type PrepareValidatedIncomingMessageOptions = {
     memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
-    workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
+    workspaceStatusById: ChatToolsInput["workspaceStatusById"];
   };
   lifecycle: ChatSendLifecycle;
   persistence: {
