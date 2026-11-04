@@ -123,7 +123,7 @@ const BABEL_TOOLCHAINS = [
 // and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.90.0",
-  oxlintConfig: "1.7.0",
+  oxlintConfig: "3.5.0",
   tsgolint: "7.0.2005",
   tsrs: "0.18.0-ts7.1.0-dev.20260929",
   typescript6Api: "npm:typescript@6.0.3",
