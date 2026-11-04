@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import type { RecordCellState } from "./record-cell";
 import {
   isCanonicalDecimal,
@@ -114,6 +116,8 @@ export const RECORD_PROJECTION_REVIEW_REASONS = [
   "not-integral",
   // A select column whose options do not contain the value.
   "no-matching-option",
+  // An integral decimal beyond the safe integer range of an int column.
+  "out-of-range",
 ] as const;
 
 export type RecordProjectionReviewReason =
@@ -206,9 +210,13 @@ const castScalar = (
         return { type: "value", value: { type: "int", value } };
       }
       if (typeof value === "string" && isCanonicalDecimal(value)) {
-        return value.includes(".")
-          ? { type: "needs-review", reason: "not-integral" }
-          : { type: "value", value: { type: "int", value: Number(value) } };
+        if (value.includes(".")) {
+          return { type: "needs-review", reason: "not-integral" };
+        }
+        const integer = parseIntegerToken(value);
+        return integer.isOk()
+          ? { type: "value", value: { type: "int", value: integer.value } }
+          : { type: "needs-review", reason: "out-of-range" };
       }
       return panic(`A ${field.type} record value cannot become an int`);
     }
