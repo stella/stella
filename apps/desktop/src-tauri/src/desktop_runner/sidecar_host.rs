@@ -40,7 +40,8 @@ use tokio::sync::{Notify, mpsc, watch};
 use uuid::Uuid;
 
 use super::harness::{
-  EmitError, HarnessHost, HarnessReports, JournaledRun, RunOutput, RunSink,
+  EmitError, Forwarded, HarnessHost, HarnessReports, JournaledRun, NotForwarded,
+  RunOutput, RunSink,
 };
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
@@ -681,10 +682,22 @@ impl SidecarHarnessHost {
     });
   }
 
-  fn forward(what: &str, sent: Result<(), harness_sidecar::SidecarUnavailable>) {
-    if let Err(error) = sent {
+  /// Hand a run command to the holder; without one, or when the holder
+  /// cannot queue it, the command is not taken and the runner leaves it
+  /// unrecorded for the API's next resend.
+  fn forward(
+    &self,
+    what: &str,
+    send: impl FnOnce(&HarnessSidecar) -> Result<(), harness_sidecar::SidecarUnavailable>,
+  ) -> Forwarded {
+    let Some(sidecar) = self.shared.sidecar() else {
+      tracing::warn!(target: LOG_TARGET, command = what, "a run command found no harness holder");
+      return Err(NotForwarded);
+    };
+    send(&sidecar).map_err(|error| {
       tracing::warn!(target: LOG_TARGET, ?error, command = what, "a run command did not reach the harness holder");
-    }
+      NotForwarded
+    })
   }
 }
 
@@ -829,13 +842,13 @@ impl HarnessHost for SidecarHarnessHost {
 
   /// Local harnesses take no follow-up input: each chat turn is its own run.
   /// The input is answered on the run's stream instead of dropped.
-  fn input(&self, input: RunInput) {
+  fn input(&self, input: RunInput) -> Forwarded {
     tracing::warn!(target: LOG_TARGET, "a run received input local harnesses do not take");
     let held = locked(&self.shared.runs)
       .get(&input.run_id)
       .map(|run| (run.sink.clone(), run.model.clone(), run.thread_id.clone()));
     let Some((sink, model, thread_id)) = held else {
-      return;
+      return Ok(());
     };
     let error = run_error(
       &input.run_id,
@@ -847,46 +860,27 @@ impl HarnessHost for SidecarHarnessHost {
     tokio::spawn(async move {
       emit(&sink, &error).await;
     });
+    Ok(())
   }
 
-  fn approval(&self, approval: RunApproval) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.approval(approval));
-    Self::forward("approval", sent);
+  fn approval(&self, approval: RunApproval) -> Forwarded {
+    self.forward("approval", |sidecar| sidecar.approval(approval))
   }
 
-  fn answer(&self, answer: RunAnswer) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.answer(answer));
-    Self::forward("answer", sent);
+  fn answer(&self, answer: RunAnswer) -> Forwarded {
+    self.forward("answer", |sidecar| sidecar.answer(answer))
   }
 
-  fn interrupt(&self, run_id: &str) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.interrupt(run_id));
-    Self::forward("interrupt", sent);
+  fn interrupt(&self, run_id: &str) -> Forwarded {
+    self.forward("interrupt", |sidecar| sidecar.interrupt(run_id))
   }
 
-  fn cancel(&self, run_id: &str) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.cancel(run_id));
-    Self::forward("cancel", sent);
+  fn cancel(&self, run_id: &str) -> Forwarded {
+    self.forward("cancel", |sidecar| sidecar.cancel(run_id))
   }
 
-  fn token(&self, refresh: RunTokenRefresh) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.token(refresh));
-    Self::forward("token", sent);
+  fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
+    self.forward("token", |sidecar| sidecar.token(refresh))
   }
 }
 

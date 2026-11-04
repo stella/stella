@@ -661,11 +661,13 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
 
     // With no runner and no socket, the harness produces more than the
     // supervisor's channel for the run can hold.
-    host.approval(RunApproval {
-      run_id: id.clone(),
-      request_id: REQUEST_ID.to_owned(),
-      decision: ApprovalDecision::Approve,
-    });
+    host
+      .approval(RunApproval {
+        run_id: id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        decision: ApprovalDecision::Approve,
+      })
+      .unwrap();
     // What the stand-in sends on the approval: more than the channel holds.
     let flooded: u64 = 300;
     assert!(flooded > u64::try_from(RUN_OUTPUT_QUEUE).unwrap());

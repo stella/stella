@@ -51,6 +51,8 @@ pub(crate) struct RunRecord {
   /// `run.approval` request ids already handed to the host.
   pub(crate) approvals: BTreeSet<String>,
   /// `run.answer` request ids already handed to the host; never the answers.
+  /// Records written before answers existed have none.
+  #[serde(default)]
   pub(crate) answers: BTreeSet<String>,
   pub(crate) interrupted: bool,
   pub(crate) cancelled: bool,
@@ -549,6 +551,15 @@ mod tests {
     reopened.remove(RUN).unwrap();
     assert!(Journal::open(encrypted(&directory), 0).get(RUN).is_none());
     fs::remove_dir_all(directory).unwrap();
+  }
+
+  #[test]
+  fn a_record_written_before_answers_existed_still_loads() {
+    let record = RunRecord::new(RUN.to_owned(), Decision::Accepted, 1);
+    let mut stored = serde_json::to_value(&record).unwrap();
+    assert!(stored.as_object_mut().unwrap().remove("answers").is_some());
+    let loaded: RunRecord = serde_json::from_value(stored).unwrap();
+    assert_eq!(loaded, record);
   }
 
   #[test]

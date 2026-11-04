@@ -13,25 +13,38 @@ use crate::runner_protocol::{
   RunAnswer, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
 };
 
+/// A run command the host could not take (its harness holder is busy or
+/// gone). The runner leaves it unrecorded, so the API's next resend of the
+/// command reaches the host again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NotForwarded;
+
+/// Whether the host took a run command.
+pub(crate) type Forwarded = Result<(), NotForwarded>;
+
 /// Runs the commands the API sends. Every call returns promptly; a host does
 /// its work on its own tasks and reports through the sink it was handed.
 ///
-/// The runner calls each method at most once per command: duplicates are
-/// dropped before they reach the host, also across restarts.
+/// The runner records a run command once the host took it (`Ok`), and drops
+/// every later copy of a recorded one before it reaches the host, also across
+/// restarts. A command the host did not take reaches it again when the API
+/// resends it, and so does one taken just before the app stopped, ahead of
+/// its record: the holder refuses a second response to one request.
 pub(crate) trait HarnessHost: Send + Sync + 'static {
   /// The version `hello` reports for the process that runs harnesses.
   fn sidecar_version(&self) -> String;
   /// Take the run or refuse it. After `Ok`, everything the run produces goes
   /// through `sink`, ending with [`RunOutput::Finished`].
   fn start(&self, start: RunStart, sink: RunSink) -> Result<(), RejectReason>;
-  fn input(&self, input: RunInput);
-  fn approval(&self, approval: RunApproval);
+  fn input(&self, input: RunInput) -> Forwarded;
+  fn approval(&self, approval: RunApproval) -> Forwarded;
   /// Answers to a blocking question the run asked.
-  fn answer(&self, answer: RunAnswer);
-  fn interrupt(&self, run_id: &str);
-  fn cancel(&self, run_id: &str);
-  /// A newer MCP token for the run; an older one never follows it.
-  fn token(&self, refresh: RunTokenRefresh);
+  fn answer(&self, answer: RunAnswer) -> Forwarded;
+  fn interrupt(&self, run_id: &str) -> Forwarded;
+  fn cancel(&self, run_id: &str) -> Forwarded;
+  /// A newer MCP token for the run; an older one never follows it. One the
+  /// host did not take is not counted as the newest, so it can come again.
+  fn token(&self, refresh: RunTokenRefresh) -> Forwarded;
   /// The runner is about to connect for the account whose API is at
   /// `api_base_url`; called before every connection attempt.
   fn connecting(&self, _api_base_url: &str) {}
@@ -145,12 +158,24 @@ impl HarnessHost for UnavailableHarnessHost {
   }
 
   // Nothing is ever accepted, so the runner never forwards these.
-  fn input(&self, _input: RunInput) {}
-  fn approval(&self, _approval: RunApproval) {}
-  fn answer(&self, _answer: RunAnswer) {}
-  fn interrupt(&self, _run_id: &str) {}
-  fn cancel(&self, _run_id: &str) {}
-  fn token(&self, _refresh: RunTokenRefresh) {}
+  fn input(&self, _input: RunInput) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn approval(&self, _approval: RunApproval) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn answer(&self, _answer: RunAnswer) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn interrupt(&self, _run_id: &str) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn cancel(&self, _run_id: &str) -> Forwarded {
+    Err(NotForwarded)
+  }
+  fn token(&self, _refresh: RunTokenRefresh) -> Forwarded {
+    Err(NotForwarded)
+  }
 }
 
 /// Reports every harness as not installed until the installer reports them.
