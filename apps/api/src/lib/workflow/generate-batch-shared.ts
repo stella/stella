@@ -14,8 +14,8 @@ import {
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { recordText } from "@/api/lib/records/record-text";
 import type {
   BatchProperty,
   PropertyBatch,

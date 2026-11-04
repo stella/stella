@@ -16,10 +16,10 @@ import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { recordText } from "@/api/lib/fields/record-text";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
-import { recordText } from "@/api/lib/records/record-text";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {

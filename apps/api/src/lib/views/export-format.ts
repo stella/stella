@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { FieldContent } from "@/api/db/schema-validators";
-import { recordText } from "@/api/lib/records/record-text";
+import { recordText } from "@/api/lib/fields/record-text";
 
 const exportDateFormatters = new Map<string, Intl.DateTimeFormat>();
 

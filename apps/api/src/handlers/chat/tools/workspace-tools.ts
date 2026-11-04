@@ -16,10 +16,10 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { formatIsoDateForDisplay } from "@/api/lib/date-format";
 import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import { writeFieldValue } from "@/api/lib/fields/write-field";
 import type { FieldWriteContent } from "@/api/lib/fields/write-field";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { recordText } from "@/api/lib/records/record-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 const refSchema = (description: string) =>

@@ -5,7 +5,7 @@ import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
-import { recordText } from "@/api/lib/records/record-text";
+import { recordText } from "@/api/lib/fields/record-text";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
