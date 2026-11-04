@@ -7,6 +7,7 @@ import {
   readFile,
   rename,
   rm,
+  stat,
 } from "node:fs/promises";
 import path from "node:path";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
@@ -68,11 +69,75 @@ export const tailwindFailureMessages = (
  */
 export const lintPassTimeoutMs = 5 * 60_000;
 
+/** The prefix of the Tailwind plugin's debug lines (`DEBUG=oxlint-tailwindcss`). */
+export const pluginProgressPrefix = "[oxlint-tailwindcss]";
+/** How many of the plugin's latest debug lines a stalled pass reports. */
+export const progressTailLines = 40;
+
+/**
+ * Forwards a pass's stderr, keeping the plugin's debug lines out of the log
+ * and only the latest `progressTailLines` of them in memory: they are the
+ * pass's progress, worth printing only when it stalls.
+ */
+const collectProgress = async (
+  stderr: ReadableStream<Uint8Array>,
+  tail: string[],
+) => {
+  const decoder = new TextDecoder();
+  let pending = "";
+  const take = (line: string) => {
+    if (!line.startsWith(pluginProgressPrefix)) {
+      process.stderr.write(`${line}\n`);
+      return;
+    }
+    tail.push(line);
+    if (tail.length > progressTailLines) {
+      tail.shift();
+    }
+  };
+  for await (const chunk of stderr) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      take(line);
+    }
+  }
+  if (pending !== "") {
+    take(pending);
+  }
+};
+
+/** The cache directory's entries with sizes and ages, to show what a stalled pass had written. */
+const describeCacheDirectory = async (directory: string | undefined) => {
+  if (directory === undefined) {
+    return "no cache directory set";
+  }
+  const entries = await readdir(directory).catch(() => null);
+  if (entries === null) {
+    return `${directory} is missing`;
+  }
+  if (entries.length === 0) {
+    return `${directory} is empty`;
+  }
+  const now = Date.now();
+  const described = await Promise.all(
+    entries.toSorted().map(async (name) => {
+      const info = await stat(path.join(directory, name)).catch(() => null);
+      return info === null
+        ? `${name} (gone)`
+        : `${name} ${info.size} bytes, ${Math.round((now - info.mtimeMs) / 1000)} s old`;
+    }),
+  );
+  return described.join("\n");
+};
+
 /**
  * Runs one lint pass and returns its exit code and report. The report is read
  * while the pass runs, so a large one cannot fill the pipe and block it. A
  * pass still running after `timeoutMs` is killed and fails generation with a
- * message naming the pass.
+ * message naming the pass, its last plugin progress lines and the cache
+ * directory's state, so the stall can be diagnosed from the log.
  */
 export const runLintPass = async (
   command: readonly string[],
@@ -90,9 +155,11 @@ export const runLintPass = async (
     cwd: repositoryRoot,
     env,
     stdout: "pipe",
-    stderr: "inherit",
+    stderr: "pipe",
   });
   const stdout = new Response(child.stdout).text();
+  const progress: string[] = [];
+  const stderr = collectProgress(child.stderr, progress);
   const deadline = { passed: false };
   const timer = setTimeout(() => {
     deadline.passed = true;
@@ -100,9 +167,16 @@ export const runLintPass = async (
   }, timeoutMs);
   const exitCode = await child.exited;
   clearTimeout(timer);
+  await stderr;
   if (deadline.passed) {
     panic(
-      `Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the ${pass} oxlint pass was still running after ${timeoutMs / 1000} s and was stopped. A normal pass takes about a minute; rerun the step, and if it stalls again, run the command locally: ${command.join(" ")}`,
+      [
+        `Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the ${pass} oxlint pass was still running after ${timeoutMs / 1000} s and was stopped. A normal pass takes about a minute; rerun the step, and if it stalls again, run the command locally: ${command.join(" ")}`,
+        `Last plugin progress (${progress.length} lines):`,
+        progress.length === 0 ? "(none)" : progress.join("\n"),
+        "Cache directory:",
+        await describeCacheDirectory(env["OXLINT_TAILWINDCSS_CACHE_DIR"]),
+      ].join("\n"),
     );
   }
   return { exitCode, stdout: await stdout };
@@ -129,7 +203,9 @@ const tailwindFailures = async (
       "json",
       ...lintTargets,
     ],
-    { env, pass },
+    // The plugin's debug lines are the pass's progress; runLintPass keeps
+    // them out of the log unless the pass stalls.
+    { env: { ...env, DEBUG: "oxlint-tailwindcss" }, pass },
   );
   // oxlint exits 1 when it reports findings; anything else is a crash.
   if (exitCode !== 0 && exitCode !== 1) {
