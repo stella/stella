@@ -674,7 +674,7 @@ describe("harness holder over its socket", () => {
     expect((await probed(limited)).outcome).toEqual({
       type: "limit_until",
       version: FAKE_CLAUDE_VERSION,
-      resetsAt: "2026-10-28T14:00:00Z",
+      resetsAt: "2099-10-28T14:00:00Z",
     });
     expect((await probed(missing)).outcome).toMatchObject({
       type: "failed",

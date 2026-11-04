@@ -161,6 +161,7 @@ const ADAPTERS = {
       claudeConfigDir: launch.configDir,
       environment: launchEnvironment(options.environment, launch.launch),
       gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
     });
   },

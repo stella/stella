@@ -1,6 +1,10 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import {
+  type HarnessProcessDeadlines,
+  startHarnessProcess,
+} from "../harness-process";
 import type { Detached, HarnessExit } from "../turn-lifecycle";
 import {
   ClaudeOutputEnvelopeSchema,
@@ -12,15 +16,12 @@ import {
 /**
  * The stream-json stdio of one Claude Code CLI process: one JSON object per
  * line in each direction. Control requests are correlated by `request_id`;
- * every other line is handed on by its `type`. The client owns the process;
- * when it exits, every pending control request settles with `closed`.
+ * every other line is handed on by its `type`. The shared harness process
+ * owns the process and bounds every wait on it.
  */
 
-/** A line longer than this is refused rather than buffered without bound. */
-const MAX_LINE_BYTES = 16 * 1024 * 1024;
-
 class ClaudeCliRequestError extends TaggedError("ClaudeCliRequestError")<{
-  reason: "rejected" | "closed";
+  reason: "rejected" | "closed" | "timed_out";
   message: string;
 }> {}
 
@@ -49,6 +50,7 @@ type StartClaudeCliOptions = {
   launch: ClaudeCliLaunch;
   args: readonly string[];
   detached: Detached;
+  deadlines: HarnessProcessDeadlines;
   cwd: string;
   env: Readonly<Record<string, string>>;
   handlers: ClaudeCliHandlers;
@@ -68,55 +70,20 @@ export type ClaudeCliClient = {
   exited: Promise<HarnessExit>;
   /** Ends stdin, which asks the CLI to finish and exit. */
   closeInput: () => void;
+  /** SIGTERM, then SIGKILL once the termination deadline passes. */
   kill: () => Promise<HarnessExit>;
 };
-
-type Pending = (result: Result<unknown, ClaudeCliRequestError>) => void;
 
 export const startClaudeCli = ({
   launch,
   args,
   detached,
+  deadlines,
   cwd,
   env,
   handlers,
 }: StartClaudeCliOptions): ClaudeCliClient => {
-  const child = Bun.spawn([launch.executable, ...launch.args, ...args], {
-    cwd,
-    env: { ...env },
-    stdin: "pipe",
-    stdout: "pipe",
-    // Drained, never surfaced: harness logs may carry account details.
-    stderr: "ignore",
-  });
-  const pending = new Map<string, Pending>();
-  const state = { nextId: 1, closed: false };
-
-  /**
-   * Stdin is the only way to reach the CLI. Once an operation on it throws,
-   * nothing more can be sent, so the process is ended and its exit settles
-   * every pending request; a throw racing an exit already under way changes
-   * nothing, because that exit is reported through `handlers.exit` anyway.
-   */
-  const onInput = (operation: () => void) => {
-    const done = Result.try(operation);
-    if (Result.isError(done)) {
-      child.kill();
-    }
-  };
-
-  const write = (message: object) => {
-    if (state.closed) {
-      return;
-    }
-    onInput(() => {
-      detached(
-        child.stdin.write(`${JSON.stringify(message)}\n`),
-        "claude-cli.write",
-      );
-      detached(child.stdin.flush(), "claude-cli.flush");
-    });
-  };
+  const state = { nextId: 1 };
 
   const settleResponse = (raw: unknown) => {
     const parsed = v.safeParse(ControlResponseSchema, raw);
@@ -125,13 +92,8 @@ export const startClaudeCli = ({
       return;
     }
     const { response } = parsed.output;
-    const settle = pending.get(response.request_id);
-    if (settle === undefined) {
-      handlers.violation("The harness answered a request that was not sent.");
-      return;
-    }
-    pending.delete(response.request_id);
-    settle(
+    const answered = cli.settle(
+      response.request_id,
       response.subtype === "error"
         ? Result.err(
             new ClaudeCliRequestError({
@@ -141,28 +103,23 @@ export const startClaudeCli = ({
           )
         : Result.ok(response.response ?? {}),
     );
+    if (!answered) {
+      handlers.violation("The harness answered a request that was not sent.");
+    }
   };
 
-  const dispatch = (line: string) => {
-    if (line.trim() === "") {
-      return;
-    }
-    const json = Result.try((): unknown => JSON.parse(line));
-    if (Result.isError(json)) {
-      handlers.violation("The harness wrote a line that is not JSON.");
-      return;
-    }
-    const envelope = v.safeParse(ClaudeOutputEnvelopeSchema, json.value);
+  const dispatch = (value: unknown) => {
+    const envelope = v.safeParse(ClaudeOutputEnvelopeSchema, value);
     if (!envelope.success) {
       handlers.violation("The harness wrote a message without a type.");
       return;
     }
     switch (envelope.output.type) {
       case "control_response":
-        settleResponse(json.value);
+        settleResponse(value);
         return;
       case "control_request": {
-        const parsed = v.safeParse(ControlRequestSchema, json.value);
+        const parsed = v.safeParse(ControlRequestSchema, value);
         if (!parsed.success) {
           handlers.violation("The harness wrote a malformed control request.");
           return;
@@ -175,7 +132,7 @@ export const startClaudeCli = ({
         return;
       }
       case "control_cancel_request": {
-        const parsed = v.safeParse(ControlCancelRequestSchema, json.value);
+        const parsed = v.safeParse(ControlCancelRequestSchema, value);
         if (!parsed.success) {
           handlers.violation("The harness wrote a malformed cancel request.");
           return;
@@ -184,100 +141,49 @@ export const startClaudeCli = ({
         return;
       }
       default:
-        handlers.message(envelope.output.type, json.value);
+        handlers.message(envelope.output.type, value);
     }
   };
 
-  const readStdout = async () => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const bytes of child.stdout) {
-      buffer += decoder.decode(bytes, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        dispatch(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-      }
-      if (buffer.length > MAX_LINE_BYTES) {
-        handlers.violation("The harness wrote an oversized message.");
-        buffer = "";
-        child.kill();
-      }
-    }
-    dispatch(buffer + decoder.decode());
-  };
-
-  const exited = (async (): Promise<HarnessExit> => {
-    await Promise.allSettled([readStdout(), child.exited]);
-    state.closed = true;
-    for (const settle of pending.values()) {
-      settle(
-        Result.err(
-          new ClaudeCliRequestError({
-            reason: "closed",
-            message: "The harness exited before it answered.",
-          }),
-        ),
-      );
-    }
-    pending.clear();
-    const exit = {
-      exitCode: child.exitCode,
-      signal: child.signalCode === null ? null : String(child.signalCode),
-    };
-    handlers.exit(exit);
-    return exit;
-  })();
+  const cli = startHarnessProcess<string, ClaudeCliRequestError>({
+    command: [launch.executable, ...launch.args, ...args],
+    cwd,
+    env,
+    detached,
+    deadlines,
+    name: "claude-cli",
+    unanswered: (reason, message) =>
+      new ClaudeCliRequestError({ reason, message }),
+    message: dispatch,
+    violation: handlers.violation,
+    exit: handlers.exit,
+  });
 
   return {
     request: async (subtype, fields = {}) => {
-      if (state.closed) {
-        return Result.err(
-          new ClaudeCliRequestError({
-            reason: "closed",
-            message: "The harness is not running.",
-          }),
-        );
-      }
       const requestId = `stella-${String(state.nextId)}`;
       state.nextId += 1;
-      const { promise, resolve } =
-        Promise.withResolvers<Result<unknown, ClaudeCliRequestError>>();
-      pending.set(requestId, resolve);
-      write({
+      return await cli.request(requestId, subtype, {
         type: "control_request",
         request_id: requestId,
         request: { ...fields, subtype },
       });
-      return await promise;
     },
-    send: write,
+    send: cli.write,
     respond: (requestId, response) => {
-      write({
+      cli.write({
         type: "control_response",
         response: { subtype: "success", request_id: requestId, response },
       });
     },
     respondError: (requestId, message) => {
-      write({
+      cli.write({
         type: "control_response",
         response: { subtype: "error", request_id: requestId, error: message },
       });
     },
-    exited,
-    closeInput: () => {
-      if (!state.closed) {
-        onInput(() => {
-          detached(child.stdin.end(), "claude-cli.close");
-        });
-      }
-    },
-    kill: async () => {
-      if (!state.closed) {
-        child.kill();
-      }
-      return exited;
-    },
+    exited: cli.exited,
+    closeInput: cli.closeInput,
+    kill: cli.kill,
   };
 };
