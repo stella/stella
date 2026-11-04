@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limitas pasiektas iki {time}",
       "stateNeedsLogin": "Reikia prisijungti",
       "stateNotInstalled": "Neįdiegta",
       "stateOffline": "Kompiuteris neprisijungęs",
-      "stateUnsupported": "Ši versija nepalaikoma"
+      "stateUnsupported": "Ši versija nepalaikoma",
+      "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {

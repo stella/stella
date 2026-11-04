@@ -7,6 +7,7 @@ import {
   type ChatLocalHarnessReadiness,
   type ChatLocalRunHarness,
   type ChatLocalRunReadiness,
+  type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
 
@@ -82,6 +83,32 @@ export const chatLocalHarnessOptions = (
       reports.find((report) => report.state === "ready") ?? reports.at(0),
     );
   });
+};
+
+/**
+ * The name a harness reports for the thread's model, from any connected
+ * computer that offers it; `null` while no computer reports it, so the
+ * composer shows the model id instead.
+ */
+export const localRunModelLabel = (
+  readiness: ChatLocalRunReadiness | undefined,
+  target: ChatLocalRunTarget,
+): string | null => {
+  if (readiness === undefined || readiness.status === "hidden") {
+    return null;
+  }
+  for (const runner of readiness.runners) {
+    for (const report of runner.harnesses) {
+      if (report.id !== target.harness || report.state !== "ready") {
+        continue;
+      }
+      const model = report.models.find(({ id }) => id === target.model);
+      if (model !== undefined) {
+        return model.label;
+      }
+    }
+  }
+  return null;
 };
 
 const SEPARATOR = "::";

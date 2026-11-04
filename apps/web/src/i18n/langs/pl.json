@@ -1693,11 +1693,13 @@
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit wyczerpany do {time}",
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
-      "stateUnsupported": "Ta wersja nie jest obsługiwana"
+      "stateUnsupported": "Ta wersja nie jest obsługiwana",
+      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {

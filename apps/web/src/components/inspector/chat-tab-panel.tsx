@@ -282,6 +282,7 @@ export const ChatTabPanel = ({
     leave,
     isGenerating,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -743,6 +744,7 @@ export const ChatTabPanel = ({
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
+                  waitingForComputer={waitingForComputer}
                   workspaceId={tabWorkspaceId}
                 />
               )}
