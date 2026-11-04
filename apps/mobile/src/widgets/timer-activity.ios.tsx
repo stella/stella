@@ -14,8 +14,10 @@ import type {
   LiveActivityLayout,
 } from "expo-widgets";
 
+import { TIMER_ACTIVITY_NAME } from "@stll/api-contract/timer-activity";
+import type { TimerActivityProps } from "@stll/api-contract/timer-activity";
+
 import { LIVE_ACTIVITIES } from "@/env";
-import type { TimerActivityProps } from "@/state/timer-activity";
 
 /**
  * A running timer on the Lock Screen and in the Dynamic Island, as t3code
@@ -136,7 +138,7 @@ const TimerActivityLayout = (
 export const TimerActivity: LiveActivityFactory<TimerActivityProps> | null =
   LIVE_ACTIVITIES
     ? createLiveActivity<TimerActivityProps>(
-        "TimerActivity",
+        TIMER_ACTIVITY_NAME,
         TimerActivityLayout,
       )
     : null;

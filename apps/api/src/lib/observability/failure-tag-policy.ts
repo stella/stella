@@ -478,6 +478,8 @@ export const TAGGED_FAILURE_REASON = {
   TestProcessSpawnError: "tagged_failure",
   TestStderrError: "tagged_failure",
   TimeoutError: "timeout_unbounded",
+  TimerActivityRejectedError: "tagged_failure",
+  TimerActivityRetryError: "upstream_unavailable",
   TokenExchangeError: "tagged_failure",
   TokenRefreshError: "tagged_failure",
   ToolOutputContractDegradedError: "tagged_failure",
