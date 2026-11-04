@@ -59,14 +59,20 @@ test("a stalled lint pass reports its last plugin progress and the cache directo
       }),
     );
     const message = rejection instanceof Error ? rejection.message : "";
-    expect(message).toContain(
-      `Last plugin progress (${progressTailLines} lines):`,
-    );
-    expect(message).toContain(
+    // The message also quotes the command, which here is the script itself,
+    // so the progress assertions read only the section between the headings.
+    const heading = `Last plugin progress (${progressTailLines} lines):\n`;
+    expect(message).toContain(heading);
+    const progress = message
+      .slice(message.indexOf(heading) + heading.length)
+      .split("\nCache directory:\n")[0]
+      ?.split("\n");
+    expect(progress).toHaveLength(progressTailLines);
+    expect(progress?.at(0)).toBe(`${pluginProgressPrefix} file 5`);
+    expect(progress?.at(-1)).toBe(
       `${pluginProgressPrefix} file ${progressTailLines + 4}`,
     );
-    expect(message).not.toContain(`${pluginProgressPrefix} file 4\n`);
-    expect(message).not.toContain("not plugin progress");
+    expect(progress).not.toContain("not plugin progress");
     expect(message).toContain("Cache directory:\nsnapshot.lock 0 bytes");
   } finally {
     await rm(cacheDirectory, { recursive: true, force: true });
