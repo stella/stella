@@ -211,20 +211,36 @@ type CourtPickerGroup = {
  * Pages of one country's catalog joined into one: each tier's courts in page
  * order, tiers apex first. Pages run by court name, so an apex court can
  * arrive on a later page than a regional one; the tier order is fixed rather
- * than taken from arrival.
+ * than taken from arrival. A spelling of a court an earlier page already holds
+ * joins that court's entry instead of listing the court twice.
  */
 export const appendCourtCatalogPage = (
   catalog: CourtCatalog | null,
   page: CourtCatalog,
 ): CourtCatalog => {
-  if (catalog === null || catalog.country !== page.country) {
+  if (catalog === null) {
     return page;
   }
-  const courtsOf = (tierLabel: CourtTierLabel) =>
-    [catalog, page].flatMap(
-      ({ courts }) =>
-        courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? [],
-    );
+  const incoming = page.courts.flatMap(({ courts }) => courts);
+  const held = new Set(
+    catalog.courts.flatMap(({ courts }) => courts.map(({ key }) => key)),
+  );
+  const courtsOf = (tierLabel: CourtTierLabel) => [
+    ...(
+      catalog.courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? []
+    ).map((court) => ({
+      ...court,
+      aliases: [
+        ...court.aliases,
+        ...incoming
+          .filter(({ key }) => key === court.key)
+          .flatMap(({ value, aliases }) => [value, ...aliases]),
+      ],
+    })),
+    ...(
+      page.courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? []
+    ).filter(({ key }) => !held.has(key)),
+  ];
   return {
     country: page.country,
     courts: COURT_TIER_LABELS.flatMap((tierLabel) => {

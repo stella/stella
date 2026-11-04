@@ -75,10 +75,10 @@ type CourtCatalog = v.InferInput<typeof CASE_LAW_COURT_CATALOG_PROJECTION>;
  * One page of courts as the search's court filter reads it: a court the
  * corpus spells several ways is listed once, under the spelling the filter
  * maps every other spelling onto, grouped by tier, apex first. The page is a
- * run of stored names in code-unit order, so a caller paging on merges pages
- * by appending; two spellings of one court that fall on either side of a page
- * boundary are listed once on each page. Counts are left to the caller, which
- * has them for the result set it is narrowing.
+ * run of stored names, so two spellings of one court can fall on either side
+ * of a page boundary; they share a `key`, which a caller paging on merges by.
+ * Counts are left to the caller, which has them for the result set it is
+ * narrowing.
  */
 export const courtCatalogPage = ({
   country,
@@ -94,11 +94,12 @@ export const courtCatalogPage = ({
   // A directory court the page holds no spelling of is not on this page.
   const entries = [
     ...storedCourtCatalog(country, courts).identities.values(),
-  ].flatMap(({ spellings: [value, ...aliases] }) =>
+  ].flatMap(({ key, spellings: [value, ...aliases] }) =>
     value === undefined
       ? []
       : [
           {
+            key,
             value,
             aliases: aliases.toSorted(compareCodeUnit),
             tier: tierOf(value),
@@ -111,7 +112,7 @@ export const courtCatalogPage = ({
       const tierCourts = entries
         .filter(({ tier }) => tier === tierLabel)
         .toSorted((left, right) => compareCodeUnit(left.value, right.value))
-        .map(({ value, aliases }) => ({ value, aliases }));
+        .map(({ key, value, aliases }) => ({ key, value, aliases }));
       return tierCourts.length === 0 ? [] : [{ tierLabel, courts: tierCourts }];
     }),
     nextCursor,

@@ -40,11 +40,15 @@ test("a page lists one entry per court, apex spellings merged, tiers apex first"
     new Set(["Najvyšší súd", "Najvyšší súd Slovenskej republiky"]),
   );
   expect(
-    page.courts.find(({ tierLabel }) => tierLabel === "regional")?.courts,
+    page.courts
+      .find(({ tierLabel }) => tierLabel === "regional")
+      ?.courts.map(({ value, aliases }) => ({ value, aliases })),
   ).toEqual([
     { value: "Krajský súd v Bratislave", aliases: [] },
     { value: "Krajský súd v Košiciach", aliases: [] },
   ]);
+  // Spellings on another page of the same court would carry the same key.
+  expect(court?.key).toEqual(expect.any(String));
 });
 
 test("a page carries the cursor the next page starts from", () => {
@@ -55,13 +59,15 @@ test("a page carries the cursor the next page starts from", () => {
     tierOf,
   });
   expect(page.nextCursor).toBe("cursor");
-  expect(page.courts).toEqual([
+  expect(
+    page.courts.map(({ tierLabel, courts }) => ({
+      tierLabel,
+      courts: courts.map(({ value }) => value),
+    })),
+  ).toEqual([
     {
       tierLabel: "regional",
-      courts: [
-        { value: "Krajský súd v Bratislave", aliases: [] },
-        { value: "Krajský súd v Košiciach", aliases: [] },
-      ],
+      courts: ["Krajský súd v Bratislave", "Krajský súd v Košiciach"],
     },
   ]);
 });

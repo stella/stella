@@ -136,7 +136,8 @@ type AdmittedCourtPageOptions = {
  * counts hold only positive totals, and `readCourtNames` is join-free, so a
  * surface that lists courts to a reader reads these: a court whose every source
  * the redistribution policy withholds is never named. The policy applies when
- * the page is read; a court's first decision lists it from the next fold.
+ * the page is read; the counts follow the corpus at the next fold, so a court's
+ * first decision lists it, and its last one's removal unlists it, from then.
  */
 export const admittedCourtPageStatement = ({
   country,

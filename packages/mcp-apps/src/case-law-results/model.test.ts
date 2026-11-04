@@ -18,6 +18,7 @@ const CATALOG = {
       tierLabel: "supreme" as const,
       courts: [
         {
+          key: "supreme",
           value: "Najvyšší súd",
           aliases: ["Najvyšší súd Slovenskej republiky"],
         },
@@ -26,8 +27,16 @@ const CATALOG = {
     {
       tierLabel: "regional" as const,
       courts: [
-        { value: "Krajský súd v Bratislave", aliases: [] },
-        { value: "Krajský súd v Košiciach", aliases: [] },
+        {
+          key: "Krajský súd v Bratislave",
+          value: "Krajský súd v Bratislave",
+          aliases: [],
+        },
+        {
+          key: "Krajský súd v Košiciach",
+          value: "Krajský súd v Košiciach",
+          aliases: [],
+        },
       ],
     },
   ],
@@ -40,7 +49,13 @@ test("catalog pages join tier by tier, apex first whichever page names it", () =
     courts: [
       {
         tierLabel: "regional" as const,
-        courts: [{ value: "Krajský súd v Bratislave", aliases: [] }],
+        courts: [
+          {
+            key: "Krajský súd v Bratislave",
+            value: "Krajský súd v Bratislave",
+            aliases: [],
+          },
+        ],
       },
     ],
     nextCursor: "next",
@@ -50,11 +65,17 @@ test("catalog pages join tier by tier, apex first whichever page names it", () =
     courts: [
       {
         tierLabel: "constitutional" as const,
-        courts: [{ value: "Ústavný súd", aliases: [] }],
+        courts: [{ key: "Ústavný súd", value: "Ústavný súd", aliases: [] }],
       },
       {
         tierLabel: "regional" as const,
-        courts: [{ value: "Krajský súd v Košiciach", aliases: [] }],
+        courts: [
+          {
+            key: "Krajský súd v Košiciach",
+            value: "Krajský súd v Košiciach",
+            aliases: [],
+          },
+        ],
       },
     ],
     nextCursor: null,
@@ -68,22 +89,55 @@ test("catalog pages join tier by tier, apex first whichever page names it", () =
     courts: [
       {
         tierLabel: "constitutional",
-        courts: [{ value: "Ústavný súd", aliases: [] }],
+        courts: [{ key: "Ústavný súd", value: "Ústavný súd", aliases: [] }],
       },
       {
         tierLabel: "regional",
         courts: [
-          { value: "Krajský súd v Bratislave", aliases: [] },
-          { value: "Krajský súd v Košiciach", aliases: [] },
+          {
+            key: "Krajský súd v Bratislave",
+            value: "Krajský súd v Bratislave",
+            aliases: [],
+          },
+          {
+            key: "Krajský súd v Košiciach",
+            value: "Krajský súd v Košiciach",
+            aliases: [],
+          },
         ],
       },
     ],
     nextCursor: null,
   });
-  // A page of another country starts over rather than mixing courts.
-  expect(appendCourtCatalogPage(joined, { ...first, country: "CZE" })).toEqual({
-    ...first,
-    country: "CZE",
+});
+
+test("a court's spellings on two pages join one entry, wherever it is listed", () => {
+  const entry = (value: string) => ({ key: "supreme", value, aliases: [] });
+  const page = (value: string, nextCursor: string | null) => ({
+    country: "SVK",
+    courts: [{ tierLabel: "supreme" as const, courts: [entry(value)] }],
+    nextCursor,
+  });
+  expect(
+    appendCourtCatalogPage(
+      page("Najvyšší súd", "next"),
+      page("Najvyšší súd Slovenskej republiky", null),
+    ),
+  ).toEqual({
+    country: "SVK",
+    courts: [
+      {
+        tierLabel: "supreme",
+        courts: [
+          {
+            key: "supreme",
+            value: "Najvyšší súd",
+            aliases: ["Najvyšší súd Slovenskej republiky"],
+          },
+        ],
+      },
+    ],
+    nextCursor: null,
   });
 });
 

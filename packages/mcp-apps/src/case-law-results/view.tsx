@@ -466,20 +466,27 @@ const SearchControls = ({
   // The page's facets describe the searched country; after a country switch
   // they describe another one and name none of the chosen country's courts.
   const facets = country === defaults.country ? page.facets : null;
-  const [catalog, setCatalog] = useState<CourtCatalog | null>(null);
-  const [catalogRequested, setCatalogRequested] = useState<string | null>(null);
-  const countryCatalog = catalog?.country === country ? catalog : null;
+  // Per country: a page answering after a country switch joins its own
+  // country's catalog, and a reader coming back finds it where it stopped.
+  const [catalogs, setCatalogs] = useState<ReadonlyMap<string, CourtCatalog>>(
+    () => new Map(),
+  );
+  const [catalogsLoading, setCatalogsLoading] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const countryCatalog = catalogs.get(country) ?? null;
   const loadCatalog = () => {
-    if (catalogRequested === country) {
+    if (catalogsLoading.has(country) || countryCatalog?.nextCursor === null) {
       return;
     }
-    setCatalogRequested(country);
     const requested = country;
+    setCatalogsLoading((current) => new Set(current).add(requested));
     bridge.detached(
       (async () => {
-        // One bounded page per call, appended as it arrives; the list stops
-        // at a page cap, past which the reader narrows by searching.
-        let cursor: string | null = null;
+        // One bounded page per call, appended as it arrives, from where the
+        // country's catalog stopped. A cap or an unreadable page ends the
+        // round; the facets stand in, and the next opening picks up from here.
+        let cursor = countryCatalog?.nextCursor ?? null;
         for (
           let pageIndex = 0;
           pageIndex < COURT_CATALOG_PAGE_CAP;
@@ -498,27 +505,31 @@ const SearchControls = ({
               ? undefined
               : parseCourtCatalog(parseAppToolPayload(result));
           if (parsed === undefined) {
-            if (pageIndex === 0) {
-              // Unreadable: the facets stand in, and the next opening asks again.
-              setCatalogRequested((current) =>
-                current === requested ? null : current,
-              );
-            }
-            return;
+            break;
           }
-          setCatalog((current) => appendCourtCatalogPage(current, parsed));
+          setCatalogs((current) =>
+            new Map(current).set(
+              requested,
+              appendCourtCatalogPage(current.get(requested) ?? null, parsed),
+            ),
+          );
           cursor = parsed.nextCursor;
           if (cursor === null) {
-            return;
+            break;
           }
         }
+        setCatalogsLoading((current) => {
+          const next = new Set(current);
+          next.delete(requested);
+          return next;
+        });
       })(),
       "caseLawResults.courts",
     );
   };
   const courtGroups = courtPickerGroups({ catalog: countryCatalog, facets });
   const catalogPending =
-    countryCatalog === null && catalogRequested === country;
+    countryCatalog === null && catalogsLoading.has(country);
   const dateLabels = {
     locale,
     placeholderLabel: t("selectDate"),
