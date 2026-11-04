@@ -15,7 +15,7 @@ describe("citation probe candidates", () => {
   });
 
   test("an authority file number joined by non-breaking hyphens is benign", () => {
-    const nb = "\u2011";
+    const nb = String.fromCodePoint(0x2011);
     expect(
       residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
     ).toBe(false);
@@ -87,5 +87,14 @@ describe("citation probe candidates", () => {
     expect(residual("sp. zn.XV/2 Gn 45/09")).toBe(false);
     expect(residual("sp. zn. VI/2 Pz 123/07-5")).toBe(true);
     expect(residual("sp. zn. 2 Tdo 123/2007")).toBe(true);
+  });
+
+  test("a Czech anonymization label is benign, a numbered docket is not", () => {
+    expect(residual("č. j. číslo jednací ze dne 1. 2. 2020")).toBe(false);
+    expect(residual("č. j. číslo uvedený v bodě 3.2 rozsudku")).toBe(false);
+    expect(residual("č.j. č. účtu ze dne 3. 4. 2019")).toBe(false);
+    expect(residual("č. j. číslo")).toBe(false);
+    expect(residual("č. j. číslo 12 C 345/2020")).toBe(true);
+    expect(residual("č. j. 12 C 345/2020-67")).toBe(true);
   });
 });

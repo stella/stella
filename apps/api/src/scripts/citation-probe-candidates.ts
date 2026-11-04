@@ -87,6 +87,11 @@ const BENIGN: readonly RegExp[] = [
   // rule above misses it whenever the detector's greedy tail reaches into
   // following prose that carries a date.
   /^(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[Aa]nonymizov[aá]no\b/u,
+  // Czech anonymization label standing where the file number belongs ("č. j.
+  // číslo jednací ze dne …", "č. j. č. účtu ze dne …"): a lowercase word
+  // follows the label, never a number, so trailing prose digits must not
+  // keep it a residual.
+  /^[čc]\.\s{0,3}j\.:?\s{0,3}(?:číslo|č\.\s{0,2}účtu)(?=\s{1,3}\p{Ll}|$)/u,
   // Czech regional-authority file number with a space-separated office
   // code ("č. j. KUAB 12345/2020"): every krajský úřad code opens with
   // "KU", which no court registry does, and the reference is not a court
