@@ -1,5 +1,6 @@
 // parser-output-unchanged: Statute anchor grammars for readers and provision reads; decision parsers reach this module only through document-ast and call none of it.
 // parser-output-unchanged: Minting and nesting provision anchors moved here serve provision keys and previews; decision parsers still call none of this module.
+// parser-output-unchanged: Unnumbered statute wording is read only by provision reads and previews; decision parsers still call none of this module.
 /**
  * The grammar a publisher writes statute anchors in, and every reading of an
  * anchor's path that the readers, previews and provision reads make.
@@ -34,7 +35,10 @@ type StatuteAnchorKinds = Readonly<Record<StatuteAnchorLevel, string>>;
  *   shallowest depth it is drawn at; an item nested in another sits one
  *   level under it (`pism_b-pism_aa`, `bod-1.bod-1a`). `restatementSuffix`
  *   marks a segment that restates its subdivision (e-Sbírka's `~2`), or is
- *   null where the publisher marks none.
+ *   null where the publisher marks none. `unnumberedAnchor` matches the
+ *   anchor of wording the publisher numbers nowhere and files outside any
+ *   path, or is null where it nests such wording in the path (Slov-Lex's
+ *   `odsek-1.text2`).
  * - `path`: anchors nest on `segmentSeparator`, but their segments name no
  *   list the reader can draw; `reason` says why.
  * - `whole`: anchors are read whole, so none nests under another; `reason`
@@ -48,6 +52,7 @@ export type StatuteAnchorScheme =
       listKinds: Readonly<Record<string, ParagraphListDepth>>;
       restatementSuffix: RegExp | null;
       segmentSeparator: string;
+      unnumberedAnchor: RegExp | null;
     }
   | { type: "path"; reason: string; segmentSeparator: string }
   | { type: "whole"; reason: string };
@@ -76,6 +81,7 @@ export const E_SBIRKA_ANCHORS = {
   listKinds: { [E_SBIRKA_KINDS.letter]: 1, [E_SBIRKA_KINDS.point]: 2 },
   restatementSuffix: /~\d+$/u,
   segmentSeparator: "-",
+  unnumberedAnchor: /^frag_\d+$/u,
 } as const satisfies StatuteAnchorScheme;
 
 const SLOV_LEX_KINDS = {
@@ -94,6 +100,7 @@ export const SLOV_LEX_ANCHORS = {
   listKinds: { [SLOV_LEX_KINDS.letter]: 1, [SLOV_LEX_KINDS.point]: 1 },
   restatementSuffix: null,
   segmentSeparator: ".",
+  unnumberedAnchor: null,
 } as const satisfies StatuteAnchorScheme;
 
 /**
@@ -184,6 +191,32 @@ export const anchorWithin = (
   return (
     anchor.startsWith(`${ancestor}${nesting.separator}`) ||
     (anchor.startsWith(ancestor) && PARSER_CHILD_SUFFIX.test(continuation))
+  );
+};
+
+type AnchorContinuesSubsectionOptions = { anchor: string; subsection: string };
+
+/**
+ * Whether `anchor` is unnumbered wording that a block anchored `subsection`
+ * carries on into, when the publisher's path does not say so. e-Sbírka files
+ * the alternatives and the closing line of `(1)` under bare `frag_…` anchors,
+ * so they read as belonging to nothing, though they are that paragraph's own
+ * text and often its penalty. Only a subsection continues this way: a closing
+ * line after letters closes the paragraph that opened them, not the last
+ * letter, as Slov-Lex's `odsek-1.text2` states outright.
+ */
+export const anchorContinuesSubsection = (
+  scheme: StatuteAnchorScheme,
+  { anchor, subsection }: AnchorContinuesSubsectionOptions,
+): boolean => {
+  if (scheme.type !== "listed" || scheme.unnumberedAnchor === null) {
+    return false;
+  }
+  const innermost = subsection.split(scheme.segmentSeparator).at(-1);
+  return (
+    innermost !== undefined &&
+    innermost.startsWith(statuteAnchorKindPrefix(scheme, "subsection")) &&
+    scheme.unnumberedAnchor.test(anchor)
   );
 };
 
