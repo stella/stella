@@ -1504,6 +1504,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/db/read-budget-entries/*.ts",
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
+      "apps/api/src/lib/fields/record-text.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-citation-projection.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",

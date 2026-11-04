@@ -6540,6 +6540,9 @@
       "calculating": "Arvutamine...",
       "errored": "Viga",
       "formatNotSupported": "Formaat ei ole toetatud",
+      "recordChoose": "{count, plural, one {Kinnitage # vaste} other {Valige # vaste hulgast}}",
+      "recordCount": "{count, plural, one {# kirje} other {# kirjet}}",
+      "recordNotFound": "Ei leitud",
       "selectAValue": "Valige väärtus",
       "selectValues": "Valige väärtused",
       "wholeNumberOnly": "Sisestage täisarv"
@@ -7232,6 +7235,7 @@
       "previewSubject": "Proovi näidisel",
       "previewUnsupported": "Eelvaade pole selle dokumenditüübi jaoks toetatud.",
       "readingFrom": "AI loeb:",
+      "record": "Kirje",
       "referencesItself": "Omadus viitab iseendale teiste omaduste kaudu",
       "resultType": "Tulemuse tüüp",
       "returnsLabel": "Vorming",
