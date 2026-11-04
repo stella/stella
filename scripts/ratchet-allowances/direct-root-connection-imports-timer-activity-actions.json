@@ -1,6 +1,0 @@
-{
-  "metric": "direct-root-connection-imports",
-  "file": "apps/api/src/lib/push/timer-activity-actions.ts",
-  "delta": 1,
-  "reason": "A Lock Screen button's key is the request's only credential, so the key is looked up on the owner connection before any person is known; the lookup names the device and the user the key carries, and the timer change then runs on the person's own membership-scoped connection."
-}

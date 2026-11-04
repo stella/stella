@@ -384,10 +384,10 @@ export const issueTimerActivityActionKey = async (
       ),
     )
     .returning({ expiresAt: timerActivityDevices.actionKeyExpiresAt });
-  if (row === undefined || row.expiresAt === null) {
-    return null;
-  }
-  return { key: `${userId}.${secret}`, expiresAt: row.expiresAt.toISOString() };
+  const expiresAt = row?.expiresAt ?? null;
+  return expiresAt === null
+    ? null
+    : { key: `${userId}.${secret}`, expiresAt: expiresAt.toISOString() };
 };
 
 const ACTION_KEY_MAX_LENGTH = 200;
@@ -429,11 +429,12 @@ export const verifyTimerActivityActionKey = async (
       ),
     )
     .limit(1);
-  if (row === undefined || row.actionKeyHash === null) {
+  const storedHash = row?.actionKeyHash ?? null;
+  if (row === undefined || storedHash === null) {
     return null;
   }
   const presented = Buffer.from(hashTimerActivityActionKey(secret), "hex");
-  const stored = Buffer.from(row.actionKeyHash, "hex");
+  const stored = Buffer.from(storedHash, "hex");
   if (
     presented.length !== stored.length ||
     !timingSafeEqual(presented, stored)

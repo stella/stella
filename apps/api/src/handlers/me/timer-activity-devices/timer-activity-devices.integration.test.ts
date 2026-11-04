@@ -359,7 +359,7 @@ describe("registering a phone for the Lock Screen timer", () => {
     const issued = (await register(actor, registration({ actionKey: true })))
       .actionKey;
     if (issued === null) {
-      return expect.unreachable("a signed-in phone gets a key");
+      expect.unreachable("a signed-in phone gets a key");
     }
     expect(Date.parse(issued.expiresAt)).toBeGreaterThan(Date.now());
 
@@ -389,7 +389,7 @@ describe("registering a phone for the Lock Screen timer", () => {
     const second = (await register(actor, registration({ actionKey: true })))
       .actionKey;
     if (first === null || second === null) {
-      return expect.unreachable("a signed-in phone gets a key");
+      expect.unreachable("a signed-in phone gets a key");
     }
     expect(
       await verifyTimerActivityActionKey(ownerDb(), {
