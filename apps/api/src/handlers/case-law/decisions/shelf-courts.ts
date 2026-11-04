@@ -6,6 +6,7 @@ import {
   directoryCourtRankByName,
 } from "@/api/lib/case-law/court-weights";
 import { isCourtDirectoryJurisdiction } from "@/api/lib/case-law/decision-court-id-sql";
+import { caseLawPopulationRows } from "@/api/lib/case-law/population-counts";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
@@ -111,6 +112,38 @@ export const readCourtNames = async ({
       const court = row["court"];
       return typeof court === "string" && court.length > 0 ? [court] : [];
     });
+};
+
+type ReadAdmittedCourtNamesOptions = ReadCourtNamesOptions & {
+  /** The sources a public surface may not count or serve. */
+  excludedSourceIds: readonly string[];
+};
+
+/**
+ * The courts holding at least one decision a public surface may serve: the
+ * population counts under the redistribution policy and the caller's source
+ * exclusions, as the browse facets read them. `readCourtNames` is join-free
+ * and lists every stored court; a surface that lists courts to a reader
+ * keeps only these, so a court whose every source is withheld is never named.
+ */
+export const readAdmittedCourtNames = async ({
+  caseLawDb,
+  country,
+  excludedSourceIds,
+}: ReadAdmittedCourtNamesOptions): Promise<ReadonlySet<string>> => {
+  const rows = await caseLawDb(async (tx) => {
+    const population = caseLawPopulationRows(tx, excludedSourceIds);
+    return await tx
+      .select({ court: population.value })
+      .from(population)
+      .where(
+        sql`${population.kind} = 'court'
+          AND ${population.country} = ${country}
+          AND ${population.total} > 0`,
+      )
+      .groupBy(population.value);
+  });
+  return new Set(rows.map(({ court }) => court));
 };
 
 type CourtDocketSizesOptions = {
