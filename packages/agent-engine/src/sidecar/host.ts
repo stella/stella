@@ -76,8 +76,12 @@ export type HarnessLaunch = {
 };
 
 export type SidecarHostOptions = {
-  /** Hands one message to the holder. */
-  send: (message: SidecarHostOutput) => void;
+  /**
+   * Hands one message to the holder. `false` when the message cannot be
+   * written within the contract (`encodeSidecarMessage`); the holder kept and
+   * sent nothing then.
+   */
+  send: (message: SidecarHostOutput) => boolean;
   /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
@@ -142,11 +146,12 @@ const START_FAILURE: Record<
   }),
 };
 
+/** The approval's summary; a missing or blank reason names the tool. */
 const summaryOf = (reason: string | null, toolName: string) =>
-  (reason ?? `Approval required to run ${toolName}`).slice(
-    0,
-    MAX_SUMMARY_CHARS,
-  );
+  (reason === null || reason.trim() === ""
+    ? `Approval required to run ${toolName}`
+    : reason
+  ).slice(0, MAX_SUMMARY_CHARS);
 
 type ProbeOutcomeOptions = {
   harness: AgentHarness;
@@ -414,12 +419,21 @@ export class SidecarHost {
             message: probed.error.message,
           } as const);
     })();
-    this.options.send({
-      type: "harness.probed",
-      requestId: message.requestId,
-      harness: message.harness,
-      outcome,
-    });
+    const probed = (reported: SidecarProbeOutcome) =>
+      this.options.send({
+        type: "harness.probed",
+        requestId: message.requestId,
+        harness: message.harness,
+        outcome: reported,
+      });
+    // A report the contract cannot carry still answers the probe.
+    if (!probed(outcome)) {
+      probed({
+        type: "failed",
+        reason: "protocol_violation",
+        message: "The harness reported more than the sidecar can relay.",
+      });
+    }
   }
 
   private start(message: SidecarRunStart, config: Config) {
@@ -548,8 +562,23 @@ export class SidecarHost {
       value: "failed",
       sessionId: null,
     };
-    const send = this.options.send;
     const runId = message.runId;
+    /**
+     * Set once one of the run's messages could not be written. The desktop
+     * would miss part of the run, so the run stops, writes nothing more and
+     * finishes `failed`.
+     */
+    const delivery = { broken: false };
+    const send = (runMessage: SidecarHostOutput) => {
+      if (delivery.broken || this.options.send(runMessage)) {
+        return;
+      }
+      delivery.broken = true;
+      this.options.log(
+        `a run's ${runMessage.type} message could not be written; stopping the run`,
+      );
+      this.stop(run);
+    };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
       run.requests.set(requestId, nativeId);
@@ -654,11 +683,20 @@ export class SidecarHost {
       send({ type: "run.event", runId, chunk: { ...chunk } });
     }
     await run.turn?.dispose();
-    send({
+    const finished = {
       type: "run.finished",
       runId,
-      outcome: outcome.value,
+      outcome: delivery.broken ? "failed" : outcome.value,
       harnessSessionId: outcome.sessionId,
-    });
+    } as const;
+    // Every accepted run ends with one `run.finished`: a native session id
+    // the contract cannot carry fails the run instead of losing its end.
+    if (!this.options.send(finished)) {
+      this.options.send({
+        ...finished,
+        outcome: "failed",
+        harnessSessionId: null,
+      });
+    }
   }
 }

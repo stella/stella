@@ -16,11 +16,11 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");

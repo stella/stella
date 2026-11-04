@@ -96,7 +96,11 @@ export type HolderPeer = {
 
 type Kept = { seq: number; line: string; bytes: number };
 
-type RunStatus = "running" | "overflowed" | "finished";
+/**
+ * `overflowed`: the run outgrew the buffer and is being cancelled; `ending`:
+ * its buffer-full chunk is kept and only its failed end is still to come.
+ */
+type RunStatus = "running" | "overflowed" | "ending" | "finished";
 
 type Journal = {
   harness: AgentHarness;
@@ -140,9 +144,7 @@ export class Holder {
       options.log(`background work failed: ${context}`);
     });
     this.host = new SidecarHost({
-      send: (message) => {
-        this.fromHost(message);
-      },
+      send: (message) => this.fromHost(message),
       log: options.log,
       environment: options.environment,
     });
@@ -382,16 +384,28 @@ export class Holder {
     peer.attached.add(runId);
   }
 
-  private fromHost(message: SidecarHostOutput) {
+  /**
+   * Take one message from the command loop. `false` when it cannot be written
+   * within the contract; nothing was kept or sent then, and the loop decides
+   * what that means for its run or probe.
+   */
+  private fromHost(message: SidecarHostOutput): boolean {
     if (
       message.type !== "run.event" &&
       message.type !== "run.approval_request" &&
       message.type !== "run.finished"
     ) {
-      if (this.current !== null) {
-        this.write(this.current, message);
+      const encoded = encodeSidecarMessage(message);
+      if (encoded.type === "refused") {
+        this.options.log(
+          `could not write a ${message.type} message: ${encoded.reason}`,
+        );
+        return false;
       }
-      return;
+      if (this.current !== null) {
+        this.deliver(this.current, encoded.line);
+      }
+      return true;
     }
     const journal =
       this.journals.get(message.runId) ??
@@ -399,32 +413,49 @@ export class Holder {
     if (journal.status === "finished") {
       panic("The command loop sent a message after a run finished");
     }
-    if (journal.status === "overflowed") {
-      if (message.type === "run.finished") {
+    if (journal.status === "overflowed" || journal.status === "ending") {
+      if (message.type !== "run.finished") {
+        return true;
+      }
+      if (journal.status === "overflowed") {
         this.record(
           message.runId,
           journal,
           this.bufferFull(message.runId, journal),
         );
-        this.record(message.runId, journal, { ...message, outcome: "failed" });
+        journal.status = "ending";
       }
-      return;
+      // A refused end comes back without its session id; the buffer-full
+      // chunk is kept already and is not repeated.
+      return this.record(message.runId, journal, {
+        ...message,
+        outcome: "failed",
+      });
     }
-    this.record(message.runId, journal, message);
+    return this.record(message.runId, journal, message);
   }
 
-  /** Number, keep and stream one run message. */
-  private record(runId: string, journal: Journal, message: SidecarRunOutput) {
+  /**
+   * Number, keep and stream one run message. `false` when it cannot be
+   * written within the contract; it is then neither numbered nor kept.
+   */
+  private record(
+    runId: string,
+    journal: Journal,
+    message: SidecarRunOutput,
+  ): boolean {
     const numbered: SidecarRunMessage = {
       ...message,
       seq: journal.lastSeq + 1,
     };
-    const line = encodeSidecarMessage(numbered);
-    if (line === null) {
-      // Only a chunk can outgrow a line; a run's last message never does.
-      this.options.log(`dropped an oversized ${message.type} message`);
-      return;
+    const encoded = encodeSidecarMessage(numbered);
+    if (encoded.type === "refused") {
+      this.options.log(
+        `could not write a run's ${message.type} message: ${encoded.reason}`,
+      );
+      return false;
     }
+    const line = encoded.line;
     const bytes = Buffer.byteLength(line);
     const limits = this.options.limits;
     if (
@@ -436,7 +467,7 @@ export class Holder {
       this.options.log("a run outgrew the holder's buffer; cancelling it");
       journal.status = "overflowed";
       this.host.cancel(runId);
-      return;
+      return true;
     }
     journal.lastSeq = numbered.seq;
     journal.kept.push({ seq: numbered.seq, line, bytes });
@@ -452,6 +483,7 @@ export class Holder {
         this.forget(runId, journal);
       }, this.options.unackedRetentionMs);
     }
+    return true;
   }
 
   /** The error chunk that ends a run the holder could no longer buffer. */
@@ -531,20 +563,25 @@ export class Holder {
     return { type: "rejected", reason, messageType, runId };
   }
 
-  private encode(message: SidecarMessage) {
-    return (
-      encodeSidecarMessage(message) ??
-      panic(`A ${message.type} message outgrew the line limit`)
-    );
-  }
-
-  /** An unnumbered message; run messages go through `record`. */
+  /**
+   * One of the holder's own unnumbered messages; run messages go through
+   * `record` and the command loop's through `fromHost`. The holder builds
+   * these from bounded fields, so a refusal is a defect.
+   */
   private write(
     peer: Peer,
     message: Exclude<SidecarMessage, SidecarRunMessage>,
   ) {
+    const encoded = encodeSidecarMessage(message);
+    if (encoded.type === "refused") {
+      panic(`The holder's ${message.type} message is ${encoded.reason}`);
+    }
+    this.deliver(peer, encoded.line);
+  }
+
+  private deliver(peer: Peer, line: string) {
     if (peer.status !== "closed") {
-      peer.connection.write(this.encode(message));
+      peer.connection.write(line);
     }
   }
 }

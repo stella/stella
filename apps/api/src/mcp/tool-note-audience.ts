@@ -12,6 +12,7 @@ export const MCP_NOTE_AUDIENCE = {
   filter_unread: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
+  phrasing_timed_out: "agent",
 } as const satisfies Record<
   AgentCaseLawSearchWarning["code"] | "input_read",
   "agent" | "user"

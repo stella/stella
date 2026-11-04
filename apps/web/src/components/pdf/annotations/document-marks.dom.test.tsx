@@ -5,6 +5,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type {
   DocumentMark,
@@ -12,7 +13,6 @@ import type {
 } from "@/components/pdf/annotations/use-document-marks";
 import type { PdfSelectionPassage } from "@/components/pdf/pdf-selection.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 

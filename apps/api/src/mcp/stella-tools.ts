@@ -22,6 +22,7 @@ import {
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
   SEARCH_TOTAL_NOT_COUNTED,
   searchPageEnd,
 } from "@stll/api-contract/search";
@@ -89,6 +90,7 @@ import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
   partialMatchesAppendedWarning,
+  phrasingTimedOutWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
@@ -227,6 +229,7 @@ import {
   handlerResultMessage,
   internalFailureResult,
   invalidCursorResult,
+  isCaseLawSearchTimeout,
   legalCitationLinkFields,
   MAX_LIST_LIMIT,
   MCP_CONTENT_MAX_CHARS,
@@ -2047,13 +2050,22 @@ const facetValuesForFilters = ({
   ];
 };
 
-/** One query's page, or the mark of a query whose page had already ended. */
+/**
+ * One query's page, the mark of a query whose page had already ended, or a
+ * query the call's time budget stopped before it answered. A timed-out query
+ * keeps the cursor it ran from, so the merged page's continuation runs it
+ * again.
+ */
 type CaseLawQueryOutcome =
-  { exhausted: true } | { exhausted: false; page: SearchCaseLawSuccess };
+  | { type: "exhausted" }
+  | { type: "page"; page: SearchCaseLawSuccess }
+  | { type: "timed_out"; subCursor: string | undefined };
 
 type CaseLawSearchAnswer =
   | { type: "page"; page: SearchCaseLawSuccess }
-  | { type: "failed"; result: InternalToolErrorResult };
+  | { type: "failed"; result: InternalToolErrorResult }
+  /** The search ran out of its time budget; `result` is the retryable error. */
+  | { type: "timed_out"; result: InternalToolErrorResult };
 
 /** One query's handler answer read as its page or the tool's refusal. */
 const readCaseLawSearchAnswer = (
@@ -2062,7 +2074,7 @@ const readCaseLawSearchAnswer = (
 ): CaseLawSearchAnswer => {
   const timeout = caseLawSearchTimeoutResult(answer);
   if (timeout !== null) {
-    return { type: "failed", result: timeout };
+    return { type: "timed_out", result: timeout };
   }
   const refusal = searchRefusalResult(answer);
   if (refusal !== null) {
@@ -2422,12 +2434,45 @@ const caseLawSearchResult = ({
 const mergedCaseLawSearchCursor = (
   pages: readonly CaseLawQueryOutcome[],
 ): string | null => {
-  const subCursors = pages.map((outcome) =>
-    outcome.exhausted ? null : outcome.page.nextCursor,
-  );
+  const subCursors = pages.map((outcome) => {
+    switch (outcome.type) {
+      case "exhausted":
+        return null;
+      case "page":
+        return outcome.page.nextCursor;
+      case "timed_out":
+        // A continuation runs the page again. A first page has no cursor to
+        // carry, and the envelope's `null` would read as ended, so it is
+        // `null` here and its warning names the call that reruns it.
+        return outcome.subCursor ?? null;
+      default:
+        outcome satisfies never;
+        return panic("Unhandled case-law query outcome");
+    }
+  });
   return subCursors.every((subCursor) => subCursor === null)
     ? null
     : encodePaginationCursor(subCursors);
+};
+
+/**
+ * The merged page's outcome: truncated on the time budget when a phrasing
+ * timed out (the reader is told to rerun it), else on the exclusion budget
+ * when a phrasing's own page stopped there, else complete.
+ */
+const mergedCaseLawPaginationOutcome = (
+  pages: readonly CaseLawQueryOutcome[],
+) => {
+  if (pages.some(({ type }) => type === "timed_out")) {
+    return SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
+  }
+  return pages.some(
+    (outcome) =>
+      outcome.type === "page" &&
+      outcome.page.paginationOutcome.type === "truncated",
+  )
+    ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+    : SEARCH_PAGINATION_COMPLETE;
 };
 
 type SearchProvisionArgRead =
@@ -2573,7 +2618,7 @@ const listSearchCaseLawProvision = async ({
     }),
     args.cursor,
   );
-  if (answer.type === "failed") {
+  if (answer.type !== "page") {
     return answer.result;
   }
   const { page } = answer;
@@ -2602,38 +2647,198 @@ const listSearchCaseLawProvision = async ({
 };
 
 type CaseLawSearchCallOutcome =
-  | { exhausted: true }
+  | { type: "exhausted" }
   | {
-      exhausted: false;
+      type: "answered";
+      subCursor: string | undefined;
       result: Parameters<typeof readCaseLawSearchAnswer>[0];
+    }
+  | {
+      /**
+       * The search rejected. `run` is the search's own promise, so the
+       * original failure can still reach the tool boundary unchanged.
+       */
+      type: "rejected";
+      subCursor: string | undefined;
+      run: Promise<Parameters<typeof readCaseLawSearchAnswer>[0]>;
+      error: unknown;
     };
 
 /**
- * Each phrasing's page, or the first failure. A query that failed sinks the
- * call: a merged page silently missing one phrasing reads as "that phrasing
- * found nothing", which is a different answer.
+ * The rejected search the call hands to the tool boundary, if any.
+ *
+ * A rejection is this phrasing's alone only when it is the time budget
+ * running out and another phrasing answered with a page. Otherwise the first
+ * rejected search goes to the boundary unchanged, which reads it as it always
+ * has (a public-read timeout, an admission outcome, its failure grade).
+ */
+const caseLawSearchRejectionForBoundary = (
+  outcomes: readonly CaseLawSearchCallOutcome[],
+): Extract<CaseLawSearchCallOutcome, { type: "rejected" }> | null => {
+  const rejected = outcomes.filter(
+    (
+      outcome,
+    ): outcome is Extract<CaseLawSearchCallOutcome, { type: "rejected" }> =>
+      outcome.type === "rejected",
+  );
+  const first = rejected.at(0);
+  if (first === undefined) {
+    return null;
+  }
+  const answeredWithPage = outcomes.some(
+    (outcome) =>
+      outcome.type === "answered" && isSearchCaseLawSuccess(outcome.result),
+  );
+  if (!answeredWithPage) {
+    return first;
+  }
+  return rejected.find(({ error }) => !isCaseLawSearchTimeout(error)) ?? null;
+};
+
+/**
+ * Each phrasing's page, the call's failure, or the rejected search the call
+ * hands to the tool boundary.
+ *
+ * A phrasing that failed for any reason but its time budget sinks the call.
+ * A phrasing that ran out of time while another answered does not: the page
+ * carries the phrasings that finished, and the timed-out one is reported as
+ * such (`phrasing_timed_out`, truncated outcome) rather than left out, since a
+ * merged page silently missing one phrasing reads as "that phrasing found
+ * nothing", which is a different answer. When no phrasing answered, the call
+ * fails as it did before: an answered timeout with the retryable time-budget
+ * error, a rejected search at the tool boundary.
  */
 const readCaseLawQueryPages = (
   outcomes: readonly CaseLawSearchCallOutcome[],
   cursor: string | undefined,
 ):
-  | Extract<CaseLawSearchAnswer, { type: "failed" }>
+  | { type: "failed"; result: InternalToolErrorResult }
+  | {
+      type: "rejected";
+      run: Promise<Parameters<typeof readCaseLawSearchAnswer>[0]>;
+    }
   | { type: "pages"; pages: CaseLawQueryOutcome[] } => {
+  const boundary = caseLawSearchRejectionForBoundary(outcomes);
+  if (boundary !== null) {
+    return { type: "rejected", run: boundary.run };
+  }
   const pages: CaseLawQueryOutcome[] = [];
+  let timeout: InternalToolErrorResult | null = null;
   for (const outcome of outcomes) {
-    if (outcome.exhausted) {
-      pages.push({ exhausted: true });
-      continue;
+    switch (outcome.type) {
+      case "exhausted":
+        pages.push({ type: "exhausted" });
+        break;
+      case "rejected":
+        // Only a time-budget rejection beside a page reaches here.
+        timeout ??=
+          caseLawSearchTimeoutResult(outcome.error) ??
+          panic("A rejection kept beside a page is not a timeout");
+        pages.push({ type: "timed_out", subCursor: outcome.subCursor });
+        break;
+      case "answered": {
+        const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+        switch (answer.type) {
+          case "failed":
+            return answer;
+          case "timed_out":
+            timeout ??= answer.result;
+            pages.push({ type: "timed_out", subCursor: outcome.subCursor });
+            break;
+          case "page":
+            pages.push({ type: "page", page: answer.page });
+            break;
+          default:
+            answer satisfies never;
+            return panic("Unhandled case-law search answer");
+        }
+        break;
+      }
+      default:
+        outcome satisfies never;
+        return panic("Unhandled case-law search call outcome");
     }
-    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
-    if (answer.type === "failed") {
-      return answer;
-    }
-    pages.push({ exhausted: false, page: answer.page });
+  }
+  if (timeout !== null && !pages.some(({ type }) => type === "page")) {
+    return { type: "failed", result: timeout };
   }
   return { type: "pages", pages };
 };
+/**
+ * Each phrasing's page or the call's failure. A rejected search the call
+ * hands to the tool boundary is read again: that rejects with its original
+ * failure, exactly as an unmerged search would.
+ */
+const settleCaseLawQueryPages = async (
+  outcomes: readonly CaseLawSearchCallOutcome[],
+  cursor: string | undefined,
+): Promise<
+  Exclude<ReturnType<typeof readCaseLawQueryPages>, { type: "rejected" }>
+> => {
+  const read = readCaseLawQueryPages(outcomes, cursor);
+  if (read.type !== "rejected") {
+    return read;
+  }
+  await read.run;
+  return panic("A rejected case-law search answered when read again");
+};
+
+/**
+ * Run one phrasing's search and keep its promise: a statement the time budget
+ * cancelled rejects rather than answers, and whether that rejection is this
+ * phrasing's alone is decided once every phrasing has settled.
+ */
+const runCaseLawPhrasing = async (
+  subCursor: string | null | undefined,
+  start: () => Promise<Parameters<typeof readCaseLawSearchAnswer>[0]>,
+): Promise<CaseLawSearchCallOutcome> => {
+  if (subCursor === null) {
+    return { type: "exhausted" };
+  }
+  const run = start();
+  const answered = await Result.tryPromise({
+    try: async () => await run,
+    catch: (cause) => cause,
+  });
+  return Result.isOk(answered)
+    ? { type: "answered", subCursor, result: answered.value }
+    : { type: "rejected", subCursor, run, error: answered.error };
+};
+
+/** The `searches[]` entry of a phrasing the time budget stopped. */
+const timedOutPhrasingNote = ({
+  query,
+  queryUsed,
+  retriedByCursor,
+  warnings,
+}: {
+  query: string;
+  queryUsed: string;
+  retriedByCursor: boolean;
+  warnings: readonly AgentCaseLawSearchWarning[];
+}) => ({
+  query,
+  queryUsed,
+  paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+  warnings: [...warnings, phrasingTimedOutWarning({ query, retriedByCursor })],
+});
+
 const SEARCH_ADMISSION = { domain: "caseLaw", surface: "search" } as const;
+
+/**
+ * What a phrasing reads about its result set. The response carries the first
+ * phrasing's facets, and a total only for a single phrasing: every other
+ * phrasing's aggregations would be read over its whole result set and
+ * dropped, so they are not asked for.
+ */
+const phrasingResultSet = <Facet>(
+  index: number,
+  queryCount: number,
+  facets: Facet[],
+): { facets: Facet[]; describeResultSet?: false } =>
+  index === 0 && (queryCount === 1 || facets.length > 0)
+    ? { facets }
+    : { facets: index === 0 ? facets : [], describeResultSet: false };
 
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
@@ -2735,7 +2940,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
-      facets: index === 0 ? parsed.output.facets : [],
+      ...phrasingResultSet(index, queries.length, parsed.output.facets),
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -2760,37 +2965,34 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const outcomes = await mapWithConcurrency({
     items: requests,
     limit: LIMITS.caseLawSearchQueriesMax,
-    operation: async ({ body, subCursor }) => {
-      if (subCursor === null) {
-        return { exhausted: true } as const;
-      }
-      return {
-        exhausted: false as const,
-        result: await search({
-          body,
-          caseLawDb: caseLawPublicReadDb,
-          observer,
-          signal: context.request?.signal,
-        }),
-      };
-    },
+    operation: async ({ body, subCursor }) =>
+      await runCaseLawPhrasing(
+        subCursor,
+        async () =>
+          await search({
+            body,
+            caseLawDb: caseLawPublicReadDb,
+            observer,
+            signal: context.request?.signal,
+          }),
+      ),
   });
 
-  const read = readCaseLawQueryPages(outcomes, cursor);
+  const read = await settleCaseLawQueryPages(outcomes, cursor);
   if (read.type === "failed") {
     return read.result;
   }
   const { pages } = read;
 
   const merged = mergeCaseLawSearchHits(
-    pages.map((outcome) => (outcome.exhausted ? [] : outcome.page.hits)),
+    pages.map((outcome) => (outcome.type === "page" ? outcome.page.hits : [])),
   );
 
   // Facets describe the first phrasing, without double-counting overlapping
   // results. Only a single phrasing can provide a total for the result set.
   const first = pages.at(0) ?? panic("Case-law search ran no query");
   const single =
-    queries.length === 1 && !first.exhausted ? first.page : undefined;
+    queries.length === 1 && first.type === "page" ? first.page : undefined;
   const mergedCursor = mergedCaseLawSearchCursor(pages);
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.
@@ -2798,7 +3000,15 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     ({ interpretation, query, subCursor }, index) => {
       const warnings = index === 0 ? filterWarnings : [];
       const outcome = pages.at(index);
-      if (outcome === undefined || outcome.exhausted) {
+      if (outcome?.type === "timed_out") {
+        return timedOutPhrasingNote({
+          query,
+          queryUsed: interpretation.queryUsed,
+          retriedByCursor: outcome.subCursor !== undefined,
+          warnings: [...warnings, ...provisionRead.warnings],
+        });
+      }
+      if (outcome === undefined || outcome.type === "exhausted") {
         // Exhausted phrasings echo the prior interpretation without new warnings.
         return {
           query,
@@ -2847,16 +3057,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
 
   const payload = boundCaseLawSearchHeadnotes({
     headnotes: "included",
-    facets: first.exhausted ? null : first.page.facets,
+    facets: first.type === "page" ? first.page.facets : null,
     searches: searchNotesForCall(searches, requests),
     nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-    paginationOutcome: pages.some(
-      (outcome) =>
-        !outcome.exhausted &&
-        outcome.page.paginationOutcome.type === "truncated",
-    )
-      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
-      : SEARCH_PAGINATION_COMPLETE,
+    paginationOutcome: mergedCaseLawPaginationOutcome(pages),
     results: merged.map(caseLawSearchResult),
     total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
     ...(merged.length === 0 ? await onboardingNextStep(context) : {}),

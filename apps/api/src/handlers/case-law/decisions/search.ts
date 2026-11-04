@@ -181,7 +181,7 @@ import {
   caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   caseLawCorpusServingGeneration,
-  currentCaseLawCorpusProjection,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
   type CorpusAggregateCacheOutcome,
@@ -386,6 +386,13 @@ type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
    * search reads it once for all its phrasings and warns when it is broad).
    */
   provisionScope?: CaseLawProvisionScope;
+  /**
+   * Internal: `false` when the caller keeps only the page and drops the
+   * facets and the total (an agent search's later phrasings, the
+   * OpenAI-compatible search). The aggregations behind them scan the whole
+   * result set, so a caller that discards them should not pay for them.
+   */
+  describeResultSet?: false;
 };
 
 type PostgresSearchBody = Omit<
@@ -1581,9 +1588,11 @@ const withoutProvision = ({
  * Which published rows a read admits.
  *
  * `indexed`: the ids came from the serving index, and the page shows text
- * read from that copy, so only a decision the serving generation holds
- * current may stand for a hit. The projection state rejects a pending row,
- * so a stale physical copy cannot serve outdated snippets.
+ * read from that copy, so only a decision the serving generation holds a
+ * copy of may stand for a hit. A queued upsert keeps the applied copy
+ * standing (its snippet may be one parse old); a queued erasure, a copy in
+ * an index the decision's country no longer routes to, or no copy at all
+ * does not.
  *
  * `published`: the database named the ids itself (a docket or an ECLI), and
  * the page shows no index text for them. Every published row answers, as on
@@ -1601,7 +1610,7 @@ const caseLawNonProvisionRowFilters = (
   const filters: SQL[] = [redistributableCaseLawSource];
   switch (admission) {
     case "indexed":
-      filters.push(currentCaseLawCorpusProjection(generation));
+      filters.push(servedCaseLawCorpusProjection(generation));
       break;
     case "published":
       break;
@@ -2791,6 +2800,15 @@ const cursorMatchesCorpusReadTarget = (
   target: string | null,
 ): boolean => cursor === null || cursor.target === target;
 
+/**
+ * Whether a page reads the facets and total: only a first page describes its
+ * result set, and only for a caller that keeps the description.
+ */
+const readsResultSetDescription = (
+  body: SearchDecisionsBody,
+  isFirstPage: boolean,
+): boolean => isFirstPage && body.describeResultSet !== false;
+
 type SearchCorpusIndexDecisionsOptions = {
   signal?: AbortSignal | undefined;
   body: SearchDecisionsBody;
@@ -3286,7 +3304,7 @@ export const searchCorpusIndexDecisions = async ({
   const pageRead = readTextPage(resolved.query, limit, null);
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
-  const facetRead = isFirstPage
+  const facetRead = readsResultSetDescription(body, isFirstPage)
     ? readCaseLawSearchFacets({
         signal,
         observer,

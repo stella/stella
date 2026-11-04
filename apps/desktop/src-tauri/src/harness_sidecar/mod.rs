@@ -216,6 +216,9 @@ pub(crate) enum SidecarUnavailable {
   Busy,
   /// The supervisor stopped.
   Stopped,
+  /// The message exceeds the protocol's line limit. The holder would refuse
+  /// it and close the connection, so it is refused before it is queued.
+  TooLarge,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -236,9 +239,30 @@ pub(crate) enum ResumeError {
 
 type ProbeReply = oneshot::Sender<Result<ProbeOutcome, ProbeError>>;
 
+/// One host message, serialized within the line limit, newline included.
+/// Commands are encoded before they are queued, so the supervisor only ever
+/// writes lines within the limit and a write fails on I/O alone.
+struct HostLine(Vec<u8>);
+
+impl HostLine {
+  fn encode(message: &HostMessage) -> Result<Self, SidecarUnavailable> {
+    // Host messages hold strings, numbers and JSON objects only, which
+    // always serialize; the error arm is unreachable in practice.
+    let mut line = serde_json::to_vec(message)
+      .map_err(|_unserializable| SidecarUnavailable::TooLarge)?;
+    if line.len() > MAX_LINE_BYTES {
+      return Err(SidecarUnavailable::TooLarge);
+    }
+    line.push(b'\n');
+    Ok(Self(line))
+  }
+}
+
 enum Control {
   StartRun {
-    start: Box<SidecarRunStart>,
+    run_id: String,
+    harness: Harness,
+    line: HostLine,
     outputs: mpsc::Sender<SidecarRunOutput>,
   },
   ResumeRun {
@@ -248,12 +272,13 @@ enum Control {
   },
   HeldRuns(oneshot::Sender<Vec<HeldRun>>),
   Probe {
-    probe: HarnessProbe,
+    request_id: String,
+    line: HostLine,
     reply: ProbeReply,
   },
   Forward {
     run_id: String,
-    message: HostMessage,
+    line: HostLine,
   },
   Ack(Ack),
   Shutdown(oneshot::Sender<()>),
@@ -311,9 +336,14 @@ impl HarnessSidecar {
     &self,
     start: SidecarRunStart,
   ) -> Result<mpsc::Receiver<SidecarRunOutput>, SidecarUnavailable> {
+    let run_id = start.run_id.clone();
+    let harness = start.harness;
+    let line = HostLine::encode(&HostMessage::RunStart(Box::new(start)))?;
     let (outputs, receiver) = mpsc::channel(RUN_OUTPUT_QUEUE);
     self.control(Control::StartRun {
-      start: Box::new(start),
+      run_id,
+      harness,
+      line,
       outputs,
     })?;
     Ok(receiver)
@@ -370,18 +400,18 @@ impl HarnessSidecar {
     &self,
     approval: RunApproval,
   ) -> Result<(), SidecarUnavailable> {
-    self.forward(approval.run_id.clone(), HostMessage::RunApproval(approval))
+    self.forward(approval.run_id.clone(), &HostMessage::RunApproval(approval))
   }
 
   /// Answers to a blocking question the run asked.
   pub(crate) fn answer(&self, answer: RunAnswer) -> Result<(), SidecarUnavailable> {
-    self.forward(answer.run_id.clone(), HostMessage::RunAnswer(answer))
+    self.forward(answer.run_id.clone(), &HostMessage::RunAnswer(answer))
   }
 
   pub(crate) fn interrupt(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
     self.forward(
       run_id.to_owned(),
-      HostMessage::RunInterrupt(RunRef {
+      &HostMessage::RunInterrupt(RunRef {
         run_id: run_id.to_owned(),
       }),
     )
@@ -390,7 +420,7 @@ impl HarnessSidecar {
   pub(crate) fn cancel(&self, run_id: &str) -> Result<(), SidecarUnavailable> {
     self.forward(
       run_id.to_owned(),
-      HostMessage::RunCancel(RunRef {
+      &HostMessage::RunCancel(RunRef {
         run_id: run_id.to_owned(),
       }),
     )
@@ -401,15 +431,16 @@ impl HarnessSidecar {
     &self,
     refresh: RunTokenRefresh,
   ) -> Result<(), SidecarUnavailable> {
-    self.forward(refresh.run_id.clone(), HostMessage::RunToken(refresh))
+    self.forward(refresh.run_id.clone(), &HostMessage::RunToken(refresh))
   }
 
   fn forward(
     &self,
     run_id: String,
-    message: HostMessage,
+    message: &HostMessage,
   ) -> Result<(), SidecarUnavailable> {
-    self.control(Control::Forward { run_id, message })
+    let line = HostLine::encode(message)?;
+    self.control(Control::Forward { run_id, line })
   }
 
   /// The harness's version, account state and models, without a prompt.
@@ -417,9 +448,16 @@ impl HarnessSidecar {
     &self,
     probe: HarnessProbe,
   ) -> Result<ProbeOutcome, ProbeError> {
+    let request_id = probe.request_id.clone();
+    let line = HostLine::encode(&HostMessage::HarnessProbe(probe))
+      .map_err(ProbeError::Unavailable)?;
     let (reply, answer) = oneshot::channel();
     self
-      .control(Control::Probe { probe, reply })
+      .control(Control::Probe {
+        request_id,
+        line,
+        reply,
+      })
       .map_err(ProbeError::Unavailable)?;
     answer.await.map_err(|_supervisor_gone| {
       ProbeError::Unavailable(SidecarUnavailable::Stopped)
@@ -743,8 +781,8 @@ impl Supervisor {
             let _delivered = done.send(());
             return;
           }
-          Some(Control::StartRun { start, outputs }) => {
-            self.start_run(start, outputs).await;
+          Some(Control::StartRun { run_id, harness, line, outputs }) => {
+            self.start_run(run_id, harness, &line, outputs).await;
           }
           Some(Control::ResumeRun { point, outputs, reply }) => {
             self.resume_run(point, outputs, reply).await;
@@ -752,9 +790,11 @@ impl Supervisor {
           Some(Control::HeldRuns(reply)) => {
             let _delivered = reply.send(self.held_runs());
           }
-          Some(Control::Probe { probe, reply }) => self.probe(probe, reply).await,
-          Some(Control::Forward { run_id, message }) => {
-            self.forward(&run_id, &message).await;
+          Some(Control::Probe { request_id, line, reply }) => {
+            self.probe(request_id, &line, reply).await;
+          }
+          Some(Control::Forward { run_id, line }) => {
+            self.forward(&run_id, &line).await;
           }
           Some(Control::Ack(ack)) => self.ack(ack).await,
         },
@@ -1011,10 +1051,12 @@ impl Supervisor {
 
   async fn start_run(
     &mut self,
-    start: Box<SidecarRunStart>,
+    run_id: String,
+    harness: Harness,
+    line: &HostLine,
     outputs: mpsc::Sender<SidecarRunOutput>,
   ) {
-    if self.runs.contains_key(&start.run_id) {
+    if self.runs.contains_key(&run_id) {
       tracing::warn!(target: LOG_TARGET, "a run was started twice");
       return;
     }
@@ -1023,10 +1065,10 @@ impl Supervisor {
       return;
     };
     self.runs.insert(
-      start.run_id.clone(),
+      run_id,
       Run {
         holder: dir.clone(),
-        harness: start.harness,
+        harness,
         last_seq: 0,
         finished: None,
         claim: Some(Claim {
@@ -1036,7 +1078,7 @@ impl Supervisor {
         abandoned: false,
       },
     );
-    self.write(&dir, &HostMessage::RunStart(start)).await;
+    self.write_line(&dir, line).await;
   }
 
   async fn resume_run(
@@ -1082,24 +1124,22 @@ impl Supervisor {
       .collect()
   }
 
-  async fn probe(&mut self, probe: HarnessProbe, reply: ProbeReply) {
+  async fn probe(&mut self, request_id: String, line: &HostLine, reply: ProbeReply) {
     let Some(dir) = self.current().await else {
       let _delivered = reply.send(Err(ProbeError::SidecarDown));
       return;
     };
-    self
-      .probes
-      .insert(probe.request_id.clone(), (dir.clone(), reply));
-    self.write(&dir, &HostMessage::HarnessProbe(probe)).await;
+    self.probes.insert(request_id, (dir.clone(), reply));
+    self.write_line(&dir, line).await;
   }
 
-  async fn forward(&mut self, run_id: &str, message: &HostMessage) {
+  async fn forward(&mut self, run_id: &str, line: &HostLine) {
     let Some(run) = self.runs.get(run_id) else {
       tracing::warn!(target: LOG_TARGET, "a command named a run no holder holds");
       return;
     };
     let dir = run.holder.clone();
-    self.write(&dir, message).await;
+    self.write_line(&dir, line).await;
   }
 
   async fn ack(&mut self, ack: Ack) {
@@ -1113,11 +1153,20 @@ impl Supervisor {
     self.write(&dir, &HostMessage::Ack(ack)).await;
   }
 
-  /// Write to a holder. A failed write needs no handling here: the reader
-  /// sees the same connection close and reports it as an event.
+  /// Write one of the supervisor's own messages (drain, resume, ack, cancel,
+  /// shutdown) to a holder.
   async fn write(&mut self, dir: &Path, message: &HostMessage) {
     if let Some(link) = self.links.get_mut(dir) {
       let _written = write_message(&mut link.writer, message).await;
+    }
+  }
+
+  /// Write a command encoded when it was called. A failed write needs no
+  /// handling here: the reader sees the same connection close and reports it
+  /// as an event.
+  async fn write_line(&mut self, dir: &Path, line: &HostLine) {
+    if let Some(link) = self.links.get_mut(dir) {
+      let _written = write_line(&mut link.writer, line).await;
     }
   }
 
@@ -1417,17 +1466,23 @@ fn remove_holder_dir(dir: &Path) {
   }
 }
 
+/// A message the supervisor itself writes (hello, drain, resume, ack, cancel,
+/// shutdown).
 async fn write_message<W: AsyncWrite + Unpin>(
   writer: &mut W,
   message: &HostMessage,
 ) -> Result<(), ()> {
-  let mut line = serde_json::to_vec(message).map_err(|_unserializable| ())?;
-  if line.len() > MAX_LINE_BYTES {
+  let line = HostLine::encode(message).map_err(|_too_large| {
     tracing::error!(target: LOG_TARGET, "a host message exceeded the line limit");
-    return Err(());
-  }
-  line.push(b'\n');
-  let written = writer.write_all(&line).await;
+  })?;
+  write_line(writer, &line).await
+}
+
+async fn write_line<W: AsyncWrite + Unpin>(
+  writer: &mut W,
+  line: &HostLine,
+) -> Result<(), ()> {
+  let written = writer.write_all(&line.0).await;
   let flushed = writer.flush().await;
   written.and(flushed).map_err(|error| {
     tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "harness holder connection closed");
