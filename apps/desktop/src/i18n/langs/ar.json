@@ -748,6 +748,20 @@
         "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
         "unavailable": "تعذّر تشغيل Claude Code على هذا الكمبيوتر. حاول مرة أخرى."
       }
+    },
+    "install": {
+      "notInstalled": "لم يُثبَّت {name} على هذا الكمبيوتر بعد.",
+      "install": "تثبيت",
+      "downloading": "جارٍ تنزيل {name} {version}: {percent}%",
+      "verifying": "جارٍ التحقق من {name} {version}",
+      "ready": "تم تثبيت {name} {version}.",
+      "retry": "إعادة المحاولة",
+      "activeStays": "سيبقى الإصدار {version} قيد الاستخدام.",
+      "failure": {
+        "download": "تعذّر تنزيل {name}. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+        "verification": "تعذّر التحقق من {name}، لذا لم يُثبَّت.",
+        "storage": "تعذّر حفظ {name} على هذا الكمبيوتر. تحقق من وجود مساحة فارغة على القرص."
+      }
     }
   }
 }

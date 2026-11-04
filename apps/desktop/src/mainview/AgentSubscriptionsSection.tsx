@@ -20,6 +20,13 @@ import {
 } from "./claude-code-status";
 import type { ClaudeCodeStatus } from "./claude-code-status";
 import { ClaudeCodeCard } from "./ClaudeCodeCard";
+import {
+  HARNESS_INSTALL_CHANGED_EVENT,
+  harnessInstallState,
+  isHarnessStatusList,
+} from "./harness-install-status";
+import type { HarnessStatus, ManagedHarness } from "./harness-install-status";
+import { HarnessInstallLine } from "./HarnessInstallLine";
 
 /**
  * AI subscriptions the local agents can use. It renders nothing unless the
@@ -40,6 +47,13 @@ export const AgentSubscriptionsSection = ({
     event: CLAUDE_CODE_AUTH_CHANGED_EVENT,
     isStatus: isClaudeCodeStatus,
   });
+  const [harnesses, refreshHarnesses] = useNativeStatus<
+    readonly HarnessStatus[]
+  >({
+    read: readHarnessStatus,
+    event: HARNESS_INSTALL_CHANGED_EVENT,
+    isStatus: isHarnessStatusList,
+  });
   const [notice, setNotice] = useState<ChatGptNotice | null>(null);
   const [claudeCodeFailed, setClaudeCodeFailed] = useState(false);
   // Set before a start command is sent, so a second click in the same
@@ -50,6 +64,42 @@ export const AgentSubscriptionsSection = ({
   if (chatGpt === null && claudeCode === null) {
     return null;
   }
+
+  /** The CLI's install line; a refused command shows the card's notice. */
+  const installLine = (
+    harness: ManagedHarness,
+    name: string,
+    onFailed: () => void,
+  ) => {
+    const state = harnessInstallState(harnesses, harness);
+    if (state === null) {
+      return null;
+    }
+    const send = (command: () => Promise<unknown>) => {
+      void Result.tryPromise(command).then((result) => {
+        if (Result.isError(result)) {
+          onFailed();
+        }
+        // Shown at once, without waiting for the change event.
+        refreshHarnesses();
+        return undefined;
+      });
+    };
+    return (
+      <HarnessInstallLine
+        name={name}
+        onCancel={(operationId) => {
+          send(async () =>
+            invoke("harness_cancel_install", { harness, operationId }),
+          );
+        }}
+        onInstall={() => {
+          send(async () => invoke("harness_install", { harness }));
+        }}
+        state={state}
+      />
+    );
+  };
 
   const run = async (command: () => Promise<unknown>) => {
     setNotice(null);
@@ -74,6 +124,9 @@ export const AgentSubscriptionsSection = ({
   const chatGptCard =
     chatGpt === null ? null : (
       <ChatGptCard
+        install={installLine("codex", "Codex", () => {
+          setNotice("actionFailed");
+        })}
         notice={notice}
         onCancel={() => {
           void run(async () => invoke("chatgpt_auth_cancel"));
@@ -136,6 +189,9 @@ export const AgentSubscriptionsSection = ({
     claudeCode === null ? null : (
       <ClaudeCodeCard
         actionFailed={claudeCodeFailed}
+        install={installLine("claude-code", "Claude Code", () => {
+          setClaudeCodeFailed(true);
+        })}
         onCancel={() => {
           void runClaudeCode(async () => invoke("claude_code_auth_cancel"));
         }}
@@ -178,6 +234,7 @@ const readChatGptStatus = async () =>
   invoke<unknown>("chatgpt_auth_get_status");
 const readClaudeCodeStatus = async () =>
   invoke<unknown>("claude_code_auth_get_status");
+const readHarnessStatus = async () => invoke<unknown>("harness_get_status");
 
 /**
  * A native status, read when its change event is live, again on every

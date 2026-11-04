@@ -55,6 +55,7 @@ mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
 mod harness_archive;
+mod harness_auto_install;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
@@ -275,6 +276,7 @@ pub fn run() {
       if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
         app.manage(installation);
       }
+      harness_commands::manage(&handle);
       chatgpt_auth_commands::manage(&handle);
       claude_code_auth_commands::manage(&handle);
       activity::start(handle.clone(), Arc::clone(&activity_manager));

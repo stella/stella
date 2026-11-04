@@ -748,6 +748,20 @@
         "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
         "unavailable": "No se pudo iniciar Claude Code en este ordenador. Inténtalo de nuevo."
       }
+    },
+    "install": {
+      "notInstalled": "{name} aún no está instalado en este ordenador.",
+      "install": "Instalar",
+      "downloading": "Descargando {name} {version}: {percent} %",
+      "verifying": "Comprobando {name} {version}",
+      "ready": "{name} {version} está instalado.",
+      "retry": "Reintentar",
+      "activeStays": "Se sigue usando la versión {version}.",
+      "failure": {
+        "download": "No se pudo descargar {name}. Comprueba tu conexión a internet e inténtalo de nuevo.",
+        "verification": "No se pudo verificar {name}, así que no se ha instalado.",
+        "storage": "No se pudo guardar {name} en este ordenador. Comprueba que haya espacio libre en el disco."
+      }
     }
   }
 }
