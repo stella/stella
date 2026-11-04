@@ -1172,6 +1172,7 @@ describe("harness holder over its socket", () => {
         PATH: process.env["PATH"] ?? "",
         FAKE_CODEX_LOG: path.join(root, "fake.log"),
       },
+      processGrantTimeoutMs: WAIT_MS,
     });
     cleanups.push(() => {
       rmSync(root, { recursive: true, force: true });
@@ -1185,6 +1186,7 @@ describe("harness holder over its socket", () => {
       harness: "codex",
       executable: fakeCodex(root, "interrupt_queued"),
       configDir,
+      launch: PLAIN_LAUNCH,
       workspaceDir,
       model: "gpt-test",
       instructions: "Use the stella MCP server.",
