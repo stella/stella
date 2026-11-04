@@ -1954,10 +1954,7 @@ describe("chat turns on a computer", () => {
   const runBell = createLocalRunBell();
   const CHAT_MODEL = MODEL;
   let chatInstance: Instance;
-  /**
-   * One computer serves the tests that keep it connected: every socket
-   * upgrade verifies the account's key, which is rate limited per key.
-   */
+  /** One computer serves the tests that keep it connected. */
   const computer: { desktopId: string; desktop: FakeDesktop | null } = {
     desktopId: Bun.randomUUIDv7(),
     desktop: null,
@@ -2774,14 +2771,7 @@ describe("chat turns on a computer", () => {
   test("a queued answer that no longer opens cancels its run instead of holding back the commands after it", async () => {
     const chatThreadId = await newThread();
     const desktopId = Bun.randomUUIDv7();
-    // Its own key: this test opens two sockets, and the account's key has a
-    // rate limit the tests around it spend.
-    const own = await createRlsDesktopCredentials(db, ids);
-    const desktop = await openDesktop(
-      chatInstance,
-      desktopId,
-      await upgradeRequest(chatInstance, desktopId, own.a),
-    );
+    const desktop = await openDesktop(chatInstance, desktopId);
     await desktop.hello();
     const { runId, requestId, run } = await pausedForQuestion({
       desktop,
@@ -2823,11 +2813,7 @@ describe("chat turns on a computer", () => {
     expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
       type: "queued",
     });
-    const back = await openDesktop(
-      chatInstance,
-      desktopId,
-      await upgradeRequest(chatInstance, desktopId, own.a),
-    );
+    const back = await openDesktop(chatInstance, desktopId);
     await back.hello([{ runId, lastSeq: run.position.seq }]);
     await back.receive("run.interrupt", ofRun(runId));
     expect(
