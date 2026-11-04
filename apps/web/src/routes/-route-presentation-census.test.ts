@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { isLegacyAdminRouteId } from "@/routes/-organization-settings-route";
+
 type RouteSource = {
   path: string;
   source: string;
@@ -23,9 +25,8 @@ type RouteExemption = {
 const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
   {
     "/": { reason: "The entry route redirects into the appropriate shell." },
-    "/_protected/admin/": {
-      reason: "The administration layout owns the redirect title.",
-      fields: ["title"],
+    "/_protected/settings/organization/": {
+      reason: "Redirects to the General organization settings page.",
     },
     "/_protected/chat/": {
       reason: "The chat layout owns the landing title.",
@@ -43,7 +44,9 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
       reason: "The matter layout owns the selected view title.",
       fields: ["title"],
     },
-    "/_protected/admin/catalogue": { reason: "Redirects to Knowledge tools." },
+    "/_protected/settings/organization/catalogue": {
+      reason: "Redirects to Knowledge tools.",
+    },
     "/_protected/verify/$code": {
       reason: "Completes verification and redirects.",
     },
@@ -296,9 +299,11 @@ export function findMissingRoutePresentation({
       continue;
     }
     const absent = [];
+    const legacyAdminRedirect = isLegacyAdminRouteId(id);
     const exemptFields = ROUTE_PRESENTATION_EXEMPTIONS[id]?.fields;
     const exemptsAll =
-      id in ROUTE_PRESENTATION_EXEMPTIONS && exemptFields === undefined;
+      legacyAdminRedirect ||
+      (id in ROUTE_PRESENTATION_EXEMPTIONS && exemptFields === undefined);
     if (
       !exemptsAll &&
       !exemptFields?.includes("title") &&

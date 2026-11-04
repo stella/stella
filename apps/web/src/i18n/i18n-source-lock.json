@@ -35,7 +35,6 @@
   "admin.organizationId": "Organization ID",
   "admin.organizationLeft": "You have left the organization.",
   "admin.planAndUsage": "Plan and usage",
-  "admin.title": "Organization admin",
   "admin.toolsDescription": "Enable or disable native tools for everyone in this organization.",
   "agentClaim.access": "Access it will get",
   "agentClaim.accessReadSearch": "Read and search access",
