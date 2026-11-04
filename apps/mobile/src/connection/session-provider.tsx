@@ -30,6 +30,7 @@ import { revokeRefreshToken } from "@/connection/tokens";
 import { APP_VARIANT, PUSH_NOTIFICATIONS } from "@/env";
 import { deviceAccountStore } from "@/native/account-store";
 import { currentPushDevice } from "@/native/push-device";
+import { stopTimerActivityUpdates } from "@/native/timer-activity-device";
 import { unregisterPushDevice } from "@/state/push-devices";
 import { forgetRecentSearches } from "@/state/recent-searches";
 
@@ -67,6 +68,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
  * the token gone.
  */
 const stopPushNotifications = async (source: AccessTokenSource) => {
+  await stopTimerActivityUpdates(source);
   if (!PUSH_NOTIFICATIONS) {
     return;
   }

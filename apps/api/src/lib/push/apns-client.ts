@@ -7,6 +7,7 @@ import type {
   MobileAppBundleId,
   MobilePushPayload,
 } from "@stll/api-contract/mobile-push";
+import type { TimerActivityPushPayload } from "@stll/api-contract/timer-activity";
 import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -227,8 +228,27 @@ export type ApnsAlert = {
   collapseId: string;
 };
 
+/**
+ * One update to a Live Activity, or the start of one, addressed to the token
+ * the activity (or, to start one, the app) gave the phone.
+ */
+export type ApnsActivityPush = {
+  environment: ApnsEnvironment;
+  token: string;
+  bundleId: MobileAppBundleId;
+  payload: TimerActivityPushPayload;
+};
+
+/**
+ * How long Apple keeps an activity update for a phone that is offline. The
+ * payload's timestamp keeps a late update from replacing a newer one, and an
+ * hour-old clock is still worth showing.
+ */
+const APNS_ACTIVITY_LIFETIME_SECONDS = 60 * 60;
+
 export type ApnsClient = {
   send: (alert: ApnsAlert) => Promise<ApnsOutcome>;
+  sendActivity: (push: ApnsActivityPush) => Promise<ApnsOutcome>;
   close: () => void;
 };
 
@@ -240,8 +260,18 @@ export const createApnsClient = ({
   transport: ApnsTransport;
   providerToken: ApnsProviderToken;
   now?: () => number;
-}): ApnsClient => ({
-  send: async (alert) => {
+}): ApnsClient => {
+  const post = async ({
+    environment,
+    token: deviceToken,
+    headers,
+    body,
+  }: {
+    environment: ApnsEnvironment;
+    token: string;
+    headers: Record<string, string>;
+    body: string;
+  }): Promise<ApnsOutcome> => {
     const token = await providerToken.current();
     if (Result.isError(token)) {
       return {
@@ -251,19 +281,10 @@ export const createApnsClient = ({
       };
     }
     const response = await transport.post({
-      origin: APNS_ORIGINS[alert.environment],
-      path: `/3/device/${alert.token}`,
-      headers: {
-        authorization: `bearer ${token.value}`,
-        "apns-topic": alert.bundleId,
-        "apns-push-type": "alert",
-        "apns-priority": "10",
-        "apns-collapse-id": alert.collapseId,
-        "apns-expiration": String(
-          Math.floor(now() / 1000) + APNS_ALERT_LIFETIME_SECONDS,
-        ),
-      },
-      body: JSON.stringify(alert.payload),
+      origin: APNS_ORIGINS[environment],
+      path: `/3/device/${deviceToken}`,
+      headers: { authorization: `bearer ${token.value}`, ...headers },
+      body,
     });
     if (Result.isError(response)) {
       return { type: "retry", reason: response.error.reason };
@@ -273,6 +294,38 @@ export const createApnsClient = ({
       providerToken.expire();
     }
     return outcome;
-  },
-  close: () => transport.close(),
-});
+  };
+  const expiresIn = (seconds: number) =>
+    String(Math.floor(now() / 1000) + seconds);
+
+  return {
+    send: async (alert) =>
+      await post({
+        environment: alert.environment,
+        token: alert.token,
+        headers: {
+          "apns-topic": alert.bundleId,
+          "apns-push-type": "alert",
+          "apns-priority": "10",
+          "apns-collapse-id": alert.collapseId,
+          "apns-expiration": expiresIn(APNS_ALERT_LIFETIME_SECONDS),
+        },
+        body: JSON.stringify(alert.payload),
+      }),
+    // An activity update is addressed to the app's Live Activity topic; it
+    // follows something the person did, so it goes out at once.
+    sendActivity: async (push) =>
+      await post({
+        environment: push.environment,
+        token: push.token,
+        headers: {
+          "apns-topic": `${push.bundleId}.push-type.liveactivity`,
+          "apns-push-type": "liveactivity",
+          "apns-priority": "10",
+          "apns-expiration": expiresIn(APNS_ACTIVITY_LIFETIME_SECONDS),
+        },
+        body: JSON.stringify(push.payload),
+      }),
+    close: () => transport.close(),
+  };
+};

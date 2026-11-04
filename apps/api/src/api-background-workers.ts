@@ -15,6 +15,7 @@ import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-clean
 import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { initListVerificationRunWorker } from "@/api/lib/lists/verification/run-queue";
 import { initPushDeliveryWorker } from "@/api/lib/push/push-delivery-worker";
+import { initTimerActivityWorker } from "@/api/lib/push/timer-activity-queue";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
@@ -40,6 +41,7 @@ export const initApiBackgroundWorkers = async (mode: BullMqWorkerHostMode) => {
     initPushDeliveryWorker,
     initReportExportWorker,
     initStyleSetPackageCleanupWorker,
+    initTimerActivityWorker,
     initUploadedMailCorrespondenceWorker,
     initWorkflowWorkers,
   ]);

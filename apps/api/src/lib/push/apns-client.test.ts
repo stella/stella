@@ -165,6 +165,42 @@ describe("APNs client", () => {
     expect(JSON.parse(first?.body ?? "")).toEqual(payload);
   });
 
+  test("addresses a Live Activity update to the app's activity topic", async () => {
+    const gateway = fakeGateway(Result.ok(response(200)));
+    const client = createApnsClient({
+      transport: gateway,
+      providerToken: fixedToken(),
+      now: () => 1_000_000_000_000,
+    });
+    const activity = {
+      aps: {
+        timestamp: 1_000_000_000,
+        event: "update",
+        "content-state": { name: "TimerActivity", props: "{}" },
+      },
+    } as const;
+
+    expect(
+      await client.sendActivity({
+        environment: "production",
+        token: TOKEN,
+        bundleId: "app.stll.mobile.preview",
+        payload: activity,
+      }),
+    ).toEqual({ type: "delivered" });
+
+    const [request] = gateway.requests;
+    expect(request?.path).toBe(`/3/device/${TOKEN}`);
+    expect(request?.headers).toEqual({
+      authorization: "bearer provider-jwt",
+      "apns-topic": "app.stll.mobile.preview.push-type.liveactivity",
+      "apns-push-type": "liveactivity",
+      "apns-priority": "10",
+      "apns-expiration": String(1_000_000_000 + 60 * 60),
+    });
+    expect(JSON.parse(request?.body ?? "")).toEqual(activity);
+  });
+
   test("an expired provider token is dropped and the alert retried", async () => {
     const providerToken = fixedToken();
     const client = createApnsClient({
