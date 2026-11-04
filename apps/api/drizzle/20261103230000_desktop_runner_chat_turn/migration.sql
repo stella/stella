@@ -3,6 +3,9 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- A run started for a chat turn names the turn that reads it, so the run ends
 -- once that turn does. Nullable with no default, so adding it rewrites no row.
+-- Deleting the turn (a truncation drops later turns) keeps the run and clears
+-- the reference, so the ended-turn sweep still cancels the run on the
+-- computer instead of the row vanishing under an open run.
 -- desktop_runner_runs holds a handful of rows at most: runner sockets are
 -- invitation-only and ended runs are pruned. The index and the foreign key
 -- below scan only those rows within the timeouts above; chat_turns is only
@@ -16,4 +19,4 @@ CREATE INDEX IF NOT EXISTS "desktop_runner_runs_chat_turn_idx"
 ALTER TABLE "desktop_runner_runs"
   -- squawk-ignore adding-foreign-key-constraint, constraint-missing-not-valid
   ADD CONSTRAINT "desktop_runner_runs_chat_turn_fk"
-  FOREIGN KEY ("chat_turn_id") REFERENCES "chat_turns"("id") ON DELETE CASCADE;
+  FOREIGN KEY ("chat_turn_id") REFERENCES "chat_turns"("id") ON DELETE SET NULL;

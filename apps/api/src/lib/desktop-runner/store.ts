@@ -1031,9 +1031,10 @@ export const expireAbandonedRuns = async (
 };
 
 /**
- * Queue a cancel for every open run whose chat turn no longer holds it
+ * Queue a cancel for every open chat run whose turn no longer holds it
  * (`CHAT_TURN_RUN_ENDING_STATUSES`): the turn was stopped, failed, superseded
- * or ended while its run still waited or worked. A turn may end on any API
+ * or ended while its run still waited or worked, or the turn is gone (a
+ * truncation deleted it, or the run predates turn references). A turn may end on any API
  * task, or with no task alive, so the sweep finds these from the rows rather
  * than from whoever ended the turn. One statement queues them all; a run
  * keeps one cancel (its key is the run), so a later sweep queues nothing more.
@@ -1054,11 +1055,15 @@ export const cancelRunsOfEndedChatTurns = async (
         ),
     })
     .from(runs)
-    .innerJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
+    .leftJoin(chatTurns, eq(chatTurns.id, runs.chatTurnId))
     .where(
       and(
         inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-        inArray(chatTurns.status, CHAT_TURN_RUN_ENDING_STATUSES),
+        isNotNull(runs.chatThreadId),
+        or(
+          isNull(runs.chatTurnId),
+          inArray(chatTurns.status, CHAT_TURN_RUN_ENDING_STATUSES),
+        ),
         // A run with its cancel queued is not read again.
         sql`NOT EXISTS (SELECT 1 FROM ${desktopRunnerCommands} WHERE ${desktopRunnerCommands.runId} = ${runs.runId} AND ${desktopRunnerCommands.kind} = 'run.cancel')`,
       ),

@@ -3633,6 +3633,17 @@ describe("chat turns on a computer", () => {
     }
   });
 
+  test("a run whose paused turn is deleted keeps its row and is cancelled on its computer", async () => {
+    const paused = await pausedForApproval();
+    // A truncation deletes the later turns of a thread with their messages.
+    await db.delete(chatTurns).where(eq(chatTurns.id, paused.chatTurnId));
+    await chatInstance.gateway.sweep();
+    expect(
+      (await paused.desktop.receive("run.cancel", ofRun(paused.runId))).runId,
+    ).toBe(paused.runId);
+    expect(await commandsOf(paused.runId, "run.cancel")).toHaveLength(1);
+  });
+
   test("a resume the run cannot take fails the turn, and the failed turn's run is cancelled", async () => {
     const paused = await pausedForApproval();
     // An answer the gateway refuses: the run holds as many commands as one
