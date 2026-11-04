@@ -184,7 +184,7 @@ export const QUEUE_AUTHORITY = {
   },
   "timer-activity-updates": {
     authority: "org-automation",
-    worker: "apps/api/src/lib/push/timer-activity-queue.ts",
+    worker: "apps/api/src/lib/push/timer-activity-worker.ts",
     reason:
       "Brings a person's own registered phones in step with their own timers; the job names only the person and organization whose timers changed, and matter names are read under the person's current membership before anything is sent.",
   },

@@ -5,11 +5,9 @@ import type { TimerActivityTimer } from "@stll/api-contract/timer-activity";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { ApnsActivityPush, ApnsOutcome } from "@/api/lib/push/apns-client";
 import type { TimerActivityDevice } from "@/api/lib/push/timer-activity-devices";
-import {
-  scheduleTimerActivityUpdates,
-  updateTimerActivities,
-} from "@/api/lib/push/timer-activity-queue";
-import type { TimerActivityDeps } from "@/api/lib/push/timer-activity-queue";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
+import { updateTimerActivities } from "@/api/lib/push/timer-activity-worker";
+import type { TimerActivityDeps } from "@/api/lib/push/timer-activity-worker";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
