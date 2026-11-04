@@ -84,6 +84,9 @@ pub(crate) struct HarnessCredentials {
   pub(crate) grant: Option<ProcessGrant>,
 }
 
+/// Called when a CLI's install has ended; see `LocalHarnesses::on_install_settled`.
+pub(crate) type InstallSettled = Arc<dyn Fn() + Send + Sync>;
+
 /// The managed CLIs on this computer and what their launches add.
 pub(crate) trait LocalHarnesses: Send + Sync + 'static {
   /// The installed CLI, held in place until the lease drops; `None` when
@@ -91,6 +94,9 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
   fn installed(&self, harness: Harness) -> Option<InstalledHarness>;
   /// What the harness's launch adds right now; `None` adds nothing.
   fn credentials(&self, harness: Harness) -> BoxFuture<'_, Option<HarnessCredentials>>;
+  /// Calls `settled` each time a CLI's install or removal ends, from then
+  /// on: what `installed` returns may have changed, so the reports do too.
+  fn on_install_settled(&self, settled: InstallSettled);
 }
 
 pub(crate) struct HostSettings {
@@ -717,6 +723,13 @@ impl HarnessHost for SidecarHarnessHost {
       }
     }
     tokio::spawn(refresh_reports(Arc::clone(&self.shared), sidecar.clone()));
+    // A CLI installed or updated after the app started is reported ready
+    // without waiting for the next periodic probe.
+    let shared = Arc::clone(&self.shared);
+    self
+      .shared
+      .harnesses
+      .on_install_settled(Arc::new(move || shared.refresh.notify_one()));
     *slot = Some((origin, sidecar));
   }
 

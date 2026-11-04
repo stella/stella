@@ -38,7 +38,7 @@ use self::harness::{
 };
 use self::journal::{Journal, JournalBacking, SharedJournal};
 use self::sidecar_host::{
-  HarnessCredentials, HostSettings, InstalledHarness, LocalHarnesses,
+  HarnessCredentials, HostSettings, InstallSettled, InstalledHarness, LocalHarnesses,
   SidecarHarnessHost,
 };
 pub(crate) use self::state::RunnerState;
@@ -344,6 +344,26 @@ struct ManagedHarnesses {
 }
 
 impl LocalHarnesses for ManagedHarnesses {
+  fn on_install_settled(&self, settled: InstallSettled) {
+    let Some(installation) = self.app.try_state::<HarnessInstallation>() else {
+      return;
+    };
+    for harness in ManagedHarness::ALL {
+      let mut states = installation.subscribe(harness);
+      let settled = Arc::clone(&settled);
+      tauri::async_runtime::spawn(async move {
+        // A download changes the state with every chunk; only an install
+        // that ended changes what a probe finds.
+        while states.changed().await.is_ok() {
+          let running = states.borrow_and_update().is_running();
+          if !running {
+            settled();
+          }
+        }
+      });
+    }
+  }
+
   fn installed(&self, harness: Harness) -> Option<InstalledHarness> {
     let managed = match harness {
       Harness::Codex => ManagedHarness::Codex,
