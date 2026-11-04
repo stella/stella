@@ -282,6 +282,7 @@ describe("court filters read a court through the resolver's court identity", () 
 
   test.each([
     "Krajský soud v Plzni pobočka v Chebu",
+    "Krajský soud v Plzni, pobočka",
     "Krajský soud",
     "Okresní soud v Neznámově",
     "OSXY99",
@@ -352,6 +353,34 @@ describe("court filters read a court through the resolver's court identity", () 
         });
         expect(reading, alias).toMatchObject({ type: "court", courts: [name] });
       }
+    }
+  });
+
+  test("a stored spelling only an alias two courts share could place filters by that exact spelling", () => {
+    // Two stored courts outside the directory whose generated short forms
+    // coincide, plus a third stored spelling that is that shared form.
+    const catalog = storedCourtCatalog("CZE", [
+      "Okresní soud Neznámov",
+      "Obvodní soud Neznámov",
+      "OS Neznámov",
+    ]);
+
+    expect(readCourtFilter({ court: "OS Neznámov", catalog })).toMatchObject({
+      type: "court",
+      courts: ["OS Neznámov"],
+    });
+  });
+
+  test("a dropped filter's hint never lists an empty set of stored courts", () => {
+    const reading = readCourtFilter({
+      court: "Krajský soud",
+      catalog: storedCourtCatalog("CZE", []),
+    });
+
+    expect(reading.type).toBe("dropped");
+    if (reading.type === "dropped") {
+      expect(reading.warning.hint).not.toContain("include .");
+      expect(reading.warning.hint).toContain("omit court");
     }
   });
 

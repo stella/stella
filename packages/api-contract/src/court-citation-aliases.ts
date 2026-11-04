@@ -497,12 +497,9 @@ const namesSomeCourt = (
     if ([...NAMED_COURT_WORDS].some((word) => token.startsWith(word))) {
       return true;
     }
-    // A branch with a seat after it (`pobočka v Chebu`) is a court of its
-    // own, even when its main court's name was read before it.
-    if (
-      BRANCH_NOUN_STEMS.some((stem) => token.startsWith(stem)) &&
-      tokens[index + 1] !== undefined
-    ) {
+    // A branch no alias read (`pobočka v Chebu`, or `pobočka` with its seat
+    // left off) is a court of its own, never its main court read before it.
+    if (BRANCH_NOUN_STEMS.some((stem) => token.startsWith(stem))) {
       return true;
     }
     const hungarianNoun = [...HUNGARIAN_COURT_NOUNS].some((noun) =>

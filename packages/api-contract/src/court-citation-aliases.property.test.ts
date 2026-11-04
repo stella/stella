@@ -269,6 +269,7 @@ describe("court citation aliases", () => {
     for (const text of [
       "KS Plzeň pobočka v Chebu",
       "Krajský soud v Plzni, pobočka Cheb",
+      "Krajský soud v Plzni, pobočka",
     ]) {
       expect(readsAs("CZE", text), text).toContainEqual({
         type: "unrecognized",

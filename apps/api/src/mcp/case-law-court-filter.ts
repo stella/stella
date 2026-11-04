@@ -120,13 +120,15 @@ const courtKeysNamed = (
   catalog: StoredCourtCatalog,
   value: string,
 ): readonly string[] => {
-  const whole = catalog.index.byAlias.get(foldCourtText(value).join(" "));
-  if (whole !== undefined) {
-    return [...whole].toSorted();
-  }
+  // A stored spelling only an ambiguous alias could place is read by that
+  // exact spelling before the alias it shares.
   const unplacedKey = `${catalog.index.country}${UNPLACED_KEY_INFIX}${value}`;
   if (catalog.identities.has(unplacedKey)) {
     return [unplacedKey];
+  }
+  const whole = catalog.index.byAlias.get(foldCourtText(value).join(" "));
+  if (whole !== undefined) {
+    return [...whole].toSorted();
   }
   const keys = new Set<string>();
   for (const constraint of readCourtCitation(catalog.index, value)) {
@@ -234,8 +236,12 @@ export const readCourtFilter = ({
       }),
     };
   }
-  const nearest = (): string =>
-    `The stored courts include ${quoted(nearestStoredCourts(catalog, court))}.`;
+  const nearest = (): string => {
+    const listed = nearestStoredCourts(catalog, court);
+    return listed.length === 0
+      ? "No court is stored for this country; omit court to search every court."
+      : `The stored courts include ${quoted(listed)}.`;
+  };
   const named = courtKeysNamed(catalog, court).map(
     (key) =>
       catalog.identities.get(key) ??
