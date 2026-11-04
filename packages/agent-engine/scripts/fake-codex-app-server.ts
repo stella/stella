@@ -37,7 +37,10 @@ type FakeStep =
   | { sleep: number }
   | { exit: number };
 
-const USER_AGENT = "stella/0.165.0 (Mac OS 27.0; arm64) test";
+const userAgent = (version: string) =>
+  `stella/${version} (Mac OS 27.0; arm64) test`;
+/** A version older than the bundled compatibility policy supports. */
+export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
@@ -47,11 +50,14 @@ const signedIn = {
   requiresOpenaiAuth: false,
 };
 
-const handshake = (account: unknown = signedIn): FakeStep[] => [
+const handshake = (
+  account: unknown = signedIn,
+  version = "0.165.0",
+): FakeStep[] => [
   {
     expect: "initialize",
     result: {
-      userAgent: USER_AGENT,
+      userAgent: userAgent(version),
       codexHome: "/fake-home",
       platformFamily: "unix",
       platformOs: "macos",
@@ -147,6 +153,34 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
   questions: null,
   ...extra,
 });
+
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  item("started", {
+    ...command("call-rm", "inProgress"),
+    command: "rm draft.md",
+  }),
+  {
+    request: "item/commandExecution/requestApproval",
+    params: {
+      kind: "command",
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      itemId: "call-rm",
+      startedAtMs: 1,
+      environmentId: null,
+      reason,
+      command: "rm draft.md",
+    },
+  },
+  item("completed", {
+    ...command("call-rm", "declined"),
+    command: "rm draft.md",
+  }),
+  item("completed", agentMessage("m-2", "Left it in place.")),
+  completed(),
+];
 
 const FAKE_SCENARIOS = {
   /**
@@ -295,32 +329,9 @@ const FAKE_SCENARIOS = {
     },
     completed(),
   ],
-  approval: [
-    ...freshTurn(),
-    item("started", {
-      ...command("call-rm", "inProgress"),
-      command: "rm draft.md",
-    }),
-    {
-      request: "item/commandExecution/requestApproval",
-      params: {
-        kind: "command",
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        itemId: "call-rm",
-        startedAtMs: 1,
-        environmentId: null,
-        reason: "Deletes a file",
-        command: "rm draft.md",
-      },
-    },
-    item("completed", {
-      ...command("call-rm", "declined"),
-      command: "rm draft.md",
-    }),
-    item("completed", agentMessage("m-2", "Left it in place.")),
-    completed(),
-  ],
+  approval: commandApproval("Deletes a file"),
+  /** A harness that gives no reason, here as an empty one. */
+  approval_without_reason: commandApproval(""),
   blocking_question: [
     ...freshTurn(),
     {
@@ -485,6 +496,11 @@ const FAKE_SCENARIOS = {
     },
   ],
   signed_out: handshake({ account: null, requiresOpenaiAuth: true }),
+  /** Signed in, at a version the bundled policy refuses. */
+  outdated: [
+    ...handshake(signedIn, FAKE_OUTDATED_VERSION),
+    { expect: "model/list", result: { data: [], nextCursor: null } },
+  ],
   auth_expired: [
     ...freshTurn(),
     completed("failed", {

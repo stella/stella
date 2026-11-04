@@ -3,5 +3,25 @@
     "file": "apps/desktop/src-tauri/tests/local_file_creation_guard.rs",
     "line": "let output = Command::new(\"cargo\")",
     "reason": "real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
+    "line": "let started = Instant::now(); // kit-allow: restart backoff over a real process",
+    "reason": "measures how long a real sidecar process stayed up for its restart backoff in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
+    "line": "let sleep = tokio::time::sleep(delay); // kit-allow: restart backoff over a real process",
+    "reason": "waits out the restart backoff between real sidecar processes in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
+    "line": "let spawned = Command::new(&launch.program) // kit-allow: spawns the supervised sidecar",
+    "reason": "spawns the supervised sidecar process in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "tokio::time::sleep(Duration::from_millis(50)).await; // kit-allow: polls a real process restart",
+    "reason": "polls until a real sidecar process has been restarted after a crash; the restart of a real process is the subject of the test"
   }
 ]
