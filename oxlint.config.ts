@@ -1415,6 +1415,7 @@ const config = defineConfig({
       "error",
       { checksVoidReturn: { attributes: false } },
     ],
+    "typescript/no-unsafe-enum-assignment": "error",
     "typescript/strict-boolean-expressions": [
       "error",
       { allowNullableString: true, allowNullableBoolean: true },
