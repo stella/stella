@@ -17,7 +17,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  isHarnessChatToolCall,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
@@ -4276,8 +4279,11 @@ const resolveAssistantPartRefs = ({
   unresolvedInputRefs,
   refRegistry,
 }: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  // A harness call is stored as its harness reported it: its name only
+  // collides with a registry tool's by chance, so no registry ref rule
+  // applies to it.
   const withDeclaredToolRefs: unknown =
-    part.type === "tool-call"
+    part.type === "tool-call" && !isHarnessChatToolCall(part)
       ? {
           ...part,
           ...("input" in part
@@ -4412,7 +4418,8 @@ const hydrateAssistantMessageRefs = ({
     inputState: ChatRefInputState,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
-    if (part.type !== "tool-call") {
+    // Stored as its harness reported it; see `resolveAssistantPartRefs`.
+    if (part.type !== "tool-call" || isHarnessChatToolCall(part)) {
       return part;
     }
     const rawInput: unknown = "input" in part ? part.input : undefined;
