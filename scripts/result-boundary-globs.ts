@@ -69,6 +69,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-runner/**/*.ts",
+  "apps/api/src/lib/desktop-runner/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/dictation/**/*.ts",
@@ -307,6 +309,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/file-derivative-queue.ts",
   // BullMQ retries an attempt only when its processor rejects.
   "apps/api/src/lib/push/push-delivery-worker.ts",
+  "apps/api/src/lib/push/timer-activity-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",

@@ -767,7 +767,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 | account_lifecycle | 6 |
-| assistant_chat | 15 |
+| assistant_chat | 16 |
 | auth_plumbing | 38 |
 | billing_ui | 1 |
 | chat_thread_ui | 18 |
@@ -777,7 +777,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
-| native_device | 2 |
+| native_device | 4 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |

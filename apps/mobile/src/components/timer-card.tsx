@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { clockOf, elapsedSeconds } from "@stll/api-contract/timer-activity";
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
@@ -12,13 +13,7 @@ import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
-import {
-  clockOf,
-  discardTimer,
-  elapsedSeconds,
-  saveTimer,
-  toggleTimer,
-} from "@/state/timers";
+import { discardTimer, saveTimer, toggleTimer } from "@/state/timers";
 import type { Timer } from "@/state/timers";
 
 /**
@@ -40,6 +35,7 @@ export const TimerCard = ({
   timer: Timer;
 }) => {
   const t = useTranslations("timers");
+  const words = useTranslations("timerActivity");
   const timeZone = useTimeZone() ?? "UTC";
   const { end } = useSession();
   const [failure, setFailure] = useState<WriteFailure | null>(null);
@@ -66,7 +62,7 @@ export const TimerCard = ({
     <View className="border-border bg-card gap-3 rounded-xl border p-4">
       <View className="gap-0.5">
         <Text
-          accessibilityLabel={t(running ? "running" : "paused")}
+          accessibilityLabel={words(running ? "running" : "paused")}
           variant={running ? "title" : "headline"}
         >
           {clockOf(elapsedSeconds(timer, now))}
@@ -75,13 +71,13 @@ export const TimerCard = ({
           {timer.description === null ||
           timer.description === undefined ||
           timer.description === ""
-            ? t("noDescription")
+            ? words("noDescription")
             : timer.description}
         </Text>
         <Text numberOfLines={1} variant="caption">
           {[
-            matterName ?? t("noMatter"),
-            t(running ? "running" : "paused"),
+            matterName ?? words("noMatter"),
+            words(running ? "running" : "paused"),
           ].join(" · ")}
         </Text>
       </View>

@@ -10,6 +10,7 @@
   "contactCapacity": "hashtext('contact_capacity')",
   "definitionCap": "0x0f10ccab::integer",
   "desktopBatch": "0x0f10ccac::integer",
+  "desktopRunnerCapacity": "hashtext('desktop-runner-capacity')",
   "expenseCapacity": "hashtext('expense-capacity')",
   "fileComparisonCapacity": "0x0f10ccb2::integer",
   "legislationAmendmentWork": "0x0f10ccad::integer",

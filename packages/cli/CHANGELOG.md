@@ -1,5 +1,15 @@
 # @stll/cli
 
+## 6.8.0
+
+### Minor Changes
+
+- [#5808](https://github.com/stella/stella/pull/5808) [`620ff13`](https://github.com/stella/stella/commit/620ff13b01484e4863fdc938a6ee9bf1a2db5a52) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add organization data-box settings commands and expose data-box messages through matter correspondence reads and channel filtering.
+
+### Patch Changes
+
+- [#6937](https://github.com/stella/stella/pull/6937) [`3fdce69`](https://github.com/stella/stella/commit/3fdce69a4490b2d55483c1c6b8e56dd4eb722a57) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A reader mark keeps the words either side of its quote, and listing marks reports each passage as placed at the anchor where its words are now or as orphaned when the document's current text has no single place for them.
+
 ## 6.7.1
 
 ### Patch Changes

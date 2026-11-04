@@ -6,7 +6,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaces } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+  markRlsDatabase,
+} from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -19,6 +25,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import bulkDeleteContacts from "./bulk/delete";
@@ -57,7 +64,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             role: "owner",
             createdAt: new Date(),
           });
-          await setup.db.insert(contacts).values([
+          await insertOwnerContacts(setup.db, [
             {
               id: blockedContactId,
               organizationId,
@@ -79,27 +86,27 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             clientId: blockedContactId,
           });
 
-          const response = await setup.db.transaction(async (tx) => {
-            const safeDb: SafeDb = async (callback) =>
-              await Result.tryPromise(async () => await callback(tx));
-            return await bulkDeleteContacts.handler(
-              createTestHandlerContext<
-                Parameters<typeof bulkDeleteContacts.handler>[0]
-              >({
-                scopedDb: NO_DB,
-                safeDb,
-                audit: auditRecorderDouble((events) => {
-                  auditedIds.push(
-                    ...events.map(({ resourceId }) => resourceId),
-                  );
-                }),
-                memberRole: sessionMemberRole("owner"),
-                session: { activeOrganizationId: organizationId },
-                user: { id: userId },
-                body: { contactIds: [blockedContactId, plainContactId] },
+          // The request's organization-scoped application transaction, as
+          // the route hands it to the handler.
+          const response = await bulkDeleteContacts.handler(
+            createTestHandlerContext<
+              Parameters<typeof bulkDeleteContacts.handler>[0]
+            >({
+              scopedDb: NO_DB,
+              safeDb: createMembershipSafeDb(markRlsDatabase(setup.db), {
+                organizationId,
+                userId,
+                serverValidatedWorkspaceIds: [],
               }),
-            );
-          });
+              audit: auditRecorderDouble((events) => {
+                auditedIds.push(...events.map(({ resourceId }) => resourceId));
+              }),
+              memberRole: sessionMemberRole("owner"),
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              body: { contactIds: [blockedContactId, plainContactId] },
+            }),
+          );
 
           expect(response).toEqual({
             outcomes: [
@@ -109,10 +116,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           });
           expect(auditedIds).toEqual([plainContactId]);
           expect(
-            await setup.db
-              .select({ id: contacts.id })
-              .from(contacts)
-              .where(eq(contacts.organizationId, organizationId)),
+            await withOwnerOrganizationScope(
+              setup.db,
+              organizationId,
+              async (scoped) =>
+                await scoped
+                  .select({ id: contacts.id })
+                  .from(contacts)
+                  .where(eq(contacts.organizationId, organizationId)),
+            ),
           ).toEqual([{ id: blockedContactId }]);
           expect(
             (
@@ -132,6 +144,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
     test("keeps a client assignment committed while the delete waits for its contact", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const setup = openClient();
+        const deleting = openClient();
         const organizationId = mintAuthProviderId<"organization">();
         const userId = mintAuthProviderId<"user">();
         const blockedContactId = createSafeId<"contact">();
@@ -162,7 +175,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             role: "owner",
             createdAt: new Date(),
           });
-          await setup.db.insert(contacts).values([
+          await insertOwnerContacts(setup.db, [
             {
               id: blockedContactId,
               organizationId,
@@ -186,6 +199,16 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const results = await withInterleaving({
             databaseUrl,
             a: {
+              // The request's organization-scoped application transaction,
+              // as the route hands it to the handler's safeDb.
+              transaction: createMembershipScopedDb(
+                markRlsDatabase(deleting.db),
+                {
+                  organizationId,
+                  userId,
+                  serverValidatedWorkspaceIds: [],
+                },
+              ),
               steps: [
                 {
                   name: "delete",
@@ -232,10 +255,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             schedules: [["b.link-client", "a.delete", "b.commit", "a.commit"]],
             reset: async () => await Promise.resolve(),
             readState: async () => ({
-              contacts: await setup.db
-                .select({ id: contacts.id })
-                .from(contacts)
-                .where(eq(contacts.organizationId, organizationId)),
+              contacts: await withOwnerOrganizationScope(
+                setup.db,
+                organizationId,
+                async (scoped) =>
+                  await scoped
+                    .select({ id: contacts.id })
+                    .from(contacts)
+                    .where(eq(contacts.organizationId, organizationId)),
+              ),
               matter: (
                 await setup.db
                   .select({ clientId: workspaces.clientId })

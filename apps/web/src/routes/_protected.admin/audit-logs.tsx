@@ -724,7 +724,7 @@ export function AuditActionSentence({
   resource: AuditLogResource;
 }) {
   const t = useTranslations();
-  const label = useAuditResourceLabel(action, resource);
+  const label = useAuditResourceLabel(action, resource, "sentence");
   if (!isAuditAction(action)) {
     // Keep the recorded action visible so retired or newer actions stay
     // distinguishable in the log.
@@ -786,7 +786,16 @@ export function AuditResourceLabel({
 
 type AuditLogResource = AuditResource;
 
-function useAuditResourceLabel(action: string, resource: AuditLogResource) {
+/**
+ * `sentence` is for the object of an action sentence, which already says the
+ * resource was deleted ("Deleted contact."); a standalone label says it itself
+ * ("deleted contact").
+ */
+function useAuditResourceLabel(
+  action: string,
+  resource: AuditLogResource,
+  placement: "label" | "sentence" = "label",
+) {
   const t = useTranslations();
   if (resource.kind === "unknown") {
     return t("settings.organization.auditLogsUnknownResource");
@@ -795,7 +804,9 @@ function useAuditResourceLabel(action: string, resource: AuditLogResource) {
     action,
     resource,
     deletedLabel: (kind) =>
-      t("settings.organization.auditLogsDeletedResource", { kind }),
+      placement === "sentence"
+        ? kind
+        : t("settings.organization.auditLogsDeletedResource", { kind }),
     kind: t(AUDIT_RESOURCE_PROJECTIONS[resource.kind]),
     unavailableLabel: (kind) =>
       t("settings.organization.auditLogsUnavailableResource", { kind }),

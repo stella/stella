@@ -939,7 +939,9 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
         // The compatibility test binds the policy to the pinned releases.
         "$TURBO_ROOT$/apps/desktop/package.json",
-        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json"
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json",
+        // The sidecar build test reads the desktop release's rebuild paths.
+        "$TURBO_ROOT$/scripts/detect-desktop-release-changes.sh"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has
@@ -1716,7 +1718,8 @@
       "env": [
         "API_TEST_DURATIONS_HASH",
         "API_TEST_SHARD",
-        "API_TEST_FILES_ENCODED"
+        "API_TEST_FILES_ENCODED",
+        "STELLA_RUN_SHARED_POSTGRES_TESTS"
       ],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
@@ -1729,8 +1732,13 @@
       "inputs": [
         "$TURBO_ROOT$/packages/html/src/email.ts",
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
+        "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generation-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-docker.ts",
+        "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/scripts/generate-online-migration-entries.ts",
-        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
@@ -1810,6 +1818,7 @@
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
         "src/mainview/App.tsx",
+        "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",

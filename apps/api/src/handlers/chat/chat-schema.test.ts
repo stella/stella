@@ -55,8 +55,8 @@ import {
   resolveBrowserExtensionCapability,
   resolveEditedUserMessageId,
   sendMessageBodySchema,
-  validateMessage as validateMessageWithPersistence,
-  validateToolCallParts,
+  validateMessage as validateChatMessage,
+  validateToolCallParts as validateChatToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -93,6 +93,21 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
+/** Every case here validates a cloud turn's calls unless it names an owner. */
+type CloudByDefault<TInput, TKey extends keyof TInput> = Omit<TInput, TKey> &
+  Partial<Pick<TInput, TKey>>;
+const validateMessageWithPersistence = async (
+  input: CloudByDefault<
+    Parameters<typeof validateChatMessage>[0],
+    "toolCallOwnership"
+  >,
+) => await validateChatMessage({ toolCallOwnership: "cloud", ...input });
+const validateToolCallParts = (
+  input: CloudByDefault<
+    Parameters<typeof validateChatToolCallParts>[0],
+    "ownership"
+  >,
+) => validateChatToolCallParts({ ownership: "cloud", ...input });
 const validateMessage = async (
   input: Omit<
     Parameters<typeof validateMessageWithPersistence>[0],

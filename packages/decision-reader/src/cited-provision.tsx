@@ -22,6 +22,7 @@ import {
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { BlockRenderer } from "./document-ast-text";
@@ -134,16 +135,26 @@ export const ProvisionCardHeader = ({
           {label}
         </BidiText>
         {actText !== "" && (
-          <span
-            className={cn(
-              "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
-              SEPARATED_PART,
-            )}
-            data-slot="provision-card-act"
-            title={actText}
-          >
-            <BidiText>{actText}</BidiText>
-          </span>
+          // The act's name truncates in a narrow card; the tooltip gives it
+          // back in full.
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
+                    SEPARATED_PART,
+                  )}
+                  data-slot="provision-card-act"
+                />
+              }
+            >
+              <BidiText>{actText}</BidiText>
+            </TooltipTrigger>
+            <TooltipPopup>
+              <BidiText>{actText}</BidiText>
+            </TooltipPopup>
+          </Tooltip>
         )}
         <span
           className={cn(

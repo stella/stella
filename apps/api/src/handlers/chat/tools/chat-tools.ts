@@ -241,8 +241,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   recordAuditEventAvailable: boolean;
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -262,7 +261,7 @@ const chatRequestWorkspace = ({
   ) {
     return null;
   }
-  const status = workspaceStatusById?.get(requestWorkspaceId);
+  const status = workspaceStatusById.get(requestWorkspaceId);
   return status === undefined ? null : { id: requestWorkspaceId, status };
 };
 
@@ -610,8 +609,7 @@ export type GetChatToolsProps = {
    * NOT default to "active" on the write path; callers supply real statuses
    * from `accessibleWorkspaces`.
    */
-  workspaceStatusById?:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -1069,6 +1067,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolWorkspaceIds,
     userId,
     userEmail,
+    workspaceStatusById,
   });
   const skillTools = createSkillTools({
     activeSkillContext,

@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { AuditResource } from "@stll/api-contract/audit-log";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
@@ -61,4 +61,24 @@ test("an action the log does not recognise stays visible", () => {
   );
 
   expect(view.getByText("contact.retired_action")).not.toBeNull();
+});
+
+test("a deleted resource without a name says deleted once", () => {
+  const resource = {
+    kind: "contact",
+    id: "resource_1234567890",
+    name: null,
+    available: false,
+  } as const satisfies AuditResource;
+  const view = render(
+    <IntlProvider locale="en" messages={messages}>
+      <p data-testid="sentence">
+        <AuditActionSentence action="delete" resource={resource} />
+      </p>
+      <AuditResourceLabel action="delete" resource={resource} />
+    </IntlProvider>,
+  );
+
+  expect(view.getByTestId("sentence").textContent).toBe("Deleted contact.");
+  expect(view.getByText("deleted contact")).not.toBeNull();
 });

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
@@ -98,7 +98,15 @@ const HarnessPolicy = v.pipe(
 const HarnessCompatibilityManifestSchema = v.object({
   version: v.literal(1),
   /** Rollback protection: an older manifest never replaces a newer one. */
-  updatedAt: v.pipe(v.string(), v.isoTimestamp()),
+  updatedAt: v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    // The format check alone accepts days a month does not have.
+    v.check(
+      (value) => Result.isOk(Result.try(() => Temporal.Instant.from(value))),
+      "updatedAt is not a real instant",
+    ),
+  ),
   compatibility: v.array(HarnessPolicy),
 });
 

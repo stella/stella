@@ -11,12 +11,12 @@ import {
   ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
   ORGANIZATION_NAME_MAX_LENGTH,
 } from "@stll/api-contract/organization-create";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 Object.assign(globalThis, {
@@ -38,7 +38,8 @@ const {
 const { IntlProvider, createTranslator } = await import("use-intl");
 const { Button } = await import("@stll/ui/button");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
-const { drainReactScheduler } = await import("@/lib/react-scheduler-drain");
+const { drainReactScheduler } =
+  await import("@stll/property-testing/dom-environment");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
 const { CreateOrganizationDialog } =
   await import("./create-organization-dialog");

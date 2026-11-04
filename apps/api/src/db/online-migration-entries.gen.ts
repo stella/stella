@@ -6,6 +6,7 @@ export { default as constraints_case_law_identifier_retry_constraints } from "./
 export { default as constraints_case_law_parsed_source_constraint } from "./online-migration-entries/constraints-case-law-parsed-source-constraint";
 export { default as constraints_chat_content_v3_constraints } from "./online-migration-entries/constraints-chat-content-v3-constraints";
 export { default as constraints_client_invoice_constraints } from "./online-migration-entries/constraints-client-invoice-constraints";
+export { default as constraints_contact_vat_id_constraints } from "./online-migration-entries/constraints-contact-vat-id-constraints";
 export { default as constraints_corpus_projection_cleanup_stall_constraints } from "./online-migration-entries/constraints-corpus-projection-cleanup-stall-constraints";
 export { default as constraints_corpus_projection_delete_receipt_constraints } from "./online-migration-entries/constraints-corpus-projection-delete-receipt-constraints";
 export { default as constraints_data_box_constraints } from "./online-migration-entries/constraints-data-box-constraints";
@@ -48,6 +49,7 @@ export { default as indexes_case_law_parse_pending_index } from "./online-migrat
 export { default as indexes_case_law_population_counts_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-counts-source-kind-idx";
 export { default as indexes_case_law_population_deltas_source_kind_idx } from "./online-migration-entries/indexes-case-law-population-deltas-source-kind-idx";
 export { default as indexes_case_law_population_projection_activity_idx } from "./online-migration-entries/indexes-case-law-population-projection-activity-idx";
+export { default as indexes_case_law_population_projection_arrivals_idx } from "./online-migration-entries/indexes-case-law-population-projection-arrivals-idx";
 export { default as indexes_case_law_provision_citations_decision_work_subtree_idx } from "./online-migration-entries/indexes-case-law-provision-citations-decision-work-subtree-idx";
 export { default as indexes_case_law_provision_citations_eli_citing_idx } from "./online-migration-entries/indexes-case-law-provision-citations-eli-citing-idx";
 export { default as indexes_case_law_provision_citations_work_citing_idx } from "./online-migration-entries/indexes-case-law-provision-citations-work-citing-idx";

@@ -14,6 +14,7 @@ import {
 import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
+  anyBootsPgliteTestDatabase,
   classifyPostgresTestIsolation,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
@@ -48,6 +49,54 @@ const durations = measured?.unwrapOr({}) ?? {};
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
 let clusterExclusivePaths = new Set<string>();
+
+const apiPackageRoot = path.resolve(import.meta.dir, "..");
+// Mirrors PGLITE_TEST_SNAPSHOT_ENV in src/tests/pglite-test-db.ts; a literal
+// keeps the runner from importing the whole API schema graph.
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+
+/**
+ * Some gated suites also use the PGlite fixtures. Without a snapshot, each one
+ * builds the whole PGlite schema in-process inside its setup hook, alongside
+ * the other workers, and a loaded runner can stretch that past the hook
+ * timeout. Build it once here so every worker boots PGlite from the dump, as
+ * the PGlite runner's batches do.
+ */
+const preparePgliteSnapshot = async (
+  files: readonly string[],
+  directory: string,
+): Promise<{ exitCode: number; environment: Record<string, string> }> => {
+  const inherited = process.env[PGLITE_TEST_SNAPSHOT_ENV];
+  if (
+    (inherited !== undefined && inherited.length > 0) ||
+    !(await anyBootsPgliteTestDatabase(apiPackageRoot, files))
+  ) {
+    return { exitCode: 0, environment: {} };
+  }
+  const snapshotPath = path.join(directory, "pglite-test-snapshot.tar");
+  console.log("Building the PGlite test-database snapshot ...");
+  const builder = Bun.spawn({
+    cmd: [
+      process.execPath,
+      path.join(import.meta.dir, "build-pglite-snapshot.ts"),
+      snapshotPath,
+    ],
+    cwd: apiPackageRoot,
+    env: process.env,
+    stdin: "ignore",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await builder.exited;
+  if (exitCode !== 0) {
+    console.error(`PGlite snapshot build failed with exit code ${exitCode}.`);
+    return { exitCode, environment: {} };
+  }
+  return {
+    exitCode,
+    environment: { [PGLITE_TEST_SNAPSHOT_ENV]: snapshotPath },
+  };
+};
 
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
@@ -90,6 +139,13 @@ process.exitCode = await runGatedTests({
     );
     let invocation = 0;
     try {
+      const pgliteSnapshot = await preparePgliteSnapshot(
+        files,
+        temporaryDirectory,
+      );
+      if (pgliteSnapshot.exitCode !== 0) {
+        return pgliteSnapshot.exitCode;
+      }
       const status = await runPostgresWorkers({
         files,
         durations,
@@ -120,9 +176,10 @@ process.exitCode = await runGatedTests({
               ],
               testFiles: workerFiles,
             }),
-            cwd: path.resolve(import.meta.dir, ".."),
+            cwd: apiPackageRoot,
             env: {
               ...process.env,
+              ...pgliteSnapshot.environment,
               [gate]: gateValue,
               DATABASE_URL: workerUrl,
             },
