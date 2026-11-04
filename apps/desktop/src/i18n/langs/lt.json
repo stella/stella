@@ -501,6 +501,10 @@
     "evidenceTitles": "Pavadinimai",
     "evidenceApps": "Programos",
     "rangeEmpty": "Šiuo laikotarpiu nieko neįrašyta.",
+    "entryStart": "Pradžia",
+    "entryEnd": "Pabaiga",
+    "rangeEndBeforeStart": "Nustatykite pabaigą vėlesnę nei pradžia.",
+    "rangeDraftedLeftOut": "{duration}, neskaičiuojant laiko, jau įtraukto į juodraščius",
     "calendarHint": "Atverkite punktyrinį pasiūlymą, kad jį peržiūrėtumėte, arba vilkite stulpelyje Laiko įrašai, kad parengtumėte įrašą bet kuriam laikotarpiui.",
     "aiDraftWrite": "Parengti su stella AI",
     "aiDraftAgain": "Parengti iš naujo",
@@ -728,6 +732,36 @@
     "callbackConnectedTitle": "ChatGPT prijungtas",
     "callbackConnectedBody": "Galite uždaryti šį skirtuką ir grįžti į stellą.",
     "callbackNotConnectedTitle": "ChatGPT neprijungtas",
-    "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą."
+    "callbackNotConnectedBody": "Grįžkite į stellą, pažiūrėkite, kas nutiko, ir bandykite dar kartą.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Naudokite savo Claude prenumeratą vietiniams agentams stelloje. Naudojimas skaičiuojamas pagal jūsų Claude planą, atskirai nuo stellos prenumeratos.",
+      "notInstalled": "Claude Code šiame kompiuteryje dar neįdiegtas.",
+      "signIn": "Prisijungti su Claude",
+      "openSignInPage": "Atidaryti prisijungimo puslapį",
+      "signedIn": "Prisijungta prie Claude",
+      "signedInAs": "Prisijungta prie Claude · {email}",
+      "signOut": "Atsijungti",
+      "apiKey": "Claude Code prisijungęs API raktu, kurio stella nenaudoja. Atsijunkite ir prisijunkite su savo Claude prenumerata.",
+      "failure": {
+        "notCompleted": "Prisijungimas nebuvo baigtas. Bandykite dar kartą.",
+        "timedOut": "Prisijungimas užtruko per ilgai. Bandykite dar kartą.",
+        "unavailable": "Šiame kompiuteryje nepavyko paleisti Claude Code. Bandykite dar kartą."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} šiame kompiuteryje dar neįdiegtas.",
+      "install": "Įdiegti",
+      "downloading": "Atsisiunčiama {name} {version}: {percent} %",
+      "verifying": "Tikrinama {name} {version}",
+      "ready": "{name} {version} įdiegtas.",
+      "retry": "Bandyti dar kartą",
+      "activeStays": "Toliau naudojama versija {version}.",
+      "failure": {
+        "download": "Nepavyko atsisiųsti {name}. Patikrinkite interneto ryšį ir bandykite dar kartą.",
+        "verification": "Nepavyko patikrinti {name}, todėl jis neįdiegtas.",
+        "storage": "Nepavyko išsaugoti {name} šiame kompiuteryje. Patikrinkite, ar diske yra laisvos vietos."
+      }
+    }
   }
 }

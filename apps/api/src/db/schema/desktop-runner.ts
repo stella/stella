@@ -11,7 +11,7 @@ import {
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
-import { chatThreads } from "./chat";
+import { chatThreads, chatTurns } from "./chat";
 import {
   jsonb,
   organization,
@@ -149,6 +149,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
      */
     chatThreadId: p.uuid("chat_thread_id"),
     /**
+     * The chat turn that reads the run; null for runs started outside chat,
+     * and for a chat run whose turn was deleted. The run lives as long as the
+     * turn holds it: once the turn ends other than paused on an answer the
+     * run can take, or is deleted, the API cancels the run.
+     */
+    chatTurnId: p.uuid("chat_turn_id"),
+    /**
      * Last position of the run's messages a chat turn consumed. A turn that
      * paused for an approval continues reading after it.
      */
@@ -172,6 +179,17 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .index("desktop_runner_runs_chat_thread_idx")
       .on(table.chatThreadId, table.desktopId, table.harness)
       .where(sql`${table.chatThreadId} IS NOT NULL`),
+    p
+      .foreignKey({
+        name: "desktop_runner_runs_chat_turn_fk",
+        columns: [table.chatTurnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("set null"),
+    p
+      .index("desktop_runner_runs_chat_turn_idx")
+      .on(table.chatTurnId)
+      .where(sql`${table.chatTurnId} IS NOT NULL`),
     p
       .foreignKey({
         name: "desktop_runner_runs_runner_fk",

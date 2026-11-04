@@ -12281,6 +12281,56 @@
   },
   {
     "schema": "public",
+    "table": "timer_activity_devices",
+    "policy": "timer_activity_devices_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('timer_activity_devices'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('timer_activity_devices'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "timer_activity_devices",
+    "policy": "user_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "timer_activity_devices",
+    "policy": "user_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "timer_activity_devices",
+    "policy": "user_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "timer_activity_devices",
+    "policy": "user_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "two_factor",
     "policy": "auth_no_stella_access",
     "command": "ALL",

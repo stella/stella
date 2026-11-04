@@ -208,7 +208,8 @@ const OpenedDocument = ({
     }
   }, [quickLook]);
 
-  // A Word document opens for editing on the first tap into its text.
+  // A Word document is editable from the start; the first tap into its
+  // text opens it for editing.
   const editableProperty =
     phase.status === "open" && phase.file.viewer === "docx"
       ? phase.file.propertyId
@@ -223,6 +224,7 @@ const OpenedDocument = ({
   const editing = useDocumentEditing({
     source,
     target,
+    viewedVersion: phase.status === "open" ? phase.file.versionNumber : null,
     // The edit is the document's new version: open it afresh.
     onFinished: onRetry,
   });
@@ -289,8 +291,9 @@ const OpenedDocument = ({
             scheme === "dark" ? "dark" : "light",
           )}
           dom={{ style: { flex: 1 } }}
-          editable={editingFile !== null}
-          key={opened.uri}
+          editable={editing.canEdit}
+          // A new file, or a reload that drops what was typed, remounts it.
+          key={`${opened.uri}#${String(editing.revision)}`}
           kind={file.viewer}
           locale={locale}
           onFailed={() => {
@@ -309,6 +312,7 @@ const OpenedDocument = ({
           onReady={() => {
             if (mounted.current) {
               setReady(true);
+              editing.viewerReady();
             }
           }}
           readChunk={async (offset: number, length: number) => {
