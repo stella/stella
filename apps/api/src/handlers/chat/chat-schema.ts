@@ -1061,7 +1061,7 @@ const validateContinuationToolCallIntegrity = ({
   }
   if (resume !== undefined) {
     const pendingInterrupts =
-      persistedMessage.metadata?.resumeSnapshot?.pendingInterrupts ?? [];
+      persistedMessage.metadata?.resumeSnapshot?.pendingInterrupts;
     const awaitedInterrupts: {
       interaction: (typeof awaitedInteractions)[number];
       interruptId: string;
@@ -1081,7 +1081,11 @@ const validateContinuationToolCallIntegrity = ({
         // The question the stored turn paused on, from its server-owned
         // resume snapshot: the request id an answer names and the questions
         // the answer is checked against.
-        const pause = questionInterruptOf(pendingInterrupts);
+        // A turn stored without a resume snapshot paused on no question.
+        const pause =
+          pendingInterrupts === undefined
+            ? ({ type: "none" } as const)
+            : questionInterruptOf(pendingInterrupts);
         if (pause.type !== "question" || pause.toolCallId !== call.id) {
           continue;
         }

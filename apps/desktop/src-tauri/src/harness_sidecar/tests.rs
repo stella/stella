@@ -420,12 +420,19 @@ fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
     let run_id = start.run_id.clone();
     let mut outputs = sidecar.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
-    let answers = (0..32)
-      .map(|question| {
-        let answer = "x".repeat(16_384);
-        (format!("q{question}"), vec![answer; 64])
-      })
-      .collect();
+    // The most a valid answer may hold is still far over one line.
+    let answers = crate::runner_protocol::QuestionAnswers::try_from(
+      (0..crate::runner_protocol::MAX_ANSWERED_QUESTIONS)
+        .map(|question| {
+          let answer = "x".repeat(crate::runner_protocol::MAX_ANSWER_LENGTH);
+          (
+            format!("q{question}"),
+            vec![answer; crate::runner_protocol::MAX_ANSWERS_PER_QUESTION],
+          )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>(),
+    )
+    .unwrap();
     assert_eq!(
       sidecar.answer(RunAnswer {
         run_id: run_id.clone(),

@@ -805,9 +805,7 @@ const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
  * waits on. Every other harness call is reported with its result; the
  * question's call stays open until its answer reaches the run.
  */
-export const isAwaitedHarnessQuestionCall = (
-  part: ChatToolCallPart,
-): boolean => {
+const isAwaitedHarnessQuestionCall = (part: ChatToolCallPart): boolean => {
   // A harness names its own tools; the chat registry's names do not cover them.
   const name: string = part.name;
   return (
