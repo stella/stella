@@ -19,10 +19,10 @@ import type {
 /** The metadata a flag or lock change keeps exactly as it found it. */
 export const carriedCellMetadata = (
   existing: CellMetadata | undefined,
-): Pick<CellMetadata, "override"> =>
-  existing === undefined || existing.override === undefined
-    ? {}
-    : { override: existing.override };
+): Pick<CellMetadata, "override"> => {
+  const override = existing?.override;
+  return override === undefined ? {} : { override };
+};
 
 /** Whether the metadata row must stay even with no flag and no lock. */
 export const hasCarriedCellMetadata = (

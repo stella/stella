@@ -144,13 +144,14 @@ const carriedWithReason = ({
   if (overrideReason === undefined) {
     return carriedCellMetadata(existing);
   }
-  if (existing === undefined || existing.override === undefined) {
+  const existingOverride = existing?.override;
+  if (existingOverride === undefined) {
     return null;
   }
   const override: CellOverride = {
-    machine: existing.override.machine,
-    editedBy: existing.override.editedBy,
-    editedAt: existing.override.editedAt,
+    machine: existingOverride.machine,
+    editedBy: existingOverride.editedBy,
+    editedAt: existingOverride.editedAt,
     reason: overrideReason,
   };
   return { override };
