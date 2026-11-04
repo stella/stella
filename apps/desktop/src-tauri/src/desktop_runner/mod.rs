@@ -70,11 +70,71 @@ pub(crate) struct DesktopRunnerControl {
 
 #[derive(Default)]
 struct Tasks {
-  /// Stops the running task.
-  running: Option<watch::Sender<bool>>,
+  /// The running task's start; `Some` while a task holds the runner.
+  running: Option<Running>,
+  /// Counts starts, so an ending task clears only its own marker.
+  starts: u64,
   /// The latest task; a new one starts after it ended, so two never share
   /// the journal.
   latest: Option<tauri::async_runtime::JoinHandle<()>>,
+}
+
+struct Running {
+  start: u64,
+  /// Stops the task.
+  stop: watch::Sender<bool>,
+}
+
+impl Tasks {
+  /// Claim the runner for a new task: its start and stop signal, or `None`
+  /// while a task already holds it.
+  fn begin(&mut self) -> Option<(u64, watch::Receiver<bool>)> {
+    if self.running.is_some() {
+      return None;
+    }
+    let (stop, stopped) = watch::channel(false);
+    self.starts = self.starts.wrapping_add(1);
+    self.running = Some(Running {
+      start: self.starts,
+      stop,
+    });
+    Some((self.starts, stopped))
+  }
+
+  /// Ask the running task to stop and release the runner.
+  fn stop(&mut self) {
+    if let Some(running) = self.running.take() {
+      running.stop.send_replace(true);
+    }
+  }
+
+  /// The task of `start` ended. A newer start keeps its marker.
+  fn ended(&mut self, start: u64) {
+    if self
+      .running
+      .as_ref()
+      .is_some_and(|running| running.start == start)
+    {
+      self.running = None;
+    }
+  }
+}
+
+/// Releases the runner when its task ends by any path (setup failure, the
+/// runner returning, a panic), so a later enable starts a new task.
+struct TaskEnd {
+  app: AppHandle,
+  start: u64,
+}
+
+impl Drop for TaskEnd {
+  fn drop(&mut self) {
+    if let Some(control) = self.app.try_state::<DesktopRunnerControl>()
+      && let Ok(mut tasks) = control.tasks.lock()
+    {
+      tasks.ended(self.start);
+    }
+  }
 }
 
 impl Default for DesktopRunnerControl {
@@ -93,17 +153,19 @@ impl DesktopRunnerControl {
     let Ok(mut tasks) = self.tasks.lock() else {
       return;
     };
-    if tasks.running.is_some() {
+    let Some((start, stopped)) = tasks.begin() else {
       return;
-    }
-    let (stop, stopped) = watch::channel(false);
-    tasks.running = Some(stop);
+    };
     let previous = tasks.latest.take();
     let app = app.clone();
     let state = Arc::clone(&self.state);
     let host_slot = Arc::clone(&self.host);
     let journal = Arc::clone(&self.journal);
     tasks.latest = Some(tauri::async_runtime::spawn(async move {
+      let _end = TaskEnd {
+        app: app.clone(),
+        start,
+      };
       if let Some(previous) = previous
         && previous.await.is_err()
       {
@@ -145,10 +207,8 @@ impl DesktopRunnerControl {
   }
 
   fn stop(&self) {
-    if let Ok(mut tasks) = self.tasks.lock()
-      && let Some(stop) = tasks.running.take()
-    {
-      stop.send_replace(true);
+    if let Ok(mut tasks) = self.tasks.lock() {
+      tasks.stop();
     }
   }
 }

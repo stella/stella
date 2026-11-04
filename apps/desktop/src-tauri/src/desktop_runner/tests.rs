@@ -992,3 +992,24 @@ async fn stopping_closes_the_socket_normally_and_reports_off() {
   assert_eq!(connection.closed().await, Some(1000));
   assert_eq!(*state.borrow_and_update(), RunnerState::Off);
 }
+
+#[test]
+fn a_task_that_ends_releases_the_runner_unless_a_newer_start_holds_it() {
+  let mut tasks = super::Tasks::default();
+  let (first, _first_stop) = tasks.begin().expect("the runner is free");
+  assert!(
+    tasks.begin().is_none(),
+    "one task holds the runner at a time"
+  );
+  // A task that ended without being stopped (its setup failed).
+  tasks.ended(first);
+  let (second, second_stop) = tasks.begin().expect("an ended task releases it");
+  tasks.stop();
+  assert!(*second_stop.borrow());
+  let (third, _third_stop) = tasks.begin().expect("a stopped task releases it");
+  // The stopped task ends after the newer start; the newer one keeps it.
+  tasks.ended(second);
+  assert!(tasks.begin().is_none());
+  tasks.ended(third);
+  assert!(tasks.begin().is_some());
+}

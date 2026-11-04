@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -32,6 +33,8 @@ export type UseChatModelSelectionOptions = {
 type PersistedChatModelSelection = {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /** Where the thread's turns run; absent leaves it as stored. */
+  runTarget?: ChatRunTarget;
 };
 
 export type ChatModelSelection = {

@@ -307,6 +307,7 @@ const installNativeBoundary = async ({
         shortcut_get_snapshot: () => settingsWindow.shortcut,
         dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
+        claude_code_auth_get_status: () => null,
         activity_delete_all: (args) => {
           if (
             args["recovery"] === "discardUnreadable" &&

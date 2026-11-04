@@ -728,6 +728,22 @@
     "callbackConnectedTitle": "ChatGPT ir savienots",
     "callbackConnectedBody": "Varat aizvērt šo cilni un atgriezties stellā.",
     "callbackNotConnectedTitle": "ChatGPT netika savienots",
-    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz."
+    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Izmantojiet savu Claude abonementu vietējiem aģentiem stellā. Lietojums tiek uzskaitīts jūsu Claude plānā, atsevišķi no stellas abonementa.",
+      "notInstalled": "Claude Code šajā datorā vēl nav instalēts.",
+      "signIn": "Pierakstīties ar Claude",
+      "openSignInPage": "Atvērt pierakstīšanās lapu",
+      "signedIn": "Pierakstījies Claude",
+      "signedInAs": "Pierakstījies Claude · {email}",
+      "signOut": "Izrakstīties",
+      "apiKey": "Claude Code ir pierakstīts ar API atslēgu, ko stella neizmanto. Izrakstieties un pēc tam pierakstieties ar savu Claude abonementu.",
+      "failure": {
+        "notCompleted": "Pierakstīšanās netika pabeigta. Mēģiniet vēlreiz.",
+        "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
+        "unavailable": "Claude Code šajā datorā neizdevās palaist. Mēģiniet vēlreiz."
+      }
+    }
   }
 }
