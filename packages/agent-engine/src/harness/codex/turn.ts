@@ -330,6 +330,9 @@ export class CodexTurnSession {
 
   /** Route the native turn's messages, including those held until now. */
   private release(turnId: string, startedAt: number | null) {
+    if (this.ended) {
+      return;
+    }
     this.turnId = turnId;
     // A queued turn is acknowledged without a start time; it cannot be
     // interrupted until `turn/started` arrives.
@@ -568,9 +571,8 @@ export class CodexTurnSession {
       threadId: this.threadId,
       input: [],
     });
-    if (this.ended) {
-      return;
-    }
+    // An interrupt during the request ends the turn; `failWith` and `release`
+    // are both no-ops on an ended turn.
     const parsed = Result.isOk(started)
       ? v.safeParse(TurnStartResponseSchema, started.value)
       : null;
