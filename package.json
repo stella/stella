@@ -245,8 +245,8 @@
     "@oxlint/plugins": "1.90.0",
     "@shadcn/lint": "0.2.3",
     "@silurus/ooxml": "0.89.7",
-    "@stll/aho-corasick": "1.0.4",
-    "@stll/aho-corasick-wasm": "1.0.4",
+    "@stll/aho-corasick": "2.0.1",
+    "@stll/aho-corasick-wasm": "2.0.1",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
@@ -345,7 +345,6 @@
     }
   },
   "patchedDependencies": {
-    "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "mailauth@8.0.4": "patches/mailauth@8.0.4.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
