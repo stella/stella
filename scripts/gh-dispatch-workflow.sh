@@ -40,9 +40,14 @@ done
 
 gh_retry=${GH_RETRY_SCRIPT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/gh-retry.sh}
 readonly attempts=4
-# How long a run list is watched for a run GitHub may still be creating.
-readonly settle_seconds=30
-readonly poll_seconds=5
+# How long a run list is watched for a run GitHub may still be creating, and
+# the pause between reads (tests shorten them).
+settle_seconds=${GH_DISPATCH_SETTLE_SECONDS:-30}
+poll_seconds=${GH_DISPATCH_POLL_SECONDS:-5}
+if [[ ! "$settle_seconds" =~ ^[0-9]+$ || ! "$poll_seconds" =~ ^[1-9][0-9]*$ ]]; then
+  echo "gh-dispatch-workflow.sh: invalid settle or poll seconds" >&2
+  exit 2
+fi
 
 umask 077
 scratch=$(mktemp -d)

@@ -1,12 +1,9 @@
-import { expect, setDefaultTimeout, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
-
-// timeout: a scenario runs the helper and gh-retry.sh as real subprocesses.
-setDefaultTimeout(30_000);
 
 const HELPER = path.resolve(import.meta.dir, "gh-dispatch-workflow.sh");
 const TITLE = "Main heavy suites abc123";
@@ -69,7 +66,10 @@ type Dispatch = {
   after?: number;
 };
 
-const scenario = async (dispatches: Dispatch[], { listFails = false } = {}) => {
+const scenario = async (
+  dispatches: Dispatch[],
+  { listFails = false, settleSeconds = 30 } = {},
+) => {
   const directory = await mkdtemp(path.join(tmpdir(), "gh-dispatch-test-"));
   try {
     await writeFile(path.join(directory, "gh"), FAKE_GH);
@@ -107,6 +107,7 @@ const scenario = async (dispatches: Dispatch[], { listFails = false } = {}) => {
           FAKE_TITLE: TITLE,
           FAKE_DISPATCHES: JSON.stringify(dispatches),
           FAKE_LIST_FAILS: listFails ? "1" : "0",
+          GH_DISPATCH_SETTLE_SECONDS: String(settleSeconds),
         },
         stdout: "pipe",
         stderr: "pipe",
@@ -192,13 +193,15 @@ test("a lost response is reconciled like a server error", async () => {
 });
 
 test("persistent server errors fail after a bounded number of attempts", async () => {
-  const result = await scenario([{ http: 502 }]);
+  // One run-list read per attempt keeps the four attempts quick.
+  const result = await scenario([{ http: 502 }], { settleSeconds: 0 });
 
   expect(result.exit).toBe(1);
   expect(result.posts).toHaveLength(4);
+  expect(result.lists).toHaveLength(5);
   expect(result.created).toHaveLength(0);
   expect(result.stderr).toContain(
-    `The main-heavy.yml dispatch failed 4 times (HTTP 502) and no '${TITLE}' run appeared within 30s of any attempt.`,
+    `The main-heavy.yml dispatch failed 4 times (HTTP 502) and no '${TITLE}' run appeared within 0s of any attempt.`,
   );
 });
 
