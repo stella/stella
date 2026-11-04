@@ -927,6 +927,39 @@ fn a_bundled_holder_runs_from_a_private_copy_in_its_version_folder() {
 }
 
 #[test]
+fn a_stale_copy_of_the_same_size_is_replaced_before_a_holder_starts() {
+  let fixture = Fixture::new();
+  let bundled = fs::read(fixture.root.join("stand-in")).unwrap();
+  // A rebuild under the same version: same length, other bytes, and a copy
+  // that would fail the run if it were started.
+  let mut stale = b"#!/bin/sh\nexit 3\n".to_vec();
+  stale.resize(bundled.len(), b'#');
+  let dir = fixture.holders().join(VERSION);
+  for folder in [fixture.holders(), dir.clone()] {
+    fs::create_dir_all(&folder).unwrap();
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o700)).unwrap();
+  }
+  let copy = dir.join(BUNDLED_NAME);
+  fs::write(&copy, &stale).unwrap();
+  fs::set_permissions(&copy, fs::Permissions::from_mode(0o700)).unwrap();
+  with_children(async {
+    let sidecar = HarnessSidecar::spawn(
+      fixture.settings_for(VERSION, fixture.stand_in().per_version_copy()),
+    );
+    let mut outputs = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert!(matches!(
+      finish(&mut outputs).await.last(),
+      Some(SidecarRunOutput::Finished {
+        outcome: RunOutcome::Completed,
+        ..
+      })
+    ));
+    sidecar.shutdown().await;
+  });
+  assert_eq!(fs::read(&copy).unwrap(), bundled);
+}
+
+#[test]
 fn the_bundled_sidecar_sits_beside_the_app_executable() {
   let launch = SidecarLaunch::bundled(Path::new(
     "/Applications/stella.app/Contents/MacOS/stella-desktop",

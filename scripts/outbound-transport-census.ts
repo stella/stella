@@ -1008,8 +1008,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
     class: "operator-configured-infrastructure",
     reason:
-      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
-    transports: ["global:fetch"],
+      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects, with a response-header deadline.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "packages/api-client/src/index.ts",

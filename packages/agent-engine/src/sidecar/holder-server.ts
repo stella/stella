@@ -158,7 +158,17 @@ const listen = async (server: net.Server, endpoint: string) =>
     });
   });
 
-/** Whether a holder answers on the endpoint. */
+/**
+ * Errors that prove nothing listens on a socket path. Any other failure
+ * (a full accept backlog answers `EAGAIN` on Linux) may come from a live
+ * holder, whose socket must not be replaced.
+ */
+const NO_LISTENER_CODES: ReadonlySet<string> = new Set([
+  "ECONNREFUSED",
+  "ENOENT",
+]);
+
+/** Whether a holder may be listening on the endpoint. */
 const answers = async (endpoint: string) =>
   new Promise<boolean>((resolve) => {
     const probe = net.connect(endpoint);
@@ -166,8 +176,8 @@ const answers = async (endpoint: string) =>
       probe.destroy();
       resolve(true);
     });
-    probe.once("error", () => {
-      resolve(false);
+    probe.once("error", (error: NodeJS.ErrnoException) => {
+      resolve(!NO_LISTENER_CODES.has(error.code ?? ""));
     });
   });
 
