@@ -5,12 +5,12 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
 import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
   desktopVersionSchema,
 } from "./desktop-presence";
-import { STELLA_API_VERSION_PREFIX } from "./index";
 
 /**
  * Wire contract for the outbound WebSocket a desktop runner holds to the API.

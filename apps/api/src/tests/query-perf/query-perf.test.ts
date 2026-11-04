@@ -38,19 +38,29 @@ import {
   coverageRefreshWroteSummary,
   describeServed,
   EXPRESSION_ID_BACKFILL_SIZES,
+  LEGISLATION_CANDIDATE_COUNT,
   PROVISION_BACKFILL_SIZES,
   readCoverageRefreshState,
   seedExpressionIdBackfillRows,
   seedProvisionBackfillRows,
   serveCaseLaw,
 } from "./corpus-seed";
+import measureLegislationCandidates from "./corpus-statement-entries/statement.legislation.candidateRows";
 import { dropSeededCorpus, withSeededCorpus } from "./corpus-template";
 import { withQueryPerfFixture } from "./fixture";
 import {
+  applyProductionStateStatistics,
+  estimatedGenerationStates,
+  PROJECTION_STATE_READS_PER_CANDIDATE,
+  projectionStateRowsVisited,
+} from "./legislation-candidate-plan";
+import {
   budgetProblem,
   budgetViolations,
+  explainOwnerStatement,
   measureOwnerStatement,
   measureQueryPerf,
+  metricsFromPlan,
   OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
   shapeViolations,
@@ -67,6 +77,7 @@ import {
   type ScheduledJobScenario,
 } from "./registry";
 import { seedRequestReceiptScenario } from "./request-receipt-seed";
+import { withQueryPerfRollback } from "./rollback";
 import {
   isTransactionControl,
   measureScheduledJobRun,
@@ -75,6 +86,7 @@ import {
   statementsForMeasurement,
 } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
+import { applyPlannerSettings } from "./settings";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
@@ -765,6 +777,60 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
     expect([...measured].toSorted()).toEqual(
       [...CORPUS_STATEMENT_BUDGET_IDS].toSorted(),
     );
+  }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
+
+  // The generation is a constant of the eligibility lookup, so the planner
+  // may drive the semi-join from the states table. Whichever side it drives
+  // from, only the candidates' own states may be read.
+  test("legislation candidates read only their own projection states under production statistics", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const outcomes = await withSeededCorpus({
+      databaseUrl,
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async ({ db, deadline, seed }) => {
+        const statement = measureLegislationCandidates(seed);
+        const read = async (statistics: "analyzed" | "production") =>
+          await deadline.run(
+            `legislation candidates, ${statistics} statistics`,
+            async () =>
+              await withQueryPerfRollback(db, async (tx) => {
+                await applyPlannerSettings(tx);
+                if (statistics === "production") {
+                  await applyProductionStateStatistics(tx);
+                }
+                const estimate = await estimatedGenerationStates(tx);
+                const document = await explainOwnerStatement(
+                  tx,
+                  statement.build(tx),
+                );
+                return { statistics, estimate, document };
+              }),
+          );
+        return [await read("analyzed"), await read("production")];
+      },
+    });
+    for (const { statistics, estimate, document } of outcomes) {
+      const visited = projectionStateRowsVisited(document.Plan);
+      log({
+        event: "legislation_candidate_states",
+        statistics,
+        estimatedGenerationStates: estimate,
+        statesRowsVisited: visited,
+        sharedBlocks: metricsFromPlan(document).sharedBlocks,
+        executionTimeMs: document["Execution Time"],
+      });
+      expect(document.Plan["Actual Rows"]).toBe(LEGISLATION_CANDIDATE_COUNT);
+      expect(visited).toBeLessThanOrEqual(
+        LEGISLATION_CANDIDATE_COUNT * PROJECTION_STATE_READS_PER_CANDIDATE,
+      );
+    }
+    // The production statistics must put the generation below one page of
+    // candidates, or they would not tempt the planner to drive from states.
+    expect(
+      outcomes.find(({ statistics }) => statistics === "production")?.estimate,
+    ).toBeLessThan(LEGISLATION_CANDIDATE_COUNT);
   }, 420_000); // timeout: the first corpus test seeds about a million rows inside the test's own 300-second deadline.
 
   test("scheduled jobs stay within their budgets at production shape", async () => {
