@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
-import { DEADLINE_UNIT, computeNominalEnd } from "./nominal-end";
+import { computeNominalEnd, DEADLINE_UNIT } from "./nominal-end";
 
 type GregorianDateParts = {
   day: number;

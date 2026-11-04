@@ -3,9 +3,9 @@ import { expect, test } from "bun:test";
 import { Temporal } from "@stll/time";
 
 import {
-  DEADLINE_UNIT,
   computeNominalEnd,
   type ComputeNominalEndOptions,
+  DEADLINE_UNIT,
   type DeadlinePeriod,
 } from "./nominal-end";
 

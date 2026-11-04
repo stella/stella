@@ -19,8 +19,7 @@ type HolidayLookup = (
 export type HolidayCalendar = {
   getPublicHoliday: HolidayLookup;
   courtHolidays:
-    | { type: "unsupported" }
-    | { type: "available"; getHoliday: HolidayLookup };
+    { type: "unsupported" } | { type: "available"; getHoliday: HolidayLookup };
 };
 
 export type NonWorkingReason =
