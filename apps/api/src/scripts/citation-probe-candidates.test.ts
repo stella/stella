@@ -92,6 +92,7 @@ describe("citation probe candidates", () => {
   test("a multi-segment authority file after sp. zn. is benign, a docket is not", () => {
     expect(residual("sp. zn. IV/12/345/2000/AB zo dňa")).toBe(false);
     expect(residual("sp. zn. 123/4567/12345/01/Ab-C/12")).toBe(false);
+    expect(residual("sp. zn.: IV/12/345/2000/AB")).toBe(false);
     expect(residual("sp. zn. 8 C/18/2008")).toBe(true);
     expect(residual("sp. zn. 36Co/52/53/2023")).toBe(true);
     expect(residual("sp. zn. 5Sžf/14/2010")).toBe(true);

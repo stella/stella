@@ -67,7 +67,7 @@ const BENIGN: readonly RegExp[] = [
   // no-whitespace chamber+registry spelling ("36Co/52/53/2023") out, and the
   // trailing one prevents a longer or oversized reference from matching a
   // benign-looking prefix of itself.
-  /(?:[čc]\.\s{0,3}j\.:?|sp\.\s{0,3}zn\.)\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
+  /(?:[čc]\.\s{0,3}j\.|sp\.\s{0,3}zn\.):?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
   // The same administrative reference written with a whitespace-separated
   // authority code: "č.j. MCO5 155283/2019/ODP/Mach" (městská část office),
   // "sp.zn. MCO5/OSU/1827/2017/Šev/Sm.p.967" (its sp. zn. spelling). The
