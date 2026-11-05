@@ -161,3 +161,14 @@ sql.raw("WHERE id::text = '2026'");`,
     ),
   ).toEqual([3, 5, 6, 7, 8, 9, 11, 12, 13]);
 });
+
+test("accepts a fixed duration built with exponentiation", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      `import {lt} from "drizzle-orm";
+const STALE_MS = 2 ** 10;
+lt(rows.createdAt,new Date(Date.now() - STALE_MS));`,
+    ),
+  ).toEqual([]);
+});

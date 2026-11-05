@@ -398,6 +398,7 @@ const isClockAdjustment = (
       (node.operator === "+" ||
         node.operator === "-" ||
         node.operator === "*" ||
+        node.operator === "**" ||
         node.operator === "/") &&
       isClockAdjustment(node.left, isDurationName) &&
       isClockAdjustment(node.right, isDurationName)));

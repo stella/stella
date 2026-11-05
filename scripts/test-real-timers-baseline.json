@@ -204,6 +204,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/desktop-runner/gateway.db.test.ts": {
+    "count": 2,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/document-processing-idle-exit.test.ts": {
     "count": 1,
     "owner": "api",
@@ -449,6 +454,11 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/desktop/tests/AgentSubscriptionsSection.dom.test.tsx": {
+    "count": 2,
+    "owner": "desktop",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
@@ -576,6 +586,11 @@
   },
   "apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx": {
     "count": 1,
+    "owner": "web",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/web/src/components/legal-reader/reference-peek.dom.test.tsx": {
+    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -809,9 +824,19 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/agent-engine/src/sidecar/sidecar.test.ts": {
+    "count": 7,
+    "owner": "agent-engine",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/business-registries/src/ares/client.test.ts": {
     "count": 1,
     "owner": "business-registries",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/auth/loopback-listener.test.ts": {
+    "count": 1,
+    "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/cli/src/auth/refresh-lock.test.ts": {
@@ -889,6 +914,11 @@
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/scripts/src/shared-test-postgres.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/scripts/src/windows-process-ownership.test.ts": {
     "count": 1,
     "owner": "scripts",
@@ -910,7 +940,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/oxlint-tailwind-design-system.test.ts": {
-    "count": 1,
+    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }
