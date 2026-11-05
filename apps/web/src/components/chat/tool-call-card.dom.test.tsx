@@ -45,3 +45,30 @@ test("tool duration respects the selected numbering system", () => {
   expect(screen.getByText(/٢/u)).toBeDefined();
   expect(screen.queryByText(/2/u)).toBeNull();
 });
+
+test("a running tool is not announced as waiting", () => {
+  const queryClient = new QueryClient();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="ar" messages={messages}>
+        <FormattingProvider locale="ar-u-nu-arab" timeZone="UTC">
+          <ToolCallCard
+            activeOrganizationId="test-org"
+            part={{
+              type: "tool-call",
+              id: "running-search",
+              name: "search-chat-history",
+              arguments: '{"query":"synthetic"}',
+              input: { query: "synthetic" },
+              state: "input-complete",
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  expect(
+    screen.queryByLabelText(messages.chat.toolCall.statusWaiting),
+  ).toBeNull();
+});

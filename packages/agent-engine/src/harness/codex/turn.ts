@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
+
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
@@ -121,6 +126,8 @@ const questionsFromParams = (questions: QuestionParams): HarnessQuestion[] =>
       prompt: question.question,
       options,
       allowsFreeText: question.isOther || options.length === 0,
+      // Codex states no multiple choice: an answer picks one option.
+      multiSelect: false,
       secret: question.isSecret,
     };
   });
@@ -180,20 +187,18 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
+      const refusal = chatLocalRunAnswersRefusal(
+        pending.questions,
+        response.answers,
+      );
+      if (refusal !== null) {
+        return Result.err(refusal);
+      }
       const answers: [string, { answers: readonly string[] }][] = [];
       const shown: [string, { answers: readonly string[] }][] = [];
       for (const question of pending.questions) {
-        const given = response.answers[question.id] ?? [];
-        if (given.length === 0) {
-          return Result.err(`Question ${question.id} has no answer.`);
-        }
         // Native replies are option labels; the label is the option's id.
-        const labels = new Set(question.options.map(({ label }) => label));
-        if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-          return Result.err(
-            `Question ${question.id} takes one of its options.`,
-          );
-        }
+        const given = response.answers[question.id] ?? [];
         answers.push([question.id, { answers: given }]);
         shown.push([
           question.id,
@@ -650,6 +655,7 @@ export class CodexTurnSession {
         description: "",
       })),
       allowsFreeText: true,
+      multiSelect: false,
       secret: false,
     }));
     this.emit({
@@ -828,8 +834,17 @@ export class CodexTurnSession {
     if (parsed === null) {
       return;
     }
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      questionsFromParams(parsed.questions),
+      method,
+    );
+    if (questions === null) {
+      return;
+    }
     const requestId = requestIdFor(id);
-    const questions = questionsFromParams(parsed.questions);
     const toolCall = {
       id: parsed.itemId,
       name: HARNESS_TOOL_NAMES.question,

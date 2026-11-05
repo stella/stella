@@ -9,13 +9,12 @@
 
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   caseLawSourceLanguagesOf,
 } from "@stll/api-contract/case-law-source-languages";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { load } from "@stll/html";
 import type * as cheerio from "@stll/html";
 import type { Element } from "@stll/html/nodes";
@@ -900,9 +899,9 @@ describe("stored Formex refresh", () => {
   });
 
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
-    const archive = new JSZip();
-    writeZipEntry(archive, "FORMEX/main.xml", "<new-formex />");
-    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const archive = new ZipArchive();
+    archive.set("FORMEX/main.xml", "<new-formex />");
+    const bytes = await archive.generate({ compression: "store" });
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({

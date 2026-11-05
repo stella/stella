@@ -5,8 +5,8 @@ import {
   ACTION_ADMISSION_REFUSALS,
   LIMITER_STORE_UNAVAILABLE,
 } from "@stll/api-contract/action-admission";
-import { DocxArchiveError } from "@stll/docx-utils";
 
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 

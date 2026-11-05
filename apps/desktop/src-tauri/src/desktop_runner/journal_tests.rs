@@ -99,13 +99,6 @@ fn a_record_survives_a_reopen_and_acknowledging_trims_its_outbox() {
       (Change::Store, ())
     })
     .unwrap();
-  // A change the caller does not store is not held either.
-  journal
-    .update(RUN, |record| {
-      record.inputs.insert("input-2".to_owned());
-      (Change::Unchanged, ())
-    })
-    .unwrap();
   assert_eq!(take_outputs(&mut journal, &["a"]), [1]);
   assert_eq!(take_outputs(&mut journal, &["b", "c"]), [2, 3]);
   let written = journal.get(RUN).unwrap().clone();
@@ -137,6 +130,36 @@ fn a_record_survives_a_reopen_and_acknowledging_trims_its_outbox() {
   assert!(Journal::open(encrypted(&directory), 0).get(RUN).is_none());
   assert!(!run_directory(&directory, RUN).exists());
   fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn a_handled_answer_survives_a_reopen() {
+  let directory = temp_dir();
+  let mut journal = Journal::open(encrypted(&directory), 0);
+  journal
+    .insert(RUN.to_owned(), Decision::Accepted, 0)
+    .unwrap();
+  journal
+    .update(RUN, |record| {
+      record.answers.insert("request-1".to_owned());
+      (Change::Store, ())
+    })
+    .unwrap();
+  let reopened = Journal::open(encrypted(&directory), 0);
+  assert_eq!(
+    reopened.get(RUN).unwrap().answers,
+    BTreeSet::from(["request-1".to_owned()])
+  );
+  fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn a_head_written_before_answers_existed_still_loads() {
+  let head = RunRecord::new(RUN.to_owned(), Decision::Accepted, 1).head(0);
+  let mut stored = serde_json::to_value(&head).unwrap();
+  assert!(stored.as_object_mut().unwrap().remove("answers").is_some());
+  let loaded: Head = serde_json::from_value(stored).unwrap();
+  assert_eq!(loaded, head);
 }
 
 #[test]

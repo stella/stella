@@ -96,6 +96,7 @@ export const DESKTOP_RUNNER_COMMAND_KINDS = [
   "run.start",
   "run.input",
   "run.approval",
+  "run.answer",
   "run.interrupt",
   "run.cancel",
 ] as const;
@@ -119,3 +120,5 @@ true satisfies Same<
   (typeof DESKTOP_RUNNER_EVENT_TYPES)[number],
   Extract<DesktopRunnerDesktopMessage, { seq: number }>["type"]
 >;
+export type DesktopRunnerEventType =
+  (typeof DESKTOP_RUNNER_EVENT_TYPES)[number];

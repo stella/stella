@@ -1460,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
+      "unverified": "Az idézet nem ellenőrizhető",
+      "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Kontextussal dolgozom",
+    "thinking": "Gondolkodás",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"
     },
@@ -2030,6 +2032,11 @@
       "needsInputTitle": "A stellának szüksége van Önre",
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Jóváhagyásra vár",
+      "waitingForInput": "Bevitelre vár",
+      "writing": "Írás"
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",

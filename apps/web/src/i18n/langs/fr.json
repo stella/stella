@@ -1460,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Afficher dans la décision",
+      "unverified": "Citation non vérifiée",
+      "unverifiedHint": "Les décisions citées ne contiennent pas ce texte mot pour mot",
       "verified": "Citation vérifiée",
       "verifiedHint": "Mot pour mot dans {source}"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
       "values": "{label} : {value, number}"
     },
-    "thinking": "Traitement du contexte",
+    "thinking": "Réflexion",
     "threadFiles": {
       "title": "Fichiers de cette conversation"
     },
@@ -2030,6 +2032,11 @@
       "needsInputTitle": "stella a besoin de vous",
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
+    },
+    "turnStatus": {
+      "waitingForApproval": "En attente d’approbation",
+      "waitingForInput": "En attente de saisie",
+      "writing": "Rédaction"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",

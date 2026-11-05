@@ -1,6 +1,7 @@
 import {
   createContext,
   Fragment,
+  memo,
   use,
   useLayoutEffect,
   useMemo,
@@ -35,7 +36,6 @@ import {
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
-import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
 import { cn } from "@stll/ui/utils";
@@ -50,15 +50,8 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { AttachmentChipOpen } from "@/components/chat/attachment-chip";
-import {
-  countProcessWork,
-  getLatestCompletedResearchPartIndex,
-  resolveChatActivityIndicatorState,
-} from "@/components/chat/chat-activity.logic";
-import type {
-  ChatActivityIndicatorState,
-  ProcessSummaryKind,
-} from "@/components/chat/chat-activity.logic";
+import { countProcessWork } from "@/components/chat/chat-activity.logic";
+import type { ProcessSummaryKind } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
@@ -88,6 +81,8 @@ import {
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
 import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
+import { ChatTurnStatus } from "@/components/chat/chat-turn-status";
+import { turnPhaseFromParts } from "@/components/chat/chat-turn-status.logic";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -102,7 +97,6 @@ import type {
 import {
   getAwaitedAssistantMessageId,
   getChatToolTitleKey,
-  hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
   isPendingApprovalPart,
@@ -131,8 +125,11 @@ import {
   ToolApprovalCard,
 } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import {
+  advanceToolCallTiming,
+  createToolCallTiming,
+} from "@/components/chat/tool-call-timing.logic";
 import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
-import { useLiveElapsedMs } from "@/components/chat/use-live-elapsed";
 import { useSteadyValue } from "@/components/chat/use-steady-value";
 import {
   EditableUserMessage,
@@ -286,6 +283,30 @@ const useOlderMessagePaging = ({
   return { sentinelRef, triggerLoadOlder };
 };
 
+/** The live status line of the turn that is running now. Memoized: the
+ *  thread re-renders on every streamed chunk, while the line only changes
+ *  with the running assistant message. */
+const ActiveTurnStatus = memo(
+  ({ assistant }: { assistant: ChatUIMessage | undefined }) => {
+    const t = useTranslations();
+    return (
+      <ChatTurnStatus
+        turn={
+          assistant === undefined
+            ? { state: "submitted", phase: null }
+            : {
+                state: "streaming",
+                phase: turnPhaseFromParts(assistant.parts, (name) =>
+                  t(getChatToolTitleKey(name)),
+                ),
+                timing: assistant.metadata?.turnTiming,
+              }
+        }
+      />
+    );
+  },
+);
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -311,7 +332,6 @@ export const ChatThreadMessages = ({
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
   onOpenPlaybook,
-  showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
@@ -339,18 +359,10 @@ export const ChatThreadMessages = ({
     [messages],
   );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
-  const latestCompletedResearchPartIndex =
-    getLatestCompletedResearchPartIndex(messages);
-  const activityIndicatorState = resolveChatActivityIndicatorState({
-    hasCompletedResearch: latestCompletedResearchPartIndex !== null,
-    hasRunningTool: hasRunningToolCallInLatestAssistantMessage({ messages }),
-    hasVisibleResponse: hasVisibleResponseContent(
-      messages,
-      latestCompletedResearchPartIndex,
-    ),
-    hasVisibleContent: hasVisibleContent(messages),
-  });
-
+  const turns = buildMessageTurns(messages);
+  const activeTurnMessageIds = new Set(
+    generationActive ? turns.at(-1)?.body.map(({ message }) => message.id) : [],
+  );
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
   const stick = useMaybeStickToBottomContext();
@@ -437,6 +449,11 @@ export const ChatThreadMessages = ({
                           onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
                           onOpenCreatedDocument={onOpenCreatedDocument}
                           onOpenPlaybook={onOpenPlaybook}
+                          turnStatus={
+                            activeTurnMessageIds.has(message.id)
+                              ? "running"
+                              : "finished"
+                          }
                           shouldShowToolCalls={shouldShowToolCalls}
                           streamdownComponents={streamdownComponents}
                           workspaceId={workspaceId}
@@ -468,9 +485,11 @@ export const ChatThreadMessages = ({
                             onResend={onResend}
                             threadRef={threadRef}
                           />
-                          <ChatTurnDuration
-                            timing={message.metadata?.turnTiming}
-                          />
+                          {!activeTurnMessageIds.has(message.id) && (
+                            <ChatTurnDuration
+                              timing={message.metadata?.turnTiming}
+                            />
+                          )}
                           <AssistantAnswerMetadata
                             message={message}
                             workspaceId={workspaceId}
@@ -532,36 +551,51 @@ export const ChatThreadMessages = ({
             ref={sentinelRef}
           />
         )}
-        {stickyUserMessages
-          ? buildMessageTurns(messages).map((turn, turnIndex) => {
-              if (turn.type === "orphan") {
-                const orphanFirstMessageId = turn.body.at(0)?.message.id;
-                return (
-                  <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
-                    {turn.body.map((item) =>
-                      renderMessageNode(item.message, item.index),
-                    )}
-                  </Fragment>
-                );
-              }
-              return (
-                <StickyUserTurn
-                  approvalPendingMessageId={approvalPendingMessageId}
-                  headerIndex={turn.index}
-                  headerMessage={turn.header}
-                  isGenerating={generationActive}
-                  key={turn.header.id}
-                  messages={messages}
-                  scrollRef={scrollRef}
-                  userMessageEdit={userMessageEdit}
-                >
-                  {turn.body.map((item) =>
-                    renderMessageNode(item.message, item.index),
-                  )}
-                </StickyUserTurn>
-              );
-            })
-          : messages.map((message, index) => renderMessageNode(message, index))}
+        {turns.map((turn, turnIndex) => {
+          const body = turn.body.map((item) =>
+            renderMessageNode(item.message, item.index),
+          );
+          const assistant = turn.body.findLast(
+            (item) => item.message.role === "assistant",
+          )?.message;
+          const active = generationActive && turnIndex === turns.length - 1;
+          const status =
+            active && !waitingForComputer ? (
+              <ActiveTurnStatus assistant={assistant} />
+            ) : null;
+          if (turn.type === "orphan") {
+            return (
+              <Fragment key={turn.body.at(0)?.message.id}>
+                {body}
+                {status}
+              </Fragment>
+            );
+          }
+          if (!stickyUserMessages) {
+            return (
+              <Fragment key={turn.header.id}>
+                {renderMessageNode(turn.header, turn.index)}
+                {body}
+                {status}
+              </Fragment>
+            );
+          }
+          return (
+            <StickyUserTurn
+              approvalPendingMessageId={approvalPendingMessageId}
+              headerIndex={turn.index}
+              headerMessage={turn.header}
+              isGenerating={generationActive}
+              key={turn.header.id}
+              messages={messages}
+              scrollRef={scrollRef}
+              userMessageEdit={userMessageEdit}
+            >
+              {body}
+              {status}
+            </StickyUserTurn>
+          );
+        })}
         {error && (
           <ChatErrorMessage
             error={error}
@@ -570,12 +604,7 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {generationActive && (
-          <TurnProgressIndicator
-            thinking={showThinkingIndicator ? activityIndicatorState : null}
-            waitingForComputer={waitingForComputer}
-          />
-        )}
+        {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -860,10 +889,9 @@ const LoadOlderSentinel = ({
       {isLoadingOlder ? (
         <span
           aria-busy="true"
-          className="text-muted-foreground flex items-center gap-2 text-xs"
+          className="text-muted-foreground text-xs"
           role="status"
         >
-          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -1099,44 +1127,6 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
-const ThinkingIndicator = ({
-  state,
-}: {
-  state: ChatActivityIndicatorState;
-}) => {
-  const t = useTranslations();
-
-  return (
-    <Message from="assistant">
-      <MessageContent>
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <StatusMark status="running" />
-          <span className={CHAT_PENDING_TEXT_CLASS}>
-            {t(state === "solving" ? "chat.analyzingSources" : "chat.thinking")}
-          </span>
-        </div>
-      </MessageContent>
-    </Message>
-  );
-};
-
-/**
- * What a running turn shows below its answer: that its computer is away,
- * which says more than a thinking indicator, or what it is working on.
- */
-const TurnProgressIndicator = ({
-  thinking,
-  waitingForComputer,
-}: {
-  thinking: ChatActivityIndicatorState | null;
-  waitingForComputer: boolean;
-}) => {
-  if (waitingForComputer) {
-    return <ComputerWaitingIndicator />;
-  }
-  return thinking === null ? null : <ThinkingIndicator state={thinking} />;
-};
-
 /** The turn's computer went away mid-turn; the turn goes on once it is back. */
 const ComputerWaitingIndicator = () => {
   const t = useTranslations();
@@ -1269,56 +1259,6 @@ export const ChatErrorMessage = ({
       </MessageContent>
     </Message>
   );
-};
-
-const hasVisibleContent = (
-  messages: readonly PersistedChatMessage[],
-): boolean => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message || message.role !== "assistant") {
-      break;
-    }
-
-    for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
-        return true;
-      }
-
-      if (part.type === "tool-call") {
-        return true;
-      }
-
-      if (part.type === "thinking" && part.content.trim()) {
-        return true;
-      }
-
-      if (isRichChatPart(part)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
-
-const hasVisibleResponseContent = (
-  messages: readonly PersistedChatMessage[],
-  afterPartIndex: number | null,
-): boolean => {
-  const message = messages.at(-1);
-  if (message?.role !== "assistant") {
-    return false;
-  }
-
-  return message.parts
-    .slice((afterPartIndex ?? -1) + 1)
-    .some(
-      (part) =>
-        (part.type === "text" && part.content.trim().length > 0) ||
-        (part.type === "thinking" && part.content.trim().length > 0) ||
-        isRichChatPart(part),
-    );
 };
 
 const getMessageText = (message: PersistedChatMessage) => {
@@ -1497,9 +1437,8 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
-  showThinkingIndicator?: boolean | undefined;
   /** The turn runs on the member's computer, which is away until it
-   *  reconnects; the turn shows the wait in place of a stalled answer. */
+   *  reconnects; the turn shows the wait in place of its live status. */
   waitingForComputer?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
@@ -1633,6 +1572,7 @@ type AssistantMessagePartsProps = Pick<
   isLatestAssistantMessage: boolean;
   message: ChatUIMessage;
   shouldShowToolCalls: boolean;
+  turnStatus: "running" | "finished";
 };
 
 type AssistantPartRenderEntry =
@@ -1992,6 +1932,7 @@ const AssistantMessageParts = ({
   onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
+  turnStatus,
   workspaceId,
 }: AssistantMessagePartsProps) => {
   const label = useTranslations()("knowledge.playbooks.openInPane");
@@ -2071,6 +2012,7 @@ const AssistantMessageParts = ({
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
+          turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
         />
       );
@@ -2176,6 +2118,7 @@ const AssistantMessageParts = ({
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
+          turnStatus={turnStatus}
           showDetails={shouldShowToolCalls}
         />
       );
@@ -2205,6 +2148,7 @@ const AssistantMessageParts = ({
           <AssistantProcessGroup
             defaultOpen={shouldShowToolCalls}
             isLive={isLiveGroup}
+            turnStatus={turnStatus}
             key={`${message.id}-process-${group.startIndex}`}
             liveStepKey={
               isLiveGroup && lastVisibleEntry
@@ -2237,6 +2181,7 @@ type AssistantProcessGroupProps = {
   isLive: boolean;
   /** Title of the run's current step while it is still streaming. */
   liveStepKey: ProcessStepTitleKey | null;
+  turnStatus: "running" | "finished";
   stepCount: number;
   /** What the run accomplished, for the settled summary. */
   workCounts: ReadonlyMap<ProcessSummaryKind, number>;
@@ -2255,39 +2200,45 @@ const PROCESS_SUMMARY_PHRASES = [
 
 const LIVE_STEP_MIN_DWELL_MS = 1500;
 
-// Whole seconds: counted up while the run is live, then its rounded duration
-// (at least one); null when this view never saw it run.
-const processElapsedSeconds = (
-  elapsedMs: number | undefined,
-  isLive: boolean,
-): number | null => {
-  if (elapsedMs === undefined) {
-    return null;
-  }
-  if (isLive) {
-    return Math.floor(elapsedMs / 1000);
-  }
-  return Math.max(1, Math.round(elapsedMs / 1000));
-};
-
-/**
- * One run of consecutive process steps (reasoning traces and tool rows),
- * folded into a single disclosure so the transcript reads as question and
- * answer. The collapsed summary shows the step count; while the run is
- * still streaming it relays the current step instead, with a timer that
- * keeps running until the run settles and then stays as its duration.
- */
 const AssistantProcessGroup = ({
   children,
   defaultOpen,
   isLive,
   liveStepKey,
   stepCount,
+  turnStatus,
   workCounts,
 }: AssistantProcessGroupProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const format = useFormatter();
+  const [timing, setTiming] = useState(() =>
+    createToolCallTiming({
+      durationMs: undefined,
+      isRunning: isLive,
+      now: performance.now(),
+    }),
+  );
+  useExternalSyncEffect(() => {
+    setTiming((current) =>
+      advanceToolCallTiming({
+        current,
+        durationMs: undefined,
+        isRunning: isLive,
+        now: performance.now(),
+      }),
+    );
+  }, [isLive]);
+  const elapsed =
+    turnStatus === "finished" &&
+    timing.status === "finished" &&
+    timing.durationMs !== undefined
+      ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })
+      : null;
   // A run that appears mid-stream fades in where the thinking indicator was;
   // one that renders settled (a reload) simply is there.
   const [appearedLive] = useState(isLive);
@@ -2304,17 +2255,6 @@ const AssistantProcessGroup = ({
     shownStepKey !== null
       ? t(shownStepKey)
       : workSummary || t("common.stepCount", { count: stepCount });
-  const elapsedMs = useLiveElapsedMs(isLive);
-  const elapsedSeconds = processElapsedSeconds(elapsedMs, isLive);
-  // A live timer appears from its first whole second, never as "0s".
-  const elapsed =
-    elapsedSeconds === null || elapsedSeconds === 0
-      ? null
-      : format.number(elapsedSeconds, {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
     <div
       data-slot="chat-step-list"
@@ -2349,21 +2289,7 @@ const AssistantProcessGroup = ({
                 text={label}
               />
             </span>
-            {elapsed !== null && (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="text-foreground-placeholder"
-                >
-                  ·
-                </span>
-                {/* The timer ticks plainly: a fade every second is motion for
-                its own sake. */}
-                <span className="text-foreground-ghost tabular-nums">
-                  {elapsed}
-                </span>
-              </>
-            )}
+            {elapsed && <span data-process-duration>{elapsed}</span>}
           </span>
         </CollapsibleTrigger>
         <CollapsiblePanel>
@@ -2475,19 +2401,9 @@ const AssistantThinkingHeader = ({
   reasoningTokenCount: number | null;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const elapsedMs = useLiveElapsedMs(isStreaming);
-  const elapsed =
-    elapsedMs === undefined || isStreaming
-      ? null
-      : format.number(Math.max(1, Math.round(elapsedMs / 1000)), {
-          style: "unit",
-          unit: "second",
-          unitDisplay: "narrow",
-        });
   return (
     <>
-      <StatusMark status={isStreaming ? "running" : "done"} />
+      <StatusMark status="done" />
       <span
         className={cn(
           "min-w-0 truncate",
@@ -2498,11 +2414,6 @@ const AssistantThinkingHeader = ({
       </span>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
-      )}
-      {elapsed !== null && (
-        <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
-          {elapsed}
-        </span>
       )}
       <span
         aria-hidden="true"
