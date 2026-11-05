@@ -12,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { createTestState } from "@stll/test-state";
+
 import {
   GUARD_ROLLOUT_DIRECTORY,
   GUARD_ROLLOUTS,
@@ -23,6 +25,8 @@ import {
   changedLineNumbers,
   guardEnforcesLine as productionGuardEnforcesLine,
 } from "./guard-rollouts.ts";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
 
 const guardEnforcesLine = (
   options: Parameters<typeof productionGuardEnforcesLine>[0],
@@ -96,7 +100,6 @@ for (const { id: guard, rules = [] } of GUARD_ROLLOUTS) {
                 guard,
                 file: fixturePath,
                 line: index + 2,
-                now: new Date("2026-10-14T00:00:00.000Z"),
                 changedLines: new Map(),
               }),
             ).toBe(true);
@@ -114,27 +117,29 @@ test("fixture scope does not include similarly named directories", () => {
       guard: "portable-path",
       file: `${FIXTURES}-other/path.ts`,
       line: 1,
-      now: new Date("2026-10-14T00:00:00.000Z"),
       changedLines: new Map(),
     }),
   ).toBe(false);
 });
 
-test("first-week path enforcement ignores legacy lines and expires into full scope", () => {
-  const changedLines = new Map([["scripts/path.ts", new Set([4])]]);
+test("a rollout past its deadline still enforces only changed lines", () => {
   const options = {
     guard: "portable-path",
     file: "scripts/path.ts",
-    changedLines,
+    changedLines: new Map([["scripts/path.ts", new Set([4])]]),
   };
-  const now = new Date("2026-10-14T00:00:00.000Z");
-  expect(guardEnforcesLine({ ...options, line: 3, now })).toBe(false);
-  expect(guardEnforcesLine({ ...options, line: 4, now })).toBe(true);
+  expect(guardEnforcesLine({ ...options, line: 3 })).toBe(false);
+  expect(guardEnforcesLine({ ...options, line: 4 })).toBe(true);
+});
+
+test("the healing probe's full scope enforces unchanged lines", () => {
+  testState.setEnv("STELLA_GUARD_SCOPE", "all");
   expect(
     guardEnforcesLine({
-      ...options,
+      guard: "portable-path",
+      file: "scripts/path.ts",
       line: 3,
-      now: new Date("2026-10-20T00:00:00.000Z"),
+      changedLines: new Map(),
     }),
   ).toBe(true);
 });

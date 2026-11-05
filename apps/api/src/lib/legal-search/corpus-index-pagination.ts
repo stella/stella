@@ -182,14 +182,30 @@ type CorpusIndexRankingScope = {
   excludedGroups: ReadonlySet<string>;
   /** Resolve physical hits after the existing SQL read, before blending or folding. */
   selectAppliedCandidates: SelectAppliedCorpusCandidates;
+  /**
+   * For each candidate, the revision and the stored fields of the passage the
+   * scan reached it by first. A ranker that reads its signals off the hits
+   * instead of the database reads them here.
+   */
+  scannedProjections: () => ReadonlyMap<string, ScannedProjection>;
+};
+
+/** A candidate's earliest-scanned passage: its copy and what the hit carried. */
+export type ScannedProjection = {
+  revision: string | null;
+  fields: CorpusIndexHit;
 };
 
 const rankingScopeOf = (
   cursor: SearchCursor | null,
-  selectAppliedCandidates: SelectAppliedCorpusCandidates,
+  passages: Pick<
+    ReturnType<typeof appliedPassages>,
+    "selectCandidates" | "projections"
+  >,
 ): CorpusIndexRankingScope => ({
   excludedGroups: new Set(cursor?.excludedGroups),
-  selectAppliedCandidates,
+  selectAppliedCandidates: passages.selectCandidates,
+  scannedProjections: passages.projections,
 });
 
 /**
@@ -263,6 +279,12 @@ type CorpusIndexSearchPageInput<TContext> = {
   /** The manifest's indexed revision field, including on legacy mappings. */
   projectionRevisionField: CorpusProjectionRevisionField;
   extractId: (hit: CorpusIndexHit) => string | null;
+  /**
+   * Stored fields the scored transport reads beside the scan's own, for a
+   * ranker that reads them off `scannedProjections`. The native transport
+   * returns whole stored documents and needs none.
+   */
+  scanFields?: readonly string[] | undefined;
   /**
    * The excerpt one hit shows. Handed the hit beside its snippet because the
    * engine's snippet is a fixed width with no size on the wire: a caller that
@@ -733,6 +755,7 @@ type ReadScanRoundOptions = {
   transport: CorpusIndexScanTransport;
   startOffset: number;
   maxHits: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -750,6 +773,7 @@ const readScanRound = async ({
   transport,
   startOffset,
   maxHits,
+  scanFields,
 }: ReadScanRoundOptions): Promise<ScanRound> => {
   switch (transport.type) {
     case "native": {
@@ -783,6 +807,7 @@ const readScanRound = async ({
         query,
         from: startOffset,
         size: maxHits,
+        scanFields,
       });
       return {
         numHits: result.numHits,
@@ -835,6 +860,7 @@ type ReadScoredScanRoundOptions = {
   query: string;
   from: number;
   size: number;
+  scanFields?: readonly string[] | undefined;
 };
 
 /**
@@ -849,6 +875,7 @@ const readScoredScanRound = async ({
   query,
   from,
   size,
+  scanFields = [],
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
     observer,
@@ -857,7 +884,7 @@ const readScoredScanRound = async ({
     query,
     from,
     size,
-    fields: CORPUS_INDEX_SCAN_PASSAGE_FIELDS,
+    fields: [...new Set([...CORPUS_INDEX_SCAN_PASSAGE_FIELDS, ...scanFields])],
     requiredFields: ["document_id"],
   });
   if (result.isErr()) {
@@ -1009,6 +1036,7 @@ type ScannedPassage = {
   position: number;
   bm25: number | undefined;
   clause: string | null;
+  fields: CorpusIndexHit;
 };
 
 type SelectedPassages = {
@@ -1065,6 +1093,16 @@ const appliedPassages = () => {
     candidates,
     passageClauseById,
     bestScoreById,
+    projections: (): ReadonlyMap<string, ScannedProjection> =>
+      new Map(
+        [...passages].map(([id, revisions]) => {
+          const [revision, { best }] =
+            [...revisions].toSorted(
+              ([, left], [, right]) => left.best.position - right.best.position,
+            )[0] ?? panic("A scanned candidate holds no passage");
+          return [id, { revision, fields: best.fields }];
+        }),
+      ),
     record: (passage: ScannedPassage): boolean => {
       const { id, revision } = passage;
       if (
@@ -1140,12 +1178,13 @@ const readWindowPage = async <TContext>({
   extractSnippet,
   rankCandidates,
   unseenScoreUpperBound,
+  scanFields,
 }: ObservedCorpusIndexSearchPageInput<TContext>): Promise<
   ScanPage<TContext>
 > => {
   const passages = appliedPassages();
   const { candidates, passageClauseById, bestScoreById } = passages;
-  const rankingScope = rankingScopeOf(parsedCursor, passages.selectCandidates);
+  const rankingScope = rankingScopeOf(parsedCursor, passages);
   const scores = scanScoreRecorder(bestScoreById);
   let ranking: CorpusIndexRanking<TContext> | null = null;
   let windowed: RankedHit[] = [];
@@ -1217,6 +1256,7 @@ const readWindowPage = async <TContext>({
       transport: scanTransport,
       startOffset,
       maxHits,
+      scanFields,
     });
     indexMs += performance.now() - roundStartedAt;
 
@@ -1244,6 +1284,7 @@ const readWindowPage = async <TContext>({
               position: startOffset + index,
               bm25: round.scores?.[index],
               clause: passageClause(hit),
+              fields: hit,
             })
           ) {
             malformed += 1;
@@ -1545,6 +1586,7 @@ const readBm25SearchPage = async <TContext>(
     extractId,
     extractSnippet,
     rankCandidates,
+    scanFields,
   } = options;
   if (
     order.type !== "relevance" ||
@@ -1562,6 +1604,7 @@ const readBm25SearchPage = async <TContext>(
     query,
     from: 0,
     size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+    scanFields,
   });
   const indexMs = performance.now() - startedAt;
   const topScore = bm25TopScore(round.hits);
@@ -1615,6 +1658,7 @@ const readBm25SearchPage = async <TContext>(
             position,
             bm25: score,
             clause: passageClause(hit),
+            fields: hit,
           })
         ) {
           malformed += 1;
@@ -1629,7 +1673,7 @@ const readBm25SearchPage = async <TContext>(
   hitDispositions.record({ malformed });
   const ranking = await rankCandidates(
     candidates,
-    rankingScopeOf(parsedCursor, passages.selectCandidates),
+    rankingScopeOf(parsedCursor, passages),
   );
   const windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   const pageRanked = windowed.slice(skip, skip + limit);

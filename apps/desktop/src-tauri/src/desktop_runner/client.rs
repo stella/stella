@@ -33,7 +33,9 @@ use tokio_tungstenite::{
 use uuid::Uuid;
 
 use super::harness::{HarnessHost, HarnessReports, JournaledRun, RunSink};
-use super::journal::{Change, Decision, Journal, RunRecord, SharedJournal, seq_of};
+use super::journal::{
+  Change, Decision, Journal, RunRecord, SharedJournal, run_of, seq_of,
+};
 use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
@@ -428,8 +430,8 @@ impl Runner {
       .iter()
       .filter(|record| record.is_held())
       .map(|record| ActiveRun {
-        run_id: record.run_id.clone(),
-        last_seq: record.last_seq,
+        run_id: record.run_id().to_owned(),
+        last_seq: record.last_seq(),
       })
       .collect();
     if active_runs.len() > MAX_ACTIVE_RUNS {
@@ -455,11 +457,11 @@ impl Runner {
       .journal
       .records()
       .into_iter()
-      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .filter(|record| record.decision == Decision::Accepted && !record.finished())
       .map(|record| JournaledRun {
-        sink: RunSink::new(record.run_id.clone(), Arc::clone(&self.journal)),
-        source_seq: record.source_seq,
-        run_id: record.run_id,
+        sink: RunSink::new(record.run_id().to_owned(), Arc::clone(&self.journal)),
+        source_seq: record.source_seq(),
+        run_id: record.run_id().to_owned(),
       })
       .collect();
     if !runs.is_empty() {
@@ -576,7 +578,7 @@ impl Runner {
       .collect();
     let mut resend = Vec::new();
     for record in held {
-      let run_id = record.run_id;
+      let run_id = record.run_id().to_owned();
       let Some(&ack_seq) = resume.get(&run_id) else {
         // The API dropped the run: stop it here too and forget it.
         if !record.cancelled {
@@ -595,7 +597,10 @@ impl Runner {
           } else {
             (
               Change::Store,
-              Some((record.outbox.clone(), record.last_seq)),
+              Some((
+                record.outbox().cloned().collect::<Vec<_>>(),
+                record.last_seq(),
+              )),
             )
           }
         })
@@ -692,7 +697,7 @@ impl Runner {
             // finds the run in the journal.
             self
               .journal
-              .put(RunRecord::new(run_id.clone(), Decision::Accepted, now_ms()))
+              .insert(run_id.clone(), Decision::Accepted, now_ms())
               .map_err(log_journal_error)?;
             let sink = RunSink::new(run_id.clone(), Arc::clone(&self.journal));
             let decision = match self.host.start(start, sink) {
@@ -801,7 +806,7 @@ impl Runner {
     self
       .journal
       .get(run_id)
-      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .filter(|record| record.decision == Decision::Accepted && !record.finished())
   }
 
   /// Record a command on a running run; whether it is new and goes to the
@@ -814,7 +819,7 @@ impl Runner {
     let marked = self
       .journal
       .update(run_id, |record| {
-        if record.decision != Decision::Accepted || record.finished || !mark(record) {
+        if record.decision != Decision::Accepted || record.finished() || !mark(record) {
           return (Change::Unchanged, false);
         }
         (Change::Store, true)
@@ -832,19 +837,6 @@ impl Runner {
 
 fn log_journal_error(error: String) {
   tracing::warn!(error = %error, "desktop runner journal write failed");
-}
-
-/// The run a sequenced message belongs to.
-fn run_of(message: &DesktopMessage) -> Option<&str> {
-  match message {
-    DesktopMessage::RunEvent(event) => Some(&event.run_id),
-    DesktopMessage::RunApprovalRequest(request) => Some(&request.run_id),
-    DesktopMessage::RunFinished(finished) => Some(&finished.run_id),
-    DesktopMessage::Hello(_)
-    | DesktopMessage::HarnessStatus(_)
-    | DesktopMessage::RunAccepted(_)
-    | DesktopMessage::RunRejected(_) => None,
-  }
 }
 
 impl Notices {

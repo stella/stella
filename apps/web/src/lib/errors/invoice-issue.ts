@@ -12,19 +12,20 @@ export const INVOICE_ISSUE_BLOCKER_FIXES = {
   [INVOICE_ISSUE_BLOCKER.sellerProfileMissing]: {
     messageKey: "errors.apiCodes.invoiceSellerProfileMissing",
     settingsLabelKey: "admin.billingProfiles",
-    to: "/admin/billing",
+    to: "/settings/organization/billing",
   },
   [INVOICE_ISSUE_BLOCKER.numberSeriesMissing]: {
     messageKey: "errors.apiCodes.invoiceNumberSeriesMissing",
     settingsLabelKey: "billing.numberSeries.title",
-    to: "/admin/number-series",
+    to: "/settings/organization/number-series",
   },
 } as const satisfies Record<
   InvoiceIssueBlocker,
   {
     messageKey: TranslationKey;
     settingsLabelKey: TranslationKey;
-    to: "/admin/billing" | "/admin/number-series";
+    to:
+      "/settings/organization/billing" | "/settings/organization/number-series";
   }
 >;
 

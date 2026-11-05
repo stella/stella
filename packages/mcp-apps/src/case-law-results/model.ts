@@ -3,10 +3,15 @@ import { panic } from "better-result";
 import { normalizeCountry } from "@stll/agent-input/country";
 import { normalizeDateBound } from "@stll/agent-input/date-value";
 import { normalizeStringList } from "@stll/agent-input/string-list";
+import {
+  COURT_TIER_LABELS,
+  type CourtTierLabel,
+} from "@stll/api-contract/case-law-court-tiers";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
 import type {
+  CourtCatalog,
   ResolveResults,
   SearchResults,
 } from "../shared/generated/contracts";
@@ -114,7 +119,7 @@ export const searchView = (data: SearchResults) => {
         : {
             court: data.facets.court.map(({ tierLabel, courts }) => ({
               tierLabel,
-              courts: courts.map(({ value }) => ({ value })),
+              courts: courts.map(({ value, count }) => ({ value, count })),
             })),
           },
     nextCursor: data.nextCursor,
@@ -193,6 +198,105 @@ export const resolveView = (data: ResolveResults) => {
 };
 export type CaseLawView =
   ReturnType<typeof searchView> | ReturnType<typeof resolveView>;
+
+type CourtFacets = NonNullable<
+  Extract<CaseLawView, { type: "search" }>["facets"]
+>;
+type CourtPickerGroup = {
+  tierLabel: CourtCatalog["courts"][number]["tierLabel"];
+  courts: { value: string; count: number | null }[];
+};
+
+/**
+ * Pages of one country's catalog joined into one: each tier's courts in page
+ * order, tiers apex first. Pages run by court name, so an apex court can
+ * arrive on a later page than a regional one; the tier order is fixed rather
+ * than taken from arrival. A spelling of a court an earlier page already holds
+ * joins that court's entry instead of listing the court twice.
+ */
+export const appendCourtCatalogPage = (
+  catalog: CourtCatalog | null,
+  page: CourtCatalog,
+): CourtCatalog => {
+  if (catalog === null) {
+    return page;
+  }
+  const incoming = page.courts.flatMap(({ courts }) => courts);
+  const held = new Set(
+    catalog.courts.flatMap(({ courts }) => courts.map(({ key }) => key)),
+  );
+  const courtsOf = (tierLabel: CourtTierLabel) => [
+    ...(
+      catalog.courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? []
+    ).map((court) => ({
+      ...court,
+      aliases: [
+        ...court.aliases,
+        ...incoming
+          .filter(({ key }) => key === court.key)
+          .flatMap(({ value, aliases }) => [value, ...aliases]),
+      ],
+    })),
+    ...(
+      page.courts.find((tier) => tier.tierLabel === tierLabel)?.courts ?? []
+    ).filter(({ key }) => !held.has(key)),
+  ];
+  return {
+    country: page.country,
+    courts: COURT_TIER_LABELS.flatMap((tierLabel) => {
+      const courts = courtsOf(tierLabel);
+      return courts.length === 0 ? [] : [{ tierLabel, courts }];
+    }),
+    nextCursor: page.nextCursor,
+  };
+};
+
+/**
+ * What the court picker lists. The country's catalog names every court it
+ * holds, so a search with few or no results still offers them all; the
+ * facets add how many of the current results each court holds, summed over
+ * every spelling of the court. A court the facets do not name has no count:
+ * facets list each tier's largest courts, so absence is not zero. Without a
+ * catalog for the country (not read yet, or unreadable), the facets alone.
+ */
+export const courtPickerGroups = ({
+  catalog,
+  facets,
+}: {
+  catalog: CourtCatalog | null;
+  facets: CourtFacets | null;
+}): CourtPickerGroup[] => {
+  const facetGroups = facets?.court ?? [];
+  if (catalog === null) {
+    return facetGroups.map(({ tierLabel, courts }) => ({
+      tierLabel,
+      courts: courts.map(({ value, count }) => ({ value, count })),
+    }));
+  }
+  const counts = new Map(
+    facetGroups.flatMap(({ courts }) =>
+      courts.map(({ value, count }) => [value, count] as const),
+    ),
+  );
+  return catalog.courts.map(({ tierLabel, courts }) => ({
+    tierLabel,
+    courts: courts
+      .map(({ value, aliases }) => {
+        const known = [value, ...aliases].flatMap((name) => {
+          const count = counts.get(name);
+          return count === undefined ? [] : [count];
+        });
+        return {
+          value,
+          count:
+            known.length === 0 ? null : known.reduce((sum, n) => sum + n, 0),
+        };
+      })
+      // Courts holding current results lead their tier, most first; the
+      // rest keep the catalog's order.
+      .toSorted((left, right) => (right.count ?? -1) - (left.count ?? -1)),
+  }));
+};
 
 type CourtSelection =
   | { type: "all" }

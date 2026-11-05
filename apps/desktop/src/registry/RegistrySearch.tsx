@@ -115,7 +115,7 @@ type RegistrySearchProps = {
   source: "clips" | "registry";
   onConnectAccount: () => Promise<unknown>;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
-  /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
+  /** The shared search field; in registry scope Enter starts the search now and ArrowUp focuses the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
     connectionStatus: DesktopConnectionStatus;
@@ -160,6 +160,11 @@ export const RegistrySearch = ({
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
+  // The search the user confirmed with Enter: it skips the debounce. A new
+  // object per Enter, so confirming the same query again retries a failure.
+  const [confirmedSearch, setConfirmedSearch] = useState<{
+    scope: string;
+  } | null>(null);
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
   const formatRequests = useRef(new Map<string, number>());
@@ -289,7 +294,7 @@ export const RegistrySearch = ({
         generation.current += 1;
       };
     }
-    const timer = setTimeout(() => {
+    const search = () => {
       setSearchState({
         status: "loading",
         scope,
@@ -331,7 +336,11 @@ export const RegistrySearch = ({
                 : searchError,
           });
         });
-    }, SEARCH_DEBOUNCE_MS);
+    };
+    const timer = setTimeout(
+      search,
+      confirmedSearch?.scope === scope ? 0 : SEARCH_DEBOUNCE_MS,
+    );
     return () => {
       clearTimeout(timer);
       generation.current += 1;
@@ -343,6 +352,7 @@ export const RegistrySearch = ({
     trimmedQuery,
     composing,
     scope,
+    confirmedSearch,
     searchError,
     roleError,
   ]);
@@ -383,7 +393,7 @@ export const RegistrySearch = ({
       })
       .catch(() => setError(t("registryErrorDisconnect")));
   };
-  // The highlighted result: the last one focused, else the first, so Enter
+  // The highlighted result: the last one focused, else the first, so ArrowUp
   // from the search field always has a target.
   const activeResult =
     currentSearch.status === "ready"
@@ -535,19 +545,27 @@ export const RegistrySearch = ({
       return () => undefined;
     }
     const handleSearchKey = (event: KeyboardEvent) => {
+      if (event.isComposing) {
+        return;
+      }
+      // Enter in the search field only searches: it never copies or closes
+      // the window. Copying is Enter on a focused result card.
+      if (event.key === "Enter") {
+        event.preventDefault();
+        // Only a search that has not started yet is brought forward, so a
+        // second Enter never repeats a request already in flight or shown.
+        if (currentSearch.status === "idle") {
+          setConfirmedSearch({ scope });
+        }
+        return;
+      }
       if (
-        event.isComposing ||
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
         event.shiftKey ||
         activeResult === null
       ) {
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        copy(activeResult);
         return;
       }
       if (event.key === "ArrowUp") {
