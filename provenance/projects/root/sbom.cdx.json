@@ -767,16 +767,16 @@
             "location": "apps/web/src/lib/workspaces/quick-entry-store.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -810,6 +810,12 @@
           },
           {
             "location": "apps/web/src/ssr-renderer.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek-layering.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#1"
           },
           {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#1"
@@ -1850,9 +1856,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
@@ -1908,9 +1911,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -2081,9 +2081,6 @@
             "location": "apps/web/src/components/references/decision-citation-chip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/references/decision-citation-chip.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/references/reference-chip.tsx#1"
           },
           {
@@ -2178,12 +2175,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-page-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-entity-row.tsx#1"
@@ -2495,9 +2486,6 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
@@ -2682,6 +2670,9 @@
           },
           {
             "location": "apps/web/src/features/my-week/my-week.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/annotated-statute-text.tsx#1"
@@ -2894,96 +2885,6 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-settings-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#1"
           },
           {
@@ -3047,6 +2948,12 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx#1"
           },
           {
@@ -3104,10 +3011,106 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-table.tsx#1"
@@ -3773,7 +3776,7 @@
             "location": "packages/decision-reader/src/cited-provision.tsx#1"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#7"
+            "location": "packages/decision-reader/src/cited-provision.tsx#2"
           },
           {
             "location": "packages/decision-reader/src/decision-text.tsx#1"
@@ -3809,10 +3812,19 @@
             "location": "packages/decision-reader/src/reader-inset-box.tsx#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.tsx#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#2"
+          },
+          {
             "location": "packages/decision-reader/src/source-link-policy.tsx#30"
           },
           {
             "location": "packages/decision-reader/src/source-link-policy.tsx#31"
+          },
+          {
+            "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -4787,7 +4799,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#11"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
@@ -4856,7 +4868,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#13"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#13"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
@@ -4877,7 +4889,7 @@
             "location": "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#12"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#12"
@@ -6181,16 +6193,16 @@
             "location": "apps/web/src/lib/workspaces/quick-entry-store.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -6224,6 +6236,12 @@
           },
           {
             "location": "apps/web/src/ssr-renderer.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek-layering.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#1"
           },
           {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#1"
@@ -7264,9 +7282,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
@@ -7322,9 +7337,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -7495,9 +7507,6 @@
             "location": "apps/web/src/components/references/decision-citation-chip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/references/decision-citation-chip.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/references/reference-chip.tsx#1"
           },
           {
@@ -7592,12 +7601,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-page-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-entity-row.tsx#1"
@@ -7909,9 +7912,6 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
@@ -8096,6 +8096,9 @@
           },
           {
             "location": "apps/web/src/features/my-week/my-week.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/annotated-statute-text.tsx#1"
@@ -8308,96 +8311,6 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-settings-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#1"
           },
           {
@@ -8461,6 +8374,12 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx#1"
           },
           {
@@ -8518,10 +8437,106 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-table.tsx#1"
@@ -9187,7 +9202,7 @@
             "location": "packages/decision-reader/src/cited-provision.tsx#1"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#7"
+            "location": "packages/decision-reader/src/cited-provision.tsx#2"
           },
           {
             "location": "packages/decision-reader/src/decision-text.tsx#1"
@@ -9223,10 +9238,19 @@
             "location": "packages/decision-reader/src/reader-inset-box.tsx#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.tsx#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#2"
+          },
+          {
             "location": "packages/decision-reader/src/source-link-policy.tsx#30"
           },
           {
             "location": "packages/decision-reader/src/source-link-policy.tsx#31"
+          },
+          {
+            "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -9792,7 +9816,7 @@
       "version": "1.9.0"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/api-key@1.7.12",
+      "bom-ref": "pkg:npm/@better-auth/api-key@1.7.16",
       "description": "API Key plugin for Better Auth.",
       "evidence": {
         "identity": [
@@ -9872,16 +9896,16 @@
           "value": "apps/api/node_modules/@better-auth/api-key/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/api-key@1.7.12",
+      "purl": "pkg:npm/%40better-auth/api-key@1.7.16",
       "scope": "required",
       "tags": [
         "auth"
       ],
       "type": "library",
-      "version": "1.7.12"
+      "version": "1.7.16"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/cimd@1.7.12",
+      "bom-ref": "pkg:npm/@better-auth/cimd@1.7.16",
       "description": "Client ID Metadata Document plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -9937,13 +9961,13 @@
           "value": "apps/api/node_modules/@better-auth/cimd/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/cimd@1.7.12",
+      "purl": "pkg:npm/%40better-auth/cimd@1.7.16",
       "scope": "required",
       "type": "library",
-      "version": "1.7.12"
+      "version": "1.7.16"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/core@1.7.12",
+      "bom-ref": "pkg:npm/@better-auth/core@1.7.16",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -10068,16 +10092,16 @@
           "value": "apps/api/node_modules/@better-auth/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/core@1.7.12",
+      "purl": "pkg:npm/%40better-auth/core@1.7.16",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.7.12"
+      "version": "1.7.16"
     },
     {
-      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.7.12",
+      "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.7.16",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
         "identity": [
@@ -10161,10 +10185,10 @@
           "value": "apps/api/node_modules/@better-auth/oauth-provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.12",
+      "purl": "pkg:npm/%40better-auth/oauth-provider@1.7.16",
       "scope": "required",
       "type": "library",
-      "version": "1.7.12"
+      "version": "1.7.16"
     },
     {
       "authors": [
@@ -10795,9 +10819,6 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/-components/add-contact-method-form.tsx#1"
           },
           {
@@ -10805,6 +10826,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/app.tsx#1"
@@ -11946,6 +11970,9 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/bridge.ts#10"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/server-tool-call.ts#1"
           },
           {
             "location": "packages/mcp-apps/src/shared/size.ts#1"
@@ -14625,6 +14652,9 @@
             "location": "packages/agent-engine/src/harness/stream-chunks.ts#8"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/holder.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/protocol.ts#1"
           },
           {
@@ -14910,22 +14940,22 @@
             "location": "apps/web/src/features/time-timers/timer-form.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-arrangement-editor.tsx#3"
@@ -15981,33 +16011,6 @@
             "location": "apps/web/src/routes/-protected-guard.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-defaults.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-queries/anonymization-blacklist.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-queries/audit-logs.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-queries/organization-data-boxes.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-queries/usage-policies.ts#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.settings/-queries/connections.ts#1"
           },
           {
@@ -16018,6 +16021,33 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-queries/memory-matters.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-defaults.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-settings-mutation.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-settings-mutation.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-queries/anonymization-blacklist.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-queries/audit-logs.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-queries/organization-data-boxes.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-queries/usage-policies.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-query.ts#1"
@@ -16332,9 +16362,6 @@
             "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#4"
           },
           {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/matter-number-hint.tsx#1"
           },
           {
@@ -16420,9 +16447,6 @@
           },
           {
             "location": "apps/web/src/components/search-matter-preview.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#3"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#3"
@@ -16575,7 +16599,7 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#3"
+            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#3"
@@ -16707,90 +16731,6 @@
             "location": "apps/web/src/routes/__root.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/memory-extraction-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-preview.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/prompt-caching-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/general.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-history-page.tsx#9"
           },
           {
@@ -16854,7 +16794,97 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/deepl-key-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/memory-extraction-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-preview.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/prompt-caching-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/web-search-keys-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.general.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-page.tsx#1"
@@ -17595,9 +17625,6 @@
             "location": "apps/web/src/components/legal-reader/annotations/guest-annotation-prompt.tsx#1"
           },
           {
-            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#4"
-          },
-          {
             "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#5"
           },
           {
@@ -17628,6 +17655,9 @@
             "location": "apps/web/src/components/quick-entry-dialog.tsx#4"
           },
           {
+            "location": "apps/web/src/components/references/decision-citation-chip.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/references/reference-chip.tsx#5"
           },
           {
@@ -17647,9 +17677,6 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#17"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#4"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#4"
@@ -17697,7 +17724,7 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#4"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#4"
+            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#2"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-cells.tsx#5"
@@ -17772,28 +17799,13 @@
             "location": "apps/web/src/routes/__root.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.admin/ai.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/anonymization.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/billing.tsx#1"
@@ -17805,7 +17817,7 @@
             "location": "apps/web/src/routes/_protected.admin/document-types.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/general.tsx#2"
+            "location": "apps/web/src/routes/_protected.admin/general.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/index.tsx#1"
@@ -17814,7 +17826,7 @@
             "location": "apps/web/src/routes/_protected.admin/matter-numbering.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/number-series.tsx#1"
@@ -17829,7 +17841,7 @@
             "location": "apps/web/src/routes/_protected.admin/tools.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#4"
+            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.admin/vat-rates.tsx#1"
@@ -17877,6 +17889,9 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-owners-editor.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#3"
           },
           {
@@ -17904,6 +17919,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/memory/suggestions-queue.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#1"
           },
           {
@@ -17920,6 +17938,69 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.ai.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.anonymization.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.billing.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.catalogue.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.general.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.number-series.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.time-policy.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.tools.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.vat-rates.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/route.tsx#1"
@@ -19567,16 +19648,16 @@
             "location": "apps/web/src/lib/workspaces/quick-entry-store.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -19610,6 +19691,12 @@
           },
           {
             "location": "apps/web/src/ssr-renderer.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek-layering.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#1"
           },
           {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#1"
@@ -20650,9 +20737,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
@@ -20708,9 +20792,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -20881,9 +20962,6 @@
             "location": "apps/web/src/components/references/decision-citation-chip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/references/decision-citation-chip.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/references/reference-chip.tsx#1"
           },
           {
@@ -20978,12 +21056,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-page-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-entity-row.tsx#1"
@@ -21295,9 +21367,6 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
@@ -21482,6 +21551,9 @@
           },
           {
             "location": "apps/web/src/features/my-week/my-week.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/annotated-statute-text.tsx#1"
@@ -21694,96 +21766,6 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-settings-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#1"
           },
           {
@@ -21847,6 +21829,12 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx#1"
           },
           {
@@ -21904,10 +21892,106 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-table.tsx#1"
@@ -22573,7 +22657,7 @@
             "location": "packages/decision-reader/src/cited-provision.tsx#1"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#7"
+            "location": "packages/decision-reader/src/cited-provision.tsx#2"
           },
           {
             "location": "packages/decision-reader/src/decision-text.tsx#1"
@@ -22609,10 +22693,19 @@
             "location": "packages/decision-reader/src/reader-inset-box.tsx#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.tsx#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#2"
+          },
+          {
             "location": "packages/decision-reader/src/source-link-policy.tsx#30"
           },
           {
             "location": "packages/decision-reader/src/source-link-policy.tsx#31"
+          },
+          {
+            "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -24776,16 +24869,16 @@
             "location": "apps/web/src/lib/workspaces/quick-entry-store.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -24819,6 +24912,12 @@
           },
           {
             "location": "apps/web/src/ssr-renderer.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek-layering.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#1"
           },
           {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#1"
@@ -25859,9 +25958,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
@@ -25917,9 +26013,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -26090,9 +26183,6 @@
             "location": "apps/web/src/components/references/decision-citation-chip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/references/decision-citation-chip.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/references/reference-chip.tsx#1"
           },
           {
@@ -26187,12 +26277,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-page-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-entity-row.tsx#1"
@@ -26504,9 +26588,6 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
@@ -26691,6 +26772,9 @@
           },
           {
             "location": "apps/web/src/features/my-week/my-week.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/annotated-statute-text.tsx#1"
@@ -26903,96 +26987,6 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-settings-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#1"
           },
           {
@@ -27056,6 +27050,12 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx#1"
           },
           {
@@ -27113,10 +27113,106 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-table.tsx#1"
@@ -27782,7 +27878,7 @@
             "location": "packages/decision-reader/src/cited-provision.tsx#1"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#7"
+            "location": "packages/decision-reader/src/cited-provision.tsx#2"
           },
           {
             "location": "packages/decision-reader/src/decision-text.tsx#1"
@@ -27818,10 +27914,19 @@
             "location": "packages/decision-reader/src/reader-inset-box.tsx#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.tsx#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#2"
+          },
+          {
             "location": "packages/decision-reader/src/source-link-policy.tsx#30"
           },
           {
             "location": "packages/decision-reader/src/source-link-policy.tsx#31"
+          },
+          {
+            "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -28885,7 +28990,7 @@
       "version": "7.4.2"
     },
     {
-      "bom-ref": "pkg:npm/better-auth@1.7.12",
+      "bom-ref": "pkg:npm/better-auth@1.7.16",
       "description": "The most comprehensive authentication framework for TypeScript.",
       "evidence": {
         "identity": [
@@ -29260,13 +29365,13 @@
           "value": "apps/api/node_modules/better-auth/package.json"
         }
       ],
-      "purl": "pkg:npm/better-auth@1.7.12",
+      "purl": "pkg:npm/better-auth@1.7.16",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.7.12"
+      "version": "1.7.16"
     },
     {
       "authors": [
@@ -31840,6 +31945,9 @@
             "location": "apps/api/src/handlers/legal-resolve/authorization.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/legal-resolve/decision-constraints.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/legal-resolve/decision-endpoint.ts#1"
           },
           {
@@ -32117,6 +32225,12 @@
           },
           {
             "location": "apps/api/src/handlers/me/send-otp.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/me/timer-activity-devices/register.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/me/timer-activity-devices/unregister.ts#1"
           },
           {
             "location": "apps/api/src/handlers/me/two-factor-send-manage-otp.ts#1"
@@ -33823,6 +33937,9 @@
             "location": "apps/api/src/lib/case-law/population-maintenance-admission.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/population-seed-batch.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law/provision-anchor-lineage.ts#24"
           },
           {
@@ -34723,6 +34840,9 @@
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-ranking-signals.ts#30"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/case-law-raw-layout.ts#1"
           },
           {
@@ -35410,6 +35530,9 @@
             "location": "apps/api/src/lib/push/push-delivery-worker.ts#1"
           },
           {
+            "location": "apps/api/src/lib/push/timer-activity-worker.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/queue-reconcile-scan.ts#12"
           },
           {
@@ -35558,6 +35681,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-population-seed.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts#1"
@@ -36107,6 +36233,9 @@
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/case-law-court-catalog-tool.ts#1"
           },
           {
             "location": "apps/api/src/mcp/case-law-court-filter.ts#1"
@@ -36860,6 +36989,9 @@
           },
           {
             "location": "apps/mobile/src/state/tasks.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/state/timer-activity-devices.ts#1"
           },
           {
             "location": "apps/mobile/src/state/timers.ts#1"
@@ -37939,24 +38071,6 @@
             "location": "apps/web/src/routes/-session-activity.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-settings-mutation.ts#3"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#1"
           },
           {
@@ -37964,6 +38078,24 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-settings-mutation.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report.logic.ts#1"
@@ -38110,6 +38242,21 @@
             "location": "packages/agent-engine/src/harness/adapter.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/cli-client.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/errors.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/items.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/turn.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/codex/adapter.ts#1"
           },
           {
@@ -38131,10 +38278,16 @@
             "location": "packages/agent-engine/src/harness/event-queue.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/harness/harness-process.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/stream-chunks.ts#9"
           },
           {
             "location": "packages/agent-engine/src/harness/transcript-handoff.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/turn-lifecycle.ts#1"
           },
           {
             "location": "packages/agent-engine/src/run.ts#3"
@@ -38143,7 +38296,16 @@
             "location": "packages/agent-engine/src/sandbox.ts#9"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/holder-server.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/holder.ts#2"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/host.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/main.ts#1"
           },
           {
             "location": "packages/agent-engine/src/sidecar/mcp-proxy.ts#1"
@@ -38203,6 +38365,15 @@
             "location": "packages/api-contract/src/chat-turn-duration.ts#1"
           },
           {
+            "location": "packages/api-contract/src/chat.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/court-citation-aliases.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/court-citation-directory.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/decision-docket-filing-year.fixtures.ts#1"
           },
           {
@@ -38237,6 +38408,15 @@
           },
           {
             "location": "packages/api-contract/src/public-country-capability.ts#4"
+          },
+          {
+            "location": "packages/api-contract/src/record-cell.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/record-projection.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/record-schema.ts#1"
           },
           {
             "location": "packages/api-contract/src/resource-link.ts#1"
@@ -38584,6 +38764,9 @@
             "location": "packages/decision-reader/src/reader-text-scale.logic.ts#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#3"
+          },
+          {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#4"
           },
           {
@@ -38728,7 +38911,7 @@
             "location": "packages/legal-ast/src/reader-text-quote.ts#20"
           },
           {
-            "location": "packages/legal-ast/src/statute-anchor-scheme.ts#16"
+            "location": "packages/legal-ast/src/statute-anchor-scheme.ts#17"
           },
           {
             "location": "packages/legal-atlas/src/document-stage-observer.ts#3"
@@ -38783,6 +38966,9 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/locale.ts#1"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/server-tool-call.ts#2"
           },
           {
             "location": "packages/mcp-apps/src/shared/size.ts#2"
@@ -39199,6 +39385,9 @@
             "location": "packages/workspace-ui/src/calculation-format.ts#10"
           },
           {
+            "location": "packages/workspace-ui/src/field-value-logic.ts#1"
+          },
+          {
             "location": "packages/workspace-ui/src/kanban-view.ts#1"
           },
           {
@@ -39595,7 +39784,7 @@
             "location": "scripts/migration-lock-census.ts#1"
           },
           {
-            "location": "scripts/migration-rehearsal-db.ts#33"
+            "location": "scripts/migration-rehearsal-db.ts#37"
           },
           {
             "location": "scripts/migration-restamp.ts#3"
@@ -40219,7 +40408,7 @@
             "location": "apps/web/src/components/legal-reader/citation-copy-options.tsx#3"
           },
           {
-            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#5"
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#4"
           },
           {
             "location": "apps/web/src/components/legal-reader/cited-provision-link.tsx#6"
@@ -40240,7 +40429,7 @@
             "location": "apps/web/src/components/legal-reader/web-reader-presentation.tsx#3"
           },
           {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#5"
+            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#3"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#16"
@@ -40591,42 +40780,6 @@
             "location": "apps/web/src/routes/__root.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/audit-change-details.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-settings-section.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-audit-archive.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#5"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#3"
           },
           {
@@ -40664,6 +40817,42 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.memory.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/audit-change-details.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-settings-section.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-audit-archive.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-summary.tsx#1"
@@ -40861,7 +41050,7 @@
             "location": "apps/web/src/testing/render-loop-guard.tsx#4"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#9"
+            "location": "packages/decision-reader/src/cited-provision.tsx#4"
           },
           {
             "location": "packages/decision-reader/src/document-ast-text.tsx#4"
@@ -40871,6 +41060,9 @@
           },
           {
             "location": "packages/decision-reader/src/reader-adapters.tsx#4"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#4"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/app.tsx#3"
@@ -45510,6 +45702,12 @@
             "location": "apps/api/src/lib/legal-search/case-law-legacy-reference-sql.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/case-law-ranking-signal-drain.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/case-law-ranking-signals.ts#31"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/case-law-raw-census.ts#1"
           },
           {
@@ -45571,6 +45769,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-publish-fence.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-ranking-signals.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-ranking-signals.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#2"
@@ -45948,6 +46152,15 @@
             "location": "apps/api/src/lib/push/push-devices.ts#12"
           },
           {
+            "location": "apps/api/src/lib/push/timer-activity-devices.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/push/timer-activity-devices.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/push/timer-activity-worker.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/report-export-enqueue.ts#12"
           },
           {
@@ -45997,6 +46210,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-population-seed.ts#2"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts#2"
@@ -46890,6 +47106,9 @@
             "location": "apps/api/src/lib/legal-search/case-law-search-index.ts#4"
           },
           {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-ranking-signals.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/legislation-works-at-date.ts#3"
           },
           {
@@ -46918,6 +47137,9 @@
           },
           {
             "location": "apps/api/src/lib/push/push-devices.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/push/timer-activity-devices.ts#13"
           },
           {
             "location": "apps/api/src/lib/review-organization/reset-scope.ts#3"
@@ -47203,6 +47425,9 @@
           },
           {
             "location": "apps/mobile/src/native/push-device.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#3"
           }
         ]
       },
@@ -47282,6 +47507,9 @@
           },
           {
             "location": "apps/mobile/src/connection/platform.ts#4"
+          },
+          {
+            "location": "apps/mobile/src/native/timer-activity-device.ts#1"
           },
           {
             "location": "apps/mobile/src/state/local-file.ts#2"
@@ -47573,7 +47801,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/mobile/src/components/timer-activity-sync.tsx#3"
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#4"
           }
         ]
       },
@@ -48123,6 +48351,12 @@
           },
           {
             "location": "apps/mobile/widgets.metro.config.cjs#3"
+          },
+          {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#6"
           },
           {
             "location": "apps/mobile/src/widgets/timer-activity.ios.tsx#10"
@@ -50443,7 +50677,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/generate-tailwind-classes.ts#12"
+            "location": "scripts/generate-tailwind-classes.ts#13"
           }
         ]
       },
@@ -51469,9 +51703,6 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/-components/add-contact-method-form.tsx#1"
           },
           {
@@ -51479,6 +51710,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/app.tsx#1"
@@ -52233,7 +52467,7 @@
             "location": "apps/mobile/src/components/tasks-list.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/timer-activity-sync.tsx#4"
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#7"
           },
           {
             "location": "apps/mobile/src/components/timer-card.tsx#4"
@@ -52975,16 +53209,16 @@
             "location": "apps/web/src/lib/workspaces/quick-entry-store.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#1"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
@@ -53018,6 +53252,12 @@
           },
           {
             "location": "apps/web/src/ssr-renderer.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek-layering.ts#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.logic.ts#1"
           },
           {
             "location": "packages/decision-reader/src/use-reader-text-scale.ts#1"
@@ -54058,9 +54298,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#1"
           },
           {
@@ -54116,9 +54353,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
           },
           {
             "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
@@ -54289,9 +54523,6 @@
             "location": "apps/web/src/components/references/decision-citation-chip.tsx#1"
           },
           {
-            "location": "apps/web/src/components/references/decision-citation-chip.tsx#2"
-          },
-          {
             "location": "apps/web/src/components/references/reference-chip.tsx#1"
           },
           {
@@ -54386,12 +54617,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-page-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#1"
           },
           {
             "location": "apps/web/src/components/sidebar-entity-row.tsx#1"
@@ -54703,9 +54928,6 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#1"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#1"
-          },
-          {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#1"
           },
           {
@@ -54890,6 +55112,9 @@
           },
           {
             "location": "apps/web/src/features/my-week/my-week.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#1"
           },
           {
             "location": "apps/web/src/features/statutes/components/annotated-statute-text.tsx#1"
@@ -55102,96 +55327,6 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-settings-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#1"
           },
           {
@@ -55255,6 +55390,12 @@
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx#1"
           },
           {
@@ -55312,10 +55453,106 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-page-header.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-table.tsx#1"
@@ -55981,7 +56218,7 @@
             "location": "packages/decision-reader/src/cited-provision.tsx#1"
           },
           {
-            "location": "packages/decision-reader/src/cited-provision.tsx#7"
+            "location": "packages/decision-reader/src/cited-provision.tsx#2"
           },
           {
             "location": "packages/decision-reader/src/decision-text.tsx#1"
@@ -56017,10 +56254,19 @@
             "location": "packages/decision-reader/src/reader-inset-box.tsx#1"
           },
           {
+            "location": "packages/decision-reader/src/reference-peek.tsx#1"
+          },
+          {
+            "location": "packages/decision-reader/src/reference-peek.tsx#2"
+          },
+          {
             "location": "packages/decision-reader/src/source-link-policy.tsx#30"
           },
           {
             "location": "packages/decision-reader/src/source-link-policy.tsx#31"
+          },
+          {
+            "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -57318,13 +57564,22 @@
             "location": "apps/mobile/src/state/tasks.ts#2"
           },
           {
-            "location": "apps/mobile/src/state/timer-activity.ts#1"
+            "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#4"
           },
           {
-            "location": "apps/mobile/src/state/timers.ts#2"
+            "location": "packages/agent-engine/src/harness/claude-code/errors.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
           },
           {
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/holder-server.ts#15"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/holder.ts#4"
           },
           {
             "location": "packages/agent-engine/src/sidecar/host.ts#2"
@@ -57444,13 +57699,22 @@
             "location": "apps/mobile/src/state/tasks.ts#2"
           },
           {
-            "location": "apps/mobile/src/state/timer-activity.ts#1"
+            "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#4"
           },
           {
-            "location": "apps/mobile/src/state/timers.ts#2"
+            "location": "packages/agent-engine/src/harness/claude-code/errors.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/turn.ts#2"
           },
           {
             "location": "packages/agent-engine/src/harness/compatibility.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/holder-server.ts#15"
+          },
+          {
+            "location": "packages/agent-engine/src/sidecar/holder.ts#4"
           },
           {
             "location": "packages/agent-engine/src/sidecar/host.ts#2"
@@ -58307,12 +58571,6 @@
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-history-page.tsx#11"
           },
           {
@@ -58320,6 +58578,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#17"
@@ -58603,13 +58867,13 @@
             "location": "apps/web/src/queries/feature-enrolments.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-form.ts#5"
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-form.ts#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-keys.ts#4"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-keys.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-hooks/use-ai-settings-toggles.ts#5"
+            "location": "apps/web/src/routes/_protected.settings/organization/-hooks/use-ai-settings-toggles.ts#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels.ts#1"
@@ -58634,6 +58898,9 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/locale.ts#2"
+          },
+          {
+            "location": "packages/transactional/push/timer-activity-labels.ts#1"
           },
           {
             "location": "apps/desktop/src/activity/ActivityApp.tsx#5"
@@ -58682,6 +58949,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationSetting.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/mainview/HarnessInstallLine.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/PermissionRow.tsx#4"
@@ -58894,7 +59164,7 @@
             "location": "apps/mobile/src/components/task-status-control.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/timer-activity-sync.tsx#5"
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/timer-card.tsx#5"
@@ -59461,9 +59731,6 @@
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#3"
           },
           {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#3"
-          },
-          {
             "location": "apps/web/src/components/keyboard-shortcuts-dialog.tsx#6"
           },
           {
@@ -59479,7 +59746,7 @@
             "location": "apps/web/src/components/legal-reader/citation-copy-options.tsx#4"
           },
           {
-            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#6"
+            "location": "apps/web/src/components/legal-reader/cited-decision-link.tsx#5"
           },
           {
             "location": "apps/web/src/components/legal-reader/margin-notes.tsx#13"
@@ -59678,9 +59945,6 @@
           },
           {
             "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/settings-shell/settings-shell.tsx#5"
           },
           {
             "location": "apps/web/src/components/shortcut-echo-hud.tsx#1"
@@ -60022,7 +60286,7 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/paragraph-reference.tsx#3"
           },
           {
-            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#5"
+            "location": "apps/web/src/features/case-law/components/case-viewer/provision-reference-chip.tsx#3"
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/provisions-cited.tsx#4"
@@ -60238,6 +60502,9 @@
             "location": "apps/web/src/features/my-week/week-strip.tsx#1"
           },
           {
+            "location": "apps/web/src/features/organization/components/jurisdiction-picker.tsx#3"
+          },
+          {
             "location": "apps/web/src/features/statutes/components/citing-decision-item.tsx#4"
           },
           {
@@ -60352,159 +60619,6 @@
             "location": "apps/web/src/routes/-protected-app.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/audit-change-details.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/members-invitations.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/native-tools-list.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-advanced.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-config-decision-model.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-provider-rows.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/ai-settings-section.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/anonymization-deny-list-card.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/billing-drafts-card.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/data-boxes-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/deepl-key-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-processing-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx#16"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/matter-numbering-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/member-role-cell.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/memory-extraction-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/month-lock-picker.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-preview.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-seller-picker.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/prompt-caching-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-refusal.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profiles-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/slug-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-zone-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/usage-plans-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-display.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rates-card.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/web-search-keys-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-audit-archive.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization-danger-zone.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/anonymization.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/audit-logs.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/billing.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/document-types.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/general.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/matter-numbering.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/members.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/number-series.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/time-policy.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/tools.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/usage.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/vat-rates.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-file-stack.tsx#4"
           },
           {
@@ -60557,6 +60671,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/editable-row.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.contacts/-components/import-done-step.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/party-matter-row.tsx#1"
@@ -60622,6 +60739,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#12"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/settings-shell/settings-shell.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#2"
           },
           {
@@ -60635,6 +60755,159 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/audit-change-details.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/members-invitations.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/native-tools-list.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-advanced.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-config-decision-model.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-provider-rows.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/ai-settings-section.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/anonymization-deny-list-card.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/deepl-key-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/matter-numbering-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/member-role-cell.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/memory-extraction-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/month-lock-picker.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-preview.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-seller-picker.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/prompt-caching-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-refusal.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profiles-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/slug-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-zone-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/usage-plans-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-display.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rates-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/web-search-keys-card.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-audit-archive.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization-danger-zone.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.anonymization.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.billing.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.general.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.number-series.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.time-policy.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.tools.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.vat-rates.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-page.tsx#2"
@@ -61268,6 +61541,9 @@
           },
           {
             "location": "apps/web/src/lib/statutes/statute-format.ts#1"
+          },
+          {
+            "location": "packages/transactional/push/timer-activity-labels.ts#1"
           },
           {
             "location": "packages/workspace-ui/src/formatting.tsx#5"
@@ -62518,6 +62794,9 @@
             "location": "apps/api/src/handlers/legal-resolve/admission.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/legal-resolve/decision-constraints.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/legal-resolve/decision-endpoint.ts#2"
           },
           {
@@ -63706,6 +63985,9 @@
             "location": "apps/api/src/lib/chat/case-law-citation-projection.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/case-law-court-catalog-projection.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/chat/case-law-court-projection.ts#1"
           },
           {
@@ -64012,6 +64294,9 @@
             "location": "apps/api/src/lib/push/push-delivery-worker.ts#4"
           },
           {
+            "location": "apps/api/src/lib/push/timer-activity-worker.ts#3"
+          },
+          {
             "location": "apps/api/src/lib/rate-limit/action-period-budget.ts#2"
           },
           {
@@ -64193,6 +64478,12 @@
           },
           {
             "location": "apps/api/src/mcp/case-law-citations-input.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/case-law-court-catalog-input.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/case-law-court-catalog-tool.ts#2"
           },
           {
             "location": "apps/api/src/mcp/case-law-search-headnotes.ts#1"
@@ -64510,7 +64801,10 @@
             "location": "apps/mobile/src/state/tasks.ts#3"
           },
           {
-            "location": "apps/mobile/src/state/timers.ts#3"
+            "location": "apps/mobile/src/state/timer-activity-devices.ts#2"
+          },
+          {
+            "location": "apps/mobile/src/state/timers.ts#2"
           },
           {
             "location": "apps/visual-preview/src/handler.ts#4"
@@ -64720,16 +65014,7 @@
             "location": "apps/web/src/route-search-params.ts#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/seller-profile-form.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/time-policy.logic.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/vat-rate-form.logic.ts#1"
+            "location": "apps/web/src/routes/-organization-settings-route.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-history.logic.ts#1"
@@ -64739,6 +65024,18 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/seller-profile-form.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/time-policy.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/vat-rate-form.logic.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.time_.report/-components/report-search.ts#1"
@@ -64786,7 +65083,25 @@
             "location": "packages/agent-engine/scripts/build-sidecar.ts#4"
           },
           {
-            "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#2"
+            "location": "packages/agent-engine/scripts/fake-claude-code-cli.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/scripts/fake-codex-app-server.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/scripts/fake-harness-peer.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#5"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/cli-client.ts#2"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/protocol.ts#1"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/claude-code/turn.ts#3"
           },
           {
             "location": "packages/agent-engine/src/harness/codex/adapter.ts#4"
@@ -64942,6 +65257,15 @@
             "location": "packages/api-contract/src/realtime-events.ts#1"
           },
           {
+            "location": "packages/api-contract/src/record-cell.ts#2"
+          },
+          {
+            "location": "packages/api-contract/src/record-projection.ts#2"
+          },
+          {
+            "location": "packages/api-contract/src/record-schema.ts#2"
+          },
+          {
             "location": "packages/api-contract/src/resource-ref.ts#1"
           },
           {
@@ -64967,6 +65291,9 @@
           },
           {
             "location": "packages/api-contract/src/time-entry-report.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/timer-activity.ts#10"
           },
           {
             "location": "packages/api-contract/src/uuid.ts#1"
@@ -65078,6 +65405,9 @@
           },
           {
             "location": "packages/mcp-apps/src/shared/app-error.ts#2"
+          },
+          {
+            "location": "packages/mcp-apps/src/shared/server-tool-call.ts#3"
           },
           {
             "location": "packages/mcp-apps/src/statute-timeline/parse.ts#1"
@@ -65266,7 +65596,7 @@
             "location": "scripts/generate-mobile-folio-fonts.ts#15"
           },
           {
-            "location": "scripts/generate-tailwind-classes.ts#13"
+            "location": "scripts/generate-tailwind-classes.ts#14"
           },
           {
             "location": "scripts/generate-us-courts.ts#37"
@@ -65317,6 +65647,9 @@
             "location": "apps/mobile/src/components/load-failure.tsx#4"
           },
           {
+            "location": "apps/mobile/src/components/timer-activity-sync.tsx#9"
+          },
+          {
             "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#6"
           },
           {
@@ -65365,15 +65698,6 @@
             "location": "apps/web/src/features/time-timers/timer-form.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/list-toolbar.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/number-series-form.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.admin/-components/organization/profile-card.tsx#6"
-          },
-          {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#5"
           },
           {
@@ -65381,6 +65705,15 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sign-in-methods.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/number-series-form.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/profile-card.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.time.tsx#2"
