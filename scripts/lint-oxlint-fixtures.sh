@@ -26,6 +26,8 @@ bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test
 bun scripts/test-timing-ledger.ts --self-test
 bun scripts/test-timing-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/refusal-code-ledger.ts --self-test
+bun scripts/refusal-code-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 
 bash scripts/check-oxlint-node-loader.test.sh
 bash scripts/check-oxlint-node-loader.sh oxlint.design.config.ts

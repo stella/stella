@@ -68,6 +68,7 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
+import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -86,6 +87,7 @@ import {
   isPendingTwoFactorSignIn,
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
@@ -157,16 +159,21 @@ import type {
   SessionMemberCaller,
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
+import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
+import { getOAuthGrantIdentityClaims } from "@/api/lib/auth/oauth-grant-identity";
 import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { currentOrganizationCreationTransaction } from "@/api/lib/auth/organization-creation-transaction";
+import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
 import {
   beforeOrganizationSlugCreation,
   beforeOrganizationSlugUpdate,
@@ -319,6 +326,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -378,6 +386,7 @@ import {
   checkMemberAdmission,
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { recordNewOrganizationAccessStateOnOwner } from "@/api/lib/usage/organization-access-state-owner";
 import {
   hasRenewingHostedSubscription,
@@ -408,9 +417,6 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
 /** Authenticated handlers receive a bounded session reader. */
 export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Access token lifetime in seconds (15 minutes). */
-const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
@@ -518,7 +524,8 @@ type EmailOtpResponseScheduleOptions = {
 };
 
 export const runEmailOtpRequestOnResponseSchedule = async ({
-  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  detach = (operation) =>
+    detached(async () => operation, "auth.email-otp-delivery"),
   responseDelayMs,
   runRequest,
   wait = Bun.sleep,
@@ -1517,10 +1524,12 @@ export const createAuth = (
     organizationId: SafeId<"organization">,
     kind: "invitation" | "membership",
   ): Promise<void> => {
-    const admission = await checkMemberAdmission(rootDb, {
-      organizationId,
-      kind,
-    });
+    const current = currentOrganizationCreationTransaction();
+    const options = { organizationId, kind };
+    const admission =
+      current === undefined
+        ? await checkMemberAdmission(rootDb, options)
+        : await checkMemberAdmission(current, options);
     // Better Auth rejects a request from an organization hook by the
     // APIError it throws.
     if (Result.isError(admission)) {
@@ -1635,7 +1644,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: rawAuthAdapter(options),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -1728,7 +1742,17 @@ export const createAuth = (
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
-    recordAccessState: recordNewOrganizationAccessStateOnOwner,
+    recordAccessState: async (organizationId: SafeId<"organization">) => {
+      const tx = currentOrganizationCreationTransaction();
+      if (tx !== undefined) {
+        await recordNewOrganizationAccessState(tx, {
+          organizationId,
+          now: new Date(),
+        });
+        return;
+      }
+      await recordNewOrganizationAccessStateOnOwner(organizationId);
+    },
     // Insert-once on the owner connection, audited in the same transaction.
     // A creator who has not accepted yet records nothing here; the
     // organization is recorded when an owner accepts.
@@ -1736,6 +1760,15 @@ export const createAuth = (
       organizationId,
       userId,
     }: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await recordOrganizationProfessionalUse({
+          tx: current,
+          organizationId,
+          userId,
+        });
+        return;
+      }
       await withAggregateTransaction(
         rootDb,
         async (tx) =>
@@ -1749,14 +1782,28 @@ export const createAuth = (
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
-    seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
-      await ensureDefaultDocumentTypes(organizationId, rootDb),
+    seedDefaultDocumentTypes: async (
+      organizationId: SafeId<"organization">,
+    ) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await ensureDefaultDocumentTypes(organizationId, current);
+        return;
+      }
+      await ensureDefaultDocumentTypes(organizationId, rootDb);
+    },
     // Once per membership, on the owner connection that wrote the membership
     // row; the defaults are then the member's own private skills to delete.
-    seedMemberDefaults: async (membership: NewMembership) =>
+    seedMemberDefaults: async (membership: NewMembership) => {
+      const current = currentOrganizationCreationTransaction();
+      if (current !== undefined) {
+        await seedDefaultSkills({ ...membership, tx: current });
+        return;
+      }
       await rootDb.transaction(
         async (tx) => await seedDefaultSkills({ ...membership, tx }),
-      ),
+      );
+    },
   });
 
   const organizationPlugin = organization({
@@ -1782,7 +1829,7 @@ export const createAuth = (
         );
         await Promise.resolve();
       },
-      async beforeDeleteOrganization({ organization: org }) {
+      async beforeDeleteOrganization({ organization: org, user: deletedBy }) {
         // Complete the deletion here, before the plugin's adapter runs.
         // Everything that names the organization cascades away with it, and
         // those rows are the only description of the objects it owns:
@@ -1800,6 +1847,10 @@ export const createAuth = (
         // is the point: instructions committed ahead of a cascade that then
         // failed would name a live organization's documents.
         //
+        // The audit trail cascades with the organization, so the teardown
+        // owner first requires the deleting owner's complete archive of it
+        // and refuses, before writing anything, without one.
+        //
         // `org.id` is read off the row the plugin already loaded, so this is
         // where it becomes the ownership id. `rootDb` bypasses row-level
         // security exactly as the plugin's own adapter does.
@@ -1813,13 +1864,11 @@ export const createAuth = (
               if (await hasRenewingHostedSubscription(tx, organizationId)) {
                 return { type: "subscription_renews" } as const;
               }
-              return {
-                type: "deleted",
-                teardown: await completeOrganizationDeletion({
-                  organizationId,
-                  tx,
-                }),
-              } as const;
+              return await completeOrganizationDeletion({
+                deletedBy: brandPersistedUserId(deletedBy.id),
+                organizationId,
+                tx,
+              });
             }),
           catch: (cause) => cause,
         });
@@ -1847,6 +1896,15 @@ export const createAuth = (
               "Cancel the organization's subscription before deleting the organization.",
           });
         }
+        if (teardown.value.type === "refused") {
+          // `code` is what the web client reads off an auth error.
+          throw new APIError("CONFLICT", {
+            code: teardown.value.code,
+            error: teardown.value.code,
+            message:
+              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
+          });
+        }
 
         // Redis is not part of the durability contract: the request rows
         // are committed and the cleanup reconciler claims every pending one
@@ -1856,7 +1914,7 @@ export const createAuth = (
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.teardown.requestIds,
+          requestIds: teardown.value.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
@@ -1923,7 +1981,10 @@ export const createAuth = (
       },
       async beforeAddMember({ organization: org, user, member: addedMember }) {
         const endpoint = tryGetCurrentAuthEndpointContext();
-        if (endpoint?.path === "/organization/create") {
+        if (
+          endpoint?.path === "/organization/create" ||
+          currentOrganizationCreationTransaction() !== undefined
+        ) {
           // Better Auth supplies the creator role, before a membership or
           // browser session exists on the system provisioning path.
           if (
@@ -1938,9 +1999,17 @@ export const createAuth = (
           // afterCreateOrganization hook. Initialize the fail-closed access
           // row before capacity admission; the lifecycle hook repeats this
           // insert after creation and the owner is idempotent.
-          await recordNewOrganizationAccessStateOnOwner(
-            brandPersistedOrganizationId(org.id),
-          );
+          const tx = currentOrganizationCreationTransaction();
+          if (tx !== undefined) {
+            await recordNewOrganizationAccessState(tx, {
+              organizationId: brandPersistedOrganizationId(org.id),
+              now: new Date(),
+            });
+          } else {
+            await recordNewOrganizationAccessStateOnOwner(
+              brandPersistedOrganizationId(org.id),
+            );
+          }
         } else {
           await requireAssignableMemberRole(
             brandPersistedOrganizationId(org.id),
@@ -2127,6 +2196,9 @@ export const createAuth = (
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
+      // Account creation must pass the shared consent, rate-limit and receipt boundary.
+      // Internal auth.api.createOrganization remains available to that boundary.
+      "/organization/create",
       "/organization/leave",
       // OAuth client management Stella has no use for; see
       // `OAUTH_ENDPOINT_POLICY`.
@@ -2513,6 +2585,10 @@ export const createAuth = (
       // actually receives.
       socialSignInOutcomePlugin,
       organizationPlugin,
+      createMemberInvitationSectionsPlugin(
+        createAuthMiddleware,
+        () => new Date(),
+      ),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {
@@ -2554,7 +2630,10 @@ export const createAuth = (
                     });
                     throw error;
                   }
-                  return claims.value;
+                  return {
+                    ...claims.value,
+                    ...(await getOAuthGrantIdentityClaims(input)),
+                  };
                 },
               },
             },
@@ -2570,7 +2649,7 @@ export const createAuth = (
               ),
             },
           ],
-          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN_SECONDS,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
@@ -2873,6 +2952,7 @@ export const createAuth = (
     },
   });
   return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
+    organizationCreateEndpoint: organizationPlugin.endpoints.createOrganization,
     organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
   });
 };
@@ -3003,6 +3083,22 @@ export const AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+const SESSION_READ_FAILED = failureSink({
+  event: "auth.session_read_failed",
+  expected: [],
+});
+
+/**
+ * The 500 a request gets when its session or membership could not be read,
+ * built from the read's failure so the request records why.
+ */
+export const authUnavailableAnswer = (cause: unknown) =>
+  observedStatus(
+    { sink: SESSION_READ_FAILED, cause },
+    500,
+    AUTH_REJECTION_BODY[500],
+  );
+
 /**
  * The rejection a signed-in account gets until it accepts the
  * professional-use statement; the web app answers it with the prompt.
@@ -3017,14 +3113,17 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
  * body of its own; an app token refused a route gets the shared 403, never
  * the professional-use prompt.
  */
-type ValidateAuthRejection = {
-  ok: false;
-  statusCode: Exclude<AuthRejectionStatus, 404>;
-  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
-};
+type ValidateAuthRefusal =
+  | {
+      statusCode: 401 | 403;
+      body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+    }
+  | { statusCode: 500; cause: unknown };
+
+type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
-  rejection: Omit<ValidateAuthRejection, "ok">,
+  rejection: ValidateAuthRefusal,
 ): ValidateAuthRejection => ({ ok: false, ...rejection });
 
 /**
@@ -3064,7 +3163,7 @@ export const authenticateSession = async (
   });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(sessionResult.error) };
   }
 
   const session = sessionResult.value?.session;
@@ -3091,7 +3190,7 @@ export const authenticateSession = async (
     });
   });
   if (Result.isError(liveResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(liveResult.error) };
   }
   if (liveResult.value === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
@@ -3594,8 +3693,7 @@ type ResolvedIdentity = {
 };
 
 type IdentityResolution =
-  | { ok: true; identity: ResolvedIdentity }
-  | Omit<ValidateAuthRejection, "body">;
+  { ok: true; identity: ResolvedIdentity } | ValidateAuthRejection;
 
 const resolveSessionIdentity = async ({
   getSession,
@@ -3615,7 +3713,11 @@ const resolveSessionIdentity = async ({
     });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: sessionResult.error,
+    };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
@@ -3630,7 +3732,11 @@ const resolveSessionIdentity = async ({
   }
 
   if (Result.isError(memberAuthorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: memberAuthorizationResult.error,
+    };
   }
 
   const authorization = memberAuthorizationResult.value;
@@ -3670,7 +3776,7 @@ const resolveAccessTokenIdentity = async ({
   });
   if (Result.isError(authenticated)) {
     if (authenticated.error.reason === "unavailable") {
-      return { ok: false, statusCode: 500 };
+      return { ok: false, statusCode: 500, cause: authenticated.error };
     }
     responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
     return { ok: false, statusCode: 401 };
@@ -3701,7 +3807,7 @@ const resolveAccessTokenIdentity = async ({
       }),
   );
   if (Result.isError(authorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false, statusCode: 500, cause: authorizationResult.error };
   }
   const authorization = authorizationResult.value;
   if (
@@ -3797,7 +3903,7 @@ const resolveValidateAuth = async ({
           responseHeaders,
         });
   if (!resolved.ok) {
-    return rejectValidateAuth({ statusCode: resolved.statusCode });
+    return resolved;
   }
   const {
     authorization,
@@ -4074,10 +4180,13 @@ export const createMemberAuthenticator = ({
     if (!result.ok) {
       return {
         ok: false,
-        answer: status(
-          result.statusCode,
-          result.body ?? AUTH_REJECTION_BODY[result.statusCode],
-        ),
+        answer:
+          result.statusCode === 500
+            ? authUnavailableAnswer(result.cause)
+            : status(
+                result.statusCode,
+                result.body ?? AUTH_REJECTION_BODY[result.statusCode],
+              ),
       };
     }
     const stepUp = handoffStepUpRefusal({

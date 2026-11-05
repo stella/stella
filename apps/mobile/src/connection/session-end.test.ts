@@ -4,6 +4,7 @@ import type { StoredSession } from "./session";
 import { createSessionEndBoundary } from "./session-end";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:

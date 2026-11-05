@@ -73,7 +73,7 @@ const MATTER_ACCESS_SIGNALS = [
 type MatterAccessSignal = (typeof MATTER_ACCESS_SIGNALS)[number];
 
 /** Occurrences of a signal per enclosing symbol path (`<module>` at top). */
-type MatterAccessSites = Record<string, number>;
+export type MatterAccessSites = Record<string, number>;
 
 export type MatterAccessFinding = {
   file: string;
@@ -195,8 +195,8 @@ const holdsMatterIdColumn = (node: Node, aliases: Aliases): boolean => {
 
 const OWNER_CONNECTION_MODULE = "apps/api/src/db/root";
 
-/** Whether an import specifier, alias or relative, names the root module. */
-const resolveSpecifier = (specifier: string, file: string) => {
+/** The repository path an import specifier, alias or relative, names. */
+export const resolveSpecifier = (specifier: string, file: string) => {
   if (specifier.startsWith("@/api/")) {
     return `apps/api/src/${specifier.slice("@/api/".length)}`;
   }
@@ -213,7 +213,7 @@ const isOwnerConnectionModule = (specifier: string, file: string) => {
   );
 };
 
-const literalText = (node: Node): string | undefined => {
+export const literalText = (node: Node): string | undefined => {
   if (node.type === "Literal" && typeof node.value === "string") {
     return node.value;
   }
@@ -274,7 +274,7 @@ const declarationName = (
 };
 
 /** `outer.inner` names of the declarations enclosing a node. */
-const enclosingSymbol = (ancestors: readonly Node[]): string => {
+export const enclosingSymbol = (ancestors: readonly Node[]): string => {
   const names: string[] = [];
   for (const [index, ancestor] of ancestors.entries()) {
     const name = declarationName(ancestor, ancestors[index - 1]);
@@ -319,7 +319,9 @@ type Facts = {
   roleRule: SiteCounter;
 };
 
-const importedName = (specifier: ImportDeclaration["specifiers"][number]) => {
+export const importedName = (
+  specifier: ImportDeclaration["specifiers"][number],
+) => {
   if (specifier.type !== "ImportSpecifier") {
     return undefined;
   }
@@ -564,7 +566,7 @@ const recordLocalAlias = (node: Node, aliases: Aliases) => {
 };
 
 /** A name the source spells once although oxc holds it twice. */
-const isRepeatedName = (node: Node, parent: Node | undefined) =>
+export const isRepeatedName = (node: Node, parent: Node | undefined) =>
   (parent?.type === "Property" && parent.shorthand && parent.key === node) ||
   (parent?.type === "ExportSpecifier" &&
     parent.exported === node &&
@@ -693,10 +695,18 @@ export const classifyMatterAccessModule = (
   return findings;
 };
 
+/** A census finding: a module's sites for one signal. */
+type CensusFinding = {
+  file: string;
+  signal: string;
+  screened: boolean;
+  sites: MatterAccessSites;
+};
+
 const allowlistKey = ({
   file,
   signal,
-}: Pick<MatterAccessFinding, "file" | "signal">) => `${file}::${signal}`;
+}: Pick<CensusFinding, "file" | "signal">) => `${file}::${signal}`;
 
 export type MatterAccessAllowlistEntry = {
   reason: string;
@@ -717,7 +727,7 @@ const siteMessage = (
  * counts so an entry can be corrected.
  */
 export const evaluateMatterAccessCensus = (
-  findings: readonly MatterAccessFinding[],
+  findings: readonly CensusFinding[],
   allowlist: Readonly<Record<string, MatterAccessAllowlistEntry>>,
 ) => {
   const unscreened = new Map(

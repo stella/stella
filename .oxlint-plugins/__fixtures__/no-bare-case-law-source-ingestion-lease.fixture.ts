@@ -1,3 +1,4 @@
+// oxlint-disable-next-line no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease -- fixture: importing the acquisition under any name must be rejected
 import { acquireCaseLawSourceIngestionLease as claim } from "./case-law-source-ingestion-lease";
 import * as leases from "./case-law-source-ingestion-lease";
 

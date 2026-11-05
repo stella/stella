@@ -4,8 +4,16 @@ import { validateDocxArchive } from "@/api/lib/docx-archive";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+/** A scanner that could not reach a verdict; a rejected file is not one. */
+const TEMPLATE_UPLOAD_SCAN_FAILED = failureSink({
+  event: "templates.upload_scan_failed",
+  expected: [],
+});
 
 /**
  * An uploaded template DOCX, scanned before anything parses or stores it. A
@@ -36,7 +44,8 @@ export const scanTemplateUpload = async (
 export const templateUploadRejectionResponse = (
   error: HandlerError<422 | 503>,
 ): Response =>
-  new Response(
+  observedResponse(
+    { sink: TEMPLATE_UPLOAD_SCAN_FAILED, cause: error },
     JSON.stringify({
       ...(error.code === undefined ? {} : { code: error.code }),
       message: error.message,

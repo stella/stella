@@ -29,6 +29,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -284,6 +285,7 @@ type NotificationRowProps = {
 };
 
 const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
+  const relativeTime = useRelativeTime();
   const unread = notification.readAt === null;
   const rowClassName = cn(
     "hover:bg-muted flex w-full items-start gap-2 px-3 py-2 text-start text-sm",
@@ -298,8 +300,16 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
           unread ? "bg-primary" : "bg-transparent",
         )}
       />
-      <span className="min-w-0 flex-1">
-        <NotificationMessage notification={notification} />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span>
+          <NotificationMessage notification={notification} />
+        </span>
+        <time
+          className="text-muted-foreground text-xs font-normal"
+          dateTime={notification.createdAt}
+        >
+          {relativeTime(notification.createdAt)}
+        </time>
       </span>
     </>
   );
@@ -308,9 +318,9 @@ const NotificationRow = ({ notification, onRead }: NotificationRowProps) => {
   return (
     <li>
       {target === null ? (
-        <button className={rowClassName} onClick={onRead} type="button">
-          {body}
-        </button>
+        <Button className="block w-full" onClick={onRead} variant="plain">
+          <span className={rowClassName}>{body}</span>
+        </Button>
       ) : (
         <NotificationLink
           className={rowClassName}

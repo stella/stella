@@ -23,6 +23,8 @@ export const HIGH_VOLUME_TABLES = [
   "case_law_citations",
   "case_law_decision_identifiers",
   "case_law_decisions",
+  "case_law_population_projections",
+  "case_law_population_deltas",
   "case_law_decision_citation_stats",
   "case_law_decision_citation_stats_state",
   // One append-only audit row per document per index operation, so the trail

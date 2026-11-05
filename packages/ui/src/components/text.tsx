@@ -17,11 +17,7 @@ const WEIGHT_CLASS_NAMES = {
 } as const satisfies Record<TextFace["weight"], string>;
 
 const faceClassName = (face: TextFace): string =>
-  cn(
-    face.family === "serif" && "font-serif",
-    WEIGHT_CLASS_NAMES[face.weight],
-    face.italic === true && "italic",
-  );
+  WEIGHT_CLASS_NAMES[face.weight];
 
 /**
  * Text in one of the design system's roles (./text.shared.ts), the same role

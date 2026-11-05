@@ -165,6 +165,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   open_case_law_decision: { chatProjectable: false },
   read_case_law_decision_blocks: { chatProjectable: false },
   preview_cited_provision: { chatProjectable: false },
+  list_case_law_courts: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields
@@ -615,4 +616,6 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // Sends a report out of the workspace after a human approves it. The in-app
   // chat has its own feedback UI, so the tool stays off that surface.
   submit_feedback: { chatProjectable: false },
+  // Organization creation authority is independent of the current chat matter.
+  create_organization: { chatProjectable: false },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;

@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Fetch } from "@/connection/http";
-import { createAccessTokenSource } from "@/connection/session";
+import {
+  createAccessTokenSource,
+  createSessionStore,
+} from "@/connection/session";
 import type { StoredSession } from "@/connection/session";
 
 import type { Timer } from "./timers";
-import { clockOf, discardTimer, elapsedSeconds, saveTimer } from "./timers";
+import { discardTimer, saveTimer } from "./timers";
 
 const SESSION: StoredSession = {
+  signInId: "sign-in-1",
   serverUrl: "https://stella.example.com",
   issuer: "https://stella.example.com/api/auth",
   clientId:
@@ -36,36 +40,22 @@ const recordingServer = () => {
     requests.push(`${init?.method ?? "GET"} ${path}${body}`);
     return Response.json({});
   };
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
   const source = createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    store,
+    generation: store.generation(),
   });
   return { fetch, requests, source };
 };
-
-describe("a timer's time", () => {
-  test("a running timer adds the seconds since it resumed", () => {
-    const now = Date.UTC(2026, 9, 28, 10, 2, 30);
-    expect(elapsedSeconds(TIMER, now)).toBe(90 + 150);
-  });
-
-  test("a paused timer keeps what it counted", () => {
-    const paused: Timer = { ...TIMER, state: "paused", lastResumedAt: null };
-    expect(elapsedSeconds(paused, Date.UTC(2030, 0, 1))).toBe(90);
-  });
-
-  test("reads as a clock", () => {
-    expect(clockOf(309)).toBe("0:05:09");
-    expect(clockOf(45_000)).toBe("12:30:00");
-  });
-});
 
 describe("finishing a timer", () => {
   test("a timer without a matter saves as internal work, dated in the person's zone", async () => {

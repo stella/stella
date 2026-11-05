@@ -5,6 +5,7 @@ import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
@@ -12,6 +13,7 @@ const AUTH_BASE_URL = `${API_BASE_URL}/api/auth`;
 const CONSENT_SCOPES = "openid profile stella:read stella:search";
 const CALLBACK_PORT = 54_321;
 const LOCALE_STORAGE_KEY = getStorageKey("i18n");
+const RENDERED_HEADING_BINDING = "__oauthConsentRenderedHeading";
 
 const token = () => randomUUID().replaceAll("-", "");
 const loopbackRedirectUriFor = (id: string) =>
@@ -124,7 +126,7 @@ const openConsent = async ({
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
 test("OAuth consent keeps its decision in view on a laptop and a phone", async ({
@@ -158,12 +160,23 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
   }
 });
 
-test("OAuth consent allows and declines through the top-level callback", async ({
+test("OAuth consent skips loopback completion and keeps hosted completion", async ({
   context,
   page,
 }) => {
   await setEnglishLocale(page);
   const apiRequest = context.request;
+  // Headings the consent document rendered, reported from the page as they
+  // appear so a heading shown just before the navigation is still recorded.
+  const renderedHeadings: string[] = [];
+  await page.exposeBinding(
+    RENDERED_HEADING_BINDING,
+    (_source, text: unknown) => {
+      if (typeof text === "string") {
+        renderedHeadings.push(text);
+      }
+    },
+  );
 
   const scenarios = [
     { decision: "allow", destination: "loopback" },
@@ -189,6 +202,21 @@ test("OAuth consent allows and declines through the top-level callback", async (
     });
 
     await openConsent({ page, clientId, id, redirectUri: callbackUrl });
+    await page.evaluate((binding) => {
+      new MutationObserver(() => {
+        const report: unknown = Reflect.get(window, binding);
+        if (typeof report !== "function") {
+          return;
+        }
+        for (const node of document.querySelectorAll("h1")) {
+          Reflect.apply(report, window, [node.textContent]);
+        }
+      }).observe(document.body, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }, RENDERED_HEADING_BINDING);
     const callbackRequestPromise = page.waitForRequest((request) =>
       request.url().startsWith(callbackUrl),
     );
@@ -199,7 +227,7 @@ test("OAuth consent allows and declines through the top-level callback", async (
       })
       .click();
 
-    if (decision === "allow") {
+    if (decision === "allow" && destination === "hosted") {
       await expect(
         page.getByRole("heading", {
           name: `Connected to Consent browser test ${id}`,
@@ -219,7 +247,15 @@ test("OAuth consent allows and declines through the top-level callback", async (
 
     const callbackParams = callback.searchParams;
     if (decision === "allow") {
-      expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      if (destination === "hosted") {
+        expect(Date.now() - clickedAt).toBeGreaterThanOrEqual(800);
+      } else {
+        // Only the verified stella CLI is told the organization's name.
+        expect(callbackParams.has("organization_name")).toBe(false);
+        expect(renderedHeadings).not.toContain(
+          `Connected to Consent browser test ${id}`,
+        );
+      }
       expect(callbackParams.get("code")).not.toBeNull();
     } else {
       expect(callbackParams.get("code")).toBeNull();
@@ -286,7 +322,7 @@ test("account switching preserves the signed OAuth query through auth routing", 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(page).toHaveURL((url) => url.pathname === "/consent");
 
   const queryBeforeSwitch = new URLSearchParams(
@@ -390,7 +426,7 @@ test("organization picker names the signed-in account and switches it without lo
   });
   await expect(
     page.getByText(`Second organization ${id}`, { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(
     page.getByText("Select an organization", { exact: true }),
   ).toBeVisible();
@@ -438,7 +474,7 @@ test("a client asking for a fresh sign-in gets the sign-in form despite a sessio
     },
   );
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
   await expect(page).toHaveURL((url) => {
@@ -493,7 +529,7 @@ test("a client asking for account selection gets the organization step with the 
   );
   await expect(
     page.getByText("Select an organization", { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(page).toHaveURL((url) => url.pathname === "/auth/organization");
   await expect(
     page.getByRole("term").filter({ hasText: "Account" }),
@@ -507,7 +543,7 @@ test("a client asking for account selection gets the organization step with the 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 });
 
 test("consent discloses permissions on demand and brands only verified locations", async ({
@@ -580,7 +616,7 @@ test("consent discloses permissions on demand and brands only verified locations
     );
     await expect(permission).toBeHidden();
     const disclosure = page.locator(
-      '[data-slot="consent-permissions"] > summary',
+      '[data-slot="consent-permissions"] button[aria-expanded]',
     );
     await disclosure.click();
     await expect(permission).toBeVisible();

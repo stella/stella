@@ -20,6 +20,10 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  chatLocalRunComputerEventSchema,
+} from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -32,6 +36,7 @@ import {
 } from "@stll/chat/resume-contract";
 import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   ChatClientTools,
@@ -142,6 +147,10 @@ type ChatRuntimeSnapshot = {
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
+  /** The turn runs on the member's computer, which went away mid-turn; the
+   *  turn goes on once it reconnects. A rejoin replays the run's events, so
+   *  a reload reads the same. */
+  waitingForComputer: boolean;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -423,6 +432,7 @@ export const createChatRuntime = ({
     status: "ready",
     stop: { status: "idle" },
     turnAbandoned: false,
+    waitingForComputer: false,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -683,7 +693,7 @@ export const createChatRuntime = ({
         const response = await fetchWithTimeout(turnUrl("resume"), {
           credentials: "include",
           ...(signal === undefined || signal === null ? {} : { signal }),
-          timeout: { type: "idle", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
         });
         if (!response.ok) {
           if (response.status === 404) {
@@ -704,7 +714,10 @@ export const createChatRuntime = ({
             }),
           );
         }
-        const data: unknown = await response.json();
+        const data = await readBodyJsonWithIdleDeadline(response, {
+          idleMs: CHAT_RESUME_PROBE_TIMEOUT_MS,
+          ...(signal === undefined || signal === null ? {} : { signal }),
+        });
         const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
         if (!parsed.success) {
           return await Promise.reject(
@@ -943,9 +956,36 @@ export const createChatRuntime = ({
       }
     },
     onInterruptStateChange: observeInterruptSubmission,
+    onCustomEvent: (name, value) => {
+      if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
+        return;
+      }
+      const parsed = v.safeParse(chatLocalRunComputerEventSchema, value);
+      if (!parsed.success) {
+        getAnalytics().captureError(
+          new ClientOperationError({
+            action: "chat.localRunComputerEvent",
+            message: "A local run sent a computer status the page cannot read",
+          }),
+          {
+            fingerprintKey: "chatRuntime:localRunComputerEvent",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:localRunComputerEvent",
+            },
+          },
+        );
+        return;
+      }
+      setSnapshot({
+        waitingForComputer: parsed.output.status === "waiting",
+      });
+    },
     onLoadingChange: (isLoading) => {
       setSnapshot({
         isLoading,
+        // A wait belongs to the request that reported it.
+        waitingForComputer: false,
         ...(!isLoading ? { reconnecting: false } : {}),
         ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
           ? { turnAbandoned: false }
@@ -1658,6 +1698,12 @@ export const buildSendRequestBody = ({
   }
 
   applyChatContext({ body, context });
+
+  // Cloud is the default and travels as an absent field.
+  const runTarget = context?.getRunTarget?.();
+  if (runTarget?.kind === "local") {
+    body.runTarget = runTarget;
+  }
 
   const { editApplyMode, docxEditRepresentation } =
     resolveChatRequestDocxEditPreferences({

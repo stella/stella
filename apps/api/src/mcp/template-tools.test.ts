@@ -683,6 +683,42 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("list_templates accepts its full precision continuation cursor without exposing its timestamp", async () => {
+    const rows = [TEMPLATE_ID, "018f4ad2-3a6d-7000-8b1d-44f76f5df002"].map(
+      (id) => ({
+        id,
+        cursorCreatedAt: "2026-10-30T12:34:56.123456Z",
+        name: "NDA",
+        fieldCount: 4,
+        tags: null,
+        whenToUse: null,
+        whenNotToUse: null,
+      }),
+    );
+    const first = await handleMcpToolCall({
+      args: { limit: 1 },
+      context: createContext({ scopedDb: createScopedDb(rows) }),
+      toolName: "list_templates",
+    });
+    const payload = parseToolPayload(first);
+    if (!isRecord(payload) || typeof payload["nextCursor"] !== "string") {
+      throw new TypeError("Expected a continuation cursor");
+    }
+    expect(payload["templates"]).toEqual(
+      rows.slice(0, 1).map(({ cursorCreatedAt, ...item }) => item),
+    );
+    const second = await handleMcpToolCall({
+      args: { limit: 1, cursor: payload["nextCursor"] },
+      context: createContext({ scopedDb: createScopedDb(rows.slice(1)) }),
+      toolName: "list_templates",
+    });
+    expect(second.isError).toBeFalsy();
+    expect(parseToolPayload(second)).toEqual({
+      templates: rows.slice(1).map(({ cursorCreatedAt, ...item }) => item),
+      nextCursor: null,
+    });
+  });
+
   test("list_templates anonymizes template tags in anonymized mode", async () => {
     const rows = [
       {
@@ -4808,30 +4844,36 @@ describe("MCP template tools", () => {
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });
 
-  test("list_templates (detail) rejects template_id combined with a cursor", async () => {
-    const result = await handleMcpToolCall({
-      // Base64 of readable text: a cursor this surface could have issued, so
-      // the contradiction with template_id is what the call is refused for.
-      args: { template_id: TEMPLATE_ID, cursor: "YWJj" },
-      context: createContext(),
-      toolName: "list_templates",
-    });
+  test.each([
+    { paging: { cursor: "YWJj" }, paths: ["cursor"] },
+    { paging: { limit: 10 }, paths: ["limit"] },
+    { paging: { cursor: "YWJj", limit: 10 }, paths: ["cursor", "limit"] },
+  ])(
+    "list_templates detail rejects paging $paths",
+    async ({ paging, paths }) => {
+      const result = await handleMcpToolCall({
+        // Base64 of readable text: a cursor this surface could have issued, so
+        // the contradiction with template_id is what the call is refused for.
+        args: { template_id: TEMPLATE_ID, ...paging },
+        context: createContext(),
+        toolName: "list_templates",
+      });
 
-    expect(result.isError).toBe(true);
-    const error = validationEnvelope(result);
-    expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "cursor applies when listing templates; omit template_id to list",
-    );
-    expect(error["issues"]).toEqual([
-      {
-        path: "cursor",
-        message:
-          "cursor applies when listing templates; omit template_id to list",
-      },
-    ]);
-    expect(describeStoredTemplateMock).not.toHaveBeenCalled();
-  });
+      expect(result.isError).toBe(true);
+      const error = validationEnvelope(result);
+      expect(error["code"]).toBe("validation_error");
+      expect(error["message"]).toBe(
+        "Paging applies when listing templates; omit template_id to list",
+      );
+      expect(error["issues"]).toEqual(
+        paths.map((path) => ({
+          path,
+          message: `${path} applies when listing templates; omit template_id to list`,
+        })),
+      );
+      expect(describeStoredTemplateMock).not.toHaveBeenCalled();
+    },
+  );
 
   test("create_template rejects a request with no document source", async () => {
     const result = await handleMcpToolCall({

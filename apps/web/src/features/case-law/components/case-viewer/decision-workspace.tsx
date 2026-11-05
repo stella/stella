@@ -13,6 +13,11 @@ import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text"
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
+  READER_BREADCRUMB_CLEARANCE,
+  scrollReaderToBlock,
+} from "@stll/decision-reader/reader-landing";
+import { decisionReaderTextPieces } from "@stll/decision-reader/reader-text-pieces.logic";
+import {
   readerSelectionMatches,
   visibleDecisionBlocks,
   visibleReaderAnchorPiecesOf,
@@ -41,6 +46,7 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
@@ -55,7 +61,6 @@ import type {
   AnswerMarginItem,
   ProvisionMarginItem,
 } from "@/components/legal-reader/margin-notes";
-import { READER_BREADCRUMB_CLEARANCE } from "@/components/legal-reader/reader-breadcrumb-scroll";
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
@@ -445,6 +450,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
     target: annotationTarget,
+    text: decisionReaderTextPieces(decision),
   });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -670,7 +676,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
-  const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const { citationAnchors, unresolvedCitationAnchors } =
+    useDecisionCitationAnchors(decisionId);
   const {
     anchors: provisionAnchors,
     externalAnchors: externalProvisionAnchors,
@@ -769,13 +776,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     if (!container || !el) {
       return;
     }
-    container.scrollTo({
-      top:
-        el.getBoundingClientRect().top -
-        container.getBoundingClientRect().top +
-        container.scrollTop,
-      behavior: "instant",
-    });
+    scrollReaderToBlock(el, container);
     const blocks = astBlocks;
     const range = paragraphRangeIndices(blocks, {
       startAnchorId: anchorId,
@@ -944,6 +945,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         </ChromeHeaderActions>
       )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
+      <OrphanedAnnotationsNotice
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
+      />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
@@ -1019,13 +1024,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   if (!el) {
                     return;
                   }
-                  container.scrollTo({
-                    top:
-                      el.getBoundingClientRect().top -
-                      container.getBoundingClientRect().top +
-                      container.scrollTop,
-                    behavior: "instant",
-                  });
+                  scrollReaderToBlock(el, container);
                   delete el.dataset["highlight"];
                   forceReflow(el);
                   el.dataset["highlight"] = "";
@@ -1225,6 +1224,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                       ),
                     ]}
                     citationAnchors={citationAnchors}
+                    unresolvedCitationAnchors={unresolvedCitationAnchors}
                     decision={decision}
                     decisionId={decisionId}
                     expandProvisions={

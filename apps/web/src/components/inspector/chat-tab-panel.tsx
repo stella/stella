@@ -27,6 +27,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -59,6 +60,7 @@ import {
   ChatMatterPickerPending,
 } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
+import { effectiveRunTarget } from "@/components/chat/chat-run-target-menu.logic";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   DockedComposer,
@@ -209,7 +211,10 @@ export const ChatTabPanel = ({
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
+  );
 
   const {
     markChatStarted,
@@ -254,9 +259,15 @@ export const ChatTabPanel = ({
       context: chatThreadContext,
     }),
   );
+  // Read at send time, so a follow-up carries the thread's stored target as
+  // the chat page sends it. The cache key never depends on it, so the
+  // runtime addresses the entry read above.
+  const getRunTarget = useLatestCallback((): ChatRunTarget =>
+    effectiveRunTarget(data.runTarget),
+  );
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: chatThreadContext,
+    context: { ...chatThreadContext, getRunTarget },
     data,
     key: threadRef,
   });
@@ -279,6 +290,7 @@ export const ChatTabPanel = ({
     leave,
     isGenerating,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     confirmStoredApprovalGrant,
@@ -339,9 +351,12 @@ export const ChatTabPanel = ({
 
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
+        const message = await buildChatRequestMessage({ files, html: prompt });
+        if (message.isErr()) {
+          notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
+        await sendMessage(message.value);
         return CHAT_SEND_SENT;
       } catch (submitError) {
         // Reported here, so the composer only takes the draft back.
@@ -371,7 +386,7 @@ export const ChatTabPanel = ({
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
     followupAnalytics: { surface: "inspector-chat" },
-    placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
+    placeholder: composerPlaceholder,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -607,7 +622,7 @@ export const ChatTabPanel = ({
               threadId: newThreadId,
               workspaceId: tabWorkspaceId,
             };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
@@ -618,6 +633,10 @@ export const ChatTabPanel = ({
         queryClient,
         threadRef: newThreadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       leave();
       resetChatTabId(tab.id, newThreadId);
       return CHAT_SEND_SENT;
@@ -733,6 +752,7 @@ export const ChatTabPanel = ({
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
                   userMessageEdit={userMessageEdit}
+                  waitingForComputer={waitingForComputer}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -759,7 +779,7 @@ export const ChatTabPanel = ({
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>
-                {t("chat.contextPlaceholder", { context: contextLabel })}
+                {composerPlaceholder}
               </PromptBarPlaceholderContent>
             }
             followupChips={
@@ -773,7 +793,15 @@ export const ChatTabPanel = ({
                       if (!(await ensureAIAvailable())) {
                         return CHAT_SEND_KEPT;
                       }
-                      await sendMessage(await buildChatRequestMessage(draft));
+                      const message = await buildChatRequestMessage(draft);
+                      if (message.isErr()) {
+                        notifyUserError(
+                          message.error,
+                          t("chat.sendErrorMessageEmpty"),
+                        );
+                        return CHAT_SEND_KEPT;
+                      }
+                      await sendMessage(message.value);
                       return CHAT_SEND_SENT;
                     }),
                     "chat-tab-panel.submit",
@@ -835,7 +863,11 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
   });
 };
 
-const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
+/** The composer's placeholder: what the chat is about, when something names it. */
+const useChatComposerPlaceholder = (
+  tab: ChatTab,
+  activeOrganizationId: string,
+) => {
   const t = useTranslations();
   const skillLabel = useSkillLabel();
   const { id: userId } = useAuthenticatedUser();
@@ -846,7 +878,7 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     }),
   );
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView, "useChatContextLabel:query");
+  useQueryViewError(dataView, "useChatComposerPlaceholder:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
@@ -854,14 +886,16 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     .map((id) => workspaces.find((workspace) => workspace.id === id)?.name)
     .filter((name): name is string => name !== undefined);
 
-  return chatContextLabel({
+  const context = chatContextLabel({
     activeSkillName:
       tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
     boundDocumentLabel,
     matterNames,
-    newChatLabel: t("chat.newChat"),
     tabLabel: tab.label,
   });
+  return context === undefined
+    ? t("chat.placeholder")
+    : t("chat.contextPlaceholder", { context });
 };
 
 type ChatEmptyStateProps = {
@@ -998,14 +1032,12 @@ const ChatTabPanelChrome = ({
  * in once data arrives.
  */
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
-  const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
-  return (
-    <PromptBarPending>
-      {t("chat.contextPlaceholder", { context: contextLabel })}
-    </PromptBarPending>
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
   );
+  return <PromptBarPending>{composerPlaceholder}</PromptBarPending>;
 };
 
 /**

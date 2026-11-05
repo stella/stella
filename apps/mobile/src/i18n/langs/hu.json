@@ -34,6 +34,14 @@
     "composerPlaceholder": "Kérdezze stellát",
     "send": "Küldés",
     "stop": "Leállítás",
+    "dictate": "Diktálás",
+    "dictationCancel": "Diktálás megszakítása",
+    "dictationFinish": "Diktálás befejezése",
+    "dictationListening": "Figyelek… {elapsed} / {limit}",
+    "dictationTranscribing": "Átírás…",
+    "dictationDenied": "A diktáláshoz mikrofon kell. Engedélyezd a stella számára a Beállításokban.",
+    "dictationFailed": "A felvételt nem sikerült átírni. Próbáld újra.",
+    "dictationSilent": "Nem hallatszott beszéd.",
     "sendFailed": "Az üzenetet nem sikerült elküldeni. Próbálja újra.",
     "answerWorking": "Dolgozom…",
     "answerStopped": "Leállítva.",
@@ -165,7 +173,30 @@
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
-    "details": "Részletek"
+    "details": "Részletek",
+    "zoomOut": "Kicsinyítés",
+    "zoomIn": "Nagyítás",
+    "zoomFit": "Szélességhez igazítás",
+    "fit": "Szélesség",
+    "appearance": {
+      "system": "Megjelenés: automatikus",
+      "light": "Megjelenés: világos",
+      "dark": "Megjelenés: sötét"
+    },
+    "edit": {
+      "saved": "Mentve",
+      "saving": "Mentés…",
+      "notSaved": "Még nincs mentve",
+      "done": "Kész",
+      "openFailed": "Ez a dokumentum most nem szerkeszthető",
+      "resumed": "Ennek a dokumentumnak van befejezetlen szerkesztése, ezért onnan folytatódik. Amit az imént beírt, nem maradt meg.",
+      "newerVersion": "Időközben a dokumentum egy újabb verzióját mentették, ezért a szerkesztés abból folytatódik. Amit az imént beírt, nem maradt meg.",
+      "takenOver": "Valaki más szerkeszti most ezt a dokumentumot. A legutóbbi mentés óta végzett módosításai nem maradtak meg.",
+      "finishFailed": "A módosításai mentve vannak, de még nem lett belőlük új verzió. Koppintson újra a Kész gombra, vagy lépjen ki: a következő szerkesztés innen folytatódik.",
+      "notStored": "A legutóbbi módosításokat nem sikerült menteni. Maradjon, és próbálja újra, vagy lépjen ki nélkülük.",
+      "stay": "Maradok",
+      "leave": "Kilépés"
+    }
   },
   "signIn": {
     "beta": "Béta",
@@ -193,7 +224,11 @@
     "server": "Szerver",
     "signOut": "Kijelentkezés",
     "deleteAccount": "Fiók törlése",
-    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné.",
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra.",
+    "lockScreenTitle": "Zárolási képernyő",
+    "timerDetails": "Időzítő részletei",
+    "timerDetailsHint": "Ha egy időzítő egy másik eszközön változik, az Apple értesítési szolgáltatása viszi a leírását és az ügyét a zárolási képernyőre. Kikapcsolva csak az idő látszik, amíg meg nem nyitja az appot."
   },
   "header": {
     "search": "Keresés"
@@ -212,9 +247,7 @@
     "share": "Megosztás"
   },
   "more": {
-    "soon": "Hamarosan",
-    "timers": "Időmérők",
-    "voiceInput": "Hangbevitel"
+    "timers": "Időmérők"
   },
   "writes": {
     "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",
@@ -235,10 +268,6 @@
     "newTimer": "Új időzítő",
     "description": "Min dolgozik?",
     "matterTitle": "Ügy",
-    "noMatter": "Nincs ügy",
-    "noDescription": "Nincs leírás",
-    "running": "Fut",
-    "paused": "Szüneteltetve",
     "pause": "Szüneteltetés",
     "resume": "Folytatás",
     "save": "Mentés",
@@ -249,8 +278,7 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
-    "more": "{count, plural, other {még # időmérő}}"
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
   },
   "scan": {
     "title": "Dokumentum szkennelése",
@@ -293,6 +321,29 @@
   "palette": {
     "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
     "noResults": "Semmi sem felel meg ennek: „{query}”"
+  },
+  "search": {
+    "placeholder": "Keresés a stellában",
+    "clear": "Keresés törlése",
+    "cancel": "Mégse",
+    "recent": "Legutóbbi keresések",
+    "clearRecent": "Törlés",
+    "hint": "Keressen az ügyekben, dokumentumokban, feladatokban, beszélgetésekben és az ítélkezési gyakorlatban.",
+    "filters": "Szűrők",
+    "noResultsTitle": "Nincs találat",
+    "noResults": "Semmi sem felel meg ennek: „{query}”. Próbáljon más szavakat, vagy távolítson el egy szűrőt.",
+    "loadFailed": "A keresést nem sikerült elvégezni.",
+    "retry": "Újra",
+    "type": {
+      "document": "Dokumentumok",
+      "matter": "Ügyek",
+      "task": "Feladatok",
+      "caseLaw": "Ítélkezési gyakorlat",
+      "chat": "Beszélgetések",
+      "folder": "Mappák",
+      "message": "E-mailek",
+      "link": "Hivatkozások"
+    }
   },
   "pane": {
     "showList": "Lista megjelenítése",

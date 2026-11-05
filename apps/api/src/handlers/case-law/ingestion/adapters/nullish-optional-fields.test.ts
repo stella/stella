@@ -3,7 +3,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const { createAtCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
@@ -17,8 +20,6 @@ const { plCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/pl-courts");
 const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
-
-let originalFetch = globalThis.fetch;
 
 // The registry's adapter reserves a slot on the process-wide RIS publisher
 // gate before every request, so a file that walked any RIS adapter within the
@@ -69,11 +70,11 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
     },
   );
 
-  globalThis.fetch = mockedFetch;
+  testFetchState.set(mockedFetch);
 };
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   clearRootDbMocks();
 });
 
@@ -382,8 +383,8 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when a detail request times out", async () => {
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -420,7 +421,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
+      }),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -496,8 +497,8 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts keeps rawHash stable when detail fetch availability changes", async () => {
     let detailMode: "ok" | "timeout" = "ok";
 
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -553,7 +554,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
+      }),
     );
 
     const first = await plCourtsAdapter.fetchPage(null, {});
@@ -584,8 +585,8 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when detail JSON is malformed", async () => {
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request): Promise<Response> => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
             return input;
@@ -624,7 +625,7 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
+      }),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -640,63 +641,65 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts sends the shared ingestion User-Agent on detail requests", async () => {
     let detailUserAgent: string | null = null;
 
-    globalThis.fetch = asFetchMock(
-      async (
-        input: string | URL | Request,
-        init?: RequestInit,
-      ): Promise<Response> => {
-        const url = (() => {
-          if (typeof input === "string") {
-            return input;
-          }
-          if (input instanceof URL) {
-            return input.href;
-          }
-          return input.url;
-        })();
+    testFetchState.set(
+      asFetchMock(
+        async (
+          input: string | URL | Request,
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const url = (() => {
+            if (typeof input === "string") {
+              return input;
+            }
+            if (input instanceof URL) {
+              return input.href;
+            }
+            return input.url;
+          })();
 
-        if (url.includes("/api/dump/judgments")) {
-          return new Response(
-            JSON.stringify({
-              items: [
-                {
+          if (url.includes("/api/dump/judgments")) {
+            return new Response(
+              JSON.stringify({
+                items: [
+                  {
+                    id: 7,
+                    courtType: "COMMON",
+                    courtCases: [{ caseNumber: "VII K 7/24" }],
+                    judgmentType: "DECISION",
+                    judgmentDate: "2024-07-07",
+                    textContent: "Postanowienie\n\nSygn. akt VII K 7/24",
+                  },
+                ],
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+
+          if (url.includes("/api/judgments/7")) {
+            detailUserAgent = new Headers(init?.headers).get("User-Agent");
+
+            return new Response(
+              JSON.stringify({
+                data: {
                   id: 7,
                   courtType: "COMMON",
                   courtCases: [{ caseNumber: "VII K 7/24" }],
                   judgmentType: "DECISION",
                   judgmentDate: "2024-07-07",
-                  textContent: "Postanowienie\n\nSygn. akt VII K 7/24",
+                  textContent: "<p>Sygn. akt VII K 7/24</p>",
                 },
-              ],
-            }),
-            {
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        if (url.includes("/api/judgments/7")) {
-          detailUserAgent = new Headers(init?.headers).get("User-Agent");
-
-          return new Response(
-            JSON.stringify({
-              data: {
-                id: 7,
-                courtType: "COMMON",
-                courtCases: [{ caseNumber: "VII K 7/24" }],
-                judgmentType: "DECISION",
-                judgmentDate: "2024-07-07",
-                textContent: "<p>Sygn. akt VII K 7/24</p>",
+              }),
+              {
+                headers: { "Content-Type": "application/json" },
               },
-            }),
-            {
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
+            );
+          }
 
-        return new Response("Not found", { status: 404 });
-      },
+          return new Response("Not found", { status: 404 });
+        },
+      ),
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -781,18 +784,12 @@ describe("case-law adapter nullish optionals", () => {
   });
 });
 
-test("route fixtures work when the captured fetch has no native static methods", async () => {
-  const captured = originalFetch;
-  originalFetch = asFetchMock(async () => new Response("unused"));
-  expect(Reflect.deleteProperty(originalFetch, "preconnect")).toBe(true);
-  try {
-    mockFetchWithBodies([
-      { pattern: "/fixture", body: '{"value":"retained"}' },
-    ]);
-    const response = await fetch("https://example.test/fixture");
-    expect(await response.json()).toEqual({ value: "retained" });
-    expect(typeof fetch.preconnect).toBe("function");
-  } finally {
-    originalFetch = captured;
-  }
+test("route fixtures work when the current fetch has no native static methods", async () => {
+  const bareFetch = asFetchMock(async () => new Response("unused"));
+  expect(Reflect.deleteProperty(bareFetch, "preconnect")).toBe(true);
+  testFetchState.set(bareFetch);
+  mockFetchWithBodies([{ pattern: "/fixture", body: '{"value":"retained"}' }]);
+  const response = await fetch("https://example.test/fixture");
+  expect(await response.json()).toEqual({ value: "retained" });
+  expect(typeof fetch.preconnect).toBe("function");
 });

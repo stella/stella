@@ -102,8 +102,16 @@ const constraintState = async (
 };
 
 type ConnectionOptions = {
-  /** Throw instead of running the statement; `count` is how many times it has been seen so far. */
-  failOn?: (statement: string, count: number) => boolean;
+  /**
+   * Throw instead of running the statement; `count` is how many times it has
+   * been seen so far and `transaction` lists the statements since the last
+   * BEGIN.
+   */
+  failOn?: (
+    statement: string,
+    count: number,
+    transaction: readonly string[],
+  ) => boolean;
 };
 
 /** The migrate entrypoint's reserved connection, over the test database. */
@@ -112,17 +120,24 @@ const connectionOver = (
   { failOn = () => false }: ConnectionOptions = {},
 ): OnlineMigrationConnection => {
   const seen = new Map<string, number>();
+  let transaction: string[] = [];
   return {
     execute: async (query, params = []) => {
       const count = (seen.get(query) ?? 0) + 1;
       seen.set(query, count);
-      if (failOn(query, count)) {
+      if (query.startsWith("BEGIN")) {
+        transaction = [];
+      }
+      if (failOn(query, count, transaction)) {
         throw new Error(`connection dropped at ${query}`);
       }
+      transaction.push(query);
       await client.query(query, [...params]);
     },
-    query: async (query, params = []) =>
-      (await client.query(query, [...params])).rows,
+    query: async (query, params = []) => {
+      transaction.push(query);
+      return (await client.query(query, [...params])).rows;
+    },
     release: () => {},
   };
 };
@@ -387,9 +402,20 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   expect(await corruptCount(db)).toBe(population);
 
   // The connection drops while the second batch commits: the first batch
-  // stays committed, the second is rolled back, nothing is validated.
+  // stays committed, the second is rolled back, nothing is validated. Only
+  // checkpoint transactions count; health reads commit on their own.
+  let batchCommits = 0;
   const dropped = connectionOver(client, {
-    failOn: (statement, count) => statement === "COMMIT" && count === 2,
+    failOn: (statement, _count, transaction) => {
+      if (
+        statement !== "COMMIT" ||
+        !transaction.some((query) => query.includes("database_backfill_states"))
+      ) {
+        return false;
+      }
+      batchCommits += 1;
+      return batchCommits === 2;
+    },
   });
   const rejection: unknown = await repairOn(dropped).then(
     () => null,

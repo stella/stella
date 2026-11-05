@@ -1,11 +1,10 @@
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
-// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
-// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
-// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
-// parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
-// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
+
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -53,13 +52,15 @@ import { panic, Result } from "better-result";
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
-
-import {
-  DECISION_DOCUMENT_ROLE,
-  type DecisionDocumentRole,
-} from "@stll/api-contract/decision-document-role";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+// parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+import { load } from "@stll/html";
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
@@ -299,7 +300,7 @@ const childElements = (element: Element): Element[] =>
   element.children.filter((child): child is Element => isTag(child));
 
 const rootElement = (xml: string): Element | undefined => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $.root().children().first().get(0);
   return root !== undefined && isTag(root) ? root : undefined;
 };
@@ -330,7 +331,7 @@ export const readPlNcourtListingRow = (
  * does not carry is refused too; an undercounted page would read as the end.
  */
 export const readPlNcourtListing = (xml: string): PlNcourtListing | null => {
-  const $ = cheerio.load(xml, {
+  const $ = load(xml, {
     xml: { xmlMode: true, withStartIndices: true, withEndIndices: true },
   });
   const root = $.root().children().first().get(0);

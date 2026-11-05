@@ -19,6 +19,7 @@ import {
   createFeedbackIntakeGuards,
   type FeedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
+import { consumeOrganizationCreateRateLimit } from "@/api/handlers/organizations/rate-limit";
 import {
   consumeSkillSourceRateLimit,
   type SkillSourceRateLimitResult,
@@ -40,7 +41,8 @@ type InvokeRateLimitPolicy =
       limit: InvokeRateLimit;
       name: Parameters<typeof recordBudgetRejection>[0]["name"];
     }
-  | { budget: "skill-source"; limit: InvokeRateLimit };
+  | { budget: "skill-source"; limit: InvokeRateLimit }
+  | { budget: "organization-create"; limit: InvokeRateLimit };
 
 /**
  * Default per-(organization, capability) invoke budget: 60 invocations per
@@ -66,6 +68,13 @@ const DEFAULT_INVOKE_RATE_LIMIT_POLICY = {
 const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
   Record<string, InvokeRateLimitPolicy>
 > = {
+  "organizations.create": {
+    budget: "organization-create",
+    limit: {
+      windowMs: API_RATE_LIMITS.organizationCreate.duration,
+      max: API_RATE_LIMITS.organizationCreate.max,
+    },
+  },
   "organizations.slug.update": {
     budget: "organization",
     name: "mcp.capability.user",
@@ -163,6 +172,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
   userId,
   guards = invokeCapabilityGuards,
   consumeSkillSource = consumeSkillSourceRateLimit,
+  consumeOrganizationCreate = consumeOrganizationCreateRateLimit,
   recordRejection = recordBudgetRejection,
 }: {
   capabilityId: string;
@@ -171,6 +181,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
   userId: SafeId<"user">;
   guards?: FeedbackIntakeGuards;
   recordRejection?: typeof recordBudgetRejection;
+  consumeOrganizationCreate?: typeof consumeOrganizationCreateRateLimit;
   consumeSkillSource?: (input: {
     clientIp: string | null;
     userId: SafeId<"user">;
@@ -178,6 +189,8 @@ export const consumeInvokeCapabilityRateLimit = async ({
 }): Promise<InvokeRateLimitResult> => {
   const policy = resolveInvokeRateLimitPolicy(capabilityId);
   switch (policy.budget) {
+    case "organization-create":
+      return await consumeOrganizationCreate({ userId });
     case "skill-source":
       return await consumeSkillSource({ clientIp, userId });
     case "organization":

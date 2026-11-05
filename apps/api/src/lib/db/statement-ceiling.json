@@ -4,8 +4,8 @@
   "worker": {},
   "scheduler": {
     "reviewOrganization.reset": {
-      "threshold": 979,
-      "reason": "Initial CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests."
+      "threshold": 966,
+      "reason": "The complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in the real registered reset tests. Post-commit search flushes the reseed starts without awaiting run outside the task's counter and are not part of this count."
     }
   }
 }

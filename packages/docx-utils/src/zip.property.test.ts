@@ -3,7 +3,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -45,7 +45,8 @@ const expectArchiveError = async (promise: Promise<unknown>): Promise<void> => {
 test(
   "archive repacking preserves every part",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "archive repacking preserves every part",
       fc.asyncProperty(
         parts,
         fc.string({ maxLength: 256 }),
@@ -66,7 +67,7 @@ test(
           expect(await extractText(second, "word/missing.xml")).toBeNull();
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 30 }),
+      { seed: propertySeed(), numRuns: 30 },
     );
   },
   propertyTestTimeout(10_000),
@@ -75,7 +76,8 @@ test(
 test(
   "archive loading applies configured budgets",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "archive loading applies configured budgets",
       fc.asyncProperty(
         fc.integer({ min: 1, max: 24 }),
         fc.integer({ min: 1, max: 128 }),
@@ -114,7 +116,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+      { seed: propertySeed(), numRuns: 20 },
     );
   },
   propertyTestTimeout(10_000),

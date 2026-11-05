@@ -8,6 +8,7 @@ import {
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { parsedInputStateBackfillServerSchema } from "../apps/api/src/env-parsed-input-state-backfill";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
@@ -117,6 +118,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_MODE",
@@ -351,6 +353,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    "Stop the parsed-input-state backfill before the next database effect.",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -759,6 +763,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof parsedInputStateBackfillServerSchema
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
@@ -819,6 +824,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -1298,6 +1305,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: parsedInputStateBackfillServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: euCompletionTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1336,6 +1347,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...parsedInputStateBackfillServerSchema,
   ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
@@ -1386,10 +1398,15 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_GENERATED_STORE",
+  "STELLA_MARKETING_CAPTURE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
+  // Bun.build defines it in the compiled agent sidecar;
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_SIDECAR_VERSION",
+  "STELLA_TIMING",
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
@@ -1459,6 +1476,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  "STELLA_RUN_SHARED_POSTGRES_TESTS",
+
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
   // Release-only secret: the short-lived federated Chrome Web Store access token.
@@ -1470,6 +1489,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
+  // The fake harness CLIs log how they started and what they receive to the
+  // file their tests name; the fake Codex app server also logs its CODEX_HOME.
+  "FAKE_HARNESS_LOG",
+  "CODEX_HOME",
+  // The desktop's stand-in harness holder (a re-run of its own test binary)
+  // takes its folder, socket and log file from the test that starts it.
+  "STAND_IN_DIR",
+  "STAND_IN_ENDPOINT",
+  "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1502,18 +1530,28 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
   // CI playground planning passes the selected and complete spec sets to the
   // shard planner, together with the desktop scope decision.
   "UI_PLAYGROUND_CHANGED_PATHS",
   "UI_PLAYGROUND_SELECTED_SPECS",
   "UI_PLAYGROUND_ALL_SPECS",
   "DESKTOP_REQUIRED",
+  // CI browser suite planning reads the changed paths, and each browser leg
+  // passes the specs it carries; the shard planner adds the suite legs.
+  "BROWSER_SUITE_CHANGED_PATHS",
+  "BROWSER_SUITE_LEGS",
+  "LEG",
+  "LEG_SPECS",
+  "SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
   // The merge group's base revision.
+  "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
@@ -1541,6 +1579,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // gh-dispatch-workflow.sh reads gh-retry.sh's final HTTP status from here.
+  "GH_RETRY_STATUS_FILE",
+  // gh-dispatch-workflow.sh bounds for watching an unconfirmed dispatch.
+  "GH_DISPATCH_SETTLE_SECONDS",
+  "GH_DISPATCH_POLL_SECONDS",
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
@@ -1610,7 +1653,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
-  "API_TEST_FILES",
+  "API_TEST_FILES_ENCODED",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
   "API_TEST_TIMINGS_DIR",
@@ -1672,6 +1715,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SEARCH_SLOT",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
@@ -1758,9 +1802,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_BASE_DATABASE_URL",
   "REHEARSAL_BASE_IMAGE_REPOSITORY",
   "REHEARSAL_BASE_REF",
+  "REHEARSAL_CI_TOOLING",
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Disposable subprocess state and failure selection in rehearsal tests.
+  "REHEARSAL_TEST_STATE",
+  "REHEARSAL_TEST_FAILURE",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PRODUCTION_WEB_IMAGE_DIGEST",
@@ -1821,6 +1869,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // Prevents recursive spawning of native file-mode test subprocesses.
+  "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
@@ -1830,6 +1880,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
+  "STELLA_SEED_LOCALE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
@@ -1875,7 +1926,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
-  "CI_POSTGRES_TEST_SELECTION",
+  "CI_POSTGRES_TEST_SELECTION_ENCODED",
   "CI_POSTGRES_TEST_SHARD",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
@@ -1923,6 +1974,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  "CARGO_CFG_TARGET_ARCH",
+  "CARGO_CFG_TARGET_OS",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
@@ -1946,6 +1999,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",
+  // Tauri sets it for a desktop build's beforeBuildCommand.
+  "TAURI_ENV_TARGET_TRIPLE",
   "TMPDIR",
   "TZ",
 ]);

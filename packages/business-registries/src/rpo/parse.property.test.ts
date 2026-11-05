@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -97,7 +97,8 @@ const entity = fc
 test(
   "entity and search agree on selected identity and normalized names",
   () => {
-    fc.assert(
+    assertProperty(
+      "entity and search agree on selected identity and normalized names",
       fc.property(entity, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseEntity(enriched));
@@ -132,7 +133,7 @@ test(
           expectNullableString(parsedPerson.identifier);
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),
@@ -141,7 +142,8 @@ test(
 test(
   "address normalization preserves foreign postal spelling and country labels",
   () => {
-    fc.assert(
+    assertProperty(
+      "address normalization preserves foreign postal spelling and country labels",
       fc.property(address, registryExtras, (raw, extras) => {
         const enriched = { extraFields: extras, ...raw };
         const parsed = expectRegistryOutcome(() => parseAddress(enriched));
@@ -159,7 +161,7 @@ test(
           expectNullableString(value);
         }
       }),
-      propertyConfig({ seed: propertySeed(), numRuns: 80 }),
+      { seed: propertySeed(), numRuns: 80 },
     );
   },
   propertyTestTimeout(10_000),

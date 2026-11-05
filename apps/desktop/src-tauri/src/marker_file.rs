@@ -10,15 +10,6 @@ fn is_regular_marker(path: &Path) -> bool {
   fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
-#[cfg(unix)]
-fn restrict_marker_permissions(file: &fs::File) -> Result<(), String> {
-  use std::os::unix::fs::PermissionsExt;
-
-  file
-    .set_permissions(fs::Permissions::from_mode(0o600))
-    .map_err(|error| format!("marker file permissions failed: {error}"))
-}
-
 /// A preference stored as the presence of an empty file in the app data dir.
 /// Only a regular file counts: a directory or symlink at the path is never
 /// read as set and is never removed.
@@ -60,22 +51,20 @@ impl MarkerFile {
     let parent = path
       .parent()
       .ok_or_else(|| "marker file path is invalid".to_string())?;
-    fs::create_dir_all(parent)
+    crate::local_store::create_private_dir(parent)
       .map_err(|error| format!("marker file directory failed: {error}"))?;
 
-    match fs::OpenOptions::new()
-      .write(true)
-      .create_new(true)
-      .open(path)
-    {
-      #[cfg(unix)]
-      Ok(file) => restrict_marker_permissions(&file),
-      #[cfg(not(unix))]
+    match crate::local_store::open_private(
+      crate::local_store::OpenMode::CreateNew,
+      path,
+    ) {
       Ok(_) => Ok(()),
       Err(error)
         if error.kind() == ErrorKind::AlreadyExists && is_regular_marker(path) =>
       {
-        Ok(())
+        crate::local_store::open_private(crate::local_store::OpenMode::Read, path)
+          .map(|_| ())
+          .map_err(|error| format!("marker file open failed: {error}"))
       }
       Err(error) => Err(format!("marker file write failed: {error}")),
     }
@@ -101,16 +90,23 @@ impl MarkerFile {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 
   fn unique_path() -> PathBuf {
-    std::env::temp_dir().join(format!("stella-marker-{}", uuid::Uuid::new_v4()))
+    std::env::temp_dir()
+      .join(format!("stella-marker-{}", uuid::Uuid::new_v4()))
+      .join("value")
   }
 
   #[test]
   fn setting_a_marker_is_persistent_and_idempotent() {
     let path = unique_path();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     let marker = MarkerFile::at(path.clone());
     assert!(!marker.is_set());
 
@@ -129,6 +125,7 @@ mod tests {
   #[test]
   fn a_directory_at_the_path_is_never_a_marker() {
     let path = unique_path();
+    crate::local_store::create_private_dir(path.parent().unwrap()).unwrap();
     fs::create_dir(&path).unwrap();
     let marker = MarkerFile::at(path.clone());
 

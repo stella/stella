@@ -21,6 +21,8 @@ not use the in-process database.
 
 Tenant and corpus profiles run in fresh databases cloned from the migrated
 template; each fixture database is dropped after its clients close. The
+corpus is seeded once per run into a kept database (`corpus-template.ts`),
+and each corpus test measures its own clone of it, dropped after the suite. The
 coverage profile uses an isolated schema with a single connection and drops
 it before closing the connection.
 
@@ -86,7 +88,8 @@ Each statement runs once to warm the cache, then five times; the maximum
 block count is the measurement. Row counts must match exactly. Fixture
 sessions use a 3-second lock timeout and a 30-second statement timeout. Each
 profile shares one deadline across database creation, seed and measurements
-(150 seconds for a tenant profile, 300 for the corpus profile); teardown has
+(150 seconds for a tenant profile, 300 for each corpus test, which also pays
+for the shared seed when it is the first to need it); teardown has
 its own 35-second deadline. Phase logs identify pending work; failures dump
 bounded activity and lock diagnostics through a separate connection.
 

@@ -67,7 +67,7 @@ const rebuilt = async (decision: IngestionResult): Promise<IngestionResult> => {
 
 const project = async (sourceRaw: string) =>
   plSnRetention.type === "checked"
-    ? await plSnRetention.project(sourceRaw)
+    ? await plSnRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("pl-sn is a checked source");
 
 /** The envelope with its document answer replaced by `payload`. */

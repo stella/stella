@@ -34,6 +34,14 @@
     "composerPlaceholder": "Ask stella",
     "send": "Send",
     "stop": "Stop",
+    "dictate": "Dictate",
+    "dictationCancel": "Cancel dictation",
+    "dictationFinish": "Done dictating",
+    "dictationListening": "Listening… {elapsed} of {limit}",
+    "dictationTranscribing": "Transcribing…",
+    "dictationDenied": "Dictation needs the microphone. Allow it for stella in Settings.",
+    "dictationFailed": "The recording could not be transcribed. Try again.",
+    "dictationSilent": "No speech was heard.",
     "sendFailed": "Your message could not be sent. Try again.",
     "answerWorking": "Working…",
     "answerStopped": "Stopped.",
@@ -165,7 +173,30 @@
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
-    "details": "Details"
+    "details": "Details",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomFit": "Fit to width",
+    "fit": "Fit",
+    "appearance": {
+      "system": "Appearance: automatic",
+      "light": "Appearance: light",
+      "dark": "Appearance: dark"
+    },
+    "edit": {
+      "saved": "Saved",
+      "saving": "Saving…",
+      "notSaved": "Not saved yet",
+      "done": "Done",
+      "openFailed": "This document cannot be edited right now",
+      "resumed": "You have an unfinished edit of this document, so it continues from there. What you typed just now was not kept.",
+      "newerVersion": "A newer version of this document was saved meanwhile, so the edit continues from it. What you typed just now was not kept.",
+      "takenOver": "Someone else is now editing this document. Your changes since the last save were not kept.",
+      "finishFailed": "Your changes are saved, but they could not become a new version yet. Tap Done again, or leave: the next edit continues from them.",
+      "notStored": "Your latest changes could not be saved. Stay to try again, or leave without them.",
+      "stay": "Stay",
+      "leave": "Leave"
+    }
   },
   "signIn": {
     "beta": "Beta",
@@ -193,7 +224,11 @@
     "server": "Server",
     "signOut": "Sign out",
     "deleteAccount": "Delete account",
-    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
+    "signOutFailed": "Sign-out could not be completed. Try again.",
+    "lockScreenTitle": "Lock Screen",
+    "timerDetails": "Timer details",
+    "timerDetailsHint": "When a timer changes on another device, Apple's notification service carries its description and matter to the Lock Screen. Off, it shows only the time until you open the app."
   },
   "header": {
     "search": "Search"
@@ -212,9 +247,7 @@
     "share": "Share"
   },
   "more": {
-    "soon": "Coming soon",
-    "timers": "Timers",
-    "voiceInput": "Voice input"
+    "timers": "Timers"
   },
   "writes": {
     "consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
@@ -235,10 +268,6 @@
     "newTimer": "New timer",
     "description": "What are you working on?",
     "matterTitle": "Matter",
-    "noMatter": "No matter",
-    "noDescription": "No description",
-    "running": "Running",
-    "paused": "Paused",
     "pause": "Pause",
     "resume": "Resume",
     "save": "Save",
@@ -249,8 +278,7 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again.",
-    "more": "{count, plural, one {# more timer} other {# more timers}}"
+    "changeFailed": "The timer could not be changed. Try again."
   },
   "scan": {
     "title": "Scan a document",
@@ -293,6 +321,29 @@
   "palette": {
     "placeholder": "Search matters and chats, or run a command",
     "noResults": "Nothing matches “{query}”"
+  },
+  "search": {
+    "placeholder": "Search stella",
+    "clear": "Clear search",
+    "cancel": "Cancel",
+    "recent": "Recent searches",
+    "clearRecent": "Clear",
+    "hint": "Search your matters, documents, tasks, chats and case law.",
+    "filters": "Filters",
+    "noResultsTitle": "No results",
+    "noResults": "Nothing matches “{query}”. Try other words, or remove a filter.",
+    "loadFailed": "The search could not be run.",
+    "retry": "Try again",
+    "type": {
+      "document": "Documents",
+      "matter": "Matters",
+      "task": "Tasks",
+      "caseLaw": "Case law",
+      "chat": "Chats",
+      "folder": "Folders",
+      "message": "Emails",
+      "link": "Links"
+    }
   },
   "pane": {
     "showList": "Show the list",

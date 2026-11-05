@@ -97,6 +97,7 @@ const accountBearerOwners = {
   "sse.rs": ".bearer_auth(&session_token)",
   "http_client.rs": "key: &crate::device_proof::DeviceKey",
   "time_entry_submit.rs": "account: &AccountRequest",
+  "billing_draft_submit.rs": "account: &AccountRequest",
 } as const;
 
 const assertBearerOwner = (file: string, source: string) => {

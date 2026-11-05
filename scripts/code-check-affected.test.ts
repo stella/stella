@@ -31,10 +31,13 @@ import {
   executeCheckCommands,
   failureExitCode,
   formatCheckFailure,
+  greenBaseScope,
+  greenBaseScopeMessage,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
   memoryLimitBytes,
+  parseArgs,
   planCheck,
   planFullCheck,
   planningCommandTimeout,
@@ -2407,5 +2410,115 @@ describe("check failure summary", () => {
       "code-check: failed (exit 1): bun scripts/check-oxlint-plugin-registry.ts",
     );
     expectNoStackFrames(formatted);
+  });
+});
+
+describe("main's code check compares with the last green commit", () => {
+  const repository = (root: string, ...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Code Check Test",
+        "-c",
+        "user.email=code-check-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+
+  test("a base option never takes the next flag as its value", () => {
+    for (const flag of ["--base", "--green-base"]) {
+      expect(() => parseArgs([flag, "--dry-run"])).toThrow(
+        `${flag} requires a value`,
+      );
+      expect(() => parseArgs([flag])).toThrow(`${flag} requires a value`);
+    }
+    expect(parseArgs(["--green-base", "", "--dry-run"])).toMatchObject({
+      greenBase: "",
+      dryRun: true,
+    });
+  });
+
+  test("a green ancestor scopes the check; anything else checks every file", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "green-base-"));
+    try {
+      repository(root, "init", "--quiet");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "green");
+      const green = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-c", "side");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "side");
+      const side = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "main");
+
+      expect(greenBaseScope(green, root)).toEqual({
+        type: "affected",
+        base: green,
+      });
+      // Not an ancestor of the checked tree, or malformed.
+      expect(greenBaseScope(side, root)).toEqual({
+        type: "all",
+        reason: "not-ancestor",
+      });
+      expect(greenBaseScope("", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      expect(greenBaseScope("HEAD~1", root)).toEqual({
+        type: "all",
+        reason: "malformed",
+      });
+      // An unknown commit fails the probe; its message is kept, not read as
+      // a missing green commit.
+      const unknown = greenBaseScope("f".repeat(40), root);
+      expect(unknown).toMatchObject({ type: "all", reason: "probe-failed" });
+      expect(greenBaseScopeMessage(unknown)).toContain(
+        "green main ancestry probe failed",
+      );
+      expect(greenBaseScopeMessage(greenBaseScope(side, root))).toBe(
+        "code-check: no reachable green main commit; checking every file",
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("a failed ancestry probe keeps its message and still checks every file", () => {
+    const outside = mkdtempSync(path.join(tmpdir(), "green-base-outside-"));
+    try {
+      const scope = greenBaseScope("a".repeat(40), outside);
+      if (scope.type !== "all" || scope.reason !== "probe-failed") {
+        throw new Error(
+          `expected a failed probe, got ${JSON.stringify(scope)}`,
+        );
+      }
+      expect(scope.detail).toContain("not a git repository");
+      expect(greenBaseScopeMessage(scope)).toBe(
+        `code-check: green main ancestry probe failed (${scope.detail}); checking every file`,
+      );
+    } finally {
+      rmSync(outside, { force: true, recursive: true });
+    }
+  });
+
+  test("every Code quality step uses the green base outside a pull request or merge group", () => {
+    const sources = [
+      readFileSync(".github/workflows/ci.yml", "utf-8"),
+      readFileSync(".github/ci-checks/code-quality-web-rest.yml", "utf-8"),
+    ].join("\n");
+    for (const leg of CODE_CHECK_LEGS) {
+      expect(sources).toContain(
+        `bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
+      );
+    }
+    expect(
+      sources.match(/GREEN_BASE: \$\{\{ inputs\.green_base \|\| '' \}\}/gu),
+    ).toHaveLength(CODE_CHECK_LEGS.length);
   });
 });
