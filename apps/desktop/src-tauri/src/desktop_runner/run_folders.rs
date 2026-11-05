@@ -199,11 +199,12 @@ mod tests {
     let lock = Mutex::new(());
     let folder = place.folder();
     std::fs::create_dir_all(&folder).unwrap();
-    remove_idle(&place.0, SystemTime::now(), &lock);
+    let made = std::fs::metadata(&folder).unwrap().modified().unwrap();
+    remove_idle(&place.0, made, &lock);
     assert!(folder.exists());
     remove_idle(
       &place.0,
-      SystemTime::now() + Duration::from_secs(KEPT_FOR_SECONDS + 60),
+      made + Duration::from_secs(KEPT_FOR_SECONDS + 60),
       &lock,
     );
     assert!(!folder.exists());
