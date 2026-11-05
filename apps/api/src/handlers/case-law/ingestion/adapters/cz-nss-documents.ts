@@ -180,7 +180,7 @@ export const readNssRegistryMetadata = ({
       }
       const cell = link.closest("td");
       const cellNode = cell.get(0);
-      if (cellNode === undefined || cellNode.type !== "tag") {
+      if (cellNode?.type !== "tag") {
         return false;
       }
       const index = cell.parent().children("td").toArray().indexOf(cellNode);
