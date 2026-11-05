@@ -1,3 +1,5 @@
+import { MARK_COLORS } from "@stll/brand";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 const FAVICON_LINK_ID = "stella-unread-favicon";
@@ -8,16 +10,16 @@ const FAVICON_LINK_ID = "stella-unread-favicon";
  * Deliberately not a redraw of the brand mark. At tab size the mark is a few
  * pixels wide and unreadable anyway, so copying its paths here would buy
  * nothing and would quietly drift from `public/favicon.svg` the first time
- * that file changes. Only the ground colour is shared, and it is named here
- * so the mirror is one obvious literal rather than a hidden dependency.
+ * that file changes. Only the ground colour is shared, and it comes from the
+ * brand's mark colours, as the badge does.
  *
  * Inline in a data URI so the badge appears without a network round trip.
  */
-const FAVICON_GROUND = "#59a1d4";
+const FAVICON_GROUND = MARK_COLORS.iconGround;
 const UNREAD_FAVICON_HREF = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56">' +
     `<rect width="56" height="56" rx="12" fill="${FAVICON_GROUND}"/>` +
-    `<circle cx="41" cy="15" r="12" fill="#ef4444" stroke="${FAVICON_GROUND}" stroke-width="4"/>` +
+    `<circle cx="41" cy="15" r="12" fill="${MARK_COLORS.unreadBadge}" stroke="${FAVICON_GROUND}" stroke-width="4"/>` +
     "</svg>",
 )}`;
 

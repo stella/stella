@@ -39,6 +39,7 @@ import {
   type ActiveChatSkillContext,
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
+import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -3580,6 +3581,9 @@ export const createSendMessage = (
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
                     known: chatContext.decisionPassageNumbers,
+                  }),
+                  answerQuoteChecker: createTurnAnswerQuoteChecker({
+                    caseLawDb: dependencies.caseLawDb,
                   }),
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,

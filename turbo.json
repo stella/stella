@@ -113,7 +113,7 @@
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/package.json",
-        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
+        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,brand,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
         "$TURBO_ROOT$/packages/typescript-config/base.json",
         "!$TURBO_ROOT$/apps/**/node_modules/**",
         "!$TURBO_ROOT$/apps/**/.cache/**",
@@ -791,8 +791,16 @@
       "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    // The WebView baseline scans every bundled package; the pre-paint colours
+    // are pinned to the resolved theme and to the web's pre-paint script.
     "@stll/desktop#test": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/**"]
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+      ]
     },
     "@stll/cli#codegen:runtime": {
       "inputs": [
@@ -1197,6 +1205,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1282,6 +1291,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1434,6 +1444,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1520,6 +1531,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1802,8 +1814,14 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
+    },
+    // The palette test checks the colours DESIGN.md documents.
+    "@stll/brand#test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/DESIGN.md"]
     },
     // The native suite compiles files it embeds from outside the crate, so its
     // inputs are the crate plus those embeds: a web-only edit elsewhere in the
