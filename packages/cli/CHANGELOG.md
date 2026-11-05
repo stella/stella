@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.8.2
+
+### Patch Changes
+
+- Carry the current generated tool registry. No command changes.
+
 ## 6.8.1
 
 ### Patch Changes
