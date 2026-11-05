@@ -193,7 +193,10 @@ describe("checkAnswerQuotes", () => {
 
   it("keys a quotation as the renderer reads it, formatting and blocks included", async () => {
     const { load } = recordingLoad(DECISIONS);
-    const [first, second] = COURT_TEXT.split(", kdo ");
+    const separator = ", kdo ";
+    const cut = COURT_TEXT.indexOf(separator);
+    const first = COURT_TEXT.slice(0, cut);
+    const second = COURT_TEXT.slice(cut + separator.length);
     const checks = await checkAnswerQuotes({
       message: answer(
         `[1](#stella-decision=${FIRST})\n\n> **${first}**, kdo\n> ${second}`,
