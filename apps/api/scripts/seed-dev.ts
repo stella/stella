@@ -62,6 +62,7 @@ import {
   expenses,
   extractedContent,
   fields,
+  invoiceLines,
   invoices,
   justifications,
   numberSeries,
@@ -2735,6 +2736,28 @@ export async function seed(organizationId?: string, userId?: string) {
     }
   };
 
+  // Billing records keep their matter on purpose (ON DELETE NO ACTION), so a
+  // replay removes them before the matters. An invoice's lines can belong to
+  // another matter, so they go first; deleting an invoice takes the rest.
+  const deleteRetainedBilling = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    await withAggregateTransaction(db, async (tx) => {
+      await tx
+        .delete(invoiceLines)
+        .where(inArray(invoiceLines.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(invoices)
+        .where(inArray(invoices.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(timeEntries)
+        .where(inArray(timeEntries.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(expenses)
+        .where(inArray(expenses.workspaceId, [...workspaceIds]));
+    });
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -2776,6 +2799,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(allSeedWorkspaceIds);
       await db.transaction(async (tx) => {
         await tx
           .delete(workspaces)
@@ -2831,6 +2855,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(clientWorkspaceIds);
     }
     await organizationTransaction(
       async (tx) =>
