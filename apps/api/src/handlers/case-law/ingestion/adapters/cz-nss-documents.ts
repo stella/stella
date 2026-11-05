@@ -179,11 +179,10 @@ export const readNssRegistryMetadata = ({
         return false;
       }
       const cell = link.closest("td");
-      const cellNode = cell.get(0);
-      if (cellNode?.type !== "tag") {
+      if (cell.length === 0) {
         return false;
       }
-      const index = cell.parent().children("td").toArray().indexOf(cellNode);
+      const index = cell.parent().children("td").index(cell);
       const header = cell
         .closest("table")
         .children("thead")
