@@ -1177,6 +1177,37 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test.each([
+    { error: new TypeError("Load failed"), transportKind: "network" },
+    {
+      error: new DOMException("signal timed out", "TimeoutError"),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError keeps a user-visible $transportKind failure a transient signal",
+    ({ error, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(error, {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/law" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/law",
+          feature: "law",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "reportUserVisibleError:failure",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
+  test.each([
     "Failed to fetch dynamically imported module: https://app.test/a.js",
     "x is not a function",
   ])("captureError keeps capturing a TypeError of ours (%s)", (message) => {

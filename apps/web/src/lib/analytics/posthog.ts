@@ -810,8 +810,8 @@ const registerBuildProperties = () => {
 };
 
 // Clients outside the API client (the auth client) reject with the native
-// fetch error or deadline reason. It must be classified here, before redaction blanks the message
-// that tells it apart from a TypeError of ours.
+// fetch error or deadline reason. It must be classified here, before redaction
+// blanks the message that tells it apart from a TypeError of ours.
 const transportFailureKind = (error: unknown): APIError["transportKind"] => {
   if (APIError.is(error)) {
     return error.transportKind;
