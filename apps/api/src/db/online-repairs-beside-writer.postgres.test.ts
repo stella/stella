@@ -31,6 +31,16 @@ const POSTGRES_IDENTIFIER_MAX_BYTES = 63;
 const ID = "00000000-0000-4000-8000-000000000001";
 const ID_2 = "00000000-0000-4000-8000-000000000002";
 const ID_3 = "00000000-0000-4000-8000-000000000003";
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000010";
+const CONTACT_ID = "00000000-0000-4000-8000-000000000011";
+const FIXTURE_ORGANIZATION =
+  "INSERT INTO organization (id, name, slug, created_at) VALUES ('org', 'Org', 'org', now())";
+const FIXTURE_USER = `INSERT INTO "user" (id, name, email) VALUES ('user', 'User', 'user@example.invalid')`;
+const FIXTURE_WORKSPACE = `INSERT INTO workspaces (id, organization_id, name, reference) VALUES ('${WORKSPACE_ID}', 'org', 'Matter', 'M-1')`;
+const FIXTURE_CONTACT = `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${CONTACT_ID}', 'org', 'organization', 'Client')`;
+/** A draft invoice on the fixture matter. */
+const FIXTURE_INVOICE = `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'draft')`;
+const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
 const READER_ANNOTATION_INSERT = `INSERT INTO legal_reader_annotations (id, organization_id, user_id, target_type, target_id, kind, visibility, color, style, block_anchor_id, start_offset, end_offset, quote) VALUES ('${ID}', 'org', 'user', 'statute', '${ID_2}', 'highlight', 'private', 'yellow', 'highlight', 'p-1', 0, 5, 'words')`;
@@ -50,10 +60,21 @@ type RowSeed = {
   assertPending: (client: SQL, id: string) => Promise<void>;
   assertRepaired: (client: SQL, id: string) => Promise<void>;
   seed: (client: SQL) => Promise<void>;
-  writerLock: { id: string; table: string };
+  /**
+   * The row the contending writer holds. `column` names a key other than `id`;
+   * `organizationId` scopes a table forcing row security on its owner.
+   */
+  writerLock: {
+    column?: string;
+    id: string;
+    organizationId?: string;
+    table: string;
+  };
 };
 type NoRowSeed = {
   kind: "no-row-work";
+  /** Rows the seed leaves in each table; one when absent. */
+  rows?: number;
   seed: (client: SQL) => Promise<void>;
   snapshot: (client: SQL) => Promise<Record<string, string[]>>;
   tables: readonly string[];
@@ -119,23 +140,6 @@ const withoutFixtureGuards = async (
   }
 };
 
-const noRowSeed = (
-  table: string,
-  constraint: string,
-  insert: string,
-): NoRowSeed => ({
-  kind: "no-row-work",
-  tables: [table],
-  snapshot: async (client) => await snapshotRows(client, [table]),
-  seed: async (client) => {
-    await invalidateConstraint(client, table, constraint, async () => {
-      await withoutFixtureGuards(client, [table], async () => {
-        await client.unsafe(insert);
-      });
-    });
-  },
-});
-
 const withFixtureAuthor = async <T>(
   client: SQL,
   work: (scoped: SQL) => Promise<T>,
@@ -143,10 +147,86 @@ const withFixtureAuthor = async <T>(
   await client.begin(async (tx) => {
     await tx.unsafe("SET LOCAL ROLE stella");
     await tx.unsafe(
-      "SELECT set_config('app.organization_id', 'org', true), set_config('app.user_id', 'user', true)",
+      `SELECT set_config('app.organization_id', 'org', true), set_config('app.user_id', 'user', true), set_config('app.workspace_ids', '{${WORKSPACE_ID}}', true), set_config('app.workspace_access_mode', 'membership', true)`,
     );
     return await work(tx);
   });
+
+type NoRowOptions = {
+  /** Parents the validated foreign key must find, written before its rows. */
+  parents?: (client: SQL) => Promise<void>;
+  /** Rows the insert writes, when it writes more than one. */
+  rows?: number;
+  /** The table forces row security on its owner: use the application role. */
+  scoped?: boolean;
+};
+
+const noRowSeed = (
+  table: string,
+  constraint: string,
+  insert: string,
+  { parents, rows, scoped = false }: NoRowOptions = {},
+): NoRowSeed => {
+  const inScope = async <T>(client: SQL, work: (reader: SQL) => Promise<T>) =>
+    scoped ? await withFixtureAuthor(client, work) : await work(client);
+  return {
+    kind: "no-row-work",
+    ...(rows === undefined ? {} : { rows }),
+    tables: [table],
+    snapshot: async (client) =>
+      await inScope(client, async (reader) => snapshotRows(reader, [table])),
+    seed: async (client) => {
+      await parents?.(client);
+      await invalidateConstraint(client, table, constraint, async () => {
+        await withoutFixtureGuards(client, [table], async () => {
+          await inScope(client, async (writer) => {
+            await writer.unsafe(insert);
+          });
+        });
+      });
+    },
+  };
+};
+
+const contactNoRowSeed = (constraint: string, insert?: string) =>
+  noRowSeed(
+    "contacts",
+    constraint,
+    insert ??
+      `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${ID}', 'org', 'person', 'Contact')`,
+    { scoped: true },
+  );
+
+const withMatter = async (client: SQL) => {
+  await exec(client, [FIXTURE_ORGANIZATION, FIXTURE_WORKSPACE]);
+};
+
+const withClient = async (client: SQL) => {
+  await exec(client, [FIXTURE_ORGANIZATION]);
+  await withFixtureAuthor(client, async (scoped) => {
+    await scoped.unsafe(FIXTURE_CONTACT);
+  });
+};
+
+/** The row a repair owes, read by one predicate before and after it runs. */
+const repairedWhen = (name: string, query: string, scoped = false) => {
+  const read = async (client: SQL, id: string) => {
+    const run = async (reader: SQL) =>
+      await reader.unsafe<{ repaired: boolean }[]>(query, [id]);
+    const rows = scoped
+      ? await withFixtureAuthor(client, run)
+      : await run(client);
+    return rows.at(0)?.repaired;
+  };
+  return {
+    assertPending: async (client: SQL, id: string) => {
+      expect(await read(client, id), `${name} pending`).toBeFalse();
+    },
+    assertRepaired: async (client: SQL, id: string) => {
+      expect(await read(client, id), name).toBeTrue();
+    },
+  };
+};
 
 const annotationNoRowSeed = (constraint: string): NoRowSeed => ({
   kind: "no-row-work",
@@ -369,10 +449,8 @@ const SEEDS = {
     "sanctions_contact_marks_attempt_count_check",
     `INSERT INTO sanctions_contact_marks (organization_id, contact_id) VALUES ('org', '${ID}')`,
   ),
-  contacts_sanctions_monitoring_mode_check: noRowSeed(
-    "contacts",
+  contacts_sanctions_monitoring_mode_check: contactNoRowSeed(
     "contacts_sanctions_monitoring_mode_check",
-    `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${ID}', 'org', 'person', 'Contact')`,
   ),
   organization_settings_sanctions_monitoring_mode_check: noRowSeed(
     "organization_settings",
@@ -418,10 +496,8 @@ const SEEDS = {
     "invoices_language_check",
     `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status) VALUES ('${ID}', 'org', '${ID_2}', 'INV-1', '2026-09-30', 'EUR', 'draft')`,
   ),
-  contacts_invoice_language_check: noRowSeed(
-    "contacts",
+  contacts_invoice_language_check: contactNoRowSeed(
     "contacts_invoice_language_check",
-    `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${ID}', 'org', 'person', 'Contact')`,
   ),
   organization_settings_invoice_language_check: noRowSeed(
     "organization_settings",
@@ -435,27 +511,27 @@ const SEEDS = {
   ),
   "contact-vat-id": {
     kind: "row-work",
-    assertPending: async (client, id) => {
-      const rows = await client<{ pending: boolean }[]>`
-        SELECT vat_id IS NULL AND tax_id = ${VAT_ID} AS pending
-        FROM contacts WHERE id = ${id}`;
-      expect(rows.at(0)?.pending, "contact-vat-id").toBeTrue();
-    },
-    assertRepaired: async (client, id) => {
-      const rows = await client<{ repaired: boolean }[]>`
-        SELECT vat_id = ${VAT_ID} AND tax_id IS NULL AS repaired
-        FROM contacts WHERE id = ${id}`;
-      expect(rows.at(0)?.repaired, "contact-vat-id").toBeTrue();
-    },
+    ...repairedWhen(
+      "contact-vat-id",
+      `SELECT vat_id IS NOT DISTINCT FROM '${VAT_ID}' AND tax_id IS NULL AS repaired FROM contacts WHERE id = $1`,
+      true,
+    ),
     seed: async (client) => {
-      await client.unsafe(
-        "INSERT INTO organization (id, name, slug, created_at) VALUES ('org', 'Org', 'org', now())",
-      );
-      await client.unsafe(
-        `INSERT INTO contacts (id, organization_id, type, display_name, tax_id) VALUES ('${ID_2}', 'org', 'organization', 'Writer contact', '${VAT_ID}'), ('${ID_3}', 'org', 'organization', 'Repair contact', '${VAT_ID}')`,
+      await client.unsafe(FIXTURE_ORGANIZATION);
+      await invalidateConstraint(
+        client,
+        "contacts",
+        "contacts_vat_id_check",
+        async () => {
+          await withFixtureAuthor(client, async (scoped) => {
+            await scoped.unsafe(
+              `INSERT INTO contacts (id, organization_id, type, display_name, tax_id) VALUES ('${ID_2}', 'org', 'organization', 'Writer contact', '${VAT_ID}'), ('${ID_3}', 'org', 'organization', 'Repair contact', '${VAT_ID}')`,
+            );
+          });
+        },
       );
     },
-    writerLock: { id: ID_2, table: "contacts" },
+    writerLock: { id: ID_2, organizationId: "org", table: "contacts" },
   },
   case_law_decisions_parsed_source_complete: {
     kind: "no-row-work",
@@ -514,6 +590,172 @@ const SEEDS = {
         },
       );
     },
+  },
+  "chat-run-text-boundaries": {
+    kind: "row-work",
+    ...repairedWhen(
+      "chat-run-text-boundaries",
+      "SELECT text_boundary_initialization IS NOT DISTINCT FROM 'recorded' AND text_message_end_seq IS NOT DISTINCT FROM 2 AS repaired FROM chat_run_log_entries WHERE run_id = $1 AND seq = 1",
+    ),
+    seed: async (client) => {
+      await withoutFixtureGuards(client, ["chat_run_log_entries"], async () => {
+        await client.unsafe(
+          `INSERT INTO chat_run_log_entries (organization_id, run_id, seq, batch_id, batch_index, chunk) SELECT 'org', run_id, seq, '${ID}', seq, jsonb_build_object('type', type, 'messageId', 'message') FROM (VALUES ('run-writer'), ('run-repair')) AS runs(run_id) CROSS JOIN (VALUES (1, 'TEXT_MESSAGE_START'), (2, 'TEXT_MESSAGE_END')) AS events(seq, type)`,
+        );
+      });
+    },
+    writerLock: {
+      column: "run_id",
+      id: "run-writer",
+      table: "chat_run_log_entries",
+    },
+  },
+  "client-invoice-clients": {
+    kind: "row-work",
+    ...repairedWhen(
+      "client-invoice-clients",
+      `SELECT client_id IS NOT DISTINCT FROM '${CONTACT_ID}' AS repaired FROM invoices WHERE id = $1`,
+    ),
+    seed: async (client) => {
+      await withClient(client);
+      // The matter gains its client after the invoices: the legacy shape, past every guard.
+      await exec(client, [
+        FIXTURE_WORKSPACE,
+        FIXTURE_INVOICE,
+        `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status) VALUES ('${ID_2}', 'org', '${WORKSPACE_ID}', 'INV-2', '2026-09-30', 'EUR', 'draft')`,
+        `UPDATE workspaces SET client_id = '${CONTACT_ID}' WHERE id = '${WORKSPACE_ID}'`,
+      ]);
+    },
+    writerLock: { id: ID, table: "invoices" },
+  },
+  "invoice-sent-at": {
+    kind: "row-work",
+    ...repairedWhen(
+      "invoice-sent-at",
+      "SELECT sent_at IS NOT DISTINCT FROM updated_at AS repaired FROM invoices WHERE id = $1",
+    ),
+    seed: async (client) => {
+      await withMatter(client);
+      await client.unsafe(
+        `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'sent'), ('${ID_2}', 'org', '${WORKSPACE_ID}', 'INV-2', '2026-09-30', 'EUR', 'sent')`,
+      );
+    },
+    writerLock: { id: ID, table: "invoices" },
+  },
+  "invoice-legacy-payments": {
+    kind: "row-work",
+    ...repairedWhen(
+      "invoice-legacy-payments",
+      "SELECT EXISTS (SELECT 1 FROM invoice_payments payment WHERE payment.invoice_id = $1 AND payment.origin = 'legacy' AND payment.amount = 12300 AND payment.method = 'other' AND payment.recorded_by IS NULL) AS repaired",
+    ),
+    seed: async (client) => {
+      await withMatter(client);
+      await client.unsafe(
+        `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status, total_amount, paid_at) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'paid', 12300, now()), ('${ID_2}', 'org', '${WORKSPACE_ID}', 'INV-2', '2026-09-30', 'EUR', 'paid', 12300, now())`,
+      );
+    },
+    writerLock: { id: ID, table: "invoices" },
+  },
+  "document-review-finding-decisions": {
+    kind: "row-work",
+    ...repairedWhen(
+      "document-review-finding-decisions",
+      "SELECT EXISTS (SELECT 1 FROM document_review_finding_decisions event WHERE event.finding_id = $1 AND event.decision = 'accepted' AND event.actor_id = 'user') AS repaired",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        FIXTURE_ORGANIZATION,
+        FIXTURE_USER,
+        FIXTURE_WORKSPACE,
+      ]);
+      await withoutFixtureGuards(
+        client,
+        ["document_review_findings"],
+        async () => {
+          await client.unsafe(
+            `INSERT INTO document_review_findings (id, organization_id, workspace_id, run_id, entity_id, file_field_id, entity_version_id, position_id, payload, position_title, decision, decided_by, decided_at) SELECT finding_id, 'org', '${WORKSPACE_ID}', '${ID_3}', '${ID_3}', '${ID_3}', '${ID_3}', finding_id, '{}', 'Position', 'accepted', 'user', now() FROM unnest(ARRAY['${ID}', '${ID_2}']::uuid[]) AS finding_id`,
+          );
+        },
+      );
+    },
+    writerLock: { id: ID, table: "document_review_findings" },
+  },
+  "legal-list-source-decisions": {
+    kind: "row-work",
+    ...repairedWhen(
+      "legal-list-source-decisions",
+      "SELECT EXISTS (SELECT 1 FROM legal_list_item_source_decisions event WHERE event.source_id = $1 AND event.decision = 'accepted' AND event.actor_id = 'user') AS repaired",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        FIXTURE_ORGANIZATION,
+        FIXTURE_USER,
+        FIXTURE_WORKSPACE,
+      ]);
+      await withoutFixtureGuards(
+        client,
+        ["legal_list_item_sources"],
+        async () => {
+          await client.unsafe(
+            `INSERT INTO legal_list_item_sources (id, workspace_id, list_id, item_entity_id, source_entity_id, source_entity_version_id, locator, verification_status, verified_by, verified_at, entity_feature_gate) SELECT source_id, '${WORKSPACE_ID}', '${ID_3}', '${ID_3}', '${ID_3}', '${ID_3}', '{}', 'verified', 'user', now(), 'open' FROM unnest(ARRAY['${ID}', '${ID_2}']::uuid[]) AS source_id`,
+          );
+        },
+      );
+    },
+    writerLock: { id: ID, table: "legal_list_item_sources" },
+  },
+  "case-law-sitemap-packing-enrollment": {
+    kind: "row-work",
+    ...repairedWhen(
+      SITEMAP_ENROLLMENT,
+      "SELECT cursor IS NOT DISTINCT FROM 'complete' AND EXISTS (SELECT 1 FROM case_law_sitemap_changes WHERE country = 'CZE' AND year = '*' AND month = '*') AS repaired FROM database_backfill_states WHERE name = $1",
+    ),
+    seed: async (client) => {
+      await exec(client, [
+        "INSERT INTO case_law_sitemap_shards (country, year, month, bucket, total, last_modified_at) VALUES ('CZE', '2026', '09', '000', 1, now())",
+        `UPDATE database_backfill_states SET cursor = NULL WHERE name = '${SITEMAP_ENROLLMENT}'`,
+      ]);
+    },
+    // The repair serializes its batches on this checkpoint.
+    writerLock: {
+      column: "name",
+      id: SITEMAP_ENROLLMENT,
+      table: "database_backfill_states",
+    },
+  },
+  "case-law-population-counts": {
+    kind: "row-work",
+    ...repairedWhen(
+      "case-law-population-counts",
+      "SELECT EXISTS (SELECT 1 FROM case_law_population_projections projection WHERE projection.decision_id = $1) AS repaired",
+    ),
+    seed: async (client) => {
+      await client.unsafe(
+        `INSERT INTO case_law_sources (id, adapter_key, name) VALUES ('${ID_3}', 'cz-regional', 'Source')`,
+      );
+      await withoutFixtureGuards(client, ["case_law_decisions"], async () => {
+        await client.unsafe(
+          `INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language) VALUES ('${ID}', '${ID_3}', '1', 'Court', 'CZE', 'cs'), ('${ID_2}', '${ID_3}', '2', 'Court', 'CZE', 'cs')`,
+        );
+      });
+      await client.unsafe(
+        "UPDATE case_law_population_seed_state SET phase = 'scan', cursor = NULL, source_id = NULL WHERE slot = 0",
+      );
+    },
+    writerLock: { id: ID, table: "case_law_decisions" },
+  },
+  case_law_source_string_config: {
+    kind: "row-work",
+    ...repairedWhen(
+      "case_law_source_string_config",
+      "SELECT jsonb_typeof(config) = 'object' AS repaired FROM case_law_sources WHERE id = $1",
+    ),
+    seed: async (client) => {
+      await client.unsafe(
+        `INSERT INTO case_law_sources (id, adapter_key, name, config) VALUES ('${ID}', 'cz-regional', 'Writer source', '"{}"'::jsonb), ('${ID_2}', 'cz-regional-2', 'Repair source', '"{}"'::jsonb)`,
+      );
+    },
+    writerLock: { id: ID, table: "case_law_sources" },
   },
 } as const satisfies Record<RepairName, Seed>;
 const seedsByName: Readonly<Record<string, Seed>> = SEEDS;
@@ -714,7 +956,9 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
       await seed.seed(owner);
       const before = await seed.snapshot(owner);
       for (const table of seed.tables) {
-        expect(before[table]?.length, `${repair.name}: ${table} seed`).toBe(1);
+        expect(before[table]?.length, `${repair.name}: ${table} seed`).toBe(
+          seed.rows ?? 1,
+        );
       }
       const repairClient = openClient().sql;
       const repairSession = await repairClient.reserve();
@@ -730,6 +974,10 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
           session: repairSession,
         });
         expect(outcome.type, repair.name).toBe("complete");
+        expect(
+          (await repair.readCompletion(connection)).type,
+          repair.name,
+        ).toBe("complete");
         expect(await seed.snapshot(owner), repair.name).toEqual(before);
       } finally {
         await repairSession.release();
@@ -752,9 +1000,10 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
       "CREATE TABLE repair_writer_heartbeat (id integer PRIMARY KEY, touched_at timestamptz)",
     );
     await owner.unsafe("INSERT INTO repair_writer_heartbeat (id) VALUES (1)");
+    const { column = "id", organizationId } = seed.writerLock;
     const writerUpdate = {
       parameters: [seed.writerLock.id],
-      statement: `WITH held AS MATERIALIZED (SELECT 1 FROM public."${seed.writerLock.table}" WHERE id = $1 FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
+      statement: `WITH held AS MATERIALIZED (SELECT 1 FROM public."${seed.writerLock.table}" WHERE "${column}" = $1 FOR UPDATE), changed AS (UPDATE repair_writer_heartbeat SET touched_at = clock_timestamp() WHERE id = 1 AND EXISTS (SELECT FROM held) RETURNING 1) SELECT 1 / CASE count(*) WHEN 1 THEN 1 ELSE 0 END FROM changed`,
     };
     const repairClient = openClient().sql;
     const repairSession = await repairClient.reserve();
@@ -774,7 +1023,13 @@ const exercise = async (repair: (typeof ONLINE_MIGRATION_REPAIRS)[number]) => {
         connection: openClient({
           connection: { lock_timeout: DEADLINE_MS },
         }).sql,
-        updates: [writerUpdate],
+        updates:
+          organizationId === undefined
+            ? [writerUpdate]
+            : [
+                `SELECT set_config('app.organization_id', '${organizationId}', true)`,
+                writerUpdate,
+              ],
         work: async () => {
           await seed.assertPending(owner, seed.writerLock.id);
           const workStartedAt = Date.now();
