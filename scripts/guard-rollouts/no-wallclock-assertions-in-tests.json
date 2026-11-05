@@ -4,7 +4,7 @@
     "no-wallclock-assertions-in-tests/no-wallclock-assertions-in-tests"
   ],
   "type": "changed-lines",
-  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "expiresAt": "2026-11-12T00:00:00.000Z",
   "check": [
     "bun",
     "--bun",
