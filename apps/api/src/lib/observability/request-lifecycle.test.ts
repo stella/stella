@@ -263,10 +263,10 @@ const CASES: readonly LifecycleCase[] = [
     status: 502,
     body: '{"code":"upstream_unavailable","message":"The registry is not answering right now."}',
     records: [
-      ["request.failed", "ERROR", shadow("transient", "upstream_unavailable")],
+      ["request.failed", "WARN", shadow("transient", "upstream_unavailable")],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "upstream_unavailable"),
       ],
     ],
@@ -281,12 +281,12 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -320,7 +320,7 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -798,7 +798,7 @@ describe("the request lifecycle", () => {
       [
         "request.handler_failed",
         "upstream_unavailable",
-        "log_error_and_capture",
+        "log_warn_and_capture",
         1,
       ],
       ["request.completed", "unobserved_5xx", "log_error_and_capture", 1],
