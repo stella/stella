@@ -816,7 +816,6 @@ describe("only the citing sentence supplies kind cues", () => {
     for (const [citationText, context] of [
       ["sp. zn. 21 Cdo\n1234/2020", "Srov. sp. zn. 21 Cdo\n1234/2020 a dále."],
       ["21 Cdo 1234/2020! a", "Srov. 21 Cdo 1234/2020! a dále."],
-      [" 21 Cdo 1234/2020", "Srov. první. 21 Cdo 1234/2020 dále."],
     ] as const) {
       expect(classifyCitationVerdict({ citationText, context })).toEqual({
         kind: CITATION_KIND.PRECEDENT,
@@ -824,6 +823,15 @@ describe("only the citing sentence supplies kind cues", () => {
       });
     }
   });
+});
+
+test("whitespace around a citation does not reach into the sentence before", () => {
+  expect(
+    classifyCitation({
+      citationText: " 12 Co 123/2020",
+      context: "Judikatura byla přezkoumána. 12 Co 123/2020 skončilo.",
+    }),
+  ).toBe(CITATION_KIND.PROCEDURAL);
 });
 
 test("a statement about the case's own numbered proceedings stays procedural", () => {

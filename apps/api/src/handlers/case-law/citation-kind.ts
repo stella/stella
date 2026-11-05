@@ -255,7 +255,9 @@ const maskPeriods = (text: string): string => text.replaceAll(".", "·");
 /** Keep legal abbreviations and docket punctuation from becoming boundaries. */
 const citingSentence = (citationText: string, context: string): string => {
   const text = normalizeUnicode(context, "NFC");
-  const printed = normalizeUnicode(citationText, "NFC");
+  // Whitespace around the span is not the citation: read as part of it, it
+  // would reach into the sentence before and borrow that sentence's cues.
+  const printed = normalizeUnicode(citationText, "NFC").trim();
   const bare = stripCitationPrefix(printed);
   const exactStart = text.indexOf(printed);
   const start = exactStart === -1 ? text.indexOf(bare) : exactStart;
@@ -275,8 +277,8 @@ const citingSentence = (citationText: string, context: string): string => {
     .replace(/(?<![\d/])\d{1,2}\.(?=\s+\d)/gu, maskPeriods)
     .replace(/\b(?:např|odst|Sb|rozh|obč|r)\./giu, maskPeriods);
   // Masking preserves UTF-16 offsets; return the original wording for cues.
-  // A span the segmenter still splits (a line break or `!` inside it, or
-  // leading whitespace) reads as every sentence it overlaps.
+  // A span the segmenter still splits (a line break or `!` inside it) reads as
+  // every sentence it overlaps.
   let from: number | null = null;
   let to = end;
   for (const sentence of sentenceSegmenter.segment(masked)) {
