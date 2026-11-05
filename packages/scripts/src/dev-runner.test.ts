@@ -38,6 +38,7 @@ import {
   infraPortsForOffset,
   isWorktreeCheckout,
   loadEnvFile,
+  loadEnvFileWithExampleDefaults,
   MAX_HASH_OFFSET,
   migrateLegacyS3DevCredentials,
   parseDockerComposePsJson,
@@ -1673,10 +1674,50 @@ describe("dev env factories", () => {
     });
   });
 
+  test("a worktree stack's browser talks to that stack's object store", () => {
+    const offset = 80;
+    const webEnv = createWebEnv({
+      baseEnv: { VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000" },
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+    const apiEnv = createApiEnv({
+      baseEnv: {},
+      infraOffset: offset,
+      infraPorts: infraPortsForOffset(offset),
+      ports: portsForOffset(offset),
+    });
+
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).not.toBe("http://localhost:9000");
+    expect(webEnv.VITE_DOCUMENTS_ENDPOINT).toBe(apiEnv.S3_ENDPOINT);
+  });
+
+  test("a variable the example gained later reaches a checkout with an older env file", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, 'OWN="mine"\nBOTH="mine"\n');
+    writeFileSync(
+      `${envPath}.example`,
+      'BOTH="example"\nADDED_LATER="example"\n# OPTIONAL="example"\n',
+    );
+    const before = readFileSync(envPath, "utf-8");
+
+    expect(loadEnvFileWithExampleDefaults(envPath)).toEqual({
+      ADDED_LATER: "example",
+      BOTH: "mine",
+      OWN: "mine",
+    });
+    // Worktrees share this file through a link, so it is never rewritten.
+    expect(readFileSync(envPath, "utf-8")).toBe(before);
+  });
+
   test("threads computed ports into the web env", () => {
     expect(
       createWebEnv({
         baseEnv: { KEEP_ME: "1" },
+        infraOffset: 0,
+        infraPorts: infraPortsForOffset(0),
         ports: {
           api: 3101,
           desktopBridge: 45_999,
@@ -1703,6 +1744,8 @@ describe("dev env factories", () => {
           VITE_BROWSER_API_URL: "http://localhost:2/api",
           VITE_PUBLIC_APP_URL: "http://localhost:3",
         },
+        infraOffset: offset,
+        infraPorts: infraPortsForOffset(offset),
         ports,
       });
       const browserApi = new URL(webEnv.VITE_BROWSER_API_URL ?? "");
@@ -1720,7 +1763,12 @@ describe("dev env factories", () => {
   test("same-origin API routing requires an explicit opt-in", () => {
     for (const optIn of [undefined, "", "0"]) {
       const baseEnv = { STELLA_DEV_SAME_ORIGIN_API: optIn };
-      const webEnv = createWebEnv({ baseEnv, ports: portsForOffset(10) });
+      const webEnv = createWebEnv({
+        baseEnv,
+        infraOffset: 10,
+        infraPorts: infraPortsForOffset(10),
+        ports: portsForOffset(10),
+      });
       expect(webEnv).not.toHaveProperty("DEV_API_PROXY_TARGET");
       expect(webEnv).not.toHaveProperty("VITE_BROWSER_API_URL");
       expect(webEnv).not.toHaveProperty("VITE_PUBLIC_APP_URL");

@@ -1437,9 +1437,13 @@ export const createApiEnv = ({
 
 export const createWebEnv = ({
   baseEnv,
+  infraOffset,
+  infraPorts,
   ports,
 }: {
   baseEnv: NodeJS.ProcessEnv;
+  infraOffset: number;
+  infraPorts: InfraPorts;
   ports: DevPorts;
 }) => ({
   ...baseEnv,
@@ -1447,6 +1451,11 @@ export const createWebEnv = ({
   STELLA_WEB_PORT: String(ports.web),
   VITE_API_URL: publicApiUrlForPort(ports.api),
   VITE_DESKTOP_BRIDGE_PORT: String(ports.desktopBridge),
+  // The browser talks to this stack's own object store, the same one as
+  // S3_ENDPOINT in the API env; the content security policy allows only this.
+  ...(infraOffset > 0 && {
+    VITE_DOCUMENTS_ENDPOINT: `http://localhost:${String(infraPorts.rustfs)}`,
+  }),
   // Set these together after inherited/.env values so Vite sees one origin.
   ...(baseEnv["STELLA_DEV_SAME_ORIGIN_API"] === "1" && {
     DEV_API_PROXY_TARGET: apiUrlForPort(ports.api),
@@ -1577,6 +1586,15 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
 
   return env;
 };
+
+// `.env` is written once, so a variable `.env.example` gains later would stop
+// every existing checkout from booting. The example's values sit underneath the
+// checkout's own; the file itself is left alone, since worktrees share it.
+export const loadEnvFileWithExampleDefaults = (envFilePath: string) =>
+  expandEnvMap({
+    ...loadEnvFile(`${envFilePath}.example`),
+    ...loadEnvFile(envFilePath),
+  });
 
 export const expandEnvMap = (
   env: Record<string, string>,
@@ -1978,7 +1996,7 @@ const buildApiEnv = ({
 }: BuildApiEnvOptions) => {
   const envFilePath = path.resolve(rootDir, "apps/api/.env");
   const env: NodeJS.ProcessEnv = {
-    ...expandEnvMap(loadEnvFile(envFilePath)),
+    ...loadEnvFileWithExampleDefaults(envFilePath),
     ...createApiEnv({
       baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),
       infraOffset,
@@ -2142,9 +2160,11 @@ export const buildPersistentSteps = ({
       }
     : configuredApiEnv;
   const webEnv = {
-    ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
+    ...loadEnvFileWithExampleDefaults(path.resolve(rootDir, "apps/web/.env")),
     ...createWebEnv({
       baseEnv: webBaseEnv,
+      infraOffset,
+      infraPorts,
       ports,
     }),
   };
