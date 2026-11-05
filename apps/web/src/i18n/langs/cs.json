@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Tato verze není podporována",
       "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte vše, co platí",
+      "dismiss": "Zamítnout a zastavit",
+      "secretAnswer": "Odpověď je skrytá",
+      "secretPlaceholder": "Vaše odpověď zůstane skrytá"
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",

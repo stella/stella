@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
       "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Wybierz wszystkie pasujące",
+      "dismiss": "Odrzuć i zatrzymaj",
+      "secretAnswer": "Odpowiedź ukryta",
+      "secretPlaceholder": "Twoja odpowiedź pozostanie ukryta"
+    },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",

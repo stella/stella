@@ -13,6 +13,7 @@ import {
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
@@ -170,6 +171,9 @@ const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
   [CONNECT_CONNECTOR_TOOL_NAME]: true,
+  // A blocking question a coding agent on the member's computer asks: its
+  // call stays open until the member answers it from the question card.
+  [CHAT_LOCAL_RUN_QUESTION_TOOL]: true,
 } as const satisfies Record<string, true>;
 export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
 

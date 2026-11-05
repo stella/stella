@@ -226,7 +226,7 @@ export const PdfViewerControls = ({
               aria-label={t("common.currentPage")}
               autoComplete="off"
               dir="ltr"
-              className="me-1 w-14 rounded border px-1 text-end"
+              className="me-1 w-14 rounded-sm border px-1 text-end"
               inputMode="numeric"
               onBlur={() => {
                 if (

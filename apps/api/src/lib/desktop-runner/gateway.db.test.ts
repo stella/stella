@@ -2842,6 +2842,10 @@ describe("chat turns on a computer", () => {
         { answers: { ...ANSWERS, tone: ["Casual"] } },
       ],
       ["a question left out", { answers: { tone: ["Formal"] } }],
+      [
+        "two answers to a single-choice question",
+        { answers: { ...ANSWERS, tone: ["Formal", "Friendly"] } },
+      ],
       ["a question never asked", { answers: { ...ANSWERS, venue: ["Brno"] } }],
     ];
     for (const [name, payload] of refusals) {
@@ -4076,6 +4080,10 @@ describe("chat turns on a computer", () => {
       ["answers as text", { answers: { law: "Czech" } }],
       ["an option the question lacks", { answers: { law: ["Austrian"] } }],
       ["a question left out", { answers: {} }],
+      [
+        "two answers to a single choice",
+        { answers: { law: ["Czech", "Slovak"] } },
+      ],
       [
         "a question never asked",
         { answers: { law: ["Czech"], venue: ["Brno"] } },

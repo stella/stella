@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Esta versión no es compatible",
       "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Elija todas las que correspondan",
+      "dismiss": "Descartar y detener",
+      "secretAnswer": "Respuesta oculta",
+      "secretPlaceholder": "Su respuesta permanece oculta"
+    },
     "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# más} many {+# más} other {+# más}}",

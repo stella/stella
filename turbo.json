@@ -1610,6 +1610,7 @@
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
+        "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "**",

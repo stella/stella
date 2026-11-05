@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Seda versiooni ei toetata",
       "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Valige kõik sobivad",
+      "dismiss": "Jäta kõrvale ja peata",
+      "secretAnswer": "Vastus on peidetud",
+      "secretPlaceholder": "Teie vastus jääb peidetuks"
+    },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# veel} other {+# veel}}",
