@@ -150,6 +150,48 @@ impl DesktopTelemetryErrorCode {
   }
 }
 
+/// Which kind of failure this was, as a fixed classification. The only thing
+/// about a failure a local-only window reports beyond its code: every value
+/// is named here, so it cannot carry content or a digest of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DesktopTelemetryReason {
+  /// The window's account binding no longer matches the current account.
+  AccountUnavailable,
+  /// The native side refused the command for this window.
+  WindowRefused,
+  BillingRequestFailed,
+  TypeError,
+  ReferenceError,
+  RangeError,
+  SyntaxError,
+  OtherError,
+  /// A thrown value or rejection none of the above describes.
+  Unclassified,
+  ImageExportCleanup,
+  HistoryCapture,
+  RetentionSweep,
+}
+
+impl DesktopTelemetryReason {
+  fn as_str(self) -> &'static str {
+    match self {
+      Self::AccountUnavailable => "accountUnavailable",
+      Self::WindowRefused => "windowRefused",
+      Self::BillingRequestFailed => "billingRequestFailed",
+      Self::TypeError => "typeError",
+      Self::ReferenceError => "referenceError",
+      Self::RangeError => "rangeError",
+      Self::SyntaxError => "syntaxError",
+      Self::OtherError => "otherError",
+      Self::Unclassified => "unclassified",
+      Self::ImageExportCleanup => "imageExportCleanup",
+      Self::HistoryCapture => "historyCapture",
+      Self::RetentionSweep => "retentionSweep",
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct DesktopErrorReport {
@@ -316,12 +358,15 @@ pub struct DesktopFrontendErrorReport {
   pub code: DesktopTelemetryErrorCode,
   #[serde(default)]
   pub detail: Option<DesktopErrorDetail>,
+  #[serde(default)]
+  pub reason: Option<DesktopTelemetryReason>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct DesktopErrorEvent {
   report: DesktopErrorReport,
   detail: Option<DesktopErrorDetail>,
+  reason: Option<DesktopTelemetryReason>,
 }
 
 /// Startup phases measured on the clipboard path. Spans carry durations and
@@ -578,12 +623,27 @@ impl DesktopTelemetry {
     self.capture_event(DesktopErrorEvent {
       report,
       detail: None,
+      reason: None,
+    });
+  }
+
+  /// A native failure whose report is shared by several call sites.
+  pub fn capture_with_reason(
+    &self,
+    report: DesktopErrorReport,
+    reason: DesktopTelemetryReason,
+  ) {
+    self.capture_event(DesktopErrorEvent {
+      report,
+      detail: None,
+      reason: Some(reason),
     });
   }
 
   /// Local-only views (clipboard, activity) may report classifications, never
   /// free-form content or content-derived digests. The native caller, not the
-  /// payload, owns this rule.
+  /// payload, owns this rule: `detail` is dropped for them, and `reason` stays
+  /// because its type only holds fixed classifications.
   pub fn capture_frontend(
     &self,
     mut report: DesktopFrontendErrorReport,
@@ -617,6 +677,7 @@ impl DesktopTelemetry {
         code: report.code,
       },
       detail: report.detail.map(DesktopErrorDetail::sanitized),
+      reason: report.reason,
     });
   }
 
@@ -638,6 +699,7 @@ impl DesktopTelemetry {
       window = ?event.report.window,
       operation = ?event.report.operation,
       code = ?event.report.code,
+      reason = event.reason.map(DesktopTelemetryReason::as_str),
       error_name = detail.map(|detail| detail.error_name.as_str()),
       error_message = detail.map(|detail| detail.message.as_str()),
       error_frame = detail.and_then(|detail| detail.frame.as_deref()),
@@ -755,6 +817,10 @@ fn analytics_error_payload(
     // digest keeps them apart without carrying text.
     fingerprint.push(':');
     fingerprint.push_str(&message_digest(&detail.message));
+  } else if let Some(reason) = event.reason {
+    // Without detail, the reason is what keeps two failures apart.
+    fingerprint.push(':');
+    fingerprint.push_str(reason.as_str());
   }
   json!({
     "api_key": config.key,
@@ -773,6 +839,7 @@ fn analytics_error_payload(
       "distinct_id": config.process_id,
       "error_frame": detail.and_then(|detail| detail.frame.as_deref()),
       "error_name": detail.map(|detail| detail.error_name.as_str()),
+      "failure_reason": event.reason.map(DesktopTelemetryReason::as_str),
       "operation": operation,
       "os": std::env::consts::OS,
       "service_name": "stella-desktop",
@@ -949,6 +1016,7 @@ mod tests {
     windows: Vec<DesktopTelemetryWindow>,
     operations: Vec<DesktopTelemetryOperation>,
     error_codes: Vec<DesktopTelemetryErrorCode>,
+    reasons: Vec<DesktopTelemetryReason>,
     spans: Vec<DesktopTelemetrySpan>,
   }
 
@@ -1166,6 +1234,7 @@ mod tests {
     DesktopErrorEvent {
       report: report(),
       detail,
+      reason: None,
     }
   }
 
@@ -1373,6 +1442,66 @@ mod tests {
   }
 
   #[test]
+  fn a_reason_tells_two_detailless_reports_apart() {
+    let reported = |reason| {
+      analytics_error_payload(
+        &config(),
+        &DesktopErrorEvent {
+          reason: Some(reason),
+          ..event(None)
+        },
+      )
+    };
+    let refused = reported(DesktopTelemetryReason::AccountUnavailable);
+    let failed = reported(DesktopTelemetryReason::BillingRequestFailed);
+
+    assert_eq!(
+      refused["properties"]["failure_reason"],
+      "accountUnavailable"
+    );
+    assert_eq!(
+      refused["properties"]["$exception_fingerprint"],
+      "desktop:clipboard:clipboardHistoryRead:invalidResponse:accountUnavailable"
+    );
+    assert_ne!(
+      refused["properties"]["$exception_fingerprint"],
+      failed["properties"]["$exception_fingerprint"]
+    );
+    // A report with detail keeps the fingerprint its issue already has.
+    let detailed = analytics_error_payload(
+      &config(),
+      &DesktopErrorEvent {
+        reason: Some(DesktopTelemetryReason::TypeError),
+        ..event(Some(DesktopErrorDetail {
+          error_name: "TypeError".to_string(),
+          message: "boom".to_string(),
+          frame: None,
+        }))
+      },
+    );
+    assert_eq!(
+      detailed["properties"]["$exception_fingerprint"],
+      format!(
+        "desktop:clipboard:clipboardHistoryRead:invalidResponse:TypeError:{}",
+        message_digest("boom")
+      )
+    );
+  }
+
+  #[test]
+  fn a_reason_outside_the_closed_set_is_rejected() {
+    for reason in ["Sensitive clipboard text", "sha256:abcdef", "TypeError"] {
+      let value = json!({
+        "window": "clipboard",
+        "operation": "runtime",
+        "code": "unhandledError",
+        "reason": reason,
+      });
+      assert!(serde_json::from_value::<DesktopFrontendErrorReport>(value).is_err());
+    }
+  }
+
+  #[test]
   fn local_only_error_reports_cannot_export_details_or_claim_another_window() {
     for (caller_label, expected_window) in [
       ("clipboard", DesktopTelemetryWindow::Clipboard),
@@ -1403,6 +1532,7 @@ mod tests {
               message: "sensitive clipboard text without quotes".to_string(),
               frame: Some("sensitive_identifier@index.js:1:1".to_string()),
             }),
+            reason: Some(DesktopTelemetryReason::AccountUnavailable),
           },
           caller_label,
         );
@@ -1412,6 +1542,10 @@ mod tests {
         };
         assert_eq!(event.report.window, expected_window);
         assert_eq!(event.detail, None);
+        assert_eq!(
+          event.reason,
+          Some(DesktopTelemetryReason::AccountUnavailable)
+        );
       }
     }
   }
