@@ -236,3 +236,20 @@ test("a search queued under a public-read scope leaves the queue when the scope 
   }
   await Promise.all(holders);
 });
+
+test("a read admitted without queueing reports no wait, however late it resumes", async () => {
+  const admission = createCorpusSearchAdmission({ slots: 1 });
+  // Work already queued ahead of the read's continuation delays its resume.
+  queueMicrotask(() => {
+    const until = performance.now() + 5;
+    while (performance.now() < until) {
+      // Hold the thread.
+    }
+  });
+  const result = await admission.acquire({ waitLimit: unbounded() });
+  if (result.type !== "admitted") {
+    return panic(`Expected admission, got ${result.reason}`);
+  }
+  result.release();
+  expect(result.waitedMs).toBe(0);
+});

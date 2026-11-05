@@ -101,7 +101,13 @@ export const createCorpusSearchAdmission = ({
     });
     const waitedMs = performance.now() - startedAt;
     if (result.type === "admitted") {
-      return { type: "admitted", release: result.release, waitedMs };
+      // A read admitted without queueing waited for nothing: the time to
+      // resume after the await is not time spent waiting for a slot.
+      return {
+        type: "admitted",
+        release: result.release,
+        waitedMs: result.queued ? waitedMs : 0,
+      };
     }
     const { queued } = budget.stats();
     if (result.reason !== "aborted") {
