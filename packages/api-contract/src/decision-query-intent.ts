@@ -250,7 +250,23 @@ const readingOfRun = (run: readonly WindowReading[]): WindowReading | null => {
 const identifierWithin = (
   text: string,
   grammar: DecisionDocketGrammar | null | undefined,
-): WindowIntent | null => {
+): WindowIntent | null => embeddedReadingOf(text, grammar)?.intent ?? null;
+
+/** The entry's words before and after the stretch read as the reference. */
+export type DecisionReferenceContext = {
+  readonly before: string;
+  readonly after: string;
+};
+
+type EmbeddedReading = {
+  readonly intent: WindowIntent;
+  readonly context: DecisionReferenceContext;
+};
+
+const embeddedReadingOf = (
+  text: string,
+  grammar: DecisionDocketGrammar | null | undefined,
+): EmbeddedReading | null => {
   const tokens = foldDecisionIdentifierInput(text).split(" ");
   if (tokens.length < 2 || tokens.length > EMBEDDED_ENTRY_MAX_TOKENS) {
     return null;
@@ -312,7 +328,43 @@ const identifierWithin = (
     ),
   );
   const [only] = stretches;
-  return distinct.size === 1 && only !== undefined ? only.intent : null;
+  if (distinct.size !== 1 || only === undefined) {
+    return null;
+  }
+  const first = Math.min(...outermost.map(({ start }) => start));
+  const outside = (index: number): boolean =>
+    !outermost.some(({ start, end }) => start <= index && index < end);
+  return {
+    intent: only.intent,
+    context: {
+      before: tokens.slice(0, first).join(" "),
+      after: tokens
+        .filter((_, index) => index >= first && outside(index))
+        .join(" "),
+    },
+  };
+};
+
+/**
+ * The words an entry carries around the one reference it names: the court,
+ * the kind of decision, the date. Empty when the entry was the reference
+ * alone, and null when the entry names no reference or several. Words between
+ * two readings of the one reference are read as coming after it. These words
+ * are the citation's other constraints, so a reader of the reference must
+ * read them too rather than drop them.
+ */
+export const decisionReferenceContext = (
+  raw: string,
+  { grammar, reporters }: ParseDecisionQueryOptions = {},
+): DecisionReferenceContext | null => {
+  const intent = parseDecisionQuery(raw, { grammar, reporters });
+  if (intent.type !== "identifier") {
+    return null;
+  }
+  if (isWholeEntryIdentifier(intent)) {
+    return { before: "", after: "" };
+  }
+  return embeddedReadingOf(raw.trim(), grammar)?.context ?? null;
 };
 
 export const parseDecisionQuery = (
@@ -878,6 +930,37 @@ export const resolveDecisionIdentity = <THit extends DecisionHitIdentity>(
     candidates: open,
     reason: "selector_unmatched",
   };
+};
+
+/**
+ * What a hit's own records say about the selector a docket printed: it
+ * carries it, records nothing for the file, or records only other sheets or
+ * parts (a contradiction). A reference without a selector, or one that is not
+ * a docket, constrains nothing here.
+ */
+export const docketSelectorAgreement = (
+  identifier: DecisionIdentifierIntent,
+  hit: DecisionHitIdentity,
+): "agrees" | "unrecorded" | "contradicts" => {
+  if (identifier.kind !== "docket" || identifier.selector.kind === "none") {
+    return "agrees";
+  }
+  const { selector } = identifier;
+  const grammar = DECISION_DOCKET_GRAMMARS[identifier.jurisdiction];
+  const familyCanonical = decisionIdentifierComparisonKey(
+    identifier.family,
+    grammar,
+  );
+  const { sheets, parts } = selectorsOfHit(
+    hit,
+    { familyCanonical, grammar },
+    undefined,
+  );
+  const carried = selector.kind === "sheet" ? sheets : parts;
+  if (carried.has(selector.value)) {
+    return "agrees";
+  }
+  return carried.size === 0 ? "unrecorded" : "contradicts";
 };
 
 /**

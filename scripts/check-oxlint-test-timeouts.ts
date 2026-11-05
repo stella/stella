@@ -428,7 +428,6 @@ type CustomLintTestTimeoutOptions = {
   directory?: string;
   allowlist?: Readonly<Record<string, string>>;
   changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
-  now?: Date;
   rollouts?: readonly GuardRollout[];
   scope?: "all" | "rollout";
 };
@@ -437,7 +436,6 @@ export const customLintTestTimeoutViolations = ({
   directory = TEST_DIRECTORY,
   allowlist = TIMEOUT_ALLOWLIST,
   changedLines,
-  now,
   rollouts,
   scope = "rollout",
 }: CustomLintTestTimeoutOptions = {}): string[] => {
@@ -460,7 +458,6 @@ export const customLintTestTimeoutViolations = ({
           file: repositoryFile,
           line,
           ...(changedLines === undefined ? {} : { changedLines }),
-          ...(now === undefined ? {} : { now }),
           ...(rollouts === undefined ? {} : { rollouts }),
         }),
     });

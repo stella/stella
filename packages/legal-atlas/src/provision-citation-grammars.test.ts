@@ -100,6 +100,7 @@ const ARTICLE_ANCHORS = {
   listKinds: {},
   restatementSuffix: null,
   segmentSeparator: "-",
+  unnumberedAnchor: null,
 } as const satisfies StatuteAnchorScheme;
 
 const articleGrammar = createProvisionCitationGrammar({

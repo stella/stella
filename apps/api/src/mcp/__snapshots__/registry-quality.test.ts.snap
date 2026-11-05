@@ -1092,6 +1092,68 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search",
     "access": "read",
@@ -8377,6 +8439,68 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           ],
           "additionalProperties": false,
           "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    }
+  },
+  {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }
@@ -16098,6 +16222,68 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search_anonymized",
     "access": "read",
@@ -18079,6 +18265,68 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           ],
           "additionalProperties": false,
           "description": "The provision object from a decision provision anchor, passed unchanged."
+        }
+      }
+    }
+  },
+  {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
         }
       }
     }

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -112,46 +113,50 @@ export const TopBarCitationsFor = ({
       <Popover>
         <PopoverTrigger
           render={
-            <button
+            <Button
               aria-label={label}
-              className={cn(
-                "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
-                CITATION_TRIGGER_TOUCH_TARGET,
-              )}
-              type="button"
+              className="group/plain ms-3 shrink-0"
+              variant="plain"
             />
           }
         >
-          {/* The counts carry the trigger at phone width; the strip would
-              take the room the case number needs. */}
-          <CitationYearStrip
-            byYear={summary.incomingByYear}
-            className="max-sm:hidden"
-            fromYear={fromYear}
-            toYear={currentYear}
-          />
-          <span aria-hidden="true" className="tabular-nums">
-            {format.number(total)}
-            {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
-          </span>
-          {!citationSummaryIsCapped(summary, "incoming") &&
-            (positive > 0 || negative > 0) && (
-              <span
-                aria-hidden="true"
-                className="flex items-center gap-1 tabular-nums"
-              >
-                {positive > 0 && (
-                  <span className="text-primary">
-                    +{format.number(positive)}
-                  </span>
-                )}
-                {negative > 0 && (
-                  <span className="text-destructive">
-                    −{format.number(negative)}
-                  </span>
-                )}
-              </span>
+          <span
+            className={cn(
+              "text-muted-foreground group-hover/plain:text-foreground group-data-popup-open/plain:text-foreground flex items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
+              CITATION_TRIGGER_TOUCH_TARGET,
             )}
+          >
+            {/* The counts carry the trigger at phone width; the strip would
+              take the room the case number needs. */}
+            <CitationYearStrip
+              byYear={summary.incomingByYear}
+              className="max-sm:hidden"
+              fromYear={fromYear}
+              toYear={currentYear}
+            />
+            <span aria-hidden="true" className="tabular-nums">
+              {format.number(total)}
+              {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
+            </span>
+            {!citationSummaryIsCapped(summary, "incoming") &&
+              (positive > 0 || negative > 0) && (
+                <span
+                  aria-hidden="true"
+                  className="flex items-center gap-1 tabular-nums"
+                >
+                  {positive > 0 && (
+                    <span className="text-primary">
+                      +{format.number(positive)}
+                    </span>
+                  )}
+                  {negative > 0 && (
+                    <span className="text-destructive">
+                      −{format.number(negative)}
+                    </span>
+                  )}
+                </span>
+              )}
+          </span>
         </PopoverTrigger>
         <PopoverPanel
           align="start"

@@ -5,20 +5,29 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_CLOSE,
+  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_FRAME_REJECTION,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
+  DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
+  DESKTOP_RUNNER_PATH,
+  DESKTOP_RUNNER_POLICY_REASONS,
+  DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
   DESKTOP_RUNNER_PROTOCOL,
   DESKTOP_RUNNER_REJECT_REASONS,
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DESKTOP_RUNNER_SERVER_MESSAGE,
+  DESKTOP_RUNNER_TIMING,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
@@ -91,13 +100,26 @@ describe("desktop runner fixtures", () => {
     expect(rolesMatchTanStack).toBe(true);
   });
 
-  test("carry the contract's protocol, limits and closed vocabularies", () => {
+  test("carry the contract's protocol, endpoint, close codes, timings and closed vocabularies", () => {
     expect(fixtures.vocabulary).toEqual({
       protocol: DESKTOP_RUNNER_PROTOCOL,
       maxFrameBytes: DESKTOP_RUNNER_MAX_FRAME_BYTES,
+      runLimits: {
+        maxMessagesPerRun: DESKTOP_RUNNER_LIMITS.maxMessagesPerRun,
+        maxMessageBytesPerRun: DESKTOP_RUNNER_LIMITS.maxMessageBytesPerRun,
+      },
+      path: DESKTOP_RUNNER_PATH,
+      desktopIdHeader: DESKTOP_RUNNER_DESKTOP_ID_HEADER,
+      close: DESKTOP_RUNNER_CLOSE,
+      policyViolationCode: DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
+      policyReasons: [...DESKTOP_RUNNER_POLICY_REASONS],
+      timing: DESKTOP_RUNNER_TIMING,
       harnesses: [...AGENT_HARNESSES],
       harnessStates: Object.values(DESKTOP_RUNNER_HARNESS_STATE),
       harnessCapabilities: [...DESKTOP_RUNNER_HARNESS_CAPABILITIES],
+      harnessUnavailableReasons: [
+        ...DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
+      ],
       runRejectReasons: [...DESKTOP_RUNNER_REJECT_REASONS],
       approvalKinds: [...DESKTOP_RUNNER_APPROVAL_KINDS],
       approvalDecisions: [...DESKTOP_RUNNER_APPROVAL_DECISIONS],
@@ -106,6 +128,7 @@ describe("desktop runner fixtures", () => {
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
+      answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
     });
   });
 
@@ -139,7 +162,21 @@ describe("desktop runner fixtures", () => {
     const starts = server.flatMap((message) =>
       message.type === "run.start" ? [message] : [],
     );
-    const { protocol, maxFrameBytes, ...vocabularies } = fixtures.vocabulary;
+    // The socket's path, header, close codes and timings are not message
+    // values; the vocabulary test above binds them.
+    const {
+      protocol,
+      maxFrameBytes,
+      runLimits: _runLimits,
+      path: _path,
+      desktopIdHeader: _desktopIdHeader,
+      close: _close,
+      policyViolationCode: _policyViolationCode,
+      policyReasons: _policyReasons,
+      timing: _timing,
+      answerLimits: _answerLimits,
+      ...vocabularies
+    } = fixtures.vocabulary;
     expect({ protocol, maxFrameBytes }).toEqual({
       protocol: DESKTOP_RUNNER_PROTOCOL,
       maxFrameBytes: DESKTOP_RUNNER_MAX_FRAME_BYTES,
@@ -155,6 +192,9 @@ describe("desktop runner fixtures", () => {
         harnessStates: reports.map(({ state }) => state),
         harnessCapabilities: reports.flatMap((report) =>
           report.state === "ready" ? report.capabilities : [],
+        ),
+        harnessUnavailableReasons: reports.flatMap((report) =>
+          report.state === "unavailable" ? [report.reason] : [],
         ),
         runRejectReasons: desktop.flatMap((message) =>
           message.type === "run.rejected" ? [message.reason] : [],
@@ -197,6 +237,60 @@ describe("desktop runner fixtures", () => {
         success: v.safeParse(desktopRunnerServerMessageSchema, message).success,
       }).toEqual({ name, success: false });
     }
+  });
+});
+
+describe("question answers", () => {
+  const answer = (answers: unknown) => ({
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+    runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+    requestId: "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+    answers,
+  });
+  const parses = (answers: unknown) =>
+    v.safeParse(desktopRunnerServerMessageSchema, answer(answers)).success;
+  const {
+    maxQuestions,
+    maxAnswersPerQuestion,
+    maxAnswerLength,
+    maxQuestionIdLength,
+  } = DESKTOP_RUNNER_ANSWER_LIMITS;
+  const questions = (count: number) =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [`q${String(index)}`, ["a"]]),
+    );
+
+  test("take each bound and refuse one past it", () => {
+    const cases: [string, unknown, unknown][] = [
+      ["questions", questions(maxQuestions), questions(maxQuestions + 1)],
+      [
+        "answers per question",
+        { tone: Array.from({ length: maxAnswersPerQuestion }, () => "a") },
+        { tone: Array.from({ length: maxAnswersPerQuestion + 1 }, () => "a") },
+      ],
+      [
+        "answer length",
+        { tone: ["a".repeat(maxAnswerLength)] },
+        { tone: ["a".repeat(maxAnswerLength + 1)] },
+      ],
+      [
+        "question id length",
+        { ["q".repeat(maxQuestionIdLength)]: ["a"] },
+        { ["q".repeat(maxQuestionIdLength + 1)]: ["a"] },
+      ],
+    ];
+    for (const [name, atBound, pastBound] of cases) {
+      expect({
+        name,
+        atBound: parses(atBound),
+        past: parses(pastBound),
+      }).toEqual({ name, atBound: true, past: false });
+    }
+  });
+
+  test("count lengths in UTF-16 code units", () => {
+    // Two UTF-8 bytes each, one code unit: the bound is on code units.
+    expect(parses({ tone: ["é".repeat(maxAnswerLength)] })).toBe(true);
   });
 });
 

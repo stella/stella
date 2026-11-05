@@ -998,6 +998,20 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/holder-server.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on, and probes for a live holder at, the private Unix socket or named pipe the desktop names; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/api-client/src/index.ts",
     class: "package-owned-client",
     reason:

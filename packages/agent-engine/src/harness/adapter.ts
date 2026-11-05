@@ -1,4 +1,3 @@
-import type { ModelMessage } from "@tanstack/ai";
 import { type Result, TaggedError } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
@@ -11,6 +10,7 @@ import type {
 
 import type { StellaSandboxMcpBinding } from "../sandbox";
 import type { HarnessEvent, HarnessSessionId } from "./events";
+import type { HarnessTranscriptMessage } from "./transcript-handoff";
 
 /**
  * Guardrails for a turn on the user's own computer, in the runner protocol's
@@ -55,7 +55,7 @@ export type HarnessTurnInput = {
    * this turn. It is the portable context: a conversation may change engine
    * or harness between turns, so every turn can start from it alone.
    */
-  transcript: readonly ModelMessage[];
+  transcript: readonly HarnessTranscriptMessage[];
   continuation: HarnessContinuationRequest;
 };
 
@@ -122,12 +122,20 @@ export type HarnessModel = {
   inputModalities: readonly string[];
 };
 
+/** A plan limit the harness reports as exhausted, and when it resets. */
+export type HarnessUsageLimit = { resetsAt: string };
+
 export type HarnessProbe = {
   version: string;
   auth: HarnessAuth;
   models: readonly HarnessModel[];
   /** What this harness and adapter can do, as the runner reports it. */
   capabilities: readonly HarnessCapability[];
+  /**
+   * Set when the harness reports its plan limit exhausted with a known
+   * reset; `null` when it reports none or cannot say when it resets.
+   */
+  usageLimit: HarnessUsageLimit | null;
 };
 
 export class HarnessProbeError extends TaggedError("HarnessProbeError")<{

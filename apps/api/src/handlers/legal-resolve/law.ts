@@ -18,6 +18,7 @@ import {
 } from "@stll/api-contract/statute-query-capability";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
+import { actIssuedFrom, pickNamedAct } from "@stll/legal-atlas/act-titles";
 import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
 import {
   locateGazetteCitations,
@@ -80,7 +81,9 @@ type LawResolveInput = {
 type LawResolver = (input: LawResolveInput) => Promise<LegalResolveResponse>;
 
 /** Works the corpus's stored titles name, for an act the profile does not list. */
-type ReadNamedWorks = (name: string) => Promise<readonly { eli: string }[]>;
+type ReadNamedWorks = (
+  name: string,
+) => Promise<readonly { eli: string; validUntil: string | null }[]>;
 
 class UnresolvedActCitationError extends TaggedError(
   "UnresolvedActCitationError",
@@ -201,12 +204,20 @@ const readCitedAct = async ({
   if (read.actName === "") {
     return { type: "unknown" };
   }
-  const elis = new Set(
-    (await readNamedWorks(read.actName)).map(({ eli }) => eli),
-  );
-  const [eli, ...others] = elis;
-  if (eli !== undefined) {
-    return others.length === 0 ? { type: "work", eli } : { type: "unknown" };
+  const named = await readNamedWorks(read.actName);
+  if (named.length > 0) {
+    const picked = pickNamedAct({
+      candidates: named.map(({ eli, validUntil }) => ({
+        act: eli,
+        citedFrom: actIssuedFrom(eli),
+        citedUntil: validUntil,
+      })),
+      date: citedOn,
+      sameAct: (left, right) => left === right,
+    });
+    return picked.type === "resolved"
+      ? { type: "work", eli: picked.act }
+      : { type: "unknown" };
   }
   // Only a name shaped like a short title (`zákona o …`) is a miss worth
   // reporting; free text that names nothing is the caller's.

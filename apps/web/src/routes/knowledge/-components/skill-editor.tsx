@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
+import { DocumentMark } from "@stll/ui/document-mark";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   FileCodeIcon,
@@ -50,7 +51,6 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import type { SkillEditAccess } from "@/components/inspector/skill-history/skill-history.logic";
 import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
-import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
@@ -1097,7 +1097,7 @@ function SkillFileTree({
       }}
       renderIcon={(node) => {
         if (node.id === BODY_NODE_ID) {
-          return <MarkdownIcon className="size-4 shrink-0" />;
+          return <DocumentMark className="size-4 shrink-0" kind="markdown" />;
         }
         if (node.kind === "file") {
           return fileIcon(node.name);
@@ -1479,7 +1479,7 @@ const fileIcon = (fileName: string) => {
   // Recognise markdown via the shared MIME/extension helper so the file view,
   // the inspector rail, and the panel all agree on what counts as markdown.
   if (isMarkdownFile({ fileName })) {
-    return <MarkdownIcon className="size-4 shrink-0" />;
+    return <DocumentMark className="size-4 shrink-0" kind="markdown" />;
   }
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();
