@@ -29,6 +29,7 @@ import {
   PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import { isProviderAccountOutOfCredit } from "@/api/lib/errors/provider-error-catalogue";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -49,6 +50,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { providerErrorBodyOf } from "@/api/lib/observability/provider-error-reason";
 
 export type { AIErrorKind };
 
@@ -423,6 +425,15 @@ const classifyAIErrorInternal = (
   const providerKind = providerResponseKind(error);
   if (providerKind !== null) {
     return providerKind;
+  }
+  // An adapter can forward the provider's error body without its status. The
+  // body still names an account out of credit, which only its owner can fix.
+  const providerBody = providerErrorBodyOf(error);
+  if (
+    providerBody !== undefined &&
+    isProviderAccountOutOfCredit(providerBody)
+  ) {
+    return "provider_billing";
   }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
