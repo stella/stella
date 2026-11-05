@@ -60,6 +60,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
+  SourceFieldDisposition,
   StoredRawReparseInput,
   StoredRawReparseValue,
 } from "@/api/lib/legal-search/ingestion-types";
