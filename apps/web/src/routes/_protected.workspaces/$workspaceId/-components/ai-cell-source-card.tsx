@@ -207,6 +207,7 @@ export const AICellSourceCard = ({
               onPointerLeave={() => {
                 dismissedRef.current = false;
               }}
+              // oxlint-disable-next-line no-native-ui/no-native-button -- the trigger wraps cell children that can hold their own flag buttons, and neither <button> nor Button may contain interactive content
               role="button"
               tabIndex={0}
             />
