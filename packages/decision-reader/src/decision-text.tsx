@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode, Ref } from "react";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
+import type { CitationSpan } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
@@ -79,9 +80,11 @@ import type {
   DecisionStatuteCitationAnchor,
   ExternalDecisionProvisionAnchor,
   ReaderDecision,
+  UnresolvedCitationAnchorSource,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";
 import { SourceLinkPolicyProvider } from "./source-link-policy";
+import { UnresolvedCitation } from "./unresolved-citation";
 
 type Decision = ReaderDecision;
 
@@ -500,6 +503,46 @@ export type DecisionTextAnchorPlacements = {
   provisionsByAnchorId: Map<string, ReactNode>;
 };
 
+type UnresolvedCitationTextAnchorsOptions = {
+  annotations: readonly AnnotationAnchorSource[] | undefined;
+  spans: readonly CitationSpan<UnresolvedCitationAnchorSource>[] | undefined;
+};
+
+/** One block's unresolved citations, marked so each still peeks. */
+const unresolvedCitationTextAnchors = ({
+  annotations = [],
+  spans = [],
+}: UnresolvedCitationTextAnchorsOptions): TextAnchor[] =>
+  spans.map((span) => {
+    const linkAnnotations = annotationsOverlappingTextSpan(annotations, span);
+    return {
+      end: span.end,
+      key: `unresolved-citation:${span.source.id}`,
+      render: (children): ReactElement => (
+        <UnresolvedCitation citation={span.source}>
+          {renderLinkAnnotations({ annotations: linkAnnotations, children })}
+        </UnresolvedCitation>
+      ),
+      start: span.start,
+    };
+  });
+
+type TextSpan = { start: number; end: number };
+
+/** The spans that share no character with any linked span of the block. */
+const outsideLinkedSpans = <TSpan extends TextSpan>(
+  spans: readonly TSpan[] | undefined,
+  linked: readonly (readonly TextSpan[] | undefined)[],
+): TSpan[] | undefined =>
+  spans?.filter(
+    (span) =>
+      !linked.some((group) =>
+        group?.some(
+          (other) => other.start < span.end && span.start < other.end,
+        ),
+      ),
+  );
+
 /**
  * The marks each block draws, by block id, with the block's text. Only the
  * marks whose words are at their offsets in that text: the link overlays
@@ -543,6 +586,7 @@ const buildAnchorsByPieceId = ({
   annotations,
   blocks,
   citations,
+  unresolvedCitations,
   provisionSpans,
   externalProvisionSpans,
   statutes,
@@ -554,6 +598,7 @@ const buildAnchorsByPieceId = ({
   annotations: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citations: readonly CitationAnchorSource[];
+  unresolvedCitations: readonly UnresolvedCitationAnchorSource[];
   provisionSpans: Record<string, ProvisionAnchorSpan<CitedProvisionTarget>[]>;
   externalProvisionSpans: Record<
     string,
@@ -563,6 +608,10 @@ const buildAnchorsByPieceId = ({
 }): DecisionTextAnchorPlacements => {
   const failures: ProvisionPlacementFailure[] = [];
   const citationSpans = locateCitationSpans({ blocks, citations });
+  const unresolvedCitationSpans = locateCitationSpans({
+    blocks,
+    citations: unresolvedCitations,
+  });
   const statuteSpans = new Map<string, DecisionStatuteCitationAnchor[]>();
   for (const statute of statutes) {
     const spans = statuteSpans.get(statute.blockId);
@@ -591,6 +640,7 @@ const buildAnchorsByPieceId = ({
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
   const blockIds = new Set([
     ...Object.keys(citationSpans),
+    ...Object.keys(unresolvedCitationSpans),
     ...Object.keys(provisionSpans),
     ...Object.keys(externalProvisionSpans),
     ...statuteSpans.keys(),
@@ -638,6 +688,19 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
+    // A resolved decision link or an official CURIA link already navigates;
+    // an unresolved peek over the same words (a longer docket such as
+    // `4 Tdo 1323/2020-906` around a resolved `4 Tdo 1323/2020`) would have
+    // nothing to open, so the link keeps them.
+    anchors.push(
+      ...unresolvedCitationTextAnchors({
+        annotations: blockAnnotations,
+        spans: outsideLinkedSpans(unresolvedCitationSpans[blockId], [
+          citationSpans[blockId],
+          externalCjeuSpansByBlock.get(blockId),
+        ]),
+      }),
+    );
     for (const span of provisionSpans[blockId] ?? []) {
       const linkAnnotations = annotationsOverlappingTextSpan(
         blockAnnotations ?? [],
@@ -783,6 +846,8 @@ export type PrepareDecisionTextPlacementsOptions = {
   annotationAnchors: readonly AnnotationAnchorSource[];
   blocks: readonly Block[];
   citationAnchors: readonly CitationAnchorSource[];
+  /** Citations the corpus could not resolve, marked so they still peek. */
+  unresolvedCitationAnchors: readonly UnresolvedCitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
   externalProvisionAnchors?:
     readonly ExternalDecisionProvisionAnchor[] | undefined;
@@ -841,6 +906,7 @@ export const prepareDecisionTextPlacements = ({
   annotationAnchors,
   blocks,
   citationAnchors,
+  unresolvedCitationAnchors,
   provisionAnchors,
   externalProvisionAnchors = [],
   statuteCitationAnchors,
@@ -858,6 +924,7 @@ export const prepareDecisionTextPlacements = ({
     annotations: annotationAnchors,
     blocks,
     citations: citationAnchors,
+    unresolvedCitations: unresolvedCitationAnchors,
     provisionSpans: provisionPlacement.anchorsByPieceId,
     externalProvisionSpans: externalPlacement.anchorsByPieceId,
     statutes: statuteCitationAnchors,
