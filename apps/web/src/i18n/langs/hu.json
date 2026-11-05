@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Ez a verzió nem támogatott",
       "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Jelölje be az összes megfelelőt",
+      "dismiss": "Elvetés és leállítás",
+      "secretAnswer": "Rejtett válasz",
+      "secretPlaceholder": "Az Ön válasza rejtve marad"
+    },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# további} other {+# további}}",

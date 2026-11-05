@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Ši versija nepalaikoma",
       "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Pasirinkite visus tinkamus",
+      "dismiss": "Atmesti ir sustabdyti",
+      "secretAnswer": "Atsakymas paslėptas",
+      "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
+    },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kitas} few {+# kiti} many {+# kito} other {+# kitų}}",
