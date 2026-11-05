@@ -381,7 +381,7 @@ export const SHADCN_LINT_SETTINGS = {
 export const THIRD_PARTY_ARTWORK_FILES = [
   "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
   "apps/web/src/components/ai-provider-icons.tsx",
-  "apps/web/src/components/auth/sign-in-panel.tsx",
+  "apps/web/src/components/auth/sign-in-brand-marks.tsx",
   "apps/web/src/components/document-icon.tsx",
 ] as const;
 

@@ -2674,7 +2674,6 @@ const FileChatOverlayInner = ({
               }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
-              showThinkingIndicator
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />

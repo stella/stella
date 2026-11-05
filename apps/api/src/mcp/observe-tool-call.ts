@@ -19,13 +19,16 @@ import { reportEmitFailure } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { isMcpErrorCode } from "@/api/mcp/error-codes";
 import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
 import { currentMcpMetricTransport } from "@/api/mcp/request-metrics";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   getMcpToolCallAnalyticsOutcome,
   getMcpToolCallOutcome,
   type McpToolCallAnalyticsOutcome,
   type McpToolCallOutcome,
+  readToolErrorEnvelope,
 } from "@/api/mcp/tool-call-outcome";
 
 type ObserveMcpToolCallOptions = {
@@ -113,6 +116,42 @@ const captureMcpToolCalled = ({
   }
 };
 
+/**
+ * What a refused call refused: the envelope's code and the declared arguments
+ * its issues name. Only argument names the tool declares are logged, never an
+ * issue's message, a nested key or an undeclared key a caller sent, so the
+ * line carries no input value.
+ */
+const describeRefusal = ({
+  result,
+  toolName,
+  mode,
+}: {
+  result: CallToolResult;
+  toolName: string;
+  mode: McpMode;
+}) => {
+  const envelope = readToolErrorEnvelope(result);
+  if (envelope === undefined) {
+    return undefined;
+  }
+  const declared = Object.keys(
+    getStaticMcpToolDefinition(toolName, mode)?.inputSchema.properties ?? {},
+  );
+  const fields = [
+    ...new Set(
+      envelope.issuePaths.flatMap((path) => {
+        const root = path.split(".").at(0) ?? "";
+        return declared.includes(root) ? [root] : [];
+      }),
+    ),
+  ];
+  return {
+    "error.code": isMcpErrorCode(envelope.code) ? envelope.code : "unknown",
+    ...(fields.length === 0 ? {} : { refused_fields: fields.join(",") }),
+  };
+};
+
 /** Transport admission and execution share one observation; direct dispatch owns its own. */
 export const observeMcpToolCall = async ({
   context,
@@ -139,10 +178,12 @@ export const observeMcpToolCall = async ({
         };
         let outcome: McpToolCallOutcome = "internal_error";
         let thrownError: unknown;
+        let refusal: ReturnType<typeof describeRefusal>;
         try {
           const result = await run();
           outcome = getMcpToolCallOutcome(result);
           resultOutcome = getMcpToolCallAnalyticsOutcome(result);
+          refusal = describeRefusal({ result, toolName, mode });
           return result;
         } catch (error) {
           thrownError = error;
@@ -155,6 +196,7 @@ export const observeMcpToolCall = async ({
             mode,
             outcome,
             duration_ms: durationMs,
+            ...refusal,
           });
           captureMcpToolCalled({
             context,

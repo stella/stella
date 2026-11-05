@@ -693,18 +693,19 @@ export function UiPlayground() {
                     moreLabel={t("common.showMore")}
                     onClear={() => setColorValue("")}
                     onSelect={setColorValue}
+                    trigger={
+                      <Button variant="outline">
+                        Color
+                        <span
+                          className="size-4 rounded border"
+                          style={{
+                            backgroundColor: `var(--option-${colorValue})`,
+                          }}
+                        />
+                      </Button>
+                    }
                     value={colorValue}
-                  >
-                    <Button variant="outline">
-                      Color
-                      <span
-                        className="size-4 rounded border"
-                        style={{
-                          backgroundColor: `var(--option-${colorValue})`,
-                        }}
-                      />
-                    </Button>
-                  </ColorPicker>
+                  />
                 </div>
 
                 <div className="flex flex-col gap-2">

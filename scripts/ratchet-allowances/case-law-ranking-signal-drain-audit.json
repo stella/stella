@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 2,
+  "reason": "The ranking-signal drain leases and consumes rows of a derived projection work queue; the rows hold no user or domain fact, every decision they name is reconciled through the canonical desired-state path, and the queue is refilled by database triggers, so an audit row per lease or consumption would record bookkeeping, not an action."
+}

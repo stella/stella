@@ -76,7 +76,8 @@
         "lch",
         "oklab",
         "oklch",
-        "color"
+        "color",
+        "device-cmyk"
       ],
       {
         "message": "Raw colour function: use a theme token, or `color-mix()` over tokens. Raw colours live only in the theme stylesheets (DESIGN.md, Colour Discipline)."

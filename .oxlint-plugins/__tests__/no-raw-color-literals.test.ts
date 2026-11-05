@@ -140,6 +140,22 @@ describe("no-raw-pdf-color-operators", () => {
     ).toEqual([1, 2, 4, 5]);
   });
 
+  test("reports a literal colour built through a namespace import", async () => {
+    expect(
+      await lintSingleRule(
+        "no-raw-pdf-color-operators",
+        [
+          'import * as pdf from "@libpdf/core";',
+          "declare const r: number;",
+          "const literal = pdf.rgb(0, 0, 0);",
+          "const computed = pdf.rgb(r, r, r);",
+          "export { computed, literal };",
+        ].join("\n"),
+        { plugin: "no-raw-color-literals" },
+      ),
+    ).toEqual([3]);
+  });
+
   test("accepts helper-built operators, computed colours and prose", async () => {
     expect(
       await lintSingleRule(

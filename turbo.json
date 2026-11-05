@@ -562,6 +562,7 @@
         "$TURBO_ROOT$/oxlint.tailwind.config.ts",
         "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock"
@@ -947,7 +948,9 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
         // The compatibility test binds the policy to the pinned releases.
         "$TURBO_ROOT$/apps/desktop/package.json",
-        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json"
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json",
+        // The sidecar build test reads the desktop release's rebuild paths.
+        "$TURBO_ROOT$/scripts/detect-desktop-release-changes.sh"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has
@@ -1280,6 +1283,7 @@
         "generate:capability-runtime"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1519,6 +1523,7 @@
         "generate:capability-runtime"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1834,6 +1839,7 @@
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
         "src/mainview/App.tsx",
+        "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",

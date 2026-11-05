@@ -83,7 +83,10 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  caseLawPublicReadDb,
+  tryCaseLawPublicRead,
+} from "@/api/lib/case-law-public-read-db";
 import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -426,8 +429,9 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
+    // A shard read refused by the corpus schema lane answers 503.
     const response = yield* Result.await(
-      Result.tryPromise(
+      tryCaseLawPublicRead(
         async () =>
           await listSitemapShardDecisionsHandler(query, caseLawPublicReadDb),
       ),

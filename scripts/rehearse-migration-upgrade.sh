@@ -9,7 +9,11 @@
 # scale-shaped rows, then runs this checkout's migrate entrypoint, schema
 # migrations and online phase alike, under a wall-clock budget. It runs the
 # entrypoint a second time to prove the upgrade is a fixed point, and checks
-# that the migrated schema matches schema.ts.
+# that the migrated schema matches schema.ts. It then boots the promoted
+# release's own image against the upgraded database: production keeps serving
+# that release, and replaces its tasks, until the candidate rolls out, and a
+# promotion that fails after its migrations leaves it serving indefinitely, so
+# a release's migrations must leave the previous release able to start.
 #
 # Inputs (environment):
 #   DATABASE_URL                       an EMPTY database (refused otherwise);
@@ -41,7 +45,10 @@
 # the database is not empty, the base schema cannot be applied, the seed
 # fails, the upgrade fails or outruns its budget, corpus writers were kept
 # out for longer than the writer gap budget, the rerun changes the applied migrations, a CHECK constraint's validity, or the
-# rows an online repair rewrites, or the schema drifts from schema.ts.
+# rows an online repair rewrites, the schema drifts from schema.ts, or the
+# promoted release does not reach readiness against the upgraded database (the
+# error names its refusing startup check and the migrations this checkout
+# applied).
 #
 # The base image is pulled only when it is not already present, so a caller
 # that pulled it with credentials this script never sees (CI does, before it
@@ -97,6 +104,7 @@ runtime_dir=""
 contender_pid=""
 compose_project=""
 base_container=""
+served_container=""
 checkout_container=""
 checkout_image=""
 compose_files=()
@@ -116,7 +124,7 @@ cleanup() {
   local status=$?
   trap - EXIT
   stop_contender
-  for name in "$base_container" "$checkout_container"; do
+  for name in "$base_container" "$served_container" "$checkout_container"; do
     [[ -n "$name" ]] || continue
     if (( status != 0 )); then
       timeout --foreground --kill-after=5 10 docker logs "$name" >&2 || true
@@ -141,10 +149,13 @@ chmod 700 "$runtime_dir"
 run_id="rehearsal-$(basename "$runtime_dir" | tr '[:upper:].' '[:lower:]-')"
 compose_project="$run_id"
 base_container="${run_id}-base"
+served_container="${run_id}-served"
 checkout_container="${run_id}-candidate"
 checkout_image="stella-api-migration-rehearsal:${run_id}"
 repair_report="$runtime_dir/repairs.jsonl"
 contender_log="$runtime_dir/contender.log"
+ledger_before="$runtime_dir/ledger-before.txt"
+ledger_after="$runtime_dir/ledger-after.txt"
 tooling="${REHEARSAL_CI_TOOLING:-$repo_root}"
 compose_files=(-f "$repo_root/docker-compose.yml" -f "$runtime_dir/compose.json" -f "$runtime_dir/credentials.json")
 
@@ -216,10 +227,14 @@ boot_api() {
   done
 }
 
+# An optional third argument names a function that is handed the failed
+# container's log file and may fail with a more specific explanation.
 boot_until_ready() {
-  local image="$1" name="$2"
+  local image="$1" name="$2" explain="${3:-}"
   if ! timeout --foreground --kill-after=5 120 bash -c "$(declare -p api_env); $(declare -f boot_api); boot_api \"\$1\" \"\$2\"" _ "$image" "$name"; then
-    timeout --foreground --kill-after=5 10 docker logs "$name" >&2 || true
+    timeout --foreground --kill-after=5 10 docker logs "$name" >"$runtime_dir/$name.log" 2>&1 || true
+    cat "$runtime_dir/$name.log" >&2
+    [[ -z "$explain" ]] || "$explain" "$runtime_dir/$name.log"
     fail "API image ${image} exited or did not answer /ready with its scheduler within 120s."
   fi
   timeout --foreground --kill-after=5 15 docker stop --time 10 "$name" >/dev/null
@@ -235,6 +250,7 @@ docker run --rm --network host \
 
 log "Booting the running base release before target fixtures"
 boot_until_ready "$base_image" "$base_container"
+bun "$repo_root/scripts/migration-rehearsal-db.ts" ledger >"$ledger_before"
 
 seed_args=()
 if [[ -n "$decisions" ]]; then
@@ -310,6 +326,17 @@ if ! grep -q "No changes detected" <<<"$parity_output"; then
   fail "The upgraded schema does not match schema.ts."
 fi
 
+explain_served_refusal() {
+  local explanation
+  explanation="$(bun "$repo_root/scripts/migration-rehearsal-startup-refusal.ts" "$1" "$ledger_before" "$ledger_after")" \
+    || explanation="its log could not be classified (see above)"
+  fail "The promoted release ${base_ref} cannot boot against the database this checkout's upgrade produced: ${explanation}. Production keeps serving ${base_ref} until this release rolls out, so its migrations must stay compatible with ${base_ref}'s startup checks: expand in this release, contract in a later one."
+}
+
+log "Booting the promoted release ${base_ref} against the upgraded database"
+bun "$repo_root/scripts/migration-rehearsal-db.ts" ledger >"$ledger_after"
+boot_until_ready "$base_image" "$served_container" explain_served_refusal
+
 log "Booting this checkout after migration proofs and writer completion"
 boot_until_ready "$checkout_image" "$checkout_container"
 
@@ -324,4 +351,5 @@ boot_until_ready "$checkout_image" "$checkout_container"
   echo "| Rerun | ${rerun_seconds}s, state unchanged |"
   echo "| Writer max gap | ${writer_gap} |"
   echo "| Schema parity | no changes detected |"
+  echo "| \`${base_ref}\` after the upgrade | ready |"
 } | tee -a "$summary"

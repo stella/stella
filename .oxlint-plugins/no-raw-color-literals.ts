@@ -33,6 +33,7 @@ import {
   isAstNode,
   isIdentifier,
   isImportedFrom,
+  memberPropertyName,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -349,8 +350,11 @@ export default eslintCompatPlugin({
           },
           CallExpression(node) {
             const callee = unwrapExpression(node.callee);
+            const name = isIdentifier(callee)
+              ? callee.name
+              : memberPropertyName(callee);
             if (
-              !isIdentifier(callee) ||
+              name === null ||
               !node.arguments.some(isNumericLiteral) ||
               !isImportedFrom({
                 context,
@@ -364,7 +368,7 @@ export default eslintCompatPlugin({
             context.report({
               node,
               messageId: "rawConstructor",
-              data: { name: callee.name },
+              data: { name },
             });
           },
         };

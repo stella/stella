@@ -42,6 +42,10 @@
       // Compile-time provider capability assertions consume the adapter types.
       "entry": ["src/**/*.type-test.ts"]
     },
+    "packages/agent-engine": {
+      // The desktop compiles the harness sidecar from this entry.
+      "entry": ["src/sidecar/main.ts"]
+    },
     "packages/agent-input": {
       "entry": ["src/**/*.test.ts"]
     },

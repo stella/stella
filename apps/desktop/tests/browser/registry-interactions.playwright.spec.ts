@@ -112,6 +112,7 @@ type Connection =
 type BoundaryMode =
   | "normal"
   | "reject-first-search"
+  | "reject-first-two-searches"
   | "defer-first-search"
   | "reject-first-state"
   | "defer-first-state"
@@ -330,6 +331,9 @@ const installNativeBoundary = async (
         permissions_get_snapshot: () => ({ rows: [] }),
         // No connection status: the section stays hidden, as with local agents off.
         chatgpt_auth_get_status: () => null,
+        claude_code_auth_get_status: () => null,
+        // No install status either, read the same as the refusal with local agents off.
+        harness_get_status: () => null,
         account_get_state: () => accountSnapshot,
         open_stella_account: () => {
           connectCount += 1;
@@ -358,7 +362,10 @@ const installNativeBoundary = async (
         },
         registry_search: async () => {
           searchCount += 1;
-          if (initialMode === "reject-first-search" && searchCount === 1) {
+          if (
+            (initialMode === "reject-first-search" && searchCount === 1) ||
+            (initialMode === "reject-first-two-searches" && searchCount <= 2)
+          ) {
             throw new TypeError("Deliberate registry search failure");
           }
           if (initialMode === "defer-first-search" && searchCount === 1) {
@@ -486,6 +493,25 @@ test("sign-in stays available without disabling local clipboard search", async (
   expect(await searches(page)).toEqual([]);
 });
 
+test("Enter while a registry search is still pending never copies a hidden clipboard result", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "defer-first-search");
+  await searchBox(page).fill("Privileged");
+  await switchScope(page, "ArrowDown");
+  // The search is asked for but never answered, so Enter lands while the
+  // registry has nothing to act on and the clips' matches are only hidden.
+  await expect.poll(async () => (await searches(page)).length).toBe(1);
+  await searchBox(page).press("Enter");
+  await searchBox(page).press("Shift+Enter");
+  expect(
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "clipboard_copy_item",
+    ),
+  ).toEqual([]);
+  await expect(searchBox(page)).toBeFocused();
+});
+
 test("keyboard activation retains the input and Enter never copies a hidden clipboard result", async ({
   page,
 }) => {
@@ -502,7 +528,7 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
   await expect(searchBox(page)).toBeFocused();
 });
 
-test("highlights the first registry result and copies it with Enter from the search field", async ({
+test("highlights the first registry result and copies it with Enter on the focused card, not from the search field", async ({
   page,
 }) => {
   await openClipboard(page);
@@ -511,24 +537,45 @@ test("highlights the first registry result and copies it with Enter from the sea
   await expect(result).toHaveAttribute("aria-current", "true");
   await expect(result.locator("strong")).toHaveText("ACME PLC");
   await expect(searchBox(page)).toBeFocused();
+  const copies = async () =>
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "registry_copy",
+    );
   await searchBox(page).press("Enter");
-  await expect
-    .poll(async () =>
-      (await tauriInvocations(page)).filter(
-        ({ command }) => command === "registry_copy",
-      ),
-    )
-    .toEqual([
-      {
-        command: "registry_copy",
-        args: { html: RESULT_HTML, text: RESULT_TEXT },
-      },
-    ]);
+  expect(await copies()).toEqual([]);
   await expect(searchBox(page)).toBeFocused();
   // ArrowUp lands on the highlighted card; ArrowDown returns to the field.
   await searchBox(page).press("ArrowUp");
   await expect(result.locator("[data-registry-card]")).toBeFocused();
   await page.keyboard.press("ArrowDown");
+  await expect(searchBox(page)).toBeFocused();
+  await searchBox(page).press("ArrowUp");
+  await expect(result.locator("[data-registry-card]")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(copies).toEqual([
+    {
+      command: "registry_copy",
+      args: { html: RESULT_HTML, text: RESULT_TEXT },
+    },
+  ]);
+});
+
+test("Enter repeats a search that failed after Enter confirmed it", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "reject-first-two-searches");
+  await activateRegistry(page, "Privileged");
+  const alert = page.getByRole("alert");
+  await expect(alert).toHaveText(enMessages.clipboard.registryErrorSearch);
+  // The debounced search failed, so this Enter confirms the query and fails.
+  await searchBox(page).press("Enter");
+  await expect.poll(async () => (await searches(page)).length).toBe(2);
+  // Retried until the second failure has rendered: Enter is inert mid-search.
+  await expect(async () => {
+    await searchBox(page).press("Enter");
+    expect((await searches(page)).length).toBe(3);
+  }).toPass();
+  await expect(alert).toBeHidden();
   await expect(searchBox(page)).toBeFocused();
 });
 

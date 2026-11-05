@@ -55,6 +55,16 @@ const manifestAt = (
   ],
 });
 
+/**
+ * A fixture only replaces the bundled floor when it is newer, so its
+ * timestamp follows the floor: a policy edit that moves the floor's date
+ * cannot silently turn a fixture into a stale manifest.
+ */
+const afterFloor = () =>
+  Temporal.Instant.from(bundledHarnessCompatibility().updatedAt)
+    .add({ seconds: 1 })
+    .toString();
+
 const parse = (raw: unknown): HarnessCompatibilityManifest => {
   const floor = bundledHarnessCompatibility();
   const chosen = preferNewerManifest(floor, raw);
@@ -131,7 +141,7 @@ describe("bundled harness compatibility", () => {
 describe("resolving a harness version", () => {
   const manifest = parse({
     version: 1,
-    updatedAt: "2026-10-28T00:00:00Z",
+    updatedAt: afterFloor(),
     compatibility: [
       {
         harness: "codex",
@@ -247,10 +257,10 @@ describe("choosing between manifests", () => {
 
   test("marking the running range broken in a newer manifest refuses launch", () => {
     const floor = bundledHarnessCompatibility();
-    const later = Temporal.Instant.from(floor.updatedAt)
-      .add({ seconds: 1 })
-      .toString();
-    const current = preferNewerManifest(floor, manifestAt(later, "broken"));
+    const current = preferNewerManifest(
+      floor,
+      manifestAt(afterFloor(), "broken"),
+    );
     const { status } = resolveHarnessCompatibility({
       manifest: current,
       harness: "codex",
