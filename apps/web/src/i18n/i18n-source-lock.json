@@ -4374,6 +4374,8 @@
   "settings.account.betaDescription": "Try features that are still in development",
   "settings.account.betaInbox": "Inbox & notifications",
   "settings.account.betaInboxDescription": "Show the Inbox and the notification bell",
+  "settings.account.betaLocalAgents": "Agents on your computer",
+  "settings.account.betaLocalAgentsDescription": "Run chats with Codex or Claude Code on your computer through stella desktop",
   "settings.account.betaTimeBillingDescription": "Show time tracking, invoices, and expenses",
   "settings.account.chatNotifications": "Chat notifications",
   "settings.account.chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.",

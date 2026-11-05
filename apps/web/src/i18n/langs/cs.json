@@ -5274,6 +5274,8 @@
       "betaDescription": "Vyzkoušejte funkce, které jsou stále ve vývoji",
       "betaInbox": "Doručené a oznámení",
       "betaInboxDescription": "Zobrazit Doručené a zvonek oznámení",
+      "betaLocalAgents": "Agenti na vašem počítači",
+      "betaLocalAgentsDescription": "Spouštět chaty s Codexem nebo Claude Code na vašem počítači přes stella desktop",
       "betaTimeBillingDescription": "Zobrazit sledování času, faktury a výdaje",
       "chatNotifications": "Oznámení z chatu",
       "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",

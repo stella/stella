@@ -5274,6 +5274,8 @@
       "betaDescription": "Prueba funciones que aún están en desarrollo",
       "betaInbox": "Bandeja de entrada y notificaciones",
       "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
+      "betaLocalAgents": "Agentes en tu ordenador",
+      "betaLocalAgentsDescription": "Ejecutar chats con Codex o Claude Code en tu ordenador mediante stella desktop",
       "betaTimeBillingDescription": "Mostrar el registro de tiempo, las facturas y los gastos",
       "chatNotifications": "Notificaciones del chat",
       "chatNotificationsBlocked": "Las notificaciones de stella están bloqueadas en este navegador. Permítelas en la configuración del sitio del navegador.",

@@ -5274,6 +5274,8 @@
       "betaDescription": "Išbandykite funkcijas, kurios dar kuriamos",
       "betaInbox": "Gautieji ir pranešimai",
       "betaInboxDescription": "Rodyti gautuosius ir pranešimų varpelį",
+      "betaLocalAgents": "Agentai jūsų kompiuteryje",
+      "betaLocalAgentsDescription": "Vykdyti pokalbius su Codex arba Claude Code jūsų kompiuteryje per stella desktop",
       "betaTimeBillingDescription": "Rodyti laiko stebėjimą, sąskaitas ir išlaidas",
       "chatNotifications": "Pokalbių pranešimai",
       "chatNotificationsBlocked": "stellos pranešimai šioje naršyklėje užblokuoti. Leiskite juos naršyklės svetainės nustatymuose.",
