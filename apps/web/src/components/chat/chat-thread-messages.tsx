@@ -887,7 +887,11 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span aria-busy="true" className="text-muted-foreground text-xs">
+        <span
+          aria-busy="true"
+          className="text-muted-foreground text-xs"
+          role="status"
+        >
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (

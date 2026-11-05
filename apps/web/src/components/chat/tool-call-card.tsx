@@ -531,8 +531,10 @@ const ToolCallCardComponent = ({
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
   const status = hasError ? "failed" : TOOL_CALL_SETTLED_STATUS[part.state];
-  const statusLabel =
+  // A running call waits on nothing; the turn's live status names the work.
+  const settledStatusLabel =
     status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+  const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
