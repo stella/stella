@@ -16,7 +16,10 @@ import type { RouteAccess, RouteDefinition } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import {
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -1797,8 +1800,10 @@ const resolveCapabilityWorkspace = ({
   // `accessibleWorkspaceStatusById`, so this branch only ever sees
   // active/archived.
   if (
-    workspaceStatus !== "active-or-archived" &&
-    getWorkspaceStatus({ context, workspaceId: rawId }) !== "active"
+    !admitsWorkspaceStatus(
+      getWorkspaceStatus({ context, workspaceId: rawId }),
+      workspaceStatus,
+    )
   ) {
     return {
       ok: false,

@@ -4,9 +4,9 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { resolveActionCapabilities } from "./action-capabilities.logic";
 import type { Capability } from "./action-capabilities.logic";

@@ -2268,7 +2268,8 @@ jobs:
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/api-contract/src/mcp-tool-names.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP app derived outputs guard
@@ -2848,10 +2849,11 @@ jobs:
         id: lockfile_ages
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') }}
         # Bun applies the release-age quarantine only while it resolves
-        # versions; a frozen install takes whatever bun.lock pins. This looks
-        # up the publish time of each pin new against the merge base, in every
-        # tracked lockfile, and fails one the governing bunfig.toml would not
-        # yet admit (its excludes honoured). A registry failure fails it too.
+        # versions; a frozen install takes whatever bun.lock pins, and Cargo
+        # has no quarantine at all. This looks up the publish time of each pin
+        # new against the merge base, in every tracked bun.lock and Cargo.lock,
+        # and fails one the governing bunfig.toml would not yet admit (its
+        # excludes honoured). A registry failure fails it too.
         # Runs before the install, so a quarantined pin never executes here,
         # and again on the queued tree, whose base may govern it differently.
         env:
@@ -4596,8 +4598,9 @@ jobs:
     # Promotes this change's migrate entrypoint the way production would:
     # the promoted release's schema (from its published image), the
     # registered high-volume tables at scale, then this checkout's schema
-    # migrations and online phase under a budget, a rerun, and schema
-    # parity. See scripts/rehearse-migration-upgrade.sh.
+    # migrations and online phase under a budget, a rerun, schema parity,
+    # and the promoted release still booting against the upgraded database.
+    # See scripts/rehearse-migration-upgrade.sh.
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
@@ -4613,7 +4616,7 @@ jobs:
     runs-on: ubuntu-24.04
     # The rehearsal step's budget plus the setup before it (checkout, install,
     # image pulls); scripts/rehearse-migration-upgrade.test.ts derives both.
-    timeout-minutes: 52
+    timeout-minutes: 54
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -4718,7 +4721,7 @@ jobs:
       # fixed-point rerun, each bounded by REHEARSAL_MIGRATE_BUDGET_SECONDS.
       # This cap only catches a hang outside them.
       - name: Rehearse the upgrade from the promoted release at scale
-        timeout-minutes: 48
+        timeout-minutes: 50
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
@@ -6391,9 +6394,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
 
       - name: Resolve Windows build toolchain
@@ -6565,9 +6568,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6609,6 +6612,22 @@ jobs:
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Install cargo-deny
+        timeout-minutes: 10
+        uses: ./.github/actions/cargo-deny
+
+      # As for the desktop crate: licenses, bans and sources read only the
+      # resolved graph, fetched for every target with bounded retries, then
+      # checked once offline. Advisories run on the Dependency Audit schedule.
+      - name: Fetch license audit inputs
+        timeout-minutes: 10
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+
+      - name: License audit
+        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
 
       - name: Save Rust build cache
         if: success()
@@ -6683,9 +6702,9 @@ jobs:
 
       - &desktop_rust_toolchain
         name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
           components: clippy
 

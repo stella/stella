@@ -40,6 +40,7 @@ import {
   billingCodes,
   caseLawDecisionIdentifiers,
   caseLawReplayBatches,
+  caseLawSources,
   contacts,
   corpusIndexProjectionStates,
   entities,
@@ -1270,6 +1271,16 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE}::integer`,
         second: sql`hashtext(${options.id.organizationId})`,
         order: [options.aggregate, options.id.organizationId],
+      };
+    case "desktopRunnerCapacity":
+      return {
+        first: sql`hashtext('desktop-runner-capacity')`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+        ],
       };
     case "fileComparisonCapacity":
       return {
@@ -3107,6 +3118,20 @@ export const lockCaseLawRemovalSource = async ({
     sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
   );
 };
+
+/** Lock the accepted source predicate before distinguishing a replay no-op from a lost fence. */
+export const lockCaseLawReplaySource = async ({
+  tx,
+  where,
+}: {
+  tx: Pick<Transaction, "select">;
+  where: SQL;
+}) =>
+  await tx
+    .select({ id: caseLawSources.id })
+    .from(caseLawSources)
+    .where(where)
+    .for("update");
 
 type LockBillingCodeOptions = {
   id: SafeId<"billingCode">;

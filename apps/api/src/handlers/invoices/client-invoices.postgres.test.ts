@@ -2218,6 +2218,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
       };
@@ -2451,6 +2454,9 @@ if (!databaseUrl || !runPostgres) {
                   accessibleWorkspaceIds: matterIds,
                   pinnedIds: [],
                 }),
+                workspaceStatusById: new Map(
+                  matterIds.map((id) => [id, "active" as const]),
+                ),
               }),
             ),
           }),
@@ -2566,6 +2572,9 @@ if (!databaseUrl || !runPostgres) {
               accessibleWorkspaceIds,
               pinnedIds: [],
             }),
+            workspaceStatusById: new Map(
+              accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+            ),
           }),
         );
         expect(

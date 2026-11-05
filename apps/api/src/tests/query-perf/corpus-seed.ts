@@ -584,6 +584,54 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   }
 };
 
+/** The country whose admitted courts the court catalog page reads. */
+export const COURT_CATALOG_COUNTRY = "XCC";
+const COURT_CATALOG_COURTS = 3000;
+const COURT_CATALOG_SOURCE_IDS = [
+  "01990000-00c4-7000-8000-000000000001",
+  "01990000-00c4-7000-8000-000000000002",
+  "01990000-00c4-7000-8000-000000000003",
+] as const;
+
+/**
+ * A country of many courts, each held by every one of three sources, as the
+ * folded population counts hold them: the court catalog reads one page of
+ * them, so the rows past the page are what it must not read.
+ */
+const seedCourtCatalogPopulation = async (database: GatedTestDb) => {
+  for (const [index, sourceId] of COURT_CATALOG_SOURCE_IDS.entries()) {
+    // db-await-in-loop: three fixed sources, each with its own court rows.
+    await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
+      VALUES (${sourceId}::uuid, ${`query-perf-court-catalog-${String(index + 1)}`},
+        ${`Court catalog fixture ${String(index + 1)}`}, false)
+      ON CONFLICT (id) DO NOTHING`);
+    // db-await-in-loop: the source's court rows follow the source row they reference.
+    await database.execute(sql`INSERT INTO case_law_population_counts
+      (kind, country, source_id, value, total)
+      SELECT 'court', ${COURT_CATALOG_COUNTRY}, ${sourceId}::uuid,
+        'Catalog court ' || lpad(n::text, 5, '0'), 1 + n % 53
+      FROM generate_series(1, ${COURT_CATALOG_COURTS}) n
+      ON CONFLICT DO NOTHING`);
+  }
+  await database.execute(sql`VACUUM (ANALYZE) case_law_population_counts`);
+};
+
+/**
+ * The coverage refresh reads every source's counts, so a fixture for another
+ * read's budget leaves this measurement's clone before it starts.
+ */
+const removeCourtCatalogPopulation = async (database: GatedTestDb) => {
+  await database.execute(
+    sql`DELETE FROM case_law_population_counts WHERE country = ${COURT_CATALOG_COUNTRY}`,
+  );
+  for (const sourceId of COURT_CATALOG_SOURCE_IDS) {
+    // db-await-in-loop: three fixed sources, after the counts that reference them.
+    await database.execute(
+      sql`DELETE FROM case_law_sources WHERE id = ${sourceId}::uuid`,
+    );
+  }
+};
+
 export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
   await withSeededTableMaintenance(database, async () => {
     await database.insert(corpusIndexGenerations).values([
@@ -678,6 +726,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
 
     await rebuildIndexes();
     await seedBrowseFacetCounts(database);
+    await seedCourtCatalogPopulation(database);
     const works = Array.from(
       { length: LEGISLATION_CANDIDATE_COUNT },
       // Spread over the works, as hits for a common term are.
@@ -962,6 +1011,7 @@ export const prepareCoverageRefreshMeasurement = async (
   options: SeedSitemapReadBudgetOptions,
 ) => {
   const { database } = options;
+  await removeCourtCatalogPopulation(database);
   await seedCoverageDecisions(options);
   const found = await readCoverageRefreshState(database);
   await replaceCoverageRefreshState(

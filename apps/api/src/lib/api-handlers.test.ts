@@ -113,7 +113,7 @@ test.each([
   const response = await endpoint.handler(ctx);
   expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
   if (!(response instanceof HttpStatusResponse)) {
-    throw new Error("Expected a status response");
+    throw new TypeError("Expected a status response");
   }
   expect(response.response.retryable).toBe(true);
   expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
@@ -522,6 +522,7 @@ const createContext = <TContext>(
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
 ): TContext =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
@@ -548,7 +549,6 @@ const createContext = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({

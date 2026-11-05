@@ -9,8 +9,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const {
@@ -241,7 +242,9 @@ test("cited sources alone leave no disclosure in the footer row", () => {
 
 test("renders a case-law source without an invalid decision date", () => {
   renderInvalidDateSource();
-  const disclosure = screen.getByText("Also consulted (1)");
+  const disclosure = screen.getByRole("button", {
+    name: "Also consulted (1)",
+  });
   fireEvent.click(disclosure);
   expect(
     screen.getByText("3 Cdo 3/26", { selector: ".font-medium" }),

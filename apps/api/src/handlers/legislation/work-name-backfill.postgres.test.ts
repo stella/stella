@@ -79,7 +79,12 @@ if (!databaseUrl || !runPostgresTests) {
               .set({ title: NEW_TITLE })
               .where(eq(legislationDocuments.id, documentId));
             await syncLegislationWorkNamesTx(asTestRaw(tx), [
-              { id: documentId, country: "CZE", title: NEW_TITLE },
+              {
+                id: documentId,
+                country: "CZE",
+                title: NEW_TITLE,
+                documentType: null,
+              },
             ]);
             started.resolve(undefined);
             await held.promise;

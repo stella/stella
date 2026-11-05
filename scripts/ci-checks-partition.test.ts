@@ -339,12 +339,9 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
           return true;
         }
         const glob = new Bun.Glob(path);
-        for (const file of tracked) {
-          if (file.startsWith(`${path}/`) || glob.match(file)) {
-            return true;
-          }
-        }
-        return false;
+        return [...tracked].some(
+          (file) => file.startsWith(`${path}/`) || glob.match(file),
+        );
       });
       if (kept.length === lines.length) {
         return command;
@@ -1259,8 +1256,20 @@ const baseSteps = legSteps(baseline, baselineIds).map((step) => {
     return { ...step, run };
   }
   if (step.name === "CLI sharded registry and derived runtime guard") {
-    const run = v.parse(v.string(), fields.run);
     const continuation = " \\";
+    // The generated chat tool names joined the guard after the policy file.
+    const policy = "  packages/api-contract/src/mcp-chat-tool-policy.gen.ts";
+    const toolNames = "  packages/api-contract/src/mcp-tool-names.gen.ts";
+    const listed = v.parse(v.string(), fields.run);
+    const run = listed.includes(toolNames)
+      ? listed
+      : listed.replace(
+          `${policy}\n`,
+          () => `${policy}${continuation}\n${toolNames}\n`,
+        );
+    if (run !== listed) {
+      Object.assign(step, { run });
+    }
     const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
     const additions = CI_GENERATED_OUTPUTS.cliRegistry
       .filter((output) => !run.includes(`  ${output}${continuation}`))

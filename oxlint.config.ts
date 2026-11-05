@@ -489,6 +489,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-section-sign-glyph.fixture.tsx", [
     "no-section-sign-glyph/no-section-sign-glyph",
   ]),
+  fixtureRuleOverride("no-em-dash-copy.fixture.tsx", [
+    "no-em-dash-copy/no-em-dash-copy",
+  ]),
   fixtureRuleOverride("no-style-substring-match.fixture.ts", [
     "no-style-substring-match/no-style-substring-match",
   ]),
@@ -1186,9 +1189,7 @@ const customCssClassNames = [
   "stella-office-spreadsheet",
   "story-step",
   "story-step-visible",
-  "view-layout-preview-fade-in",
-  "view-layout-preview-fade-out",
-  "view-layout-preview-move",
+  "view-layout-preview-kanban-carry",
   "word",
 ] satisfies string[];
 
@@ -1957,6 +1958,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-oauth-grant-admission.ts",
     "./.oxlint-plugins/no-placeholder-stella-mark.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-em-dash-copy.ts",
     "./.oxlint-plugins/no-style-substring-match.ts",
     "./.oxlint-plugins/no-inert-autofocus.ts",
     "./.oxlint-plugins/one-statement-time-per-row-write.ts",
@@ -2029,6 +2031,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -3465,6 +3468,39 @@ const config = defineConfig({
       },
     },
     {
+      // Product copy only. Tests, fixtures and generated catalogues are not
+      // copy a reader sees, and neither is text written for a model, an
+      // operator or a parser: the API's prompts, tool descriptions, agent
+      // references and ingestion, the CLI and its agent skill, court-text and
+      // registry parsers, agent input normalisation, repository scripts and
+      // the web app's dev-only diagnostics.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/tests/**",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+        "**/fixtures/**",
+        "**/*.gen.ts",
+        "**/*.generated.ts",
+        "**/generated/**",
+        "apps/api/**",
+        "apps/web/src/routes/dev/**",
+        "apps/web/src/runtime.ts",
+        "apps/web/src/components/render-storm-canary.tsx",
+        "packages/agent-input/**",
+        "packages/api-contract/**",
+        "packages/business-registries/**",
+        "packages/cli/**",
+        "packages/decision-reader/**",
+        "packages/legal-atlas/**",
+        "packages/scripts/**",
+      ],
+      rules: {
+        "no-em-dash-copy/no-em-dash-copy": "error",
+      },
+    },
+    {
       // The other half of the detached-promise guard: `.catch(() => null)`
       // passes every floating-promise check while discarding the rejection,
       // which is what the `void` ban exists to prevent. Product code only;
@@ -4829,6 +4865,15 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-unguarded-case-law-replay-write.fixture.ts",
+      ],
+      rules: {
+        "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
       rules: {
@@ -5727,6 +5772,14 @@ const config = defineConfig({
       },
     },
     {
+      files: ["**/*.{ts,tsx,mts,cts}"],
+      excludeFiles: ["**/*.test.{ts,tsx,mts,cts}"],
+      rules: {
+        "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
+          "error",
+      },
+    },
+    {
       // A cursor write is the irreversible boundary of a replay-safe
       // ingestion page. Keep it inside the canonical helper so the ordering
       // is visible and reviewable; schema constraints and fixed-point tests
@@ -6536,11 +6589,14 @@ const config = defineConfig({
       },
     },
     {
+      // DOM teardown goes through its one owner, which drains React's
+      // scheduler before removing the happy-dom globals.
       files: [
         "apps/web/**/*.{ts,tsx}",
+        "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
       ],
-      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      excludeFiles: ["packages/property-testing/src/dom-environment.ts"],
       rules: {
         "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },

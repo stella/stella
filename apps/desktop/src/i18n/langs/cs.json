@@ -38,7 +38,7 @@
     "reconnectAccount": "Znovu připojit k stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Změny zůstávají lokální a budou automaticky zopakovány",
+    "checkpointDelayedBody": "{fileName}: změny zůstávají lokální a budou automaticky zopakovány",
     "checkpointDelayedTitle": "Synchronizace kontrolního bodu zpožděna",
     "diagnosticsCopiedBody": "Vložte ji do žádosti o podporu, když bude potřeba.",
     "diagnosticsCopiedTitle": "Diagnostika zkopírována",
@@ -54,9 +54,9 @@
     "recoveryResetTitle": "Lokální data obnovy byla resetována",
     "revisionCreatedBody": "{fileName} uložen jako verze {versionNumber}. Úpravy na desktopu dokončeny",
     "revisionCreatedTitle": "Revize stella vytvořena",
-    "sessionClosedSaved": "{fileName} — Lokální kopie zůstává zachována v Dočasných pracovních kopiích",
-    "sessionClosedUnsaved": "{fileName} — Máte neuložené lokální úpravy. Svou kopii najdete v Dočasných pracovních kopiích.",
-    "takenOverBody": "{fileName} — Znovu otevřete ze stella zde, abyste si převzali úpravy zpět",
+    "sessionClosedSaved": "{fileName}: lokální kopie zůstává zachována v Dočasných pracovních kopiích",
+    "sessionClosedUnsaved": "{fileName}: máte neuložené lokální úpravy. Svou kopii najdete v Dočasných pracovních kopiích.",
+    "takenOverBody": "{fileName}: znovu otevřete ze stella zde, abyste si převzali úpravy zpět",
     "takenOverLocalError": "Úpravy na desktopu přesunuty na jiné zařízení. Tato lokální kopie je zachována.",
     "takenOverTitle": "Úpravy přesunuty na jiné zařízení",
     "editsSetAsideTitle": "Úpravy odloženy",
@@ -501,6 +501,10 @@
     "evidenceTitles": "Názvy",
     "evidenceApps": "Aplikace",
     "rangeEmpty": "V tomto úseku se nic nezaznamenalo.",
+    "entryStart": "Začátek",
+    "entryEnd": "Konec",
+    "rangeEndBeforeStart": "Nastavte konec až po začátku.",
+    "rangeDraftedLeftOut": "{duration}, čas již zahrnutý v konceptech se nepočítá",
     "calendarHint": "Otevřením čárkovaného návrhu ho zkontrolujete; tažením ve sloupci Časové záznamy vytvoříte záznam pro libovolný úsek.",
     "aiDraftWrite": "Navrhnout pomocí stella AI",
     "aiDraftAgain": "Navrhnout znovu",
@@ -728,6 +732,36 @@
     "callbackConnectedTitle": "ChatGPT je připojen",
     "callbackConnectedBody": "Tuto kartu můžete zavřít a vrátit se do stelly.",
     "callbackNotConnectedTitle": "ChatGPT se nepřipojil",
-    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu."
+    "callbackNotConnectedBody": "Vraťte se do stelly, zjistěte, co se stalo, a zkuste to znovu.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Používejte své předplatné Claude pro lokální agenty ve stelle. Využití se započítává do tarifu Claude, odděleně od předplatného stelly.",
+      "notInstalled": "Claude Code zatím není na tomto počítači nainstalován.",
+      "signIn": "Přihlásit se přes Claude",
+      "openSignInPage": "Otevřít stránku přihlášení",
+      "signedIn": "Přihlášeno ke Claude",
+      "signedInAs": "Přihlášeno ke Claude · {email}",
+      "signOut": "Odhlásit se",
+      "apiKey": "Claude Code je přihlášen klíčem API, který stella nepoužívá. Odhlaste se a pak se přihlaste se svým předplatným Claude.",
+      "failure": {
+        "notCompleted": "Přihlášení nebylo dokončeno. Zkuste to znovu.",
+        "timedOut": "Přihlášení trvalo příliš dlouho. Zkuste to znovu.",
+        "unavailable": "Claude Code se na tomto počítači nepodařilo spustit. Zkuste to znovu."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} zatím není na tomto počítači nainstalován.",
+      "install": "Nainstalovat",
+      "downloading": "Stahování {name} {version}: {percent} %",
+      "verifying": "Kontrola {name} {version}",
+      "ready": "{name} {version} je nainstalován.",
+      "retry": "Zkusit znovu",
+      "activeStays": "Dál se používá verze {version}.",
+      "failure": {
+        "download": "{name} se nepodařilo stáhnout. Zkontrolujte připojení k internetu a zkuste to znovu.",
+        "verification": "{name} se nepodařilo ověřit, proto nebyl nainstalován.",
+        "storage": "{name} se nepodařilo uložit do tohoto počítače. Zkontrolujte, zda je na disku volné místo."
+      }
+    }
   }
 }

@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { quotePieces } from "@stll/legal-ast/answer-quote";
@@ -30,7 +31,6 @@ import {
   useAnswerCitedDecisions,
   useAnswerQuoteChecks,
 } from "@/components/chat/chat-decision-citation";
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { CitationCopyOptions } from "@/components/legal-reader/citation-copy-options";
 import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic";
 import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";

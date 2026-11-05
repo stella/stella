@@ -38,14 +38,22 @@ export const createRlsDesktopCredentials = async (
     resolveMember: async (lookup) =>
       await resolveMemberAuthorization(lookup, testDb),
   });
-  const mint = async (boundOrganizationId: TestIds["orgA"]) => {
-    const identity = await createDesktopDeviceSigner();
+  type DeviceIdentity = Awaited<ReturnType<typeof createDesktopDeviceSigner>>;
+  const mint = async (
+    boundOrganizationId: TestIds["orgA"],
+    device?: DeviceIdentity,
+  ) => {
+    const identity = device ?? (await createDesktopDeviceSigner());
     const created = await auth.api.createApiKey({
       body: {
         configId: DESKTOP_REGISTRY_KEY_CONFIG,
         name: "Desktop matrix",
         userId: ids.userA1,
         expiresIn: null,
+        // Tests verify a key far more often than a desktop does, so a limit
+        // would refuse whichever test comes after the budget runs out.
+        // desktop-registry/auth.test.ts pins the limit real keys get.
+        rateLimitEnabled: false,
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: boundOrganizationId,
@@ -57,11 +65,23 @@ export const createRlsDesktopCredentials = async (
       },
     });
     return {
+      /** The account token, for a request a test signs with another key. */
+      credential: created.key,
+      keyId: created.id,
+      deviceJkt: identity.deviceJkt,
+      /** The device key, for another credential a test mints on it. */
+      device: identity,
       signRequest: async (request: Request) => {
         request.headers.set("authorization", `Bearer ${created.key}`);
         return await identity.signRequest({ request, credential: created.key });
       },
     };
   };
-  return { ...authorizers, a: await mint(ids.orgA), b: await mint(ids.orgB) };
+  return {
+    ...authorizers,
+    a: await mint(ids.orgA),
+    b: await mint(ids.orgB),
+    /** Another credential of the account, on a new or a given device key. */
+    mint,
+  };
 };

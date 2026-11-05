@@ -99,6 +99,7 @@ const toolCallOutcome = ({
   input?: unknown;
 }): ToolCallOutcome => {
   const result = validateToolCallParts({
+    ownership: "cloud",
     message: {
       id: toSafeId<"chatMessage">("msg_property_tool_call"),
       role: "assistant",
@@ -205,6 +206,7 @@ test("keeps a null the tool's schema admits and omits one it refuses", () => {
   const argumentsText = JSON.stringify({ instructions: null, note: null });
   const validate = (part: { input?: unknown }) =>
     validateToolCallParts({
+      ownership: "cloud",
       message: {
         id: toSafeId<"chatMessage">("msg_nullable_tool_call"),
         role: "assistant",
