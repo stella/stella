@@ -15,7 +15,9 @@ local-only feature follows every rule below and adds one entry to
   (`keychain::LocalDataKey`). Data is written as AES-256-GCM envelopes through
   `local_store::EncryptedJsonFile`, atomically and readable by the owner only.
   Bind each file to its purpose with associated data when a store has more
-  than one file.
+  than one file. A store that only grows between rewrites appends through
+  `local_store::EncryptedJsonLog`, which binds each line to its position and
+  replaces the file atomically when it is rewritten.
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
   key while encrypted data exists without one; the store opens in a
   deletion-only state. Activity distinguishes a definitely missing key from
