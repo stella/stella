@@ -1,7 +1,7 @@
 {
   "release": null,
   "sourceCommit": "5f59e48fc5664cec256f28303d5b08093af4a872",
-  "newestMigration": "20261103120100_generated_artefact_provenance",
+  "newestMigration": "20261105140000_generated_artefact_provenance",
   "shape": "TODO: what this stored shape adds or drops",
   "actors": {
     "organizationId": "rsK6EA1H3T8Ze8q3qAt2v9FhiukPVqRr",
