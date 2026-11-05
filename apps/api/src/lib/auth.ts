@@ -354,6 +354,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -2144,6 +2145,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
