@@ -6,6 +6,8 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_COMPACT_ROW_CLASS,
@@ -139,16 +141,28 @@ export const DockedComposerPending = ({
   surface,
 }: {
   surface: "chat" | "sign-in";
-}) =>
-  surface === "chat" ? (
-    <DockedComposer
-      bar={<PromptBarPending>{null}</PromptBarPending>}
-      // The status row's height: its controls, and the gap above them.
-      dock={<div aria-hidden className="mt-1.5 h-6" />}
-    />
-  ) : (
-    <DockedComposer bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>} />
+}) => {
+  const t = useTranslations("common");
+  return (
+    <>
+      {/* The placeholder is hidden from assistive technology; this says why. */}
+      <span className="sr-only" role="status">
+        {t("loading")}
+      </span>
+      {surface === "chat" ? (
+        <DockedComposer
+          bar={<PromptBarPending>{null}</PromptBarPending>}
+          // The status row's height: its controls, and the gap above them.
+          dock={<div aria-hidden className="mt-1.5 h-6" />}
+        />
+      ) : (
+        <DockedComposer
+          bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>}
+        />
+      )}
+    </>
   );
+};
 
 type DockedComposerProps = {
   /**
