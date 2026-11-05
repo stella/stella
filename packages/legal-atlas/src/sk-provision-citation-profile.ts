@@ -354,14 +354,17 @@ export const SK_PROFILE = {
   ],
 
   titleHeads: TITLE_HEADS,
-  amendingClauseOpeners: [
-    "a o zmene",
-    "a o doplnení",
-    "a o zrušení",
-    "a ktorým sa mení",
-    "a ktorým sa dopĺňa",
-    "a ktorým sa zrušuje",
-  ],
+  amendingClause: {
+    openers: [
+      "a o zmene",
+      "a o doplnení",
+      "a o zrušení",
+      "a ktorým sa mení",
+      "a ktorým sa dopĺňa",
+      "a ktorým sa zrušuje",
+    ],
+    amendedActStems: ["zákon", "poriad", "predpis"],
+  },
 
   ordinalWords: {
     prvá: "1",

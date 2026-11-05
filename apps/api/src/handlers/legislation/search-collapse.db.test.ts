@@ -574,6 +574,56 @@ describe("acts the query names come first", () => {
     },
   );
 
+  test("an act's end is that of its last version, whatever that version is called", async () => {
+    const renamedEli = "https://example.test/eli/cz/sb/1999/987";
+    const renamed = [
+      {
+        id: createSafeId<"legislationDocument">(),
+        title: "987/1999 Sb., o dřívějším názvu",
+        versionValidFrom: "2000-01-01",
+        versionValidTo: "2010-01-01",
+      },
+      {
+        id: createSafeId<"legislationDocument">(),
+        title: "987/1999 Sb., o pozdějším názvu",
+        versionValidFrom: "2010-01-01",
+        versionValidTo: null,
+      },
+    ];
+    await db.insert(legislationDocuments).values(
+      renamed.map((row) => ({
+        ...row,
+        sourceId,
+        eli: renamedEli,
+        country: "CZE",
+        language: "cs",
+        contentHash: `renamed-${row.versionValidFrom}`,
+      })),
+    );
+    await db.transaction(
+      async (tx) =>
+        await syncLegislationWorkNamesTx(
+          asTestRaw(tx),
+          renamed.map(({ id, title }) => ({
+            id,
+            country: "CZE",
+            title,
+            documentType: null,
+          })),
+        ),
+    );
+
+    const named = await legislationDb(
+      async (tx) =>
+        await readNamedLegislationWorks(tx, {
+          query: "o dřívějším názvu",
+          country: "CZE",
+        }),
+    );
+
+    expect(named).toMatchObject([{ eli: renamedEli, validUntil: null }]);
+  });
+
   test("a name in the act's own title, corroborated by a citation, pins the act in force", async () => {
     const result = await rehydrate("Občanský zákoník", [
       [old1964, 0.9],

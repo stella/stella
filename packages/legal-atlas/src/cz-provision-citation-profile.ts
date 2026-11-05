@@ -896,13 +896,16 @@ export const CZ_PROFILE = {
   ],
 
   titleHeads: TITLE_HEADS,
-  amendingClauseOpeners: [
-    "a o změně",
-    "a o doplnění",
-    "a o zrušení",
-    "a kterým se mění",
-    "a kterým se ruší",
-  ],
+  amendingClause: {
+    openers: [
+      "a o změně",
+      "a o doplnění",
+      "a o zrušení",
+      "a kterým se mění",
+      "a kterým se ruší",
+    ],
+    amendedActStems: ["zákon", "řád", "předpis"],
+  },
 
   ordinalWords: {
     první: "1",

@@ -1,6 +1,16 @@
 // parser-output-unchanged: names derive from stored titles and kinds; no parse reads them
 import { panic } from "better-result";
-import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  max,
+  ne,
+  or,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
@@ -14,12 +24,10 @@ import {
 } from "@stll/api-contract/statute-query-intent";
 import {
   splitStatuteTitleCitation,
+  statesStatuteCitation,
   statuteTitleCitationMentionRegex,
 } from "@stll/api-contract/statute-route";
-import {
-  laterValidityEnd,
-  nameBeforeAmendingClause,
-} from "@stll/legal-atlas/act-titles";
+import { nameBeforeAmendingClause } from "@stll/legal-atlas/act-titles";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import {
   nominativeTitle,
@@ -121,6 +129,20 @@ const parentheticalsOf = (text: string): string[] =>
   });
 
 /**
+ * The parentheses a title's own name holds. One that follows or states a
+ * citation belongs to the cited act (`kterým se mění zákon č. 90/2012 Sb.
+ * (zákon o obchodních korporacích)`).
+ */
+const ownParentheticalsOf = (text: string): string[] =>
+  [...text.matchAll(PARENTHETICAL)].flatMap((match) => {
+    const inner = match[1]?.trim();
+    const through = text.slice(0, match.index + match[0].length);
+    return inner === undefined || inner === "" || statesStatuteCitation(through)
+      ? []
+      : [inner];
+  });
+
+/**
  * The word a citing title writes right before a citation (`zákona č.
  * 89/2012 Sb.` → `zákona`), skipping abbreviations that end in a full stop.
  * Null when that word is not plain letters.
@@ -195,19 +217,17 @@ const statedOwnNames = ({
   if (profile === null) {
     return [];
   }
-  const shortened = nameBeforeAmendingClause(
-    ownName,
-    profile.amendingClauseOpeners,
-  );
+  const shortened = nameBeforeAmendingClause(ownName, profile.amendingClause);
   const stated = documentType?.trim().toLowerCase() ?? "";
   const kind = profile.titleHeads.find(
     ({ nominative }) => nominative === stated,
   )?.nominative;
+  // An amending clause ends the name, so a comma past it cuts nothing short.
   const wholeName = !FIRST_CLAUSE_END.test(rest.replace(PARENTHETICAL, ""));
   const headed =
-    kind === undefined || !wholeName
+    kind === undefined
       ? []
-      : [ownName, shortened].flatMap((name) =>
+      : [wholeName ? ownName : null, shortened].flatMap((name) =>
           name !== null && TITLE_COMPLEMENT.test(name)
             ? [`${kind} ${name}`]
             : [],
@@ -257,7 +277,7 @@ export const legislationWorkNameForms = (
   const ownName = rest.split(FIRST_CLAUSE_END, 1)[0]?.trim() ?? "";
   if (ownName !== "") {
     derive("derived_title_segment", ownName);
-    for (const inner of parentheticalsOf(ownName)) {
+    for (const inner of ownParentheticalsOf(ownName)) {
       derive("derived_parenthetical", inner);
     }
     for (const name of statedOwnNames({ ...naming, rest, ownName })) {
@@ -266,14 +286,8 @@ export const legislationWorkNameForms = (
   }
   const ownCitationKey =
     citation === null ? null : legislationNameMatchKey(citation);
-  const citesAnotherAct = [
-    ...title.matchAll(statuteTitleCitationMentionRegex()),
-  ].some((mention) => {
-    const citedKey = legislationNameMatchKey(mention[1] ?? "");
-    return citedKey !== null && citedKey !== ownCitationKey;
-  });
   const closing = CLOSING_PARENTHETICAL.exec(rest)?.[1]?.trim();
-  if (closing !== undefined && !citesAnotherAct) {
+  if (closing !== undefined && !statesStatuteCitation(rest)) {
     derive("derived_parenthetical", closing);
   }
   if (citation !== null) {
@@ -694,6 +708,47 @@ const statuteQueryReferences = (
   }
 };
 
+/**
+ * When each act stops being in force: the end of its last version under any
+ * title, since a court can keep using a name after the act took another. An
+ * act with an open version has no end.
+ */
+const validityEndsOf = async (
+  tx: LegislationReadTransaction,
+  works: readonly NamedLegislationWork[],
+): Promise<ReadonlyMap<string, string | null>> => {
+  if (works.length === 0) {
+    return new Map();
+  }
+  const acts = await tx
+    .select({
+      sourceId: legislationDocuments.sourceId,
+      eli: legislationDocuments.eli,
+      language: legislationDocuments.language,
+      versions: count(),
+      endedVersions: count(legislationDocuments.versionValidTo),
+      lastEnd: max(legislationDocuments.versionValidTo),
+    })
+    .from(legislationDocuments)
+    .where(
+      inArray(legislationDocuments.eli, [
+        ...new Set(works.map(({ eli }) => eli)),
+      ]),
+    )
+    .groupBy(
+      legislationDocuments.sourceId,
+      legislationDocuments.eli,
+      legislationDocuments.language,
+    )
+    .limit(NAMED_VERSION_LIMIT);
+  return new Map(
+    acts.map((act) => [
+      legislationWorkRefKey(act),
+      act.endedVersions === act.versions ? act.lastEnd : null,
+    ]),
+  );
+};
+
 type ReadNamedLegislationWorksOptions = {
   query: string;
   /** Narrows the lookup to one jurisdiction's names. */
@@ -817,7 +872,6 @@ export const readNamedLegislationWorks = async (
       sourceId: legislationDocuments.sourceId,
       eli: legislationDocuments.eli,
       language: legislationDocuments.language,
-      versionValidTo: legislationDocuments.versionValidTo,
     })
     .from(legislationDocuments)
     .where(inArray(legislationDocuments.id, versionIds));
@@ -829,23 +883,23 @@ export const readNamedLegislationWorks = async (
       eli: version.eli,
       language: version.language,
       fromCitation: fromCitationIds.has(version.id),
-      validUntil: version.versionValidTo,
+      validUntil: null,
     };
     const key = legislationWorkRefKey(work);
     const known = works.get(key);
     works.set(key, {
       ...work,
       fromCitation: work.fromCitation || (known?.fromCitation ?? false),
-      validUntil:
-        known === undefined
-          ? work.validUntil
-          : laterValidityEnd(known.validUntil, work.validUntil),
     });
   }
   const chosen = chooseNamedWorks([...works.values()]);
+  const ends = await validityEndsOf(tx, chosen);
   // Ordered by key rather than by language: the order only has to be stable.
   const byKey = new Map(
-    chosen.map((work) => [legislationWorkRefKey(work), work]),
+    chosen.map((work) => {
+      const key = legislationWorkRefKey(work);
+      return [key, { ...work, validUntil: ends.get(key) ?? null }];
+    }),
   );
   const ordered: NamedLegislationWork[] = [];
   for (const key of [...byKey.keys()].toSorted()) {

@@ -356,6 +356,33 @@ describe("the names courts print", () => {
     expect(own).toEqual([]);
   });
 
+  test("a parenthesis after a citation with no comma is the cited act's", () => {
+    for (const title of [
+      "1/2000 Sb., o X, kterým se mění zákon č. 90/2012 Sb. (zákon o obchodních korporacích)",
+      "1/2000 Sb., kterým se mění zákon č. 90/2012 Sb. (zákon o obchodních korporacích)",
+    ]) {
+      const own = legislationWorkNameForms(title, {
+        country: "CZE",
+        documentType: "zákon",
+      }).flatMap((form) =>
+        form.origin === "derived" && form.derivation === "derived_parenthetical"
+          ? [form.matchKey]
+          : [],
+      );
+      expect(own).toEqual([]);
+    }
+  });
+
+  test("a comma past the amending clause leaves the name whole", () => {
+    expect(
+      keysOf(
+        "1/2000 Sb., o X a o změně zákona č. 5/1999 Sb., o Y",
+        "CZE",
+        "zákon",
+      ),
+    ).toEqual(expect.arrayContaining(["o x", "zákon o x"]));
+  });
+
   test("planning twice over the same names changes nothing", () => {
     const subject = {
       id: createSafeId<"legislationDocument">(),

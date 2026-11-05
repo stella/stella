@@ -21,10 +21,19 @@ describe("actTitleForms", () => {
     ["cs", "vyhláška o X", "vyhláškou o X"],
     ["cs", "daňový řád", "daňového řádu"],
     ["cs", "zákoník práce", "zákoníkem práce"],
+    ["cs", "soudní řád správní", "soudního řádu správního"],
+    ["cs", "soudní řád správní", "soudním řádem správním"],
+    ["sk", "rokovací poriadok", "rokovacieho poriadku"],
     ["sk", "o obetiach trestných činov", "zákonom o obetiach trestných činov"],
     ["sk", "správny poriadok", "správneho poriadku"],
   ])("%s %s is also printed as %s", (language, shortTitle, printed) => {
     expect(actTitleForms({ language, shortTitle })).toContain(printed);
+  });
+
+  test("only the word beside the noun agrees with it", () => {
+    expect(
+      actTitleForms({ language: "cs", shortTitle: "daňový řád ve znění" }),
+    ).toContain("daňového řádu ve znění");
   });
 
   test("a language without morphology reads a title as stored", () => {
@@ -39,6 +48,9 @@ describe("isCitableActName", () => {
     ["cs", "zákon o obětech trestných činů"],
     ["cs", "vyhláška o X"],
     ["cs", "občanský soudní řád"],
+    ["cs", "soudní řád správní"],
+    ["cs", "ústavní zákon o bezpečnosti"],
+    ["sk", "rokovací poriadok"],
     ["cs", "zákoník práce"],
     ["sk", "zákon o obetiach trestných činov"],
     ["sk", "správny poriadok"],
@@ -50,6 +62,8 @@ describe("isCitableActName", () => {
     ["cs", "o advokacii"],
     ["cs", "o soudním řádu"],
     ["cs", "kterým se mění některé další zákony a zákon o X"],
+    ["cs", "kterým se mění zákon č. 1/2000 Sb."],
+    ["cs", "úplné znění zákona o X"],
     ["pl", "ustawa o adwokaturze"],
   ])("%s %s is not", (language, name) => {
     expect(isCitableActName(language, name)).toBe(false);
@@ -60,30 +74,41 @@ describe("nameBeforeAmendingClause", () => {
   test.each([
     [
       "o ochraně osobních údajů a o změně některých zákonů",
-      CZ_PROFILE.amendingClauseOpeners,
+      CZ_PROFILE.amendingClause,
       "o ochraně osobních údajů",
     ],
     [
       "o obětech trestných činů a o změně některých zákonů (zákon o obětech trestných činů)",
-      CZ_PROFILE.amendingClauseOpeners,
+      CZ_PROFILE.amendingClause,
       "o obětech trestných činů",
     ],
+    ["o X a o změně zákona č. 1/2000 Sb.", CZ_PROFILE.amendingClause, "o X"],
+    [
+      "o X a o změně občanského soudního řádu",
+      CZ_PROFILE.amendingClause,
+      "o X",
+    ],
+    ["o X a\u00A0o\nzměně některých zákonů", CZ_PROFILE.amendingClause, "o X"],
     [
       "o obetiach trestných činov a o zmene a doplnení niektorých zákonov",
-      SK_PROFILE.amendingClauseOpeners,
+      SK_PROFILE.amendingClause,
       "o obetiach trestných činov",
     ],
-  ])("%s", (name, openers, expected) => {
-    expect(nameBeforeAmendingClause(name, openers)).toBe(expected);
+  ])("%s", (name, clause, expected) => {
+    expect(nameBeforeAmendingClause(name, clause)).toBe(expected);
   });
 
   test("a name with no such clause, or nothing before it, has no shorter form", () => {
-    const openers = CZ_PROFILE.amendingClauseOpeners;
-    expect(nameBeforeAmendingClause("o advokacii", openers)).toBeNull();
-    expect(nameBeforeAmendingClause("a o změně zákonů", openers)).toBeNull();
+    const clause = CZ_PROFILE.amendingClause;
+    expect(nameBeforeAmendingClause("o advokacii", clause)).toBeNull();
+    expect(nameBeforeAmendingClause("a o změně zákonů", clause)).toBeNull();
     // A word the opener only begins is not the clause.
     expect(
-      nameBeforeAmendingClause("o a o změnách v řízení", openers),
+      nameBeforeAmendingClause("o a o změnách v zákonech", clause),
+    ).toBeNull();
+    // A clause amending no act is part of the name.
+    expect(
+      nameBeforeAmendingClause("o ochraně ovzduší a o změně klimatu", clause),
     ).toBeNull();
   });
 });

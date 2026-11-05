@@ -2,7 +2,10 @@ import { panic } from "better-result";
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import type { TitleHeadSpec } from "./provision-citation-profile";
+import type {
+  AmendingClauseSpec,
+  TitleHeadSpec,
+} from "./provision-citation-profile";
 
 export const ACT_KINDS = ["statute", "decree", "regulation"] as const;
 
@@ -152,6 +155,7 @@ const TITLE_MORPHOLOGY = {
     adjectives: {
       ý: ["ý", "ého", "ému", "om", "ým"],
       y: ["y", "eho", "emu", "om", "ym"],
+      í: ["í", "ieho", "iemu", "om", "ím"],
     },
   },
 } as const satisfies Record<string, TitleMorphology>;
@@ -173,9 +177,9 @@ type ActTitleFormsOptions = {
 };
 
 /**
- * Every case a citing sentence prints a short title in. The words after the
- * noun keep their form; adjectives before it decline with it. A language with
- * no morphology reads a title as stored.
+ * Every case a citing sentence prints a short title in. Adjectives agree with
+ * the noun from either side (`soudního řádu správního`); the words further on
+ * keep their form. A language with no morphology reads a title as stored.
  */
 export const actTitleForms = ({
   language,
@@ -219,7 +223,7 @@ export const actTitleForms = ({
         if (wordIndex === nounIndex) {
           return declined;
         }
-        if (wordIndex > nounIndex) {
+        if (wordIndex > nounIndex + 1) {
           return word;
         }
         const suffix = word.at(-1)?.toLowerCase() ?? "";
@@ -234,19 +238,17 @@ export const actTitleForms = ({
   );
 };
 
-/** How far into a name its noun can stand: `občanský soudní řád`. */
-const MAX_WORDS_BEFORE_NOUN = 3;
-
 /**
- * Whether a stored name reads as a short title a court prints, stating what
- * kind of act it is: `zákon o advokacii`, `daňový řád`. Not a bare subject (`o
- * advokacii`), which fits any sentence about it, nor a long title that only
- * mentions a kind (`kterým se mění zákon …`). A language without a vocabulary
- * has none.
+ * Whether a stored name reads as a short title a court prints, opening with
+ * the kind of act it is, or with only adjectives before that: `zákon o
+ * advokacii`, `občanský soudní řád`. Not a bare subject (`o advokacii`), which
+ * fits any sentence about it, nor a long title that only mentions a kind
+ * (`kterým se mění zákon …`). A language without a vocabulary has none.
  */
 export const isCitableActName = (language: string, name: string): boolean => {
   const heads = instrumentHeadsFor(language);
-  if (heads === null) {
+  const morphology = morphologyFor(language);
+  if (heads === null || morphology === null) {
     return false;
   }
   const nouns = ACT_KINDS.flatMap((kind) =>
@@ -259,8 +261,9 @@ export const isCitableActName = (language: string, name: string): boolean => {
   const noun = words.findIndex((word) => nouns.includes(word));
   return (
     noun !== -1 &&
-    noun <= MAX_WORDS_BEFORE_NOUN &&
-    !words.slice(0, noun).includes("o")
+    words
+      .slice(0, noun)
+      .every((word) => morphology.adjectives[word.at(-1) ?? ""] !== undefined)
   );
 };
 
@@ -268,22 +271,28 @@ export const isCitableActName = (language: string, name: string): boolean => {
  * A title's name without the clause that only amends other acts (`o ochraně
  * osobních údajů a o změně některých zákonů` → `o ochraně osobních údajů`),
  * which is how a court prints it. Null when there is no such clause, or
- * nothing before it.
+ * nothing before it. A clause names an act it amends: `a o změně klimatu` is
+ * part of the name.
  */
 export const nameBeforeAmendingClause = (
   name: string,
-  openers: readonly string[],
+  { openers, amendedActStems }: AmendingClauseSpec,
 ): string | null => {
-  const lower = name.toLowerCase();
-  let start = name.length;
-  for (const opener of openers) {
-    const at = lower.indexOf(` ${opener.toLowerCase()} `);
-    if (at !== -1 && at < start) {
-      start = at;
-    }
-  }
-  const before = name.slice(0, start).trim();
-  return start === name.length || before === "" ? null : before;
+  const collapsed = name.replaceAll(/\s+/gu, " ").trim();
+  const lower = collapsed.toLowerCase();
+  const starts = openers.flatMap((opener) => {
+    const needle = ` ${opener.toLowerCase()} `;
+    const at = lower.indexOf(needle);
+    const namesAct =
+      at !== -1 &&
+      lower
+        .slice(at + needle.length)
+        .split(" ")
+        .some((word) => amendedActStems.some((stem) => word.startsWith(stem)));
+    return namesAct ? [at] : [];
+  });
+  const before = collapsed.slice(0, Math.min(...starts)).trim();
+  return starts.length === 0 || before === "" ? null : before;
 };
 
 /**
