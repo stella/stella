@@ -3383,7 +3383,7 @@ describe("acquireChatRuntime reconcile", () => {
         data: buildThreadData(),
         key: {
           scope: "global",
-          threadId: toChatThreadId(`thread-run-${code}`),
+          threadId: toChatThreadId(`thread-run-${code ?? "none"}`),
         },
         queryClient: new QueryClient(),
       });
