@@ -85,7 +85,7 @@ type KbdProps = React.ComponentProps<"kbd"> & {
 };
 
 const KBD_VARIANT_CLASS_NAME = {
-  cap: "border-border bg-muted text-muted-foreground text-2xs h-5 min-w-5 rounded border px-1",
+  cap: "border-border bg-muted text-muted-foreground text-2xs h-5 min-w-5 rounded-sm border px-1",
   plain: "text-foreground-label text-xs tracking-widest",
 } as const satisfies Record<KbdVariant, string>;
 

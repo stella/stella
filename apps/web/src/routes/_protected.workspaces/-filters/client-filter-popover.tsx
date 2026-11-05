@@ -75,7 +75,7 @@ export const ClientFilterPopover = ({
             return (
               <button
                 className={cn(
-                  "hover:bg-accent flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-sm",
+                  "hover:bg-accent flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm",
                 )}
                 key={c.id}
                 onClick={() => toggle(c.id)}
