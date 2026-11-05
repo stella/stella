@@ -905,6 +905,66 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("sp. zn. 2 M Obdo 1/2008");
   });
 
+  test("extracts Slovak compound registers printed as separate words", () => {
+    // Verbatim citations from Slovak decisions: the register's second word
+    // ("V", "Pr") stands apart from the ordinary register, with or without
+    // the panel's leading "M".
+    for (const docket of [
+      "1 M Obdo V 13/2005",
+      "1 M Obdo V 2/2006",
+      "1 Tdo V 14/2007",
+      "2 Cdo Pr 3/2016",
+    ]) {
+      const citations = extractCitations([
+        { index: 0, text: `uznesenie sp. zn. ${docket} z 29. marca 2006` },
+      ]);
+      expect(citations.map(({ citationText }) => citationText)).toEqual([
+        `sp. zn. ${docket}`,
+      ]);
+    }
+  });
+
+  test("folds a spaced Slovak compound register onto the glued docket's key", () => {
+    const spellings = [
+      ["4mcdo/15/2010", ["4 M Cdo 15/2010", "4 MCdo 15/2010", "4MCdo/15/2010"]],
+      [
+        "1mobdov/13/2005",
+        [
+          "sp. zn. 1 M Obdo V 13/2005",
+          "1 M ObdoV 13/2005",
+          "1 MObdo V 13/2005",
+          "1 MObdoV 13/2005",
+          "1MObdoV/13/2005",
+          "1 M Obdo V/13/2005",
+        ],
+      ],
+      ["1tdov/14/2007", ["1 Tdo V 14/2007", "1 TdoV 14/2007", "1TdoV/14/2007"]],
+      ["2cdopr/3/2016", ["2 Cdo Pr 3/2016", "2 CdoPr 3/2016", "2CdoPr/3/2016"]],
+    ] as const;
+    for (const [key, variants] of spellings) {
+      for (const variant of variants) {
+        expect(bareCitationKey(variant)).toBe(key);
+      }
+    }
+    // The fold is idempotent over a key an earlier pass already lowercased.
+    expect(bareCitationKey("4 m cdo 15/2010")).toBe("4mcdo/15/2010");
+  });
+
+  test("keeps a compound register apart from its ordinary register", () => {
+    expect(bareCitationKey("1 Tdo V 14/2007")).not.toBe(
+      bareCitationKey("1 Tdo 14/2007"),
+    );
+    expect(bareCitationKey("4 M Cdo 15/2010")).not.toBe(
+      bareCitationKey("4 Cdo 15/2010"),
+    );
+    expect(bareCitationKey("2 Cdo Pr 3/2016")).not.toBe(
+      bareCitationKey("2 Cdo 3/2016"),
+    );
+    // A register that merely is the letter stays the single word it is.
+    expect(bareCitationKey("1 M 13/2005")).toBe("1m/13/2005");
+    expect(bareCitationKey("1 V 13/2005")).toBe("1v/13/2005");
+  });
+
   test("extracts a Slovak case number with a courthouse workplace-code prefix", () => {
     // Verbatim prose quoted from a prod decision (SVK): the district court
     // workplace code ("B4-") prefixes the ordinary joined chamber+registry
