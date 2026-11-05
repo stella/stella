@@ -275,7 +275,7 @@ const bindingProjection = ({
     if (!isAstNode(declaration)) {
       continue;
     }
-    const omitted = omittedRestPattern(declaration, String(node.name));
+    const omitted = omittedRestPattern(declaration, node.name);
     if (omitted !== null) {
       return omitted;
     }
