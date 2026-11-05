@@ -901,6 +901,80 @@ test("generated artefact provenance detector rejects new raw calls and writes", 
   ).toMatchObject({ modelImport: true, legacyCalls: 1 });
 });
 
+test("the provenance census sees every form of reaching generateArtefact", async () => {
+  const { inspectArtefactGenerators } =
+    await import("./generated-artefact-provenance.ts");
+  const file = "apps/api/src/unregistered.ts";
+  const module = "@/api/lib/ai-generation/provenance";
+  for (const source of [
+    `import * as provenance from "${module}"; provenance.generateArtefact({});`,
+    `import * as provenance from "${module}"; provenance["generateArtefact"]({});`,
+    `const provenance = await import("${module}"); provenance.generateArtefact({});`,
+    `(await import("${module}")).generateArtefact({});`,
+  ]) {
+    expect(
+      inspectArtefactGenerators({ file, source }).modelImport,
+      source,
+    ).toBe(true);
+  }
+  for (const source of [
+    `import * as provenance from "${module}"; provenance.readProvenance({});`,
+    `(await import("${module}")).readProvenance({});`,
+  ]) {
+    expect(
+      inspectArtefactGenerators({ file, source }).modelImport,
+      source,
+    ).toBe(false);
+  }
+});
+
+test("the provenance census reports an assignment to the provenance property", async () => {
+  const { inspectArtefactGenerators } =
+    await import("./generated-artefact-provenance.ts");
+  const file = "apps/api/src/unregistered.ts";
+  for (const source of [
+    "row.generationProvenance = origin;",
+    'row["generationProvenance"] = origin;',
+  ]) {
+    expect(inspectArtefactGenerators({ file, source }).writes, source).toEqual([
+      1,
+    ]);
+  }
+  expect(
+    inspectArtefactGenerators({
+      file: "apps/api/src/lib/ai-generation/provenance.ts",
+      source: "row.generationProvenance = origin;",
+    }).writes,
+  ).toEqual([]);
+});
+
+test("a wildcard re-export from a model boundary cannot match the registry", async () => {
+  const { exportedModelOperations } =
+    await import("./generated-artefact-provenance.ts");
+  const file = "apps/api/src/lib/tanstack-ai-generate.ts";
+  expect(
+    exportedModelOperations({ file, source: 'export * from "./provider";' }),
+  ).toEqual(['export *: export * from "./provider";']);
+  expect(
+    exportedModelOperations({
+      file,
+      source: 'export * as p from "./provider";',
+    }),
+  ).toEqual(['export *: export * as p from "./provider";']);
+  expect(
+    exportedModelOperations({
+      file,
+      source: 'export type * from "./provider";',
+    }),
+  ).toEqual([]);
+  expect(
+    exportedModelOperations({
+      file,
+      source: "export const generateText = () => {};",
+    }),
+  ).toEqual(["generateText"]);
+});
+
 test("generated artefact provenance counts every dynamic-import invocation", async () => {
   const { inspectArtefactGenerators, assessArtefactGenerator } =
     await import("./generated-artefact-provenance");

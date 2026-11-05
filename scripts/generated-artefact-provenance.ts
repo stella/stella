@@ -482,6 +482,78 @@ const ownsProvenanceProperty = ({
     }
   });
 
+const assignedPropertyName = (target: ts.Expression): string | undefined => {
+  if (ts.isPropertyAccessExpression(target)) {
+    return target.name.text;
+  }
+  return ts.isElementAccessExpression(target) &&
+    ts.isStringLiteralLike(target.argumentExpression)
+    ? target.argumentExpression.text
+    : undefined;
+};
+
+type ProvenanceAccessOptions = {
+  file: string;
+  tree: ts.SourceFile;
+  wrapperNamespaces: Set<string>;
+};
+/** Records namespaces bound to a dynamic import of the provenance module, and
+ *  says whether the file reads `generateArtefact` off one. A dynamic import
+ *  consumed through `.then` is outside this analysis; the ownership lint limits
+ *  who may import the module at all. */
+const reachesGenerateArtefactDynamically = ({
+  file,
+  tree,
+  wrapperNamespaces,
+}: ProvenanceAccessOptions): boolean => {
+  const isImportCall = (expression: ts.Expression): boolean => {
+    let current = expression;
+    while (
+      ts.isParenthesizedExpression(current) ||
+      ts.isAwaitExpression(current)
+    ) {
+      current = current.expression;
+    }
+    if (
+      !ts.isCallExpression(current) ||
+      current.expression.kind !== ts.SyntaxKind.ImportKeyword
+    ) {
+      return false;
+    }
+    const specifier = current.arguments.at(0);
+    return (
+      specifier !== undefined &&
+      ts.isStringLiteralLike(specifier) &&
+      modulePath(file, specifier.text) === PROVENANCE_MODULE
+    );
+  };
+  const nodes: ts.Node[] = [];
+  const collect = (node: ts.Node) => {
+    nodes.push(node);
+    ts.forEachChild(node, collect);
+  };
+  collect(tree);
+  for (const node of nodes) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      isImportCall(node.initializer)
+    ) {
+      wrapperNamespaces.add(node.name.text);
+    }
+  }
+  return nodes.some(
+    (node) =>
+      (ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node)) &&
+      assignedPropertyName(node) === "generateArtefact" &&
+      ((ts.isIdentifier(node.expression) &&
+        wrapperNamespaces.has(node.expression.text)) ||
+        isImportCall(node.expression)),
+  );
+};
+
 export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   // Escaped strings still take the AST path; unrelated modules need no parse.
   if (!SCAN_TOKENS.some((token) => source.includes(token))) {
@@ -539,6 +611,9 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
       }
     }
   });
+  modelImport =
+    reachesGenerateArtefactDynamically({ file, tree, wrapperNamespaces }) ||
+    modelImport;
   const resolve = modelReference({ file, bindings, namespaces });
   // Resolve aliases to a fixed point, including a chain declared before its source.
   let changed = true;
@@ -584,6 +659,16 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
   visit(tree, (node) => {
     if (ts.isCallExpression(node) && resolve(node).has("module")) {
       modelImport = true;
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      assignedPropertyName(node.left) === "generationProvenance" &&
+      !PROVENANCE_PROPERTY_OWNERS.some(
+        (owner) => owner.type === "module" && owner.file === file,
+      )
+    ) {
+      writes.push(tree.getLineAndCharacterOfPosition(node.getStart()).line + 1);
     }
     if (
       ts.isCallExpression(node) &&
@@ -660,8 +745,17 @@ export const exportedModelOperations = ({
 }: ScanOptions): string[] => {
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const result: string[] = [];
+  const wildcards: string[] = [];
   for (const statement of tree.statements) {
     if (ts.isExportDeclaration(statement)) {
+      if (
+        !statement.isTypeOnly &&
+        (statement.exportClause === undefined ||
+          ts.isNamespaceExport(statement.exportClause))
+      ) {
+        // Its names are unknown here, so it can never match the registry.
+        wildcards.push(`export *: ${statement.getText(tree)}`);
+      }
       if (
         !statement.isTypeOnly &&
         statement.exportClause !== undefined &&
@@ -694,9 +788,10 @@ export const exportedModelOperations = ({
       }
     }
   }
-  return result
-    .filter((name) => /^(?:collect|generate|stream)/u.test(name))
-    .toSorted();
+  return [
+    ...result.filter((name) => /^(?:collect|generate|stream)/u.test(name)),
+    ...wildcards,
+  ].toSorted();
 };
 
 type Ledger = Record<string, number>;
