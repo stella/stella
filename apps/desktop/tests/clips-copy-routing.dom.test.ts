@@ -103,24 +103,30 @@ const firstText = (root: Element, selector: string) => {
 };
 
 /**
- * Installs routing whose write settles only when the test says so. `settle`
- * returns after the routing has reacted: its reaction to the write was
- * registered during the event, so it runs before this later `await` resumes.
+ * Resolves after the routing's reaction to a settled write has run. That
+ * reaction takes a few microtasks and no timer, so no clock is involved.
  */
+const afterMicrotasks = async (remaining = 10): Promise<void> => {
+  if (remaining > 0) {
+    await afterMicrotasks(remaining - 1);
+  }
+};
+
+/** Installs routing whose write settles only when the test says so. */
 const installHeldWrite = () => {
   const held = Promise.withResolvers<undefined>();
   cleanups.push(
     installClipsCopyRouting({
       document,
       windowLabel: "clipboard-editor",
-      write: () => held.promise,
+      write: async () => await held.promise,
       onFailure: () => undefined,
     }),
   );
   return {
     settle: async () => {
       held.resolve(undefined);
-      await held.promise;
+      await afterMicrotasks();
     },
   };
 };
@@ -436,11 +442,11 @@ describe("a copy that never reached the clipboard", () => {
         onFailure: () => failed.resolve(undefined),
       }),
     );
-    return failed.promise;
+    return { failed: failed.promise };
   };
 
   test("is flagged until the next copy", async () => {
-    const failed = installFailingOnce();
+    const { failed } = installFailingOnce();
     selectContents(editorWithText());
     expect(isClipsCopyFailed()).toBe(false);
 
@@ -453,7 +459,7 @@ describe("a copy that never reached the clipboard", () => {
   });
 
   test("stops being flagged once the user leaves the window", async () => {
-    const failed = installFailingOnce();
+    const { failed } = installFailingOnce();
     selectContents(editorWithText());
 
     dispatchClipboardEvent("copy");
