@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
@@ -143,13 +143,15 @@ test.each([
   ["YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION"],
   ["EMAIL_VERIFICATION_REQUIRED_FOR_INVITATION"],
 ])("%s is an expected answer, not a reported defect", (code) => {
-  const report = mock();
+  const reported: unknown[] = [];
 
   reportUnhandledAuthClientError(
     { code, message: "Forbidden", status: 403, statusText: "Forbidden" },
-    report,
+    (error) => {
+      reported.push(error);
+    },
     "https://api.example.test/api/auth/organization/get-invitation",
   );
 
-  expect(report).not.toHaveBeenCalled();
+  expect(reported).toEqual([]);
 });
