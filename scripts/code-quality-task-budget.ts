@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import { type ChildProcess, spawn } from "node:child_process";
+import { statfsSync } from "node:fs";
 import { readdir, readFile, realpath } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -522,6 +524,37 @@ type ProcessTreeAtSignalOptions = {
   stallMs: number;
   report: (message: string) => void;
 };
+const MIB = 1024 * 1024;
+const MACHINE_TRAIL_MS = 30_000;
+
+/** What a runner that is being stopped had left, so a stop names its cause. */
+const machineResources = () => {
+  const disk = Result.try(() => statfsSync(process.cwd()));
+  const diskFree = disk.isOk()
+    ? `${Math.round((disk.value.bavail * disk.value.bsize) / MIB)}`
+    : "unknown";
+  const load = os
+    .loadavg()
+    .map((value) => value.toFixed(1))
+    .join(" ");
+  return `Machine: memory_free_mib=${Math.round(os.freemem() / MIB)} memory_total_mib=${Math.round(os.totalmem() / MIB)} disk_free_mib=${diskFree} load=${load} cpus=${os.availableParallelism()}`;
+};
+
+/**
+ * A runner can be stopped without warning, so the trail has to exist before
+ * the stop: the last lines show how the machine looked on the way there.
+ */
+const startMachineTrail = (
+  report: (message: string) => void,
+  startedAt: number,
+) => {
+  const trail = setInterval(() => {
+    report(`${machineResources()} elapsed_ms=${Date.now() - startedAt}\n`);
+  }, MACHINE_TRAIL_MS);
+  trail.unref();
+  return trail;
+};
+
 const processTreeAtSignal = async ({
   group,
   signal,
@@ -532,7 +565,7 @@ const processTreeAtSignal = async ({
   const snapshot = await Result.tryPromise(
     async () =>
       await processSnapshot({
-        columns: "pid=,ppid=,pgid=,stat=,command=",
+        columns: "pid=,ppid=,pgid=,stat=,rss=,command=",
         stallMs,
         report,
       }),
@@ -540,7 +573,7 @@ const processTreeAtSignal = async ({
   const rows = snapshot.isOk()
     ? ownedProcessTreeRows(snapshot.value, group).join("\n")
     : failureMessage(snapshot.error);
-  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\nPID PPID PGID STATE COMMAND\n${rows || "No remaining group members"}\n`;
+  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\n${machineResources()}\nPID PPID PGID STATE RSS_KB COMMAND\n${rows || "No remaining group members"}\n`;
 };
 
 const PROCESS_GROUP_POLL_MS = 50;
@@ -855,6 +888,7 @@ export const runBudgetedCheck = async ({
   let termination: string | undefined;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
   const startedAt = Date.now();
+  const machineTrail = startMachineTrail(reportDiagnostic, startedAt);
   // A delegated supervisor shares the outer group so its descendants cannot
   // outlive the owner when equal cleanup deadlines race.
   const ownsGroup = process.env[PROCESS_GROUP_ENV] !== "inherited";
@@ -942,6 +976,7 @@ export const runBudgetedCheck = async ({
       resolve(signalExitCode(code, signal));
     });
   });
+  clearInterval(machineTrail);
   const endedAt = Date.now();
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
   const pipesDrained = Promise.race([
