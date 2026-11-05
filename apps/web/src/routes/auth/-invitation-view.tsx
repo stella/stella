@@ -47,7 +47,7 @@ export const loadInvitationView = async (invitationId: string) => {
     return { type: "refused", code: error.code } as const;
   }
 
-  if (data === null || data.status !== "pending") {
+  if (data?.status !== "pending") {
     return { type: "missing" } as const;
   }
 
