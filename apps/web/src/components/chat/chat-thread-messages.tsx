@@ -315,6 +315,7 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
+  waitingForComputer = false,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -375,7 +376,7 @@ export const ChatThreadMessages = ({
     // carries retry and stop.
     message.role === "assistant" &&
     index !== messages.length - 1 &&
-    message.metadata?.contextNotice === undefined &&
+    !carriesContextNotice(message) &&
     !hasVisibleAssistantParts(message.parts) ? null : (
       <ChatRenderErrorBoundary
         fallback={<MessageRenderFallback message={message} />}
@@ -569,11 +570,12 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {showThinkingIndicator &&
-          generationActive &&
-          activityIndicatorState && (
-            <ThinkingIndicator state={activityIndicatorState} />
-          )}
+        {generationActive && (
+          <TurnProgressIndicator
+            thinking={showThinkingIndicator ? activityIndicatorState : null}
+            waitingForComputer={waitingForComputer}
+          />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -1118,6 +1120,42 @@ const ThinkingIndicator = ({
   );
 };
 
+/**
+ * What a running turn shows below its answer: that its computer is away,
+ * which says more than a thinking indicator, or what it is working on.
+ */
+const TurnProgressIndicator = ({
+  thinking,
+  waitingForComputer,
+}: {
+  thinking: ChatActivityIndicatorState | null;
+  waitingForComputer: boolean;
+}) => {
+  if (waitingForComputer) {
+    return <ComputerWaitingIndicator />;
+  }
+  return thinking === null ? null : <ThinkingIndicator state={thinking} />;
+};
+
+/** The turn's computer went away mid-turn; the turn goes on once it is back. */
+const ComputerWaitingIndicator = () => {
+  const t = useTranslations();
+
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        <div
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <StatusMark status="pending" />
+          <span>{t("chat.localRun.waitingForComputer")}</span>
+        </div>
+      </MessageContent>
+    </Message>
+  );
+};
+
 type ChatErrorTranslationKey =
   | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
@@ -1460,6 +1498,9 @@ type ChatThreadMessagesProps = {
     >,
   ) => Promise<void> | void;
   showThinkingIndicator?: boolean | undefined;
+  /** The turn runs on the member's computer, which is away until it
+   *  reconnects; the turn shows the wait in place of a stalled answer. */
+  waitingForComputer?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
@@ -1809,6 +1850,10 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
  * answer text, or a finished web search or fetch, which shows in the sources
  * tray instead of as a step.
  */
+/** A message without metadata carries no context notice. */
+const carriesContextNotice = (message: ChatUIMessage): boolean =>
+  message.metadata?.contextNotice !== undefined;
+
 const hasVisibleAssistantParts = (parts: readonly ChatUIPart[]): boolean =>
   toAssistantPartRenderEntries(parts).some((entry) => {
     if (entry.type !== "standard") {

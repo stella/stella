@@ -31,7 +31,7 @@ import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
@@ -861,7 +861,12 @@ const declareCensus = (fixture: FixtureRuntime) => {
           .filter(
             (route) => route.parentRoute?.id === "__root__" && hasUi(route),
           )
-          .filter((route) => route.options.staticData?.appFrame === undefined)
+          .filter((route) => {
+            if (route.options.staticData === undefined) {
+              return true;
+            }
+            return route.options.staticData.appFrame === undefined;
+          })
           .map(({ id }) => id),
       ).toEqual([]);
       const publicLeaves = uiLeaves.filter((route) => !isLegacyTool(route));

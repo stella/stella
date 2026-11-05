@@ -46,15 +46,15 @@ export const tokenUsageFromTerminalChunk = (
     ...leftoverUsage
   } = leftover ?? {};
   const promptTokensDetails = nonEmptyDetails({
-    ...(spec?.cachedInputTokens === undefined
-      ? {}
-      : { cachedTokens: spec.cachedInputTokens }),
+    ...(spec?.cachedInputTokens !== undefined
+      ? { cachedTokens: spec.cachedInputTokens }
+      : {}),
     ...leftoverPromptDetails,
   });
   const completionTokensDetails = nonEmptyDetails({
-    ...(spec?.reasoningTokens === undefined
-      ? {}
-      : { reasoningTokens: spec.reasoningTokens }),
+    ...(spec?.reasoningTokens !== undefined
+      ? { reasoningTokens: spec.reasoningTokens }
+      : {}),
     ...leftoverCompletionDetails,
   });
 

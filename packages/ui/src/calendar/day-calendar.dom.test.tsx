@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { DayCalendar } from "./day-calendar";
 import type { DayCalendarColumn } from "./day-calendar";
 import {
@@ -94,7 +96,7 @@ afterAll(async () => {
   } else {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type CalendarProps = ComponentProps<typeof DayCalendar>;
@@ -390,6 +392,65 @@ describe("DayCalendar", () => {
 
     expect(surface("brief label")?.textContent).toBe("");
     expect(surface("line label")?.textContent).toBe("line titleline caption");
+    await cleanup();
+  });
+
+  test("a topic block tints in its topic's swatch without a matter's edge, and switching stays plain", async () => {
+    const block = (
+      id: string,
+      hour: number,
+      kind: "mixed" | "segment",
+      tone:
+        | { key: string; type: "topic" }
+        | { color: null; matterId: string; type: "matter" }
+        | { type: "neutral" },
+    ) =>
+      ({
+        accessibleLabel: id,
+        endMs: at(hour, 30),
+        id,
+        kind,
+        startMs: at(hour),
+        title: id,
+        tone,
+      }) as const;
+    const { cleanup, container } = await renderCalendar({
+      columns: [
+        {
+          ...activityColumn,
+          blocks: [
+            block("topic", 9, "segment", { key: "title:lease", type: "topic" }),
+            block("same topic", 11, "segment", {
+              key: "title:lease",
+              type: "topic",
+            }),
+            block("matter", 13, "segment", {
+              color: null,
+              matterId: "lease",
+              type: "matter",
+            }),
+            block("switching", 15, "mixed", { type: "neutral" }),
+          ],
+        },
+      ],
+    });
+    const surface = (label: string) => {
+      const element = container.querySelector<HTMLElement>(
+        `[aria-label="${label}"]`,
+      );
+      if (element === null) {
+        throw new TypeError(`Missing block ${label}`);
+      }
+      return element;
+    };
+
+    // The tint itself is a `color-mix` the DOM under test drops; the swatch
+    // comes from the matter palette's stable key hash.
+    expect(surface("topic").className).not.toContain("bg-muted");
+    expect(surface("topic").className).toBe(surface("same topic").className);
+    expect(surface("topic").className).not.toContain("border-s-[3px]");
+    expect(surface("matter").className).toContain("border-s-[3px]");
+    expect(surface("switching").className).toContain("bg-muted");
     await cleanup();
   });
 

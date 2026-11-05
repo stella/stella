@@ -10,8 +10,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
@@ -122,6 +123,8 @@ const comment = ({
   kind: "comment" as const,
   mine,
   quote: "the contract was void",
+  quotePrefix: "So ",
+  quoteSuffix: ".",
   startOffset: 3,
   style: null,
   updatedAt: writtenAt,
@@ -166,6 +169,7 @@ const DecisionComments = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const surface = useDecisionAnnotationSurface({
     marks: "all",
+    text: [{ anchorId: "p-2", text: "So the contract was void." }],
     scrollContainerRef,
     target,
   });

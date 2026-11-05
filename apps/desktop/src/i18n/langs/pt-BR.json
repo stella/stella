@@ -38,7 +38,7 @@
     "reconnectAccount": "Reconectar ao stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — As alterações permanecem locais e serão reenviadas automaticamente",
+    "checkpointDelayedBody": "{fileName}: as alterações permanecem locais e serão reenviadas automaticamente",
     "checkpointDelayedTitle": "Sincronização do ponto de controle atrasada",
     "diagnosticsCopiedBody": "Cole no seu pedido de suporte quando precisar.",
     "diagnosticsCopiedTitle": "Diagnósticos copiados",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Os dados locais de recuperação foram redefinidos",
     "revisionCreatedBody": "{fileName} salvo como versão {versionNumber}. Edição no desktop concluída",
     "revisionCreatedTitle": "Revisão da stella criada",
-    "sessionClosedUnsaved": "{fileName} — Você tem edições locais não salvas. Encontre sua cópia em Cópias de trabalho temporárias.",
-    "sessionClosedSaved": "{fileName} — A cópia local permanece preservada em Cópias de trabalho temporárias",
-    "takenOverBody": "{fileName} — Reabra pela stella aqui para retomar a edição",
+    "sessionClosedUnsaved": "{fileName}: você tem edições locais não salvas. Encontre sua cópia em Cópias de trabalho temporárias.",
+    "sessionClosedSaved": "{fileName}: a cópia local permanece preservada em Cópias de trabalho temporárias",
+    "takenOverBody": "{fileName}: reabra pela stella aqui para retomar a edição",
     "takenOverTitle": "A edição foi movida para outro dispositivo",
-    "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada."
+    "takenOverLocalError": "A edição no desktop foi movida para outro dispositivo. Esta cópia local está preservada.",
+    "editsSetAsideTitle": "Edições deixadas de lado",
+    "editsSetAsideBody": "As edições não salvas foram deixadas de lado. Conecte-se novamente à mesma conta para abrir a pasta de recuperação em Configurações."
   },
   "dialog": {
     "accountWindowTitle": "Conectar conta",
@@ -232,7 +234,16 @@
     "permissionDenied": "Desativado nas configurações do sistema.",
     "permissionManaged": "Gerenciado pela sua organização",
     "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
-    "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão."
+    "errorPermissions": "O stella desktop não conseguiu ler nem alterar esta permissão.",
+    "recoveryTitle": "Edições deixadas de lado",
+    "recoveryBody": "As edições não salvas ficam armazenadas aqui para sua conta. Abra a pasta para recuperá-las.",
+    "recoverySignIn": "As edições foram deixadas de lado para essa conta. Conecte-se novamente a essa conta para abrir a pasta dela.",
+    "recoveryUnassigned": "Algumas edições não têm uma conta registrada. Abra a pasta delas para recuperá-las manualmente.",
+    "recoveryPending": "Algumas edições ainda estão sendo deixadas de lado. Tente novamente para concluir.",
+    "recoveryOpenFolder": "Abrir pasta de recuperação",
+    "recoveryOpenUnassigned": "Abrir edições sem conta atribuída",
+    "recoveryFilePending": "Aguardando para serem deixadas de lado",
+    "recoveryError": "Não foi possível abrir a pasta de recuperação. Tente novamente."
   },
   "clipboard": {
     "registryUnavailable": "Nenhum registro está habilitado para as jurisdições em que você atua.",
@@ -490,6 +501,10 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nada foi registrado neste intervalo.",
+    "entryStart": "Início",
+    "entryEnd": "Fim",
+    "rangeEndBeforeStart": "Defina um horário de término depois do início.",
+    "rangeDraftedLeftOut": "{duration}, sem contar o tempo já em rascunho",
     "calendarHint": "Abra uma sugestão tracejada para revisá-la ou arraste na coluna Lançamentos de horas para preparar um lançamento de qualquer intervalo.",
     "aiDraftWrite": "Redigir com stella AI",
     "aiDraftAgain": "Redigir de novo",
@@ -717,6 +732,36 @@
     "callbackConnectedTitle": "O ChatGPT está conectado",
     "callbackConnectedBody": "Você pode fechar esta guia e voltar para o stella.",
     "callbackNotConnectedTitle": "O ChatGPT não foi conectado",
-    "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo."
+    "callbackNotConnectedBody": "Volte para o stella para ver o que aconteceu e tente de novo.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Use sua assinatura do Claude para os agentes locais no stella. O uso é descontado do seu plano do Claude, separado da sua assinatura do stella.",
+      "notInstalled": "O Claude Code ainda não está instalado neste computador.",
+      "signIn": "Entrar com o Claude",
+      "openSignInPage": "Abrir a página de login",
+      "signedIn": "Conectado ao Claude",
+      "signedInAs": "Conectado ao Claude · {email}",
+      "signOut": "Sair",
+      "apiKey": "O Claude Code está conectado com uma chave de API, que o stella não usa. Saia e depois entre com sua assinatura do Claude.",
+      "failure": {
+        "notCompleted": "O login não foi concluído. Tente de novo.",
+        "timedOut": "O login demorou demais. Tente de novo.",
+        "unavailable": "Não foi possível iniciar o Claude Code neste computador. Tente de novo."
+      }
+    },
+    "install": {
+      "notInstalled": "O {name} ainda não está instalado neste computador.",
+      "install": "Instalar",
+      "downloading": "Baixando o {name} {version}: {percent}%",
+      "verifying": "Verificando o {name} {version}",
+      "ready": "O {name} {version} está instalado.",
+      "retry": "Tentar de novo",
+      "activeStays": "A versão {version} continua em uso.",
+      "failure": {
+        "download": "Não foi possível baixar o {name}. Verifique sua conexão com a internet e tente de novo.",
+        "verification": "Não foi possível verificar o {name}, por isso ele não foi instalado.",
+        "storage": "Não foi possível salvar o {name} neste computador. Verifique se há espaço livre no disco."
+      }
+    }
   }
 }

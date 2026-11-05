@@ -2,10 +2,11 @@
 //! `@stll/api-contract/desktop-runner`.
 //!
 //! The tests round-trip every message in the contract's shared fixture file
-//! and compare each closed value list with it, so a field, tag or value that
-//! differs from the API schema fails here.
+//! and compare each closed value list, the socket path, the installation
+//! header, the close codes and the timings with it, so a field, tag or value
+//! that differs from the API fails here.
 
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -13,6 +14,66 @@ use serde_json::{Map, Value};
 pub(crate) const PROTOCOL: u32 = 1;
 /// Largest frame either side sends or accepts, in UTF-8 bytes.
 pub(crate) const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+/// Sequenced messages one run may store; the API refuses more.
+pub(crate) const MAX_MESSAGES_PER_RUN: u32 = 20_000;
+/// UTF-8 bytes of sequenced messages one run may store.
+pub(crate) const MAX_MESSAGE_BYTES_PER_RUN: u64 = 64 * 1024 * 1024;
+/// Where the runner socket lives under the API base URL.
+pub(crate) const PATH: &str = "/v1/desktop/runner";
+/// Names the installation the socket belongs to.
+pub(crate) const DESKTOP_ID_HEADER: &str = "stella-desktop-id";
+/// The API pings this often and closes a socket after two silent intervals.
+pub(crate) const PING_INTERVAL: Duration = Duration::from_millis(20_000);
+/// The API closes a socket that sent no `hello` within this.
+pub(crate) const HELLO_TIMEOUT: Duration = Duration::from_millis(10_000);
+/// The close code of a frame the contract rejects; its reason says why.
+pub(crate) const POLICY_VIOLATION_CODE: u16 = 1008;
+
+/// Why the API closed a runner socket, with the contract's key for each.
+macro_rules! close_codes {
+  ($($variant:ident => $key:literal, $code:literal, $reason:literal);+ $(;)?) => {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub(crate) enum CloseCode {
+      $($variant,)+
+    }
+
+    impl CloseCode {
+      pub(crate) fn from_code(code: u16) -> Option<Self> {
+        match code {
+          $($code => Some(Self::$variant),)+
+          _ => None,
+        }
+      }
+
+      #[cfg(test)]
+      const ALL: &[Self] = &[$(Self::$variant),+];
+
+      #[cfg(test)]
+      const fn contract(self) -> (&'static str, u16, &'static str) {
+        match self {
+          $(Self::$variant => ($key, $code, $reason),)+
+        }
+      }
+    }
+  };
+}
+
+close_codes! {
+  GoingAway => "goingAway", 1001, "going_away";
+  UnsupportedData => "unsupportedData", 1003, "binary_frame";
+  TooLarge => "tooLarge", 1009, "too_large";
+  InternalError => "internalError", 1011, "internal_error";
+  Overloaded => "overloaded", 1013, "overloaded";
+  UpgradeRequired => "upgradeRequired", 4001, "upgrade_required";
+  Superseded => "superseded", 4002, "superseded";
+  HeartbeatTimeout => "heartbeatTimeout", 4003, "heartbeat_timeout";
+  SequenceGap => "sequenceGap", 4004, "sequence_gap";
+  HelloTimeout => "helloTimeout", 4005, "hello_timeout";
+  UnknownRun => "unknownRun", 4006, "unknown_run";
+  TooManyRunners => "tooManyRunners", 4007, "too_many_runners";
+  CredentialRevoked => "credentialRevoked", 4008, "credential_revoked";
+  FeatureDisabled => "featureDisabled", 4009, "feature_disabled";
+}
 
 /// A closed string value whose variant list is also its `ALL` list.
 macro_rules! wire_values {
@@ -25,6 +86,10 @@ macro_rules! wire_values {
       )+
     }
 
+    #[cfg_attr(
+      not(test),
+      allow(dead_code, reason = "the tests compare every closed list with the contract")
+    )]
     impl $name {
       pub(crate) const ALL: &[Self] = &[$(Self::$variant),+];
 
@@ -50,6 +115,7 @@ macro_rules! wire_union {
     }
 
     impl $name {
+      #[cfg(test)]
       pub(crate) const TAGS: &[&str] = &[$($wire),+];
     }
   };
@@ -73,11 +139,19 @@ wire_values!(RejectReason {
   HarnessNeedsLogin => "harness_needs_login",
   HarnessLimited => "harness_limited",
   HarnessUnsupported => "harness_unsupported",
+  HarnessUnavailable => "harness_unavailable",
   HarnessVersionUnavailable => "harness_version_unavailable",
   ModelUnavailable => "model_unavailable",
   PolicyUnsupported => "policy_unsupported",
   AtCapacity => "at_capacity",
+  RunTooLarge => "run_too_large",
   UnknownRun => "unknown_run",
+});
+
+wire_values!(HarnessUnavailableReason {
+  HarnessFailed => "harness_failed",
+  UnexpectedAnswer => "unexpected_answer",
+  ProbeFailed => "probe_failed",
 });
 
 wire_values!(ApprovalKind {
@@ -160,12 +234,21 @@ pub(crate) struct UnsupportedHarness {
   pub(crate) version: Option<String>,
 }
 
+/// An installed harness this desktop could not check, so it can neither offer
+/// it nor say it is unsupported.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct UnavailableHarness {
+  pub(crate) id: Harness,
+  pub(crate) reason: HarnessUnavailableReason,
+}
+
 wire_union!(HarnessReport tagged "state" {
   Ready(ReadyHarness) => "ready",
   NeedsLogin(SignedOutHarness) => "needs_login",
   LimitUntil(LimitedHarness) => "limit_until",
   NotInstalled(MissingHarness) => "not_installed",
   Unsupported(UnsupportedHarness) => "unsupported",
+  Unavailable(UnavailableHarness) => "unavailable",
 });
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -428,6 +511,14 @@ mod tests {
         names(HarnessCapability::ALL.iter().map(|value| value.wire_name())),
       ),
       (
+        "harnessUnavailableReasons",
+        names(
+          HarnessUnavailableReason::ALL
+            .iter()
+            .map(|value| value.wire_name()),
+        ),
+      ),
+      (
         "runRejectReasons",
         names(RejectReason::ALL.iter().map(|value| value.wire_name())),
       ),
@@ -474,6 +565,48 @@ mod tests {
       fixtures["vocabulary"]["maxFrameBytes"].as_u64(),
       u64::try_from(MAX_FRAME_BYTES).ok()
     );
+    let limits = &fixtures["vocabulary"]["runLimits"];
+    assert_eq!(
+      limits["maxMessagesPerRun"].as_u64(),
+      Some(u64::from(MAX_MESSAGES_PER_RUN))
+    );
+    assert_eq!(
+      limits["maxMessageBytesPerRun"].as_u64(),
+      Some(MAX_MESSAGE_BYTES_PER_RUN)
+    );
+  }
+
+  #[test]
+  fn socket_path_header_close_codes_and_timings_match_the_contract() {
+    let fixtures = fixtures();
+    let vocabulary = &fixtures["vocabulary"];
+    assert_eq!(vocabulary["path"], PATH);
+    assert_eq!(vocabulary["desktopIdHeader"], DESKTOP_ID_HEADER);
+    assert_eq!(vocabulary["policyViolationCode"], POLICY_VIOLATION_CODE);
+    let millis = |name: &str| {
+      Duration::from_millis(
+        vocabulary["timing"][name]
+          .as_u64()
+          .unwrap_or_else(|| panic!("timing {name}")),
+      )
+    };
+    assert_eq!(millis("pingIntervalMs"), PING_INTERVAL);
+    assert_eq!(millis("helloTimeoutMs"), HELLO_TIMEOUT);
+
+    let contract = vocabulary["close"].as_object().expect("close codes");
+    let rust: BTreeSet<String> = CloseCode::ALL
+      .iter()
+      .map(|close| close.contract().0.to_owned())
+      .collect();
+    assert_eq!(rust, contract.keys().cloned().collect::<BTreeSet<_>>());
+    for close in CloseCode::ALL {
+      let (key, code, reason) = close.contract();
+      assert_eq!(contract[key]["code"], code, "{key}");
+      assert_eq!(contract[key]["reason"], reason, "{key}");
+      assert_eq!(CloseCode::from_code(code), Some(*close));
+    }
+    assert_eq!(CloseCode::from_code(POLICY_VIOLATION_CODE), None);
+    assert_eq!(CloseCode::from_code(1000), None);
   }
 
   #[test]

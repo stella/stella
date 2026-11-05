@@ -113,7 +113,7 @@ fn roots() -> &'static [Root] {
       roots.push(owned(home.join("Library/LaunchAgents"), false));
     }
     // Test builds, the allocation harness included, keep their fixtures under
-    // the temporary directory.
+    // the temporary directory. Production never treats it as a root.
     #[cfg(any(test, feature = "allocation-tests"))]
     roots.push(Root {
       path: std::env::temp_dir(),
@@ -122,6 +122,35 @@ fn roots() -> &'static [Root] {
     });
     roots
   })
+}
+
+// Platform-selected ancestors may be system aliases. Resolve those before
+// pinning the application root; the root and its descendants remain no-follow.
+fn physical_platform_parent(path: &Path) -> io::Result<PathBuf> {
+  let mut ancestor = path;
+  let mut missing = Vec::new();
+  loop {
+    match ancestor.canonicalize() {
+      Ok(mut physical) => {
+        for name in missing.into_iter().rev() {
+          physical.push(name);
+        }
+        return Ok(physical);
+      }
+      Err(error) if error.kind() == io::ErrorKind::NotFound => {
+        missing.push(ancestor.file_name().ok_or_else(invalid_path)?);
+        ancestor = ancestor.parent().ok_or_else(invalid_path)?;
+      }
+      Err(error) => return Err(error),
+    }
+  }
+}
+
+fn physical_application_root(path: &Path) -> io::Result<PathBuf> {
+  Ok(
+    physical_platform_parent(path.parent().ok_or_else(invalid_path)?)?
+      .join(path.file_name().ok_or_else(invalid_path)?),
+  )
 }
 
 fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
@@ -144,7 +173,6 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   // A root moved or deleted while the app runs leaves the cached handle on an
   // unlinked directory; reuse it only while the path still names that inode.
   let cached = opened.get(root_path).filter(|directory| {
-    use std::os::unix::fs::MetadataExt;
     match (directory.metadata(), std::fs::symlink_metadata(root_path)) {
       (Ok(held), Ok(current)) => {
         held.dev() == current.dev() && held.ino() == current.ino()
@@ -164,25 +192,13 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
     return Ok((directory, relative));
   }
   opened.remove(root_path);
-  // Only the platform-supplied temporary anchor may contain a system alias.
-  // All descendants, including test fixtures, still use no-follow traversal.
-  #[cfg(any(test, feature = "allocation-tests"))]
+  // Only the test-only temporary anchor is resolved whole. Application roots
+  // resolve their platform parent; the root and every descendant, test
+  // fixtures included, keep no-follow traversal.
   let physical_root = if temporary_anchor {
     root_path.canonicalize()?
   } else {
-    root_path.clone()
-  };
-  // The platform base may contain system or user symlinks; resolve it once.
-  // The application directory and every descendant keep no-follow traversal.
-  #[cfg(not(any(test, feature = "allocation-tests")))]
-  let physical_root = {
-    let base = root_path.parent().ok_or_else(invalid_path)?;
-    let name = root_path.file_name().ok_or_else(invalid_path)?;
-    match base.canonicalize() {
-      Ok(base) => base.join(name),
-      Err(error) if error.kind() == io::ErrorKind::NotFound => root_path.clone(),
-      Err(error) => return Err(error),
-    }
+    physical_application_root(root_path)?
   };
   let directory = absolute_directory(&physical_root)?;
   if !temporary_anchor {
@@ -195,16 +211,6 @@ fn root_for(path: &Path) -> io::Result<(Arc<File>, PathBuf)> {
   opened.insert(root_path.clone(), Arc::clone(&directory));
   drop(opened);
   Ok((directory, relative))
-}
-
-pub(super) fn create_directory_new(path: &Path) -> io::Result<()> {
-  let parent = Parent::at(path)?;
-  fs::mkdirat(&parent.directory, &parent.name, DIRECTORY_MODE)?;
-  let directory = child_directory(&parent.directory, &parent.name, false, true)?;
-  fs::fsync(&directory)?;
-  drop(directory);
-  fs::fsync(&parent.directory)?;
-  Ok(())
 }
 
 pub(super) fn create_directory(path: &Path) -> io::Result<()> {
@@ -254,11 +260,36 @@ impl Parent {
     })
   }
 
+  pub(super) fn create_directory_new(&self) -> io::Result<()> {
+    fs::mkdirat(&self.directory, &self.name, DIRECTORY_MODE)?;
+    let directory = child_directory(&self.directory, &self.name, false, true)?;
+    fs::fsync(&directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
+  pub(super) fn publish_directory(&self, destination: &Self) -> io::Result<()> {
+    let directory = child_directory(&self.directory, &self.name, false, true)?;
+    fs::fsync(&directory)?;
+    fs::renameat_with(
+      &self.directory,
+      &self.name,
+      &destination.directory,
+      &destination.name,
+      fs::RenameFlags::NOREPLACE,
+    )?;
+    fs::fsync(&destination.directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
   pub(super) fn open(&self, mode: OpenMode) -> io::Result<File> {
     let flags = match mode {
       OpenMode::Read => OFlags::RDONLY,
       OpenMode::CreateNew => OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
       OpenMode::Append => OFlags::WRONLY | OFlags::CREATE | OFlags::APPEND,
+      #[cfg(test)]
+      OpenMode::AppendExisting => OFlags::WRONLY | OFlags::APPEND,
       OpenMode::Lock => OFlags::RDWR | OFlags::CREATE,
     };
     let file = File::from(fs::openat(
@@ -272,22 +303,6 @@ impl Parent {
     }
     check_owner(&file)?;
     Ok(file)
-  }
-
-  pub(super) fn rename_directory_to(&self, destination: &Self) -> io::Result<()> {
-    let directory = child_directory(&self.directory, &self.name, false, true)?;
-    destination.check_entry()?;
-    fs::renameat(
-      &self.directory,
-      &self.name,
-      &destination.directory,
-      &destination.name,
-    )?;
-    fs::fsync(&directory)?;
-    drop(directory);
-    fs::fsync(&destination.directory)?;
-    fs::fsync(&self.directory)?;
-    Ok(())
   }
 
   fn check_entry(&self) -> io::Result<()> {
@@ -327,6 +342,23 @@ impl Parent {
     Ok(())
   }
 
+  pub(super) fn move_to(&self, destination: &Self) -> io::Result<()> {
+    let source = self.open(OpenMode::Read)?;
+    fs::fchmod(&source, FILE_MODE)?;
+    fs::fsync(&source)?;
+    destination.check_entry()?;
+    fs::renameat_with(
+      &self.directory,
+      &self.name,
+      &destination.directory,
+      &destination.name,
+      fs::RenameFlags::NOREPLACE,
+    )?;
+    fs::fsync(&destination.directory)?;
+    fs::fsync(&self.directory)?;
+    Ok(())
+  }
+
   pub(super) fn link_to(&self, destination: &Self) -> io::Result<()> {
     let source = self.open(OpenMode::Read)?;
     fs::fchmod(&source, FILE_MODE)?;
@@ -346,5 +378,34 @@ impl Parent {
     fs::unlinkat(&self.directory, &self.name, AtFlags::empty())?;
     fs::fsync(&self.directory)?;
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn platform_aliases_keep_application_roots_no_follow() {
+    use std::os::unix::fs::symlink;
+    let root =
+      std::env::temp_dir().join(format!("stella-platform-{}", uuid::Uuid::new_v4()));
+    let physical = root.join("physical");
+    std::fs::create_dir_all(&physical).unwrap();
+    let alias = root.join("platform");
+    symlink(&physical, &alias).unwrap();
+    let application = alias.join("missing/stella");
+    let resolved = physical_application_root(&application).unwrap();
+    let handle = absolute_directory(&resolved).unwrap();
+    assert_eq!(
+      handle.metadata().unwrap().ino(),
+      std::fs::metadata(&application).unwrap().ino()
+    );
+    std::fs::remove_dir(&application).unwrap();
+    symlink(&physical, &application).unwrap();
+    assert!(
+      absolute_directory(&physical_application_root(&application).unwrap()).is_err()
+    );
+    std::fs::remove_dir_all(root).unwrap();
   }
 }

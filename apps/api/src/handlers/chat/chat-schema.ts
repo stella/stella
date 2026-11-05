@@ -31,10 +31,16 @@ import {
   resourceRef,
 } from "@stll/api-contract";
 import {
+  isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
+  isHarnessChatToolCall,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { chatUserMessageContentSchema } from "@stll/api-contract/chat-message-content";
+import {
+  type ChatRunTarget,
+  chatRunTargetSchema,
+} from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -283,6 +289,12 @@ const sendMessageCommonProperties = {
    * `"agent"` explicitly requests the configured agent sandbox.
    */
   runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
+  /**
+   * Where this turn runs. Absent or `cloud` keeps stella's own model path;
+   * `local` hands the turn to a harness on one of the member's computers and
+   * is refused, never rerouted, when no computer can take it.
+   */
+  runTarget: v.exactOptional(chatRunTargetSchema),
   userContext: v.exactOptional(userContextSchema),
   activeDraft: v.exactOptional(activeDraftSchema),
   activeFile: v.exactOptional(activeFileSchema),
@@ -490,8 +502,37 @@ type UnusedActiveContextSchema = Exclude<
 true satisfies UndeclaredActiveContextKey extends never ? true : never;
 true satisfies UnusedActiveContextSchema extends never ? true : never;
 
+/**
+ * Whose tool calls a message may carry. `cloud`: a turn stella's own models
+ * run, whose calls the chat tool registry validates and the API or the
+ * browser executes. `harness`: a turn a coding-agent harness on the member's
+ * computer ran, whose calls only that harness executes; the registry does not
+ * describe them, so they are checked for shape, never run by the API, and
+ * never accepted from a cloud turn. A message never mixes the two.
+ */
+export type ChatToolCallOwnership = "cloud" | "harness";
+
+/** Whose tool calls a turn sent to `runTarget` carries. */
+export const toolCallOwnershipOf = (
+  runTarget: ChatRunTarget | undefined,
+): ChatToolCallOwnership => {
+  const kind = runTarget?.kind;
+  switch (kind) {
+    case undefined:
+    case "cloud":
+      return "cloud";
+    case "local":
+      return "harness";
+    default:
+      kind satisfies never;
+      return panic(`Unknown chat run target: ${String(kind)}`);
+  }
+};
+
 type ValidateMessageInput = {
   message: RawIncomingMessage;
+  /** Who runs the turn this message continues or starts. */
+  toolCallOwnership: ChatToolCallOwnership;
   persistedMessage: {
     content: PersistedChatMessageContent;
     role: ChatMessageRole;
@@ -583,7 +624,9 @@ type ValidatedToolCallPart =
       name: string;
       output: { type: "absent" } | { type: "present"; value: unknown };
       part: ChatToolCallPart;
-    };
+    }
+  /** A call a member's computer ran; see `validateOwnedToolCallPart`. */
+  | { type: "harness"; name: string; part: ChatToolCallPart };
 
 type ValidatedToolPayload =
   | { type: "input-only"; input: unknown }
@@ -622,6 +665,7 @@ export const validateMessage = async ({
   resume,
   safeDb,
   threadId,
+  toolCallOwnership,
   tools,
   userId,
 }: ValidateMessageInput): Promise<ValidateMessageResult> =>
@@ -662,9 +706,14 @@ export const validateMessage = async ({
       parts: partsResult.value.parts,
       ...(metadata === undefined ? {} : { metadata }),
     });
+    const { clientAuthoredCallIds } = partsResult.value;
     const toolValidationResult = validateToolCallParts({
-      clientAuthoredCallIds: partsResult.value.clientAuthoredCallIds,
+      clientAuthoredCallIds,
       message: candidateMessage,
+      // A harness call reaches the API only from the computer that ran it: a
+      // client may answer one the server stored, never write a new one.
+      ownership:
+        clientAuthoredCallIds === undefined ? "cloud" : toolCallOwnership,
       tools,
     });
 
@@ -955,7 +1004,10 @@ const validateContinuationToolCallIntegrity = ({
       canonicalCall,
       incomingCall,
       refRegistry,
-      tool: registeredChatTool(tools, canonicalCall.name),
+      // A harness call is not the registry tool its name may match.
+      tool: isHarnessChatToolCall(canonicalCall)
+        ? undefined
+        : registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -1149,15 +1201,15 @@ const normalizeContinuationInput = ({
     refRegistry,
     toolName,
   });
-  if (tool?.inputSchema === undefined) {
-    return Result.ok(withNullsOmitted(input));
+  if (tool?.inputSchema !== undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: tool.name,
+    });
   }
-  return validateToolPayload({
-    payload: withToolInputPlaceholdersOmitted(tool.inputSchema, input),
-    payloadName: "input",
-    schema: tool.inputSchema,
-    toolName: tool.name,
-  });
+  return Result.ok(withNullsOmitted(input));
 };
 
 const validateContinuationToolCallTransition = ({
@@ -1232,7 +1284,7 @@ const validateContinuationToolCallTransition = ({
     }
     case "input-complete": {
       if (
-        isServerChatToolCall(canonicalCall) ||
+        !isBrowserResolvedChatToolCall(canonicalCall) ||
         (incomingCall.state !== "complete" && incomingCall.state !== "error")
       ) {
         return invalidContinuationToolCall();
@@ -1543,6 +1595,7 @@ export const validateToolCallParts = ({
   allowDeferredServerInput = false,
   clientAuthoredCallIds,
   message,
+  ownership,
   tools,
 }: {
   allowPartialInput?: boolean;
@@ -1550,6 +1603,8 @@ export const validateToolCallParts = ({
   /** See `ValidatedIncomingChatParts`; `undefined` validates every call. */
   clientAuthoredCallIds?: ReadonlySet<string> | undefined;
   message: ChatMessage;
+  /** Whose calls the validated ones must be; see `ChatToolCallOwnership`. */
+  ownership: ChatToolCallOwnership;
   tools: ChatToolMap;
 }): Result<ChatPart[], HandlerError<400>> => {
   const toolCallsById = new Map<string, ValidatedToolCallPart>();
@@ -1582,14 +1637,19 @@ export const validateToolCallParts = ({
         continue;
       }
 
-      const toolCallResult = validateToolCallPart({
-        allowPartialInput,
-        allowDeferredServerInput:
-          allowDeferredServerInput &&
-          firstAwaitedIndex !== -1 &&
-          index > firstAwaitedIndex,
+      const toolCallResult = validateOwnedToolCallPart({
+        ownership,
         part,
-        tools,
+        validateCloudCall: () =>
+          validateToolCallPart({
+            allowPartialInput,
+            allowDeferredServerInput:
+              allowDeferredServerInput &&
+              firstAwaitedIndex !== -1 &&
+              index > firstAwaitedIndex,
+            part,
+            tools,
+          }),
       });
       if (Result.isError(toolCallResult)) {
         return Result.err(toolCallResult.error);
@@ -1619,6 +1679,52 @@ export const validateToolCallParts = ({
     parts.push(part);
   }
   return Result.ok(parts);
+};
+
+/**
+ * A call checked as its owner's. A harness call in a cloud turn, or a cloud
+ * call in a harness turn, is refused: the first would store work the API
+ * never ran under a name the registry trusts, the second would send an
+ * answer to an executor that does not hold the call.
+ */
+const validateOwnedToolCallPart = ({
+  ownership,
+  part,
+  validateCloudCall,
+}: {
+  ownership: ChatToolCallOwnership;
+  part: ChatToolCallPart;
+  validateCloudCall: () => Result<ValidatedToolCallPart, HandlerError<400>>;
+}): Result<ValidatedToolCallPart, HandlerError<400>> => {
+  const harnessCall = isHarnessChatToolCall(part);
+  switch (ownership) {
+    case "cloud":
+      return harnessCall
+        ? Result.err(
+            new HandlerError({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+              status: 400,
+              message: `Chat tool call ran on a computer, not in this turn: ${part.id}`,
+            }),
+          )
+        : validateCloudCall();
+    case "harness":
+      // Nothing in the chat tool registry describes a harness call, whatever
+      // its name, and the API never runs one: it is stored as the harness
+      // reported it, and storing proves its input and output are JSON.
+      return harnessCall
+        ? Result.ok({ type: "harness", name: part.name, part })
+        : Result.err(
+            new HandlerError({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+              status: 400,
+              message: `Chat tool call is not one the computer ran: ${part.id}`,
+            }),
+          );
+    default:
+      ownership satisfies never;
+      return panic(`Unknown chat tool call ownership: ${String(ownership)}`);
+  }
 };
 
 const validateToolCallPart = ({
@@ -1883,6 +1989,10 @@ const validateToolResultPart = ({
         message: `Chat tool result has no matching call: ${part.toolCallId}`,
       }),
     );
+  }
+  if (toolCall.type === "harness") {
+    // What the harness reported, success or failure, is the result.
+    return Result.ok();
   }
 
   if (validation === "error") {

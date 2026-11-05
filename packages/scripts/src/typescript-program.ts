@@ -67,13 +67,13 @@ export const createProgram = async ({
       ...(compilerOptions === undefined ? {} : { compilerOptions }),
       files,
       include: [],
-      ...(parsed?.projectReferences === undefined
-        ? {}
-        : {
+      ...(parsed?.projectReferences !== undefined
+        ? {
             references: parsed.projectReferences.map(
               ({ path: referencePath }) => ({ path: referencePath }),
             ),
-          }),
+          }
+        : {}),
     });
     const snapshot = await api.createSnapshot({ openProjects: [virtualPath] });
     const project =

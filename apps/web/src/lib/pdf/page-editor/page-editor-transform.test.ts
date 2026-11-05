@@ -192,7 +192,7 @@ describe("cleaned scan pages", () => {
       value instanceof PdfRef ? pdf.getObject(value) : value;
     const xObjects = resolve(page.getResources().get("XObject"));
     if (!(xObjects instanceof PdfDict)) {
-      throw new Error("Expected an XObject resource dictionary");
+      throw new TypeError("Expected an XObject resource dictionary");
     }
     const images = [...xObjects.keys()].map((key) =>
       resolve(xObjects.get(key)),
@@ -200,7 +200,7 @@ describe("cleaned scan pages", () => {
     expect(images).toHaveLength(1);
     const [image] = images;
     if (!(image instanceof PdfStream)) {
-      throw new Error("Expected an image stream");
+      throw new TypeError("Expected an image stream");
     }
     const number = (key: string) => {
       const value = image.get(key);
@@ -316,13 +316,13 @@ describe("cleaned scan pages", () => {
       const images =
         resource instanceof PdfRef ? pdf.getObject(resource) : resource;
       if (!(images instanceof PdfDict)) {
-        throw new Error("Expected an image resource dictionary");
+        throw new TypeError("Expected an image resource dictionary");
       }
       expect([...images.keys()]).toHaveLength(1);
       for (const key of images.keys()) {
         const image = images.get(key);
         if (!(image instanceof PdfRef)) {
-          throw new Error("Expected a shared image reference");
+          throw new TypeError("Expected a shared image reference");
         }
         imageRefs.add(image.toString());
       }
