@@ -402,7 +402,7 @@ test("a lone tick answers with its card, not a list of one", async () => {
   }
 });
 
-test("focusing a tick names everyone in its card, past what a row fits", async () => {
+test("resting on a tick names everyone in its card, past what a row fits", async () => {
   const bench = ["Svatoň Jan", "Novák Petr", "Dvořák Eva", "Malý Jiří"];
   const { container, root, scrollContainer } = await renderItems([
     {
@@ -411,9 +411,20 @@ test("focusing a tick names everyone in its card, past what a row fits", async (
       portraits: bench.map((name) => ({ image: null, name })),
     },
   ]);
+  jest.useFakeTimers();
   try {
+    const tick = opinionTick(container);
     await act(async () => {
-      opinionTick(container)?.focus();
+      tick?.dispatchEvent(
+        new PointerEvent("pointerover", {
+          bubbles: true,
+          pointerType: "mouse",
+        }),
+      );
+      tick?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      tick?.dispatchEvent(new MouseEvent("mouseenter"));
+      tick?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+      jest.advanceTimersByTime(1000);
     });
     const card = document.querySelector('[data-slot="tooltip-popup"]');
     for (const name of bench) {
@@ -422,6 +433,7 @@ test("focusing a tick names everyone in its card, past what a row fits", async (
     expect(card?.textContent).toContain(OPINION.title);
     expect(card?.textContent).toContain("Portrait source: Court");
   } finally {
+    restoreRealTimers();
     await cleanup(root, container, scrollContainer);
   }
 });
