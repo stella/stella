@@ -171,7 +171,7 @@ describe("checkAnswerQuotes", () => {
       message: answer(`[1](#stella-decision=${FIRST})\n\n> ${COURT_TEXT}`),
       load: async () =>
         await Promise.withResolvers<DecisionBlocksByDecision>().promise,
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     expect(failed).toEqual({ type: "unavailable" });

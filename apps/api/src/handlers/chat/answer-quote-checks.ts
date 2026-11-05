@@ -61,7 +61,7 @@ const displayedTextOf = (node: MarkdownNode): string => {
   if (node.type === "break") {
     return " ";
   }
-  const inner = (node.children ?? []).map(displayedTextOf).join("");
+  const inner = node.children?.map(displayedTextOf).join("") ?? "";
   return BLOCK_NODE_TYPES.has(node.type) ? ` ${inner} ` : inner;
 };
 
@@ -110,7 +110,9 @@ const readAnswerMarkdown = (markdown: string): AnswerMarkdown => {
       default:
         break;
     }
-    nodes.push(...(node.children ?? []).toReversed());
+    if (node.children !== undefined) {
+      nodes.push(...node.children.toReversed());
+    }
   }
   for (const identifier of references) {
     const href = definitions.get(identifier);
