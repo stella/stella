@@ -33,13 +33,27 @@ const ID_2 = "00000000-0000-4000-8000-000000000002";
 const ID_3 = "00000000-0000-4000-8000-000000000003";
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000010";
 const CONTACT_ID = "00000000-0000-4000-8000-000000000011";
+const ENTITY_ID = "00000000-0000-4000-8000-000000000012";
 const FIXTURE_ORGANIZATION =
   "INSERT INTO organization (id, name, slug, created_at) VALUES ('org', 'Org', 'org', now())";
 const FIXTURE_USER = `INSERT INTO "user" (id, name, email) VALUES ('user', 'User', 'user@example.invalid')`;
 const FIXTURE_WORKSPACE = `INSERT INTO workspaces (id, organization_id, name, reference) VALUES ('${WORKSPACE_ID}', 'org', 'Matter', 'M-1')`;
+const FIXTURE_MEMBER = `INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES ('member', 'org', 'user', 'owner', now())`;
 const FIXTURE_CONTACT = `INSERT INTO contacts (id, organization_id, type, display_name) VALUES ('${CONTACT_ID}', 'org', 'organization', 'Client')`;
 /** A draft invoice on the fixture matter. */
 const FIXTURE_INVOICE = `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'draft')`;
+const TIME_ENTRY_INSERT = `INSERT INTO time_entries (id, organization_id, workspace_id, date_worked, timezone_id, duration_minutes, billed_minutes, rate_at_entry, currency, narrative) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '2026-09-30', 'Europe/Prague', 60, 60, 100, 'EUR', 'Work')`;
+const EXPENSE_INSERT = `INSERT INTO expenses (id, organization_id, workspace_id, matter_id, date_incurred, amount, currency, category, description) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ID_2}', '2026-09-30', 100, 'EUR', 'other', 'Expense')`;
+const INVOICE_LINE_INSERT = `INSERT INTO invoice_lines (id, organization_id, workspace_id, invoice_id, position, description, quantity, unit_price, vat_rate_bps, vat_treatment, net_amount, vat_amount, gross_amount, source) VALUES ('${ID_2}', 'org', '${WORKSPACE_ID}', '${ID}', 0, 'Line', 1, 100, 0, 'exempt', 100, 0, 100, 'manual')`;
+/** Columns every delivered email row shares. */
+const EMAIL_COLUMNS = `id, organization_id, workspace_id, direction, channel, intake, authenticated_sender_address, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, spf, dkim, dmarc, entity_feature_gate`;
+const EMAIL_VALUES = `'${ID}', 'org', '${WORKSPACE_ID}', 'in', 'email', 'direct', 'sender@example.invalid', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'pass', 'pass', 'pass', 'open'`;
+const CORRESPONDENCE_EMAIL = `INSERT INTO correspondence (${EMAIL_COLUMNS}) VALUES (${EMAIL_VALUES})`;
+/** An uploaded data-box message; its source entity is the fixture entity. */
+const CORRESPONDENCE_DATA_BOX = `INSERT INTO correspondence (id, organization_id, workspace_id, channel, source, source_entity_id, message_id, original_signature, data_box_envelope, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, entity_feature_gate) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'data_box', 'upload', '${ENTITY_ID}', 'message', '{"status":"unverified"}', '{"messageId":"message"}', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'open')`;
+const EXTERNAL_REF_COLUMNS =
+  "external_source, external_id, external_change_key, imported_at";
+const EXTERNAL_REF_VALUES = "'fixture', 'external-1', 'change-1', now()";
 const SITEMAP_ENROLLMENT = "case-law-sitemap-packing-enrollment";
 /** A Czech VAT number in the legacy tax_id column; synthetic. */
 const VAT_ID = "CZ12345678";
@@ -207,6 +221,65 @@ const withClient = async (client: SQL) => {
     await scoped.unsafe(FIXTURE_CONTACT);
   });
 };
+
+/** An invoice the fixture author may reach: invoice lines' row policy reads it. */
+const withInvoice = async (client: SQL) => {
+  await exec(client, [
+    FIXTURE_ORGANIZATION,
+    FIXTURE_USER,
+    FIXTURE_MEMBER,
+    FIXTURE_WORKSPACE,
+    FIXTURE_INVOICE,
+  ]);
+};
+
+const withFixtureEntity = async (client: SQL) => {
+  await withoutFixtureGuards(client, ["entities"], async () => {
+    await client.unsafe(
+      `INSERT INTO entities (id, workspace_id, name, entity_feature_gate) VALUES ('${ENTITY_ID}', '${WORKSPACE_ID}', 'Source', 'open')`,
+    );
+  });
+};
+
+const invoiceFkSeed = (constraint: string) =>
+  noRowSeed("invoices", constraint, FIXTURE_INVOICE, { parents: withMatter });
+
+const invoiceLineSeed = (constraint: string, insert = INVOICE_LINE_INSERT) =>
+  noRowSeed("invoice_lines", constraint, insert, {
+    parents: withInvoice,
+    scoped: true,
+  });
+
+const timeEntryFkSeed = (constraint: string) =>
+  noRowSeed("time_entries", constraint, TIME_ENTRY_INSERT, {
+    parents: withMatter,
+  });
+
+const expenseFkSeed = (constraint: string) =>
+  noRowSeed("expenses", constraint, EXPENSE_INSERT, { parents: withMatter });
+
+const withLinkParents = async (client: SQL) => {
+  await exec(client, [FIXTURE_ORGANIZATION, FIXTURE_USER, FIXTURE_WORKSPACE]);
+  await withoutFixtureGuards(client, ["legislation_documents"], async () => {
+    await client.unsafe(
+      `INSERT INTO legislation_documents (id, source_id, eli, title, country, language) VALUES ('${ID_2}', '${ID_3}', 'eli/fixture', 'Statute', 'CZE', 'cs')`,
+    );
+  });
+};
+
+const legislationLinkSeed = (constraint: string) =>
+  noRowSeed(
+    "legislation_matter_links",
+    constraint,
+    `INSERT INTO legislation_matter_links (id, document_id, statute_id, provision_id, applied_version, jurisdiction, workspace_id, linked_by) VALUES ('${ID}', '${ID_2}', 'statute', 'provision', '2026-09-30', 'CZE', '${WORKSPACE_ID}', 'user')`,
+    { parents: withLinkParents },
+  );
+
+const correspondenceSeed = (constraint: string, insert: string) =>
+  noRowSeed("correspondence", constraint, insert, { scoped: true });
+
+const billingArrangementSeed = (constraint: string, insert: string) =>
+  noRowSeed("billing_arrangements", constraint, insert, { scoped: true });
 
 /** The row a repair owes, read by one predicate before and after it runs. */
 const repairedWhen = (name: string, query: string, scoped = false) => {
@@ -610,6 +683,25 @@ const SEEDS = {
       table: "chat_run_log_entries",
     },
   },
+  account_audit_logs_event_type_check: noRowSeed(
+    "account_audit_logs",
+    "account_audit_logs_event_type_check",
+    `INSERT INTO account_audit_logs (id, user_id, event_type, resource_id, group_id) VALUES ('${ID}', 'user', 'organization.created', 'org', '${ID_2}')`,
+    { scoped: true },
+  ),
+  "client-invoice-tenant-key": {
+    kind: "no-row-work",
+    tables: ["invoices"],
+    snapshot: async (client) => await snapshotRows(client, ["invoices"]),
+    seed: async (client) => {
+      await withInvoice(client);
+      await exec(client, [
+        `ALTER TABLE public.invoices DROP CONSTRAINT invoices_original_organization_fk`,
+        `ALTER TABLE public.invoices DROP CONSTRAINT invoices_id_org_unique`,
+        `CREATE UNIQUE INDEX invoices_id_org_unique ON public.invoices USING btree (id, organization_id)`,
+      ]);
+    },
+  },
   "client-invoice-clients": {
     kind: "row-work",
     ...repairedWhen(
@@ -628,6 +720,147 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "invoices" },
   },
+  invoices_workspace_id_workspaces_id_fkey: invoiceFkSeed(
+    "invoices_workspace_id_workspaces_id_fkey",
+  ),
+  invoices_workspace_organization_fk: invoiceFkSeed(
+    "invoices_workspace_organization_fk",
+  ),
+  invoice_lines_workspace_id_workspaces_id_fk: invoiceLineSeed(
+    "invoice_lines_workspace_id_workspaces_id_fk",
+  ),
+  invoice_lines_workspace_organization_fk: invoiceLineSeed(
+    "invoice_lines_workspace_organization_fk",
+  ),
+  invoices_scope_check: noRowSeed(
+    "invoices",
+    "invoices_scope_check",
+    `INSERT INTO invoices (id, organization_id, client_id, invoice_number, invoice_date, currency, status) VALUES ('${ID}', 'org', '${CONTACT_ID}', 'INV-1', '2026-09-30', 'EUR', 'draft')`,
+    { parents: withClient },
+  ),
+  invoices_original_organization_fk: noRowSeed(
+    "invoices",
+    "invoices_original_organization_fk",
+    `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status, document_type, original_invoice_id) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'draft', 'invoice', NULL), ('${ID_2}', 'org', '${WORKSPACE_ID}', 'CN-1', '2026-09-30', 'EUR', 'draft', 'credit_note', '${ID}')`,
+    { rows: 2 },
+  ),
+  invoice_lines_recorded_snapshot_check: invoiceLineSeed(
+    "invoice_lines_recorded_snapshot_check",
+    `INSERT INTO invoice_lines (id, organization_id, workspace_id, invoice_id, position, description, quantity, unit_price, vat_rate_bps, vat_treatment, net_amount, vat_amount, gross_amount, source, recorded_description, recorded_quantity, recorded_unit_price, recorded_net_amount) VALUES ('${ID_2}', 'org', '${WORKSPACE_ID}', '${ID}', 0, 'Line', 1, 100, 0, 'exempt', 100, 0, 100, 'manual', 'Recorded', 1, 100, 100)`,
+  ),
+  time_entries_workspace_id_workspaces_id_fkey: timeEntryFkSeed(
+    "time_entries_workspace_id_workspaces_id_fkey",
+  ),
+  time_entries_workspace_organization_fk: timeEntryFkSeed(
+    "time_entries_workspace_organization_fk",
+  ),
+  expenses_workspace_id_workspaces_id_fkey: expenseFkSeed(
+    "expenses_workspace_id_workspaces_id_fkey",
+  ),
+  expenses_workspace_organization_fk: expenseFkSeed(
+    "expenses_workspace_organization_fk",
+  ),
+  case_law_identifier_retry_shape: noRowSeed(
+    "case_law_decision_identifier_backfills",
+    "case_law_identifier_retry_shape",
+    "INSERT INTO case_law_decision_identifier_backfills (version, verification_retry_count, verification_retry_after) VALUES ('fixture', 3, now())",
+  ),
+  organization_settings_ai_billing_drafts_mode_check: noRowSeed(
+    "organization_settings",
+    "organization_settings_ai_billing_drafts_mode_check",
+    `INSERT INTO organization_settings (id, organization_id, ai_billing_drafts_mode) VALUES ('${ID}', 'org', 'enabled')`,
+  ),
+  contacts_time_billing_format_check: contactNoRowSeed(
+    "contacts_time_billing_format_check",
+    `INSERT INTO contacts (id, organization_id, type, display_name, time_billing_format) VALUES ('${ID}', 'org', 'person', 'Contact', 'ledes')`,
+  ),
+  organization_access_states_shape: noRowSeed(
+    "organization_access_states",
+    "organization_access_states_shape",
+    `INSERT INTO organization_access_states (organization_id, state, origin, evaluation_started_at, evaluation_ends_at) VALUES ('${ID}', 'evaluation_period', 'creation', now(), now() + interval '1 day')`,
+  ),
+  legal_reader_annotations_matter_document_shape: annotationNoRowSeed(
+    "legal_reader_annotations_matter_document_shape",
+  ),
+  legal_reader_answer_messages_error_code_values: noRowSeed(
+    "legal_reader_answer_messages",
+    "legal_reader_answer_messages_error_code_values",
+    `INSERT INTO legal_reader_answer_messages (id, answer_id, role, content, status, sequence, error_code) VALUES ('${ID_2}', '${ID}', 'assistant', 'Answer', 'failed', 1, 'internal')`,
+    {
+      // The message's row policy reads its answer.
+      parents: async (client) => {
+        await exec(client, [FIXTURE_ORGANIZATION, FIXTURE_USER]);
+        await withoutFixtureGuards(
+          client,
+          ["legal_reader_answers"],
+          async () => {
+            await withFixtureAuthor(client, async (scoped) => {
+              await scoped.unsafe(
+                `INSERT INTO legal_reader_answers (id, organization_id, user_id, decision_id, kind, paragraph_id, quote, start_offset, end_offset) VALUES ('${ID}', 'org', 'user', '${ID_3}', 'ask', 'p-1', 'words', 0, 5)`,
+              );
+            });
+          },
+        );
+      },
+      scoped: true,
+    },
+  ),
+  legislation_matter_links_document_fk: legislationLinkSeed(
+    "legislation_matter_links_document_fk",
+  ),
+  legislation_matter_links_workspace_id_workspaces_id_fkey: legislationLinkSeed(
+    "legislation_matter_links_workspace_id_workspaces_id_fkey",
+  ),
+  legislation_matter_links_linked_by_user_id_fkey: legislationLinkSeed(
+    "legislation_matter_links_linked_by_user_id_fkey",
+  ),
+  rate_entries_activity_code_id_billing_codes_id_fk: noRowSeed(
+    "rate_entries",
+    "rate_entries_activity_code_id_billing_codes_id_fk",
+    `INSERT INTO rate_entries (id, workspace_id, rate_table_id, hourly_rate, effective_from, activity_code_id) VALUES ('${ID}', '${WORKSPACE_ID}', '${ID_2}', 100, '2026-09-30', '${ID_3}')`,
+    {
+      parents: async (client) => {
+        await withoutFixtureGuards(client, ["billing_codes"], async () => {
+          await client.unsafe(
+            `INSERT INTO billing_codes (id, organization_id, workspace_id, type, code, label) VALUES ('${ID_3}', 'org', '${WORKSPACE_ID}', 'activity', 'A101', 'Activity')`,
+          );
+        });
+      },
+    },
+  ),
+  billing_arrangements_mode_caps_check: billingArrangementSeed(
+    "billing_arrangements_mode_caps_check",
+    `INSERT INTO billing_arrangements (workspace_id, organization_id, mode, currency, flat_fee_amount) VALUES ('${WORKSPACE_ID}', 'org', 'flat_fee', 'EUR', 100)`,
+  ),
+  billing_arrangements_minute_crossing_check: billingArrangementSeed(
+    "billing_arrangements_minute_crossing_check",
+    `INSERT INTO billing_arrangements (workspace_id, organization_id, mode, currency, minute_threshold_state, minute_cap_state) VALUES ('${WORKSPACE_ID}', 'org', 'hourly', 'EUR', 'below', 'above')`,
+  ),
+  user_email_undeliverable_check: noRowSeed(
+    "user",
+    "user_email_undeliverable_check",
+    `INSERT INTO "user" (id, name, email, email_undeliverable_address, email_undeliverable_reason, email_undeliverable_at) VALUES ('user', 'User', 'user@example.invalid', 'user@example.invalid', 'hard_bounce', now())`,
+  ),
+  time_entries_internal_shape_check: noRowSeed(
+    "time_entries",
+    "time_entries_internal_shape_check",
+    `INSERT INTO time_entries (id, organization_id, activity_group, date_worked, timezone_id, duration_minutes, billed_minutes, rate_at_entry, currency, narrative, billable, no_charge, status) VALUES ('${ID}', 'org', 'internal', '2026-09-30', 'Europe/Prague', 60, 0, 0, 'XXX', 'Internal work', false, false, 'draft')`,
+  ),
+  usage_events_action_type_domain: noRowSeed(
+    "usage_events",
+    "usage_events_action_type_domain",
+    `INSERT INTO usage_events (id, organization_id, user_id, period_start, period_end, action_type, model_role, units_consumed, service_tier) VALUES ('${ID}', 'org', 'user', '2026-09-01', '2026-10-01', 'chat', 'chat', 1, 'standard')`,
+  ),
+  notifications_kind_check: noRowSeed(
+    "notifications",
+    "notifications_kind_check",
+    `INSERT INTO notifications (id, user_id, organization_id, kind, metadata, idempotency_key) VALUES ('${ID}', 'user', 'org', 'announcement', '{}', 'fixture')`,
+  ),
+  notifications_entity_type_check: noRowSeed(
+    "notifications",
+    "notifications_entity_type_check",
+    `INSERT INTO notifications (id, user_id, organization_id, kind, metadata, idempotency_key, entity_type, entity_id) VALUES ('${ID}', 'user', 'org', 'task_assigned', '{}', 'fixture', 'task', '${ID_2}')`,
+  ),
   "invoice-sent-at": {
     kind: "row-work",
     ...repairedWhen(
@@ -656,6 +889,34 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "invoices" },
   },
+  contacts_external_ref_check: contactNoRowSeed(
+    "contacts_external_ref_check",
+    `INSERT INTO contacts (id, organization_id, type, display_name, ${EXTERNAL_REF_COLUMNS}) VALUES ('${ID}', 'org', 'person', 'Contact', ${EXTERNAL_REF_VALUES})`,
+  ),
+  workspaces_external_ref_check: noRowSeed(
+    "workspaces",
+    "workspaces_external_ref_check",
+    `INSERT INTO workspaces (id, organization_id, name, reference, ${EXTERNAL_REF_COLUMNS}) VALUES ('${WORKSPACE_ID}', 'org', 'Matter', 'M-1', ${EXTERNAL_REF_VALUES})`,
+  ),
+  time_entries_external_ref_check: noRowSeed(
+    "time_entries",
+    "time_entries_external_ref_check",
+    `INSERT INTO time_entries (id, organization_id, workspace_id, date_worked, timezone_id, duration_minutes, billed_minutes, rate_at_entry, currency, narrative, ${EXTERNAL_REF_COLUMNS}) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '2026-09-30', 'Europe/Prague', 60, 60, 100, 'EUR', 'Work', ${EXTERNAL_REF_VALUES})`,
+  ),
+  expenses_external_ref_check: noRowSeed(
+    "expenses",
+    "expenses_external_ref_check",
+    `INSERT INTO expenses (id, organization_id, workspace_id, matter_id, date_incurred, amount, currency, category, description, ${EXTERNAL_REF_COLUMNS}) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', '${ID_2}', '2026-09-30', 100, 'EUR', 'other', 'Expense', ${EXTERNAL_REF_VALUES})`,
+  ),
+  invoices_external_ref_check: noRowSeed(
+    "invoices",
+    "invoices_external_ref_check",
+    `INSERT INTO invoices (id, organization_id, workspace_id, invoice_number, invoice_date, currency, status, ${EXTERNAL_REF_COLUMNS}) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'INV-1', '2026-09-30', 'EUR', 'draft', ${EXTERNAL_REF_VALUES})`,
+  ),
+  correspondence_external_ref_check: correspondenceSeed(
+    "correspondence_external_ref_check",
+    `INSERT INTO correspondence (${EMAIL_COLUMNS}, ${EXTERNAL_REF_COLUMNS}) VALUES (${EMAIL_VALUES}, ${EXTERNAL_REF_VALUES})`,
+  ),
   "document-review-finding-decisions": {
     kind: "row-work",
     ...repairedWhen(
@@ -757,6 +1018,44 @@ const SEEDS = {
     },
     writerLock: { id: ID, table: "case_law_sources" },
   },
+  correspondence_direction_check: correspondenceSeed(
+    "correspondence_direction_check",
+    CORRESPONDENCE_EMAIL,
+  ),
+  correspondence_channel_check: correspondenceSeed(
+    "correspondence_channel_check",
+    CORRESPONDENCE_EMAIL,
+  ),
+  correspondence_data_box_check: correspondenceSeed(
+    "correspondence_data_box_check",
+    CORRESPONDENCE_DATA_BOX,
+  ),
+  organization_settings_data_box_ids_check: noRowSeed(
+    "organization_settings",
+    "organization_settings_data_box_ids_check",
+    `INSERT INTO organization_settings (id, organization_id, data_box_ids) VALUES ('${ID}', 'org', '["abc1234"]')`,
+  ),
+  correspondence_source_entity_workspace_fk: noRowSeed(
+    "correspondence",
+    "correspondence_source_entity_workspace_fk",
+    CORRESPONDENCE_DATA_BOX,
+    { parents: withFixtureEntity, scoped: true },
+  ),
+  desktop_runner_commands_kind_check: noRowSeed(
+    "desktop_runner_commands",
+    "desktop_runner_commands_kind_check",
+    `INSERT INTO desktop_runner_commands (run_id, kind, command_key, payload) VALUES ('${ID}', 'run.input', '${ID_2}', '{}')`,
+  ),
+  desktop_runner_events_request_check: noRowSeed(
+    "desktop_runner_events",
+    "desktop_runner_events_request_check",
+    `INSERT INTO desktop_runner_events (run_id, seq, type, request_id, message) VALUES ('${ID}', 1, 'run.approval_request', '${ID_2}', '{}')`,
+  ),
+  chat_turns_interaction_values_check: noRowSeed(
+    "chat_turns",
+    "chat_turns_interaction_values_check",
+    `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, interaction_type, interaction_tool_call_id) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'awaiting-user', '${ENTITY_ID}', 'approval', 'call')`,
+  ),
 } as const satisfies Record<RepairName, Seed>;
 const seedsByName: Readonly<Record<string, Seed>> = SEEDS;
 
