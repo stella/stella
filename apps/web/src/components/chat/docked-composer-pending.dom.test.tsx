@@ -17,8 +17,8 @@ afterEach(() => {
   cleanup();
 });
 
-afterAll(() => {
-  unregisterDomEnvironment();
+afterAll(async () => {
+  await unregisterDomEnvironment();
 });
 
 const expectLoadingAnnounced = (
