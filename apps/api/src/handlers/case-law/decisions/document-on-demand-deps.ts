@@ -10,6 +10,7 @@
 import {
   type OnDemandDocumentDeps,
   recordDocumentPacingOutcome,
+  withDocumentFetchBudget,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -41,16 +42,19 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) =>
-    await withPublicReadIo(
-      "hydration",
-      async (io) =>
-        await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
-          decisionId: decision.id,
-          scopedDb: getCaseLawIngestionDb(),
-          signal: AbortSignal.any([
-            AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-            ...(io.signal === undefined ? [] : [io.signal]),
-          ]),
-        }),
-    ),
+    await withPublicReadIo("hydration", async (io) => {
+      const budget = AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS);
+      return await withDocumentFetchBudget(
+        budget,
+        async () =>
+          await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
+            decisionId: decision.id,
+            scopedDb: getCaseLawIngestionDb(),
+            signal: AbortSignal.any([
+              budget,
+              ...(io.signal === undefined ? [] : [io.signal]),
+            ]),
+          }),
+      );
+    }),
 };

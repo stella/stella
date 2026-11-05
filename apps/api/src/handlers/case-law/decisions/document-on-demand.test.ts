@@ -15,6 +15,7 @@ import {
   readThroughDeferredDocument,
   recordDocumentPacingOutcome,
   resetDocumentFetchesForTesting,
+  withDocumentFetchBudget,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type {
   DocumentReadDeferral,
@@ -477,6 +478,58 @@ describe("deferral reporting", () => {
       expect(captured).toEqual([]);
     });
   }
+
+  const expiredFetchDeps = (): OnDemandDocumentDeps => ({
+    recordPacingOutcome: () => {},
+    withFetchBudget: availableBudget,
+    recordRequest: async () => {},
+    fetchDocument: async () => {
+      const budget = AbortSignal.timeout(1);
+      return await withDocumentFetchBudget(
+        budget,
+        async () =>
+          await new Promise<never>((_resolve, reject) => {
+            budget.addEventListener("abort", () => {
+              reject(budget.reason);
+            });
+          }),
+      );
+    },
+  });
+
+  test("a fetch that outlasts its budget is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: expiredFetchDeps(),
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
+  test("a fetch failing inside its budget is still captured", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          ...expiredFetchDeps(),
+          fetchDocument: async () =>
+            await withDocumentFetchBudget(
+              AbortSignal.timeout(60_000),
+              async () => {
+                await Promise.resolve();
+                throw new Error("court site unreachable");
+              },
+            ),
+        },
+        recordDemand: false,
+      }),
+    ).toBeNull();
+    expect(captured).toHaveLength(1);
+  });
 
   test("a failing fetch is still captured as an exception", async () => {
     expect(

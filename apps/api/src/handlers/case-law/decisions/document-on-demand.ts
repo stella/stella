@@ -38,7 +38,11 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
-import { declareFailureClass, type FailureReason } from "@stll/errors";
+import {
+  classifyFailure,
+  declareFailureClass,
+  type FailureReason,
+} from "@stll/errors";
 
 import type {
   ImmediatePublisherSlotResult,
@@ -227,6 +231,30 @@ export const recordDocumentPacingOutcome = (
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
   return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+};
+
+/**
+ * Runs one fetch under its wall-clock budget. A publisher too slow for the
+ * budget is the source's state rather than a fault here: the reader was
+ * already answered and the queue keeps the work, so the failure the expiry
+ * caused grades as the upstream being unavailable, as any failure the budget
+ * did not cause keeps its own grade.
+ */
+export const withDocumentFetchBudget = async <T>(
+  budget: AbortSignal,
+  run: () => Promise<T>,
+): Promise<T> => {
+  const outcome = await Result.tryPromise({
+    try: run,
+    catch: (error: unknown) => error,
+  });
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  const { error } = outcome;
+  throw budget.aborted && typeof error === "object" && error !== null
+    ? classifyFailure(error, "upstream_unavailable")
+    : error;
 };
 
 type FetchDeferredDocumentOptions = {
