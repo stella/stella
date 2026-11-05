@@ -17,6 +17,65 @@ import {
  * in another. Each case states which signal is expected to decide it.
  */
 
+describe("a citation printed with its reporter entry is published authority", () => {
+  const doctrine =
+    "Extrémní rozpor je dán zejména tehdy, pokud hodnocení důkazů v napadeném rozhodnutí zcela absentuje";
+
+  test("a reported ruling stays precedent in a sentence about a contested decision", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "III. ÚS 359/05",
+        context: `${doctrine} [usnesení ze dne 23. 9. 2005 sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)].`,
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PRECEDENT,
+      evidence: CITATION_KIND_EVIDENCE.REPORTER,
+    });
+  });
+
+  test("a Supreme Administrative Court report counts as well", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "6 As 1/2020",
+        context: `${doctrine} (rozsudek sp. zn. 6 As 1/2020, č. 4055/2020 Sb. NSS).`,
+      }).kind,
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
+  test("the reporter entry of another citation in the sentence says nothing about this one", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "7 Tdo 346/2025",
+        context:
+          "Napadené usnesení sp. zn. 7 Tdo 346/2025 vychází z nálezu sp. zn. III. ÚS 84/94 (N 34/3 SbNU 257).",
+      }),
+    ).toEqual({
+      kind: CITATION_KIND.PROCEDURAL,
+      evidence: CITATION_KIND_EVIDENCE.CONTEXT,
+    });
+  });
+
+  test("a shorter docket does not read the entry of a longer one that ends the same", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "I. ÚS 359/05",
+        context: `${doctrine} [sp. zn. I. ÚS 359/05; sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)].`,
+      }).evidence,
+    ).toBe(CITATION_KIND_EVIDENCE.CONTEXT);
+  });
+
+  test("the publisher's account still outranks the reporter entry", () => {
+    expect(
+      classifyCitationVerdict({
+        citationText: "III. ÚS 359/05",
+        citationKey: "iii.ús/359/05",
+        proceduralKeys: new Set(["iii.ús/359/05"]),
+        context: `sp. zn. III. ÚS 359/05 (U 22/38 SbNU 579)`,
+      }).evidence,
+    ).toBe(CITATION_KIND_EVIDENCE.PUBLISHER);
+  });
+});
+
 describe("context decides when it speaks", () => {
   test("an appeal recital is procedural even for a supreme-court registry", () => {
     expect(

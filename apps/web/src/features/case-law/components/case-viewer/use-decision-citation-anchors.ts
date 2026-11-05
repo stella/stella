@@ -5,7 +5,7 @@ import type {
   UnresolvedCitationAnchorSource,
 } from "@stll/decision-reader/reader-types";
 
-import { decisionCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
+import { decisionInTextCitationsInfiniteOptions } from "@/features/case-law/queries/citations";
 import { optionalArray } from "@/lib/arrays";
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
@@ -18,12 +18,12 @@ type DecisionCitationAnchors = {
   unresolvedCitationAnchors: UnresolvedCitationAnchorSource[];
 };
 
-/** Outgoing citations already loaded for inline marking in a decision. */
+/** Every citation in a decision's text, loaded for inline marking. */
 export const useDecisionCitationAnchors = (
   decisionId: SafeId<"caseLawDecision">,
 ): DecisionCitationAnchors => {
   const dataQuery = useInfiniteQuery(
-    decisionCitationsInfiniteOptions(decisionId, "outgoing"),
+    decisionInTextCitationsInfiniteOptions(decisionId),
   );
   const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useDecisionCitationAnchors:query");
