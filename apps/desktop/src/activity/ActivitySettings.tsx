@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
@@ -149,7 +149,7 @@ function reportSettingsError(
 
 function useActivitySettings(
   date: string | null,
-  onReadError: (message: string) => void,
+  setError: Dispatch<SetStateAction<string | null>>,
 ) {
   const t = useTranslations("activity");
   const [view, setView] = useState<ActivitySettingsView>({ type: "loading" });
@@ -171,7 +171,7 @@ function useActivitySettings(
       setView((previousView) =>
         previousView.type === "ready" ? previousView : { type: "failed" },
       );
-      onReadError(errorRead);
+      setError(errorRead);
     };
     const read = () => {
       requestId.current += 1;
@@ -186,6 +186,8 @@ function useActivitySettings(
             return undefined;
           }
           setView({ settings: value, type: "ready" });
+          // Only the read's own error: a failed change still needs saying.
+          setError((shown) => (shown === errorRead ? null : shown));
           return undefined;
         })
         .catch((error: unknown) => {
@@ -211,7 +213,7 @@ function useActivitySettings(
       disposed = true;
       stopListening();
     };
-  }, [date, errorRead, onReadError]);
+  }, [date, errorRead, setError]);
 
   return view;
 }
