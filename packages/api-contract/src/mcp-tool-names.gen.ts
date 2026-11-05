@@ -16,6 +16,7 @@ export const STELLA_MCP_TOOL_NAMES = [
   "open_case_law_decision",
   "read_case_law_decision_blocks",
   "preview_cited_provision",
+  "list_case_law_courts",
   "search_legislation",
   "read_statute",
   "read_statute_provisions",

@@ -6,11 +6,19 @@ import {
   normalizeStreamChunk,
   type RunAgentResumeItem,
 } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import type { ChatLocalRunHarness } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TOOL_EXECUTOR,
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+} from "@stll/api-contract/chat";
+import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  type ChatLocalRunComputerEvent,
+  type ChatLocalRunHarness,
+} from "@stll/api-contract/chat-run-target";
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -21,14 +29,21 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
+import {
+  questionPauseOf,
+  questionReplyOf,
+} from "@/api/lib/desktop-runner/chunk";
 import type {
   DesktopRunnerControl,
+  DesktopRunnerControlError,
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
 import type {
+  ChatRunForRequest,
   DesktopRunnerRunView,
   RunOwner,
 } from "@/api/lib/desktop-runner/store";
@@ -52,6 +67,7 @@ type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
 type LocalRunControl = Pick<
   DesktopRunnerControl,
   | "answerApproval"
+  | "answerQuestion"
   | "interruptRun"
   | "readChatRunForRequest"
   | "readChatRunSession"
@@ -84,12 +100,24 @@ export type LocalRunContext = {
 type LocalRunStreamInput = {
   /** The chat run this attempt answers; every run event carries it. */
   chatRunId: string;
+  /**
+   * The chat turn that reads the run. The run lives as long as the turn holds
+   * it; a resumed turn answers only the run it started.
+   */
+  chatTurnId: SafeId<"chatTurn">;
   /** The thread history, as the cloud model would receive it. */
   messages: readonly ModelMessage[];
   /** The system prompt the cloud model would receive. */
   instructions: string;
-  /** Answers to the approvals the run paused for; absent on a new turn. */
+  /**
+   * The answer to the approval or blocking question the run paused for;
+   * absent on a new turn.
+   */
   resume: readonly RunAgentResumeItem[] | undefined;
+  /**
+   * The turn's own cut: a stop on any API task, its deadline, a lost owner or
+   * a failed production. It interrupts the run on the computer.
+   */
   abortSignal: AbortSignal;
 };
 
@@ -110,7 +138,8 @@ const EVENT_PAGE = 200;
 type LocalRunFailure =
   | typeof AI_FAILURE_CODES.local_runner_needs_login
   | typeof AI_FAILURE_CODES.local_runner_limit_reached
-  | typeof AI_FAILURE_CODES.local_runner_unavailable;
+  | typeof AI_FAILURE_CODES.local_runner_unavailable
+  | typeof AI_FAILURE_CODES.local_runner_turn_too_large;
 
 const FAILURE_MESSAGE = {
   [AI_FAILURE_CODES.local_runner_needs_login]:
@@ -119,6 +148,8 @@ const FAILURE_MESSAGE = {
     "The harness on the computer reached its usage limit.",
   [AI_FAILURE_CODES.local_runner_unavailable]:
     "The computer stopped running the turn.",
+  [AI_FAILURE_CODES.local_runner_turn_too_large]:
+    "The conversation is too long to hand to the computer.",
 } as const satisfies Record<LocalRunFailure, string>;
 
 type StoredOutcome = Extract<
@@ -161,10 +192,12 @@ const LOCAL_RUN_REJECTION = {
   harness_limited: AI_FAILURE_CODES.local_runner_limit_reached,
   harness_not_installed: AI_FAILURE_CODES.local_runner_unavailable,
   harness_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
+  harness_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   harness_version_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   model_unavailable: AI_FAILURE_CODES.local_runner_unavailable,
   policy_unsupported: AI_FAILURE_CODES.local_runner_unavailable,
   at_capacity: AI_FAILURE_CODES.local_runner_unavailable,
+  run_too_large: AI_FAILURE_CODES.local_runner_turn_too_large,
   unknown_run: AI_FAILURE_CODES.local_runner_unavailable,
 } as const satisfies Record<RejectReason, LocalRunFailure>;
 
@@ -215,12 +248,71 @@ type RewriteContext = {
   threadId: string;
 };
 
-/** The chunk as this chat run carries it: its run, thread and call ids. */
+/**
+ * Which stored events a local turn carries. A harness turn is text, reasoning,
+ * tool calls and their results, and its run's start, end and custom events,
+ * as `harnessEventsToChunks` maps them. Every other event is dropped: a
+ * snapshot or a chunked tool call would write message state or call ownership
+ * past the stamping below, and nothing a harness reports needs one.
+ */
+const LOCAL_RUN_EVENT_DISPOSITION = {
+  [EventType.TEXT_MESSAGE_START]: "carry",
+  [EventType.TEXT_MESSAGE_CONTENT]: "carry",
+  [EventType.TEXT_MESSAGE_END]: "carry",
+  [EventType.TEXT_MESSAGE_CHUNK]: "drop",
+  [EventType.TOOL_CALL_START]: "carry",
+  [EventType.TOOL_CALL_ARGS]: "carry",
+  [EventType.TOOL_CALL_END]: "carry",
+  [EventType.TOOL_CALL_CHUNK]: "drop",
+  [EventType.TOOL_CALL_RESULT]: "carry",
+  [EventType.STATE_SNAPSHOT]: "drop",
+  [EventType.STATE_DELTA]: "drop",
+  [EventType.MESSAGES_SNAPSHOT]: "drop",
+  [EventType.ACTIVITY_SNAPSHOT]: "drop",
+  [EventType.ACTIVITY_DELTA]: "drop",
+  [EventType.RAW]: "drop",
+  [EventType.CUSTOM]: "carry",
+  [EventType.RUN_STARTED]: "carry",
+  [EventType.RUN_FINISHED]: "carry",
+  [EventType.RUN_ERROR]: "carry",
+  [EventType.STEP_STARTED]: "drop",
+  [EventType.STEP_FINISHED]: "drop",
+  [EventType.REASONING_START]: "carry",
+  [EventType.REASONING_MESSAGE_START]: "carry",
+  [EventType.REASONING_MESSAGE_CONTENT]: "carry",
+  [EventType.REASONING_MESSAGE_END]: "carry",
+  [EventType.REASONING_MESSAGE_CHUNK]: "drop",
+  [EventType.REASONING_END]: "carry",
+  [EventType.REASONING_ENCRYPTED_VALUE]: "drop",
+  [EventType.SUBAGENT_STARTED]: "drop",
+  [EventType.SUBAGENT_FINISHED]: "drop",
+  [EventType.SUBAGENT_ERROR]: "drop",
+} as const satisfies Record<EventType, "carry" | "drop">;
+
+/**
+ * The chunk as this chat run carries it: its run, thread and call ids, and
+ * every call owned by the harness that ran it, whatever the desktop said, so
+ * no call of a local turn ever reads as one the API or the browser runs.
+ * `null` for an event a local turn does not carry.
+ */
 const asChatChunk = (
   chunk: PublicStreamChunk,
   { runnerRunId, chatRunId, threadId }: RewriteContext,
-): PublicStreamChunk => {
+): PublicStreamChunk | null => {
+  if (LOCAL_RUN_EVENT_DISPOSITION[chunk.type] === "drop") {
+    return null;
+  }
   const callId = (id: string) => localCallId(runnerRunId, id);
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    return {
+      ...chunk,
+      toolCallId: callId(chunk.toolCallId),
+      metadata: {
+        ...chunk.metadata,
+        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: CHAT_TOOL_EXECUTOR.harness,
+      },
+    };
+  }
   // Only these name a run, a thread or a call; every other chunk passes as is.
   if (chunk.type === EventType.RUN_STARTED) {
     return { ...chunk, runId: chatRunId, threadId };
@@ -248,7 +340,6 @@ const asChatChunk = (
     };
   }
   if (
-    chunk.type === EventType.TOOL_CALL_START ||
     chunk.type === EventType.TOOL_CALL_ARGS ||
     chunk.type === EventType.TOOL_CALL_END ||
     chunk.type === EventType.TOOL_CALL_RESULT
@@ -267,24 +358,9 @@ const asChatChunk = (
   return chunk;
 };
 
-type RunFinishedChunk = Extract<
-  PublicStreamChunk,
-  { type: EventType.RUN_FINISHED }
->;
-
 /** A chunk this source makes itself, in the public form the pipeline reads. */
 const publicChunks = (chunk: AdapterYieldChunk): PublicStreamChunk[] =>
   normalizeStreamChunk(chunk);
-
-/** The interrupt of a blocking harness question, which chat cannot answer in place. */
-const questionInterruptOf = (chunk: RunFinishedChunk) =>
-  chunk.outcome?.type === "interrupt"
-    ? chunk.outcome.interrupts.find(
-        (interrupt) =>
-          isRecord(interrupt.metadata) &&
-          interrupt.metadata["kind"] === "question",
-      )
-    : undefined;
 
 /** The run error that ends the turn; `code` names why for the member. */
 const runErrorChunks = (
@@ -357,14 +433,14 @@ const finishedRunChunks = ({
 };
 
 /**
- * What an open read does once it has caught up: wait for more, read the final
- * message the run stored with its transition, or end the turn with why the
- * gateway gave the run up.
+ * What an open read does once it has caught up: wait for more (with the
+ * computer there or away), read the final message the run stored with its
+ * transition, or end the turn with why the gateway gave the run up.
  */
 const caughtUpStep = (
   run: DesktopRunnerRunView | null,
 ):
-  | { type: "wait" }
+  | { type: "wait"; computer: ChatLocalRunComputerEvent["status"] }
   | { type: "read" }
   | { type: "fail"; code: LocalRunFailure } => {
   if (run === null) {
@@ -385,40 +461,15 @@ const caughtUpStep = (
       return { type: "read" };
     case "assigned":
     case "running":
+      return { type: "wait", computer: "connected" };
     case "waiting_for_computer":
       // A computer that is away resumes the run when it reconnects.
-      return { type: "wait" };
+      return { type: "wait", computer: "waiting" };
     default:
       run.state satisfies never;
       return panic("Unknown desktop runner run state");
   }
 };
-
-/**
- * The runner protocol answers approvals only. A blocking question becomes one
- * the member answers with their next message, which resumes the harness
- * session in a new run.
- */
-const questionReplyChunks = (
-  question: NonNullable<ReturnType<typeof questionInterruptOf>> & {
-    toolCallId: string;
-  },
-  rewrite: Pick<RewriteContext, "chatRunId" | "threadId">,
-): PublicStreamChunk[] => [
-  {
-    type: EventType.TOOL_CALL_RESULT,
-    toolCallId: question.toolCallId,
-    messageId: `${rewrite.chatRunId}:${question.id}`,
-    content: JSON.stringify({
-      status: "awaiting_reply",
-      questions: isRecord(question.metadata)
-        ? question.metadata["questions"]
-        : [],
-    }),
-    timestamp: nowMs(),
-  },
-  ...runFinishedChunks(rewrite, false),
-];
 
 /**
  * A run store that cannot be read ends the turn as a computer that stopped
@@ -450,7 +501,8 @@ type ReadRunOptions = {
 
 /**
  * Stop the computer's turn: what a user's stop, a deadline or a lost owner
- * means for a run nobody reads any more. The run stays open for a later turn.
+ * means for a run nobody reads any more. The gateway keeps one interrupt per
+ * run, so a repeat is a no-op.
  */
 const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
   const stopped = await context.control.interruptRun({
@@ -465,9 +517,35 @@ const interruptRun = async (context: LocalRunContext, runnerRunId: string) => {
 };
 
 /**
+ * Tells the chat when its computer went away or came back. Only a change is
+ * sent, so a long wait adds one event to the run log, not one per poll; the
+ * run's start goes first when none went out yet.
+ */
+const computerStatusChunks = (start: () => Generator<PublicStreamChunk>) => {
+  /** Whether the turn last told the chat its computer is away. */
+  let away = false;
+  return function* (
+    status: ChatLocalRunComputerEvent["status"],
+  ): Generator<PublicStreamChunk> {
+    const nowAway = status === "waiting";
+    if (nowAway === away) {
+      return;
+    }
+    away = nowAway;
+    yield* start();
+    yield {
+      type: EventType.CUSTOM,
+      name: CHAT_LOCAL_RUN_COMPUTER_EVENT,
+      value: { status } satisfies ChatLocalRunComputerEvent,
+      timestamp: nowMs(),
+    };
+  };
+};
+
+/**
  * The run's chunks after `afterSeq`, until the run finishes or pauses for an
- * approval. A pause records the position, so the resumed turn continues
- * after it. A computer that is away keeps the turn waiting; a run the gateway
+ * approval or a blocking question. A pause records the position, so the
+ * resumed turn continues after it. A computer that is away keeps the turn waiting; a run the gateway
  * gave up on ends it with a failure the member can read.
  *
  * @yields Chunks of the chat run, ending with its terminal one.
@@ -501,6 +579,7 @@ async function* readRunChunks({
       };
     }
   };
+  const computer = computerStatusChunks(start);
   const fail = function* (
     code: LocalRunFailure,
     message?: string,
@@ -515,11 +594,34 @@ async function* readRunChunks({
       runId: runnerRunId,
       seq: position,
     });
+  /**
+   * The run is this reader's to end until it finishes or pauses for an
+   * answer. Any other way the read ends interrupts it, once: a cut of the
+   * turn while the read waits or while its consumer is not pulling, a
+   * consumer that stops reading, a store that cannot be read.
+   */
+  let holdsRun = true;
+  let interrupting: Promise<void> | null = null;
+  const stopRun = async () => {
+    if (holdsRun) {
+      holdsRun = false;
+      interrupting = interruptRun(context, runnerRunId);
+    }
+    await interrupting;
+  };
+  /** The run finished, ended on the gateway's side, or paused. */
+  const releaseRun = () => {
+    holdsRun = false;
+  };
+  const onCut = () => {
+    detached(stopRun, "local-run-chunks.interrupt");
+  };
+  abortSignal.addEventListener("abort", onCut, { once: true });
   const listener = context.runBell.listen(runnerRunId);
   try {
     for (;;) {
       if (abortSignal.aborted) {
-        await interruptRun(context, runnerRunId);
+        await stopRun();
         return;
       }
       const page = await control.readEvents({
@@ -530,10 +632,14 @@ async function* readRunChunks({
       });
       if (page.isErr()) {
         // Nobody reads this turn any more; stop the computer before reporting.
-        await interruptRun(context, runnerRunId);
+        await stopRun();
         yield* start();
         yield* storeUnavailable(page.error, rewrite);
         return;
+      }
+      if (page.value.items.length > 0) {
+        // Anything the computer stored since it was away means it is back.
+        yield* computer("connected");
       }
       for (const item of page.value.items) {
         position = item.seq;
@@ -551,6 +657,9 @@ async function* readRunChunks({
               panic("A stored desktop runner chunk no longer folds");
             }
             const chunk = asChatChunk(message.chunk, rewrite);
+            if (chunk === null) {
+              continue;
+            }
             if (chunk.type === EventType.RUN_STARTED) {
               // A run resumed after a pause opens a new segment; the chat
               // run is one.
@@ -569,26 +678,25 @@ async function* readRunChunks({
               yield chunk;
               continue;
             }
-            const question = questionInterruptOf(chunk);
-            if (question?.toolCallId !== undefined) {
-              yield* questionReplyChunks(
-                { ...question, toolCallId: question.toolCallId },
-                rewrite,
-              );
-              await interruptRun(context, runnerRunId);
-              return;
-            }
             if (chunk.outcome?.type === "interrupt") {
               // The position is stored before the pause is handed out, so an
               // answer always continues after it.
               const recorded = await pause();
               if (recorded.isErr()) {
+                await stopRun();
                 yield* storeUnavailable(recorded.error, rewrite);
                 return;
               }
+              // The paused run is the turn's now: it waits for the answer
+              // while the turn awaits it, and is cancelled once the turn ends
+              // any other way (`readRunsOfEndedChatTurns`).
+              releaseRun();
               yield chunk;
               return;
             }
+            // The harness finished its turn: nothing is left to interrupt,
+            // only the run's own end to read.
+            releaseRun();
             yield chunk;
             finished = true;
             continue;
@@ -597,6 +705,7 @@ async function* readRunChunks({
             // The chunk stream carries the interrupt the member answers.
             continue;
           case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished: {
+            releaseRun();
             const ending = finishedRunChunks({
               outcome: message.outcome,
               finishSent: finished,
@@ -622,6 +731,7 @@ async function* readRunChunks({
       }
       const run = await control.readRun({ owner, runId: runnerRunId });
       if (run.isErr()) {
+        await stopRun();
         yield* start();
         yield* storeUnavailable(run.error, rewrite);
         return;
@@ -629,11 +739,14 @@ async function* readRunChunks({
       const step = caughtUpStep(run.value);
       switch (step.type) {
         case "fail":
+          // The gateway already ended the run: rejected, lost, or gone.
+          releaseRun();
           yield* fail(step.code);
           return;
         case "read":
           continue;
         case "wait":
+          yield* computer(step.computer);
           await listener.wait({
             timeoutMs: context.pollMs ?? DEFAULT_POLL_MS,
             signal: abortSignal,
@@ -645,7 +758,10 @@ async function* readRunChunks({
       }
     }
   } finally {
+    abortSignal.removeEventListener("abort", onCut);
     listener.close();
+    // A consumer that closed the read early, or a read that threw.
+    await stopRun();
   }
 }
 
@@ -661,6 +777,7 @@ const unavailableHarnessFailure = (
     case "ready":
     case "not_installed":
     case "unsupported":
+    case "unavailable":
     case undefined:
       return AI_FAILURE_CODES.local_runner_unavailable;
     default:
@@ -721,7 +838,7 @@ async function* startLocalRun({
       messages: messages.map((message) => ({ ...message })),
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
-      chatThreadId: context.chatThreadId,
+      chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
     });
   let started = await start(input.messages);
   const latest = input.messages.at(-1);
@@ -765,8 +882,10 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
-    case "too_large":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
+      return;
+    case "too_large":
+      yield* refuse(AI_FAILURE_CODES.local_runner_turn_too_large);
       return;
     default:
       outcome satisfies never;
@@ -774,24 +893,107 @@ async function* startLocalRun({
   }
 }
 
-/** Why answering the paused run failed, or `null` once the answer is queued. */
-type ResumeFailure = LocalRunFailure | null;
-
-/** Whether a queued approval answer lets the paused run go on. */
-const approvalAnswerFailure = (answer: QueueCommandOutcome): ResumeFailure => {
-  switch (answer.type) {
+/** Whether a queued command lets the paused run go on; `null` once it is queued. */
+const queuedCommandFailure = (
+  outcome: QueueCommandOutcome,
+): LocalRunFailure | null => {
+  switch (outcome.type) {
     case "queued":
     case "duplicate":
       return null;
     case "run_ended":
     case "run_not_found":
-    case "approval_not_requested":
+    case "not_requested":
     case "command_limit":
     case "too_large":
       return AI_FAILURE_CODES.local_runner_unavailable;
     default:
-      answer satisfies never;
-      return panic("Unknown approval answer outcome");
+      outcome satisfies never;
+      return panic("Unknown desktop runner command outcome");
+  }
+};
+
+/**
+ * An answer to a blocking question that does not answer it
+ * (`questionReplyOf`). The reason names question ids only, never what was
+ * answered.
+ */
+class LocalRunAnswerRefused extends TaggedError("LocalRunAnswerRefused")<{
+  message: string;
+}> {}
+
+const LOCAL_RUN_ANSWER_SINK = failureSink({
+  event: "chat.local_run_answer_refused",
+  expected: [],
+});
+
+/** What the paused run receives for the member's answer. */
+type ResumeCommand =
+  | { type: "queued"; outcome: QueueCommandOutcome }
+  | { type: "refused"; reason: string };
+
+/**
+ * Hand the member's answer to the run that paused for it: an approval as its
+ * decision, a question as its answers, or, when the member dismissed the
+ * question, a stop of the run's turn.
+ */
+const answerPausedRun = async (
+  context: LocalRunContext,
+  item: RunAgentResumeItem & { interruptId: string },
+  run: ChatRunForRequest,
+): Promise<Result<ResumeCommand, DesktopRunnerControlError>> => {
+  const { control, owner } = context;
+  const queued = (
+    outcome: Result<QueueCommandOutcome, DesktopRunnerControlError>,
+  ) =>
+    outcome.map((value): ResumeCommand => ({ type: "queued", outcome: value }));
+  switch (run.askedBy) {
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
+      return queued(
+        await control.answerApproval({
+          owner,
+          runId: run.runId,
+          requestId: item.interruptId,
+          decision: approvalDecisionOf(item),
+        }),
+      );
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
+      if (item.status === "cancelled") {
+        // The harness ends the turn it paused; the reader reads that end.
+        return queued(await control.interruptRun({ owner, runId: run.runId }));
+      }
+      const stored = v.safeParse(
+        desktopRunnerDesktopMessageSchema,
+        run.request,
+      );
+      const pause = stored.success
+        ? questionPauseOf(
+            stored.output.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent
+              ? stored.output.chunk
+              : null,
+          )
+        : null;
+      if (pause?.type !== "question" || pause.requestId !== item.interruptId) {
+        return panic("A stored question pause no longer reads as one");
+      }
+      const answered = questionReplyOf(item.payload, pause.questions);
+      if (answered.type === "refused") {
+        return Result.ok({ type: "refused", reason: answered.reason });
+      }
+      return queued(
+        await control.answerQuestion({
+          owner,
+          runId: run.runId,
+          requestId: item.interruptId,
+          answers: answered.answers,
+        }),
+      );
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
+      return panic("A run's final message asked nothing");
+    default:
+      run.askedBy satisfies never;
+      return panic("Unknown desktop runner request");
   }
 };
 
@@ -801,8 +1003,8 @@ type ResumeOptions = {
 };
 
 /**
- * Answer the approvals the run paused for on the same run, then continue
- * reading it after where the paused turn stopped.
+ * Answer the approval or blocking question the run paused for on the same
+ * run, then continue reading it after where the paused turn stopped.
  *
  * @yields Chunks of the chat run, ending with its terminal one.
  */
@@ -812,9 +1014,6 @@ async function* resumeLocalRun({
 }: ResumeOptions): AsyncGenerator<PublicStreamChunk> {
   const { control, owner } = context;
   const uuid = v.pipe(v.string(), v.uuid());
-  let runnerRunId: string | null = null;
-  let afterSeq = 0;
-  let failure: ResumeFailure;
   const rewrite = {
     chatRunId: input.chatRunId,
     threadId: context.chatThreadId,
@@ -825,65 +1024,74 @@ async function* resumeLocalRun({
     threadId: context.chatThreadId,
     timestamp: nowMs(),
   } as const satisfies PublicStreamChunk;
-  // The harness pauses for one approval at a time, so a resume answers one.
+  const fail = function* (code: LocalRunFailure, message?: string) {
+    yield opened;
+    yield* runErrorChunks(failureOf(code, message), rewrite);
+  };
+  // The harness pauses for one request at a time, so a resume answers one.
   const [item, ...rest] = input.resume;
-  if (item === undefined || rest.length > 0) {
-    failure = AI_FAILURE_CODES.local_runner_unavailable;
-  } else if (!v.is(uuid, item.interruptId)) {
-    // Approval request ids are minted as UUIDs by the runner protocol.
-    failure = AI_FAILURE_CODES.local_runner_unavailable;
-  } else {
-    const found = await control.readChatRunForRequest({
-      owner,
-      chatThreadId: context.chatThreadId,
-      requestId: item.interruptId,
-    });
-    if (found.isErr()) {
+  // Request ids are minted as UUIDs by the runner protocol.
+  if (item === undefined || rest.length > 0 || !v.is(uuid, item.interruptId)) {
+    yield* fail(AI_FAILURE_CODES.local_runner_unavailable);
+    return;
+  }
+  const found = await control.readChatRunForRequest({
+    owner,
+    chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
+    requestId: item.interruptId,
+  });
+  if (found.isErr()) {
+    yield opened;
+    yield* storeUnavailable(found.error, rewrite);
+    return;
+  }
+  const run = found.value;
+  if (run === null) {
+    yield* fail(AI_FAILURE_CODES.local_runner_unavailable);
+    return;
+  }
+  const answered = await answerPausedRun(
+    context,
+    { ...item, interruptId: item.interruptId },
+    run,
+  );
+  if (answered.isErr()) {
+    if (answered.error._tag === "DatabaseError") {
       yield opened;
-      yield* storeUnavailable(found.error, rewrite);
+      yield* storeUnavailable(answered.error, rewrite);
       return;
     }
-    const run = found.value;
-    if (run === null) {
-      failure = AI_FAILURE_CODES.local_runner_unavailable;
-    } else {
-      const answered = await control.answerApproval({
-        owner,
-        runId: run.runId,
-        requestId: item.interruptId,
-        decision: approvalDecisionOf(item),
-      });
-      if (answered.isErr()) {
-        if (answered.error._tag === "DatabaseError") {
-          yield opened;
-          yield* storeUnavailable(answered.error, rewrite);
-          return;
-        }
-        failure = AI_FAILURE_CODES.local_runner_unavailable;
-      } else {
-        failure = approvalAnswerFailure(answered.value);
-        runnerRunId = run.runId;
-        afterSeq = run.chatReadSeq;
-      }
-    }
-  }
-  if (failure !== null || runnerRunId === null) {
-    yield {
-      type: EventType.RUN_STARTED,
-      runId: input.chatRunId,
-      threadId: context.chatThreadId,
-      timestamp: nowMs(),
-    };
-    yield* runErrorChunks(
-      failureOf(failure ?? AI_FAILURE_CODES.local_runner_unavailable),
-      { chatRunId: input.chatRunId, threadId: context.chatThreadId },
-    );
+    yield* fail(AI_FAILURE_CODES.local_runner_unavailable);
     return;
+  }
+  const command = answered.value;
+  switch (command.type) {
+    case "refused": {
+      observeFailure(new LocalRunAnswerRefused({ message: command.reason }), {
+        sink: LOCAL_RUN_ANSWER_SINK,
+      });
+      // The turn that owned the question ends here, so the run stops waiting
+      // for an answer nobody can give any more.
+      await interruptRun(context, run.runId);
+      yield* fail(AI_FAILURE_CODES.local_runner_unavailable, command.reason);
+      return;
+    }
+    case "queued": {
+      const failure = queuedCommandFailure(command.outcome);
+      if (failure !== null) {
+        yield* fail(failure);
+        return;
+      }
+      break;
+    }
+    default:
+      command satisfies never;
+      panic("Unknown resume command");
   }
   yield* readRunChunks({
     context,
-    runnerRunId,
-    afterSeq,
+    runnerRunId: run.runId,
+    afterSeq: run.chatReadSeq,
     chatRunId: input.chatRunId,
     abortSignal: input.abortSignal,
   });

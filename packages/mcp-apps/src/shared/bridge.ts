@@ -23,13 +23,14 @@ import {
 } from "./app-error";
 import type { AppFailure } from "./app-error";
 import { appLocale, setAppDocumentLocale } from "./locale";
+import { type AppToolResult, callAppServerTool } from "./server-tool-call";
 import { mountAppViewport } from "./size";
 import { projectAppToolArguments } from "./tool-input";
 
+export type { AppToolResult } from "./server-tool-call";
+
 export const createViewportApp = (name: string) =>
   new App({ name, version: "1.0.0" }, {}, { autoResize: false });
-
-export type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
 export const parseAppToolPayload = (result: AppToolResult): unknown => {
   if (result.structuredContent !== undefined) {
@@ -93,15 +94,13 @@ export const openPresentationLink = async ({
     .split("&")
     .filter((part) => !new URLSearchParams(part).has("sh"))
     .join("&");
-  const fresh = await Result.tryPromise(async () =>
-    app.callServerTool({
-      name: MCP_WEB_HANDOFF_TOOL_NAME,
-      arguments: { url: parsed.href },
-    }),
-  );
+  const fresh = await callAppServerTool(app, {
+    name: MCP_WEB_HANDOFF_TOOL_NAME,
+    arguments: { url: parsed.href },
+  });
   const payload =
-    Result.isOk(fresh) && fresh.value.isError !== true
-      ? fresh.value.structuredContent
+    fresh.status === "answered" && fresh.result.isError !== true
+      ? fresh.result.structuredContent
       : undefined;
   const freshUrlValue =
     typeof payload === "object" &&
@@ -243,10 +242,11 @@ export const requestPresentationTool = async ({
   // The server normalizes and validates; a refusal returns as a tool error.
   const arguments_ = projectAppToolArguments(request.name, request.arguments);
   onRequest?.(arguments_);
-  const called = await Result.tryPromise(async () =>
-    app.callServerTool({ name: request.name, arguments: arguments_ }),
-  );
-  if (Result.isError(called)) {
+  const called = await callAppServerTool(app, {
+    name: request.name,
+    arguments: arguments_,
+  });
+  if (called.status === "unreachable") {
     return {
       status: "error",
       failure: appFailure("unavailable", requestId, true),
@@ -254,7 +254,7 @@ export const requestPresentationTool = async ({
   }
   return {
     status: "ready",
-    result: called.value,
+    result: called.result,
     requestId,
     arguments: arguments_,
   } as const;

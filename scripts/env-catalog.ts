@@ -1403,6 +1403,9 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
+  // Bun.build defines it in the compiled agent sidecar;
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
@@ -1486,10 +1489,15 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
-  // The fake Codex app server logs what it receives, and the CODEX_HOME it
-  // started with, to the file its tests name.
-  "FAKE_CODEX_LOG",
+  // The fake harness CLIs log how they started and what they receive to the
+  // file their tests name; the fake Codex app server also logs its CODEX_HOME.
+  "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  // The desktop's stand-in harness holder (a re-run of its own test binary)
+  // takes its folder, socket and log file from the test that starts it.
+  "STAND_IN_DIR",
+  "STAND_IN_ENDPOINT",
+  "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1571,6 +1579,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // gh-dispatch-workflow.sh reads gh-retry.sh's final HTTP status from here.
+  "GH_RETRY_STATUS_FILE",
+  // gh-dispatch-workflow.sh bounds for watching an unconfirmed dispatch.
+  "GH_DISPATCH_SETTLE_SECONDS",
+  "GH_DISPATCH_POLL_SECONDS",
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
@@ -1986,6 +1999,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",
+  // Tauri sets it for a desktop build's beforeBuildCommand.
+  "TAURI_ENV_TARGET_TRIPLE",
   "TMPDIR",
   "TZ",
 ]);

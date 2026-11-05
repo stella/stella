@@ -203,6 +203,7 @@ export const NO_NATIVE_UI_REGISTRY = {
   }),
   "directional-icon": noNative("mirrors an icon under a right-to-left UI"),
   "document-identity-badge": noNative("a domain badge for a document"),
+  "document-mark": noNative("file format artwork drawn as SVG"),
   "document-identity-badge.logic": notComponent("badge formatting helpers"),
   field: owned(
     nativeRuleId("label"),
@@ -391,6 +392,10 @@ export const NO_NATIVE_UI_REGISTRY = {
     elements: ["textarea"],
   }),
   "theme.css": notComponent("the design-system stylesheet"),
+  "time-field": owned(
+    DATE_INPUT_RULE,
+    "the native time inputs are reported there",
+  ),
   toast: owned(
     "stella-toast/stella-toast",
     "toasts go through stellaToast; the browser's alert() is no-alert's",

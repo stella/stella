@@ -58,7 +58,10 @@ and container base images used in the Stella monorepo.
      group, major updates grouped by runtime family.
 
    All updates use a five-day cooldown before adoption, aligned with
-   Bun's `minimumReleaseAge` quarantine.
+   Bun's `minimumReleaseAge` quarantine. CI checks every new pin in a
+   `bun.lock` or `Cargo.lock` against that quarantine
+   (`scripts/check-lockfile-release-ages.ts`), and `bun run cargo:update`
+   applies it when resolving crates, as Cargo has no quarantine of its own.
 
 6. **Workspace consistency.** `sherif` runs as a `postinstall`
    hook and is available via `bun run lint:ws`. It flags

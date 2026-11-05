@@ -481,6 +481,17 @@ const documentFieldContentProjection = v.variant("type", [
       sourceType: v.exactOptional(v.string()),
     }),
   ),
+  projectionBranch(
+    v.strictObject({
+      version: v.literal(1),
+      type: v.literal("record"),
+      schemaVersion: v.number(),
+      // Typed values (a register entry, a list of proceedings) and their
+      // source provenance, shaped by the column's schema rather than paths
+      // this projection could enumerate.
+      state: unenumeratedJson(),
+    }),
+  ),
 ]);
 
 /**

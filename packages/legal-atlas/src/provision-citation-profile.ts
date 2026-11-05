@@ -232,6 +232,13 @@ export type CitationTerms = {
   readonly point: string;
 };
 
+export type AmendingClauseSpec = {
+  /** The words that open the clause. */
+  openers: readonly string[];
+  /** How a word naming an act begins: what makes it an amendment of one. */
+  amendedActStems: readonly string[];
+};
+
 export type JurisdictionProfile = {
   versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
@@ -263,6 +270,11 @@ export type JurisdictionProfile = {
   titles: readonly ActTitleSpec[];
   /** Heads of short titles, with every declined form including the nominative. */
   titleHeads: readonly TitleHeadSpec[];
+  /**
+   * How a title states the clause that only amends other acts (`a o změně
+   * některých zákonů`). Courts print the name before it.
+   */
+  amendingClause: AmendingClauseSpec;
   /** Ordinal words a sentence reference uses, mapped to their digit. */
   ordinalWords: Readonly<Record<string, string>>;
   /**

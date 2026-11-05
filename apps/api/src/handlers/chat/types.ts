@@ -166,7 +166,14 @@ export type ChatTurnOutcome =
          * whose input is complete and whose result the chat client posts back
          * as a native interrupt resolution.
          */
-        | { type: "client-tool"; toolCallId: string };
+        | { type: "client-tool"; toolCallId: string }
+        /**
+         * A blocking question a coding-agent harness on the member's computer
+         * asked (`HARNESS_QUESTION_TOOL`). The call stays as the harness
+         * reported it; the answer is the resume payload of the question's
+         * interrupt, which the API hands to the run that asked it.
+         */
+        | { type: "harness-question"; toolCallId: string };
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: ChatTurnCancellationReason }

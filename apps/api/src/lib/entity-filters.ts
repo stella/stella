@@ -83,13 +83,16 @@ const getFieldValue = (content: FieldContent | undefined): string => {
       return String(content.amountCents);
     case "person":
       return content.name;
+    // Matches `fieldValueExpr`, which projects no scalar for these.
     case "error":
     case "pending":
     case "unsupported":
     case "clip":
+    case "record":
       return "";
     default:
-      return "";
+      content satisfies never;
+      return panic(`Unhandled content: ${String(content)}`);
   }
 };
 
@@ -779,6 +782,7 @@ export const FIELD_FIND_SUPPORT = {
   date: "excluded",
   int: "excluded",
   money: "excluded",
+  record: "excluded",
   error: "excluded",
   pending: "excluded",
   unsupported: "excluded",
