@@ -564,6 +564,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
                 const editable = (
                   await safeDb(async (tx) => {
                     const loaded = await readEditableMessageOnTx({
+                      admitted: "active",
                       tx,
                       threadId,
                       messageId,

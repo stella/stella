@@ -21,13 +21,14 @@ import type { PropertyContentType } from "./entity-find";
  * cannot answer "which kinds are there?" differently. The three exclusions are
  * the kinds a person enters by hand — a file is uploaded, a money amount needs
  * a currency the model cannot choose, and a person resolves to a member — and
- * they are exactly the kinds the workspace extractor never schedules.
+ * they are exactly the kinds the workspace extractor never schedules. A record
+ * comes from a data-source tool call, which a decision does not drive.
  *
  * There is no boolean kind in the property model, so a yes/no question is a
  * single-select over two options. The text not settling a question is the
  * `not_stated` cell state, the same for every kind.
  */
-type HandEnteredType = "file" | "money" | "person";
+type HandEnteredType = "file" | "money" | "person" | "record";
 
 export type CaseLawResearchAnswerType = Exclude<
   PropertyContentType,

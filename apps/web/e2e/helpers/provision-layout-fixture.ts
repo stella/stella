@@ -305,7 +305,7 @@ export const openProvisionLayoutInspector = async (
   // a direct pointer jump from the citation leaves the hover corridor.
   await page.getByText(PROVISION_LAYOUT_SENTENCE, { exact: true }).hover();
   await page
-    .getByRole("button", { name: "Open provision", exact: true })
+    .getByRole("button", { name: "Open in side panel", exact: true })
     .click();
   const article = page.locator(
     '[data-slot="inspector-dock-pane"] article.reader-statute',

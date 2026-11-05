@@ -1129,7 +1129,6 @@
     "workspaces.deleteSelectedRowsDescription",
     "workspaces.deleteSelection",
     "workspaces.exportToCsv",
-    "workspaces.fields.formatNotSupported",
     "workspaces.files.desktopEdit.forceRelease",
     "workspaces.files.desktopEdit.opening",
     "workspaces.files.desktopEdit.takeoverNoResponse",

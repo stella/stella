@@ -119,6 +119,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "time_entry_timer_states",
   "time_timer_confirmations",
   "time_timers",
+  "timer_activity_devices",
   "two_factor",
   "usage_allocations",
   "usage_events",

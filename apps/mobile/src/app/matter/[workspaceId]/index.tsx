@@ -1,7 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslations } from "use-intl";
 
-import { useRevision } from "@/components/changes";
 import { MatterEntities } from "@/components/matter-entities";
 import { barGlyph } from "@/components/ui/bar-glyph";
 import { usePickDocument } from "@/components/use-pick-document";
@@ -21,18 +20,13 @@ const MatterScreen = () => {
     name?: string;
   }>();
   const { state } = useSession();
-  const revision = useRevision("documents", "tasks");
 
   return (
     <>
       <Stack.Screen options={{ title: name ?? "" }} />
       <AddMenu workspaceId={workspaceId} />
       {state.status === "signed-in" ? (
-        <MatterEntities
-          key={revision}
-          source={state.source}
-          workspaceId={workspaceId}
-        />
+        <MatterEntities source={state.source} workspaceId={workspaceId} />
       ) : null}
     </>
   );

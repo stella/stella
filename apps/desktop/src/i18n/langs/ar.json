@@ -501,6 +501,10 @@
     "evidenceTitles": "العناوين",
     "evidenceApps": "التطبيقات",
     "rangeEmpty": "لم يُسجَّل شيء في هذه الفترة.",
+    "entryStart": "البداية",
+    "entryEnd": "النهاية",
+    "rangeEndBeforeStart": "اختر وقت انتهاء بعد وقت البدء.",
+    "rangeDraftedLeftOut": "{duration}، دون احتساب الوقت الموجود في المسودات",
     "calendarHint": "افتح اقتراحًا بإطار متقطع لمراجعته، أو اسحب في عمود قيود الوقت لإعداد قيد لأي فترة.",
     "aiDraftWrite": "صياغة باستخدام stella AI",
     "aiDraftAgain": "صياغة مجددًا",
@@ -728,6 +732,36 @@
     "callbackConnectedTitle": "تم ربط ChatGPT",
     "callbackConnectedBody": "يمكنك إغلاق علامة التبويب هذه والعودة إلى stella.",
     "callbackNotConnectedTitle": "لم يتم ربط ChatGPT",
-    "callbackNotConnectedBody": "عُد إلى stella لمعرفة ما حدث وحاول مرة أخرى."
+    "callbackNotConnectedBody": "عُد إلى stella لمعرفة ما حدث وحاول مرة أخرى.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "استخدم اشتراكك في Claude للوكلاء المحليين في stella. يُحتسب الاستخدام من خطة Claude، بشكل منفصل عن اشتراكك في stella.",
+      "notInstalled": "لم يُثبَّت Claude Code على هذا الكمبيوتر بعد.",
+      "signIn": "تسجيل الدخول باستخدام Claude",
+      "openSignInPage": "فتح صفحة تسجيل الدخول",
+      "signedIn": "تم تسجيل الدخول إلى Claude",
+      "signedInAs": "تم تسجيل الدخول إلى Claude · {email}",
+      "signOut": "تسجيل الخروج",
+      "apiKey": "سُجِّل الدخول إلى Claude Code بمفتاح API لا تستخدمه stella. سجّل الخروج، ثم سجّل الدخول باستخدام اشتراكك في Claude.",
+      "failure": {
+        "notCompleted": "لم يكتمل تسجيل الدخول. حاول مرة أخرى.",
+        "timedOut": "استغرق تسجيل الدخول وقتًا طويلًا. حاول مرة أخرى.",
+        "unavailable": "تعذّر تشغيل Claude Code على هذا الكمبيوتر. حاول مرة أخرى."
+      }
+    },
+    "install": {
+      "notInstalled": "لم يُثبَّت {name} على هذا الكمبيوتر بعد.",
+      "install": "تثبيت",
+      "downloading": "جارٍ تنزيل {name} {version}: {percent}%",
+      "verifying": "جارٍ التحقق من {name} {version}",
+      "ready": "تم تثبيت {name} {version}.",
+      "retry": "إعادة المحاولة",
+      "activeStays": "سيبقى الإصدار {version} قيد الاستخدام.",
+      "failure": {
+        "download": "تعذّر تنزيل {name}. تحقق من اتصالك بالإنترنت وحاول مرة أخرى.",
+        "verification": "تعذّر التحقق من {name}، لذا لم يُثبَّت.",
+        "storage": "تعذّر حفظ {name} على هذا الكمبيوتر. تحقق من وجود مساحة فارغة على القرص."
+      }
+    }
   }
 }

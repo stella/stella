@@ -477,6 +477,11 @@ describe("notice publication outcomes", () => {
           metadata: refused.metadata,
           sourceDescriptor: null,
           provisionKeys: [],
+          rankingSignals: {
+            citationAuthorityBucket: 0,
+            languageGroupKey: null,
+            languageGroupShared: false,
+          },
           vacatedFrom: null,
         }),
       );

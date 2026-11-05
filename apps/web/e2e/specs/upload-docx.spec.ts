@@ -10,6 +10,7 @@ import {
   apiStatus,
   apiUploadDocx,
 } from "../helpers/api";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -87,6 +88,7 @@ test.describe("DOCX upload + inspector", () => {
     page,
     request,
   }) => {
+    const policy = await installContentSecurityPolicyCollector(page);
     const testWorkspace = workspace;
     if (testWorkspace === null) {
       throw new Error("Test workspace was not created");
@@ -204,6 +206,7 @@ test.describe("DOCX upload + inspector", () => {
       }
       throw error;
     }
+    await policy.assertClean();
   });
 
   test("leaving browser edit creates a persisted DOCX version with the typed text", async ({

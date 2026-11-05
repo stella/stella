@@ -142,6 +142,11 @@ test("allows a marker binding used only as a whole value", async () => {
       'const EMPTY = "—";\nconst cell = (v: string | null) => v ?? EMPTY;',
     ),
   ).toEqual([]);
+  expect(
+    await lint(
+      'const EMPTY = "—";\nconst blank = (v: string) => (v === EMPTY ? null : v);',
+    ),
+  ).toEqual([]);
 });
 
 test("exempts console calls named by a computed string", async () => {
