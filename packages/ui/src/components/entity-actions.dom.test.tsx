@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
-import { setImmediate as nextMacrotask } from "node:timers/promises";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register();
 const previousActEnvironment: unknown = Reflect.get(
@@ -18,12 +19,8 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  // React's scheduler runs its queued tasks on the next macrotasks; let them
-  // run while the DOM globals still exist.
-  await nextMacrotask();
-  await nextMacrotask();
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type Actions = Parameters<typeof EntityActions>[0]["actions"];
