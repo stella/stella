@@ -207,14 +207,22 @@ const directLossyCall = (context: Context, node: AstNode): boolean => {
   );
 };
 
-const omittedRestPattern = (node: AstNode): AstNode | null => {
+const omittedRestPattern = (
+  node: AstNode,
+  bindingName: string,
+): AstNode | null => {
   const pattern = node.id;
   return isAstNode(pattern) &&
     pattern.type === "ObjectPattern" &&
     Array.isArray(pattern.properties) &&
     pattern.properties.length > 1 &&
     pattern.properties.some(
-      (property) => isAstNode(property) && property.type === "RestElement",
+      (property) =>
+        isAstNode(property) &&
+        property.type === "RestElement" &&
+        isAstNode(property.argument) &&
+        property.argument.type === "Identifier" &&
+        property.argument.name === bindingName,
     )
     ? pattern
     : null;
@@ -267,7 +275,7 @@ const bindingProjection = ({
     if (!isAstNode(declaration)) {
       continue;
     }
-    const omitted = omittedRestPattern(declaration);
+    const omitted = omittedRestPattern(declaration, String(node.name));
     if (omitted !== null) {
       return omitted;
     }
