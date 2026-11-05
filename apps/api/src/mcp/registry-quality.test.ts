@@ -13,7 +13,7 @@ import {
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
 import type { PermissionInput } from "@stll/permissions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -207,6 +207,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "kind": "open-read",
         "name": "list_capabilities",
         "reason": "reads the static capability catalog metadata",
+      },
+      {
+        "kind": "open-read",
+        "name": "list_case_law_courts",
+        "reason": "public case-law corpus",
       },
       {
         "kind": "all",
@@ -1143,7 +1148,8 @@ describe("MCP wire schemas under an independent validator", () => {
       const acceptsUncompacted = compileWireSchema(validator, uncompacted);
       let accepted = 0;
       let rejected = 0;
-      fc.assert(
+      assertProperty(
+        "every output schema accepts exactly what its uncompacted projection accepts",
         fc.property(
           schemaComparisonArbitrary([uncompacted, outputSchema]),
           (value) => {
@@ -1157,7 +1163,7 @@ describe("MCP wire schemas under an independent validator", () => {
             }
           },
         ),
-        propertyConfig({ numRuns: 200 }),
+        { numRuns: 200 },
       );
       // Both verdicts must occur, or the comparison proved nothing.
       expect(accepted, `${tool} accepted no drawn value`).toBeGreaterThan(0);

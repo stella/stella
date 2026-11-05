@@ -279,6 +279,9 @@ const GENERATION_SEAM_EXPORTS = {
   systemPromptsPatch: "none",
   chatTurnOutputTokens: "none",
   mergeGenerationOptions: "none",
+  // A refused dispatch sends nothing, so there is no answer to grade.
+  checkBeforeDispatch: "none",
+  DispatchRefusedError: "none",
 } as const satisfies Record<keyof typeof generation, SeamExportRole>;
 
 export const seamExportsOf = (role: SeamExportRole): string[] =>

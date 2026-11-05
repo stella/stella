@@ -6,21 +6,18 @@ import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  AI_BILLING_DRAFTS_MODE,
-  billingDraftUserSettings,
-  contacts,
-  DEFAULT_AI_BILLING_DRAFTS_MODE,
-  organizationSettings,
-} from "@/api/db/schema";
+import { contacts } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {
   extractBillingGuidelineSections,
+  isFirmGuidelineFile,
   loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+import { draftingModeFor } from "./billing-draft-mode";
 
 export const BILLING_DRAFT_CONTEXT_LIMITS = {
   historyDays: 90,
@@ -35,6 +32,8 @@ type LoadBillingDraftContextOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: DesktopBillingDraftRequest;
+  /** The caller's own drafting preference, read with the drafting gate. */
+  preference: string | null;
 };
 
 type LoadBillingDraftMattersOptions = Pick<
@@ -144,44 +143,9 @@ export const loadBillingDraftContext = async ({
   organizationId,
   userId,
   body,
+  preference,
 }: LoadBillingDraftContextOptions) =>
   await Result.gen(async function* () {
-    const settings = yield* Result.await(
-      safeDb(async (tx) => {
-        const org = await tx
-          .select({ mode: organizationSettings.aiBillingDraftsMode })
-          .from(organizationSettings)
-          .where(eq(organizationSettings.organizationId, organizationId))
-          .limit(1);
-        const own = await tx
-          .select({
-            consentAt: billingDraftUserSettings.consentAt,
-            preference: billingDraftUserSettings.preference,
-          })
-          .from(billingDraftUserSettings)
-          .where(
-            and(
-              eq(billingDraftUserSettings.organizationId, organizationId),
-              eq(billingDraftUserSettings.userId, userId),
-            ),
-          )
-          .limit(1);
-        return { org: org.at(0), own: own.at(0) };
-      }),
-    );
-    if (
-      (settings.org?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE) !==
-        AI_BILLING_DRAFTS_MODE.ENABLED ||
-      !settings.own?.consentAt
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message:
-            "AI billing drafts require organization enablement and personal consent",
-        }),
-      );
-    }
     const matterIds = Array.from(
       new Set(
         body.entries.map(({ matterId }) => brandValidatedWorkspaceId(matterId)),
@@ -234,16 +198,50 @@ export const loadBillingDraftContext = async ({
         }),
       ),
     );
+    const loadedAISettings = yield* Result.await(
+      safeDb(
+        async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
+      ),
+    );
+    const aiSettings = yield* loadedAISettings;
+    const shared = {
+      earlierEntries: earlierEntries.map((entry) => ({
+        id: entry.id,
+        dateWorked: entry.dateWorked,
+        durationMinutes: entry.durationMinutes,
+        narrative: entry.narrative,
+        taskCode: entry.taskCode,
+        activityCode: entry.activityCode,
+        activityGroup: entry.activityGroup,
+        matterId:
+          entry.workspaceId ??
+          panic("Matter-scoped history returned an internal entry"),
+      })),
+      preference,
+      ...aiSettings,
+    };
     const files = yield* Result.await(
       loadBillingGuidelines({ safeDb, organizationId, clientIds }),
     );
-    if (!files.some(({ clientId }) => clientId === null)) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "A firm billing guideline file is required",
-        }),
-      );
+    if (draftingModeFor(files.some(isFirmGuidelineFile)) === "plain") {
+      // A plain description carries no classification, so neither LEDES
+      // codes nor activity groups of earlier entries reach the model.
+      return Result.ok({
+        mode: "plain" as const,
+        matters: matters.filter(({ matterId }) =>
+          validatedMatterIds.includes(matterId),
+        ),
+        ...shared,
+        earlierEntries: shared.earlierEntries.map(
+          ({ id, matterId, dateWorked, durationMinutes, narrative }) => ({
+            id,
+            matterId,
+            dateWorked,
+            durationMinutes,
+            narrative,
+          }),
+        ),
+      });
     }
     const guidelines = Array.from(
       new Set(files.map(({ fileId }) => fileId)),
@@ -276,28 +274,10 @@ export const loadBillingDraftContext = async ({
         }),
       );
     }
-    const loadedAISettings = yield* Result.await(
-      safeDb(
-        async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
-      ),
-    );
-    const aiSettings = yield* loadedAISettings;
     return Result.ok({
+      mode: "guided" as const,
       matters,
-      earlierEntries: earlierEntries.map((entry) => ({
-        id: entry.id,
-        dateWorked: entry.dateWorked,
-        durationMinutes: entry.durationMinutes,
-        narrative: entry.narrative,
-        taskCode: entry.taskCode,
-        activityCode: entry.activityCode,
-        activityGroup: entry.activityGroup,
-        matterId:
-          entry.workspaceId ??
-          panic("Matter-scoped history returned an internal entry"),
-      })),
       guidelines,
-      preference: settings.own.preference,
-      ...aiSettings,
+      ...shared,
     });
   });

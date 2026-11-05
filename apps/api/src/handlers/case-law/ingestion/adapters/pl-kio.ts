@@ -1,11 +1,12 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
-import type * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 import { Buffer } from "node:buffer";
 
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 import {
   DECISION_IDENTIFIER_TYPES,
   type DecisionIdentifier,

@@ -34,6 +34,14 @@
     "composerPlaceholder": "Küsi stellalt",
     "send": "Saada",
     "stop": "Peata",
+    "dictate": "Dikteeri",
+    "dictationCancel": "Tühista dikteerimine",
+    "dictationFinish": "Lõpeta dikteerimine",
+    "dictationListening": "Kuulan… {elapsed} / {limit}",
+    "dictationTranscribing": "Transkribeerin…",
+    "dictationDenied": "Dikteerimiseks on vaja mikrofoni. Luba see stellale seadetes.",
+    "dictationFailed": "Salvestist ei õnnestunud transkribeerida. Proovi uuesti.",
+    "dictationSilent": "Kõnet ei kuuldud.",
     "sendFailed": "Sõnumit ei õnnestunud saata. Proovige uuesti.",
     "answerWorking": "Töötan…",
     "answerStopped": "Peatatud.",
@@ -174,6 +182,20 @@
       "system": "Välimus: automaatne",
       "light": "Välimus: hele",
       "dark": "Välimus: tume"
+    },
+    "edit": {
+      "saved": "Salvestatud",
+      "saving": "Salvestamine…",
+      "notSaved": "Veel salvestamata",
+      "done": "Valmis",
+      "openFailed": "Seda dokumenti ei saa praegu muuta",
+      "resumed": "Sellel dokumendil on pooleli jäänud muudatus, nii et jätkate sealt. Äsja kirjutatut ei säilitatud.",
+      "newerVersion": "Vahepeal salvestati selle dokumendi uuem versioon, nii et muutmine jätkub sellest. Äsja kirjutatut ei säilitatud.",
+      "takenOver": "Seda dokumenti muudab nüüd keegi teine. Teie muudatusi pärast viimast salvestamist ei säilitatud.",
+      "finishFailed": "Teie muudatused on salvestatud, kuid neist ei saanud veel uut versiooni. Puudutage uuesti Valmis või lahkuge: järgmine muutmine jätkab neist.",
+      "notStored": "Viimaseid muudatusi ei õnnestunud salvestada. Jää ja proovi uuesti või lahku ilma nendeta.",
+      "stay": "Jää",
+      "leave": "Lahku"
     }
   },
   "signIn": {
@@ -203,7 +225,10 @@
     "signOut": "Logi välja",
     "deleteAccount": "Kustuta konto",
     "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada.",
-    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti."
+    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti.",
+    "lockScreenTitle": "Lukustuskuva",
+    "timerDetails": "Taimeri üksikasjad",
+    "timerDetailsHint": "Kui taimer muutub teises seadmes, toob Apple'i teavitusteenus selle kirjelduse ja asja lukustuskuvale. Väljalülitatuna näidatakse ainult aega, kuni rakenduse avate."
   },
   "header": {
     "search": "Otsing"
@@ -222,9 +247,7 @@
     "share": "Jaga"
   },
   "more": {
-    "soon": "Tulemas peagi",
-    "timers": "Taimerid",
-    "voiceInput": "Häälsisestus"
+    "timers": "Taimerid"
   },
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
@@ -245,10 +268,6 @@
     "newTimer": "Uus taimer",
     "description": "Mille kallal töötate?",
     "matterTitle": "Asi",
-    "noMatter": "Asjata",
-    "noDescription": "Kirjelduseta",
-    "running": "Käib",
-    "paused": "Peatatud",
     "pause": "Peata",
     "resume": "Jätka",
     "save": "Salvesta",
@@ -259,8 +278,7 @@
     "retry": "Proovi uuesti",
     "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
     "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
-    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti.",
-    "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}"
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
   },
   "scan": {
     "title": "Skanni dokument",

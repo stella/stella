@@ -22,7 +22,17 @@ export const SCHEDULER_BACKFILL_IDS = {
   populationCounts: "caseLaw.foldPopulationCounts.minutely",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
+  parsedInputState: "caseLaw.backfillParsedInputState.fiveMinute",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",
+} as const;
+
+/**
+ * Scheduler jobs that batch through the backfill runtime on a migration-owned
+ * online repair's checkpoint. Their checkpoint carries the repair's name, not
+ * the job id, so the scheduler heartbeat above does not report them.
+ */
+export const SCHEDULER_REPAIR_BACKFILL_IDS = {
+  populationSeed: "caseLaw.seedPopulationCounts.minutely",
 } as const;
 
 export const emitSchedulerBackfillHeartbeat = (

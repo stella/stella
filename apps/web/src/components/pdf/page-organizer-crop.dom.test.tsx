@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   CropPanelPage,

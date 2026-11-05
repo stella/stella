@@ -25,7 +25,7 @@ const readGzip = async (url: URL): Promise<string> =>
 
 const projectionOf = async (sourceRaw: string) =>
   czNssRetention.type === "checked"
-    ? await czNssRetention.project(sourceRaw)
+    ? await czNssRetention.project(sourceRaw, { sourceRawObjects: {} })
     : panic("cz-nss is declared unparsed");
 
 /** The oracle's verdict on the adapter's document against the projection. */

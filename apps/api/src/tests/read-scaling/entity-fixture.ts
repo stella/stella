@@ -39,6 +39,7 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 /**
  * Session-local copies of `tables` that shadow the shared ones on this
@@ -254,7 +255,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
         .delete(properties)
         .where(eq(properties.workspaceId, workspaceId));
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     },
     measure: async ({

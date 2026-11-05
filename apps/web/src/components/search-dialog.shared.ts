@@ -59,15 +59,21 @@ export const isAvailableSearchKind = (
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
 
+/**
+ * The non-empty, distinct parts of a result's metadata line. Each part renders
+ * in its own isolate, so a name's direction never carries into the date or
+ * the editor beside it.
+ */
 export const compactMeta = (
   parts: readonly (string | null | undefined)[],
-): string =>
-  parts
-    .flatMap((part) => {
+): readonly string[] => [
+  ...new Set(
+    parts.flatMap((part) => {
       const trimmed = part?.trim();
       return trimmed ? [trimmed] : [];
-    })
-    .join(" · ");
+    }),
+  ),
+];
 
 const MIME_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
   ["application/msword", "DOC"],

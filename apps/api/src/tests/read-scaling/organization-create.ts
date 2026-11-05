@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 
@@ -21,6 +21,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 
@@ -67,12 +68,14 @@ const seedCreationHistory = async (size: number) => {
 type CreationFixture = Awaited<ReturnType<typeof seedCreationHistory>>;
 
 const cleanupCreation = async (fixture: CreationFixture) => {
-  await rootDb
-    .delete(organization)
+  const created = await rootDb
+    .select({ id: organization.id })
+    .from(organization)
     .where(eq(organization.slug, fixture.userId.toLowerCase()));
-  await rootDb
-    .delete(organization)
-    .where(inArray(organization.id, fixture.historyOrganizationIds));
+  await deleteOrganizationsForTest(rootDb, [
+    ...created.map(({ id }) => id),
+    ...fixture.historyOrganizationIds,
+  ]);
   await rootDb
     .delete(organizationCreationRequests)
     .where(eq(organizationCreationRequests.userId, fixture.userId));

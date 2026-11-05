@@ -11,11 +11,11 @@ import {
   type BrowserExtensionStatus,
   PRODUCTION_STELLA_ORIGINS,
 } from "@stll/api-contract/browser-control";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import arMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // Not a hosted origin: the store build never connects here, so no store link.
 const TEST_URL = "https://app.stella.test";

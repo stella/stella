@@ -1,6 +1,9 @@
 import type * as v from "valibot";
 
-import { desktopBillingDraftModelResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  desktopBillingDraftModelResponseSchema,
+  desktopBillingPlainDraftModelResponseSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
 
 import { analysisOutputSchema } from "@/api/handlers/case-law/analysis/analysis-output";
 import { significanceOutputSchema } from "@/api/handlers/case-law/analysis/significance";
@@ -111,6 +114,7 @@ export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
   "streamTanStackObjectForTask",
   "generateTanStackChatObject",
   "createVerificationCall",
+  "generateAdmittedObject",
 ] as const;
 
 /**
@@ -142,6 +146,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: desktopBillingDraftModelResponseSchema,
       answer:
         '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
+    },
+    {
+      file: "handlers/desktop-time-entries/billing-drafts.ts",
+      outputSchema: "desktopBillingPlainDraftModelResponseSchema",
+      schema: desktopBillingPlainDraftModelResponseSchema,
+      answer:
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
     },
     {
       file: "handlers/case-law/decisions/search-expand.ts",

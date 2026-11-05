@@ -333,6 +333,7 @@
     "Queue authority": ["**"],
     "Design token docs": [
       "packages/ui/src/styles/theme.css",
+      "packages/brand/src/palette.ts",
       "DESIGN.md",
       "scripts/**",
       "bunfig.toml"
@@ -764,6 +765,7 @@
     "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
+    "Published package API reports": ["**"],
     "Resolve static check receipts": ["**"],
     "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
@@ -783,6 +785,11 @@
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
     "Tracked file sizes": ["**"],
+    "CI job names": [
+      ".github/workflows/ci.yml",
+      "scripts/check-ci-job-names.test.ts",
+      "scripts/check-ci-job-names.ts"
+    ],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
@@ -795,7 +802,7 @@
     "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
-    "Instruction references": ["**"],
+    "Instruction policy": ["**"],
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],

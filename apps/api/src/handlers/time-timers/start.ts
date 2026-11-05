@@ -10,6 +10,7 @@ import {
   timerItem,
 } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const startTimer = createSafeRootHandler(
@@ -76,6 +77,9 @@ const startTimer = createSafeRootHandler(
         return Result.ok(timerItem(timer));
       }),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return outcome;
   },
 );

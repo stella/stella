@@ -6,12 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
-import {
-  contacts,
-  properties,
-  workspaceMembers,
-  workspaces,
-} from "@/api/db/schema";
+import { properties, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipScopedDb,
   createScopedDb,
@@ -27,6 +22,8 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -82,12 +79,14 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
       createdAt: new Date(),
     },
   ]);
-  await db.insert(contacts).values({
-    id: fixture.clientId,
-    organizationId: fixture.organizationId,
-    type: "person",
-    displayName: "Client",
-  });
+  await insertOwnerContacts(db, [
+    {
+      id: fixture.clientId,
+      organizationId: fixture.organizationId,
+      type: "person",
+      displayName: "Client",
+    },
+  ]);
   return fixture;
 };
 
@@ -121,9 +120,7 @@ const withFixture = async (
     try {
       await check(db, fixture);
     } finally {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db
         .delete(user)
         .where(inArray(user.id, [fixture.adminId, fixture.memberId]));

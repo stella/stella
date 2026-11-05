@@ -16,9 +16,18 @@
   },
   "admin": {
     "ai": "AI",
+    "auditArchiveDescription": "Deleting the organization also deletes its activity log. Export the activity log first and download the archive; it stays available to you for one hour.",
+    "auditArchiveDownloadFirst": "Download the activity log archive before you delete the organization.",
+    "auditArchiveFailed": "The activity log archive could not be prepared.",
+    "auditArchiveOutdated": "The activity log has new entries since this archive. Export it again before you delete the organization.",
+    "auditArchiveReady": "The activity log archive is ready. You can now delete the organization.",
+    "auditArchiveRequest": "Export activity log",
+    "auditArchiveRequestNew": "Export activity log again",
+    "auditArchiveWorking": "Preparing the activity log archive…",
     "billingProfiles": "Billing profiles",
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.",
     "deleteOrganization": "Delete organization",
+    "deleteRefusedAuditArchive": "Export the organization's activity log before you delete the organization.",
     "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.",
     "deleteTypeToConfirm": "Type {name} to confirm.",
     "firmSetup": "Firm setup",
@@ -31,7 +40,6 @@
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
     "planAndUsage": "Plan and usage",
-    "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
   },
   "agentClaim": {
@@ -201,12 +209,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Add interpretation note",
-      "description": "Hard evidence — emails, messages, bank records, agreed facts — extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
+      "description": "Hard evidence (emails, messages, bank records, agreed facts) extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
       "editInterpretationNote": "Edit interpretation note",
       "empty": "Mark items of this list as facts to check documents against them.",
       "extractionAndReview": "Extraction & review",
       "factCount": "{count, plural, one {# fact} other {# facts}}",
-      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong> — the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
+      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong>: the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
       "heldForReview": "Held for review",
       "holdOutOfScoring": "Hold out of scoring",
       "inScoring": "In scoring",
@@ -220,10 +228,10 @@
       "title": "Anchor facts"
     },
     "claimDetail": {
-      "escalatedReview": "Escalated to the evidence team — no verdict to confirm or dispute here until the underlying conflict is resolved.",
+      "escalatedReview": "Escalated to the evidence team; no verdict to confirm or dispute here until the underlying conflict is resolved.",
       "flagDispute": "Flag dispute",
       "humanReview": "Human review",
-      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat — what the evidence means, not the medium it came in, is what is uncertain.",
+      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat: what the evidence means, not the medium it came in, is what is uncertain.",
       "notVerifiable": {
         "reopen": "Re-open → check against record",
         "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.",
@@ -233,15 +241,15 @@
         "add": "Add note / correction",
         "heading": "Your note · {savedAt}",
         "headingUndated": "Your note",
-        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only — it does not change the verdict or the anchor-fact record.",
+        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only; it does not change the verdict or the anchor-fact record.",
         "saveCorrection": "Save correction"
       },
       "overridden": "Overridden",
-      "overrideNotice": "Overridden to <strong>{verdict}</strong> — the analysis below is the tool's own, shown unchanged.",
+      "overrideNotice": "Overridden to <strong>{verdict}</strong>; the analysis below is the tool's own, shown unchanged.",
       "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
       "overrideVerdict": "Override verdict",
       "recordConflict": {
-        "description": "Two anchor facts speak to the same point — <strong>{subject}</strong> — but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record — not one the tool should make silently.",
+        "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
         "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
         "flagForEvidenceTeam": "Flag for evidence team",
         "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
@@ -258,46 +266,46 @@
       "score": {
         "anchorFactsDisagree": "Anchor facts disagree",
         "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
-        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score — it means there is nothing to check it against yet.",
-        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle — a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
+        "noCoverage": "<strong>The record is silent.</strong> No anchor fact in the database addresses this claim. This is distinct from a weak score: it means there is nothing to check it against yet.",
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
         "outOf100": "<strong>/ 100</strong> support score",
         "supportCount": "{count, plural, one {# support} other {# supports}}",
         "verdictWithheld": "Verdict withheld"
       },
       "sourceCount": "{count, plural, one {# source} other {# sources}}",
-      "whyScore": "Why this score — anchor facts"
+      "whyScore": "Why this score: anchor facts"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objective, checkable assertion — scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words."
+        "hint": "Objective, checkable assertion, scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words."
       },
       "opinion": {
-        "hint": "A value judgement or characterisation — no document can confirm or contradict it, so it is set aside, not scored.",
+        "hint": "A value judgement or characterisation: no document can confirm or contradict it, so it is set aside, not scored.",
         "label": "Opinion"
       },
       "setAside": "set aside",
       "unverifiable": {
-        "hint": "An assertion no document could ever settle — a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
+        "hint": "An assertion no document could ever settle: a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
         "label": "Not verifiable"
       }
     },
     "confidence": {
       "interpretation": "Interpretation",
-      "tooltip": "Interpretive confidence — how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
+      "tooltip": "Interpretive confidence: how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
     },
     "confirm": {
       "acknowledge": "Mark as noted",
       "recordConflict": "Confirm resolution",
-      "supported": "Confirm — ready",
+      "supported": "Confirm: ready",
       "verdict": "Confirm verdict"
     },
     "disposition": {
-      "contested": "The verdict is clean, but a contributing fact's interpretation is contested — worth your eyes before sign-off.",
+      "contested": "The verdict is clean, but a contributing fact's interpretation is contested; worth your eyes before sign-off.",
       "contradicted": "The record departs from this claim. A human call is needed before this verdict stands.",
       "nocover": "No anchor fact addresses this claim, so there's nothing to confirm it against. Sign-off is optional.",
-      "notverifiable": "Set aside as not verifiable — sign-off is optional. Re-open below if it's actually checkable.",
-      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team — the tool won't pick for you.",
-      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly — no judgement call needed.",
+      "notverifiable": "Set aside as not verifiable; sign-off is optional. Re-open below if it's actually checkable.",
+      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team; the tool won't pick for you.",
+      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
       "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands."
     },
     "documents": {
@@ -356,7 +364,7 @@
       "failed": "Not saved",
       "failedTitle": "Your change was not saved"
     },
-    "sourceMediumTooltip": "Source medium — a neutral descriptor. It does not lower confidence on its own.",
+    "sourceMediumTooltip": "Source medium: a neutral descriptor. It does not lower confidence on its own.",
     "states": {
       "contradicted": {
         "chip": "Contradicted",
@@ -386,7 +394,7 @@
     "verification": {
       "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
-      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
+      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
       "documentView": {
         "label": "Document view",
@@ -649,6 +657,8 @@
       "noExpenses": "No approved, unbilled expenses on this matter.",
       "noTime": "No approved, unbilled time on this matter.",
       "noVat": "No VAT",
+      "notReadyDescription": "You can save a draft now and issue it once this is set up.",
+      "notReadyTitle": "Not ready to issue",
       "nothingToBill": "Nothing to invoice yet. Approve time entries or expenses on this matter to bill them.",
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
@@ -818,12 +828,14 @@
       "effectiveFrom": "Effective from",
       "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
+      "firstTableIsDefault": "The matter's first rate table is its default.",
       "hourlyRate": "Hourly rate",
       "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
       "ongoing": "Ongoing",
+      "onlyDefaultApplies": "Rates apply only from the matter's default table.",
       "override": "Override",
       "perHour": "/hr",
       "rateCount": "{count, plural, one {# rate} other {# rates}}",
@@ -1399,6 +1411,18 @@
     "aiPrompt": "AI message composer",
     "aiThread": "AI conversation",
     "analyzingSources": "Analyzing sources",
+    "anonymizationPreview": {
+      "answer": "<person1>Zoë Hartley</person1> can claim the unpaid rent from <person2>Renée Okafor</person2>, with interest from the due date.",
+      "off": "Anonymized AI mode is off: the AI sees your text as written, personal data included.",
+      "on": "Anonymized AI mode is on: personal data is replaced with placeholders before the AI sees it and restored in the answer.",
+      "prompt": "Draft a reply to <person1>Zoë Hartley</person1> (NI number <nationalId>QQ 12 34 56 C</nationalId>, <address>14 Elm Row, Leeds</address>) about the rent <person2>Renée Okafor</person2> owes her.",
+      "steps": {
+        "answered": "The AI answers",
+        "restored": "You read",
+        "sent": "The AI receives",
+        "written": "You write"
+      }
+    },
     "anonymizedMode": "Anonymized AI mode",
     "anonymizedModeDisabled": "Anonymized AI mode is off",
     "anonymizedModeEnabled": "Anonymized AI mode is on",
@@ -1436,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Show in decision",
+      "unverified": "Citation not verified",
+      "unverifiedHint": "The cited decisions do not contain this text word for word",
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },
@@ -1505,7 +1531,7 @@
       "updatingDescription": "Your stella extension is an older version. Chrome updates it automatically, usually within a few hours; then stella can open and read websites for you again."
     },
     "cancelQueuedMessage": "Cancel queued message",
-    "caseLawGreeting": "Ask about this decision — its full text is available here.",
+    "caseLawGreeting": "Ask about this decision; its full text is available here.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",
     "commandsSection": "Commands",
@@ -1655,6 +1681,28 @@
     "loadEarlierMessages": "Load earlier messages",
     "loadEarlierMessagesError": "Couldn't load earlier messages",
     "loadingEarlierMessages": "Loading earlier messages…",
+    "localRun": {
+      "cloud": "stella cloud",
+      "errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
+      "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
+      "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
+      "onThisComputer": "{harness} on this computer",
+      "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
+      "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
+      "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
+      "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
+      "refusalUnavailable": "Running chats on your computer is not available for your account.",
+      "runOn": "Run on",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limit reached until {time}",
+      "stateNeedsLogin": "Sign-in needed",
+      "stateNotInstalled": "Not installed",
+      "stateOffline": "Computer offline",
+      "stateUnavailable": "Not available right now",
+      "stateUnsupported": "This version is not supported",
+      "waitingForComputer": "Waiting for your computer to reconnect…"
+    },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# more} other {+# more}}",
@@ -1752,7 +1800,7 @@
       "tryOne": "Try one of these to start"
     },
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}",
-    "queuedNotice": "Queued — sends when the current response finishes",
+    "queuedNotice": "Queued: sends when the current response finishes",
     "reasoning": "Reasoning trace",
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}",
     "recapLoading": "Recapping the conversation…",
@@ -1801,6 +1849,7 @@
     "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
+    "sendErrorMessageEmpty": "This message has no text to send. Type your question or attach a file, then send it.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
     "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.",
     "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.",
@@ -1856,7 +1905,7 @@
       "unavailable": "A chart could not be selected. The table is shown.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Working with context",
+    "thinking": "Thinking",
     "threadFiles": {
       "title": "Files in this chat"
     },
@@ -1874,6 +1923,7 @@
       "boe_search_legislation": "BOE legislation search",
       "borme_get_summary": "BORME daily summary",
       "business_registry_lookup": "Searching business registry",
+      "command_execution": "Running a command",
       "compare_versions": "Comparing versions",
       "configure_template_fields": "Configure template fields",
       "connect_connector": "Asking to connect a connector",
@@ -1899,9 +1949,12 @@
       "execute_typescript": "Reading workspace data",
       "expand-chat-history": "Reading chat history",
       "fetch_url": "Reading page",
+      "file_change": "Changing files",
       "fill_template": "Filling template",
       "find_text": "Searching document text",
       "get_document_outline": "Reading document outline",
+      "harness_unsupported_item": "Step stella cannot show",
+      "harness_web_search": "Searching the web",
       "infosoud_lookup_case": "InfoSoud case lookup",
       "link_matter_contact": "Link contact to matter",
       "list_stories": "Listing document parts",
@@ -1918,7 +1971,9 @@
       "remember": "Remembering",
       "remove_matter_member": "Remove matter member",
       "reply_comment": "Replying to comment",
+      "request_permissions": "Requesting permissions",
       "request_secret": "Requesting a private credential",
+      "request_user_input": "Asking for clarification",
       "resolve_comment": "Resolving comment",
       "review_folder_consistency": "Reviewing folder consistency",
       "run-stella-query": "Reading workspace data",
@@ -1960,7 +2015,7 @@
       "characterCount": "{count, plural, one {# character} other {# characters}}",
       "consoleLogs": "Console output",
       "exactCall": "Exact call",
-      "failed": "This step failed — stella will work around it.",
+      "failed": "This step failed; stella will work around it.",
       "field": "Field",
       "input": "Input",
       "interrupted": "Interrupted before finishing",
@@ -1978,15 +2033,19 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnStatus": {
+      "waitingForApproval": "Waiting for approval",
+      "waitingForInput": "Waiting for input",
+      "writing": "Writing"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
-    "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.",
+    "usageFallbackNotice": "Daily AI allowance used; replies continue on the standard model.",
     "videoContent": "Generated video",
     "webSearch": {
       "answer": "Web search summary",
       "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
       "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
       "sources": "Sources",
       "toggleDescription": "Let the model search the public web and read pages for this conversation.",
       "toggleLabel": "Web search",
@@ -2340,6 +2399,7 @@
     "notes": "Notes",
     "open": "Open",
     "openInNewTab": "Open in new tab",
+    "openInSidePanel": "Open in side panel",
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
     "options": "Options",
@@ -2592,9 +2652,16 @@
       "value": "Field value"
     },
     "datePrecision": "Date precision",
+    "deleteBlockedByMattersCount": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
+    "deleteBlockedCount": "Contacts not removed: {count}",
     "deleteContact": "Delete contact",
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.",
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.",
+    "deleteNotFoundCount": "Contacts not found: {count}.",
+    "deleteSelected": "Delete {count, plural, one {# contact} other {# contacts}}",
+    "deleteSelectedConfirm": "Permanently delete {count, plural, one {this contact} other {these # contacts}}? This action cannot be undone.",
+    "deleteSelectedLimit": "Select no more than {limit} contacts to delete at once.",
+    "deletedCount": "Deleted {count, plural, one {# contact} other {# contacts}}",
     "editContact": "Edit contact",
     "emailTypes": {
       "other": "Other",
@@ -2608,7 +2675,7 @@
     "extractProcuracao": {
       "dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
       "extracting": "Extracting grantor(s)…",
-      "fileHint": "stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
+      "fileHint": "stella reads the document and finds the grantor(s) (not the lawyer) automatically. Review the results before confirming.",
       "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
       "invalidFileType": "Please choose a .docx file.",
       "noOutorganteFound": "No grantor could be identified in this document.",
@@ -2725,6 +2792,12 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
+      "undoImport": "Undo import ({count})",
+      "undoImportConfirm": "Permanently delete the {count, plural, one {contact} other {# contacts}} this import created? This action cannot be undone.",
+      "undoImportTitle": "Undo this import?",
+      "undoneRow": "Removed by undo",
+      "undoneSummary": "Undo removed {count, plural, one {# contact} other {# contacts}} created by this import.",
+      "undoneToast": "Import undone: {count, plural, one {# contact} other {# contacts}} deleted",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
         "ignored_populated_column": "Column “{column}” contains data but is ignored.",
@@ -2754,6 +2827,7 @@
     "saved": "Contact details saved.",
     "search": "Search contacts...",
     "searchCountries": "Search nationalities",
+    "selectContact": "Select {name}",
     "title": "Clients",
     "type": {
       "organization": "Organization",
@@ -2770,6 +2844,28 @@
     },
     "backToList": "Back to correspondence",
     "createAddress": "Create address",
+    "dataBox": {
+      "acceptedAt": "Accepted on",
+      "acceptedByFiction": "by deemed delivery",
+      "acceptedByLogin": "by login",
+      "channel": "Data box",
+      "contact": "Contact: {name}",
+      "deliveredAt": "Delivered to the box",
+      "delivery": "Delivery terms",
+      "directionUnknown": "Direction unknown",
+      "messageId": "Message ID",
+      "moreContacts": "More contacts match this data box.",
+      "openFile": "Open .zfo file",
+      "personalDelivery": "To the addressee in person",
+      "recipient": "Recipient",
+      "recipientReference": "Recipient’s reference",
+      "sealNotVerified": "The file’s electronic seal is kept with it and not verified.",
+      "senderReference": "Sender’s reference",
+      "sent": "Outgoing",
+      "statedInFile": "Data-box message (as stated in the file)",
+      "toHands": "To the attention of {name}",
+      "uploaded": "Uploaded data-box message"
+    },
     "deliveredBy": "Delivered by <address>{sender}</address>",
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated",
     "deliveryAuthentication": "Delivery authentication",
@@ -2940,6 +3036,7 @@
       "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "clauseDirectivesInvalidDetails": "Clause {clauseName} in slot {slotName} has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
       "clauseDirectivesOverrideInvalidDetails": "The override for clause {clauseName} in slot {slotName} has invalid directives. Correct this fill’s override before filling again.",
+      "correspondenceSourceChanged": "This correspondence changed in the meantime. Reload the page and try again.",
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.",
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.",
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",
@@ -2957,12 +3054,16 @@
       "invitationLimitReached": "This organization has reached its invitation limit. Cancel a pending invitation first.",
       "invitationOtherRecipient": "This invitation was sent to a different email address.",
       "invitationRoleNotAllowed": "You cannot invite someone with this role. Choose another role.",
+      "invoiceNumberSeriesMissing": "Set up a default invoice number series under Number series in organization settings, then issue the invoice.",
+      "invoiceSellerProfileMissing": "Add a seller profile under Billing profiles in organization settings, then issue the invoice.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
       "matterContactCapacityExceeded": "This matter has more contacts than can be displayed. Remove visible contact links to reveal the remaining contacts.",
       "matterContactCapacityReached": "This matter has reached its contact limit. Remove a contact link before adding another.",
       "mcpAuthorizationApprovalRequired": "An administrator must approve this connector before you can connect.",
       "notOrganizationMember": "You are not a member of this organization.",
+      "organizationDataBoxLimitReached": "This organization has reached its data box limit. Remove a data box before adding another.",
+      "organizationDataBoxesChanged": "The organization's data boxes changed in the meantime. Reload the page and try again.",
       "organizationLastOwner": "An organization needs an owner. Transfer ownership first.",
       "organizationMemberLimitReached": "This organization has reached its member limit.",
       "providerKeyRejected": "The provider rejected the API key.",
@@ -3138,7 +3239,6 @@
     "noFileInVersion": "No file in this version",
     "noFullScreenPreview": "This file type has no full-screen preview.",
     "noLabel": "No label",
-    "openInSidePanel": "Open in side panel",
     "redlinePreview": "Tracked changes",
     "removeLabel": "Remove label",
     "saveComparison": "Save comparison",
@@ -3451,7 +3551,7 @@
     "redoShortcut": "Redo (Ctrl+Y)",
     "rejectChange": "Reject Change",
     "removeLink": "Remove link",
-    "renderErrorDescription": "Something went wrong showing this part of the document. Reload the page — if it keeps happening, let us know.",
+    "renderErrorDescription": "Something went wrong showing this part of the document. Reload the page; if it keeps happening, let us know.",
     "saveCheckpointFailedDescription": "The DOCX was created locally, but stella could not upload the checkpoint. Keep the editor open and try saving again.",
     "saveCheckpointFailedTitle": "Could not upload save",
     "saveEditorUnavailableDescription": "The editor is not ready yet. Wait for the document to finish loading, then try saving again.",
@@ -4258,7 +4358,7 @@
       "derivedQuestion": "Extraction question",
       "derivedType": "Answer format",
       "descriptionPlaceholder": "What does this playbook check?",
-      "disabledBadge": "Off — skipped in runs",
+      "disabledBadge": "Off: skipped in runs",
       "discardChanges": "Discard changes",
       "duplicatePosition": "Duplicate position",
       "empty": "No playbooks yet",
@@ -4273,7 +4373,7 @@
         "restricted": "Answer must be absent"
       },
       "extractOnlyBadge": "Extract only",
-      "extractOnlyDescription": "No grading — captures the value into the table.",
+      "extractOnlyDescription": "No grading; captures the value into the table.",
       "extraction": "Extraction",
       "extractionAuto": "Auto",
       "extractionManual": "Manual",
@@ -4519,6 +4619,10 @@
         "undoShortcut": "Undo highlight or comment change",
         "visibilityRestored": "Sharing restored"
       },
+      "orphaned": {
+        "description": "The text of this document was updated since these were made: their passages could no longer be found in it, or now appear in more than one place. They are not shown in the text.",
+        "summary": "{count, plural, one {# highlight or comment no longer matches the text} other {# highlights and comments no longer match the text}}"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",
@@ -4671,7 +4775,7 @@
     "continue": "Continue",
     "enterTeamName": "Enter your team name above",
     "getStarted": "Get Started",
-    "inviteExternal": "External — will have access to your documents",
+    "inviteExternal": "External: will have access to your documents",
     "inviteHint": "Separate multiple addresses with commas, or paste a list.",
     "inviteInvalidEmail": "Not a valid email: {value}",
     "inviteSubtitle": "They'll receive an email with a link to join.",
@@ -5334,11 +5438,16 @@
       "auditLogsActionDownload": "Download",
       "auditLogsActionExecute": "Execute",
       "auditLogsActionUpdate": "Update",
-      "auditLogsAllActions": "All Actions",
+      "auditLogsActorId": "Actor ID",
+      "auditLogsAfter": "After",
+      "auditLogsAllActions": "All actions",
+      "auditLogsAnyone": "Anyone",
+      "auditLogsBefore": "Before",
       "auditLogsChanges": "Changes",
       "auditLogsDeletedResource": "deleted {kind}",
       "auditLogsDescription": "Who did what in this organization, and when.",
       "auditLogsEmpty": "No activity yet.",
+      "auditLogsEmptyValue": "(empty)",
       "auditLogsError": "Couldn't load the activity log.",
       "auditLogsExport": "Export logs",
       "auditLogsExportFailed": "Couldn't export the activity log.",
@@ -5346,9 +5455,16 @@
       "auditLogsExporting": "Exporting...",
       "auditLogsFrom": "From date",
       "auditLogsLoading": "Loading logs...",
+      "auditLogsMoreChanges": "+{count, plural, one {# more} other {# more}}",
+      "auditLogsNoChanges": "No field changes recorded.",
+      "auditLogsPerformer": "Activity by",
+      "auditLogsPerformerAll": "People and automations",
+      "auditLogsPerformerAutomations": "Automations",
+      "auditLogsPerformerPeople": "People",
+      "auditLogsPersonPlaceholder": "Search by name or email",
       "auditLogsResourceId": "Resource ID",
       "auditLogsResourceIdentifier": "Resource ID: {id}",
-      "auditLogsResourceType": "Resource Type",
+      "auditLogsResourceType": "Resource type",
       "auditLogsResourceTypePlaceholder": "e.g. workspace",
       "auditLogsSentenceAccess": "Opened {resource}.",
       "auditLogsSentenceActivity": "Recorded activity for {resource}.",
@@ -5368,8 +5484,6 @@
       "auditLogsTo": "To date",
       "auditLogsUnavailableResource": "{kind} (not available)",
       "auditLogsUnknownResource": "unknown item",
-      "auditLogsUserId": "User ID",
-      "auditLogsUserIdPlaceholder": "Filter by user ID",
       "auditResourceKinds": {
         "agent_skill": "skill",
         "agent_skill_comment": "skill comment",
@@ -5454,10 +5568,16 @@
         "workspace_member": "matter member"
       },
       "billingDrafts": {
-        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Attach firm guidelines before enabling drafts.",
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Drafts are checked against the guidelines once firm guidelines are attached.",
         "firm": "Firm guidelines",
         "ledes": "Electronic billing (LEDES)",
         "title": "AI billing drafts"
+      },
+      "dataBoxes": {
+        "description": "A data-box message sent from one of these boxes is filed as outgoing, one sent to them as incoming. Each change re-derives the direction of messages already filed in the matters you can access.",
+        "invalid": "A data box ID has seven letters or digits.",
+        "remove": "Remove data box {address}",
+        "title": "Organization data boxes"
       },
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
@@ -5486,7 +5606,7 @@
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
       "promptCaching": {
-        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.",
+        "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically; only a Zero Data Retention contract with the provider fully disables server-side caching.",
         "title": "Prompt caching",
         "toggleLabel": "Allow prompt caching with AI providers"
       },
@@ -5600,6 +5720,7 @@
     "citingDecisionsSortCitations": "Mentions of this provision",
     "citingDecisionsSortDate": "Decision date",
     "citingDecisionsYear": "Decision year",
+    "citingDecisionsYearOutOfRange": "Enter a year from {min} to {max}.",
     "citingDecisionsYearPlaceholder": "All years",
     "columns": {
       "act": "Act",
@@ -5645,7 +5766,6 @@
     "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
-    "openProvision": "Open provision",
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
@@ -6127,12 +6247,12 @@
       "fieldSettingBrackets": "A template marker cannot contain curly brackets. Remove them from the settings of “{fieldPath}”.",
       "fieldWithoutMarker": "“{fieldPath}” has no marker in the document, so its settings were not saved.",
       "fillFormPreview": "How it appears in the fill form",
-      "fillStale": "Unsaved changes — save to fill with the latest fields.",
+      "fillStale": "Unsaved changes; save to fill with the latest fields.",
       "filledByPerson": "Person",
       "formulaExampleLabel": "Example",
       "formulaNoFields": "Add a number field first to compute a formula.",
       "formulaNonNumberFields": "Not a number: {fields}",
-      "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.",
+      "formulaNumbersOnlyHelp": "Calculations use number fields only; dates and text can't be used.",
       "formulaUnknownFields": "Not a field: {fields}",
       "gettingStartedField": "Write your text, then select a phrase → right-click → Make field.",
       "gettingStartedFill": "Try the result in the Fill tab.",
@@ -6178,7 +6298,7 @@
       "renameFieldInvalid": "That name is invalid or already taken",
       "repeatForEach": "Repeat for each…",
       "repeatable": "Allow multiple",
-      "repeatableHelp": "Let the filler add this field more than once — for example, a list of parties or items.",
+      "repeatableHelp": "Let the filler add this field more than once: for example, a list of parties or items.",
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.",
       "repeatableNested": "This field already sits inside a repeating block.",
       "repeats": "Repeats: {item}",
@@ -6337,6 +6457,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "This matter is archived and read-only.",
     "calculations": {
       "choose": "Calculate",
       "kinds": {
@@ -6398,6 +6519,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentSwitcher": {
+      "searchPlaceholder": "Find a document…",
+      "trigger": "Switch document"
+    },
     "documentsCount": "{count, plural, one {# document} other {# documents}}",
     "dropToUploadFiles": "Drop to upload files",
     "duplicateMatter": "Duplicate matter",
@@ -6419,8 +6544,12 @@
       "calculating": "Calculating...",
       "errored": "Errored",
       "formatNotSupported": "Format not supported",
+      "recordChoose": "{count, plural, one {Confirm # match} other {Choose from # matches}}",
+      "recordCount": "{count, plural, one {# record} other {# records}}",
+      "recordNotFound": "Not found",
       "selectAValue": "Select a value",
-      "selectValues": "Select values"
+      "selectValues": "Select values",
+      "wholeNumberOnly": "Enter a whole number"
     },
     "files": {
       "addFilePropertyToUpload": "Add a file property to upload files",
@@ -6884,7 +7013,7 @@
       "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.",
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteDescription": "Attach a client to share this matter with the team. This is one-way: promoted matters cannot return to personal.",
       "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
       "recentClients": "Recent clients",
@@ -7038,7 +7167,7 @@
         "addAnother": "Add another column",
         "createFailed": "Couldn't create columns",
         "createMany": "Create {count} columns",
-        "createdMany": "Created {count} columns",
+        "createdMany": "{count, plural, one {Created # column} other {Created # columns}}",
         "createdOne": "Column created",
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.",
         "title": "Add columns"
@@ -7104,12 +7233,13 @@
       "optionsLabel": "Options",
       "person": "Person",
       "previewEmpty": "AI returned no value.",
-      "previewMockNotice": "Mock preview — backend not yet wired.",
+      "previewMockNotice": "Mock preview: backend not yet wired.",
       "previewOnFirst": "Preview on {document}",
       "previewSkipped": "No applicable input on this document.",
       "previewSubject": "Try it on a sample",
       "previewUnsupported": "Preview unsupported for this document type.",
       "readingFrom": "AI reads from",
+      "record": "Record",
       "referencesItself": "Property references itself through other properties",
       "resultType": "Result type",
       "returnsLabel": "Format",
@@ -7189,6 +7319,7 @@
       "aiModel": "AI Model",
       "manualInput": "Manually"
     },
+    "unarchiveBeforeDelete": "Unarchive this matter before deleting it.",
     "unarchiveMatter": "Unarchive",
     "uploadDocuments": "Upload documents",
     "views": {

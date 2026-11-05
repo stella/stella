@@ -29,6 +29,10 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
     .map((measure) => measure(seed))
     .toSorted((left, right) => compareCodeUnit(left.budgetId, right.budgetId));
 
+/** The budgets the corpus statement entries own, one per entry. */
+export const CORPUS_STATEMENT_BUDGET_IDS =
+  Object.keys(corpusStatements).toSorted(compareCodeUnit);
+
 /**
  * How each budgeted scheduled job is measured, keyed by the job's id: the
  * gate runs that job's registered task against every corpus scenario it can

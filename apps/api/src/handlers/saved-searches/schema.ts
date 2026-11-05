@@ -4,6 +4,7 @@ import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
+  displayNameSchema,
   paginationCursorSchema,
   resourceIdSchema,
 } from "@/api/lib/custom-schema";
@@ -54,11 +55,11 @@ export const savedSearchListQuerySchema = v.object({
 });
 
 export const createSavedSearchBodySchema = v.strictObject({
-  name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  name: displayNameSchema(),
   criteria: savedSearchCriteriaBodySchema,
 });
 
 export const updateSavedSearchBodySchema = v.strictObject({
-  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  name: v.optional(displayNameSchema()),
   criteria: v.optional(savedSearchCriteriaBodySchema),
 });

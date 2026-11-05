@@ -39,6 +39,12 @@ export const ACCOUNT = {
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
   bridgePort: 45_901,
   bridgeVersion: 1,
   capabilities: [],
@@ -82,7 +88,6 @@ export const ACTIVITY_SETTINGS = {
   detailsAccess: "ready",
   browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],
   browserTitleApps: [],
-  narrativeAssist: "ask",
   apps: [
     { identifier: "com.example.editor", name: "Example Editor" },
     { identifier: "com.example.browser", name: "Example Browser" },

@@ -1196,23 +1196,25 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   }
 });
 
-test("enqueue aggregation accepts only the queued PR event and successful structural checks", () => {
+test("enqueue aggregation requires the queued PR event, successful structural checks and verified evidence", () => {
   const start = aggregate.indexOf('if [[ "$QUEUE_VALIDATION" == true');
   const end = aggregate.indexOf("# Read failure and timeout evidence", start);
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
-  const branch = `${aggregate.slice(start, end)}\nexit 9`;
-  for (const [event, action, outcome, expected] of [
-    ["pull_request", "enqueued", "success", 0],
-    ["pull_request", "enqueued", "failure", 9],
-    ["pull_request", "enqueued", "cancelled", 9],
-    ["pull_request", "synchronize", "success", 9],
-    ["merge_group", "enqueued", "success", 9],
+  const branch = `mirror_metadata_code_run() { reused_from_run_id=90; return "$MIRROR_STATUS"; }\n${aggregate.slice(start, end)}\nexit 9`;
+  for (const [event, action, outcome, evidence, expected] of [
+    ["pull_request", "enqueued", "success", "0", 0],
+    ["pull_request", "enqueued", "success", "1", 1],
+    ["pull_request", "enqueued", "failure", "0", 9],
+    ["pull_request", "enqueued", "cancelled", "0", 9],
+    ["pull_request", "synchronize", "success", "0", 9],
+    ["merge_group", "enqueued", "success", "0", 9],
   ] as const) {
     const child = Bun.spawnSync(["bash", "-c", branch], {
       env: {
         ...process.env,
         QUEUE_VALIDATION: "true",
+        MIRROR_STATUS: evidence,
         EVENT: event,
         PR_ACTION: action,
         NEEDS: JSON.stringify({

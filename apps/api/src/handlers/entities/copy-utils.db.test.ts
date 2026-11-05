@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -61,9 +62,7 @@ beforeAll(
 
 afterAll(async () => {
   if (seededOrganizationIds.length > 0) {
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, seededOrganizationIds));
+    await deleteOrganizationsForTest(testDb, seededOrganizationIds);
   }
   await releaseTestDb();
 });

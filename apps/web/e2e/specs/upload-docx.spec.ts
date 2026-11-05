@@ -1,7 +1,8 @@
 import type { APIRequestContext } from "@playwright/test";
-import JSZip from "jszip";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   apiDownloadFileField,
@@ -9,6 +10,7 @@ import {
   apiStatus,
   apiUploadDocx,
 } from "../helpers/api";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -55,8 +57,8 @@ const findFileFieldForProperty = (
   );
 
 const readDocumentXml = async (docxBuffer: Buffer) => {
-  const zip = await JSZip.loadAsync(docxBuffer);
-  const documentXml = await zip.file("word/document.xml")?.async("text");
+  const zip = await ZipArchive.read(docxBuffer);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("Saved DOCX is missing word/document.xml");
   }
@@ -86,6 +88,7 @@ test.describe("DOCX upload + inspector", () => {
     page,
     request,
   }) => {
+    const policy = await installContentSecurityPolicyCollector(page);
     const testWorkspace = workspace;
     if (testWorkspace === null) {
       throw new Error("Test workspace was not created");
@@ -203,6 +206,7 @@ test.describe("DOCX upload + inspector", () => {
       }
       throw error;
     }
+    await policy.assertClean();
   });
 
   test("leaving browser edit creates a persisted DOCX version with the typed text", async ({

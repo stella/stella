@@ -10,7 +10,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
-  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  billingGuidelineFileCap,
   loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -48,7 +48,7 @@ const responseSchema = v.strictObject({
         clientId: v.nullable(resourceIdSchema("contact")),
       }),
     ),
-    v.maxLength(1 + BILLING_GUIDELINE_MAX_FILES_PER_CLIENT),
+    v.maxLength(billingGuidelineFileCap(1)),
   ),
   timeBillingFormat: v.picklist(["categories", "ledes"]),
 });

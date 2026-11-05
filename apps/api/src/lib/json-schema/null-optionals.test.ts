@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   withModelPlaceholdersOmitted,
   withNullOptionalsOmitted,
-} from "@/api/lib/json-schema/null-optionals";
+} from "@stll/agent-input";
+
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
 const schema = {

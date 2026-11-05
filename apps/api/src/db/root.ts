@@ -1,19 +1,19 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import {
-  ORGANIZATION_EVALUATION_LIMIT,
-  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
-} from "@stll/api-contract/organization-create";
 import { createOpaqueOrganizationSlug } from "@stll/auth-model";
 import { classifyFailure, declareFailureClass } from "@stll/errors";
 
+import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
-import { organizationCreationRequests as receipts } from "@/api/db/schema";
+import {
+  oauthGrantRevocations,
+  organizationCreationRequests as receipts,
+} from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
@@ -35,8 +35,6 @@ import {
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
-  claimOrganizationEvaluation,
-  recordOrganizationCreationAudit,
 } from "@/api/lib/db/audit-recording";
 import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
@@ -46,6 +44,8 @@ import { meterSqlClient } from "@/api/lib/db/meter-client";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import { createOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
+import type { OrganizationEvaluation } from "@/api/lib/db/organization-creation";
 import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import {
@@ -288,6 +288,54 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
 
+type ReadOAuthGrantAdmissionOptions = {
+  clientId: string;
+  organizationId: string;
+  userId: string;
+  grantId: string | undefined;
+  issuedAtCutoff: number;
+  db?: Pick<RootDatabase, "select"> | undefined;
+};
+
+/** Reads only control-plane attribution and revocation for one user grant. */
+export const readOAuthGrantAdmission = async ({
+  clientId,
+  organizationId,
+  userId,
+  grantId,
+  issuedAtCutoff,
+  db = rootDb,
+}: ReadOAuthGrantAdmissionOptions) =>
+  (
+    await db
+      .select({
+        registrationId: agentRegistration.id,
+        revokedAt: oauthGrantRevocations.revokedAt,
+      })
+      .from(sql`(SELECT 1) AS oauth_session`)
+      .leftJoin(
+        agentRegistration,
+        and(
+          eq(agentRegistration.clientId, clientId),
+          eq(agentRegistration.boundUserId, userId),
+          eq(agentRegistration.boundOrganizationId, organizationId),
+          eq(agentRegistration.status, "claimed"),
+        ),
+      )
+      .leftJoin(
+        oauthGrantRevocations,
+        and(
+          eq(oauthGrantRevocations.oauthClientId, clientId),
+          eq(oauthGrantRevocations.userId, userId),
+          eq(oauthGrantRevocations.organizationId, organizationId),
+          grantId === undefined
+            ? sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${issuedAtCutoff})`
+            : eq(oauthGrantRevocations.grantId, grantId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
 // Migrated databases use PostgreSQL's inline UNIQUE name; schema-sync databases
 // use Drizzle's name. Both also have the explicitly named unique index.
 const SLUG_UNIQUE_CONSTRAINTS = [
@@ -469,7 +517,7 @@ export type CreateOrganizationOptions = {
   userId: SafeId<"user">;
   name: string;
   slug?: string;
-  evaluation: "grant" | "none";
+  evaluation: OrganizationEvaluation;
   idempotencyKey: string | null;
 };
 
@@ -641,43 +689,29 @@ export const createOrganizationForAccount = async (
             );
           }
         }
-        switch (evaluation) {
-          case "grant":
-            if (!(await claimOrganizationEvaluation(tx, userId))) {
-              return abortTransaction(
-                new HandlerError({
-                  status: 403,
-                  code: ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
-                  message: `This account has used all ${ORGANIZATION_EVALUATION_LIMIT} lifetime organization evaluation periods.`,
-                  hint: "Use an existing organization or contact support to arrange paid access. Deleting an organization does not restore an evaluation period.",
-                }),
-              );
+        const created = await createOrganizationWithEvaluation(
+          tx,
+          { userId, evaluation },
+          async () => {
+            const inserted = await createWithAvailableSlug(
+              { userId, name, ...(slug === undefined ? {} : { slug }) },
+              { createOrganization, fillRandom, transaction: tx },
+            );
+            if (inserted.isErr()) {
+              return Result.err(inserted.error);
             }
-            break;
-          case "none":
-            break;
-          default:
-            evaluation satisfies never;
-            return panic("Unhandled organization evaluation request");
-        }
-        const created = await createWithAvailableSlug(
-          { userId, name, ...(slug === undefined ? {} : { slug }) },
-          { createOrganization, fillRandom, transaction: tx },
+            return Result.ok({
+              organizationId: brandPersistedOrganizationId(inserted.value.id),
+              name: inserted.value.name,
+              slug: inserted.value.slug,
+              role: "owner" as const,
+            });
+          },
         );
         if (created.isErr()) {
           return abortTransaction(created.error);
         }
-        const result = {
-          organizationId: brandPersistedOrganizationId(created.value.id),
-          name: created.value.name,
-          slug: created.value.slug,
-          role: "owner" as const,
-        };
-        await recordOrganizationCreationAudit(tx, {
-          userId,
-          organizationId: result.organizationId,
-          evaluation,
-        });
+        const result = created.value;
         if (key !== null) {
           await tx
             .update(receipts)

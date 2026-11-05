@@ -23,6 +23,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { seedEntityReadScaling } from "@/api/tests/read-scaling/entity-fixture";
 
@@ -185,9 +186,7 @@ const withBillingKnowledgeFixture = async <TResult>(
         ),
       );
     await db.delete(member).where(eq(member.id, membershipId));
-    await db
-      .delete(organization)
-      .where(eq(organization.id, otherOrganizationId));
+    await deleteOrganizationsForTest(db, [otherOrganizationId]);
   }
 };
 

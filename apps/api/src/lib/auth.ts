@@ -68,6 +68,7 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
+import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -86,7 +87,12 @@ import {
   isPendingTwoFactorSignIn,
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
   admitApiAccessTokenRoute,
@@ -159,10 +165,12 @@ import type {
 } from "@/api/lib/auth/member-caller";
 import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
+import { getOAuthGrantIdentityClaims } from "@/api/lib/auth/oauth-grant-identity";
 import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
@@ -322,6 +330,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import type { NewMembership } from "@/api/lib/organization-lifecycle-hooks";
 import {
@@ -345,6 +354,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -412,9 +422,6 @@ const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
 /** Authenticated handlers receive a bounded session reader. */
 export const ownerSyntheticSessionAuthorityReader =
   bindOwnerSyntheticSessionAuthorityReader(readSyntheticSessionAuthority);
-
-/** Access token lifetime in seconds (15 minutes). */
-const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 
 /** Refresh token lifetime in seconds (30 days). */
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
@@ -522,7 +529,8 @@ type EmailOtpResponseScheduleOptions = {
 };
 
 export const runEmailOtpRequestOnResponseSchedule = async ({
-  detach = (operation) => detached(operation, "auth.email-otp-delivery"),
+  detach = (operation) =>
+    detached(async () => operation, "auth.email-otp-delivery"),
   responseDelayMs,
   runRequest,
   wait = Bun.sleep,
@@ -1641,7 +1649,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -1821,7 +1834,7 @@ export const createAuth = (
         );
         await Promise.resolve();
       },
-      async beforeDeleteOrganization({ organization: org }) {
+      async beforeDeleteOrganization({ organization: org, user: deletedBy }) {
         // Complete the deletion here, before the plugin's adapter runs.
         // Everything that names the organization cascades away with it, and
         // those rows are the only description of the objects it owns:
@@ -1839,6 +1852,10 @@ export const createAuth = (
         // is the point: instructions committed ahead of a cascade that then
         // failed would name a live organization's documents.
         //
+        // The audit trail cascades with the organization, so the teardown
+        // owner first requires the deleting owner's complete archive of it
+        // and refuses, before writing anything, without one.
+        //
         // `org.id` is read off the row the plugin already loaded, so this is
         // where it becomes the ownership id. `rootDb` bypasses row-level
         // security exactly as the plugin's own adapter does.
@@ -1852,13 +1869,11 @@ export const createAuth = (
               if (await hasRenewingHostedSubscription(tx, organizationId)) {
                 return { type: "subscription_renews" } as const;
               }
-              return {
-                type: "deleted",
-                teardown: await completeOrganizationDeletion({
-                  organizationId,
-                  tx,
-                }),
-              } as const;
+              return await completeOrganizationDeletion({
+                deletedBy: brandPersistedUserId(deletedBy.id),
+                organizationId,
+                tx,
+              });
             }),
           catch: (cause) => cause,
         });
@@ -1886,6 +1901,15 @@ export const createAuth = (
               "Cancel the organization's subscription before deleting the organization.",
           });
         }
+        if (teardown.value.type === "refused") {
+          // `code` is what the web client reads off an auth error.
+          throw new APIError("CONFLICT", {
+            code: teardown.value.code,
+            error: teardown.value.code,
+            message:
+              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
+          });
+        }
 
         // Redis is not part of the durability contract: the request rows
         // are committed and the cleanup reconciler claims every pending one
@@ -1895,7 +1919,7 @@ export const createAuth = (
         await handoffCommittedEntityDeletionCleanupBatch({
           captureDeliveryError: captureError,
           enqueueCleanup: enqueueEntityDeletionCleanup,
-          requestIds: teardown.value.teardown.requestIds,
+          requestIds: teardown.value.requestIds,
         });
       },
       // A readable refusal before the plugin writes anything; the
@@ -2121,6 +2145,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
@@ -2611,7 +2637,10 @@ export const createAuth = (
                     });
                     throw error;
                   }
-                  return claims.value;
+                  return {
+                    ...claims.value,
+                    ...(await getOAuthGrantIdentityClaims(input)),
+                  };
                 },
               },
             },
@@ -2627,7 +2656,7 @@ export const createAuth = (
               ),
             },
           ],
-          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN,
+          accessTokenExpiresIn: ACCESS_TOKEN_EXPIRES_IN_SECONDS,
           refreshTokenExpiresIn: REFRESH_TOKEN_EXPIRES_IN,
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
@@ -3061,6 +3090,22 @@ export const AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
+const SESSION_READ_FAILED = failureSink({
+  event: "auth.session_read_failed",
+  expected: [],
+});
+
+/**
+ * The 500 a request gets when its session or membership could not be read,
+ * built from the read's failure so the request records why.
+ */
+export const authUnavailableAnswer = (cause: unknown) =>
+  observedStatus(
+    { sink: SESSION_READ_FAILED, cause },
+    500,
+    AUTH_REJECTION_BODY[500],
+  );
+
 /**
  * The rejection a signed-in account gets until it accepts the
  * professional-use statement; the web app answers it with the prompt.
@@ -3075,15 +3120,21 @@ const PROFESSIONAL_USE_REJECTION_BODY = {
  * body of its own; an app token refused a route gets the shared 403, never
  * the professional-use prompt.
  */
-type ValidateAuthRejection = {
-  ok: false;
-  statusCode: Exclude<AuthRejectionStatus, 404>;
-  body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
-};
+type ValidateAuthRefusal =
+  | {
+      statusCode: 401 | 403;
+      body?: typeof PROFESSIONAL_USE_REJECTION_BODY;
+    }
+  | { statusCode: 500; cause: unknown };
+
+type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
-  rejection: Omit<ValidateAuthRejection, "ok">,
-): ValidateAuthRejection => ({ ok: false, ...rejection });
+  rejection: ValidateAuthRefusal,
+): ValidateAuthRejection => ({
+  ok: false,
+  ...rejection,
+});
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -3122,7 +3173,7 @@ export const authenticateSession = async (
   });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(sessionResult.error) };
   }
 
   const session = sessionResult.value?.session;
@@ -3149,7 +3200,7 @@ export const authenticateSession = async (
     });
   });
   if (Result.isError(liveResult)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+    return { ok: false, answer: authUnavailableAnswer(liveResult.error) };
   }
   if (liveResult.value === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
@@ -3652,8 +3703,7 @@ type ResolvedIdentity = {
 };
 
 type IdentityResolution =
-  | { ok: true; identity: ResolvedIdentity }
-  | Omit<ValidateAuthRejection, "body">;
+  { ok: true; identity: ResolvedIdentity } | ValidateAuthRejection;
 
 const resolveSessionIdentity = async ({
   getSession,
@@ -3673,7 +3723,11 @@ const resolveSessionIdentity = async ({
     });
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: sessionResult.error,
+    };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
@@ -3688,7 +3742,11 @@ const resolveSessionIdentity = async ({
   }
 
   if (Result.isError(memberAuthorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return {
+      ok: false,
+      statusCode: 500,
+      cause: memberAuthorizationResult.error,
+    };
   }
 
   const authorization = memberAuthorizationResult.value;
@@ -3728,7 +3786,7 @@ const resolveAccessTokenIdentity = async ({
   });
   if (Result.isError(authenticated)) {
     if (authenticated.error.reason === "unavailable") {
-      return { ok: false, statusCode: 500 };
+      return { ok: false, statusCode: 500, cause: authenticated.error };
     }
     responseHeaders["www-authenticate"] = 'Bearer error="invalid_token"';
     return { ok: false, statusCode: 401 };
@@ -3759,7 +3817,7 @@ const resolveAccessTokenIdentity = async ({
       }),
   );
   if (Result.isError(authorizationResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false, statusCode: 500, cause: authorizationResult.error };
   }
   const authorization = authorizationResult.value;
   if (
@@ -3855,7 +3913,7 @@ const resolveValidateAuth = async ({
           responseHeaders,
         });
   if (!resolved.ok) {
-    return rejectValidateAuth({ statusCode: resolved.statusCode });
+    return resolved;
   }
   const {
     authorization,
@@ -4132,10 +4190,13 @@ export const createMemberAuthenticator = ({
     if (!result.ok) {
       return {
         ok: false,
-        answer: status(
-          result.statusCode,
-          result.body ?? AUTH_REJECTION_BODY[result.statusCode],
-        ),
+        answer:
+          result.statusCode === 500
+            ? authUnavailableAnswer(result.cause)
+            : status(
+                result.statusCode,
+                result.body ?? AUTH_REJECTION_BODY[result.statusCode],
+              ),
       };
     }
     const stepUp = handoffStepUpRefusal({
@@ -4157,9 +4218,6 @@ export type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 
-/** Which matter statuses a workspace route admits; archived only where it says so. */
-export type WorkspaceStatusAccess = "active" | "active-or-archived";
-
 /**
  * Matter access for a member: the matter the validated `:workspaceId` names
  * must be one the member may use, in a status the route admits. Its audit
@@ -4172,10 +4230,7 @@ export const authorizeWorkspace = async (
   admitted: WorkspaceStatusAccess,
 ): Promise<CallerOutcome<WorkspaceCaller>> => {
   const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
-  const admittedStatus =
-    workspace?.status === "active" ||
-    (admitted === "active-or-archived" && workspace?.status === "archived");
-  if (!admittedStatus) {
+  if (!admitsWorkspaceStatus(workspace?.status, admitted)) {
     return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
   }
   return {

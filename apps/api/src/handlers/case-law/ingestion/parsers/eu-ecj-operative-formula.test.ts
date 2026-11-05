@@ -8,7 +8,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphRole } from "@stll/legal-ast/document-ast";
 
-import { parseEcjDecisionHtml } from "./eu-ecj";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+import { parseEcjDecisionHtml as uncheckedParseEcjDecisionHtml } from "./eu-ecj";
+
+const parseEcjDecisionHtml = guardParser(uncheckedParseEcjDecisionHtml);
 
 const FIXTURES_DIR = new URL("__fixtures__/eu-ecj/", import.meta.url);
 
