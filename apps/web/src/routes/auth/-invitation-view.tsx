@@ -1,4 +1,4 @@
-import { Link, notFound } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@stll/ui/button";
@@ -37,7 +37,7 @@ const isInvitationRefusalCode = (
 ): code is InvitationRefusalCode =>
   code !== undefined && Object.hasOwn(INVITATION_REFUSALS, code);
 
-/** An invitation this account may answer, or why the server refused to show it. */
+/** An invitation this account may answer, why the server refused to show it, or nothing to show. */
 export const loadInvitationView = async (invitationId: string) => {
   const { data, error } = await authClient.organization.getInvitation({
     query: { id: invitationId },
@@ -48,7 +48,7 @@ export const loadInvitationView = async (invitationId: string) => {
   }
 
   if (data === null || data.status !== "pending") {
-    throw notFound();
+    return { type: "missing" } as const;
   }
 
   return { type: "invitation", invitation: data } as const;

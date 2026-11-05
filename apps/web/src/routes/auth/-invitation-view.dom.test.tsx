@@ -104,11 +104,7 @@ test("an invitation that does not exist stays not found", async () => {
     message: "Invitation not found",
   });
 
-  const thrown: unknown = await loadInvitationView("invitation-1").catch(
-    (error: unknown) => error,
-  );
-
-  expect(thrown).toMatchObject({ isNotFound: true });
+  expect(await loadInvitationView("invitation-1")).toEqual({ type: "missing" });
 });
 
 test("the wrong account sees whose session this is and can sign out", async () => {

@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  redirect,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@stll/ui/button";
@@ -33,7 +38,15 @@ export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
     }
     return { signedInEmail: context.user.email };
   },
-  loader: async ({ params }) => await loadInvitationView(params.invitationId),
+  loader: async ({ params }) => {
+    const view = await loadInvitationView(params.invitationId);
+
+    if (view.type === "missing") {
+      throw notFound();
+    }
+
+    return view;
+  },
   component: InvitationPage,
 });
 
