@@ -1587,6 +1587,12 @@ mod tests {
         json!(error_code.as_str())
       );
     }
+    for reason in contract.reasons {
+      assert_eq!(
+        serde_json::to_value(reason).unwrap(),
+        json!(reason.as_str())
+      );
+    }
     for span in contract.spans {
       assert_eq!(serde_json::to_value(span).unwrap(), json!(span.as_str()));
     }
