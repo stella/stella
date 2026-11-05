@@ -18,6 +18,9 @@ minimumReleaseAgeExcludes = [
   # quarantine exception granted 2026-10-07: @gdp-ts/core can be installed now
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
+  # A "cargo:<crate>" entry exempts a crates.io crate in a tracked Cargo.lock
+  # from scripts/check-lockfile-release-ages.ts on the same terms; Bun never
+  # matches it, as npm names cannot contain a colon.
   # Turbo 2.11.2 adds production pruning and devEngines support. Keep every
   # platform binary in the same exception: Bun otherwise skips quarantined
   # optional bindings and leaves the executable unavailable.

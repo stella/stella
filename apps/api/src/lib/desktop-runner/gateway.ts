@@ -28,6 +28,7 @@ import {
   SYSTEM_TIMERS,
 } from "@/api/lib/desktop-runner/session";
 import {
+  cancelRunsOfEndedChatTurns,
   type DesktopRunnerDb,
   expireAbandonedRuns,
   expireRunLeases,
@@ -158,6 +159,82 @@ const refusal = (status: number, message: string, code?: string) =>
     status,
   });
 
+/**
+ * A run lives only while its chat turn holds it. However the turn ended, on
+ * whichever task, the run it left going is cancelled here; the cancel reaches
+ * a computer that is away when it reconnects.
+ */
+const cancelEndedChatTurnRuns = async ({
+  db,
+  doorbell,
+}: {
+  db: DesktopRunnerDb;
+  doorbell: DesktopRunnerDoorbell;
+}) => {
+  const cancelled = await Result.tryPromise(
+    async () => await cancelRunsOfEndedChatTurns(db, { limit: EXPIRY_BATCH }),
+  );
+  if (cancelled.isErr()) {
+    // The next sweep finds them again.
+    observeFailure(cancelled.error, { sink: LEASE_SWEEP_SINK });
+    return;
+  }
+  for (const holder of cancelled.value) {
+    doorbell.ring(holder);
+  }
+};
+
+/**
+ * The runs the API ends on a sweep: those nobody accepted or whose computer
+ * stayed away, those whose leases lapsed, those past retention, and those
+ * whose chat turn ended without them.
+ */
+const endRuns = async ({
+  db,
+  doorbell,
+  limits,
+  now,
+}: {
+  db: DesktopRunnerDb;
+  doorbell: DesktopRunnerDoorbell;
+  limits: DesktopRunnerLimits;
+  now: Date;
+}) => {
+  // Abandoned runs end first: a lapsed lease moves a run to waiting and
+  // restarts the clock the abandon window reads.
+  const abandoned = await Result.tryPromise(
+    async () =>
+      await expireAbandonedRuns(db, {
+        now,
+        abandonedMs: limits.abandonedRunMs,
+        limit: EXPIRY_BATCH,
+      }),
+  );
+  if (abandoned.isErr()) {
+    observeFailure(abandoned.error, { sink: LEASE_SWEEP_SINK });
+  }
+  const expired = await Result.tryPromise(
+    async () => await expireRunLeases(db, { now, limit: EXPIRY_BATCH }),
+  );
+  if (expired.isErr()) {
+    // The next sweep expires them; a late expiry only delays the state.
+    observeFailure(expired.error, { sink: LEASE_SWEEP_SINK });
+  }
+  const pruned = await Result.tryPromise(
+    async () =>
+      await pruneEndedRuns(db, {
+        now,
+        retentionMs: limits.endedRunRetentionMs,
+        limit: EXPIRY_BATCH,
+      }),
+  );
+  if (pruned.isErr()) {
+    // Retention catches up on the next sweep.
+    observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
+  }
+  await cancelEndedChatTurnRuns({ db, doorbell });
+};
+
 export type DesktopRunnerGateway = {
   /**
    * Authenticate an upgrade request and open its socket. Answers a refusal,
@@ -229,39 +306,7 @@ export const createDesktopRunnerGateway = (
   };
 
   const sweep = async () => {
-    // Abandoned runs end first: a lapsed lease moves a run to waiting and
-    // restarts the clock the abandon window reads.
-    const abandoned = await Result.tryPromise(
-      async () =>
-        await expireAbandonedRuns(options.db, {
-          now: now(),
-          abandonedMs: limits.abandonedRunMs,
-          limit: EXPIRY_BATCH,
-        }),
-    );
-    if (abandoned.isErr()) {
-      observeFailure(abandoned.error, { sink: LEASE_SWEEP_SINK });
-    }
-    const expired = await Result.tryPromise(
-      async () =>
-        await expireRunLeases(options.db, { now: now(), limit: EXPIRY_BATCH }),
-    );
-    if (expired.isErr()) {
-      // The next sweep expires them; a late expiry only delays the state.
-      observeFailure(expired.error, { sink: LEASE_SWEEP_SINK });
-    }
-    const pruned = await Result.tryPromise(
-      async () =>
-        await pruneEndedRuns(options.db, {
-          now: now(),
-          retentionMs: limits.endedRunRetentionMs,
-          limit: EXPIRY_BATCH,
-        }),
-    );
-    if (pruned.isErr()) {
-      // Retention catches up on the next sweep.
-      observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
-    }
+    await endRuns({ ...options, limits, now: now() });
     // Only sockets that have not sent their newest command, one after
     // another: a sweep catches lost rings, however old, without reading the
     // queue of every idle socket. Pages continue across sweeps, so every

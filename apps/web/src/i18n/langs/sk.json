@@ -40,7 +40,6 @@
     "organizationId": "ID organizácie",
     "organizationLeft": "Opustili ste organizáciu.",
     "planAndUsage": "Tarifa a využitie",
-    "title": "Správa organizácie",
     "toolsDescription": "Zapnite alebo vypnite vstavané nástroje pre všetkých v tejto organizácii."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
+      "unverified": "Citáciu sa nepodarilo overiť",
+      "unverifiedHint": "Citované rozhodnutia tento text doslovne neobsahujú",
       "verified": "Overená citácia",
       "verifiedHint": "Doslovne v {source}"
     },
@@ -1698,6 +1699,7 @@
       "stateNeedsLogin": "Vyžaduje prihlásenie",
       "stateNotInstalled": "Nie je nainštalované",
       "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálne nedostupné",
       "stateUnsupported": "Táto verzia nie je podporovaná",
       "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Graf sa nepodarilo vybrať. Zobrazuje sa tabuľka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracujem s kontextom",
+    "thinking": "Premýšľanie",
     "threadFiles": {
       "title": "Súbory v tomto chate"
     },
@@ -2031,6 +2033,11 @@
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čakanie na schválenie",
+      "waitingForInput": "Čakanie na zadanie",
+      "writing": "Písanie"
+    },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
     "usageFallbackNotice": "Denný prídel AI je vyčerpaný; odpovede pokračujú na štandardnom modeli.",
@@ -2039,7 +2046,6 @@
       "answer": "Súhrn webového vyhľadávania",
       "answerDisclaimer": "Zostavené z verejných výsledkov z webu uvedených nižšie. Overte si to oproti prepojeným zdrojom.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otvoriť {source} na novej karte",
       "sources": "Zdroje",
       "toggleDescription": "Umožniť modelu v tejto konverzácii vyhľadávať na verejnom webe a čítať stránky.",
       "toggleLabel": "Vyhľadávanie na webe",
@@ -2393,6 +2399,7 @@
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
+    "openInSidePanel": "Otvoriť v bočnom paneli",
     "openInStella": "Otvoriť v stelle",
     "openOriginalSource": "Otvoriť originál",
     "options": "Možnosti",
@@ -2786,6 +2793,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
       "undoImport": "Vrátiť import ({count})",
+      "undoImportConfirm": "Natrvalo odstrániť {count, plural, one {kontakt vytvorený} few {# kontakty vytvorené} many {# kontaktu vytvoreného} other {# kontaktov vytvorených}} týmto importom? Túto akciu nemožno vrátiť späť.",
+      "undoImportTitle": "Vrátiť tento import?",
+      "undoneRow": "Odstránené vrátením importu",
+      "undoneSummary": "Vrátenie importu odstránilo {count, plural, one {# vytvorený kontakt} few {# vytvorené kontakty} many {# vytvoreného kontaktu} other {# vytvorených kontaktov}}.",
+      "undoneToast": "Import vrátený: {count, plural, one {odstránený # kontakt} few {odstránené # kontakty} many {odstránených # kontaktu} other {odstránených # kontaktov}}",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
@@ -3227,7 +3239,6 @@
     "noFileInVersion": "V tejto verzii nie je žiadny súbor",
     "noFullScreenPreview": "Tento typ súboru nemá náhľad na celú obrazovku.",
     "noLabel": "Bez označenia",
-    "openInSidePanel": "Otvoriť v bočnom paneli",
     "redlinePreview": "Sledované zmeny",
     "removeLabel": "Odstrániť označenie",
     "saveComparison": "Uložiť porovnanie",
@@ -5755,7 +5766,6 @@
     "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
-    "openProvision": "Otvoriť ustanovenie",
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",
@@ -6534,6 +6544,9 @@
       "calculating": "Počíta sa...",
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
+      "recordChoose": "{count, plural, one {Potvrďte # zhodu} few {Vyberte z # zhôd} many {Vyberte z # zhody} other {Vyberte z # zhôd}}",
+      "recordCount": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamov}}",
+      "recordNotFound": "Nenájdené",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty",
       "wholeNumberOnly": "Zadajte celé číslo"
@@ -7226,6 +7239,7 @@
       "previewSubject": "Vyskúšaj na vzorke",
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
+      "record": "Záznam",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",

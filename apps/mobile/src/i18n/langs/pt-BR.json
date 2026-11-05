@@ -225,7 +225,10 @@
     "signOut": "Sair",
     "deleteAccount": "Excluir conta",
     "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu.",
-    "signOutFailed": "Não foi possível concluir a saída. Tente novamente."
+    "signOutFailed": "Não foi possível concluir a saída. Tente novamente.",
+    "lockScreenTitle": "Tela Bloqueada",
+    "timerDetails": "Detalhes do cronômetro",
+    "timerDetailsHint": "Quando um cronômetro muda em outro dispositivo, o serviço de notificações da Apple leva a descrição e o caso dele para a Tela Bloqueada. Desativado, mostra só o tempo até você abrir o app."
   },
   "header": {
     "search": "Pesquisar"
@@ -265,10 +268,6 @@
     "newTimer": "Novo cronômetro",
     "description": "No que você está trabalhando?",
     "matterTitle": "Caso",
-    "noMatter": "Sem caso",
-    "noDescription": "Sem descrição",
-    "running": "Em andamento",
-    "paused": "Pausado",
     "pause": "Pausar",
     "resume": "Retomar",
     "save": "Salvar",
@@ -279,8 +278,7 @@
     "retry": "Tentar novamente",
     "unavailable": "O controle de horas não está ativado na sua organização.",
     "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
-    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente.",
-    "more": "{count, plural, one {mais # cronômetro} other {mais # cronômetros}}"
+    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente."
   },
   "scan": {
     "title": "Digitalizar um documento",

@@ -6,7 +6,10 @@
 use std::{
   collections::HashMap,
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+  },
   time::Duration,
 };
 
@@ -33,21 +36,23 @@ use super::client::{
   RunnerTiming,
 };
 use super::harness::{
-  EmitError, HarnessHost, NoHarnessReports, RunOutput, RunSink, UnavailableHarnessHost,
+  EmitError, Forwarded, HarnessHost, HarnessReports, NoHarnessReports, NotForwarded,
+  RunOutput, RunSink, UnavailableHarnessHost,
 };
-use super::journal::{Journal, JournalBacking};
+use super::journal::{Journal, JournalBacking, SharedJournal};
 use super::state::RunnerState;
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
   ApprovalKind, DESKTOP_ID_HEADER, Harness, HarnessReport, MAX_FRAME_BYTES, PATH,
-  PROTOCOL, RejectReason, RunApproval, RunInput, RunOutcome, RunStart, RunTokenRefresh,
+  PROTOCOL, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
+  RunTokenRefresh,
 };
 
 const WAIT: Duration = Duration::from_secs(10);
 const BEARER: &str = "stella_desktop_fixture_bearer";
 const RUN: &str = "0192f3a0-6b1c-7d2e-8f30-0000000000a1";
 
-fn timing() -> RunnerTiming {
+pub(super) fn timing() -> RunnerTiming {
   RunnerTiming {
     connect_timeout: Duration::from_secs(5),
     welcome_timeout: Duration::from_secs(5),
@@ -59,18 +64,18 @@ fn timing() -> RunnerTiming {
 }
 
 /// A gateway as the desktop sees it: accepts upgrades, records each one.
-struct Gateway {
+pub(super) struct Gateway {
   listener: TcpListener,
 }
 
-struct Connection {
+pub(super) struct Connection {
   socket: WebSocketStream<TcpStream>,
   headers: HeaderMap,
   path: String,
 }
 
 impl Gateway {
-  async fn bind() -> Self {
+  pub(super) async fn bind() -> Self {
     Self {
       listener: TcpListener::bind("127.0.0.1:0").await.unwrap(),
     }
@@ -84,7 +89,7 @@ impl Gateway {
     clippy::result_large_err,
     reason = "tungstenite fixes the handshake callback's error type"
   )]
-  async fn accept(&self) -> Connection {
+  pub(super) async fn accept(&self) -> Connection {
     let (stream, _) = tokio::time::timeout(WAIT, self.listener.accept())
       .await
       .expect("the runner connects")
@@ -122,7 +127,7 @@ impl Gateway {
 
 impl Connection {
   /// The next text frame, as JSON.
-  async fn receive(&mut self) -> Value {
+  pub(super) async fn receive(&mut self) -> Value {
     loop {
       let frame = tokio::time::timeout(WAIT, self.socket.next())
         .await
@@ -137,13 +142,13 @@ impl Connection {
     }
   }
 
-  async fn receive_type(&mut self, kind: &str) -> Value {
+  pub(super) async fn receive_type(&mut self, kind: &str) -> Value {
     let message = self.receive().await;
     assert_eq!(message["type"], kind, "{message}");
     message
   }
 
-  async fn send(&mut self, message: Value) {
+  pub(super) async fn send(&mut self, message: Value) {
     self
       .socket
       .send(Message::text(message.to_string()))
@@ -151,11 +156,11 @@ impl Connection {
       .unwrap();
   }
 
-  async fn hello(&mut self) -> Value {
+  pub(super) async fn hello(&mut self) -> Value {
     self.receive_type("hello").await
   }
 
-  async fn welcome(&mut self, resume: &[(&str, u32)]) {
+  pub(super) async fn welcome(&mut self, resume: &[(&str, u32)]) {
     let resume: Vec<Value> = resume
       .iter()
       .map(|(run_id, ack_seq)| json!({"runId": run_id, "ackSeq": ack_seq}))
@@ -225,10 +230,12 @@ fn text_chunk(delta: &str) -> RunOutput {
 }
 
 /// Records every call and keeps each run's sink for the test to emit through.
+/// While `refusing`, it takes no run command, as a busy or absent holder.
 #[derive(Default)]
 struct RecordingHost {
   calls: Mutex<Vec<String>>,
   sinks: Mutex<HashMap<String, RunSink>>,
+  refusing: AtomicBool,
 }
 
 impl RecordingHost {
@@ -243,6 +250,15 @@ impl RecordingHost {
   fn record(&self, call: String) {
     self.calls.lock().unwrap().push(call);
   }
+
+  fn take(&self, command: String) -> Forwarded {
+    if self.refusing.load(Ordering::SeqCst) {
+      self.record(format!("refused {command}"));
+      return Err(NotForwarded);
+    }
+    self.record(command);
+    Ok(())
+  }
 }
 
 impl HarnessHost for RecordingHost {
@@ -256,24 +272,34 @@ impl HarnessHost for RecordingHost {
     Ok(())
   }
 
-  fn input(&self, input: RunInput) {
-    self.record(format!("input {}", input.input_id));
+  fn input(&self, input: RunInput) -> Forwarded {
+    self.take(format!("input {}", input.input_id))
   }
 
-  fn approval(&self, approval: RunApproval) {
-    self.record(format!("approval {}", approval.request_id));
+  fn approval(&self, approval: RunApproval) -> Forwarded {
+    self.take(format!("approval {}", approval.request_id))
   }
 
-  fn interrupt(&self, run_id: &str) {
-    self.record(format!("interrupt {run_id}"));
+  fn answer(&self, answer: RunAnswer) -> Forwarded {
+    // The answers themselves may be secret; the host is shown only to take them.
+    let questions: Vec<&str> = answer.answers.question_ids().collect();
+    self.take(format!(
+      "answer {} {}",
+      answer.request_id,
+      questions.join(",")
+    ))
   }
 
-  fn cancel(&self, run_id: &str) {
-    self.record(format!("cancel {run_id}"));
+  fn interrupt(&self, run_id: &str) -> Forwarded {
+    self.take(format!("interrupt {run_id}"))
   }
 
-  fn token(&self, refresh: RunTokenRefresh) {
-    self.record(format!("token {}", refresh.expires_at));
+  fn cancel(&self, run_id: &str) -> Forwarded {
+    self.take(format!("cancel {run_id}"))
+  }
+
+  fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
+    self.take(format!("token {}", refresh.expires_at))
   }
 }
 
@@ -313,7 +339,7 @@ impl JournalOpener for DirectoryJournals {
   }
 }
 
-struct Started {
+pub(super) struct Started {
   state: watch::Receiver<RunnerState>,
   stop: watch::Sender<bool>,
   wake: watch::Sender<u64>,
@@ -329,7 +355,7 @@ impl Started {
       .clone()
   }
 
-  async fn stop(self) {
+  pub(super) async fn stop(self) {
     self.stop.send_replace(true);
     tokio::time::timeout(WAIT, self.task)
       .await
@@ -338,29 +364,34 @@ impl Started {
   }
 }
 
-struct Setup {
-  host: Arc<dyn HarnessHost>,
-  journal_dir: PathBuf,
-  timing: RunnerTiming,
-  device_key: DeviceKey,
-  desktop_id: Uuid,
-  signed_in: bool,
+pub(super) struct Setup {
+  pub(super) host: Arc<dyn HarnessHost>,
+  pub(super) reports: Arc<dyn HarnessReports>,
+  pub(super) journal_dir: PathBuf,
+  pub(super) timing: RunnerTiming,
+  pub(super) device_key: DeviceKey,
+  pub(super) desktop_id: Uuid,
+  pub(super) signed_in: bool,
+  /// Shared by every runner this setup starts, as the app shares it.
+  pub(super) journal: Arc<SharedJournal>,
 }
 
 impl Setup {
-  fn new(host: Arc<dyn HarnessHost>) -> Self {
+  pub(super) fn new(host: Arc<dyn HarnessHost>) -> Self {
     Self {
       host,
+      reports: Arc::new(NoHarnessReports),
       journal_dir: std::env::temp_dir()
         .join(format!("stella-runner-test-{}", Uuid::new_v4())),
       timing: timing(),
       device_key: DeviceKey::fixture(),
       desktop_id: Uuid::new_v4(),
       signed_in: true,
+      journal: Arc::new(SharedJournal::default()),
     }
   }
 
-  fn start(&self, gateway: &Gateway) -> Started {
+  pub(super) fn start(&self, gateway: &Gateway) -> Started {
     let state = Arc::new(watch::channel(RunnerState::Off).0);
     let observed = state.subscribe();
     let (stop, stopped) = watch::channel(false);
@@ -378,8 +409,9 @@ impl Setup {
         signed_in: self.signed_in,
       }),
       journals: Arc::new(DirectoryJournals(self.journal_dir.clone())),
+      journal: Arc::clone(&self.journal),
       host: Arc::clone(&self.host),
-      reports: Arc::new(NoHarnessReports),
+      reports: Arc::clone(&self.reports),
       state,
       wakes,
       stop: stopped,
@@ -517,7 +549,7 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   );
   let sink = host.sink(RUN);
   for (expected, delta) in [(1, "One"), (2, "Two"), (3, "Three")] {
-    assert_eq!(sink.emit(text_chunk(delta)).await.unwrap().get(), expected);
+    assert_eq!(sink.emit(text_chunk(delta)).unwrap().get(), expected);
     let event = connection.receive_type("run.event").await;
     assert_eq!(event["seq"], expected);
     assert_eq!(event["chunk"]["delta"], delta);
@@ -528,7 +560,7 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   connection.close(1011, "internal_error").await;
 
   // Produced while disconnected: journaled, sent after the next welcome.
-  assert_eq!(sink.emit(text_chunk("Four")).await.unwrap().get(), 4);
+  assert_eq!(sink.emit(text_chunk("Four")).unwrap().get(), 4);
 
   let mut connection = gateway.accept().await;
   assert_eq!(
@@ -546,11 +578,14 @@ async fn unacknowledged_messages_are_resent_from_welcome_resume_across_reconnect
   let restarted_host = Arc::new(RecordingHost::default());
   let restarted = Setup {
     host: Arc::clone(&restarted_host) as Arc<dyn HarnessHost>,
+    reports: Arc::new(NoHarnessReports),
     journal_dir: setup.journal_dir.clone(),
     timing: timing(),
     device_key: setup.device_key.clone(),
     desktop_id: setup.desktop_id,
     signed_in: true,
+    // A new app process opens the journal from disk again.
+    journal: Arc::new(SharedJournal::default()),
   };
   let runner = restarted.start(&gateway);
   let mut connection = gateway.accept().await;
@@ -600,7 +635,6 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
         kind: ApprovalKind::Command,
         summary: "Run the test suite".to_owned(),
       })
-      .await
       .unwrap()
       .get(),
     1
@@ -622,7 +656,6 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
         outcome: RunOutcome::Completed,
         harness_session_id: Some("session-1".to_owned()),
       })
-      .await
       .unwrap()
       .get(),
     2
@@ -632,14 +665,11 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
     "session-1"
   );
   // Nothing follows the final message.
-  assert_eq!(
-    done.emit(text_chunk("late")).await,
-    Err(EmitError::RunClosed)
-  );
+  assert_eq!(done.emit(text_chunk("late")), Err(EmitError::RunClosed));
   connection
     .send(json!({"type": "ack", "runId": finished, "seq": 2}))
     .await;
-  host.sink(RUN).emit(text_chunk("Working")).await.unwrap();
+  host.sink(RUN).emit(text_chunk("Working")).unwrap();
   connection.receive_type("run.event").await;
   connection.close(1011, "internal_error").await;
 
@@ -655,7 +685,7 @@ async fn a_finished_run_is_forgotten_once_acknowledged_and_a_run_welcome_omits_i
   assert_eq!(connection.hello().await["activeRuns"], json!([]));
   assert!(host.calls().contains(&format!("cancel {RUN}")));
   assert_eq!(
-    host.sink(RUN).emit(text_chunk("gone")).await,
+    host.sink(RUN).emit(text_chunk("gone")),
     Err(EmitError::RunClosed)
   );
   runner.stop().await;
@@ -683,6 +713,12 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
     "decision": "approve",
   });
+  let answer = json!({
+    "type": "run.answer",
+    "runId": RUN,
+    "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+    "answers": {"tone": ["Formal"], "passphrase": ["open sesame"]},
+  });
   let token = |expires_at: &str| json!({"type": "run.token", "runId": RUN, "token": "run-token-2", "expiresAt": expires_at});
   for _ in 0..2 {
     connection
@@ -691,6 +727,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     connection.receive_type("run.accepted").await;
     connection.send(input.clone()).await;
     connection.send(approval.clone()).await;
+    connection.send(answer.clone()).await;
     connection
       .send(json!({"type": "run.interrupt", "runId": RUN}))
       .await;
@@ -717,6 +754,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
       format!("start {RUN}"),
       "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
       "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
+      "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 passphrase,tone".to_owned(),
       format!("interrupt {RUN}"),
       "token 2026-10-28T13:15:00.000Z".to_owned(),
     ]
@@ -726,11 +764,14 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
   let restarted_host = Arc::new(RecordingHost::default());
   let restarted = Setup {
     host: Arc::clone(&restarted_host) as Arc<dyn HarnessHost>,
+    reports: Arc::new(NoHarnessReports),
     journal_dir: setup.journal_dir.clone(),
     timing: timing(),
     device_key: setup.device_key.clone(),
     desktop_id: setup.desktop_id,
     signed_in: true,
+    // A new app process opens the journal from disk again.
+    journal: Arc::new(SharedJournal::default()),
   };
   let runner = restarted.start(&gateway);
   let mut connection = gateway.accept().await;
@@ -739,6 +780,7 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
   // The API replays its queue on a new socket.
   connection.send(input).await;
   connection.send(approval).await;
+  connection.send(answer).await;
   connection
     .send(json!({"type": "run.interrupt", "runId": RUN}))
     .await;
@@ -753,6 +795,80 @@ async fn duplicate_commands_reach_the_host_once_also_after_a_restart_and_only_a_
     .await;
   connection.receive_type("run.accepted").await;
   assert_eq!(restarted_host.calls(), [format!("cancel {RUN}")]);
+  runner.stop().await;
+}
+
+#[tokio::test]
+async fn a_command_the_host_did_not_take_reaches_it_when_the_api_resends_it() {
+  let gateway = Gateway::bind().await;
+  let host = Arc::new(RecordingHost::default());
+  let setup = Setup::new(Arc::clone(&host) as Arc<dyn HarnessHost>);
+  let runner = setup.start(&gateway);
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[]).await;
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  let commands = [
+    json!({
+      "type": "run.input",
+      "runId": RUN,
+      "inputId": "0192f3a0-6b1c-7d2e-8f30-0000000000c1",
+      "message": {"role": "user", "content": "Also check the dates."},
+    }),
+    json!({
+      "type": "run.approval",
+      "runId": RUN,
+      "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d1",
+      "decision": "approve",
+    }),
+    json!({
+      "type": "run.answer",
+      "runId": RUN,
+      "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000d2",
+      "answers": {"tone": ["Formal"]},
+    }),
+    json!({"type": "run.interrupt", "runId": RUN}),
+    json!({"type": "run.cancel", "runId": RUN}),
+  ];
+  let names = [
+    "input 0192f3a0-6b1c-7d2e-8f30-0000000000c1".to_owned(),
+    "approval 0192f3a0-6b1c-7d2e-8f30-0000000000d1".to_owned(),
+    "answer 0192f3a0-6b1c-7d2e-8f30-0000000000d2 tone".to_owned(),
+    format!("interrupt {RUN}"),
+    format!("cancel {RUN}"),
+  ];
+  // The holder is busy: no command is taken, so none is recorded as handled.
+  host.refusing.store(true, Ordering::SeqCst);
+  for command in &commands {
+    connection.send(command.clone()).await;
+  }
+  // Answered in order, so everything before it was handled.
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  // The holder is back; the API resends its queue on the next socket.
+  host.refusing.store(false, Ordering::SeqCst);
+  connection.close(1011, "internal_error").await;
+  let mut connection = gateway.accept().await;
+  connection.hello().await;
+  connection.welcome(&[(RUN, 0)]).await;
+  for _ in 0..2 {
+    for command in &commands {
+      connection.send(command.clone()).await;
+    }
+  }
+  connection
+    .send(run_start(RUN, "2026-10-28T13:00:00.000Z"))
+    .await;
+  connection.receive_type("run.accepted").await;
+  let mut expected = vec![format!("start {RUN}")];
+  expected.extend(names.iter().map(|name| format!("refused {name}")));
+  expected.extend(names.iter().cloned());
+  assert_eq!(host.calls(), expected);
   runner.stop().await;
 }
 
@@ -917,11 +1033,8 @@ async fn frames_over_the_limit_are_refused_both_ways() {
   // journaled, and takes no position.
   let sink = host.sink(RUN);
   let oversized = "x".repeat(MAX_FRAME_BYTES);
-  assert_eq!(
-    sink.emit(text_chunk(&oversized)).await,
-    Err(EmitError::TooLarge)
-  );
-  assert_eq!(sink.emit(text_chunk("fits")).await.unwrap().get(), 1);
+  assert_eq!(sink.emit(text_chunk(&oversized)), Err(EmitError::TooLarge));
+  assert_eq!(sink.emit(text_chunk("fits")).unwrap().get(), 1);
   assert_eq!(connection.receive_type("run.event").await["seq"], 1);
 
   // A frame from the API over the limit drops the socket: the runner stops

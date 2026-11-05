@@ -225,7 +225,10 @@
     "signOut": "Sign out",
     "deleteAccount": "Delete account",
     "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
-    "signOutFailed": "Sign-out could not be completed. Try again."
+    "signOutFailed": "Sign-out could not be completed. Try again.",
+    "lockScreenTitle": "Lock Screen",
+    "timerDetails": "Timer details",
+    "timerDetailsHint": "When a timer changes on another device, Apple's notification service carries its description and matter to the Lock Screen. Off, it shows only the time until you open the app."
   },
   "header": {
     "search": "Search"
@@ -265,10 +268,6 @@
     "newTimer": "New timer",
     "description": "What are you working on?",
     "matterTitle": "Matter",
-    "noMatter": "No matter",
-    "noDescription": "No description",
-    "running": "Running",
-    "paused": "Paused",
     "pause": "Pause",
     "resume": "Resume",
     "save": "Save",
@@ -279,8 +278,7 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again.",
-    "more": "{count, plural, one {# more timer} other {# more timers}}"
+    "changeFailed": "The timer could not be changed. Try again."
   },
   "scan": {
     "title": "Scan a document",

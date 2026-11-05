@@ -48,6 +48,7 @@ const contents = {
   int: { version: 1, type: "int" },
   money: { version: 1, type: "money", currency: null },
   person: { version: 1, type: "person" },
+  record: { version: 1, type: "record", shape: { type: "tool-output" } },
   "single-select": {
     version: 1,
     type: "single-select",

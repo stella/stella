@@ -76,6 +76,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection; during an outage alerts are skipped and the in-app notification stands.",
       },
       {
+        path: "apps/api/src/lib/push/timer-activity-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection; during an outage the Lock Screen waits for the app to redraw it when it opens.",
+      },
+      {
         path: "apps/api/src/lib/account-export/queue.ts",
         reason:
           "Queue transport: the worker uses a dedicated connection; PostgreSQL requests and cursor recovery reconstruct work after an outage.",

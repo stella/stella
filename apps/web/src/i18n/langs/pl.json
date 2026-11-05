@@ -40,7 +40,6 @@
     "organizationId": "ID organizacji",
     "organizationLeft": "Opuszczono organizację.",
     "planAndUsage": "Plan i wykorzystanie",
-    "title": "Administracja organizacji",
     "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
+      "unverified": "Cytat niezweryfikowany",
+      "unverifiedHint": "Cytowane orzeczenia nie zawierają tego tekstu dosłownie",
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
     },
@@ -1698,6 +1699,7 @@
       "stateNeedsLogin": "Wymaga zalogowania",
       "stateNotInstalled": "Nie zainstalowano",
       "stateOffline": "Komputer offline",
+      "stateUnavailable": "Chwilowo niedostępne",
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
       "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuję z kontekstem",
+    "thinking": "Myślenie",
     "threadFiles": {
       "title": "Pliki w tym czacie"
     },
@@ -2031,6 +2033,11 @@
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
     },
+    "turnStatus": {
+      "waitingForApproval": "Oczekiwanie na zatwierdzenie",
+      "waitingForInput": "Oczekiwanie na dane",
+      "writing": "Pisanie"
+    },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
     "usageFallbackNotice": "Dzienny limit AI wyczerpany; odpowiedzi działają dalej na modelu standardowym.",
@@ -2039,7 +2046,6 @@
       "answer": "Podsumowanie wyszukiwania w internecie",
       "answerDisclaimer": "Opracowano na podstawie publicznych wyników wyszukiwania poniżej. Zweryfikuj w powiązanych źródłach.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otwórz {source} w nowej karcie",
       "sources": "Źródła",
       "toggleDescription": "Pozwól modelowi wyszukiwać w publicznej sieci i czytać strony w tej rozmowie.",
       "toggleLabel": "Wyszukiwanie w sieci",
@@ -2393,6 +2399,7 @@
     "notes": "Notatki",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
+    "openInSidePanel": "Otwórz w panelu bocznym",
     "openInStella": "Otwórz w stelli",
     "openOriginalSource": "Otwórz źródło oryginalne",
     "options": "Opcje",
@@ -2786,6 +2793,11 @@
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
       "undoImport": "Cofnij import ({count})",
+      "undoImportConfirm": "Trwale usunąć {count, plural, one {kontakt utworzony} few {# kontakty utworzone} many {# kontaktów utworzonych} other {# kontaktu utworzonego}} przez ten import? Tej operacji nie można cofnąć.",
+      "undoImportTitle": "Cofnąć ten import?",
+      "undoneRow": "Usunięto przez cofnięcie importu",
+      "undoneSummary": "Cofnięcie importu usunęło {count, plural, one {# utworzony kontakt} few {# utworzone kontakty} many {# utworzonych kontaktów} other {# utworzonego kontaktu}}.",
+      "undoneToast": "Import cofnięty: usunięto {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
       "warning": {
         "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
@@ -3227,7 +3239,6 @@
     "noFileInVersion": "Brak pliku w tej wersji",
     "noFullScreenPreview": "Ten typ pliku nie ma podglądu pełnoekranowego.",
     "noLabel": "Brak oznaczenia",
-    "openInSidePanel": "Otwórz w panelu bocznym",
     "redlinePreview": "Śledzone zmiany",
     "removeLabel": "Usuń oznaczenie",
     "saveComparison": "Zapisz porównanie",
@@ -5755,7 +5766,6 @@
     "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
-    "openProvision": "Otwórz przepis",
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
@@ -6534,6 +6544,9 @@
       "calculating": "Obliczanie...",
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
+      "recordChoose": "{count, plural, one {Potwierdź # dopasowanie} few {Wybierz spośród # dopasowań} many {Wybierz spośród # dopasowań} other {Wybierz spośród # dopasowania}}",
+      "recordCount": "{count, plural, one {# rekord} few {# rekordy} many {# rekordów} other {# rekordu}}",
+      "recordNotFound": "Nie znaleziono",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości",
       "wholeNumberOnly": "Wpisz liczbę całkowitą"
@@ -7226,6 +7239,7 @@
       "previewSubject": "Wypróbuj na próbce",
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
+      "record": "Rekord",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",
