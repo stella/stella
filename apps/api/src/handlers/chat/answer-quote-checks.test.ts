@@ -54,6 +54,49 @@ const recordingLoad = (decisions: DecisionBlocksByDecision) => {
 };
 
 describe("checkAnswerQuotes", () => {
+  it("a quotation too short to be evidence is not called a misquote", async () => {
+    const { load } = recordingLoad(DECISIONS);
+    const checks = await checkAnswerQuotes({
+      message: answer(`[1](#stella-decision=${FIRST})\n\n> dovolací soud`),
+      load,
+    });
+    expect(checks).toMatchObject({
+      type: "checked",
+      checks: [{ type: "unchecked" }],
+    });
+  });
+
+  it("a citation by public page leaves an unmatched quotation unchecked", async () => {
+    const { load } = recordingLoad(DECISIONS);
+    const checks = await checkAnswerQuotes({
+      message: answer(
+        `[1](#stella-decision=${FIRST})\n[2](https://my.stll.app/law/cze/cases/nejvyssi-soud/21-cdo-476-2015)\n\n> A sentence no cited decision holds at all, word for word.`,
+      ),
+      load,
+    });
+    expect(checks).toMatchObject({
+      type: "checked",
+      checks: [{ type: "unchecked" }],
+    });
+  });
+
+  it("matching past the deadline stores nothing", async () => {
+    const checks = await checkAnswerQuotes({
+      message: answer(`[1](#stella-decision=${FIRST})\n\n> ${COURT_TEXT}`),
+      // Holds the thread, so the load resolves before its timer can fire and
+      // only the check between quotations can see the deadline has passed.
+      load: async () => {
+        const end = performance.now() + 5;
+        while (performance.now() < end) {
+          Math.random();
+        }
+        return await Promise.resolve(DECISIONS);
+      },
+      timeoutMs: 1, // timeout under test
+    });
+    expect(checks).toEqual({ type: "unavailable" });
+  });
+
   it("verifies a quotation a cited decision holds, at its paragraph", async () => {
     const { load, requested } = recordingLoad(DECISIONS);
     const checks = await checkAnswerQuotes({

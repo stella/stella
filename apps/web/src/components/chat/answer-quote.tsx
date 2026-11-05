@@ -1,13 +1,14 @@
 import { useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { quotePieces } from "@stll/legal-ast/answer-quote";
+import { answerQuoteKey, quotePieces } from "@stll/legal-ast/answer-quote";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -36,8 +37,11 @@ import { quotationMarksFor } from "@/components/legal-reader/citation-copy.logic
 import { decisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type VerifiedQuote = Extract<AnswerQuoteState, { type: "verified" }>;
 
@@ -212,9 +216,28 @@ const QuoteCaption = ({
  * When the decisions it cites were checked and none holds it, it says that.
  */
 export const AnswerQuote = ({ children }: { children?: ReactNode }) => {
-  const decisions = useAnswerCitedDecisions();
+  const citedDecisions = useAnswerCitedDecisions();
   const checks = useAnswerQuoteChecks();
   const text = quoteTextOf(children);
+  const check = checks?.get(answerQuoteKey(text));
+  // A decision cited through its reader link is not read by the answer; the
+  // server's verification names it, and its attribution needs it.
+  const verifiedId = check?.type === "verified" ? check.decisionId : null;
+  const missingId =
+    verifiedId !== null && !citedDecisions.some(({ id }) => id === verifiedId)
+      ? verifiedId
+      : null;
+  const verifiedRead = queryView(
+    useQuery({
+      ...decisionOptions(missingId ?? ""),
+      enabled: missingId !== null,
+    }),
+  );
+  useQueryViewError(verifiedRead, "AnswerQuote:verified-decision");
+  const decisions =
+    missingId !== null && verifiedRead.type === "items"
+      ? [...citedDecisions, verifiedRead.items]
+      : citedDecisions;
   const state = answerQuoteState({ quote: text, decisions, checks });
 
   return (

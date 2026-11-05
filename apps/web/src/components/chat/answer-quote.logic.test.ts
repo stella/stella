@@ -77,6 +77,26 @@ describe("answer quotation state", () => {
     });
   });
 
+  test("a stored verification does not survive a decision that no longer holds the text", () => {
+    const reimported = {
+      ...loaded,
+      documentAst: astWith("The court dismissed the appeal on other grounds."),
+    } satisfies PublicCaseLawDecision;
+    expect(
+      answerQuoteState({
+        quote: COURT_TEXT,
+        decisions: [reimported],
+        checks: checks({
+          type: "verified",
+          key: answerQuoteKey(COURT_TEXT),
+          decisionId: reimported.id,
+          anchorId: "p-7",
+          paragraph: 7,
+        }),
+      }),
+    ).toEqual({ type: "plain" });
+  });
+
   test("shows a server verification only once its decision has loaded", () => {
     expect(
       answerQuoteState({

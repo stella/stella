@@ -8,9 +8,11 @@ import {
   parseChatResourceHref,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import type { SafeId } from "@stll/api-contract/safe-id";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import {
+  answerQuoteHasEvidence,
   answerQuoteKey,
   locateQuoteInBlocks,
 } from "@stll/legal-ast/answer-quote";
@@ -65,9 +67,17 @@ const displayedTextOf = (node: MarkdownNode): string => {
   return BLOCK_NODE_TYPES.has(node.type) ? ` ${inner} ` : inner;
 };
 
+/** A link to a decision's public page, which the server cannot read by id. */
+const linksDecisionRoute = (href: string): boolean => {
+  const pathname = URL.parse(href, "https://app.invalid")?.pathname;
+  return pathname !== undefined && parseCaseLawDecisionPath(pathname) !== null;
+};
+
 type AnswerMarkdown = {
   /** Every blockquote's displayed text, nested ones included. */
   quotes: string[];
+  /** Whether any citation links a decision by its public page. */
+  citesByRoute: boolean;
   /** Decisions linked by id, in the order written. */
   decisionIds: SafeId<"caseLawDecision">[];
 };
@@ -121,6 +131,7 @@ const readAnswerMarkdown = (markdown: string): AnswerMarkdown => {
     }
   }
   const decisionIds: SafeId<"caseLawDecision">[] = [];
+  let citesByRoute = false;
   for (const href of hrefs) {
     const passage = parseChatDecisionPassageHref(href);
     if (passage !== null) {
@@ -130,9 +141,11 @@ const readAnswerMarkdown = (markdown: string): AnswerMarkdown => {
     const target = parseChatResourceHref(href);
     if (target?.type === RESOURCE_TYPE.CASE_LAW_DECISION) {
       decisionIds.push(target.resource.id);
+    } else if (linksDecisionRoute(href)) {
+      citesByRoute = true;
     }
   }
-  return { quotes, decisionIds };
+  return { quotes, decisionIds, citesByRoute };
 };
 
 /**
@@ -165,6 +178,41 @@ export type AnswerQuoteCheckOutcome =
   | { type: "no-quotations" }
   | { type: "unavailable" };
 
+const checkQuote = ({
+  key,
+  quote,
+  requested,
+  loaded,
+  everyCitedRead,
+}: {
+  key: string;
+  quote: string;
+  requested: readonly SafeId<"caseLawDecision">[];
+  loaded: DecisionBlocksByDecision;
+  everyCitedRead: boolean;
+}): ChatAnswerQuoteCheck => {
+  if (!answerQuoteHasEvidence(quote)) {
+    return { type: "unchecked", key };
+  }
+  for (const decisionId of requested) {
+    const blocks = loaded.get(decisionId);
+    const located =
+      blocks === undefined ? null : locateQuoteInBlocks(quote, blocks);
+    if (located !== null) {
+      return {
+        type: "verified",
+        key,
+        decisionId,
+        anchorId: located.anchorId,
+        paragraph: located.paragraph,
+      };
+    }
+  }
+  return everyCitedRead
+    ? { type: "unverified", key }
+    : { type: "unchecked", key };
+};
+
 /** Checks every quotation of an answer against the decisions it cites by id. */
 export const checkAnswerQuotes = async ({
   message,
@@ -173,6 +221,7 @@ export const checkAnswerQuotes = async ({
 }: CheckAnswerQuotesOptions): Promise<AnswerQuoteCheckOutcome> => {
   const quotes = new Map<string, string>();
   const cited = new Set<SafeId<"caseLawDecision">>();
+  let citesByRoute = false;
   for (const part of message.parts) {
     if (!isChatTextPart(part)) {
       continue;
@@ -187,6 +236,7 @@ export const checkAnswerQuotes = async ({
     for (const decisionId of markdown.decisionIds) {
       cited.add(decisionId);
     }
+    citesByRoute ||= markdown.citesByRoute;
   }
   if (quotes.size === 0) {
     return { type: "no-quotations" };
@@ -201,6 +251,7 @@ export const checkAnswerQuotes = async ({
     };
   }
   const requested = [...cited].slice(0, COURT_PARAGRAPH_NUMBER_DECISIONS_MAX);
+  const deadline = performance.now() + timeoutMs;
   const read = await Result.tryPromise(
     async () =>
       await withTimeout(async () => await load(requested), {
@@ -214,29 +265,18 @@ export const checkAnswerQuotes = async ({
   }
   const loaded = read.value;
   // A quotation no read decision holds may still come from one that could
-  // not be read (restricted, no document, past the bound): not a misquote.
-  const everyCitedRead = [...cited].every((decisionId) =>
-    loaded.has(decisionId),
-  );
-  const checks = [...quotes].map(([key, quote]): ChatAnswerQuoteCheck => {
-    for (const decisionId of requested) {
-      const blocks = loaded.get(decisionId);
-      const located =
-        blocks === undefined ? null : locateQuoteInBlocks(quote, blocks);
-      if (located !== null) {
-        return {
-          type: "verified",
-          key,
-          decisionId,
-          anchorId: located.anchorId,
-          paragraph: located.paragraph,
-        };
-      }
+  // not be read (restricted, no document, past the bound, linked by its public
+  // page): not a misquote.
+  const everyCitedRead =
+    !citesByRoute && [...cited].every((decisionId) => loaded.has(decisionId));
+  const checks: ChatAnswerQuoteCheck[] = [];
+  for (const [key, quote] of quotes) {
+    // Matching holds up the end of the turn, so the deadline covers it too.
+    if (performance.now() > deadline) {
+      return { type: "unavailable" };
     }
-    return everyCitedRead
-      ? { type: "unverified", key }
-      : { type: "unchecked", key };
-  });
+    checks.push(checkQuote({ key, quote, requested, loaded, everyCitedRead }));
+  }
   return { type: "checked", checks };
 };
 

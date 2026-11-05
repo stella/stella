@@ -122,7 +122,12 @@ export const answerQuoteState = ({
   const check = checks?.get(answerQuoteKey(quote));
   if (check?.type === "verified") {
     const decision = decisions.find(({ id }) => id === check.decisionId);
-    if (decision !== undefined) {
+    // Without the decision's text the stored place stands; with it, a reimport
+    // may have changed the decision, so the quotation is matched again below.
+    if (
+      decision !== undefined &&
+      parseDocumentAst(decision.documentAst) === null
+    ) {
       return {
         type: "verified",
         decision,

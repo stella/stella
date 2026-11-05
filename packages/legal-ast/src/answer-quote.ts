@@ -69,6 +69,13 @@ export const answerQuoteKey = (quote: string): string =>
   foldQuoteText(quotePieces(quote).join(" "), "drop").folded;
 
 /**
+ * Whether a quotation holds enough text to be evidence. A shorter one can be
+ * neither confirmed nor called a misquote, so it is not checked at all.
+ */
+export const answerQuoteHasEvidence = (quote: string): boolean =>
+  quotePieces(quote).some((piece) => piece.length >= MIN_EVIDENCE_LENGTH);
+
+/**
  * The quotation's place in a decision, or null unless every piece of it is
  * the decision's text, in order. Matching tolerates only what a faithful copy
  * changes (quote marks, dashes, spacing; see `locateQuote`), so a located
@@ -78,10 +85,10 @@ export const locateQuoteInBlocks = (
   quote: string,
   blocks: readonly Block[],
 ): LocatedQuote | null => {
-  const pieces = quotePieces(quote);
-  if (!pieces.some((piece) => piece.length >= MIN_EVIDENCE_LENGTH)) {
+  if (!answerQuoteHasEvidence(quote)) {
     return null;
   }
+  const pieces = quotePieces(quote);
   // Adjacent text blocks form runs. A non-text block ends a run, so its
   // omitted contents cannot be mistaken for contiguous source text.
   const runs: {
