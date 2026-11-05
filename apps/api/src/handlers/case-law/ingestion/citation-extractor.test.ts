@@ -906,9 +906,9 @@ describe("extractCitations", () => {
   });
 
   test("extracts Slovak compound registers printed as separate words", () => {
-    // Verbatim citations from Slovak decisions: the register's second word
-    // ("V", "Pr") stands apart from the ordinary register, with or without
-    // the panel's leading "M".
+    // The register's second word ("V", "Pr") stands apart from the ordinary
+    // register, with or without the panel's leading "M". The dockets are
+    // illustrative of each shape, including the slash and joined-digit forms.
     for (const docket of [
       "1 M Obdo V 13/2005",
       "1 M Obdo V 2/2006",
