@@ -275,6 +275,7 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   local_runner_needs_login: false,
   local_runner_limit_reached: false,
   local_runner_unavailable: false,
+  local_runner_turn_too_large: false,
   unknown: false,
 } as const satisfies Record<AIErrorKind, boolean>;
 

@@ -170,7 +170,8 @@ export type WorkspaceProperty = Omit<
     | {
         version: 1;
         type: "person";
-      };
+      }
+    | Extract<WorkspacePropertyWire["content"], { type: "record" }>;
   tool: ManualInputTool | AIModelTool | PlaybookVerdictTool;
   // Structural role: identifies the document-type classifier by identity
   // rather than by the literal name "Document Type" (mirrors the server

@@ -176,6 +176,8 @@ const PROPERTY_WRITE_METHODS = {
   // alongside the amount and a person needs resolving to a workspace member.
   money: "unsupported",
   person: "unsupported",
+  // A record comes from its data source or its AI column, never typed in.
+  record: "unsupported",
   text: "set_field_value",
   "single-select": "set_field_value",
   "multi-select": "set_field_value",

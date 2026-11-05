@@ -75,10 +75,12 @@ export const DESKTOP_RUNNER_STORED_REJECT_REASONS = [
   "harness_needs_login",
   "harness_limited",
   "harness_unsupported",
+  "harness_unavailable",
   "harness_version_unavailable",
   "model_unavailable",
   "policy_unsupported",
   "at_capacity",
+  "run_too_large",
   "unknown_run",
 ] as const;
 true satisfies Same<

@@ -5,36 +5,6 @@
     "reason": "real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test"
   },
   {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let mut command = tokio::process::Command::new(program); // kit-allow: spawns the detached holder process",
-    "reason": "starts the detached holder process in the supervisor's runtime code; the process boundary is what the supervisor manages"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let deadline = Instant::now() + self.settings.start_timeout; // kit-allow: bounds the wait for a real holder process to listen",
-    "reason": "bounds how long the supervisor waits for a holder process it started to listen; a real process start in the supervisor's runtime code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let in_time = Instant::now() < deadline; // kit-allow: bounds the wait for a real holder process to listen",
-    "reason": "checks the start deadline while a holder process it started begins to listen; a real process start in the supervisor's runtime code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "tokio::time::sleep(START_POLL).await; // kit-allow: polls a real holder process that is starting",
-    "reason": "polls the endpoint of a holder process that is starting; a real process start in the supervisor's runtime code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "tokio::time::sleep(self.settings.backoff.delay(attempt)).await; // kit-allow: reconnect backoff to a real holder process",
-    "reason": "waits out the reconnect backoff to a holder process after a dropped connection in the supervisor's runtime code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let deadline = tokio::time::Instant::now() + self.settings.shutdown_grace; // kit-allow: bounds the shutdown of real holder processes",
-    "reason": "bounds how long the supervisor waits for holder processes to stop their runs on shutdown, in the supervisor's runtime code"
-  },
-  {
     "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
     "line": "let deadline = tokio::time::Instant::now() + WAIT; // kit-allow: waits on another process",
     "reason": "bounds the wait for a condition another process (the stand-in holder) makes true; the process boundary is the subject of the test"

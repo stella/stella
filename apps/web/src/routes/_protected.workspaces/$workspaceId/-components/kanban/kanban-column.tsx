@@ -675,20 +675,21 @@ export const KanbanColumnSwatch = ({
       moreLabel={t("common.showMore")}
       onSelect={onSelect}
       side="bottom"
+      trigger={
+        <Button
+          aria-label={t("common.changeColor")}
+          className="flex shrink-0"
+          shape="round"
+          variant="plain"
+        >
+          <span
+            className="block size-2.5 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+        </Button>
+      }
       value={optionColor}
-    >
-      <Button
-        aria-label={t("common.changeColor")}
-        className="flex shrink-0"
-        shape="round"
-        variant="plain"
-      >
-        <span
-          className="block size-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      </Button>
-    </ColorPicker>
+    />
   );
 };
 

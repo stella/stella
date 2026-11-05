@@ -137,7 +137,7 @@ describe("property content types", () => {
     // `Exclude`, so bind the two: a member added to `propertyContentSchema`
     // that belongs in the extractable subset, or dropped from it, fails here.
     expectTypeOf<AiExtractablePropertyContent>().toEqualTypeOf<
-      Exclude<PropertyContent, { type: "file" | "money" | "person" }>
+      Exclude<PropertyContent, { type: "file" | "money" | "person" | "record" }>
     >();
     // A case-law question column is a property asked of a decision, so the
     // kinds a question may take are exactly the kinds the extractor can produce.

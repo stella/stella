@@ -5,6 +5,10 @@
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
+    "runLimits": {
+      "maxMessagesPerRun": 20000,
+      "maxMessageBytesPerRun": 67108864
+    },
     "path": "/v1/desktop/runner",
     "desktopIdHeader": "stella-desktop-id",
     "close": {
@@ -50,18 +54,26 @@
       "needs_login",
       "limit_until",
       "not_installed",
-      "unsupported"
+      "unsupported",
+      "unavailable"
     ],
     "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessUnavailableReasons": [
+      "harness_failed",
+      "unexpected_answer",
+      "probe_failed"
+    ],
     "runRejectReasons": [
       "harness_not_installed",
       "harness_needs_login",
       "harness_limited",
       "harness_unsupported",
+      "harness_unavailable",
       "harness_version_unavailable",
       "model_unavailable",
       "policy_unsupported",
       "at_capacity",
+      "run_too_large",
       "unknown_run"
     ],
     "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
@@ -192,6 +204,30 @@
         }
       },
       {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "harness_failed"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "claude-code",
+          "state": "unavailable",
+          "reason": "unexpected_answer"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "probe_failed"
+        }
+      },
+      {
         "type": "run.accepted",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       },
@@ -218,6 +254,11 @@
       {
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_unavailable"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_version_unavailable"
       },
       {
@@ -234,6 +275,11 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "at_capacity"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "run_too_large"
       },
       {
         "type": "run.rejected",
@@ -755,6 +801,29 @@
             "id": "codex",
             "state": "limit_until",
             "version": "0.48.0"
+          }
+        }
+      },
+      {
+        "name": "unavailable harness without a reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable"
+          }
+        }
+      },
+      {
+        "name": "unavailable harness with an unknown reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable",
+            "reason": "the harness exited"
           }
         }
       },

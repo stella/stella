@@ -494,3 +494,31 @@ test("a thread that runs on the member's computer gets no follow-ups from a clou
     generator.mockRestore();
   }
 });
+
+test("an archived matter refuses suggested prompts even when no model is available", async () => {
+  const organizationId = toSafeId<"organization">("org_prompts_archived");
+  const threadRead = mock(() => panic("Refused request read the thread"));
+  const db = createScopedDbMock({
+    query: { chatThreads: { findFirst: threadRead } },
+  });
+  const result = await getSuggestedPrompts.handler(
+    asTestRaw({
+      getWorkspaceAccess: async (id: string) => ({ id, status: "archived" }),
+      memberRole: sessionMemberRole("owner"),
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      managedAIResidency: "eu" as const,
+      params: { threadId: toSafeId<"chatThread">("thread_prompts_archived") },
+      promptCachingEnabled: false,
+      query: { workspaceId: toSafeId<"workspace">("workspace_archived") },
+      request: new Request("https://example.test/prompts"),
+      route:
+        "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
+      safeDb: db.safeDb,
+      session: { activeOrganizationId: organizationId },
+      user: { id: toSafeId<"user">("user_prompts_archived") },
+    }),
+  );
+  expect(result).toMatchObject({ code: 404 });
+  expect(threadRead).not.toHaveBeenCalled();
+});
