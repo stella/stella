@@ -6,6 +6,7 @@ import {
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -19,9 +20,12 @@ import * as v from "valibot";
 import {
   FAKE_APPROVAL_REASON,
   FAKE_CLAUDE_VERSION,
+  FAKE_ESCAPE_COMMAND,
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
   FAKE_RESUMED_SESSION_ID,
+  FAKE_SANDBOX_HOST,
+  FAKE_SANDBOX_REFUSAL,
   FAKE_UNLISTED_DEFAULT,
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
@@ -37,6 +41,7 @@ import {
   resolveHarnessCompatibility,
 } from "../compatibility";
 import { type HarnessEvent, harnessSessionId } from "../events";
+import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createClaudeCodeHarnessAdapter } from "./adapter";
 
@@ -49,6 +54,8 @@ const FAKE_CODEX = path.join(
   "../../../scripts/fake-codex-app-server.ts",
 );
 const MCP_TOKEN = "run-token-123";
+/** The computer's package cache; the turn never creates it. */
+const CACHE_DIR = path.join(tmpdir(), "stella-agent-package-cache");
 const INSTRUCTIONS = "Use the stella MCP server.";
 
 /** Variables a stray shell or parent session could hand the CLI. */
@@ -94,7 +101,10 @@ const LogEntrySchema = v.looseObject({
 
 const harnessFor = (
   scenario: FakeScenarioName,
-  { requestTimeoutMs = 10_000 }: { requestTimeoutMs?: number } = {},
+  {
+    platform = "darwin",
+    requestTimeoutMs = 10_000,
+  }: { platform?: NodeJS.Platform; requestTimeoutMs?: number } = {},
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-claude-adapter-"));
   cleanups.push(() => rmSync(root, { recursive: true, force: true }));
@@ -116,6 +126,7 @@ const harnessFor = (
     onBackgroundError: (error) => {
       backgroundErrors.push(error);
     },
+    platform,
   });
   const entries = () =>
     readFileSync(logPath, "utf-8")
@@ -147,6 +158,7 @@ const harnessFor = (
     adapter,
     claudeConfigDir,
     workspaceDir,
+    logPath,
     received,
     startups,
     controlRequests,
@@ -169,7 +181,7 @@ const turnInput = (
   workspaceDir,
   model: "sonnet",
   instructions: INSTRUCTIONS,
-  policy: { network: "open", fs: "workspace" },
+  policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
     serverName: FAKE_STELLA_SERVER,
     url: "https://mcp.example.test/mcp",
@@ -177,6 +189,7 @@ const turnInput = (
   },
   transcript,
   continuation: { type: "fresh" },
+  cacheDir: CACHE_DIR,
   ...overrides,
 });
 
@@ -286,6 +299,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       DISABLE_AUTOUPDATER: "1",
       ENABLE_CLAUDEAI_MCP_SERVERS: "false",
       FAKE_KEEP: "1",
+      ...packageCacheEnvironment(CACHE_DIR),
     });
     const args = startup?.args ?? [];
     const sessionId = args[args.indexOf("--session-id") + 1];
@@ -892,6 +906,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume"],
+      approvalModes: ["ask", "auto", "full_auto"],
       // The exhausted model-specific window does not count.
       usageLimit: { resetsAt: "2099-10-28T14:00:00Z" },
     });
@@ -962,6 +977,7 @@ describe("Claude Code adapter over stream-json stdio", () => {
       onBackgroundError: (error) => {
         backgroundErrors.push(error);
       },
+      platform: "darwin",
     });
     const probed = await harness.probe();
     expect(Result.isError(probed) && probed.error.reason).toBe(
@@ -990,7 +1006,146 @@ describe("Claude Code adapter over stream-json stdio", () => {
         gracePeriodMs: 10,
         requestTimeoutMs: 10_000,
         onBackgroundError: () => undefined,
+        platform: "darwin",
       }),
     ).toThrow("CLAUDE_CONFIG_DIR must be stella's");
+  });
+});
+
+describe("Claude Code approval modes", () => {
+  /** The CLI's arguments for one turn in `approvals`. */
+  const argsFor = async (
+    approvals: HarnessTurnInput["policy"]["approvals"],
+  ) => {
+    const { startups } = await run("tool_calls", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals },
+      },
+    });
+    return startups()[0]?.args ?? [];
+  };
+  const valueOf = (args: readonly string[], flag: string) =>
+    args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
+
+  test("ask accepts edits in the workspace and asks about the rest, without the sandbox", async () => {
+    const args = await argsFor("ask");
+    expect(valueOf(args, "--permission-mode")).toBe("acceptEdits");
+    expect(args).not.toContain("--settings");
+  });
+
+  test("auto lets the CLI approve what it judges safe, without the sandbox", async () => {
+    const args = await argsFor("auto");
+    expect(valueOf(args, "--permission-mode")).toBe("auto");
+    expect(args).not.toContain("--settings");
+  });
+
+  test("full auto runs commands in the required OS sandbox and never skips permission checks", async () => {
+    const args = await argsFor("full_auto");
+    expect(valueOf(args, "--permission-mode")).toBe("acceptEdits");
+    expect(args).not.toContain("bypassPermissions");
+    expect(args).not.toContain("--dangerously-skip-permissions");
+    expect(JSON.parse(valueOf(args, "--settings") ?? "null")).toEqual({
+      sandbox: {
+        enabled: true,
+        failIfUnavailable: true,
+        autoAllowBashIfSandboxed: true,
+        allowUnsandboxedCommands: true,
+        filesystem: { allowWrite: [CACHE_DIR] },
+      },
+    });
+  });
+
+  test("full auto lets sandboxed commands reach the network and still asks before leaving the sandbox", async () => {
+    const { events, answers } = await run("sandbox_network", {
+      overrides: {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+      },
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    const approvals = events.flatMap((event) =>
+      event.type === "approval.requested" ? [event.request] : [],
+    );
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]).toMatchObject({
+      kind: "command",
+      toolCall: { input: { command: FAKE_ESCAPE_COMMAND } },
+    });
+    expect(answers()).toEqual([
+      {
+        subtype: "success",
+        request_id: "cli-1",
+        response: {
+          behavior: "allow",
+          updatedInput: { host: FAKE_SANDBOX_HOST },
+        },
+      },
+      {
+        subtype: "success",
+        request_id: "cli-2",
+        response: expect.objectContaining({ behavior: "deny" }),
+      },
+    ]);
+    expect(terminal(events)?.type).toBe("turn.completed");
+  });
+
+  test("outside full auto a request to reach a host is asked about", async () => {
+    const { events } = await run("sandbox_network", {
+      onEvent: async (event, turn) => {
+        if (event.type === "approval.requested") {
+          await turn.respond({
+            type: "approval",
+            requestId: event.request.requestId,
+            decision: "deny",
+          });
+        }
+      },
+    });
+    expect(
+      events.filter((event) => event.type === "approval.requested"),
+    ).toHaveLength(2);
+  });
+
+  test("full auto fails as sandbox unavailable when the CLI cannot start its sandbox", async () => {
+    const harness = harnessFor("sandbox_unavailable");
+    const started = await harness.adapter.startTurn(
+      turnInput(harness.workspaceDir, {
+        policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+      }),
+    );
+    expect(Result.isError(started) && started.error).toMatchObject({
+      reason: "sandbox_unavailable",
+      message: FAKE_SANDBOX_REFUSAL,
+    });
+    // A refused sandbox is not a missing session: no unsandboxed retry.
+    expect(harness.startups()).toHaveLength(1);
+  });
+
+  test("where the CLI has no sandbox, full auto is not offered and never starts the CLI", async () => {
+    for (const platform of ["win32", "linux"] as const) {
+      const harness = harnessFor("probe", { platform });
+      const probed = await harness.adapter.probe();
+      expect(Result.isOk(probed) && probed.value.approvalModes).toEqual([
+        "ask",
+        "auto",
+      ]);
+      const unsandboxed = harnessFor("tool_calls", { platform });
+      const started = await unsandboxed.adapter.startTurn(
+        turnInput(unsandboxed.workspaceDir, {
+          policy: { network: "open", fs: "workspace", approvals: "full_auto" },
+        }),
+      );
+      expect(Result.isError(started) && started.error.reason).toBe(
+        "sandbox_unavailable",
+      );
+      expect(existsSync(unsandboxed.logPath)).toBe(false);
+    }
   });
 });
