@@ -15,7 +15,11 @@ const OUTLINE_ITEM_FIELD_EQUALS = {
     a.portraits?.length === b.portraits?.length &&
     (a.portraits ?? []).every((portrait, index) => {
       const other = b.portraits?.[index];
-      return other?.image === portrait.image && other?.name === portrait.name;
+      return (
+        other !== undefined &&
+        other.image === portrait.image &&
+        other.name === portrait.name
+      );
     }),
   portraitCredit: (a, b) => a.portraitCredit === b.portraitCredit,
 } as const satisfies Record<
