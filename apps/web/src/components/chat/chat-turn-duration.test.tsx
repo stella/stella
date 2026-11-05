@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract/chat-turn-duration";
 
 import { ChatTurnDuration } from "@/components/chat/chat-turn-duration";
+import { ChatTurnStatus } from "@/components/chat/chat-turn-status";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
@@ -36,6 +37,27 @@ const renderDuration = (
     <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
       <FormattingProvider locale="en" timeZone="UTC">
         <ChatTurnDuration timing={timing} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+};
+
+const renderLiveStatus = (
+  timing: Extract<
+    Parameters<typeof ChatTurnDuration>[0]["timing"],
+    { status: "running" }
+  >,
+) => {
+  createChatTurnTimingObserver()(
+    [{ id: "live", metadata: { turnTiming: timing } }],
+    performance.now(),
+  );
+  return renderToStaticMarkup(
+    <IntlProvider locale="en" messages={messages} now={NOW} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <ChatTurnStatus
+          turn={{ state: "streaming", phase: { type: "writing" }, timing }}
+        />
       </FormattingProvider>
     </IntlProvider>,
   );
@@ -72,20 +94,31 @@ describe("assistant turn duration", () => {
     });
   }
 
-  test("renders the same label while running and after reload", () => {
-    const running = renderDuration({
+  test("leaves the running turn to the live status line and keeps the finished label across reload", () => {
+    const runningTiming = {
       status: "running",
       durationMs: 0,
       startedAt: START,
       observedAt: NOW.toISOString(),
       elapsedMs: 134_000,
-    });
+    } as const;
+    expect(renderDuration(runningTiming)).toBe("");
+    const live = renderLiveStatus(runningTiming);
+    expect(live).toContain("data-turn-live-status");
+    expect(live).toContain("134s");
+    expect(live).not.toContain("Worked for");
+
     const finished = renderDuration({
       status: "finished",
       durationMs: 134_000,
     });
-    expect(running).toContain("Worked for 2m 14s");
-    expect(finished).toBe(running);
+    // A reload reads the stored timing again into a fresh observer.
+    const reloaded = renderDuration({
+      status: "finished",
+      durationMs: 134_000,
+    });
+    expect(finished).toContain("Worked for 2m 14s");
+    expect(reloaded).toBe(finished);
     expect(finished).toContain("tabular-nums");
     expect(finished).toContain("data-chat-copy-exclude");
   });

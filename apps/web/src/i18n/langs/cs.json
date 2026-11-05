@@ -40,7 +40,6 @@
     "organizationId": "ID organizace",
     "organizationLeft": "Opustili jste organizaci.",
     "planAndUsage": "Tarif a využití",
-    "title": "Správa organizace",
     "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
+      "unverified": "Citaci se nepodařilo ověřit",
+      "unverifiedHint": "Citovaná rozhodnutí tento text doslovně neobsahují",
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
     },
@@ -1686,18 +1687,35 @@
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAskDescription": "Soubory ve složce běhu upravuje sám; na vše ostatní se zeptá.",
+      "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
+      "permissionFullAuto": "Plně automaticky",
+      "permissionFullAutoDescription": "Na nic uvnitř složky běhu se neptá; než změní něco ve vašem počítači, vždy se zeptá.",
+      "permissionSandboxed": "Běží v izolovaném prostředí; než změní něco ve vašem počítači, zeptá se.",
+      "permissionUnavailable": "V tomto počítači není k dispozici",
+      "permissions": "Oprávnění",
       "refusalConflictingRunMode": "Tento požadavek se má spustit zároveň v cloudovém agentovi i ve vašem počítači. Vyberte jedno v nabídce Spustit na.",
       "refusalHarnessUnavailable": "Programovací agent ve vašem počítači teď tento požadavek nemůže převzít. Zkontrolujte ho ve stella desktop.",
       "refusalModelUnavailable": "Programovací agent ve vašem počítači už tento model nenabízí. Vyberte jiný v nabídce Spustit na.",
       "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
+      "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit vyčerpán do {time}",
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
-      "stateUnsupported": "Tato verze není podporována"
+      "stateUnavailable": "Momentálně nedostupné",
+      "stateUnsupported": "Tato verze není podporována",
+      "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte vše, co platí",
+      "dismiss": "Zamítnout a zastavit",
+      "secretAnswer": "Odpověď je skrytá",
+      "secretPlaceholder": "Vaše odpověď zůstane skrytá"
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
@@ -1905,7 +1923,7 @@
       "unavailable": "Graf se nepodařilo vybrat. Zobrazuje se tabulka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuji s kontextem",
+    "thinking": "Přemýšlení",
     "threadFiles": {
       "title": "Soubory v tomto chatu"
     },
@@ -2033,6 +2051,11 @@
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čekání na schválení",
+      "waitingForInput": "Čekání na zadání",
+      "writing": "Psaní"
+    },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "usageFallbackNotice": "Denní příděl AI je vyčerpán; odpovědi pokračují na standardním modelu.",
@@ -2041,7 +2064,6 @@
       "answer": "Shrnutí webového vyhledávání",
       "answerDisclaimer": "Sestaveno z výsledků veřejného webu níže. Ověřte si je proti uvedeným zdrojům.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otevřít {source} na nové kartě",
       "sources": "Zdroje",
       "toggleDescription": "Umožnit modelu v této konverzaci vyhledávat na veřejném webu a číst stránky.",
       "toggleLabel": "Vyhledávání na webu",
@@ -2395,6 +2417,7 @@
     "notes": "Poznámky",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
+    "openInSidePanel": "Otevřít v bočním panelu",
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
     "options": "Možnosti",
@@ -2788,6 +2811,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
       "undoImport": "Vrátit import ({count})",
+      "undoImportConfirm": "Trvale smazat {count, plural, one {kontakt vytvořený} few {# kontakty vytvořené} many {# kontaktu vytvořeného} other {# kontaktů vytvořených}} tímto importem? Tuto akci nelze vrátit zpět.",
+      "undoImportTitle": "Vrátit tento import?",
+      "undoneRow": "Odstraněno vrácením importu",
+      "undoneSummary": "Vrácení importu odstranilo {count, plural, one {# vytvořený kontakt} few {# vytvořené kontakty} many {# vytvořeného kontaktu} other {# vytvořených kontaktů}}.",
+      "undoneToast": "Import vrácen: {count, plural, one {smazán # kontakt} few {smazány # kontakty} many {smazáno # kontaktu} other {smazáno # kontaktů}}",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
       "warning": {
         "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
@@ -3229,7 +3257,6 @@
     "noFileInVersion": "V této verzi není žádný soubor",
     "noFullScreenPreview": "Tento typ souboru nemá náhled na celou obrazovku.",
     "noLabel": "Bez označení",
-    "openInSidePanel": "Otevřít v bočním panelu",
     "redlinePreview": "Sledované změny",
     "removeLabel": "Odebrat označení",
     "saveComparison": "Uložit porovnání",
@@ -5757,7 +5784,6 @@
     "leadingDecisionsExplanation": "První zmínka v každém rozhodnutí, seřazená podle váhy citace: vážené příchozí citace zohledňující úroveň soudu, povahu citace a její stáří.",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
-    "openProvision": "Otevřít ustanovení",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
@@ -6536,6 +6562,9 @@
       "calculating": "Načítá se…",
       "errored": "Chyba",
       "formatNotSupported": "Formát není podporován",
+      "recordChoose": "{count, plural, one {Potvrďte # shodu} few {Vyberte z # shod} many {Vyberte z # shody} other {Vyberte z # shod}}",
+      "recordCount": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamů}}",
+      "recordNotFound": "Nenalezeno",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty",
       "wholeNumberOnly": "Zadejte celé číslo"
@@ -7228,6 +7257,7 @@
       "previewSubject": "Vyzkoušej na vzorku",
       "previewUnsupported": "Náhled není pro tento typ dokumentu podporovaný.",
       "readingFrom": "AI čerpá informace z",
+      "record": "Záznam",
       "referencesItself": "Vlastnost odkazuje sama na sebe přes jiné vlastnosti",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",

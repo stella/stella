@@ -93,7 +93,10 @@ export const EditableField = ({
     // (isCreatableContentType), so a workspace only holds one if the API put
     // it there.
     type === "money" ||
-    type === "person"
+    type === "person" ||
+    // A record comes from its data source or AI column, never typed in.
+    type === "record" ||
+    content?.type === "record"
   ) {
     return (
       <FieldValue
@@ -365,7 +368,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           {isEmpty ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -459,7 +462,7 @@ const InlineDateEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           <FieldValue
             content={{ type: "date", version: 1, value }}
             property={property}
@@ -555,7 +558,7 @@ const InlineTextEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block truncate rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block truncate rounded-sm px-2 py-1 text-sm">
           {value ? (
             <FieldValue
               content={{ type: "text", version: 1, value }}
@@ -661,7 +664,7 @@ const InlineIntEditor = ({
         }}
         variant="plain"
       >
-        <span className="hover:bg-muted block rounded px-2 py-1 text-sm">
+        <span className="hover:bg-muted block rounded-sm px-2 py-1 text-sm">
           {value === null ? (
             <span className="text-muted-foreground">—</span>
           ) : (
@@ -843,7 +846,7 @@ const TableFileField = ({
           />
         }
       >
-        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5">
+        <span className="bg-muted grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5">
           <DocumentIcon
             className="size-3.5 shrink-0"
             fileName={content.fileName}
@@ -867,7 +870,7 @@ const TableFileField = ({
     <Tooltip
       content={content.fileName}
       render={
-        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon

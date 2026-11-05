@@ -991,6 +991,12 @@
       }
     },
     {
+      "id": "stealth/crouton-alpha",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
       "id": "stepfun/step-3.7-flash",
       "reasoning": {
         "default_effort": "medium"
@@ -1015,6 +1021,12 @@
       }
     },
     {
+      "id": "tencent/hy4",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "tencent/hy4-preview",
       "reasoning": {
         "default_effort": "high"
@@ -1028,18 +1040,6 @@
     },
     {
       "id": "thinkingmachines/inkling-small",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling-small:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1087,7 +1087,19 @@
       }
     },
     {
+      "id": "x-ai/grok-4.6:batch",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
       "id": "x-ai/grok-4.7",
+      "reasoning": {
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "x-ai/grok-4.7:batch",
       "reasoning": {
         "default_effort": "high"
       }
@@ -1118,6 +1130,12 @@
     },
     {
       "id": "z-ai/glm-5.3-flashx",
+      "reasoning": {
+        "default_effort": "max"
+      }
+    },
+    {
+      "id": "z-ai/glm-5.3-flashx-legal",
       "reasoning": {
         "default_effort": "max"
       }

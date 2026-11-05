@@ -86,10 +86,25 @@ const httpStatus = (info: CodexTurnError["codexErrorInfo"]): number | null => {
   return null;
 };
 
+/**
+ * The selected model was at capacity. Codex itself retries transient errors
+ * inside a turn; this one ends the turn, and a continuation on the same
+ * thread is how it resumes (approach from t3code, MIT, `CodexAdapterV2.ts`).
+ */
+export const isCapacityFailure = (error: CodexTurnError | null): boolean =>
+  errorCode(error?.codexErrorInfo ?? null) === "serverOverloaded";
+
 type ClassifyTurnFailureOptions = {
   error: CodexTurnError | null;
   rateLimits: CodexRateLimits | null;
 };
+
+/**
+ * Codex reports an exhausted ChatGPT Subscription Sharing allowance as a stream
+ * disconnect that only its text tells apart (approach from t3code, MIT,
+ * pingdotgg/t3code#25341).
+ */
+const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
 
 export const classifyTurnFailure = ({
   error,
@@ -107,6 +122,10 @@ export const classifyTurnFailure = ({
       message,
       resetsAt: usageLimitResetsAt(rateLimits),
     };
+  }
+  if (message.includes(SHARING_LIMIT_TEXT)) {
+    // This allowance has its own reset, which the plan's rate limits do not say.
+    return { type: "usage_limit", message, resetsAt: null };
   }
   return { type: "provider_error", message, code };
 };

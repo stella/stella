@@ -7,6 +7,7 @@
 
 import * as v from "valibot";
 
+import type { ChatLocalRunQuestion } from "@stll/api-contract/chat-run-target";
 import type {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
@@ -84,15 +85,32 @@ export type HarnessApprovalRequest = {
   options: readonly HarnessApprovalOption[];
 };
 
-export type HarnessQuestion = {
-  id: string;
-  header: string;
-  prompt: string;
-  /** Answers name an option by its `label`, which is the native reply. */
-  options: readonly { label: string; description: string }[];
-  allowsFreeText: boolean;
-  secret: boolean;
+/**
+ * What an approval asks the user to allow. A command approval names the
+ * command itself, since that is what runs, not the harness's summary of it
+ * (as t3code, MIT, shows command approvals); anything else uses the
+ * harness's reason, or names the tool.
+ */
+export const approvalMessage = (request: HarnessApprovalRequest): string => {
+  const { input } = request.toolCall;
+  if (
+    request.kind === "command" &&
+    typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    input.command.trim() !== ""
+  ) {
+    return input.command;
+  }
+  if (request.reason !== null && request.reason.trim() !== "") {
+    return request.reason;
+  }
+  return `Approval required to run ${request.toolCall.name}`;
 };
+
+/** One question of a blocking question, as the chat contract carries it. */
+export type HarnessQuestion = ChatLocalRunQuestion;
 
 /**
  * `response` questions block the turn and are answered through `respond`.
@@ -128,7 +146,12 @@ export type HarnessFailure =
       exitCode: number | null;
       signal: string | null;
     }
-  | { type: "protocol_violation"; message: string };
+  | { type: "protocol_violation"; message: string }
+  /**
+   * The run's approval mode needs the harness's OS sandbox and the sandbox
+   * could not start; the run never runs without it.
+   */
+  | { type: "sandbox_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -165,4 +188,5 @@ export const HARNESS_FAILURE_OUTCOME = {
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
+  sandbox_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

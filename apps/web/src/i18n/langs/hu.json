@@ -40,7 +40,6 @@
     "organizationId": "Szervezetazonosító",
     "organizationLeft": "Kilépett a szervezetből.",
     "planAndUsage": "Csomag és használat",
-    "title": "Szervezet adminisztrációja",
     "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
+      "unverified": "Az idézet nem ellenőrizhető",
+      "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
@@ -1686,18 +1687,35 @@
       "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
       "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
       "onThisComputer": "{harness} ezen a számítógépen",
+      "permissionAskDescription": "A futtatás mappájában lévő fájlokat magától szerkeszti; minden más előtt rákérdez.",
+      "permissionAutoDescription": "Amit biztonságosnak ítél, magától elvégzi; a többire rákérdez.",
+      "permissionFullAuto": "Teljesen automatikus",
+      "permissionFullAutoDescription": "A futtatás mappáján belül semmire sem kérdez rá; mielőtt bármit módosítana a számítógépén, mindig rákérdez.",
+      "permissionSandboxed": "Elkülönített környezetben fut; mielőtt bármit módosítana a számítógépén, rákérdez.",
+      "permissionUnavailable": "Ezen a számítógépen nem érhető el",
+      "permissions": "Engedélyek",
       "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
       "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
       "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
       "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalPermissionUnavailable": "A számítógépén futó kódoló ügynök nem futhat ezekkel az engedélyekkel. Válasszon másik lehetőséget az Engedélyek menüben.",
       "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
       "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
       "runOn": "Futtatás itt",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Korlát elérve eddig: {time}",
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
-      "stateUnsupported": "Ez a verzió nem támogatott"
+      "stateUnavailable": "Jelenleg nem érhető el",
+      "stateUnsupported": "Ez a verzió nem támogatott",
+      "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Jelölje be az összes megfelelőt",
+      "dismiss": "Elvetés és leállítás",
+      "secretAnswer": "Rejtett válasz",
+      "secretPlaceholder": "Az Ön válasza rejtve marad"
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
@@ -1905,7 +1923,7 @@
       "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Kontextussal dolgozom",
+    "thinking": "Gondolkodás",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"
     },
@@ -2033,6 +2051,11 @@
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
     },
+    "turnStatus": {
+      "waitingForApproval": "Jóváhagyásra vár",
+      "waitingForInput": "Bevitelre vár",
+      "writing": "Írás"
+    },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
     "usageFallbackNotice": "A napi AI-keret elfogyott; a válaszok a normál modellen folytatódnak.",
@@ -2041,7 +2064,6 @@
       "answer": "Webes keresés összefoglalója",
       "answerDisclaimer": "Az alábbi nyilvános webes találatokból összeállítva. Ellenőrizze a hivatkozott források alapján.",
       "fetchedFrom": "{source} forrásból",
-      "openSource": "{source} megnyitása új lapon",
       "sources": "Források",
       "toggleDescription": "Engedélyezi a modellnek, hogy ebben a beszélgetésben a nyilvános weben keressen és oldalakat olvasson.",
       "toggleLabel": "Webes keresés",
@@ -2395,6 +2417,7 @@
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
+    "openInSidePanel": "Megnyitás az oldalpanelen",
     "openInStella": "Megnyitás a Stellában",
     "openOriginalSource": "Eredeti forrás megnyitása",
     "options": "Beállítások",
@@ -2788,6 +2811,11 @@
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
       "undoImport": "Importálás visszavonása ({count})",
+      "undoImportConfirm": "Véglegesen törli az importálással létrehozott {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+      "undoImportTitle": "Visszavonja ezt az importálást?",
+      "undoneRow": "Visszavonással eltávolítva",
+      "undoneSummary": "A visszavonás {count, plural, one {# létrehozott névjegyet} other {# létrehozott névjegyet}} távolított el.",
+      "undoneToast": "Importálás visszavonva: {count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
@@ -3229,7 +3257,6 @@
     "noFileInVersion": "Nincs fájl ebben a verzióban",
     "noFullScreenPreview": "Ehhez a fájltípushoz nincs teljes képernyős előnézet.",
     "noLabel": "Nincs címke",
-    "openInSidePanel": "Megnyitás az oldalpanelen",
     "redlinePreview": "Követett módosítások",
     "removeLabel": "Címke eltávolítása",
     "saveComparison": "Összehasonlítás mentése",
@@ -5757,7 +5784,6 @@
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
-    "openProvision": "Rendelkezés megnyitása",
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
@@ -6536,6 +6562,9 @@
       "calculating": "Számítás...",
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
+      "recordChoose": "{count, plural, one {# találat megerősítése} other {Válasszon # találat közül}}",
+      "recordCount": "{count, plural, one {# rekord} other {# rekord}}",
+      "recordNotFound": "Nem található",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket",
       "wholeNumberOnly": "Adjon meg egy egész számot"
@@ -7228,6 +7257,7 @@
       "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
+      "record": "Rekord",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",

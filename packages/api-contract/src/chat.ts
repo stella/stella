@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { BrowserExtensionStatus } from "./browser-control";
@@ -94,8 +96,23 @@ export const isUnsupportedChatPart = (
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 
+/**
+ * Who runs a tool call. `server`: the API runs it during the turn. `client`:
+ * the browser resolves it (a client tool, or a question the user answers).
+ * `harness`: a coding-agent harness on the member's computer ran it during a
+ * turn routed there. The API never runs a harness call; it stores what the
+ * harness reported and forwards approval answers to the computer.
+ */
+export const CHAT_TOOL_EXECUTOR = {
+  server: "server",
+  client: "client",
+  harness: "harness",
+} as const;
+export type ChatToolExecutor =
+  (typeof CHAT_TOOL_EXECUTOR)[keyof typeof CHAT_TOOL_EXECUTOR];
+
 /** Ownership is recorded by the runtime and does not depend on later tool sets. */
-export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
+export const chatToolExecutor = (part: unknown): ChatToolExecutor | null => {
   if (
     typeof part !== "object" ||
     part === null ||
@@ -115,6 +132,8 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
         return "server";
       case "client":
         return "client";
+      case "harness":
+        return "harness";
       default:
         break;
     }
@@ -124,6 +143,31 @@ export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
 
 export const isServerChatToolCall = (part: unknown): boolean =>
   chatToolExecutor(part) === "server";
+
+/** Whether a member's computer ran the call; see `CHAT_TOOL_EXECUTOR`. */
+export const isHarnessChatToolCall = (part: unknown): boolean =>
+  chatToolExecutor(part) === "harness";
+
+/**
+ * Whether the browser resolves the call. A server or harness call is run by
+ * the API or by the member's computer, so the browser never answers it with
+ * an output; a call stored before ownership was recorded reads as the
+ * browser's, as it always has.
+ */
+export const isBrowserResolvedChatToolCall = (part: unknown): boolean => {
+  const executor = chatToolExecutor(part);
+  switch (executor) {
+    case "server":
+    case "harness":
+      return false;
+    case "client":
+    case null:
+      return true;
+    default:
+      executor satisfies never;
+      return panic(`Unknown chat tool executor: ${String(executor)}`);
+  }
+};
 
 /**
  * Title a thread is persisted with until its first message generates a real

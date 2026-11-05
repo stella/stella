@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
 import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
@@ -78,6 +79,131 @@ export const DESKTOP_RUNNER_LIMITS = {
   maxSocketsPerAccount: 4,
 } as const satisfies DesktopRunnerLimits;
 
+/** Where a desktop opens its runner socket (`wss://<api>/v1/desktop/runner`). */
+export const DESKTOP_RUNNER_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/runner` as const;
+
+/**
+ * The installation id the desktop already reports with its presence. The
+ * credential binds the device key; this names the installation the key runs
+ * in, so runs can be bound to both.
+ */
+export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
+
+/**
+ * Why the API closed a runner socket. A desktop reconnects after every code
+ * except `upgradeRequired` (until it is updated) and `superseded` (another
+ * socket of the same installation took over). Refusals before the upgrade are
+ * HTTP answers instead: 400 without a valid installation id, 401 or 403 from
+ * account and device-proof authorization, 403 with code `feature_disabled`
+ * for an account without the runner feature, 426 without a WebSocket upgrade,
+ * 429 above the account's socket cap, 503 while the task drains.
+ *
+ * - `goingAway`: the API task is draining or the socket reached its maximum
+ *   life; a `reconnect` frame with the delay to wait precedes it.
+ * - `unsupportedData`: a binary frame; the protocol is JSON text.
+ * - 1008, `policyViolation(reason)`: a frame the contract rejects
+ *   (`not_json`, `unknown_type`, `invalid`), a message before `hello`
+ *   (`hello_required`), a second `hello` (`hello_repeated`), a run message its
+ *   run's state does not allow (`run_state`), a chunk that is not a valid
+ *   AG-UI event or pauses for a question without a UUID request id
+ *   (`unfoldable_chunk`), or a run message past what one run may
+ *   store (`run_limit`; the API ends that run as lost).
+ * - `tooLarge`: a frame above `DESKTOP_RUNNER_MAX_FRAME_BYTES`.
+ * - `overloaded`: the desktop sent frames faster than they could be stored.
+ * - `internalError`: the API could not persist or read what it needed; the
+ *   desktop resends everything after its last `ack`.
+ * - `upgradeRequired`: `hello` named a protocol outside the accepted range;
+ *   an `upgrade_required` frame with the range precedes it.
+ * - `superseded`: a newer socket of the same installation and device key
+ *   was accepted.
+ * - `heartbeatTimeout`: pings went unanswered.
+ * - `sequenceGap`: a run message skipped a position; `welcome.resume` on the
+ *   next socket says where to resume.
+ * - `helloTimeout`: no `hello` arrived in time.
+ * - `unknownRun`: a run message for a run this socket does not hold.
+ * - `tooManyRunners`: the account holds as many installations as it may, and
+ *   none can make room.
+ * - `credentialRevoked`: the device key's credential was revoked, expired or
+ *   unlinked; the desktop must link again.
+ * - `featureDisabled`: the account no longer has the runner feature.
+ */
+export const DESKTOP_RUNNER_CLOSE = {
+  goingAway: { code: 1001, reason: "going_away" },
+  unsupportedData: { code: 1003, reason: "binary_frame" },
+  tooLarge: { code: 1009, reason: "too_large" },
+  internalError: { code: 1011, reason: "internal_error" },
+  overloaded: { code: 1013, reason: "overloaded" },
+  upgradeRequired: { code: 4001, reason: "upgrade_required" },
+  superseded: { code: 4002, reason: "superseded" },
+  heartbeatTimeout: { code: 4003, reason: "heartbeat_timeout" },
+  sequenceGap: { code: 4004, reason: "sequence_gap" },
+  helloTimeout: { code: 4005, reason: "hello_timeout" },
+  unknownRun: { code: 4006, reason: "unknown_run" },
+  tooManyRunners: { code: 4007, reason: "too_many_runners" },
+  credentialRevoked: { code: 4008, reason: "credential_revoked" },
+  featureDisabled: { code: 4009, reason: "feature_disabled" },
+} as const;
+export const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
+
+/** The reason a `policyViolation` close carries. */
+export const DESKTOP_RUNNER_POLICY_REASONS = [
+  "not_json",
+  "unknown_type",
+  "invalid",
+  "hello_required",
+  "hello_repeated",
+  "run_state",
+  "unfoldable_chunk",
+  "run_limit",
+] as const;
+type DesktopRunnerPolicyReason = (typeof DESKTOP_RUNNER_POLICY_REASONS)[number];
+
+export type DesktopRunnerClose =
+  | (typeof DESKTOP_RUNNER_CLOSE)[keyof typeof DESKTOP_RUNNER_CLOSE]
+  | {
+      code: typeof DESKTOP_RUNNER_POLICY_VIOLATION_CODE;
+      reason: DesktopRunnerPolicyReason;
+    };
+
+export const policyViolation = (
+  reason: DesktopRunnerPolicyReason,
+): DesktopRunnerClose => ({
+  code: DESKTOP_RUNNER_POLICY_VIOLATION_CODE,
+  reason,
+});
+
+/** How long the gateway waits for things and how long it holds them. */
+export type DesktopRunnerTiming = {
+  /** Between pings; two unanswered intervals close the socket. */
+  readonly pingIntervalMs: number;
+  /** A socket's life before the API asks the desktop to reconnect. */
+  readonly maxSocketLifeMs: number;
+  /** Before a socket that sent no `hello` is closed. */
+  readonly helloTimeoutMs: number;
+  /** A run's lease, renewed by every heartbeat of the socket holding it. */
+  readonly leaseMs: number;
+  /** How recently a runner must have been seen for routing to pick it. */
+  readonly runnerFreshnessMs: number;
+  /** Between sweeps for expired leases and commands a doorbell missed. */
+  readonly sweepIntervalMs: number;
+  /** Upper bound of the `reconnect` delay spread over a draining task's sockets. */
+  readonly drainSpreadMs: number;
+  /** A run's MCP token is refreshed when it has less than this left. */
+  readonly tokenRefreshMarginMs: number;
+};
+
+export const DESKTOP_RUNNER_TIMING = {
+  pingIntervalMs: 20_000,
+  maxSocketLifeMs: 60 * 60_000,
+  helloTimeoutMs: 10_000,
+  leaseMs: 90_000,
+  runnerFreshnessMs: 60_000,
+  sweepIntervalMs: 15_000,
+  drainSpreadMs: 30_000,
+  tokenRefreshMarginMs: 5 * 60_000,
+} as const satisfies DesktopRunnerTiming;
+
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   hello: "hello",
   harnessStatus: "harness.status",
@@ -95,6 +221,7 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runStart: "run.start",
   runInput: "run.input",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -107,7 +234,22 @@ export const DESKTOP_RUNNER_HARNESS_STATE = {
   limitUntil: "limit_until",
   notInstalled: "not_installed",
   unsupported: "unsupported",
+  unavailable: "unavailable",
 } as const;
+
+/**
+ * Why an installed harness could not be checked, so it is neither offered nor
+ * called unsupported: the desktop only knows that it cannot run it right now.
+ *
+ * - `harness_failed`: the harness did not start, exited or stopped answering.
+ * - `unexpected_answer`: the harness answered in a way the desktop cannot read.
+ * - `probe_failed`: the desktop's own harness host could not ask it.
+ */
+export const DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS = [
+  "harness_failed",
+  "unexpected_answer",
+  "probe_failed",
+] as const;
 
 /** What a ready harness reports it can do; the API never assumes more. */
 export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
@@ -117,16 +259,22 @@ export const DESKTOP_RUNNER_HARNESS_CAPABILITIES = [
   "image_input",
 ] as const;
 
-/** Why a desktop refused a run command. */
+/**
+ * Why a desktop refused a run command. `harness_unavailable` matches a harness
+ * reported `unavailable`; `run_too_large` is a `run.start` the desktop cannot
+ * hand to its harness host whole, which no retry on that computer fixes.
+ */
 export const DESKTOP_RUNNER_REJECT_REASONS = [
   "harness_not_installed",
   "harness_needs_login",
   "harness_limited",
   "harness_unsupported",
+  "harness_unavailable",
   "harness_version_unavailable",
   "model_unavailable",
   "policy_unsupported",
   "at_capacity",
+  "run_too_large",
   "unknown_run",
 ] as const;
 
@@ -159,6 +307,28 @@ export const DESKTOP_RUNNER_RUN_OUTCOMES = [
 export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
+/**
+ * How much a local run asks before it acts, chosen per thread.
+ * - `ask`: edits inside the run workspace go ahead; commands and anything
+ *   else are asked about.
+ * - `auto`: the harness decides what is safe to do on its own and asks
+ *   about the rest.
+ * - `full_auto`: everything inside the harness's OS sandbox (writes confined
+ *   to the run workspace and its caches) runs without asking; leaving the
+ *   sandbox is always asked about. A desktop that cannot sandbox the
+ *   harness does not offer it.
+ */
+export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const;
+export type DesktopRunnerApprovalMode =
+  (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number];
+/** The mode every harness supports, and a thread's mode until one is chosen. */
+export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
+  "ask" satisfies DesktopRunnerApprovalMode;
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
@@ -168,6 +338,68 @@ const MAX_MESSAGE_TYPE_LENGTH = 64;
 
 const listsOnce = (keys: readonly string[]) =>
   new Set(keys).size === keys.length;
+
+/**
+ * What one `run.answer` may carry. A run asks a blocking question as a chunk
+ * whose `RUN_FINISHED` interrupt has `metadata.kind: "question"`; the answers
+ * name each question by its id. Lengths are UTF-16 code units, as JavaScript
+ * counts them.
+ */
+export const DESKTOP_RUNNER_ANSWER_LIMITS = {
+  maxQuestions: 32,
+  maxAnswersPerQuestion: 64,
+  maxAnswerLength: 16_384,
+  maxQuestionIdLength: 256,
+} as const;
+
+/** The keys `v.record` leaves out of what it parses, without an issue. */
+const RECORD_DROPPED_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+/**
+ * The id a blocking question names one of its questions by, in the pause
+ * that asks it and in the answers alike. Answers are a record keyed by this
+ * id, so an id the record would drop could never be answered.
+ */
+export const desktopRunnerQuestionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
+  v.check(
+    (id) => !RECORD_DROPPED_KEYS.has(id),
+    "A question id must survive as an answer key",
+  ),
+);
+
+/**
+ * Answers to a blocking question, keyed by question id: option labels or
+ * free text. A question may be answered by several options.
+ */
+export const desktopRunnerQuestionAnswersSchema = v.pipe(
+  v.record(
+    desktopRunnerQuestionIdSchema,
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswerLength),
+        ),
+      ),
+      v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswersPerQuestion),
+    ),
+  ),
+  v.check(
+    (answers) =>
+      Object.keys(answers).length <= DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions,
+    `At most ${String(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions)} questions are answered at once`,
+  ),
+);
+export type DesktopRunnerQuestionAnswers = v.InferOutput<
+  typeof desktopRunnerQuestionAnswersSchema
+>;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -221,6 +453,21 @@ const harnessReportSchema = v.variant("state", [
         "Capabilities are listed once",
       ),
     ),
+    /**
+     * The approval modes this desktop can run the harness in. A desktop or a
+     * stored report from before modes existed offers the default alone.
+     */
+    approvalModes: v.optional(
+      v.pipe(
+        v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
+        v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
+        v.check(
+          (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
+          "Every harness supports the default approval mode",
+        ),
+      ),
+      [DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE],
+    ),
     models: v.pipe(
       v.array(harnessModelSchema),
       v.minLength(1),
@@ -251,6 +498,11 @@ const harnessReportSchema = v.variant("state", [
     state: v.literal(DESKTOP_RUNNER_HARNESS_STATE.unsupported),
     /** `null` when this desktop cannot run the harness at any version. */
     version: v.nullable(desktopVersionSchema),
+  }),
+  v.object({
+    id: harnessSchema,
+    state: v.literal(DESKTOP_RUNNER_HARNESS_STATE.unavailable),
+    reason: v.picklist(DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS),
   }),
 ]);
 export type DesktopRunnerHarnessReport = v.InferOutput<
@@ -392,6 +644,7 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -411,6 +664,16 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; `requestId` is the id of
+   * the question's interrupt in the run's chunks.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt),

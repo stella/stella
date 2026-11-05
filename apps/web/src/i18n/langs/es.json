@@ -40,7 +40,6 @@
     "organizationId": "ID de la organización",
     "organizationLeft": "Has salido de la organización.",
     "planAndUsage": "Plan y uso",
-    "title": "Administración de la organización",
     "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Ver en la resolución",
+      "unverified": "Cita no verificada",
+      "unverifiedHint": "Las resoluciones citadas no contienen este texto palabra por palabra",
       "verified": "Cita verificada",
       "verifiedHint": "Palabra por palabra en {source}"
     },
@@ -1686,18 +1687,35 @@
       "errorNeedsLogin": "El agente de programación de tu ordenador necesita que vuelvas a iniciar sesión. Inicia sesión desde stella desktop y vuelve a intentarlo.",
       "errorUnavailable": "Tu ordenador dejó de procesar esta respuesta. Comprueba que stella desktop esté abierto y conectado, y vuelve a intentarlo.",
       "onThisComputer": "{harness} en este ordenador",
+      "permissionAskDescription": "Edita por su cuenta los archivos de la carpeta de ejecución; pregunta antes de cualquier otra cosa.",
+      "permissionAutoDescription": "Hace por su cuenta lo que considera seguro; pregunta por el resto.",
+      "permissionFullAuto": "Totalmente automático",
+      "permissionFullAutoDescription": "Nunca pregunta por nada dentro de la carpeta de ejecución; siempre pregunta antes de cambiar tu ordenador.",
+      "permissionSandboxed": "Se ejecuta en un entorno aislado; pregunta antes de cambiar tu ordenador.",
+      "permissionUnavailable": "No disponible en este ordenador",
+      "permissions": "Permisos",
       "refusalConflictingRunMode": "Esta solicitud pide ejecutarse a la vez con el agente en la nube y en tu ordenador. Elige uno en Ejecutar en.",
       "refusalHarnessUnavailable": "El agente de programación de tu ordenador no puede atender esta solicitud ahora. Revísalo en stella desktop.",
       "refusalModelUnavailable": "El agente de programación de tu ordenador ya no ofrece este modelo. Elige otro en Ejecutar en.",
       "refusalNoComputer": "Ninguno de tus ordenadores está conectado. Abre stella desktop y vuelve a enviar.",
+      "refusalPermissionUnavailable": "El agente de programación de tu ordenador no puede ejecutarse con estos permisos. Elige otra opción en Permisos.",
       "refusalTooLarge": "Esta conversación es demasiado larga para pasarla a tu ordenador. Empieza un chat nuevo para ejecutarla allí.",
       "refusalUnavailable": "Ejecutar chats en tu ordenador no está disponible para tu cuenta.",
       "runOn": "Ejecutar en",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Límite alcanzado hasta {time}",
       "stateNeedsLogin": "Hay que iniciar sesión",
       "stateNotInstalled": "No instalado",
       "stateOffline": "Ordenador sin conexión",
-      "stateUnsupported": "Esta versión no es compatible"
+      "stateUnavailable": "No disponible por ahora",
+      "stateUnsupported": "Esta versión no es compatible",
+      "waitingForComputer": "Esperando a que tu ordenador se vuelva a conectar…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Elija todas las que correspondan",
+      "dismiss": "Descartar y detener",
+      "secretAnswer": "Respuesta oculta",
+      "secretPlaceholder": "Su respuesta permanece oculta"
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat espera su respuesta} other {# chats esperan su respuesta}}",
@@ -1905,7 +1923,7 @@
       "unavailable": "No se pudo seleccionar un gráfico. Se muestra la tabla.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Trabajando con contexto",
+    "thinking": "Razonando",
     "threadFiles": {
       "title": "Archivos de este chat"
     },
@@ -2033,6 +2051,11 @@
       "replyReadyBody": "stella terminó de responder en tu chat.",
       "replyReadyTitle": "Respuesta lista"
     },
+    "turnStatus": {
+      "waitingForApproval": "Esperando aprobación",
+      "waitingForInput": "Esperando información",
+      "writing": "Redactando"
+    },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
     "usageFallbackNotice": "Se agotó la asignación diaria de IA: las respuestas continúan con el modelo estándar.",
@@ -2041,7 +2064,6 @@
       "answer": "Resumen de la búsqueda web",
       "answerDisclaimer": "Síntesis de los resultados web públicos que aparecen abajo. Contrástela con las fuentes enlazadas.",
       "fetchedFrom": "de {source}",
-      "openSource": "Abrir {source} en una pestaña nueva",
       "sources": "Fuentes",
       "toggleDescription": "Permitir que el modelo busque en la web pública y lea páginas para esta conversación.",
       "toggleLabel": "Búsqueda web",
@@ -2395,6 +2417,7 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
+    "openInSidePanel": "Abrir en el panel lateral",
     "openInStella": "Abrir en stella",
     "openOriginalSource": "Abrir fuente original",
     "options": "Opciones",
@@ -2788,6 +2811,11 @@
       "taxIdSchemeNone": "Sin validación de la identificación fiscal",
       "title": "Importar contactos",
       "undoImport": "Deshacer importación ({count})",
+      "undoImportConfirm": "¿Eliminar permanentemente {count, plural, one {el contacto creado} many {los # contactos creados} other {los # contactos creados}} por esta importación? Esta acción no se puede deshacer.",
+      "undoImportTitle": "¿Deshacer esta importación?",
+      "undoneRow": "Eliminado al deshacer",
+      "undoneSummary": "Al deshacer se {count, plural, one {eliminó # contacto creado} many {eliminaron # contactos creados} other {eliminaron # contactos creados}} por esta importación.",
+      "undoneToast": "Importación deshecha: {count, plural, one {# contacto eliminado} many {# contactos eliminados} other {# contactos eliminados}}",
       "validateFailed": "No se han podido comprobar estos contactos.",
       "warning": {
         "ignored_populated_column": "La columna «{column}» contiene datos, pero se ignora.",
@@ -3229,7 +3257,6 @@
     "noFileInVersion": "No hay ningún archivo en esta versión",
     "noFullScreenPreview": "Este tipo de archivo no tiene vista previa a pantalla completa.",
     "noLabel": "Sin etiqueta",
-    "openInSidePanel": "Abrir en el panel lateral",
     "redlinePreview": "Cambios controlados",
     "removeLabel": "Eliminar etiqueta",
     "saveComparison": "Guardar comparación",
@@ -5757,7 +5784,6 @@
     "leadingDecisionsExplanation": "La primera mención en cada resolución, ordenada por autoridad de cita: citas recibidas ponderadas y ajustadas según la jerarquía del tribunal, el sentido de la cita y su antigüedad.",
     "noVersionInForce": "Ninguna versión de esta norma estaba vigente en la fecha elegida.",
     "openEnded": "actualidad",
-    "openProvision": "Abrir la disposición",
     "outline": "Índice",
     "outlineJumpLabel": "Ir a una disposición",
     "outlineJumpPlaceholder": "§ 10 o un título",
@@ -6536,6 +6562,9 @@
       "calculating": "Calculando...",
       "errored": "Error",
       "formatNotSupported": "Formato no compatible",
+      "recordChoose": "{count, plural, one {Confirmar # coincidencia} many {Elegir entre # coincidencias} other {Elegir entre # coincidencias}}",
+      "recordCount": "{count, plural, one {# registro} many {# registros} other {# registros}}",
+      "recordNotFound": "No encontrado",
       "selectAValue": "Seleccione un valor",
       "selectValues": "Seleccione valores",
       "wholeNumberOnly": "Introduzca un número entero"
@@ -7228,6 +7257,7 @@
       "previewSubject": "Pruébalo en una muestra",
       "previewUnsupported": "Vista previa no compatible con este tipo de documento.",
       "readingFrom": "La IA lee de",
+      "record": "Registro",
       "referencesItself": "La propiedad se referencia a sí misma a través de otras propiedades",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",

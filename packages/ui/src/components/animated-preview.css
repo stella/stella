@@ -124,7 +124,9 @@ span[data-slot="animated-preview"] {
         calc(var(--animated-preview-carry-y) - 0.375rem)
       )
       rotate(2.5deg) scale(1.05);
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+    filter: drop-shadow(
+      0 8px 10px color-mix(in srgb, var(--color-black) 28%, transparent)
+    );
   }
 
   64% {
@@ -133,7 +135,9 @@ span[data-slot="animated-preview"] {
         calc(var(--animated-preview-carry-y) - 0.375rem)
       )
       rotate(2.5deg) scale(1.05);
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+    filter: drop-shadow(
+      0 8px 10px color-mix(in srgb, var(--color-black) 28%, transparent)
+    );
   }
 
   74%,

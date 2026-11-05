@@ -640,7 +640,7 @@ const FormatMarkerHint = ({
     return (
       <p className="text-muted-foreground text-xs">
         {t("templates.fieldLookupFormatDefaultMarker")}
-        <code className="bg-muted ms-1 rounded px-1 py-0.5">
+        <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
           {`{{${fieldPath}}}`}
         </code>
       </p>
@@ -652,7 +652,7 @@ const FormatMarkerHint = ({
   return (
     <p className="text-muted-foreground text-xs">
       {t("templates.fieldLookupFormatMarker")}
-      <code className="bg-muted ms-1 rounded px-1 py-0.5">
+      <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
         {`{{${fieldPath}.${trimmedKey}}}`}
       </code>
     </p>
@@ -1116,7 +1116,7 @@ export const FieldConfigEditor = ({
       )}
     >
       {!embedded && (
-        <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
+        <p className="bg-muted/60 text-muted-foreground rounded-sm px-3 py-2 text-xs leading-relaxed">
           <code>{field.path}</code>
         </p>
       )}

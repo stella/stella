@@ -1,6 +1,7 @@
-import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
+import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -12,7 +13,7 @@ import {
  * A stand-in for `codex app-server` that replays a handwritten transcript
  * over real stdio, so the adapter's process, framing and protocol handling
  * run unmodified in tests without a model provider. Every message it
- * receives is appended to `$FAKE_CODEX_LOG` for the test to inspect.
+ * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect.
  *
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
@@ -37,7 +38,10 @@ type FakeStep =
   | { sleep: number }
   | { exit: number };
 
-const USER_AGENT = "stella/0.165.0 (Mac OS 27.0; arm64) test";
+const userAgent = (version: string) =>
+  `stella/${version} (Mac OS 27.0; arm64) test`;
+/** A version older than the bundled compatibility policy supports. */
+export const FAKE_OUTDATED_VERSION = "0.150.0";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
 const FAKE_TURN_ID = "turn-1";
@@ -47,11 +51,14 @@ const signedIn = {
   requiresOpenaiAuth: false,
 };
 
-const handshake = (account: unknown = signedIn): FakeStep[] => [
+const handshake = (
+  account: unknown = signedIn,
+  version = "0.166.0",
+): FakeStep[] => [
   {
     expect: "initialize",
     result: {
-      userAgent: USER_AGENT,
+      userAgent: userAgent(version),
       codexHome: "/fake-home",
       platformFamily: "unix",
       platformOs: "macos",
@@ -147,6 +154,56 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
   questions: null,
   ...extra,
 });
+
+/** The selected model was at capacity: the turn ends and may continue. */
+const OVERLOADED = {
+  message: "Selected model is at capacity. Please try a different model.",
+  codexErrorInfo: "serverOverloaded",
+  additionalDetails: null,
+};
+const CONTINUED_TURN_ID = "turn-2";
+
+const continuedTurn = (status: string, error: unknown = null) => ({
+  id: CONTINUED_TURN_ID,
+  items: [],
+  status,
+  error,
+  startedAt: 2,
+});
+
+/** A continuation: `turn/start` on the same thread, then its outcome. */
+const continuation = (outcome: FakeStep[]): FakeStep[] => [
+  { expect: "turn/start", result: { turn: continuedTurn("inProgress") } },
+  ...outcome,
+];
+
+/** A command the harness asks to run, declined, then the turn's answer. */
+const commandApproval = (reason: string | null): FakeStep[] => [
+  ...freshTurn(),
+  item("started", {
+    ...command("call-rm", "inProgress"),
+    command: "rm draft.md",
+  }),
+  {
+    request: "item/commandExecution/requestApproval",
+    params: {
+      kind: "command",
+      threadId: FAKE_THREAD_ID,
+      turnId: FAKE_TURN_ID,
+      itemId: "call-rm",
+      startedAtMs: 1,
+      environmentId: null,
+      reason,
+      command: "rm draft.md",
+    },
+  },
+  item("completed", {
+    ...command("call-rm", "declined"),
+    command: "rm draft.md",
+  }),
+  item("completed", agentMessage("m-2", "Left it in place.")),
+  completed(),
+];
 
 const FAKE_SCENARIOS = {
   /**
@@ -295,32 +352,9 @@ const FAKE_SCENARIOS = {
     },
     completed(),
   ],
-  approval: [
-    ...freshTurn(),
-    item("started", {
-      ...command("call-rm", "inProgress"),
-      command: "rm draft.md",
-    }),
-    {
-      request: "item/commandExecution/requestApproval",
-      params: {
-        kind: "command",
-        threadId: FAKE_THREAD_ID,
-        turnId: FAKE_TURN_ID,
-        itemId: "call-rm",
-        startedAtMs: 1,
-        environmentId: null,
-        reason: "Deletes a file",
-        command: "rm draft.md",
-      },
-    },
-    item("completed", {
-      ...command("call-rm", "declined"),
-      command: "rm draft.md",
-    }),
-    item("completed", agentMessage("m-2", "Left it in place.")),
-    completed(),
-  ],
+  approval: commandApproval("Deletes a file"),
+  /** A harness that gives no reason, here as an empty one. */
+  approval_without_reason: commandApproval(""),
   blocking_question: [
     ...freshTurn(),
     {
@@ -485,6 +519,11 @@ const FAKE_SCENARIOS = {
     },
   ],
   signed_out: handshake({ account: null, requiresOpenaiAuth: true }),
+  /** Signed in, at a version the bundled policy refuses. */
+  outdated: [
+    ...handshake(signedIn, FAKE_OUTDATED_VERSION),
+    { expect: "model/list", result: { data: [], nextCursor: null } },
+  ],
   auth_expired: [
     ...freshTurn(),
     completed("failed", {
@@ -537,7 +576,63 @@ const FAKE_SCENARIOS = {
       additionalDetails: null,
     }),
   ],
+  capacity_retry: [
+    ...freshTurn(),
+    completed("failed", OVERLOADED),
+    ...continuation([
+      {
+        notify: "item/completed",
+        params: {
+          threadId: FAKE_THREAD_ID,
+          turnId: CONTINUED_TURN_ID,
+          item: agentMessage("m-r", "Recovered."),
+        },
+      },
+      {
+        notify: "turn/completed",
+        params: { threadId: FAKE_THREAD_ID, turn: continuedTurn("completed") },
+      },
+    ]),
+  ],
+  capacity_exhausted: [
+    ...freshTurn(),
+    completed("failed", OVERLOADED),
+    ...Array.from({ length: 5 }, () =>
+      continuation([
+        {
+          notify: "turn/completed",
+          params: {
+            threadId: FAKE_THREAD_ID,
+            turn: continuedTurn("failed", OVERLOADED),
+          },
+        },
+      ]),
+    ).flat(),
+  ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** One blocking question asking two questions under one id. */
+  question_twice_named: [
+    ...freshTurn(),
+    {
+      request: "item/tool/requestUserInput",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-twice",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: ["Czech", "Slovak"].map((law) => ({
+          id: "law",
+          header: "Governing law",
+          question: `Does ${law} law govern the lease?`,
+          isOther: true,
+          isSecret: false,
+          options: null,
+        })),
+      },
+    },
+    { sleep: 5000 },
+  ],
   crash: [
     ...freshTurn(),
     item("started", command("call-x", "inProgress")),
@@ -627,72 +722,27 @@ const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
   method: v.optional(v.string()),
 });
-type Incoming = v.InferOutput<typeof IncomingSchema>;
 
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
 ) => {
-  const requests: Incoming[] = [];
-  const responses: Incoming[] = [];
-  const state: { wake: (() => void) | null; closed: boolean } = {
-    wake: null,
-    closed: false,
-  };
-  const write = (message: object) => {
-    process.stdout.write(`${JSON.stringify(message)}\n`);
-  };
-  const wakeReader = () => {
-    const wake = state.wake;
-    state.wake = null;
-    if (wake !== null) {
-      wake();
-    }
-  };
-
-  const reading = (async () => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const bytes of Bun.stdin.stream()) {
-      buffer += decoder.decode(bytes, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        const raw: unknown = JSON.parse(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-        log({ received: raw });
-        const message = v.parse(IncomingSchema, raw);
-        if (message.method !== undefined && message.id !== undefined) {
-          requests.push(message);
-        } else if (message.method === undefined) {
-          responses.push(message);
-        }
-        wakeReader();
+  const { reading, take, write } = openFakeHarnessPeer({
+    schema: IncomingSchema,
+    queueOf: (message) => {
+      if (message.method === undefined) {
+        return "responses";
       }
-    }
-    state.closed = true;
-    wakeReader();
-  })();
-
-  const take = async (queue: Incoming[]): Promise<Incoming | null> => {
-    for (;;) {
-      const message = queue.shift();
-      if (message !== undefined) {
-        return message;
-      }
-      if (state.closed) {
-        return null;
-      }
-      const { promise, resolve } = Promise.withResolvers<undefined>();
-      state.wake = () => resolve(undefined);
-      await promise;
-    }
-  };
+      // A notification from the client needs no answer.
+      return message.id === undefined ? null : "requests";
+    },
+    log,
+  });
 
   let serverRequestId = 1000;
   for (const step of steps) {
     if ("expect" in step) {
-      const message = await take(requests);
+      const message = await take("requests");
       if (message === null) {
         return;
       }
@@ -714,11 +764,11 @@ const run = async (
         method: step.request,
         params: step.params,
       });
-      if (step.wait !== false && (await take(responses)) === null) {
+      if (step.wait !== false && (await take("responses")) === null) {
         return;
       }
     } else if ("awaitResponse" in step) {
-      if ((await take(responses)) === null) {
+      if ((await take("responses")) === null) {
         return;
       }
     } else if ("ignoreTerm" in step) {
@@ -739,12 +789,27 @@ const run = async (
 
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
-  const logPath = process.env["FAKE_CODEX_LOG"] ?? "";
-  const log = (entry: object) => {
-    appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
-  };
+  const log = fakeHarnessLog();
   log({
-    startup: { codexHome: process.env["CODEX_HOME"], cwd: process.cwd() },
+    startup: {
+      codexHome: process.env["CODEX_HOME"],
+      cwd: process.cwd(),
+      pid: process.pid,
+      /** What follows the scenario: the launch's own arguments. */
+      args: process.argv.slice(3),
+      /** Where the turn points package managers' caches. */
+      packageCache: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) =>
+          Object.hasOwn(PACKAGE_CACHE_FOLDERS, name),
+        ),
+      ),
+      /** The variables a launch may set or remove. */
+      launchEnvironment: Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([name]) => name.startsWith("STELLA_") || name === "OPENAI_API_KEY",
+        ),
+      ),
+    },
   });
   if (!isScenario(scenario)) {
     log({ unknownScenario: scenario });

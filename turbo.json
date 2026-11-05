@@ -113,7 +113,7 @@
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "$TURBO_ROOT$/apps/web/package.json",
-        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
+        "$TURBO_ROOT$/packages/{ai-catalog,api-contract,boe,brand,business-registries,cli,chat-limits,country-codes,errors,infosoud,money,permissions,portable-path,sha256,skills,template-packs,time}/**",
         "$TURBO_ROOT$/packages/typescript-config/base.json",
         "!$TURBO_ROOT$/apps/**/node_modules/**",
         "!$TURBO_ROOT$/apps/**/.cache/**",
@@ -562,6 +562,7 @@
         "$TURBO_ROOT$/oxlint.tailwind.config.ts",
         "$TURBO_ROOT$/scripts/generate-tailwind-classes.ts",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/patches/oxlint-tailwindcss@1.16.0.patch",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/bun.lock"
@@ -790,8 +791,16 @@
       "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    // The WebView baseline scans every bundled package; the pre-paint colours
+    // are pinned to the resolved theme and to the web's pre-paint script.
     "@stll/desktop#test": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/**"]
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+      ]
     },
     "@stll/cli#codegen:runtime": {
       "inputs": [
@@ -939,7 +948,9 @@
         "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
         // The compatibility test binds the policy to the pinned releases.
         "$TURBO_ROOT$/apps/desktop/package.json",
-        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json"
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json",
+        // The sidecar build test reads the desktop release's rebuild paths.
+        "$TURBO_ROOT$/scripts/detect-desktop-release-changes.sh"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has
@@ -1194,6 +1205,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1271,6 +1283,7 @@
         "generate:capability-runtime"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1278,6 +1291,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1430,6 +1444,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1508,6 +1523,7 @@
         "generate:capability-runtime"
       ],
       "inputs": [
+        "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
         "$TURBO_ROOT$/packages/analytics-config/**",
@@ -1515,6 +1531,7 @@
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
         "$TURBO_ROOT$/packages/boe/**",
+        "$TURBO_ROOT$/packages/brand/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/catalogue/**",
@@ -1593,6 +1610,7 @@
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/playwright-tools/**",
+        "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
         "**",
@@ -1796,8 +1814,14 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
+    },
+    // The palette test checks the colours DESIGN.md documents.
+    "@stll/brand#test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/DESIGN.md"]
     },
     // The native suite compiles files it embeds from outside the crate, so its
     // inputs are the crate plus those embeds: a web-only edit elsewhere in the
@@ -1816,6 +1840,7 @@
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
         "src/mainview/App.tsx",
+        "$TURBO_ROOT$/packages/agent-engine/src/sidecar/protocol.fixtures.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",

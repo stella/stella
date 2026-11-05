@@ -88,6 +88,8 @@ const AI_ERROR_RETRYABLE = {
   local_runner_needs_login: false,
   local_runner_limit_reached: false,
   local_runner_unavailable: true,
+  // The same conversation never fits; only a shorter one does.
+  local_runner_turn_too_large: false,
   loop_detected: false,
   deadline_exceeded: true,
   model_unavailable: false,
@@ -111,6 +113,7 @@ export const AI_ERROR_FAILURE_CODE = {
   local_runner_needs_login: "provider-error",
   local_runner_limit_reached: "provider-error",
   local_runner_unavailable: "provider-error",
+  local_runner_turn_too_large: "provider-error",
   loop_detected: "provider-error",
   deadline_exceeded: "provider-error",
   model_unavailable: "provider-error",

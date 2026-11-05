@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -150,6 +151,8 @@ type ChatThreadRecord = {
   webSearchEnabled: boolean;
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
+  /** The stored run target (`storedChatRunTarget`); null runs in the cloud. */
+  chatLocalRunTarget: ChatLocalRunTarget | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -240,6 +243,7 @@ const loadThreadAttempt = async ({
       webSearchEnabled: boolean;
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
+      chatLocalRunTarget: ChatLocalRunTarget | null;
       rollbackToken: string | null;
     };
 
@@ -260,6 +264,7 @@ const loadThreadAttempt = async ({
             webSearchEnabled: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatLocalRunTarget: true,
             rollbackToken: true,
           },
         }),
@@ -293,6 +298,7 @@ const loadThreadAttempt = async ({
           webSearchEnabled: existing.webSearchEnabled,
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
+          chatLocalRunTarget: existing.chatLocalRunTarget,
           messages: [],
           historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
@@ -514,6 +520,7 @@ const loadThreadAttempt = async ({
         webSearchEnabled: false,
         chatModel: null,
         chatReasoningEffort: null,
+        chatLocalRunTarget: null,
         messages: [],
         historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },

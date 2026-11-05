@@ -1352,6 +1352,40 @@ export const installPgliteCaseLawSitemapChanges = async (
   }
 };
 
+/**
+ * Install the ranking-signal change functions and triggers from the production
+ * migration after schema push, which creates the table but has no construct
+ * for a function or a trigger.
+ */
+export const installPgliteCaseLawRankingSignalChanges = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261104180000_case_law_ranking_signal_changes",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith(
+        'CREATE FUNCTION "case_law_citation_authority_bucket"',
+      ) ||
+      source.startsWith('CREATE FUNCTION "log_case_law_ranking_signal_') ||
+      source.startsWith('CREATE TRIGGER "case_law_decisions_ranking_signal_')
+    );
+  });
+  if (statements.length !== 7) {
+    panic(
+      "Expected the bucket function, two change functions and four triggers",
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120100_organization_member_capacity",

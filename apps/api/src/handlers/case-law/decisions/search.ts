@@ -184,6 +184,10 @@ import {
   servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import {
+  CASE_LAW_RANKING_SCAN_FIELDS,
+  indexedCaseLawCandidateRow,
+} from "@/api/lib/legal-search/case-law-indexed-candidates";
+import {
   type CorpusAggregateCacheOutcome,
   createCorpusAggregateCache,
 } from "@/api/lib/legal-search/corpus-aggregate-cache";
@@ -202,11 +206,15 @@ import {
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexRankingSignals,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusCandidateRankingInput,
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
+  ScannedProjection,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -1859,6 +1867,31 @@ type CandidateDecisionRow = Awaited<
 >["rows"][number];
 
 /**
+ * The candidate rows of a generation that stores the ranking signals, read
+ * off the scanned passages. The row shape is the database read's, so the
+ * blend, the fold and the cursor groups run unchanged on either source; a
+ * hit without a well-formed signal set is excluded like a row the database
+ * did not return.
+ */
+const indexedCandidateDecisionRows = (
+  projections: ReadonlyMap<string, ScannedProjection>,
+  ids: readonly string[],
+  generation: string,
+) =>
+  partitionReturnedCorpusRecords<CandidateDecisionRow>(
+    ids.map((id) => {
+      const projection = projections.get(id);
+      return {
+        id,
+        row:
+          projection === undefined
+            ? null
+            : indexedCaseLawCandidateRow(id, projection, generation),
+      };
+    }),
+  );
+
+/**
  * Everything a result card shows, read only for the ids the page emits. The
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
@@ -2036,6 +2069,12 @@ type RehydrateCaseLawCandidatesOptions = CorpusCandidateRankingInput & {
   generation: string;
   /** The request's record of rows read so far; only ids absent from it are read. */
   hydrated?: HydratedDecisionRows | undefined;
+  /**
+   * The scanned passages of a generation that stores the ranking signals on
+   * every passage: the candidate rows are read off them instead of from
+   * PostgreSQL (`indexedCaseLawCandidateRow`). Absent: the database read.
+   */
+  indexedProjections?: ReadonlyMap<string, ScannedProjection> | undefined;
   timeDbRead?: TimeDbRead | undefined;
   hitDispositions?: CorpusHitDispositionCounter | undefined;
   excludedGroups?: ReadonlySet<string> | undefined;
@@ -2153,6 +2192,7 @@ const rehydrateAdmitting = async (
     courtWeights,
     generation,
     hydrated = new Map(),
+    indexedProjections,
     timeDbRead = untimedDbRead,
     hitDispositions = createCorpusHitDispositionCounter(),
     excludedGroups = new Set(),
@@ -2161,21 +2201,27 @@ const rehydrateAdmitting = async (
   const ids = candidates
     .filter((candidate) => !hydrated.has(candidate.id))
     .map((candidate) => toSafeId<"caseLawDecision">(candidate.id));
-  const read =
-    ids.length === 0
-      ? { rows: [], dispositions: [] }
-      : await timeDbRead(
-          async () =>
-            await caseLawDb(
-              async (tx) =>
-                await candidateDecisionRowsQuery(tx, {
-                  admission,
-                  body,
-                  generation,
-                  ids,
-                }),
-            ),
-        );
+  const readCandidateRows = async () => {
+    if (ids.length === 0) {
+      return { rows: [], dispositions: [] };
+    }
+    if (indexedProjections !== undefined) {
+      return indexedCandidateDecisionRows(indexedProjections, ids, generation);
+    }
+    return await timeDbRead(
+      async () =>
+        await caseLawDb(
+          async (tx) =>
+            await candidateDecisionRowsQuery(tx, {
+              admission,
+              body,
+              generation,
+              ids,
+            }),
+        ),
+    );
+  };
+  const read = await readCandidateRows();
   recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
   for (const id of ids) {
     hydrated.set(id, null);
@@ -2877,7 +2923,7 @@ const TERM_COVERAGE_FAILURE_SINK = failureSink({
  * any other failure is the coverage read's. Each 5xx answer observes its
  * cause on the request itself.
  */
-const termCoverageFailure = (error: HandlerError<502 | 503>) => {
+const termCoverageFailure = (error: HandlerError<400 | 502 | 503>) => {
   // An expired budget is read first: it is never the index being down.
   const timedOut = publicReadTimeoutError(error) !== null;
   if (!timedOut && isSearchIndexUnavailable(error)) {
@@ -2888,6 +2934,44 @@ const termCoverageFailure = (error: HandlerError<502 | 503>) => {
   return timedOut
     ? publicReadTimeoutResponse(answer)
     : observedStatus(answer, error.status, { message: error.message });
+};
+
+/**
+ * Whether a search blends its candidates from the engine's hits. A
+ * generation that stores the ranking signals answers the blend from its own
+ * hits, so the candidates cost no database read; only the page is read. A
+ * filter the engine cannot apply (a provision, a category, a legal sentence)
+ * and a read spanning another generation's indexes keep the database read,
+ * which decides them per row.
+ */
+const caseLawIndexRanking = ({
+  body,
+  generation,
+  indexId,
+}: {
+  body: SearchDecisionsBody;
+  generation: string;
+  indexId: string;
+}): {
+  scanFields: readonly string[] | undefined;
+  projections: (
+    scanned: () => ReadonlyMap<string, ScannedProjection>,
+  ) => ReadonlyMap<string, ScannedProjection> | undefined;
+} => {
+  const fromIndex =
+    corpusIndexRankingSignals(
+      requireCorpusIndexManifest("case_law", generation),
+    ) !== null &&
+    body.provision === undefined &&
+    body.category === undefined &&
+    body.hasLegalSentence === undefined &&
+    !indexId.includes(",");
+  return fromIndex
+    ? {
+        scanFields: CASE_LAW_RANKING_SCAN_FIELDS,
+        projections: (scanned) => scanned(),
+      }
+    : { scanFields: undefined, projections: () => undefined };
 };
 
 export const searchCorpusIndexDecisions = async ({
@@ -3227,6 +3311,7 @@ export const searchCorpusIndexDecisions = async ({
     language: body.language,
   });
   const excerptTokens = tokenizeCorpusFreeText(body.query);
+  const indexRanking = caseLawIndexRanking({ body, generation, indexId });
 
   // The strict page and the relaxed top-up are the same scan over different
   // queries; `omit` names decisions the relaxed one must leave out.
@@ -3267,11 +3352,13 @@ export const searchCorpusIndexDecisions = async ({
           tokens: excerptTokens,
         }),
       unseenScoreUpperBound: caseLawUnseenScoreUpperBound(sort),
+      // The signals a ranking from the index reads off each hit.
+      scanFields: indexRanking.scanFields,
       // The scan names the groups to leave out: a page addressed by offset
       // walks windows the request's own cursor never named.
       rankCandidates: async (
         candidates,
-        { excludedGroups, selectAppliedCandidates },
+        { excludedGroups, selectAppliedCandidates, scannedProjections },
       ) => {
         const ranking = await rehydrateCaseLawCandidates({
           hitDispositions,
@@ -3282,6 +3369,7 @@ export const searchCorpusIndexDecisions = async ({
           courtWeights,
           generation,
           hydrated,
+          indexedProjections: indexRanking.projections(scannedProjections),
           excludedGroups,
           timeDbRead: async (run) =>
             await dbTimer.time(CASE_LAW_SEARCH_DB_READ.candidates, run),

@@ -40,7 +40,6 @@
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
     "planAndUsage": "Plan and usage",
-    "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Show in decision",
+      "unverified": "Citation not verified",
+      "unverifiedHint": "The cited decisions do not contain this text word for word",
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },
@@ -1686,18 +1687,35 @@
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "onThisComputer": "{harness} on this computer",
+      "permissionAskDescription": "Edits files in the run's folder on its own; asks before anything else.",
+      "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
+      "permissionFullAuto": "Full auto",
+      "permissionFullAutoDescription": "Never asks for anything inside the run's folder; always asks before changing your computer.",
+      "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
+      "permissionUnavailable": "Not available on this computer",
+      "permissions": "Permissions",
       "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
       "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit reached until {time}",
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",
       "stateOffline": "Computer offline",
-      "stateUnsupported": "This version is not supported"
+      "stateUnavailable": "Not available right now",
+      "stateUnsupported": "This version is not supported",
+      "waitingForComputer": "Waiting for your computer to reconnect…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Choose any that apply",
+      "dismiss": "Dismiss and stop",
+      "secretAnswer": "Answer hidden",
+      "secretPlaceholder": "Your answer stays hidden"
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# chat is waiting for you} other {# chats are waiting for you}}",
@@ -1905,7 +1923,7 @@
       "unavailable": "A chart could not be selected. The table is shown.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Working with context",
+    "thinking": "Thinking",
     "threadFiles": {
       "title": "Files in this chat"
     },
@@ -2033,6 +2051,11 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnStatus": {
+      "waitingForApproval": "Waiting for approval",
+      "waitingForInput": "Waiting for input",
+      "writing": "Writing"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
     "usageFallbackNotice": "Daily AI allowance used; replies continue on the standard model.",
@@ -2041,7 +2064,6 @@
       "answer": "Web search summary",
       "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
       "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
       "sources": "Sources",
       "toggleDescription": "Let the model search the public web and read pages for this conversation.",
       "toggleLabel": "Web search",
@@ -2395,6 +2417,7 @@
     "notes": "Notes",
     "open": "Open",
     "openInNewTab": "Open in new tab",
+    "openInSidePanel": "Open in side panel",
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
     "options": "Options",
@@ -2788,6 +2811,11 @@
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
       "undoImport": "Undo import ({count})",
+      "undoImportConfirm": "Permanently delete the {count, plural, one {contact} other {# contacts}} this import created? This action cannot be undone.",
+      "undoImportTitle": "Undo this import?",
+      "undoneRow": "Removed by undo",
+      "undoneSummary": "Undo removed {count, plural, one {# contact} other {# contacts}} created by this import.",
+      "undoneToast": "Import undone: {count, plural, one {# contact} other {# contacts}} deleted",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
         "ignored_populated_column": "Column “{column}” contains data but is ignored.",
@@ -3229,7 +3257,6 @@
     "noFileInVersion": "No file in this version",
     "noFullScreenPreview": "This file type has no full-screen preview.",
     "noLabel": "No label",
-    "openInSidePanel": "Open in side panel",
     "redlinePreview": "Tracked changes",
     "removeLabel": "Remove label",
     "saveComparison": "Save comparison",
@@ -5757,7 +5784,6 @@
     "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
-    "openProvision": "Open provision",
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
@@ -6536,6 +6562,9 @@
       "calculating": "Calculating...",
       "errored": "Errored",
       "formatNotSupported": "Format not supported",
+      "recordChoose": "{count, plural, one {Confirm # match} other {Choose from # matches}}",
+      "recordCount": "{count, plural, one {# record} other {# records}}",
+      "recordNotFound": "Not found",
       "selectAValue": "Select a value",
       "selectValues": "Select values",
       "wholeNumberOnly": "Enter a whole number"
@@ -7228,6 +7257,7 @@
       "previewSubject": "Try it on a sample",
       "previewUnsupported": "Preview unsupported for this document type.",
       "readingFrom": "AI reads from",
+      "record": "Record",
       "referencesItself": "Property references itself through other properties",
       "resultType": "Result type",
       "returnsLabel": "Format",

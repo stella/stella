@@ -40,7 +40,6 @@
     "organizationId": "Organisations-ID",
     "organizationLeft": "Sie haben die Organisation verlassen.",
     "planAndUsage": "Tarif und Nutzung",
-    "title": "Organisationsverwaltung",
     "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
+      "unverified": "Zitat nicht verifiziert",
+      "unverifiedHint": "Die zitierten Entscheidungen enthalten diesen Text nicht wörtlich",
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
     },
@@ -1686,18 +1687,35 @@
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "onThisComputer": "{harness} auf diesem Computer",
+      "permissionAskDescription": "Bearbeitet Dateien im Ordner des Laufs selbst; fragt vor allem anderen nach.",
+      "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
+      "permissionFullAuto": "Vollautomatisch",
+      "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Laufs nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
+      "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
+      "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
+      "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
+      "selectionLabel": "{harness} · {model}",
       "stateLimitUntil": "Limit erreicht bis {time}",
       "stateNeedsLogin": "Anmeldung erforderlich",
       "stateNotInstalled": "Nicht installiert",
       "stateOffline": "Computer nicht verbunden",
-      "stateUnsupported": "Diese Version wird nicht unterstützt"
+      "stateUnavailable": "Derzeit nicht verfügbar",
+      "stateUnsupported": "Diese Version wird nicht unterstützt",
+      "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Alles Zutreffende auswählen",
+      "dismiss": "Verwerfen und anhalten",
+      "secretAnswer": "Antwort verborgen",
+      "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
     "matterRuns": {
       "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
@@ -1905,7 +1923,7 @@
       "unavailable": "Es konnte kein Diagramm ausgewählt werden. Die Tabelle wird angezeigt.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Arbeite mit Kontext",
+    "thinking": "Nachdenken",
     "threadFiles": {
       "title": "Dateien in diesem Chat"
     },
@@ -2033,6 +2051,11 @@
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
     },
+    "turnStatus": {
+      "waitingForApproval": "Warten auf Genehmigung",
+      "waitingForInput": "Warten auf Eingabe",
+      "writing": "Antwort wird verfasst"
+    },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
     "usageFallbackNotice": "Tägliches KI-Kontingent aufgebraucht; Antworten laufen weiter über das Standardmodell.",
@@ -2041,7 +2064,6 @@
       "answer": "Zusammenfassung der Websuche",
       "answerDisclaimer": "Zusammengefasst aus den öffentlichen Webergebnissen unten. Bitte anhand der verlinkten Quellen überprüfen.",
       "fetchedFrom": "von {source}",
-      "openSource": "{source} in neuem Tab öffnen",
       "sources": "Quellen",
       "toggleDescription": "Dem Modell erlauben, in dieser Unterhaltung im öffentlichen Web zu suchen und Seiten zu lesen.",
       "toggleLabel": "Websuche",
@@ -2395,6 +2417,7 @@
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
+    "openInSidePanel": "Im Seitenpanel öffnen",
     "openInStella": "In stella öffnen",
     "openOriginalSource": "Originalquelle öffnen",
     "options": "Optionen",
@@ -2788,6 +2811,11 @@
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
       "undoImport": "Import rückgängig machen ({count})",
+      "undoImportConfirm": "{count, plural, one {Den durch diesen Import erstellten Kontakt} other {Die # durch diesen Import erstellten Kontakte}} endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "undoImportTitle": "Diesen Import rückgängig machen?",
+      "undoneRow": "Durch Rückgängigmachen entfernt",
+      "undoneSummary": "Durch das Rückgängigmachen {count, plural, one {wurde # erstellter Kontakt} other {wurden # erstellte Kontakte}} entfernt.",
+      "undoneToast": "Import rückgängig gemacht: {count, plural, one {# Kontakt} other {# Kontakte}} gelöscht",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
       "warning": {
         "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
@@ -3229,7 +3257,6 @@
     "noFileInVersion": "Keine Datei in dieser Version",
     "noFullScreenPreview": "Für diesen Dateityp gibt es keine Vollbildvorschau.",
     "noLabel": "Keine Bezeichnung",
-    "openInSidePanel": "Im Seitenpanel öffnen",
     "redlinePreview": "Nachverfolgte Änderungen",
     "removeLabel": "Bezeichnung entfernen",
     "saveComparison": "Vergleich speichern",
@@ -5757,7 +5784,6 @@
     "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
-    "openProvision": "Vorschrift öffnen",
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
@@ -6536,6 +6562,9 @@
       "calculating": "Berechnung...",
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
+      "recordChoose": "{count, plural, one {# Treffer bestätigen} other {Aus # Treffern auswählen}}",
+      "recordCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+      "recordNotFound": "Nicht gefunden",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen",
       "wholeNumberOnly": "Ganze Zahl eingeben"
@@ -7228,6 +7257,7 @@
       "previewSubject": "Auf einem Beispiel testen",
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
+      "record": "Datensatz",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",

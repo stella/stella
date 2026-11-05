@@ -42,7 +42,7 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { APIError, isCancellation } from "@/lib/errors/api";
+import { APIError, isCancellation, isTypedCodeRefusal } from "@/lib/errors/api";
 import { isNativeFetchFailure } from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
@@ -833,6 +833,11 @@ const captureError: Analytics["captureError"] = (
   }
   // A cancelled request is expected control flow, not an operational failure.
   if (isCancellation(error)) {
+    return;
+  }
+  // A mistyped or expired code is the form's to answer, wherever it is captured:
+  // the status and code the tracker keeps cannot tell this 400 from a defect.
+  if (isTypedCodeRefusal(error)) {
     return;
   }
   // Cheap guards before the SDK call: a stray `captureError(null)`

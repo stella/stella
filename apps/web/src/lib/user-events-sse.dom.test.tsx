@@ -1,120 +1,169 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
+import {
+  chatRunsChangedRealtimeEvent,
+  newNotificationRealtimeEvent,
+  RESOURCE_TYPE,
+  resourceSetUpdatedRealtimeEvent,
+} from "@stll/api-contract";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-GlobalRegistrator.register({ url: "https://app.example.test" });
-const { act } = await import("react");
-const { cleanup, render } = await import("@testing-library/react");
-const { QueryClient, QueryClientProvider } =
-  await import("@tanstack/react-query");
-const { useUserEventsSSE } = await import("./user-events-sse");
+GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 
-/** A stream the test drives: it opens, drops and delivers on command. */
-class ScriptedEventSource extends EventTarget {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
+/** One fake stream per `new EventSource`, so a test can push frames into it. */
+class FakeEventSource extends EventTarget {
   static readonly CLOSED = 2;
-  static instances: ScriptedEventSource[] = [];
-  readyState = ScriptedEventSource.CONNECTING;
+  static readonly opened: FakeEventSource[] = [];
+  readyState = 1;
   readonly url: string;
-
   constructor(url: string) {
     super();
     this.url = url;
-    ScriptedEventSource.instances.push(this);
+    FakeEventSource.opened.push(this);
   }
-
   open() {
-    this.readyState = ScriptedEventSource.OPEN;
+    this.readyState = 1;
     this.dispatchEvent(new Event("open"));
   }
-
   /** The browser lost the connection and is retrying on its own. */
   drop() {
-    this.readyState = ScriptedEventSource.CONNECTING;
+    this.readyState = 0;
     this.dispatchEvent(new Event("error"));
   }
-
-  deliver(data: unknown) {
+  push(data: unknown) {
     this.dispatchEvent(
       new MessageEvent("message", { data: JSON.stringify(data) }),
     );
   }
-
   close() {
-    this.readyState = ScriptedEventSource.CLOSED;
+    this.readyState = FakeEventSource.CLOSED;
   }
 }
+Object.assign(globalThis, { EventSource: FakeEventSource });
 
-const originalEventSource = globalThis.EventSource;
+const { act, cleanup, renderHook } = await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
+const { activeChatRunsOptions } = await import("@/features/chat/active-runs");
+const { contactsKeys } = await import("@/lib/contacts/queries");
+const { notificationsOptions } = await import("@/lib/notification-queries");
+const { useUserEventRefreshes } = await import("./user-events-sse");
 
-beforeEach(() => {
-  ScriptedEventSource.instances = [];
-  globalThis.EventSource = ScriptedEventSource as unknown as typeof EventSource;
-});
 afterEach(() => {
   cleanup();
-  globalThis.EventSource = originalEventSource;
+  FakeEventSource.opened.length = 0;
 });
-afterAll(async () => {
-  cleanup();
-  await unregisterDomEnvironment();
-});
+afterAll(async () => await unregisterDomEnvironment());
 
-const mountStream = () => {
-  const calls = { events: [] as string[], resyncs: 0 };
-  const Subscriber = () => {
-    useUserEventsSSE("organization_firm", {
-      onEvent: (event) => {
-        calls.events.push(event.type);
-        return [];
-      },
-      onResync: () => {
-        calls.resyncs += 1;
-        return [];
-      },
-    });
-    return null;
-  };
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <Subscriber />
-    </QueryClientProvider>,
-  );
-  const stream = ScriptedEventSource.instances.at(-1);
-  if (stream === undefined) {
-    throw new Error("The hook opened no stream");
+const ORGANIZATION = "organization-one";
+const USER = "user-one";
+
+const mount = () => {
+  const queryClient = new QueryClient();
+  const contactsList = contactsKeys.list(ORGANIZATION, { q: "" });
+  const otherFirmContacts = contactsKeys.lists("organization-two");
+  const notifications = notificationsOptions({
+    organizationId: ORGANIZATION,
+    userId: USER,
+  }).queryKey;
+  const activeRuns = activeChatRunsOptions({
+    activeOrganizationId: ORGANIZATION,
+    userId: USER,
+  }).queryKey;
+  for (const key of [activeRuns, contactsList, otherFirmContacts]) {
+    queryClient.setQueryData(key, { seeded: true });
   }
-  return { calls, stream };
+  // The notification refresh trims an infinite list to its first page.
+  queryClient.setQueryData(notifications, {
+    pages: [{ items: [], nextCursor: null, limit: 20, unreadCount: 0 }],
+    pageParams: [null],
+  });
+  renderHook(
+    () => useUserEventRefreshes({ organizationId: ORGANIZATION, userId: USER }),
+    {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      ),
+    },
+  );
+  const isStale = (key: readonly unknown[]) =>
+    queryClient.getQueryState(key)?.isInvalidated === true;
+  return {
+    activeRuns,
+    contactsList,
+    isStale,
+    notifications,
+    otherFirmContacts,
+  };
 };
 
-test("the first open re-reads nothing: the queries were just fetched", () => {
-  const { calls, stream } = mountStream();
-  act(() => {
-    stream.open();
-  });
-  expect(calls.resyncs).toBe(0);
+test("the app shell opens exactly one user stream", () => {
+  mount();
+  expect(FakeEventSource.opened).toHaveLength(1);
+  expect(FakeEventSource.opened.at(0)?.url).toEndWith("/notifications/events");
 });
 
-test("every reopen after a drop re-reads what the stream keeps fresh", () => {
-  const { calls, stream } = mountStream();
-  act(() => {
-    stream.open();
-    stream.drop();
-    stream.open();
-    stream.drop();
-    stream.open();
+test("an organization contact change refreshes that firm's contacts only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened
+      .at(0)
+      ?.push(resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT));
   });
-  expect(calls.resyncs).toBe(2);
+
+  expect(view.isStale(view.contactsList)).toBe(true);
+  expect(view.isStale(view.otherFirmContacts)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
 });
 
-test("a delivered event reaches the handler and an unknown one does not", () => {
-  const { calls, stream } = mountStream();
-  act(() => {
-    stream.open();
-    stream.deliver({ type: "new-notification", data: null });
-    stream.deliver({ type: "not-a-user-event", data: null });
+test("a notification event refreshes the notifications", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(newNotificationRealtimeEvent());
   });
-  expect(calls.events).toEqual(["new-notification"]);
+
+  expect(view.isStale(view.notifications)).toBe(true);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a chat run change refreshes the active runs only", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.push(chatRunsChangedRealtimeEvent());
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
+});
+
+test("a reopen after a drop re-reads everything the stream keeps fresh", async () => {
+  const view = mount();
+  const stream = FakeEventSource.opened.at(0);
+  await act(async () => {
+    stream?.open();
+    stream?.drop();
+    stream?.open();
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(true);
+  expect(view.isStale(view.contactsList)).toBe(true);
+  expect(view.isStale(view.otherFirmContacts)).toBe(false);
+});
+
+test("a frame that is no known event refreshes nothing", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened
+      .at(0)
+      ?.push({ type: "not-a-user-event", data: null });
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(false);
+  expect(view.isStale(view.notifications)).toBe(false);
+  expect(view.isStale(view.contactsList)).toBe(false);
 });

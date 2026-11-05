@@ -9,7 +9,6 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import JSZip from "jszip";
 import * as v from "valibot";
 
 import {
@@ -52,7 +51,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -289,9 +288,8 @@ const handleMcpToolCallWithCapturedObserver = async (
  * `read_content_across_matters`'s markdown branch.
  */
 const makeDocxBytes = async (bodyText = "Signed below.") => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -310,15 +308,14 @@ const makeDocxBytes = async (bodyText = "Signed below.") => {
   <w:p><w:r><w:t>${bodyText}</w:t></w:r></w:p>
 </w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generate({ compression: "store" });
   return bytes.buffer.slice(
     bytes.byteOffset,
     bytes.byteOffset + bytes.byteLength,
@@ -1846,6 +1843,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
+      "list_case_law_courts",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -1887,6 +1885,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
+      "list_case_law_courts",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",
@@ -6561,6 +6560,51 @@ describe("OpenAI-compatible MCP tools", () => {
         expect.objectContaining({ code: "filter_dropped" }),
       );
     });
+
+    test.each([
+      [
+        [
+          "Krajský soud v Plzni",
+          "Krajský soud v Plzni – pobočka v Karlových Varech",
+        ],
+        { court: "Krajský soud v Plzni – pobočka v Karlových Varech" },
+      ],
+      [["Krajský soud v Plzni"], {}],
+    ] as const)(
+      "a branch filter with stored courts %p filters the branch or nothing, never its main court",
+      async (stored, sent) => {
+        const baseContext = createContext();
+        const result = await handleMcpToolCall({
+          args: {
+            queries: ["náhrada škody"],
+            country: "CZE",
+            courts: ["KS Plzeň pobočka Karlovy Vary"],
+          },
+          context: {
+            ...baseContext,
+            testDependencies: {
+              ...baseContext.testDependencies,
+              readCaseLawCourtNames: async () => stored,
+            },
+          },
+          toolName: "search_case_law",
+        });
+
+        const body = searchedBody();
+        expect(body["court"]).toBeUndefined();
+        expect(body["courts"]).toEqual(
+          "court" in sent ? [sent.court] : undefined,
+        );
+        if (!("court" in sent)) {
+          expect(searchWarnings(result)).toContainEqual(
+            expect.objectContaining({
+              code: "filter_dropped",
+              message: expect.stringContaining("no stored decision"),
+            }),
+          );
+        }
+      },
+    );
 
     test("a several-spelling court the court list excludes notes only the spelling sent", async () => {
       const baseContext = createContext();

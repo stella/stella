@@ -25,6 +25,7 @@ export type {
   HarnessRunPolicy,
   HarnessTurn,
   HarnessTurnInput,
+  HarnessUsageLimit,
 } from "./harness/adapter";
 export {
   HarnessProbeError,
@@ -44,6 +45,7 @@ export type {
 export { HARNESS_FAILURE_OUTCOME, harnessSessionId } from "./harness/events";
 export {
   HARNESS_CONTINUATION_EVENT,
+  HARNESS_QUESTION_TOOL,
   harnessEventsToChunks,
 } from "./harness/stream-chunks";
 export type {
@@ -57,6 +59,11 @@ export {
   preferNewerManifest,
   resolveHarnessCompatibility,
 } from "./harness/compatibility";
+export type { ClaudeCodeHarnessAdapterOptions } from "./harness/claude-code/adapter";
+export {
+  claudeCodeLaunch,
+  createClaudeCodeHarnessAdapter,
+} from "./harness/claude-code/adapter";
 export type { CodexHarnessAdapterOptions } from "./harness/codex/adapter";
 export {
   codexAppServerLaunch,

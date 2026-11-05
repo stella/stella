@@ -141,6 +141,7 @@ import {
   CLIPBOARD_ITEM_DRAG_TYPE,
   CLIPBOARD_SEARCH_OPTION_KEYS,
   CLIPBOARD_SEARCH_SCOPES,
+  clipboardActionItems,
   clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
@@ -164,10 +165,10 @@ import {
   hasClipboardPrimaryModifier,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  isClipboardSearchConfirm,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
   NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
-  shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
@@ -212,6 +213,7 @@ import {
 } from "./ClipboardGroupFields";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
+import { useClipsCopyFailed } from "./clips-copy-routing";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
@@ -1776,6 +1778,16 @@ const ClipboardApp = () => {
     },
     [observeTimelineRail],
   );
+  // Initial focus belongs to the window attaching, not to every commit: an
+  // inline ref reruns on each render and would pull focus off the body
+  // whenever an unrelated render (a deferred filter catching up) lands.
+  const attachTimeline = useCallback((node: HTMLDivElement | null) => {
+    timelineRef.current = node;
+    focusTimeline(node);
+    return () => {
+      timelineRef.current = null;
+    };
+  }, []);
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
@@ -1804,6 +1816,7 @@ const ClipboardApp = () => {
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
+  const copyFailed = useClipsCopyFailed();
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -2041,16 +2054,20 @@ const ClipboardApp = () => {
   // deferred render is pending the rail still shows the previous query's
   // list, and acting on it would hand over the wrong clip. Resolved on
   // demand inside the key handlers so the keystroke render itself never
-  // pays for a filter; identical to the rendered list once settled.
+  // pays for a filter; identical to the rendered list once settled. Outside
+  // the clips scope no clip is shown, so no key acts on one.
   const resolveActionItems = () =>
-    query === filterQuery
-      ? filteredItems
-      : filterClipboardItems(
-          snapshot.items,
-          query,
-          activeGroupId,
-          searchOptions,
-        );
+    clipboardActionItems(
+      searchSource,
+      query === filterQuery
+        ? filteredItems
+        : filterClipboardItems(
+            snapshot.items,
+            query,
+            activeGroupId,
+            searchOptions,
+          ),
+    );
   const resolveActionItem = () => {
     const items = resolveActionItems();
     return items.at(Math.min(selectedIndex, Math.max(0, items.length - 1)));
@@ -2727,13 +2744,12 @@ const ClipboardApp = () => {
         isComposing: event.isComposing,
         key: event.key,
       };
-      if (shouldCopyFromClipboardInput(inputKey)) {
-        const item = resolveActionItem();
-        if (item) {
-          event.preventDefault();
-          copyItemFromEnter(item, event.shiftKey);
-        }
-      } else if (activeItem && shouldReturnToTimelineFromInput(inputKey)) {
+      if (isClipboardSearchConfirm(inputKey)) {
+        event.preventDefault();
+      } else if (
+        resolveActionItem() &&
+        shouldReturnToTimelineFromInput(inputKey)
+      ) {
         event.preventDefault();
         selectIndex(activeIndex);
       } else if (
@@ -2911,13 +2927,15 @@ const ClipboardApp = () => {
     persistenceWarningLabel = t("imageCleanupPending");
   }
   let feedback: ReactNode = null;
-  if (appError) {
+  const feedbackMessage =
+    appError?.message ?? (copyFailed ? t("errorPaste") : null);
+  if (feedbackMessage !== null) {
     feedback = (
       <div
         className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
         role="alert"
       >
-        {appError.message}
+        {feedbackMessage}
       </div>
     );
   }
@@ -2940,10 +2958,7 @@ const ClipboardApp = () => {
       className={`${CLIPBOARD_WINDOW_CLASS} text-foreground relative flex min-h-dvh flex-col overflow-hidden outline-none`}
       aria-label={t("timeline")}
       data-active-group={activeGroup ? "" : undefined}
-      ref={(node) => {
-        timelineRef.current = node;
-        focusTimeline(node);
-      }}
+      ref={attachTimeline}
       role="application"
       style={windowStyle}
       tabIndex={-1}

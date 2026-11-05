@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.65.1",
+  "version": "0.66.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -55,6 +55,8 @@
     "./composer": "./src/components/composer.tsx",
     "./composer-tokens": "./src/components/composer-tokens.ts",
     "./context-menu": "./src/components/context-menu.tsx",
+    "./entity-actions": "./src/components/entity-actions.tsx",
+    "./native-context-menu": "./src/lib/native-context-menu.ts",
     "./document-identity-badge": "./src/components/document-identity-badge.tsx",
     "./document-identity-badge.logic": "./src/components/document-identity-badge.logic.ts",
     "./court-filter": "./src/components/court-filter.tsx",
@@ -94,8 +96,13 @@
     "./initials": "./src/lib/initials.ts",
     "./input-otp": "./src/components/input-otp.tsx",
     "./list": "./src/components/list.tsx",
+    "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",
+    "./document-mark": {
+      "react-native": "./src/components/document-mark.native.tsx",
+      "default": "./src/components/document-mark.tsx"
+    },
     "./matter-icon": {
       "react-native": "./src/components/matter-icon.native.tsx",
       "default": "./src/components/matter-icon.tsx"
@@ -174,6 +181,7 @@
       "react-native": "./src/components/text.native.tsx",
       "default": "./src/components/text.tsx"
     },
+    "./time-field": "./src/components/time-field.tsx",
     "./toast": "./src/components/toast.tsx",
     "./toggle": "./src/components/toggle.tsx",
     "./toggle-group": "./src/components/toggle-group.tsx",
