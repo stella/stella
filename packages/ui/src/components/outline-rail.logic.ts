@@ -11,6 +11,13 @@ const OUTLINE_ITEM_FIELD_EQUALS = {
   meta: (a, b) => a.meta === b.meta,
   color: (a, b) => a.color === b.color,
   emphasis: (a, b) => a.emphasis === b.emphasis,
+  portraits: (a, b) =>
+    a.portraits?.length === b.portraits?.length &&
+    (a.portraits ?? []).every((portrait, index) => {
+      const other = b.portraits?.[index];
+      return other?.image === portrait.image && other?.name === portrait.name;
+    }),
+  portraitCredit: (a, b) => a.portraitCredit === b.portraitCredit,
 } as const satisfies Record<
   keyof OutlineItem,
   (a: OutlineItem, b: OutlineItem) => boolean
