@@ -117,7 +117,7 @@ test("the wrong account sees whose session this is and can sign out", async () =
   const calls: string[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
-      calls.push(String(input));
+      calls.push(input instanceof Request ? input.url : input.toString());
       return await Promise.resolve(Response.json({ success: true }));
     },
     { preconnect: () => undefined },
