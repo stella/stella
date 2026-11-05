@@ -104,11 +104,18 @@
       "run.start",
       "run.input",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "run.token",
       "ack"
-    ]
+    ],
+    "answerLimits": {
+      "maxQuestions": 32,
+      "maxAnswersPerQuestion": 64,
+      "maxAnswerLength": 16384,
+      "maxQuestionIdLength": 256
+    }
   },
   "valid": {
     "desktop": [
@@ -527,6 +534,16 @@
         "decision": "deny"
       },
       {
+        "type": "run.answer",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+        "answers": {
+          "tone": ["Formal"],
+          "recipients": ["Court", "Opposing counsel"],
+          "deadline": ["Friday before noon"]
+        }
+      },
+      {
         "type": "run.interrupt",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001"
       },
@@ -909,6 +926,41 @@
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
           "decision": "maybe"
+        }
+      },
+      {
+        "name": "run.answer with an empty question id",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "": ["Formal"] }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not a list",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "tone": "Formal" }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not text",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "tone": [true] }
+        }
+      },
+      {
+        "name": "run.answer without answers",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1"
         }
       },
       {

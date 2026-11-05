@@ -62,19 +62,19 @@ desktop_runner_commands.id           bigint       generated,not null  desktop-ru
 desktop_runner_commands.run_id       uuid         fk,not null         desktop-runner.ts:263
 desktop_runner_commands.kind         text         not null            desktop-runner.ts:267
 desktop_runner_commands.command_key  uuid         not null            desktop-runner.ts:269  The id the command is idempotent on.
-desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:271  The server message as sent, without a token.
-desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:272
+desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:274  The server message as sent, without a token; a `run.answer` holds its answers sealed (`sealedAnswers`), never as plain text.
+desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:275
 ```
 
-## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:296 · rls
+## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:299 · rls
 
 The desktop messages of a run that take a position in its sequence (events, approval requests, the final message), each stored once and acknowledged only after…
 
 ```text
-desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:299
-desktop_runner_events.seq         bigint       not null          desktop-runner.ts:303
-desktop_runner_events.type        text         not null          desktop-runner.ts:304
-desktop_runner_events.request_id  uuid         null              desktop-runner.ts:306  Set on an approval request, so an answer can be matched to it.
-desktop_runner_events.message     jsonb        not null          desktop-runner.ts:308  The desktop message as validated.
-desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:309
+desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:302
+desktop_runner_events.seq         bigint       not null          desktop-runner.ts:306
+desktop_runner_events.type        text         not null          desktop-runner.ts:307
+desktop_runner_events.request_id  uuid         null              desktop-runner.ts:313  The request an answer is matched to: set on an approval request, and on an event whose chunk pauses the run for a blocking question (the id of the question's i…
+desktop_runner_events.message     jsonb        not null          desktop-runner.ts:315  The desktop message as validated.
+desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:316
 ```

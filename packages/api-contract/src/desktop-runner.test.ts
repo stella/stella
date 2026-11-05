@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
   DESKTOP_RUNNER_CLOSE,
@@ -127,6 +128,7 @@ describe("desktop runner fixtures", () => {
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
+      answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
     });
   });
 
@@ -172,6 +174,7 @@ describe("desktop runner fixtures", () => {
       policyViolationCode: _policyViolationCode,
       policyReasons: _policyReasons,
       timing: _timing,
+      answerLimits: _answerLimits,
       ...vocabularies
     } = fixtures.vocabulary;
     expect({ protocol, maxFrameBytes }).toEqual({
@@ -234,6 +237,60 @@ describe("desktop runner fixtures", () => {
         success: v.safeParse(desktopRunnerServerMessageSchema, message).success,
       }).toEqual({ name, success: false });
     }
+  });
+});
+
+describe("question answers", () => {
+  const answer = (answers: unknown) => ({
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+    runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+    requestId: "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+    answers,
+  });
+  const parses = (answers: unknown) =>
+    v.safeParse(desktopRunnerServerMessageSchema, answer(answers)).success;
+  const {
+    maxQuestions,
+    maxAnswersPerQuestion,
+    maxAnswerLength,
+    maxQuestionIdLength,
+  } = DESKTOP_RUNNER_ANSWER_LIMITS;
+  const questions = (count: number) =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [`q${String(index)}`, ["a"]]),
+    );
+
+  test("take each bound and refuse one past it", () => {
+    const cases: [string, unknown, unknown][] = [
+      ["questions", questions(maxQuestions), questions(maxQuestions + 1)],
+      [
+        "answers per question",
+        { tone: Array.from({ length: maxAnswersPerQuestion }, () => "a") },
+        { tone: Array.from({ length: maxAnswersPerQuestion + 1 }, () => "a") },
+      ],
+      [
+        "answer length",
+        { tone: ["a".repeat(maxAnswerLength)] },
+        { tone: ["a".repeat(maxAnswerLength + 1)] },
+      ],
+      [
+        "question id length",
+        { ["q".repeat(maxQuestionIdLength)]: ["a"] },
+        { ["q".repeat(maxQuestionIdLength + 1)]: ["a"] },
+      ],
+    ];
+    for (const [name, atBound, pastBound] of cases) {
+      expect({
+        name,
+        atBound: parses(atBound),
+        past: parses(pastBound),
+      }).toEqual({ name, atBound: true, past: false });
+    }
+  });
+
+  test("count lengths in UTF-16 code units", () => {
+    // Two UTF-8 bytes each, one code unit: the bound is on code units.
+    expect(parses({ tone: ["é".repeat(maxAnswerLength)] })).toBe(true);
   });
 });
 

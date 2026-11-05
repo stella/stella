@@ -20,7 +20,7 @@ use super::sidecar_host::{
 };
 use super::tests::{Connection, Gateway, Setup};
 use crate::harness_sidecar::tests::Fixture;
-use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar, RUN_OUTPUT_QUEUE};
+use crate::harness_sidecar::{HarnessLaunchSettings, HarnessSidecar};
 use crate::runner_protocol::{ApprovalDecision, Harness, RunApproval};
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -33,6 +33,7 @@ const MODELS: &[&str] = &[
   "wait",
   "interruptible",
   "approve",
+  "ask",
   "needs-login",
   "crash",
   "flood-later",
@@ -427,7 +428,7 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
 }
 
 #[test]
-fn approvals_interrupts_and_cancels_reach_the_harness_and_its_end_comes_back() {
+fn approvals_answers_interrupts_and_cancels_reach_the_harness_and_its_end_comes_back() {
   let place = Place::new();
   run(async {
     let host = place.host(None, Duration::from_secs(3600));
@@ -454,6 +455,24 @@ fn approvals_interrupts_and_cancels_reach_the_harness_and_its_end_comes_back() {
     assert_eq!(rest[1]["outcome"], "completed");
     assert_eq!(seqs(&rest), vec![3, 4]);
 
+    // A question's answers reach the holder, which goes on with the run.
+    let asked = run_id();
+    let request_id = "0192f3a0-6b1c-7d2e-8f30-0000000000d2";
+    connection.send(run_start(&asked, "ask")).await;
+    connection.receive_type("run.accepted").await;
+    connection.receive_type("run.event").await;
+    connection
+      .send(json!({
+        "type": "run.answer",
+        "runId": asked,
+        "requestId": request_id,
+        "answers": {"tone": ["Formal"]},
+      }))
+      .await;
+    let rest = until_finished(&mut connection).await;
+    assert_eq!(rest[0]["chunk"]["delta"], request_id);
+    assert_eq!(rest[1]["outcome"], "completed");
+
     for (model, command, outcome) in [
       ("interruptible", "run.interrupt", "interrupted"),
       ("wait", "run.cancel", "cancelled"),
@@ -469,6 +488,13 @@ fn approvals_interrupts_and_cancels_reach_the_harness_and_its_end_comes_back() {
     }
     runner.stop().await;
   });
+  let answers = place.received("run.answer");
+  assert_eq!(answers.len(), 1);
+  assert_eq!(
+    answers[0]["requestId"],
+    "0192f3a0-6b1c-7d2e-8f30-0000000000d2"
+  );
+  assert_eq!(answers[0]["answers"], json!({"tone": ["Formal"]}));
   stop_holders(&place);
 }
 
@@ -619,7 +645,7 @@ fn a_harness_process_runs_only_once_its_credential_authorized_it() {
 }
 
 #[test]
-fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
+fn a_burst_during_a_runner_outage_is_journaled_whole_and_resent() {
   let place = Place::new();
   let id = run_id();
   run(async {
@@ -637,16 +663,16 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
     .await;
     runner.stop().await;
 
-    // With no runner and no socket, the harness produces more than the
-    // supervisor's channel for the run can hold.
-    host.approval(RunApproval {
-      run_id: id.clone(),
-      request_id: REQUEST_ID.to_owned(),
-      decision: ApprovalDecision::Approve,
-    });
-    // What the stand-in sends on the approval: more than the channel holds.
+    // With no runner and no socket, the harness produces a burst.
+    host
+      .approval(RunApproval {
+        run_id: id.clone(),
+        request_id: REQUEST_ID.to_owned(),
+        decision: ApprovalDecision::Approve,
+      })
+      .unwrap();
+    // What the stand-in sends on the approval.
     let flooded: u64 = 300;
-    assert!(flooded > u64::try_from(RUN_OUTPUT_QUEUE).unwrap());
     until(
       "the journal took every output and the holder was acked for it",
       || place.acks(&id).last() == Some(&(flooded + 1)),
@@ -655,8 +681,8 @@ fn a_run_survives_a_runner_outage_longer_than_the_holder_channel_holds() {
     // Each ack follows the journal: it never names a position the journal
     // does not hold yet.
     let journaled = setup.journal.get(&id).unwrap();
-    assert_eq!(u64::from(journaled.last_seq), flooded + 1);
-    assert_eq!(u64::from(journaled.source_seq), flooded + 1);
+    assert_eq!(u64::from(journaled.last_seq()), flooded + 1);
+    assert_eq!(u64::from(journaled.source_seq()), flooded + 1);
     let acks = place.acks(&id);
     assert!(acks.windows(2).all(|pair| pair[0] < pair[1]), "{acks:?}");
 

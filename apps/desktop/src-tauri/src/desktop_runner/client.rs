@@ -32,8 +32,10 @@ use tokio_tungstenite::{
 };
 use uuid::Uuid;
 
-use super::harness::{HarnessHost, HarnessReports, JournaledRun, RunSink};
-use super::journal::{Change, Decision, Journal, RunRecord, SharedJournal, seq_of};
+use super::harness::{Forwarded, HarnessHost, HarnessReports, JournaledRun, RunSink};
+use super::journal::{
+  Change, Decision, Journal, RunRecord, SharedJournal, run_of, seq_of,
+};
 use super::state::{Backoff, RunnerState};
 use crate::device_proof::DeviceKey;
 use crate::runner_protocol::{
@@ -428,8 +430,8 @@ impl Runner {
       .iter()
       .filter(|record| record.is_held())
       .map(|record| ActiveRun {
-        run_id: record.run_id.clone(),
-        last_seq: record.last_seq,
+        run_id: record.run_id().to_owned(),
+        last_seq: record.last_seq(),
       })
       .collect();
     if active_runs.len() > MAX_ACTIVE_RUNS {
@@ -455,11 +457,11 @@ impl Runner {
       .journal
       .records()
       .into_iter()
-      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .filter(|record| record.decision == Decision::Accepted && !record.finished())
       .map(|record| JournaledRun {
-        sink: RunSink::new(record.run_id.clone(), Arc::clone(&self.journal)),
-        source_seq: record.source_seq,
-        run_id: record.run_id,
+        sink: RunSink::new(record.run_id().to_owned(), Arc::clone(&self.journal)),
+        source_seq: record.source_seq(),
+        run_id: record.run_id().to_owned(),
       })
       .collect();
     if !runs.is_empty() {
@@ -576,11 +578,12 @@ impl Runner {
       .collect();
     let mut resend = Vec::new();
     for record in held {
-      let run_id = record.run_id;
+      let run_id = record.run_id().to_owned();
       let Some(&ack_seq) = resume.get(&run_id) else {
-        // The API dropped the run: stop it here too and forget it.
+        // The API dropped the run: stop it here too and forget it. Nothing
+        // resends this stop, so one the host does not take is only logged.
         if !record.cancelled {
-          self.host.cancel(&run_id);
+          let _not_taken: Forwarded = self.host.cancel(&run_id);
         }
         self.tokens.remove(&run_id);
         self.forget(&run_id);
@@ -595,7 +598,10 @@ impl Runner {
           } else {
             (
               Change::Store,
-              Some((record.outbox.clone(), record.last_seq)),
+              Some((
+                record.outbox().cloned().collect::<Vec<_>>(),
+                record.last_seq(),
+              )),
             )
           }
         })
@@ -692,7 +698,7 @@ impl Runner {
             // finds the run in the journal.
             self
               .journal
-              .put(RunRecord::new(run_id.clone(), Decision::Accepted, now_ms()))
+              .insert(run_id.clone(), Decision::Accepted, now_ms())
               .map_err(log_journal_error)?;
             let sink = RunSink::new(run_id.clone(), Arc::clone(&self.journal));
             let decision = match self.host.start(start, sink) {
@@ -723,37 +729,53 @@ impl Runner {
         send(socket, &answer).await
       }
       ServerMessage::RunInput(input) => {
+        let run_id = input.run_id.clone();
         let input_id = input.input_id.clone();
-        if self.first_time(&input.run_id, |record| record.inputs.insert(input_id))? {
-          self.host.input(input);
-        }
-        Ok(())
+        self.forward_once(
+          &run_id,
+          |record| record.inputs.contains(&input_id),
+          |record| {
+            record.inputs.insert(input_id.clone());
+          },
+          || self.host.input(input),
+        )
       }
       ServerMessage::RunApproval(approval) => {
+        let run_id = approval.run_id.clone();
         let request_id = approval.request_id.clone();
-        if self.first_time(&approval.run_id, |record| {
-          record.approvals.insert(request_id)
-        })? {
-          self.host.approval(approval);
-        }
-        Ok(())
+        self.forward_once(
+          &run_id,
+          |record| record.approvals.contains(&request_id),
+          |record| {
+            record.approvals.insert(request_id.clone());
+          },
+          || self.host.approval(approval),
+        )
       }
-      ServerMessage::RunInterrupt(RunRef { run_id }) => {
-        if self.first_time(&run_id, |record| {
-          !std::mem::replace(&mut record.interrupted, true)
-        })? {
-          self.host.interrupt(&run_id);
-        }
-        Ok(())
+      ServerMessage::RunAnswer(answer) => {
+        let run_id = answer.run_id.clone();
+        let request_id = answer.request_id.clone();
+        self.forward_once(
+          &run_id,
+          |record| record.answers.contains(&request_id),
+          |record| {
+            record.answers.insert(request_id.clone());
+          },
+          || self.host.answer(answer),
+        )
       }
-      ServerMessage::RunCancel(RunRef { run_id }) => {
-        if self.first_time(&run_id, |record| {
-          !std::mem::replace(&mut record.cancelled, true)
-        })? {
-          self.host.cancel(&run_id);
-        }
-        Ok(())
-      }
+      ServerMessage::RunInterrupt(RunRef { run_id }) => self.forward_once(
+        &run_id,
+        |record| record.interrupted,
+        |record| record.interrupted = true,
+        || self.host.interrupt(&run_id),
+      ),
+      ServerMessage::RunCancel(RunRef { run_id }) => self.forward_once(
+        &run_id,
+        |record| record.cancelled,
+        |record| record.cancelled = true,
+        || self.host.cancel(&run_id),
+      ),
       ServerMessage::RunToken(refresh) => {
         if self.accepted(&refresh.run_id).is_none() {
           return Ok(());
@@ -768,8 +790,10 @@ impl Runner {
         {
           return Ok(());
         }
-        self.tokens.insert(refresh.run_id.clone(), expires_at);
-        self.host.token(refresh);
+        let run_id = refresh.run_id.clone();
+        if self.host.token(refresh).is_ok() {
+          self.tokens.insert(run_id, expires_at);
+        }
         Ok(())
       }
       ServerMessage::Ack(ack) => {
@@ -801,26 +825,39 @@ impl Runner {
     self
       .journal
       .get(run_id)
-      .filter(|record| record.decision == Decision::Accepted && !record.finished)
+      .filter(|record| record.decision == Decision::Accepted && !record.finished())
   }
 
-  /// Record a command on a running run; whether it is new and goes to the
-  /// host. `mark` returns `false` for a command the record already holds.
-  fn first_time(
+  /// Hand a command on a running run to the host unless its record holds
+  /// it, then record it. The record follows the host taking the command: one
+  /// the host could not take stays unrecorded, so the API's next resend (on
+  /// the next socket) reaches the host again instead of being dropped as
+  /// handled. Recording first would make that loss permanent; the price of
+  /// this order is that a command taken just before the app stopped, ahead
+  /// of its record, reaches the host once more after a restart, where the
+  /// holder refuses a second response to one request, and a second interrupt
+  /// or cancel asks for the stop the member already asked for.
+  fn forward_once(
     &self,
     run_id: &str,
-    mark: impl FnOnce(&mut RunRecord) -> bool,
-  ) -> Result<bool, ()> {
-    let marked = self
+    handled: impl FnOnce(&RunRecord) -> bool,
+    record_handled: impl FnOnce(&mut RunRecord),
+    forward: impl FnOnce() -> Forwarded,
+  ) -> Result<(), ()> {
+    if self.accepted(run_id).is_none_or(|record| handled(&record)) {
+      return Ok(());
+    }
+    if forward().is_err() {
+      return Ok(());
+    }
+    self
       .journal
       .update(run_id, |record| {
-        if record.decision != Decision::Accepted || record.finished || !mark(record) {
-          return (Change::Unchanged, false);
-        }
-        (Change::Store, true)
+        record_handled(record);
+        (Change::Store, ())
       })
       .map_err(log_journal_error)?;
-    Ok(marked == Some(true))
+    Ok(())
   }
 
   fn forget(&self, run_id: &str) {
@@ -832,19 +869,6 @@ impl Runner {
 
 fn log_journal_error(error: String) {
   tracing::warn!(error = %error, "desktop runner journal write failed");
-}
-
-/// The run a sequenced message belongs to.
-fn run_of(message: &DesktopMessage) -> Option<&str> {
-  match message {
-    DesktopMessage::RunEvent(event) => Some(&event.run_id),
-    DesktopMessage::RunApprovalRequest(request) => Some(&request.run_id),
-    DesktopMessage::RunFinished(finished) => Some(&finished.run_id),
-    DesktopMessage::Hello(_)
-    | DesktopMessage::HarnessStatus(_)
-    | DesktopMessage::RunAccepted(_)
-    | DesktopMessage::RunRejected(_) => None,
-  }
 }
 
 impl Notices {

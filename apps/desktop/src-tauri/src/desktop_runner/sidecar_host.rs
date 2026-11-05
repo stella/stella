@@ -40,7 +40,8 @@ use tokio::sync::{Notify, mpsc, watch};
 use uuid::Uuid;
 
 use super::harness::{
-  EmitError, HarnessHost, HarnessReports, JournaledRun, RunOutput, RunSink,
+  EmitError, Forwarded, HarnessHost, HarnessReports, JournaledRun, NotForwarded,
+  RunOutput, RunSink,
 };
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
@@ -48,7 +49,7 @@ use crate::harness_sidecar::{
 };
 use crate::runner_protocol::{
   Harness, HarnessReport, HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES,
-  MissingHarness, RejectReason, RunApproval, RunInput, RunOutcome, RunStart,
+  MissingHarness, RejectReason, RunAnswer, RunApproval, RunInput, RunOutcome, RunStart,
   RunTokenRefresh, UnavailableHarness,
 };
 
@@ -322,22 +323,6 @@ async fn emit(sink: &RunSink, output: &RunOutput) {
   }
 }
 
-/// Move a run's outputs from the supervisor's channel to `queue` as they
-/// arrive, so a journal write that takes a while never makes the run look
-/// undrained to the supervisor. The queue holds only what the holder has not
-/// been acked for, which the holder bounds by the run's storage limits.
-async fn drain(
-  mut outputs: mpsc::Receiver<SidecarDelivery>,
-  queue: mpsc::UnboundedSender<SidecarDelivery>,
-) {
-  while let Some(delivery) = outputs.recv().await {
-    let last = matches!(delivery.output, SidecarRunOutput::Finished { .. });
-    if queue.send(delivery).is_err() || last {
-      return;
-    }
-  }
-}
-
 /// What a batch of holder outputs did to the run.
 struct Batch {
   outputs: Vec<(RunOutput, Option<NonZeroU32>)>,
@@ -354,19 +339,17 @@ async fn pump(
   shared: Arc<Shared>,
   sidecar: HarnessSidecar,
   run_id: String,
-  outputs: mpsc::Receiver<SidecarDelivery>,
+  mut outputs: mpsc::UnboundedReceiver<SidecarDelivery>,
   sink: RunSink,
   lease: Option<Box<dyn Send + Sync>>,
 ) {
-  let (queue_tx, mut queue) = mpsc::unbounded_channel();
-  tokio::spawn(drain(outputs, queue_tx));
   let (model, thread_id) = locked(&shared.runs)
     .get(&run_id)
     .map(|run| (run.model.clone(), run.thread_id.clone()))
     .unwrap_or_default();
   let mut limited = false;
   let outcome = loop {
-    let first = queue.recv().await.unwrap_or_else(|| {
+    let first = outputs.recv().await.unwrap_or_else(|| {
       // The supervisor always ends a run's channel with its end; a channel
       // closed without one is a run nobody can finish any more.
       tracing::warn!(target: LOG_TARGET, "a run's channel closed before its end");
@@ -385,7 +368,7 @@ async fn pump(
         Some(SidecarRunOutput::Finished { .. })
       )
     {
-      match queue.try_recv() {
+      match outputs.try_recv() {
         Ok(delivery) => deliveries.push(delivery),
         Err(_empty) => break,
       }
@@ -611,7 +594,7 @@ impl SidecarHarnessHost {
     &self,
     sidecar: HarnessSidecar,
     run_id: String,
-    outputs: mpsc::Receiver<SidecarDelivery>,
+    outputs: mpsc::UnboundedReceiver<SidecarDelivery>,
     sink: RunSink,
     lease: Option<Box<dyn Send + Sync>>,
   ) {
@@ -696,10 +679,22 @@ impl SidecarHarnessHost {
     });
   }
 
-  fn forward(what: &str, sent: Result<(), harness_sidecar::SidecarUnavailable>) {
-    if let Err(error) = sent {
+  /// Hand a run command to the holder; without one, or when the holder
+  /// cannot queue it, the command is not taken and the runner leaves it
+  /// unrecorded for the API's next resend.
+  fn forward(
+    &self,
+    what: &str,
+    send: impl FnOnce(&HarnessSidecar) -> Result<(), harness_sidecar::SidecarUnavailable>,
+  ) -> Forwarded {
+    let Some(sidecar) = self.shared.sidecar() else {
+      tracing::warn!(target: LOG_TARGET, command = what, "a run command found no harness holder");
+      return Err(NotForwarded);
+    };
+    send(&sidecar).map_err(|error| {
       tracing::warn!(target: LOG_TARGET, ?error, command = what, "a run command did not reach the harness holder");
-    }
+      NotForwarded
+    })
   }
 }
 
@@ -844,13 +839,13 @@ impl HarnessHost for SidecarHarnessHost {
 
   /// Local harnesses take no follow-up input: each chat turn is its own run.
   /// The input is answered on the run's stream instead of dropped.
-  fn input(&self, input: RunInput) {
+  fn input(&self, input: RunInput) -> Forwarded {
     tracing::warn!(target: LOG_TARGET, "a run received input local harnesses do not take");
     let held = locked(&self.shared.runs)
       .get(&input.run_id)
       .map(|run| (run.sink.clone(), run.model.clone(), run.thread_id.clone()));
     let Some((sink, model, thread_id)) = held else {
-      return;
+      return Ok(());
     };
     let error = run_error(
       &input.run_id,
@@ -862,38 +857,27 @@ impl HarnessHost for SidecarHarnessHost {
     tokio::spawn(async move {
       emit(&sink, &error).await;
     });
+    Ok(())
   }
 
-  fn approval(&self, approval: RunApproval) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.approval(approval));
-    Self::forward("approval", sent);
+  fn approval(&self, approval: RunApproval) -> Forwarded {
+    self.forward("approval", |sidecar| sidecar.approval(approval))
   }
 
-  fn interrupt(&self, run_id: &str) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.interrupt(run_id));
-    Self::forward("interrupt", sent);
+  fn answer(&self, answer: RunAnswer) -> Forwarded {
+    self.forward("answer", |sidecar| sidecar.answer(answer))
   }
 
-  fn cancel(&self, run_id: &str) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.cancel(run_id));
-    Self::forward("cancel", sent);
+  fn interrupt(&self, run_id: &str) -> Forwarded {
+    self.forward("interrupt", |sidecar| sidecar.interrupt(run_id))
   }
 
-  fn token(&self, refresh: RunTokenRefresh) {
-    let sent = self
-      .shared
-      .sidecar()
-      .map_or(Ok(()), |sidecar| sidecar.token(refresh));
-    Self::forward("token", sent);
+  fn cancel(&self, run_id: &str) -> Forwarded {
+    self.forward("cancel", |sidecar| sidecar.cancel(run_id))
+  }
+
+  fn token(&self, refresh: RunTokenRefresh) -> Forwarded {
+    self.forward("token", |sidecar| sidecar.token(refresh))
   }
 }
 

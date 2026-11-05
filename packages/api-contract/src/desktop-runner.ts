@@ -106,7 +106,8 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  *   (`not_json`, `unknown_type`, `invalid`), a message before `hello`
  *   (`hello_required`), a second `hello` (`hello_repeated`), a run message its
  *   run's state does not allow (`run_state`), a chunk that is not a valid
- *   AG-UI event (`unfoldable_chunk`), or a run message past what one run may
+ *   AG-UI event or pauses for a question without a UUID request id
+ *   (`unfoldable_chunk`), or a run message past what one run may
  *   store (`run_limit`; the API ends that run as lost).
  * - `tooLarge`: a frame above `DESKTOP_RUNNER_MAX_FRAME_BYTES`.
  * - `overloaded`: the desktop sent frames faster than they could be stored.
@@ -220,6 +221,7 @@ export const DESKTOP_RUNNER_SERVER_MESSAGE = {
   runStart: "run.start",
   runInput: "run.input",
   runApproval: "run.approval",
+  runAnswer: "run.answer",
   runInterrupt: "run.interrupt",
   runCancel: "run.cancel",
   runToken: "run.token",
@@ -314,6 +316,68 @@ const MAX_MESSAGE_TYPE_LENGTH = 64;
 
 const listsOnce = (keys: readonly string[]) =>
   new Set(keys).size === keys.length;
+
+/**
+ * What one `run.answer` may carry. A run asks a blocking question as a chunk
+ * whose `RUN_FINISHED` interrupt has `metadata.kind: "question"`; the answers
+ * name each question by its id. Lengths are UTF-16 code units, as JavaScript
+ * counts them.
+ */
+export const DESKTOP_RUNNER_ANSWER_LIMITS = {
+  maxQuestions: 32,
+  maxAnswersPerQuestion: 64,
+  maxAnswerLength: 16_384,
+  maxQuestionIdLength: 256,
+} as const;
+
+/** The keys `v.record` leaves out of what it parses, without an issue. */
+const RECORD_DROPPED_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "prototype",
+  "constructor",
+]);
+
+/**
+ * The id a blocking question names one of its questions by, in the pause
+ * that asks it and in the answers alike. Answers are a record keyed by this
+ * id, so an id the record would drop could never be answered.
+ */
+export const desktopRunnerQuestionIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestionIdLength),
+  v.check(
+    (id) => !RECORD_DROPPED_KEYS.has(id),
+    "A question id must survive as an answer key",
+  ),
+);
+
+/**
+ * Answers to a blocking question, keyed by question id: option labels or
+ * free text. A question may be answered by several options.
+ */
+export const desktopRunnerQuestionAnswersSchema = v.pipe(
+  v.record(
+    desktopRunnerQuestionIdSchema,
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswerLength),
+        ),
+      ),
+      v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxAnswersPerQuestion),
+    ),
+  ),
+  v.check(
+    (answers) =>
+      Object.keys(answers).length <= DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions,
+    `At most ${String(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions)} questions are answered at once`,
+  ),
+);
+export type DesktopRunnerQuestionAnswers = v.InferOutput<
+  typeof desktopRunnerQuestionAnswersSchema
+>;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -562,6 +626,16 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     runId: runIdSchema,
     requestId: requestIdSchema,
     decision: v.picklist(DESKTOP_RUNNER_APPROVAL_DECISIONS),
+  }),
+  /**
+   * Answers to a blocking question the run asked; `requestId` is the id of
+   * the question's interrupt in the run's chunks.
+   */
+  v.object({
+    type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer),
+    runId: runIdSchema,
+    requestId: requestIdSchema,
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runInterrupt),

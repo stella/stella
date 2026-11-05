@@ -327,6 +327,7 @@ describe("local harness chunks", () => {
               prompt: "Which governing law?",
               options: [{ label: "Czech", description: "" }],
               allowsFreeText: true,
+              multiSelect: false,
               secret: false,
             },
           ],
