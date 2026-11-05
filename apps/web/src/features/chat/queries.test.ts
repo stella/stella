@@ -5,7 +5,15 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -55,6 +63,7 @@ import {
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -3222,6 +3231,7 @@ describe("acquireChatRuntime reconcile", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+    mock.restore();
   });
 
   const threadId = toChatThreadId("thread-acquire");
@@ -3340,6 +3350,57 @@ describe("acquireChatRuntime reconcile", () => {
       },
     },
   ];
+
+  test.each([
+    { code: "provider_unavailable", reported: false },
+    { code: "local_runner_needs_login", reported: false },
+    { code: ACTION_ADMISSION_CODES.concurrencyBusy, reported: false },
+    { code: "unknown", reported: true },
+    { code: undefined, reported: true },
+  ])(
+    "reports a run error with code $code only when the server left it unclassified",
+    async ({ code, reported }) => {
+      const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+        () => undefined,
+      );
+      globalThis.fetch = createFetchMock(async (_input, init) =>
+        createSseResponse([
+          {
+            type: "RUN_STARTED",
+            threadId,
+            runId: parseChatRequestRunId(init),
+          },
+          {
+            type: "RUN_ERROR",
+            message: code ?? "AI stream error",
+            ...(code === undefined ? {} : { code }),
+          },
+        ]),
+      );
+      const runtime = acquireChatRuntime({
+        activeOrganizationId,
+        context: { allowMissingThread: true },
+        data: buildThreadData(),
+        key: {
+          scope: "global",
+          threadId: toChatThreadId(`thread-run-${code}`),
+        },
+        queryClient: new QueryClient(),
+      });
+
+      await sendThreadChatMessage(
+        runtime,
+        createOutgoingMessage("22222222-2222-4222-8222-2222222222d1"),
+      );
+
+      expect(runtime.getSnapshot().status).toBe("error");
+      const reports = capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      );
+      expect(reports).toHaveLength(reported ? 1 : 0);
+    },
+  );
 
   test("shows a rejected native approval continuation as the thread error", async () => {
     const requests: unknown[] = [];
