@@ -14,7 +14,9 @@ import {
 import {
   E_SBIRKA_ANCHORS,
   SLOV_LEX_ANCHORS,
+  statuteAnchorNesting,
   US_CODE_ANCHORS,
+  wholeStatuteAnchors,
 } from "./statute-anchor-scheme.js";
 import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
 
@@ -146,6 +148,87 @@ describe("provisionPreviewBlocks over subdivisions", () => {
   });
 });
 
+describe("unnumbered wording of a paragraph", () => {
+  // § 185 and § 205 of the Czech Criminal Code, as e-Sbírka files them: the
+  // wording after `(1)` and after its last letter sits under bare `frag_`
+  // anchors, outside the paragraph's path.
+  const section185: Block[] = [
+    heading("h", "par_185", 4),
+    paragraph("p1", "par_185-odst_1", "(1) Kdo s jiným proti jeho vůli,"),
+    paragraph("f1", "frag_149950285", "kdo jiného donutí, nebo"),
+    paragraph("f2", "frag_149950287", "kdo zneužije jeho bezbrannosti,"),
+    paragraph("f3", "frag_149950289", "bude potrestán odnětím svobody."),
+    paragraph("p2", "par_185-odst_2", "(2) Odnětím svobody bude potrestán,"),
+    paragraph("a", "par_185-odst_2-pism_a", "a) na dítěti,"),
+    paragraph("p3", "par_185-odst_3", "(3) Příprava je trestná."),
+  ];
+  const section205: Block[] = [
+    heading("h", "par_205", 4),
+    paragraph("p1", "par_205-odst_1", "(1) Kdo si přisvojí cizí věc, a"),
+    paragraph("a", "par_205-odst_1-pism_a", "a) způsobí škodu,"),
+    paragraph("b", "par_205-odst_1-pism_b", "b) čin spáchá vloupáním,"),
+    paragraph("f", "frag_7275235", "bude potrestán odnětím svobody."),
+    paragraph("p2", "par_205-odst_2", "(2) Příprava je trestná."),
+  ];
+  const idsOf = (statute: Block[], citedAnchorId: string) =>
+    provisionPreviewBlocks(czech(statute), {
+      provisionAnchorId: statute.at(0)?.anchorId ?? panic("No heading"),
+      citedAnchorId,
+    })?.map(({ id }) => id);
+
+  test("a cited paragraph runs up to the next paragraph", () => {
+    expect(idsOf(section185, "par_185-odst_1")).toEqual([
+      "p1",
+      "f1",
+      "f2",
+      "f3",
+    ]);
+  });
+
+  test("a cited paragraph keeps the closing line after its letters", () => {
+    expect(idsOf(section205, "par_205-odst_1")).toEqual(["p1", "a", "b", "f"]);
+  });
+
+  test("a cited letter leaves the paragraph's closing line out", () => {
+    expect(idsOf(section205, "par_205-odst_1-pism_b")).toEqual(["b"]);
+  });
+
+  test("the last paragraph ends with the provision", () => {
+    expect(idsOf(section185, "par_185-odst_3")).toEqual(["p3"]);
+  });
+
+  test("cited unnumbered wording is shown alone", () => {
+    expect(idsOf(section185, "frag_149950285")).toEqual(["f1"]);
+  });
+
+  test("Slov-Lex states the same ownership in the path", () => {
+    const section212: Block[] = [
+      heading("h", "paragraf-212", 4),
+      paragraph("p1", "paragraf-212.odsek-1", "(1) Kto si prisvojí vec a"),
+      paragraph("a", "paragraf-212.odsek-1.pismeno-a", "a) spôsobí škodu,"),
+      paragraph("t", "paragraf-212.odsek-1.text2", "potrestá sa odňatím."),
+      paragraph("p2", "paragraf-212.odsek-2", "(2) Príprava je trestná."),
+    ];
+    const slovakIds = (citedAnchorId: string) =>
+      provisionPreviewBlocks(slovak(section212), {
+        provisionAnchorId: "paragraf-212",
+        citedAnchorId,
+      })?.map(({ id }) => id);
+    expect(slovakIds("paragraf-212.odsek-1")).toEqual(["p1", "a", "t"]);
+    expect(slovakIds("paragraf-212.odsek-1.pismeno-a")).toEqual(["a"]);
+  });
+
+  test("a publisher without unnumbered anchors keeps the old stop", () => {
+    const blocksOf = [
+      paragraph("p1", "paragraf-1.odsek-1", "(1) Text"),
+      paragraph("x", "frag_1", "Text filed elsewhere"),
+    ];
+    const cited = blocksOf.at(0) ?? panic("No cited block");
+    expect(blocksNestedUnder(slovak(blocksOf), cited)).toEqual([cited]);
+    expect(blocksNestedUnder(us(blocksOf), cited)).toEqual([cited]);
+  });
+});
+
 describe("provisionBlocks", () => {
   test("keeps the heading and every block it owns", () => {
     expect(provisionBlocks(czech(blocks), "par_1")).toEqual(blocks.slice(0, 5));
@@ -153,21 +236,36 @@ describe("provisionBlocks", () => {
 });
 
 describe("provisionHeadingAnchor", () => {
+  const eSbirka = statuteAnchorNesting(E_SBIRKA_ANCHORS);
+  const usCode = statuteAnchorNesting(US_CODE_ANCHORS);
+
   test("files a cited subdivision under its provision", () => {
-    expect(provisionHeadingAnchor("par_90-odst_5", "-")).toBe("par_90");
-    expect(provisionHeadingAnchor("paragraf-5.odsek-1", ".")).toBe(
-      "paragraf-5",
-    );
-    expect(provisionHeadingAnchor("s1983/a/1", "/")).toBe("s1983");
+    expect(provisionHeadingAnchor("par_90-odst_5", eSbirka)).toBe("par_90");
+    expect(
+      provisionHeadingAnchor(
+        "paragraf-5.odsek-1",
+        statuteAnchorNesting(SLOV_LEX_ANCHORS),
+      ),
+    ).toBe("paragraf-5");
+    expect(provisionHeadingAnchor("s1983/a/1", usCode)).toBe("s1983");
   });
 
   test("keeps a separator the section number itself carries", () => {
-    expect(provisionHeadingAnchor("s2000e-2/a", "/")).toBe("s2000e-2");
+    expect(provisionHeadingAnchor("s2000e-2/a", usCode)).toBe("s2000e-2");
   });
 
-  test("leaves a provision-level anchor, and one with no separator, alone", () => {
-    expect(provisionHeadingAnchor("par_90", "-")).toBe("par_90");
-    expect(provisionHeadingAnchor("par_90-odst_5", null)).toBe("par_90-odst_5");
+  test("leaves a provision-level anchor alone", () => {
+    expect(provisionHeadingAnchor("par_90", eSbirka)).toBe("par_90");
+  });
+
+  test("files every anchor of a flat scheme under itself", () => {
+    const flat = statuteAnchorNesting(
+      wholeStatuteAnchors("Read whole in this test."),
+    );
+    expect(flat).toEqual({ type: "flat" });
+    // The same anchor a nested scheme cuts, so the flat reading is no accident.
+    expect(provisionHeadingAnchor("par_90-odst_5", eSbirka)).toBe("par_90");
+    expect(provisionHeadingAnchor("par_90-odst_5", flat)).toBe("par_90-odst_5");
   });
 });
 

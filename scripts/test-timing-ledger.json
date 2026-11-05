@@ -25,7 +25,7 @@
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
   {
-    "id": "no-polling-loop::apps/web/src/routes/_protected.admin/-components/organization/jurisdictions-card.dom.test.tsx::settleAll::for",
+    "id": "no-polling-loop::apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.dom.test.tsx::settleAll::for",
     "count": 1,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
   },
@@ -4147,11 +4147,6 @@
   {
     "id": "no-unreasoned-timeout::scripts/network-baseline-scope.test.ts::<module>::test timeout",
     "count": 7,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::scripts/nightly-exact-base.test.ts::<module>::test timeout",
-    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

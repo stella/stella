@@ -535,6 +535,7 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    "oauth_grant_revocations",
     // Root-owned OAuth state denies all app-role access.
     "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
@@ -557,6 +558,13 @@ describe("policy coverage", () => {
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
+    // Desktop runner sockets and runs are served on the owner connection:
+    // every row is bound to an account, organization, installation and device
+    // key the socket proved, and the request role is denied outright
+    // (owner-only policies, privileges revoked; asserted in
+    // rls-table-grants.test.ts).
+    "desktop_runners",
+    "desktop_runner_runs",
     // Account-owned creation receipts exist before membership; organization_id
     // is a cascade pointer. Owner-only RLS and revoked request-role grants are
     // asserted in rls-table-grants.test.ts instead of tenant CRUD policies.
@@ -578,6 +586,7 @@ describe("policy coverage", () => {
     // the organization is a routing column for delivery, never a permission.
     // The dedicated assertion below covers the user-only policies.
     "push_devices",
+    "timer_activity_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -1122,21 +1131,24 @@ describe("policy coverage", () => {
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
   });
 
-  test("push devices admit only the person who registered them", async () => {
-    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
-      (p) => p.table_name === "push_devices",
-    );
-    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
-      new Set(["r", "a", "w", "d"]),
-    );
-    for (const policy of tablePolicies) {
-      expect(policy.permissive).toBe(true);
-      const expr =
-        policy.command === "a" ? policy.check_expr : policy.using_expr;
-      expect(expr).toContain("user_id");
-      expect(expr).toContain(SETTING_USER_ID);
-    }
-  });
+  test.each(["push_devices", "timer_activity_devices"])(
+    "%s admit only the person who registered them",
+    async (table) => {
+      const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+        (p) => p.table_name === table,
+      );
+      expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+        new Set(["r", "a", "w", "d"]),
+      );
+      for (const policy of tablePolicies) {
+        expect(policy.permissive).toBe(true);
+        const expr =
+          policy.command === "a" ? policy.check_expr : policy.using_expr;
+        expect(expr).toContain("user_id");
+        expect(expr).toContain(SETTING_USER_ID);
+      }
+    },
+  );
 
   test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);
@@ -1573,6 +1585,7 @@ describe("policy coverage", () => {
       "jwks",
       "oauth_access_token",
       "oauth_client",
+      "oauth_grant_revocations",
       "service_oauth_clients",
       "mcp_web_handoff",
       "oauth_consent",

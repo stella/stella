@@ -1054,7 +1054,7 @@ const NavBadge = ({
   digit: number;
 }) => (
   <SidebarMenuBadge className={className}>
-    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
+    <kbd className="animate-in bg-muted text-muted-foreground fade-in text-3xs rounded-sm border px-1.5 py-0.5 duration-150 motion-reduce:animate-none">
       {digit}
     </kbd>
   </SidebarMenuBadge>
@@ -1501,7 +1501,7 @@ export const MatterItem = ({
             showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
-            .join(" — ")}
+            .join(" · ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
             {pinFlashSequence !== null && (

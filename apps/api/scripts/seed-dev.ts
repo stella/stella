@@ -40,7 +40,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import {
@@ -49,6 +49,7 @@ import {
 } from "@stll/playwright-tools/marketing-locales";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import type { Transaction } from "@/api/db/root";
 import {
   billingCodes,
   chatMessages,
@@ -61,6 +62,7 @@ import {
   expenses,
   extractedContent,
   fields,
+  invoiceLines,
   invoices,
   justifications,
   numberSeries,
@@ -95,6 +97,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
@@ -269,11 +272,9 @@ export const createMockDocx = async (
   title: string,
   bodyText?: string,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -284,8 +285,7 @@ export const createMockDocx = async (
       }</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -304,8 +304,7 @@ export const createMockDocx = async (
       `${xmlEscape(line)}</w:t></w:r></w:p>`;
   }
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -313,17 +312,16 @@ export const createMockDocx = async (
       "</w:document>",
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 
@@ -373,12 +371,10 @@ const supplierAgreementBaseVersionId = (
 const createSupplierAgreementDocx = async (
   disposition: SeedTrackedChangeDisposition,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const { author, date, initials } = SUPPLIER_AGREEMENT.reviewer;
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -390,8 +386,7 @@ const createSupplierAgreementDocx = async (
       `</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -464,8 +459,7 @@ const createSupplierAgreementDocx = async (
 
   const paragraphs = SUPPLIER_AGREEMENT.paragraphs.map(paragraphXml).join("");
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -482,16 +476,14 @@ const createSupplierAgreementDocx = async (
         "</w:comment>",
     )
     .join("");
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/comments.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `${commentsXml}</w:comments>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
@@ -499,9 +491,9 @@ const createSupplierAgreementDocx = async (
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 
@@ -2665,6 +2657,10 @@ export async function seed(organizationId?: string, userId?: string) {
   assertSeedLocaleMatches(ORG_ID);
   let USER_ID = userId ?? DEFAULT_USER_ID;
   const toWs = (id: WorkspaceId) => id;
+  // Contacts admit the owner connection inside one organization only.
+  const organizationTransaction = async <T>(
+    fn: (tx: Transaction) => Promise<T>,
+  ): Promise<T> => await withOwnerOrganizationScope(db, ORG_ID, fn);
 
   /** The owner first, then the colleagues in author rotation order. */
   const ensureSeedUsers = async (): Promise<readonly string[]> => {
@@ -2729,6 +2725,28 @@ export async function seed(organizationId?: string, userId?: string) {
     }
   };
 
+  // Billing records keep their matter on purpose (ON DELETE NO ACTION), so a
+  // replay removes them before the matters. An invoice's lines can belong to
+  // another matter, so they go first; deleting an invoice takes the rest.
+  const deleteRetainedBilling = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    await withAggregateTransaction(db, async (tx) => {
+      await tx
+        .delete(invoiceLines)
+        .where(inArray(invoiceLines.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(invoices)
+        .where(inArray(invoices.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(timeEntries)
+        .where(inArray(timeEntries.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(expenses)
+        .where(inArray(expenses.workspaceId, [...workspaceIds]));
+    });
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -2770,6 +2788,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(allSeedWorkspaceIds);
       await db.transaction(async (tx) => {
         await tx
           .delete(workspaces)
@@ -2825,14 +2844,15 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(clientWorkspaceIds);
     }
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(workspaces)
           .where(sql`${workspaces.clientId} IN ${allSeedContactIds}`),
     );
-    await db.transaction(
+    await organizationTransaction(
       async (tx) =>
         await tx
           .delete(contacts)
@@ -2862,7 +2882,7 @@ export async function seed(organizationId?: string, userId?: string) {
     // 1. Contacts (original orgs + people)
     const coreContacts = [...orgContacts, ...personContacts];
     for (const c of coreContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)
@@ -2906,7 +2926,7 @@ export async function seed(organizationId?: string, userId?: string) {
     }
     // 1b. Additional org contacts for overview stress-testing
     for (const c of moreOrgContacts) {
-      await db.transaction(
+      await organizationTransaction(
         async (tx) =>
           await tx
             .insert(contacts)

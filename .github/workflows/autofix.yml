@@ -192,7 +192,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout Dependabot head
@@ -462,7 +462,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout lockfile tooling
@@ -663,6 +663,7 @@ jobs:
             # Type-aware fixes need the complete generated type graph. set -e
             # aborts on preparation errors before any fixer runs.
             bun scripts/ci-generated-sources.ts prepare
+            bun "$GITHUB_WORKSPACE/scripts/generate-tailwind-classes.ts" --write
             backup="$RUNNER_TEMP/autofix-lint-backup"
             for path in "${lint_paths[@]}"; do
               mkdir -p "$backup/$(dirname "$path")"

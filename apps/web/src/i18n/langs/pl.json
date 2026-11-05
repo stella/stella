@@ -40,7 +40,6 @@
     "organizationId": "ID organizacji",
     "organizationLeft": "Opuszczono organizację.",
     "planAndUsage": "Plan i wykorzystanie",
-    "title": "Administracja organizacji",
     "toolsDescription": "Włącz lub wyłącz wbudowane narzędzia dla wszystkich osób w tej organizacji."
   },
   "agentClaim": {
@@ -210,12 +209,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Dodaj uwagę do interpretacji",
-      "description": "Bezpośrednie dowody — wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne — wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
+      "description": "Bezpośrednie dowody (wiadomości e-mail, komunikaty, dokumentacja bankowa i fakty bezsporne) wyodrębnione do rejestru faktów referencyjnych, z którym porównywane są twierdzenia. Fakty można weryfikować, edytować lub dodawać ręcznie.",
       "editInterpretationNote": "Edytuj uwagę do interpretacji",
       "empty": "Oznacz pozycje tej listy jako fakty, względem których będą weryfikowane dokumenty.",
       "extractionAndReview": "Wyodrębnianie i weryfikacja",
       "factCount": "{count, plural, one {# fakt} few {# fakty} many {# faktów} other {# faktu}}",
-      "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
+      "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong>: treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
       "inScoring": "Uwzględnione w ocenie",
@@ -229,10 +228,10 @@
       "title": "Fakty referencyjne"
     },
     "claimDetail": {
-      "escalatedReview": "Przekazano zespołowi ds. dowodów — dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
+      "escalatedReview": "Przekazano zespołowi ds. dowodów; dopóki źródłowa sprzeczność nie zostanie rozstrzygnięta, nie ma tu rozstrzygnięcia do potwierdzenia ani zakwestionowania.",
       "flagDispute": "Oznacz spór",
       "humanReview": "Weryfikacja przez człowieka",
-      "interpretationCaveat": "Jeden z uwzględnionych faktów jest obarczony istotnym zastrzeżeniem interpretacyjnym — niepewne jest znaczenie dowodu, a nie nośnik, z którego pochodzi.",
+      "interpretationCaveat": "Jeden z uwzględnionych faktów jest obarczony istotnym zastrzeżeniem interpretacyjnym: niepewne jest znaczenie dowodu, a nie nośnik, z którego pochodzi.",
       "notVerifiable": {
         "reopen": "Otwórz ponownie → porównaj z rejestrem",
         "reopenExplanation": "<strong>Odłożono jako niemożliwe do zweryfikowania.</strong> Jeśli to twierdzenie można jednak sprawdzić, otwórz je ponownie: AVT zachowa zmianę klasyfikacji i wykona tylko pominięte wcześniej porównanie z rejestrem.",
@@ -242,15 +241,15 @@
         "add": "Dodaj uwagę / korektę",
         "heading": "Twoja uwaga · {savedAt}",
         "headingUndated": "Twoja uwaga",
-        "placeholder": "Zapisz korektę lub wyjaśnienie. Uwaga zostanie przypisana wyłącznie do tego twierdzenia — nie zmieni rozstrzygnięcia ani rejestru faktów referencyjnych.",
+        "placeholder": "Zapisz korektę lub wyjaśnienie. Uwaga zostanie przypisana wyłącznie do tego twierdzenia; nie zmieni rozstrzygnięcia ani rejestru faktów referencyjnych.",
         "saveCorrection": "Zapisz korektę"
       },
       "overridden": "Zmienione",
-      "overrideNotice": "Rozstrzygnięcie zmieniono na <strong>{verdict}</strong> — poniżej bez zmian przedstawiono własną analizę narzędzia.",
+      "overrideNotice": "Rozstrzygnięcie zmieniono na <strong>{verdict}</strong>; poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideTooltip": "Osoba weryfikująca zapisała inne rozstrzygnięcie. Poniżej bez zmian przedstawiono własną analizę narzędzia.",
       "overrideVerdict": "Zmień rozstrzygnięcie",
       "recordConflict": {
-        "description": "Dwa fakty referencyjne dotyczą tej samej kwestii — <strong>{subject}</strong> — ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania — narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
+        "description": "Dwa fakty referencyjne dotyczą tej samej kwestii (<strong>{subject}</strong>), ale są ze sobą sprzeczne. Oba pochodzą ze źródeł o <strong>wysokim poziomie pewności</strong>, więc nie jest to problem wiarygodności: sam rejestr jest wewnętrznie niespójny. AVT wstrzymuje rozstrzygnięcie zamiast oceniać twierdzenie, ponieważ wybór nadrzędnego wpisu wymaga Twojej decyzji i jej odnotowania; narzędzie nie powinno dokonywać takiego wyboru bez informowania użytkownika.",
         "escalatedNotice": "Oznaczono dla zespołu ds. dowodów. Sprzeczność w rejestrze pozostaje otwarta i uwzględniana w zestawieniu do czasu wybrania nadrzędnego wpisu.",
         "flagForEvidenceTeam": "Oznacz dla zespołu ds. dowodów",
         "governed": "<strong>{value}</strong> jest nadrzędny: twierdzenie ocenia się względem tego wpisu. Drugi wpis pozostaje zarejestrowany.",
@@ -267,46 +266,46 @@
       "score": {
         "anchorFactsDisagree": "Fakty referencyjne są sprzeczne",
         "conflictCount": "{count, plural, one {# sprzeczność} few {# sprzeczności} many {# sprzeczności} other {# sprzeczności}}",
-        "noCoverage": "<strong>Rejestr nie zawiera informacji na ten temat.</strong> Żaden fakt referencyjny w bazie danych nie odnosi się do tego twierdzenia. Nie jest to słaba ocena — na razie po prostu nie ma z czym porównać twierdzenia.",
-        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia — na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
+        "noCoverage": "<strong>Rejestr nie zawiera informacji na ten temat.</strong> Żaden fakt referencyjny w bazie danych nie odnosi się do tego twierdzenia. Nie jest to słaba ocena: na razie po prostu nie ma z czym porównać twierdzenia.",
+        "notVerifiable": "<strong>Twierdzenie niemożliwe do zweryfikowania.</strong> Żaden dokument nie może rozstrzygnąć takiego twierdzenia: na przykład hipotezy, prognozy, deklaracji zamiaru, wniosku prawnego lub twierdzenia zbyt nieprecyzyjnego, by je sprawdzić. Zostaje odłożone bez oceny.",
         "outOf100": "<strong>/ 100</strong> poziom potwierdzenia",
         "supportCount": "{count, plural, one {# potwierdzenie} few {# potwierdzenia} many {# potwierdzeń} other {# potwierdzenia}}",
         "verdictWithheld": "Wstrzymano rozstrzygnięcie"
       },
       "sourceCount": "{count, plural, one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
-      "whyScore": "Uzasadnienie oceny — fakty referencyjne"
+      "whyScore": "Uzasadnienie oceny: fakty referencyjne"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie — oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa."
+        "hint": "Obiektywne, możliwe do sprawdzenia twierdzenie, oceniane względem rejestru. Obejmuje twierdzenia sformułowane jako przyznanie lub zaprzeczenie: ocenie podlega ich treść, a nie same słowa."
       },
       "opinion": {
-        "hint": "Ocena lub charakterystyka — żaden dokument nie może jej potwierdzić ani podważyć, dlatego zostaje odłożona bez oceny.",
+        "hint": "Ocena lub charakterystyka: żaden dokument nie może jej potwierdzić ani podważyć, dlatego zostaje odłożona bez oceny.",
         "label": "Opinia"
       },
       "setAside": "odłożone",
       "unverifiable": {
-        "hint": "Twierdzenie, którego nie może rozstrzygnąć żaden dokument — hipoteza, prognoza, deklaracja zamiaru lub przekonania, wniosek prawny albo twierdzenie zbyt nieprecyzyjne, by je sprawdzić. Zostaje odłożone bez oceny. Różni się od Braku pokrycia, który oznacza możliwy do sprawdzenia fakt, o którym rejestr jedynie nie zawiera informacji.",
+        "hint": "Twierdzenie, którego nie może rozstrzygnąć żaden dokument: hipoteza, prognoza, deklaracja zamiaru lub przekonania, wniosek prawny albo twierdzenie zbyt nieprecyzyjne, by je sprawdzić. Zostaje odłożone bez oceny. Różni się od Braku pokrycia, który oznacza możliwy do sprawdzenia fakt, o którym rejestr jedynie nie zawiera informacji.",
         "label": "Niemożliwe do zweryfikowania"
       }
     },
     "confidence": {
       "interpretation": "Interpretacja",
-      "tooltip": "Pewność interpretacji — stopień jednoznaczności znaczenia tego dowodu. Niezależna od nośnika źródła (pismo odręczne, skan itp.)."
+      "tooltip": "Pewność interpretacji: stopień jednoznaczności znaczenia tego dowodu. Niezależna od nośnika źródła (pismo odręczne, skan itp.)."
     },
     "confirm": {
       "acknowledge": "Przyjmuję do wiadomości",
       "recordConflict": "Potwierdź rozstrzygnięcie",
-      "supported": "Potwierdź — gotowe",
+      "supported": "Potwierdź: gotowe",
       "verdict": "Potwierdź wynik"
     },
     "disposition": {
-      "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna — warto ją sprawdzić przed zatwierdzeniem.",
+      "contested": "Rozstrzygnięcie jest jednoznaczne, ale interpretacja jednego z uwzględnionych faktów jest sporna; warto ją sprawdzić przed zatwierdzeniem.",
       "contradicted": "Rejestr odbiega od tego twierdzenia. Zanim rozstrzygnięcie zostanie zatwierdzone, potrzebna jest decyzja człowieka.",
       "nocover": "Żaden fakt referencyjny nie odnosi się do tego twierdzenia, więc nie ma z czym go porównać. Zatwierdzenie jest opcjonalne.",
-      "notverifiable": "Odłożone jako niemożliwe do zweryfikowania — zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
-      "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów — narzędzie nie dokona wyboru za Ciebie.",
-      "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo — nie jest potrzebna decyzja uznaniowa.",
+      "notverifiable": "Odłożone jako niemożliwe do zweryfikowania; zatwierdzenie jest opcjonalne. Jeśli twierdzenie można jednak sprawdzić, otwórz je ponownie poniżej.",
+      "recordconflict": "Dwa materiały dowodowe w aktach są ze sobą sprzeczne. Powyżej wskaż, który jest nadrzędny, albo oznacz sprawę dla zespołu ds. dowodów; narzędzie nie dokona wyboru za Ciebie.",
+      "supported": "Rejestr potwierdza to twierdzenie. Zatwierdzenie potwierdza, że narzędzie odczytało je prawidłowo; nie jest potrzebna decyzja uznaniowa.",
       "tension": "Rejestr potwierdza to twierdzenie tylko częściowo. Przed zatwierdzeniem rozstrzygnięcia rozważ powyższe fakty potwierdzające i przeczące."
     },
     "documents": {
@@ -365,7 +364,7 @@
       "failed": "Nie zapisano",
       "failedTitle": "Twoja zmiana nie została zapisana"
     },
-    "sourceMediumTooltip": "Nośnik źródła — neutralny opis. Sam w sobie nie obniża poziomu pewności.",
+    "sourceMediumTooltip": "Nośnik źródła: neutralny opis. Sam w sobie nie obniża poziomu pewności.",
     "states": {
       "contradicted": {
         "chip": "Sprzeczne",
@@ -395,7 +394,7 @@
     "verification": {
       "acceptRoutine": "Zaakceptuj {count, plural, one {# rutynowe twierdzenie} few {# rutynowe twierdzenia} many {# rutynowych twierdzeń} other {# rutynowego twierdzenia}}",
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
-      "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
+      "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong>: sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
       "documentView": {
         "label": "Widok dokumentu",
@@ -1412,6 +1411,18 @@
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
+    "anonymizationPreview": {
+      "answer": "<person1>Małgorzata Wójcik</person1> może żądać od <person2>Łukasza Nowaka</person2> spłaty długu wraz z odsetkami za opóźnienie.",
+      "off": "Zanonimizowany tryb AI jest wyłączony: AI otrzymuje tekst w takiej postaci, w jakiej go napisano, razem z danymi osobowymi.",
+      "on": "Zanonimizowany tryb AI jest włączony: dane osobowe są zastępowane symbolami zastępczymi przed wysłaniem do AI i przywracane w odpowiedzi.",
+      "prompt": "Przygotuj odpowiedź dla <person1>Małgorzaty Wójcik</person1> (PESEL <nationalId>85121214219</nationalId>, <address>ul. Lipowa 14, Kraków</address>) w sprawie długu <person2>Łukasza Nowaka</person2>.",
+      "steps": {
+        "answered": "AI odpowiada",
+        "restored": "Czytasz",
+        "sent": "AI otrzymuje",
+        "written": "Piszesz"
+      }
+    },
     "anonymizedMode": "Zanonimizowany tryb AI",
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",
@@ -1449,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Pokaż w orzeczeniu",
+      "unverified": "Cytat niezweryfikowany",
+      "unverifiedHint": "Cytowane orzeczenia nie zawierają tego tekstu dosłownie",
       "verified": "Zweryfikowany cytat",
       "verifiedHint": "Dosłownie w {source}"
     },
@@ -1518,7 +1531,7 @@
       "updatingDescription": "Twoje rozszerzenie stella jest w starszej wersji. Chrome aktualizuje je automatycznie, zwykle w ciągu kilku godzin; potem stella znów będzie mogła otwierać i czytać dla Ciebie strony."
     },
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
-    "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
+    "caseLawGreeting": "Zapytaj mnie o to orzeczenie; mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "choosePromptImprovementStrategy": "Opcje ulepszania promptu",
     "commandsSection": "Polecenia",
@@ -1668,6 +1681,28 @@
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
     "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
     "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
+    "localRun": {
+      "cloud": "Chmura stella",
+      "errorLimitReached": "Agent programistyczny na Twoim komputerze osiągnął limit użycia. Spróbuj ponownie po odnowieniu limitu.",
+      "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
+      "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
+      "onThisComputer": "{harness} na tym komputerze",
+      "refusalConflictingRunMode": "To żądanie ma działać jednocześnie z agentem w chmurze i na Twoim komputerze. Wybierz jedno w menu Uruchom na.",
+      "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
+      "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
+      "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
+      "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
+      "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
+      "runOn": "Uruchom na",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limit wyczerpany do {time}",
+      "stateNeedsLogin": "Wymaga zalogowania",
+      "stateNotInstalled": "Nie zainstalowano",
+      "stateOffline": "Komputer offline",
+      "stateUnavailable": "Chwilowo niedostępne",
+      "stateUnsupported": "Ta wersja nie jest obsługiwana",
+      "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
+    },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kolejne} few {+# kolejne} many {+# kolejnych} other {+# kolejnego}}",
@@ -1765,7 +1800,7 @@
       "tryOne": "Zacznij od jednego z tych"
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
-    "queuedNotice": "W kolejce — zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+    "queuedNotice": "W kolejce: zostanie wysłana po zakończeniu bieżącej odpowiedzi",
     "reasoning": "Rozumowanie",
     "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",
@@ -1870,7 +1905,7 @@
       "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuję z kontekstem",
+    "thinking": "Myślenie",
     "threadFiles": {
       "title": "Pliki w tym czacie"
     },
@@ -1888,6 +1923,7 @@
       "boe_search_legislation": "Wyszukiwanie w BOE",
       "borme_get_summary": "Dzienne podsumowanie BORME",
       "business_registry_lookup": "Wyszukiwanie w rejestrze przedsiębiorstw",
+      "command_execution": "Uruchamianie polecenia",
       "compare_versions": "Porównywanie wersji",
       "configure_template_fields": "Skonfiguruj pola szablonu",
       "connect_connector": "Prośba o połączenie łącznika",
@@ -1913,9 +1949,12 @@
       "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
       "fetch_url": "Czytanie strony",
+      "file_change": "Zmiana plików",
       "fill_template": "Wypełnianie szablonu",
       "find_text": "Wyszukiwanie tekstu w dokumencie",
       "get_document_outline": "Odczytywanie konspektu dokumentu",
+      "harness_unsupported_item": "Krok, którego stella nie może wyświetlić",
+      "harness_web_search": "Wyszukiwanie w internecie",
       "infosoud_lookup_case": "Wyszukiwanie sprawy w InfoSoud",
       "link_matter_contact": "Powiąż kontakt ze sprawą",
       "list_stories": "Wyświetlanie części dokumentu",
@@ -1932,7 +1971,9 @@
       "remember": "Zapamiętywanie",
       "remove_matter_member": "Usuń członka sprawy",
       "reply_comment": "Odpowiadanie na komentarz",
+      "request_permissions": "Prośba o uprawnienia",
       "request_secret": "Prośba o prywatne dane dostępowe",
+      "request_user_input": "Prośba o doprecyzowanie",
       "resolve_comment": "Rozwiązywanie komentarza",
       "review_folder_consistency": "Sprawdzanie spójności folderu",
       "run-stella-query": "Odczytywanie danych sprawy",
@@ -1974,7 +2015,7 @@
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
       "consoleLogs": "Dane wyjściowe konsoli",
       "exactCall": "Dokładne wywołanie",
-      "failed": "Ten krok się nie powiódł — stella poradzi sobie inaczej.",
+      "failed": "Ten krok się nie powiódł; stella poradzi sobie inaczej.",
       "field": "Pole",
       "input": "Dane wejściowe",
       "interrupted": "Przerwano przed ukończeniem",
@@ -1992,15 +2033,19 @@
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
     },
+    "turnStatus": {
+      "waitingForApproval": "Oczekiwanie na zatwierdzenie",
+      "waitingForInput": "Oczekiwanie na dane",
+      "writing": "Pisanie"
+    },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
-    "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym.",
+    "usageFallbackNotice": "Dzienny limit AI wyczerpany; odpowiedzi działają dalej na modelu standardowym.",
     "videoContent": "Wygenerowane wideo",
     "webSearch": {
       "answer": "Podsumowanie wyszukiwania w internecie",
       "answerDisclaimer": "Opracowano na podstawie publicznych wyników wyszukiwania poniżej. Zweryfikuj w powiązanych źródłach.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otwórz {source} w nowej karcie",
       "sources": "Źródła",
       "toggleDescription": "Pozwól modelowi wyszukiwać w publicznej sieci i czytać strony w tej rozmowie.",
       "toggleLabel": "Wyszukiwanie w sieci",
@@ -2354,6 +2399,7 @@
     "notes": "Notatki",
     "open": "Otwórz",
     "openInNewTab": "Otwórz w nowej karcie",
+    "openInSidePanel": "Otwórz w panelu bocznym",
     "openInStella": "Otwórz w stelli",
     "openOriginalSource": "Otwórz źródło oryginalne",
     "options": "Opcje",
@@ -2645,7 +2691,7 @@
       "billingAddress": "Adres rozliczeniowy",
       "billingAddressCity": "Miasto",
       "billingAddressLine1": "Ulica",
-      "billingAddressLine2": "Ulica — linia 2",
+      "billingAddressLine2": "Ulica (linia 2)",
       "billingAddressPostalCode": "Kod pocztowy",
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
@@ -2692,8 +2738,8 @@
       "description": "Dopasuj kolumny do pól stella, sprawdź każdy wiersz, a następnie zaimportuj wszystkie prawidłowe kontakty.",
       "dropFile": "Przeciągnij tutaj plik z kontaktami",
       "fields": {
-        "address_line_1": "Adres — wiersz 1",
-        "address_line_2": "Adres — wiersz 2",
+        "address_line_1": "Adres (wiersz 1)",
+        "address_line_2": "Adres (wiersz 2)",
         "city": "Miejscowość",
         "first_name": "Imię",
         "last_name": "Nazwisko",
@@ -2747,6 +2793,11 @@
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
       "undoImport": "Cofnij import ({count})",
+      "undoImportConfirm": "Trwale usunąć {count, plural, one {kontakt utworzony} few {# kontakty utworzone} many {# kontaktów utworzonych} other {# kontaktu utworzonego}} przez ten import? Tej operacji nie można cofnąć.",
+      "undoImportTitle": "Cofnąć ten import?",
+      "undoneRow": "Usunięto przez cofnięcie importu",
+      "undoneSummary": "Cofnięcie importu usunęło {count, plural, one {# utworzony kontakt} few {# utworzone kontakty} many {# utworzonych kontaktów} other {# utworzonego kontaktu}}.",
+      "undoneToast": "Import cofnięty: usunięto {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
       "warning": {
         "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
@@ -2793,6 +2844,28 @@
     },
     "backToList": "Wróć do korespondencji",
     "createAddress": "Utwórz adres",
+    "dataBox": {
+      "acceptedAt": "Doręczono",
+      "acceptedByFiction": "w drodze fikcji doręczenia",
+      "acceptedByLogin": "przez zalogowanie",
+      "channel": "Skrzynka danych",
+      "contact": "Kontakt: {name}",
+      "deliveredAt": "Dostarczono do skrzynki",
+      "delivery": "Doręczenie",
+      "directionUnknown": "Kierunek nieznany",
+      "messageId": "Identyfikator wiadomości",
+      "moreContacts": "Więcej kontaktów pasuje do tej skrzynki danych.",
+      "openFile": "Otwórz plik .zfo",
+      "personalDelivery": "Do rąk własnych",
+      "recipient": "Adresat",
+      "recipientReference": "Sygnatura adresata",
+      "sealNotVerified": "Elektroniczna pieczęć pliku jest przechowywana wraz z nim i nie jest weryfikowana.",
+      "senderReference": "Sygnatura nadawcy",
+      "sent": "Wysłana",
+      "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
+      "toHands": "Do rąk: {name}",
+      "uploaded": "Przesłana wiadomość ze skrzynki danych"
+    },
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
     "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
@@ -2963,6 +3036,7 @@
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
       "clauseDirectivesInvalidDetails": "Klauzula {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "clauseDirectivesOverrideInvalidDetails": "Zastąpiona treść klauzuli {clauseName} w polu {slotName} zawiera nieprawidłowe dyrektywy. Popraw treść dla tego wypełnienia przed ponowną próbą.",
+      "correspondenceSourceChanged": "Ta korespondencja zmieniła się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",
@@ -2988,6 +3062,8 @@
       "matterContactCapacityReached": "Ta sprawa osiągnęła limit kontaktów. Usuń jedno powiązanie z kontaktem przed dodaniem kolejnego.",
       "mcpAuthorizationApprovalRequired": "Administrator musi zatwierdzić ten konektor, zanim będzie można się połączyć.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
+      "organizationDataBoxLimitReached": "Ta organizacja osiągnęła limit skrzynek danych. Usuń jedną, zanim dodasz kolejną.",
+      "organizationDataBoxesChanged": "Skrzynki danych organizacji zmieniły się w międzyczasie. Odśwież stronę i spróbuj ponownie.",
       "organizationLastOwner": "Organizacja musi mieć właściciela. Najpierw przekaż własność.",
       "organizationMemberLimitReached": "Ta organizacja osiągnęła limit członków.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
@@ -3163,7 +3239,6 @@
     "noFileInVersion": "Brak pliku w tej wersji",
     "noFullScreenPreview": "Ten typ pliku nie ma podglądu pełnoekranowego.",
     "noLabel": "Brak oznaczenia",
-    "openInSidePanel": "Otwórz w panelu bocznym",
     "redlinePreview": "Śledzone zmiany",
     "removeLabel": "Usuń oznaczenie",
     "saveComparison": "Zapisz porównanie",
@@ -4283,7 +4358,7 @@
       "derivedQuestion": "Pytanie wyodrębniające",
       "derivedType": "Format odpowiedzi",
       "descriptionPlaceholder": "Co sprawdza ten playbook?",
-      "disabledBadge": "Wyłączone — pomijane podczas uruchomień",
+      "disabledBadge": "Wyłączone: pomijane podczas uruchomień",
       "discardChanges": "Odrzuć zmiany",
       "duplicatePosition": "Duplikuj stanowisko",
       "empty": "Brak playbooków",
@@ -4298,7 +4373,7 @@
         "restricted": "Odpowiedź musi być nieobecna"
       },
       "extractOnlyBadge": "Tylko ekstrakcja",
-      "extractOnlyDescription": "Bez oceny — wartość jest zapisywana w tabeli.",
+      "extractOnlyDescription": "Bez oceny; wartość jest zapisywana w tabeli.",
       "extraction": "Ekstrakcja",
       "extractionAuto": "Automatyczna",
       "extractionManual": "Ręczna",
@@ -4544,6 +4619,10 @@
         "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
         "visibilityRestored": "Przywrócono udostępnianie"
       },
+      "orphaned": {
+        "description": "Tekst tego dokumentu zmienił się od ich utworzenia: nie udało się ponownie odnaleźć w nim oznaczonych fragmentów albo występują one teraz w kilku miejscach. Nie są one wyświetlane w tekście.",
+        "summary": "{count, plural, one {# zaznaczenie lub komentarz nie pasuje już do tekstu} few {# zaznaczenia lub komentarze nie pasują już do tekstu} many {# zaznaczeń lub komentarzy nie pasuje już do tekstu} other {# zaznaczenia lub komentarza nie pasuje już do tekstu}}"
+      },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
       "styleHighlight": "Wyróżnienie",
@@ -4696,7 +4775,7 @@
     "continue": "Kontynuuj",
     "enterTeamName": "Wpisz powyżej nazwę zespołu",
     "getStarted": "Rozpocznij",
-    "inviteExternal": "Użytkownik zewnętrzny — uzyska dostęp do Twoich dokumentów",
+    "inviteExternal": "Użytkownik zewnętrzny: uzyska dostęp do Twoich dokumentów",
     "inviteHint": "Oddziel adresy przecinkami lub wklej listę.",
     "inviteInvalidEmail": "Nieprawidłowy e-mail: {value}",
     "inviteSubtitle": "Otrzymają e-mail z linkiem do dołączenia.",
@@ -4793,7 +4872,7 @@
       "prices": {
         "azureManaged": "Ceny wdrożenia są zarządzane w Azure.",
         "empty": "Dodaj dostawcę, aby zobaczyć ceny modeli",
-        "emptyHint": "Wybierz dostawcę po lewej — pokażemy tu ceny jego modeli.",
+        "emptyHint": "Wybierz dostawcę po lewej. Pokażemy tu ceny jego modeli.",
         "inMtok": "We/M",
         "model": "Model",
         "outMtok": "Wy/M",
@@ -5494,6 +5573,12 @@
         "ledes": "Fakturowanie elektroniczne (LEDES)",
         "title": "Projekty rozliczeń z AI"
       },
+      "dataBoxes": {
+        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
+        "remove": "Usuń skrzynkę danych {address}",
+        "title": "Skrzynki danych organizacji"
+      },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",
@@ -5521,7 +5606,7 @@
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
       "promptCaching": {
-        "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie — tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
+        "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie; tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
         "title": "Cache'owanie promptów",
         "toggleLabel": "Zezwól na cache'owanie promptów u dostawców AI"
       },
@@ -5635,6 +5720,7 @@
     "citingDecisionsSortCitations": "Wzmianki o tym przepisie",
     "citingDecisionsSortDate": "Data orzeczenia",
     "citingDecisionsYear": "Rok orzeczenia",
+    "citingDecisionsYearOutOfRange": "Wpisz rok od {min} do {max}.",
     "citingDecisionsYearPlaceholder": "Wszystkie lata",
     "columns": {
       "act": "Akt",
@@ -5680,7 +5766,6 @@
     "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
-    "openProvision": "Otwórz przepis",
     "outline": "Spis treści",
     "outlineJumpLabel": "Przejdź do przepisu",
     "outlineJumpPlaceholder": "§ 10 lub tytuł",
@@ -6162,7 +6247,7 @@
       "fieldSettingBrackets": "Znacznik szablonu nie może zawierać nawiasów klamrowych. Usuń je z ustawień pola „{fieldPath}”.",
       "fieldWithoutMarker": "Pole „{fieldPath}” nie ma znacznika w dokumencie, więc jego ustawienia nie zostały zapisane.",
       "fillFormPreview": "Tak pojawi się w formularzu",
-      "fillStale": "Niezapisane zmiany — zapisz, aby wypełniać najnowsze pola.",
+      "fillStale": "Niezapisane zmiany; zapisz, aby wypełniać najnowsze pola.",
       "filledByPerson": "Osoba",
       "formulaExampleLabel": "Przykład",
       "formulaNoFields": "Najpierw dodaj pole liczbowe, aby formuła miała co obliczać.",
@@ -6459,6 +6544,9 @@
       "calculating": "Obliczanie...",
       "errored": "Błąd",
       "formatNotSupported": "Format nie jest obsługiwany",
+      "recordChoose": "{count, plural, one {Potwierdź # dopasowanie} few {Wybierz spośród # dopasowań} many {Wybierz spośród # dopasowań} other {Wybierz spośród # dopasowania}}",
+      "recordCount": "{count, plural, one {# rekord} few {# rekordy} many {# rekordów} other {# rekordu}}",
+      "recordNotFound": "Nie znaleziono",
       "selectAValue": "Wybierz wartość",
       "selectValues": "Wybierz wartości",
       "wholeNumberOnly": "Wpisz liczbę całkowitą"
@@ -6925,7 +7013,7 @@
       "personalDescription": "Sprawy osobiste są prywatne. Awansuj je na sprawy klienckie, aby udostępnić zespołowi.",
       "personalLabel": "Osobista",
       "promoteCta": "Awansuj na sprawę kliencką",
-      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
+      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne: awansowane sprawy nie mogą wrócić do osobistych.",
       "promoteToClientConfirm": "Sprawa <bdi>{matterName}</bdi> zostanie przypisana do klienta <bdi>{clientName}</bdi> i udostępniona zespołowi. Nie będzie można przywrócić jej jako osobistej.",
       "promotedSuccess": "Sprawa awansowana",
       "recentClients": "Ostatni klienci",
@@ -7145,12 +7233,13 @@
       "optionsLabel": "Opcje",
       "person": "Osoba",
       "previewEmpty": "AI nie zwróciło żadnej wartości.",
-      "previewMockNotice": "Podgląd makietowy — backend jeszcze nie podłączony.",
+      "previewMockNotice": "Podgląd makietowy: backend jeszcze nie podłączony.",
       "previewOnFirst": "Podgląd na: {document}",
       "previewSkipped": "Brak odpowiedniego wejścia w tym dokumencie.",
       "previewSubject": "Wypróbuj na próbce",
       "previewUnsupported": "Podgląd niedostępny dla tego typu dokumentu.",
       "readingFrom": "AI czyta z",
+      "record": "Rekord",
       "referencesItself": "Właściwość odwołuje się do siebie przez inne właściwości",
       "resultType": "Typ wyniku",
       "returnsLabel": "Format",

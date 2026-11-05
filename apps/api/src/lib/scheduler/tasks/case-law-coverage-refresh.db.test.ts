@@ -9,6 +9,7 @@ import {
   BACKFILL_TABLE_CONTENTION,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import { CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL } from "@/api/db/corpus-schema-lane";
 import {
   caseLawCoverageSummaries,
   databaseBackfillStates,
@@ -292,6 +293,54 @@ test("a held coverage refresh computes nothing and keeps the stored answer", asy
   });
   expect(await held(context)).toBeUndefined();
   expect(computations).toBe(0);
+  expect(await storedSummary()).toEqual(published);
+});
+
+test("a coverage refresh yields to a schema upgrade holding the lane", async () => {
+  await db
+    .delete(databaseBackfillStates)
+    .where(eq(databaseBackfillStates.name, SCHEDULER_BACKFILL_IDS.coverage));
+  const context = await refreshContext();
+  const published = await storedSummary();
+  // An upgrade holds the lane exclusive: every try is refused, and each
+  // transaction records what it sent.
+  const transactions: string[][] = [];
+  const laneHeld = asTestRaw<SchedulerDb>({
+    execute: db.execute.bind(db),
+    transaction: async <T>(work: (tx: unknown) => Promise<T>) =>
+      await db.transaction(async (tx) => {
+        const sent: string[] = [];
+        transactions.push(sent);
+        return await work(
+          new Proxy(tx, {
+            get: (target, property, receiver) =>
+              property === "execute"
+                ? async (query: Parameters<typeof target.execute>[0]) => {
+                    sent.push(typeof query === "string" ? query : "execute");
+                    return query === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL
+                      ? [{ granted: false }]
+                      : await target.execute(query);
+                  }
+                : Reflect.get(target, property, receiver),
+          }),
+        );
+      }),
+  });
+  let computations = 0;
+  const yielded = createCaseLawCoverageRefreshTask({
+    createRuntime,
+    laneSleep: async () => {},
+    compute: async () => {
+      computations += 1;
+      return { answer: CASE_LAW_COVERAGE_SNAPSHOT_FIXTURE, complete: true };
+    },
+  });
+  expect(await yielded({ ...context, db: laneHeld })).toBeUndefined();
+  expect(computations).toBe(0);
+  expect(transactions.length).toBeGreaterThan(1);
+  for (const sent of transactions) {
+    expect(sent).toEqual([CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL]);
+  }
   expect(await storedSummary()).toEqual(published);
 });
 

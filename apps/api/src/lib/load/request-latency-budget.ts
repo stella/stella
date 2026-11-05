@@ -64,6 +64,16 @@ export const remainingRequestBudgetMs = (): number | undefined => {
 };
 
 /**
+ * The `performance.now()` at which the current request began, the start its
+ * budget is counted from; undefined outside a scope. Shared work queues
+ * order by it, so the request that has waited longest goes first.
+ */
+export const requestStartedAtMs = (): number | undefined => {
+  const scope = requestLatencyScope.getStore();
+  return scope === undefined ? undefined : scope.deadlineAtMs - scope.budgetMs;
+};
+
+/**
  * How far below the request's deadline a timeout may end and still be the
  * request's: the clamp floors to whole milliseconds, so a clamped timer fires
  * up to a millisecond early.

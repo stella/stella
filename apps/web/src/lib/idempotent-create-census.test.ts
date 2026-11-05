@@ -359,7 +359,8 @@ const createMutationViolations = ({
           name === "useIdempotentMutation") ||
         (isModule({
           module,
-          owner: "routes/_protected.admin/-hooks/use-settings-mutation",
+          owner:
+            "routes/_protected.settings/organization/-hooks/use-settings-mutation",
         }) &&
           name === "useSettingsMutation") ||
         (isModule({
@@ -1165,7 +1166,7 @@ test("create census follows the owned subrequest derivation and rejects an unown
 test("create census trusts owning mutation wrappers and refuses unrelated matching names", () => {
   const source = `
     import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
-    import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
+    import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
     import { useIdempotentMutation } from "@/unrelated/use-idempotent-mutation";
     useCapabilityMutation({ mutationFn: (body, request) => api.things.put(body, request) });
     useSettingsMutation({ mutationFn: (body, request) => api.things.put(body, request) });

@@ -5,6 +5,7 @@ import {
   afterEach,
   beforeAll,
   beforeEach,
+  describe,
   expect,
   test,
 } from "bun:test";
@@ -49,6 +50,7 @@ import {
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
   CASE_LAW_REPLAY_SCOPE,
   REPLAY_REJECTION_POLICY,
@@ -73,6 +75,8 @@ import {
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
+import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
@@ -2033,4 +2037,152 @@ test("replay updates exactly changed rows and produces content-free terminal res
   await db.execute(
     sql`DROP TRIGGER count_replay_decision_update ON case_law_decisions`,
   );
+});
+
+describe("a replay page writes its rows' payloads as one pack", () => {
+  /** Two rows of one source whose stored payloads re-parse to new text. */
+  const twoStaleRows = async () => {
+    const fixture = await replayConvergenceFixture("Body text before.");
+    const secondId = createSafeId<"caseLawDecision">();
+    await db
+      .update(caseLawDecisions)
+      .set({ parserVersion: 3, createdAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(caseLawDecisions.id, fixture.id));
+    await db.insert(caseLawDecisions).values({
+      id: secondId,
+      sourceId: fixture.sourceId,
+      caseNumber: "C-11/26",
+      court: fixture.result.court,
+      country: fixture.result.country,
+      language: fixture.result.language,
+      metadata: { celex: "62026CJ0011" },
+      sourceHash: "before-the-parser-change",
+      parserVersion: 3,
+      sourceRawS3Key: "case-law/raw/legacy/second",
+      sourceRawContentType: "application/xhtml+xml",
+      createdAt: new Date("2026-01-02T00:00:00Z"),
+    });
+    const adapter = stubAdapter((stored) => ({
+      type: "parsed",
+      result: plainTextIngestionResult({
+        ...fixture.result,
+        caseNumber: stored.caseNumber,
+        fulltext: `Body text after, ${stored.caseNumber}.`,
+        rawHash: `after-${stored.caseNumber}`,
+      }),
+    }));
+    return { ...fixture, secondId, adapter };
+  };
+
+  const canonicalTransfer = (
+    put: (packs: readonly EncodedPack[]) => Result<void, CorpusPackError>,
+  ) =>
+    ({
+      mode: "canonical",
+      transfer: {
+        layout: "packs",
+        putPacks: async ({ packs }) => await Promise.resolve(put(packs)),
+      },
+    }) satisfies CaseLawCorpusDependencies;
+
+  const mirrorStatuses = async (ids: readonly SafeId<"caseLawDecision">[]) =>
+    await Promise.all(
+      ids.map(async (id) => {
+        const [row] = await db
+          .select({ status: caseLawDecisions.corpusMirrorStatus })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        return row?.status;
+      }),
+    );
+
+  const replayWith = async (
+    fixture: Awaited<ReturnType<typeof twoStaleRows>>,
+    corpus: CaseLawCorpusDependencies,
+  ) => {
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: fixture.sourceId,
+    });
+    if (lease === null) {
+      return panic("Expected the source ingestion lease to be free");
+    }
+    try {
+      const run = await replayCaseLawSource({
+        adapter: fixture.adapter,
+        scopedDb,
+        sourceId: fixture.sourceId,
+        sourceLease: lease,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+        readStoredRaw: async () =>
+          await Promise.resolve(new TextEncoder().encode(STORED_PAYLOAD)),
+        bound: { type: "at-most", limit: 10 },
+        pageSize: 10,
+        corpus,
+      });
+      if (run.type !== "ran") {
+        return panic("Expected the replay to run");
+      }
+      return run.report;
+    } finally {
+      await lease.release();
+    }
+  };
+
+  test("both rows of a page settle through a single pack transfer", async () => {
+    const fixture = await twoStaleRows();
+    const transfers: (readonly EncodedPack[])[] = [];
+    const report = await replayWith(
+      fixture,
+      canonicalTransfer((packs) => {
+        transfers.push(packs);
+        return Result.ok(undefined);
+      }),
+    );
+
+    expect(report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(2);
+    expect(report.resumeAfter).toBe(fixture.secondId);
+    // One transfer of one pack for the page, not one per row.
+    expect(transfers.map((packs) => packs.length)).toEqual([1]);
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+    ]);
+  });
+
+  test("a pack that does not land holds the cursor, and the next run writes the page again", async () => {
+    const fixture = await twoStaleRows();
+    const failed = await replayWith(
+      fixture,
+      canonicalTransfer(() =>
+        Result.err(new CorpusPackError({ message: "bucket unreachable" })),
+      ),
+    );
+
+    // The rows were written but their payloads never became durable: the
+    // first one halts the run as retryable, and nothing advances the cursor.
+    expect(failed.outcomes[REPLAY_ROW_OUTCOME.RETRYABLE]).toBe(1);
+    expect(failed.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+    expect(failed.resumeAfter).toBeNull();
+    expect(failed.haltReason).toContain("retryable outcome");
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+    ]);
+
+    const transfers: (readonly EncodedPack[])[] = [];
+    const resumed = await replayWith(
+      fixture,
+      canonicalTransfer((packs) => {
+        transfers.push(packs);
+        return Result.ok(undefined);
+      }),
+    );
+    expect(resumed.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(2);
+    expect(transfers.map((packs) => packs.length)).toEqual([1]);
+    expect(await mirrorStatuses([fixture.id, fixture.secondId])).toEqual([
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+    ]);
+  });
 });

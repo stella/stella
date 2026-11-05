@@ -1473,13 +1473,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/oauth-connections.ts::disconnectOAuthConnectionForUser.try",
-    "writes": {
-      "delete:oauthConsent": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
-  },
-  {
     "id": "apps/api/src/lib/properties/property-status.ts::markPropertiesFresh",
     "writes": {
       "update:properties": 1

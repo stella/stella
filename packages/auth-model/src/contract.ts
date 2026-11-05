@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.12";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.16";
 
 export const AUTH_SESSION_STARTUP_HEADER = "x-stella-session-startup";
 
@@ -106,7 +106,7 @@ export const OPAQUE_ORGANIZATION_SLUG_PATTERN = /^org-[a-z2-7]{10}$/u;
  * the identifier's length; organization names never enter the identifier.
  */
 export const createOpaqueOrganizationSlug = (
-  fillRandom: (bytes: Uint8Array) => void = (bytes) => {
+  fillRandom: (bytes: Uint8Array<ArrayBuffer>) => void = (bytes) => {
     crypto.getRandomValues(bytes);
   },
 ): string => {

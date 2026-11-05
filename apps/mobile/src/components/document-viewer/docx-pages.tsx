@@ -76,9 +76,9 @@ const SAVE_PAUSE_MS = 1500;
 /**
  * A Word document laid out in pages by folio, as the web shows it, `zoom`
  * times the width folio fits the page to. As on the web there is no edit
- * button: read-only, a tap into the text asks for editing (`onEditRequest`);
- * once `editable`, folio edits in place and the edits are saved after each
- * pause in typing, and at once when `saveRequest` changes, which is final.
+ * button: a tap into the text asks for editing (`onEditRequest`). While
+ * `editable`, folio edits in place and the edits are saved after each pause
+ * in typing, and at once when `saveRequest` changes, which is final.
  */
 export const DocxPages = ({
   bytes,
@@ -95,16 +95,20 @@ export const DocxPages = ({
   locale: string;
   /** The page's width as a factor of folio's fit (see ./zoom.ts). */
   zoom: number;
-  /** The app holds the document's edit lock, so folio edits. */
+  /**
+   * folio takes edits: a Word document the app may open for editing. The
+   * saves wait for the app to hold its edit lock.
+   */
   editable: boolean;
   /** Changes to ask for the edits now; such a save ends the editing. */
   saveRequest: number;
   onEditRequest: () => void;
   /**
    * One save: the whole document, or null when nothing changed since the
-   * last save. The next save waits for this one.
+   * last save. The next save waits for this one. Whether it was stored comes
+   * back; edits that were not stay for the next save.
    */
-  onSaved: (bytes: Uint8Array | null, final: boolean) => Promise<void>;
+  onSaved: (bytes: Uint8Array | null, final: boolean) => Promise<boolean>;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -130,7 +134,9 @@ export const DocxPages = ({
       await onSaved(null, final);
       return;
     }
-    await onSaved(new Uint8Array(buffer), final);
+    if (!(await onSaved(new Uint8Array(buffer), final))) {
+      dirty.current = true;
+    }
   };
 
   // Saves wait for one another; a failed one leaves the edits to the next.
@@ -251,9 +257,11 @@ export const DocxPages = ({
     <IntlProvider locale={uiLocale} messages={messages}>
       <div
         className="h-full"
-        // A tap into the read-only text asks for editing, as a click does on
-        // the web; a scroll does not end in a click.
-        onClickCapture={editable ? undefined : onEditRequest}
+        // A tap into the text asks for editing, as a click does on the web;
+        // a scroll does not end in a click. The text is editable already,
+        // so the same tap brings up the keyboard: iOS shows it only for a
+        // field focused within the tap.
+        onClickCapture={onEditRequest}
       >
         <DocxEditor
           autoOpenReviewSidebar={false}

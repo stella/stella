@@ -423,6 +423,7 @@ test("sentinel reads pass only with a matching early overflow decision", () => {
   expect(findTransferReads(file, safe)).toEqual([]);
   for (const decision of [
     "if (rows.length > pageSize) console.log('overflow');",
+    "if (rows[length] > pageSize) return { type: 'overflow' };",
     "if (otherRows.length > pageSize) return { type: 'overflow' };",
     "if (rows.length > OTHER_CAP) return { type: 'overflow' };",
     "if (rows.length > pageSize) return makeCsv(rows);",

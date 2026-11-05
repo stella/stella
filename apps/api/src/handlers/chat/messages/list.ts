@@ -34,6 +34,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
+import {
+  decodeChatRunTarget,
+  localRunTargetField,
+} from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -148,6 +152,7 @@ const getMessages = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -231,6 +236,7 @@ const getMessages = createSafeRootHandler(
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatRunTarget: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -400,6 +406,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
+          ...localRunTargetField(decodeChatRunTarget(null)),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -492,6 +499,8 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
+      // Present only for a thread whose turns run on a computer; absent is cloud.
+      ...localRunTargetField(decodeChatRunTarget(thread.chatRunTarget)),
       context,
     });
   },

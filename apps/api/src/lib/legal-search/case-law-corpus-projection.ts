@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import {
@@ -47,7 +48,7 @@ export const caseLawCorpusDocumentCanRecur = (generation: string) =>
 
 /**
  * The revision this generation recorded as applied for the decision, by the
- * states table's primary key. Read beside `currentCaseLawCorpusProjection`,
+ * states table's primary key. Read beside `servedCaseLawCorpusProjection`,
  * it names the copy of the decision a passage read may return.
  */
 export const caseLawCorpusAppliedRevision = (generation: string) =>
@@ -60,24 +61,62 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
   )`;
 
 /**
+ * Which applied copy a read may stand on.
+ *
+ * `served`: any applied copy. A search hit or a provider row shows the copy's
+ * snippet and nothing it must agree with, so a queued upsert keeps it served.
+ *
+ * `current`: only a copy equal to what the generation wants (epoch,
+ * fingerprint and index). A read that pairs the copy's text with the
+ * decision's current AST, as research does with court paragraph numbers,
+ * must not pair an old excerpt with new numbering; it falls back to the AST
+ * while an upsert is queued.
+ */
+type CaseLawCorpusCopy = "served" | "current";
+
+const copyIsCurrent = (copy: CaseLawCorpusCopy): SQL => {
+  switch (copy) {
+    case "served":
+      return sql``;
+    case "current":
+      return sql`
+        AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
+        AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
+        AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}`;
+    default:
+      copy satisfies never;
+      return panic(`Unhandled corpus copy: ${String(copy)}`);
+  }
+};
+
+/**
  * The served projection state of the decision at `resolvedGeneration`, the
  * generation the jurisdiction-serving pointer resolved for the decision's
- * country (never a bare generation): applied equals desired on every field
- * that can change what is served, and the applied revision sits in the index
- * that generation routes the decision's current country to.
+ * country (never a bare generation): an applied upsert whose revision sits in
+ * the index that generation routes the decision's current country to, with no
+ * erasure queued.
+ *
+ * A queued upsert keeps the applied copy served until the new one lands:
+ * passage reads name `applied_revision`, so a hit always comes from the copy
+ * recorded here, and the published view has already decided whether the
+ * decision may be shown at all. Index lag can make a snippet one parse old,
+ * never hide a decision.
+ *
+ * An applied upsert always names its revision (the states table's
+ * `applied_shape` check), so the predicate does not repeat that: restating
+ * it would match the partial census index and steer the planner off the
+ * primary key this lookup is registered on.
  */
 const acceptedCaseLawProjectionStateAt = (
   resolvedGeneration: SQLWrapper,
+  copy: CaseLawCorpusCopy,
 ): SQL => sql`
         ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
         AND ${corpusIndexProjectionStates.generation} = ${resolvedGeneration}
         AND ${corpusIndexProjectionStates.entityId} = ${publishedCaseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
-        AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
-        AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, publishedCaseLawDecisions.country)})`;
+        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, publishedCaseLawDecisions.country)})${copyIsCurrent(copy)}`;
 
 /** The jurisdiction-serving pointer row of the decision's country. */
 const caseLawDecisionPointer = sql`
@@ -86,27 +125,38 @@ const caseLawDecisionPointer = sql`
 
 /**
  * Accept a physical hit only when the generation that serves the decision's
- * country recorded the current decision in its current jurisdiction and has
- * no queued mutation: the one the jurisdiction-serving pointer names, else
- * the serving generation the caller passes.
+ * country holds an applied copy of the decision in its current jurisdiction
+ * and no erasure is queued: the one the jurisdiction-serving pointer names,
+ * else the serving generation the caller passes.
  *
- * A queued mutation moves desired ahead of applied, and a queued erasure
- * leaves `desired_fingerprint` null, so neither is accepted. No row at all
- * means the generation does not hold the decision.
+ * A queued erasure sets `desired_action` to erase and is not accepted. A
+ * queued upsert is: the applied copy answers until the new one replaces it.
+ * No row at all, or no applied upsert, means the generation does not hold the
+ * decision.
  *
  * The pointer is joined rather than read by a scalar subquery, so the
  * generation is a plain column of the lookup and the states table's primary
  * key, `(family, generation, entity_id)`, answers it once per candidate row.
  */
-export const currentCaseLawCorpusProjection = (generation: string): SQL =>
+const caseLawCorpusCopyExists = (
+  generation: string,
+  copy: CaseLawCorpusCopy,
+): SQL =>
   sql`EXISTS (
       SELECT 1
       FROM (VALUES (1)) serving_anchor (present)
       LEFT JOIN ${corpusIndexJurisdictionServing} pointer
         ON ${caseLawDecisionPointer}
       JOIN ${corpusIndexProjectionStates}
-        ON ${acceptedCaseLawProjectionStateAt(sql`COALESCE(pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}, ${generation})`)}
+        ON ${acceptedCaseLawProjectionStateAt(sql`COALESCE(pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}, ${generation})`, copy)}
     )`;
+
+export const servedCaseLawCorpusProjection = (generation: string): SQL =>
+  caseLawCorpusCopyExists(generation, "served");
+
+/** As `servedCaseLawCorpusProjection`, but only while no upsert is queued. */
+export const currentCaseLawCorpusProjection = (generation: string): SQL =>
+  caseLawCorpusCopyExists(generation, "current");
 
 /** Derive each accepted decision's retrieval contract from SQL's effective generation. */
 export const caseLawAppliedProjections = (

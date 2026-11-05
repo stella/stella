@@ -67,6 +67,7 @@
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
+    "icu-minify": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:"
   }

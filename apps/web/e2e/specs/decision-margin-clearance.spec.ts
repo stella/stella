@@ -275,15 +275,12 @@ for (const { locale, dir, messages } of WIDE_CASES) {
         frame.y + frame.height / 2,
       );
       await page.mouse.wheel(0, 1800);
-      const currentSection = aside.getByTitle(
-        messages.caseLaw.analysis.backToSection,
+      const currentSection = aside.locator(
+        '[data-slot="reader-current-section"]',
       );
       // The header stays mounted at zero opacity until a heading has passed
       // the top, so its own visibility flag is what says it shows.
-      await expect(currentSection.locator("..")).toHaveAttribute(
-        "aria-hidden",
-        "false",
-      );
+      await expect(currentSection).toHaveAttribute("aria-hidden", "false");
       const barBox = await box(bar);
       expect(intersects(barBox, await box(currentSection))).toBe(false);
       expect(intersects(barBox, await box(aside))).toBe(false);
