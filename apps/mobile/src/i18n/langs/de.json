@@ -189,6 +189,8 @@
       "notSaved": "Noch nicht gespeichert",
       "done": "Fertig",
       "openFailed": "Dieses Dokument kann gerade nicht bearbeitet werden",
+      "resumed": "Sie haben eine unvollendete Bearbeitung dieses Dokuments; sie wird fortgesetzt. Was Sie gerade getippt haben, wurde nicht übernommen.",
+      "newerVersion": "Inzwischen wurde eine neuere Version dieses Dokuments gespeichert; die Bearbeitung wird mit ihr fortgesetzt. Was Sie gerade getippt haben, wurde nicht übernommen.",
       "takenOver": "Jemand anderes bearbeitet dieses Dokument jetzt. Ihre Änderungen seit dem letzten Speichern wurden nicht übernommen.",
       "finishFailed": "Ihre Änderungen sind gespeichert, wurden aber noch nicht zu einer neuen Version. Tippen Sie erneut auf Fertig oder verlassen Sie das Dokument: Die nächste Bearbeitung setzt dort an.",
       "notStored": "Ihre letzten Änderungen konnten nicht gespeichert werden. Bleiben Sie, um es erneut zu versuchen, oder verlassen Sie das Dokument ohne sie.",
@@ -223,7 +225,10 @@
     "signOut": "Abmelden",
     "deleteAccount": "Konto löschen",
     "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können.",
-    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
+    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut.",
+    "lockScreenTitle": "Sperrbildschirm",
+    "timerDetails": "Timer-Details",
+    "timerDetailsHint": "Ändert sich ein Timer auf einem anderen Gerät, bringt Apples Mitteilungsdienst seine Beschreibung und Akte auf den Sperrbildschirm. Ausgeschaltet zeigt er nur die Zeit, bis Sie die App öffnen."
   },
   "header": {
     "search": "Suchen"
@@ -263,10 +268,6 @@
     "newTimer": "Neuer Timer",
     "description": "Woran arbeiten Sie?",
     "matterTitle": "Akte",
-    "noMatter": "Keine Akte",
-    "noDescription": "Keine Beschreibung",
-    "running": "Läuft",
-    "paused": "Pausiert",
     "pause": "Pausieren",
     "resume": "Fortsetzen",
     "save": "Speichern",
@@ -277,8 +278,7 @@
     "retry": "Erneut versuchen",
     "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
     "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
-    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut.",
-    "more": "{count, plural, one {# weiterer Timer} other {# weitere Timer}}"
+    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
   },
   "scan": {
     "title": "Dokument scannen",

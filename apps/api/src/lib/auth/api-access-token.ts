@@ -262,6 +262,18 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/me/push-devices/unregister.ts",
     uncataloged: "native_device",
   },
+  // The phone that shows the person's timer on its Lock Screen: the same
+  // reasoning, for the person's own phone rows.
+  "PUT /v1/me/timer-activity-devices/:deviceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/timer-activity-devices/register.ts",
+    uncataloged: "native_device",
+  },
+  "DELETE /v1/me/timer-activity-devices/:deviceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/timer-activity-devices/unregister.ts",
+    uncataloged: "native_device",
+  },
 } as const satisfies Record<
   string,
   {

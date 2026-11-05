@@ -38,7 +38,7 @@ import {
   authenticateSession,
   authorizeWorkspace,
 } from "@/api/lib/auth";
-import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
 import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
 import type { AccountAccess } from "@/api/lib/auth/account-access";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";

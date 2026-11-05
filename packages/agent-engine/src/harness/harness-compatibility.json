@@ -1,14 +1,15 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-28T00:00:00Z",
+  "updatedAt": "2026-11-03T00:00:00Z",
   "compatibility": [
     {
       "harness": "codex",
       "desktopRange": ">=0.0.1",
-      "recommendedVersion": "0.164.0",
-      "recommendedRange": ">=0.164.0",
+      "recommendedVersion": "0.166.0",
+      "recommendedRange": ">=0.166.0",
       "ranges": [
-        { "range": ">=0.164.0", "status": "supported" },
+        { "range": ">=0.166.0", "status": "supported" },
+        { "range": ">=0.164.0 <0.166.0", "status": "graceful" },
         { "range": "<0.164.0", "status": "unsupported" }
       ]
     },

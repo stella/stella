@@ -276,7 +276,7 @@ type WrittenCitationRead = {
 type ReadWrittenCitationOptions = {
   citation: string;
   asOf?: string;
-  namedWorks?: readonly { eli: string }[];
+  namedWorks?: readonly { eli: string; validUntil: string | null }[];
 };
 
 /** Resolves a written citation, recording the ELI opened, names read and misses reported. */
@@ -340,7 +340,7 @@ describe("written law citations", () => {
   test("a short title the profile does not list is read from the corpus's titles", async () => {
     const read = await readWrittenCitation({
       citation: "§ 2 odst. 4 písm. b) zákona o obětech trestných činů",
-      namedWorks: [{ eli: VICTIMS_ACT_ELI }],
+      namedWorks: [{ eli: VICTIMS_ACT_ELI, validUntil: null }],
     });
     expect(read.namesRead).toEqual(["zákona o obětech trestných činů"]);
     expect(read.eli).toBe(VICTIMS_ACT_ELI);
@@ -364,14 +364,42 @@ describe("written law citations", () => {
     const read = await readWrittenCitation({
       citation: "zákona o obětech trestných činů",
       namedWorks: [
-        { eli: VICTIMS_ACT_ELI },
-        { eli: CONSTITUTIONAL_COURT_ACT_ELI },
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+        { eli: CONSTITUTIONAL_COURT_ACT_ELI, validUntil: null },
       ],
     });
     expect(read.response).toEqual({
       status: "not_found",
       reason: "unknown_document",
     });
+    expect(read.reported).toEqual([]);
+  });
+
+  test("the citing date picks the act a name meant then", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+      ],
+    });
+    expect(read.eli).toBe(VICTIMS_ACT_ELI);
+  });
+
+  test("an act named only before it was issued, or after it ended, is not opened", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+      ],
+    });
+    expect(read.eli).toBeUndefined();
     expect(read.reported).toEqual([]);
   });
 

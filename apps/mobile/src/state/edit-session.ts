@@ -33,6 +33,8 @@ const openedSchema = v.object({
   sessionToken: v.pipe(v.string(), v.minLength(1)),
   downloadUrl: v.pipe(v.string(), v.url()),
   fileName: v.pipe(v.string(), v.minLength(1)),
+  resumedFromCheckpoint: v.boolean(),
+  baseVersionNumber: v.pipe(v.number(), v.integer()),
 });
 
 /** An open edit session; its token changes as checkpoints rotate it. */
@@ -45,6 +47,16 @@ export type EditSession = {
 export type OpenedEditSession = EditSession & {
   /** A short-lived link to the working copy, with any earlier checkpoint. */
   readonly downloadUrl: string;
+  /**
+   * Whether the working copy holds an earlier unfinished edit; otherwise it
+   * is the document's current version.
+   */
+  readonly resumedFromCheckpoint: boolean;
+  /**
+   * The version the lock is on: the session's edits become the version after
+   * it, so they must start from it.
+   */
+  readonly baseVersionNumber: number;
 };
 
 const lockPath = (workspaceId: string, action: "open" | "release") =>

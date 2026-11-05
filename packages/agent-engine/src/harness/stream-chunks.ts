@@ -9,14 +9,16 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 
-import type {
-  HarnessApprovalRequest,
-  HarnessEvent,
-  HarnessFailure,
-  HarnessQuestionRequest,
-  HarnessToolCall,
-  HarnessUsage,
+import {
+  approvalMessage,
+  type HarnessApprovalRequest,
+  type HarnessEvent,
+  type HarnessFailure,
+  type HarnessQuestionRequest,
+  type HarnessToolCall,
+  type HarnessUsage,
 } from "./events";
 
 /**
@@ -37,7 +39,7 @@ import type {
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
 /** Tool name for a harness question, matching Codex's native item name. */
-export const HARNESS_QUESTION_TOOL = "request_user_input";
+export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
 export type HarnessChunkContext = {
   harness: AgentHarness;
@@ -389,12 +391,11 @@ class ChunkMapper {
             {
               id: request.requestId,
               reason: "tool_call",
-              message:
-                request.reason ??
-                `Approval required to run ${request.toolCall.name}`,
+              message: approvalMessage(request),
               toolCallId: request.toolCall.id,
               metadata: {
                 kind: "approval",
+                reason: request.reason,
                 toolName: request.toolCall.name,
                 input: request.toolCall.input,
                 approvalKind: request.kind,
