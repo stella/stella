@@ -80,6 +80,11 @@ are redefined per palette; components need no palette-specific code.
 
 ### Brand Colours (Reference)
 
+Rendered from `BRAND_PALETTE` in `packages/brand/src/palette.ts`
+(`@stll/brand`), which also exports the sRGB triples PDF output draws with.
+
+<!-- BEGIN GENERATED BRAND COLOURS -->
+
 | Name        | Hex       | Usage                          |
 | ----------- | --------- | ------------------------------ |
 | Black       | `#000`    | Primary text, logo mark        |
@@ -87,8 +92,16 @@ are redefined per palette; components need no palette-specific code.
 | Pale Blue   | `#e2f6fd` | Light tint surfaces            |
 | Blue Accent | `#59a1d4` | Accent in marketing material   |
 
+<!-- END GENERATED BRAND COLOURS -->
+
 ### Colour Discipline
 
+- A colour is a theme token (`var(--token)` or a token class) or a
+  `@stll/brand` constant. The `no-raw-color-literals` lint rule and the
+  stylelint colour rules reject a raw hex, `rgb()`, `hsl()`, `oklch()` or
+  `color()` anywhere else; colour that is document data, not design, is
+  exempted by path in `oxlint.config.ts` and `.stylelintrc.json`, each entry
+  with its reason.
 - One accent colour per surface region; everything else is neutral
   or a semantic status colour.
 - No pure `#000000` backgrounds in app chrome (dark mode uses a
