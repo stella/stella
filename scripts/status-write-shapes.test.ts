@@ -67,6 +67,14 @@ describe("lifecycle write shapes", () => {
       }
     }
   });
+  test("a caught value shadows a same-named binding of an unrelated table", () => {
+    const [table, keys] = Object.entries(columns)[0] ?? [];
+    expect(table).toBeDefined();
+    const key = keys?.[0];
+    const content = `const handle = unrelatedTable;\ntry { run(); } catch (handle) { db.update(handle).set({ ${key}: "running" }); }`;
+    expect(measure(content)).toBe(1);
+  });
+
   test("comments, strings, inserts and unrelated table or column writes are not updates", () => {
     expect(
       measure(
