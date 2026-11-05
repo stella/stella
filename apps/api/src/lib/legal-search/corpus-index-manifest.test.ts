@@ -131,6 +131,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
   // Czech decisions in the group v9 gave them; SVK keeps `cs_sk`, alone.
   case_law_v10: {
     AUT: "aut",
+    BRA: "bra",
     CZE: "cze",
     EU: "eu",
     GBR: "gbr",
