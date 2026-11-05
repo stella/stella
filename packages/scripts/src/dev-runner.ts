@@ -1590,9 +1590,16 @@ export const loadEnvFile = (envFilePath: string): Record<string, string> => {
 // `.env` is written once, so a variable `.env.example` gains later would stop
 // every existing checkout from booting. The example's values sit underneath the
 // checkout's own; the file itself is left alone, since worktrees share it.
-export const loadEnvFileWithExampleDefaults = (envFilePath: string) =>
+export const loadEnvFileWithExampleDefaults = (
+  envFilePath: string,
+  inherited: NodeJS.ProcessEnv = process.env,
+) =>
   expandEnvMap({
-    ...loadEnvFile(`${envFilePath}.example`),
+    ...Object.fromEntries(
+      Object.entries(loadEnvFile(`${envFilePath}.example`)).map(
+        ([key, value]) => [key, inherited[key] ?? value],
+      ),
+    ),
     ...loadEnvFile(envFilePath),
   });
 

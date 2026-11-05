@@ -1712,6 +1712,23 @@ describe("dev env factories", () => {
     expect(readFileSync(envPath, "utf-8")).toBe(before);
   });
 
+  test("a value the shell already sets beats the example's when the env file refers to it", () => {
+    const root = createTempDir();
+    const envPath = path.resolve(root, ".env");
+    writeFileSync(envPath, `REFERS="\${FROM_SHELL}"\nOWN="mine"\n`);
+    writeFileSync(
+      `${envPath}.example`,
+      'FROM_SHELL="example"\nOWN="example"\n',
+    );
+
+    expect(
+      loadEnvFileWithExampleDefaults(envPath, {
+        FROM_SHELL: "shell",
+        OWN: "shell",
+      }),
+    ).toEqual({ FROM_SHELL: "shell", OWN: "mine", REFERS: "shell" });
+  });
+
   test("threads computed ports into the web env", () => {
     expect(
       createWebEnv({
