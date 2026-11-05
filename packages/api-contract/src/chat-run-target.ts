@@ -3,6 +3,8 @@ import * as v from "valibot";
 import type { AgentHarness } from "./agent-harness";
 import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
   DESKTOP_RUNNER_HARNESS_STATE,
   type DesktopRunnerHarnessReport,
   desktopRunnerQuestionAnswersSchema,
@@ -41,6 +43,14 @@ export const chatLocalRunTargetSchema = v.strictObject({
   kind: v.literal("local"),
   harness: v.picklist(CHAT_LOCAL_RUN_HARNESSES),
   model: localModelSchema,
+  /**
+   * How much the run asks before it acts; `ask` when omitted. Only a mode
+   * the computer reports for the harness is accepted.
+   */
+  approvals: v.optional(
+    v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+    DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  ),
 });
 export type ChatLocalRunTarget = v.InferOutput<typeof chatLocalRunTargetSchema>;
 
@@ -67,6 +77,8 @@ export const CHAT_LOCAL_RUN_REFUSAL = {
   harnessUnavailable: "local_run_harness_unavailable",
   /** The harness no longer offers the chosen model. */
   modelUnavailable: "local_run_model_unavailable",
+  /** The computer cannot run the harness in the chosen approval mode. */
+  approvalsUnavailable: "local_run_approvals_unavailable",
   /** The turn does not fit what one run may carry. */
   tooLarge: "local_run_too_large",
   /** A turn cannot both run in the agent sandbox and on a computer. */

@@ -88,6 +88,7 @@
     ],
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
+    "approvalModes": ["ask", "auto", "full_auto"],
     "desktopMessageTypes": [
       "hello",
       "harness.status",
@@ -130,6 +131,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -202,6 +204,7 @@
           "state": "ready",
           "version": "2.0.30",
           "capabilities": ["approvals"],
+          "approvalModes": ["ask", "auto"],
           "models": [
             {
               "id": "model-large",
@@ -467,7 +470,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "ask"
         },
         "mcp": {
           "serverName": "stella",
@@ -497,7 +501,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -579,6 +584,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -615,6 +621,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -717,6 +724,7 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
+          "approvals": "full_auto",
           "clipboard": "blocked"
         },
         "mcp": {
@@ -762,7 +770,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -909,6 +918,77 @@
           ],
           "activeRuns": []
         }
+      },
+      {
+        "name": "ready harness without the default approval mode",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["auto", "full_auto"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "ready harness listing an approval mode twice",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "ask"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "ready harness without approval modes",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
       }
     ],
     "server": [
@@ -1000,7 +1080,8 @@
           ],
           "policy": {
             "network": "restricted",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -1047,7 +1128,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "home"
+            "fs": "home",
+            "approvals": "ask"
           },
           "mcp": {
             "serverName": "stella",
@@ -1094,7 +1176,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -1141,7 +1224,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           }
         }
       },
@@ -1166,6 +1250,101 @@
           "type": "ack",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
           "seq": "12"
+        }
+      },
+      {
+        "name": "unknown approval mode",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "bypass"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "run.start without an approval mode",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
         }
       }
     ]

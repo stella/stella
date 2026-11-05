@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
 import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
@@ -796,6 +797,12 @@ if (import.meta.main) {
       pid: process.pid,
       /** What follows the scenario: the launch's own arguments. */
       args: process.argv.slice(3),
+      /** Where the turn points package managers' caches. */
+      packageCache: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) =>
+          Object.hasOwn(PACKAGE_CACHE_FOLDERS, name),
+        ),
+      ),
       /** The variables a launch may set or remove. */
       launchEnvironment: Object.fromEntries(
         Object.entries(process.env).filter(

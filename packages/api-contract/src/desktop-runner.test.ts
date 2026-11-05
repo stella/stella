@@ -8,6 +8,7 @@ import {
   DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -126,6 +127,7 @@ describe("desktop runner fixtures", () => {
       runOutcomes: [...DESKTOP_RUNNER_RUN_OUTCOMES],
       networkPolicies: [...DESKTOP_RUNNER_NETWORK_POLICIES],
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
+      approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
       answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
@@ -210,6 +212,12 @@ describe("desktop runner fixtures", () => {
         ),
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
+        approvalModes: [
+          ...starts.map(({ policy }) => policy.approvals),
+          ...reports.flatMap((report) =>
+            report.state === "ready" ? report.approvalModes : [],
+          ),
+        ],
       }),
     ).toEqual(normalized(vocabularies));
   });

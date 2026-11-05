@@ -294,7 +294,11 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
-import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
+import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
@@ -1336,15 +1340,15 @@ const keepThreadRunTarget = async ({
   if (!routedLocally || runTarget === undefined) {
     return Result.ok();
   }
-  const runsOn = encodeChatRunTarget(runTarget);
-  const stored = thread.data.chatRunTarget;
-  if (stored === runsOn) {
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatRunTarget: runsOn })
+      .set({ chatLocalRunTarget: runsOn })
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1357,7 +1361,7 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatRunTarget: { old: stored, new: runsOn } },
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
     });
   });
 };

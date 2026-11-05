@@ -22,6 +22,7 @@ import {
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
@@ -83,6 +84,7 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
 };
 
 export type LocalRunContext = {
@@ -832,6 +834,7 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
@@ -882,6 +885,7 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
     case "too_large":

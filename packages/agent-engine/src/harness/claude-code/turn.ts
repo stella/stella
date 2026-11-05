@@ -236,7 +236,19 @@ type ClaudeCodeTurnSessionOptions = {
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  /**
+   * Whether a sandboxed command's request to reach a host is answered
+   * without asking. A local run's network is open; the CLI's sandbox routes
+   * commands through a proxy that asks about every new host.
+   */
+  allowSandboxNetwork: boolean;
 };
+
+/**
+ * The tool name the CLI asks with when a sandboxed command reaches a host its
+ * sandbox has not allowed yet. Not a model tool: no tool call carries it.
+ */
+const SANDBOX_NETWORK_TOOL = "SandboxNetworkAccess";
 
 export class ClaudeCodeTurnSession {
   private began = false;
@@ -257,11 +269,13 @@ export class ClaudeCodeTurnSession {
 
   private readonly lifecycle: HarnessTurnLifecycle<ClaudeCliClient>;
   private readonly stellaServer: string;
+  private readonly allowSandboxNetwork: boolean;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
+    allowSandboxNetwork,
   }: ClaudeCodeTurnSessionOptions) {
     this.lifecycle = new HarnessTurnLifecycle({
       gracePeriodMs,
@@ -269,6 +283,7 @@ export class ClaudeCodeTurnSession {
       name: "claude-turn",
     });
     this.stellaServer = stellaServer;
+    this.allowSandboxNetwork = allowSandboxNetwork;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -695,6 +710,13 @@ export class ClaudeCodeTurnSession {
       "permission request",
     );
     if (parsed === null) {
+      return;
+    }
+    if (parsed.tool_name === SANDBOX_NETWORK_TOOL && this.allowSandboxNetwork) {
+      this.client?.respond(controlId, {
+        behavior: "allow",
+        updatedInput: parsed.input,
+      });
       return;
     }
     const requestId = requestIdFor(controlId);

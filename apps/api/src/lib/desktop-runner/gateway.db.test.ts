@@ -8,7 +8,7 @@ import {
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -28,6 +28,7 @@ import {
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
@@ -35,6 +36,7 @@ import {
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
@@ -469,6 +471,8 @@ const openDesktop = async (
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
           { id: "claude-code", state: "needs_login", version: "2.1.0" },
@@ -536,12 +540,17 @@ const runnerRows = async (
       ),
     );
 
-const startInput = (desktopId: string) => ({
+const startInput = (
+  desktopId: string,
+  approvals: DesktopRunnerApprovalMode = "ask",
+  harness: "codex" | "claude-code" = "codex",
+) => ({
   owner,
   desktopId,
-  harness: "codex" as const,
+  harness,
   harnessVersion: HARNESS_VERSION,
   model: MODEL,
+  approvals,
   harnessSessionId: null,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
@@ -1004,6 +1013,78 @@ describe("leases", () => {
       .where(eq(desktopRunnerRuns.runId, accepted));
     expect(row?.desktopId).toBe(desktopId);
     await back.close();
+  });
+});
+
+describe("approval modes", () => {
+  test("a run starts in the thread's approval mode, and a mode the computer does not report is refused", async () => {
+    // A runner row as its socket's hello leaves it; no socket is needed to
+    // queue a start.
+    const desktopId = Bun.randomUUIDv7();
+    await db.insert(desktopRunners).values({
+      ...owner,
+      desktopId,
+      deviceJkt: credentials.a.deviceJkt,
+      keyId: credentials.a.keyId,
+      connection: "connected",
+      sessionId: Bun.randomUUIDv7(),
+      instanceId: "api-elsewhere",
+      protocol: DESKTOP_RUNNER_PROTOCOL.current,
+      appVersion: "1.4.0",
+      sidecarVersion: "1.4.0",
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          // Codex runs in one approval mode.
+          approvalModes: ["ask"],
+          models: [{ id: MODEL, label: "GPT-5 Codex" }],
+        },
+        {
+          id: "claude-code",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          approvalModes: ["ask", "auto", "full_auto"],
+          models: [{ id: MODEL, label: "Model" }],
+        },
+      ],
+      connectedAt: now(),
+      lastSeenAt: now(),
+    });
+    const runIds: string[] = [];
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const outcome = (
+        await control.startRun(startInput(desktopId, approvals, "claude-code"))
+      ).unwrap();
+      const runId =
+        outcome.type === "assigned"
+          ? outcome.runId
+          : panic(`the run was not assigned: ${outcome.type}`);
+      runIds.push(runId);
+      const [queued] = await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, runId));
+      expect(queued?.payload).toMatchObject({
+        type: "run.start",
+        policy: { network: "open", fs: "workspace", approvals },
+      });
+    }
+    for (const approvals of ["auto", "full_auto"] as const) {
+      expect(
+        (await control.startRun(startInput(desktopId, approvals))).unwrap(),
+      ).toEqual({ type: "approvals_unavailable" });
+    }
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(inArray(desktopRunnerRuns.runId, runIds));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 });
 
@@ -1858,6 +1939,8 @@ describe("outbound frames", () => {
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
         ],
@@ -2090,6 +2173,7 @@ describe("chat turns on a computer", () => {
       harness: "codex",
       harnessVersion: HARNESS_VERSION,
       model: CHAT_MODEL,
+      approvals: "ask",
     },
   });
 
