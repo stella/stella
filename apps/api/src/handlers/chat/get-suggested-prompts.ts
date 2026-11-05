@@ -235,6 +235,14 @@ const getSuggestedPrompts = createSafeRootHandler(
       session,
       user,
     } = ctx;
+    // First, so a matter the member can't write to answers the same whether or
+    // not a model is available.
+    const scope = yield* resolveChatScope({
+      admitted: "active",
+      getWorkspaceAccess,
+      workspaceId,
+    });
+
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
@@ -251,11 +259,6 @@ const getSuggestedPrompts = createSafeRootHandler(
     ) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
-
-    const scope = yield* resolveChatScope({
-      getWorkspaceAccess,
-      workspaceId,
-    });
 
     const thread = yield* Result.await(
       safeDb((tx) =>
