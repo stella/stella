@@ -71,11 +71,11 @@ export const ColumnFilterButton = ({
           <Button
             aria-label={t("common.filter")}
             className={cn(
-              "inline-flex size-4 items-center justify-center opacity-0 transition-opacity",
+              "opacity-0 transition-opacity",
               "group-hover/header:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
               isActive && "opacity-100",
             )}
-            size="inline"
+            size="icon-2xs"
             variant="muted"
           />
         }
