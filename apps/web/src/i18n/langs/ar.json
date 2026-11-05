@@ -1703,6 +1703,12 @@
       "stateUnsupported": "هذا الإصدار غير مدعوم",
       "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "اختر كل ما ينطبق",
+      "dismiss": "تجاهل وإيقاف",
+      "secretAnswer": "الإجابة مخفية",
+      "secretPlaceholder": "تبقى إجابتك مخفية"
+    },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",

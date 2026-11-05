@@ -151,6 +151,13 @@ export const chatLocalRunQuestionsSchema = v.pipe(
       new Set(questions.map(({ id }) => id)).size === questions.length,
     "Each question has its own id",
   ),
+  v.check(
+    (questions) =>
+      questions.every(
+        ({ allowsFreeText, options }) => allowsFreeText || options.length > 0,
+      ),
+    "Each question offers an option or free text",
+  ),
 );
 export type ChatLocalRunQuestion = Readonly<
   Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">

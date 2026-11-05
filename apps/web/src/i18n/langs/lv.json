@@ -1703,6 +1703,12 @@
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
     },
+    "localRunQuestion": {
+      "chooseSeveral": "Izvēlieties visus atbilstošos",
+      "dismiss": "Noraidīt un apturēt",
+      "secretAnswer": "Atbilde ir paslēpta",
+      "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
+    },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",
