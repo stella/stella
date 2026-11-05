@@ -2463,6 +2463,8 @@ describe("chat turns on a computer", () => {
         message.type === "run.start" && message.runId !== firstStart.runId,
     );
     expect(secondStart.harnessSessionId).toBe("codex-session-1");
+    expect(firstStart.folderId).toBe(chatThreadId);
+    expect(secondStart.folderId).toBe(chatThreadId);
     desktop.send({ type: "run.accepted", runId: secondStart.runId });
     const secondRun = desktopRun(desktop, secondStart.runId);
     await secondRun.events(
