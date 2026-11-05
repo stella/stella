@@ -14,14 +14,16 @@ const API_SRC = path.resolve(import.meta.dir, "..");
 const WRITES_CONTACTS = /\.(?:insert|update|delete)\(contacts\)/u;
 const ANNOUNCES = /\bannounceContactSetChanged\(/u;
 
-/** Writers that run inside a caller's transaction: the caller announces. */
-const ANNOUNCED_BY_CALLER: Record<string, string> = {
-  "lib/imports/upsert-by-external-id.ts": "handlers/contacts/import.ts",
+/** Writers that run inside a caller's transaction: each caller announces. */
+const ANNOUNCED_BY_CALLERS: Record<string, string[]> = {
+  "lib/imports/upsert-by-external-id.ts": ["handlers/contacts/import.ts"],
+  "lib/member-assignment-offboarding.ts": [
+    "lib/auth.ts",
+    "lib/delete-account.ts",
+  ],
 };
 
 const EXEMPT: Record<string, string> = {
-  "lib/member-assignment-offboarding.ts":
-    "Clears a departing member's attorney assignment during offboarding; the field is not shown in contact lists.",
   "handlers/dev/routes.ts": "Development-only reset of a local organization.",
 };
 
@@ -48,9 +50,10 @@ describe("contact set announcements", () => {
       if (Object.hasOwn(EXEMPT, file)) {
         continue;
       }
-      const announcer = ANNOUNCED_BY_CALLER[file] ?? file;
-      if (!ANNOUNCES.test(await readSource(announcer))) {
-        unannounced.push(file);
+      for (const announcer of ANNOUNCED_BY_CALLERS[file] ?? [file]) {
+        if (!ANNOUNCES.test(await readSource(announcer))) {
+          unannounced.push(`${file} via ${announcer}`);
+        }
       }
     }
     expect(unannounced).toEqual([]);
@@ -59,7 +62,7 @@ describe("contact set announcements", () => {
   test("the census names only files that still write contacts", async () => {
     const writers = new Set(await contactWriters());
     const listed = [
-      ...Object.keys(ANNOUNCED_BY_CALLER),
+      ...Object.keys(ANNOUNCED_BY_CALLERS),
       ...Object.keys(EXEMPT),
     ];
     expect(listed.filter((file) => !writers.has(file))).toEqual([]);
