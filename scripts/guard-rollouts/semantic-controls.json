@@ -5,8 +5,7 @@
     "semantic-controls/require-menu-anchor",
     "semantic-controls/require-specific-icon-label"
   ],
-  "type": "changed-lines",
-  "expiresAt": "2026-11-05T00:00:00.000Z",
+  "type": "full",
   "check": [
     "bun",
     "--bun",

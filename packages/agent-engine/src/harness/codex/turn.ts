@@ -2,11 +2,15 @@ import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
-  type HarnessInteractionResponse,
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
+
+import type {
+  HarnessInteractionResponse,
   HarnessRespondError,
-  type HarnessTurn,
+  HarnessTurn,
 } from "../adapter";
-import { createEventQueue } from "../event-queue";
 import {
   type HarnessApprovalOption,
   type HarnessContinuation,
@@ -17,13 +21,18 @@ import {
   type HarnessUsage,
 } from "../events";
 import { HARNESS_TOOL_NAMES, unsupportedItem } from "../tool-parts";
-import type {
-  AppServerClient,
-  AppServerExit,
-  AppServerHandlers,
-  Detached,
-} from "./app-server-client";
-import { classifyTurnFailure, mergeRateLimits } from "./errors";
+import {
+  type Detached,
+  HarnessTurnLifecycle,
+  respondError,
+  settlesWithin,
+} from "../turn-lifecycle";
+import type { AppServerClient, AppServerHandlers } from "./app-server-client";
+import {
+  classifyTurnFailure,
+  isCapacityFailure,
+  mergeRateLimits,
+} from "./errors";
 import {
   codexItemHandling,
   isToolItem,
@@ -44,6 +53,7 @@ import {
   isCodexNotificationMethod,
   isCodexServerRequestMethod,
   METHOD_NOT_FOUND,
+  TurnStartResponseSchema,
 } from "./protocol";
 
 /**
@@ -116,6 +126,8 @@ const questionsFromParams = (questions: QuestionParams): HarnessQuestion[] =>
       prompt: question.question,
       options,
       allowsFreeText: question.isOther || options.length === 0,
+      // Codex states no multiple choice: an answer picks one option.
+      multiSelect: false,
       secret: question.isSecret,
     };
   });
@@ -126,12 +138,6 @@ const ZERO_USAGE: HarnessUsage = {
   outputTokens: 0,
   reasoningOutputTokens: 0,
 };
-
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
-
-const respondError = (reason: HarnessRespondError["reason"], message: string) =>
-  Result.err(new HarnessRespondError({ reason, message }));
 
 /**
  * The JSON-RPC result for an answer (`reply`), and the same result as the
@@ -181,20 +187,18 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
+      const refusal = chatLocalRunAnswersRefusal(
+        pending.questions,
+        response.answers,
+      );
+      if (refusal !== null) {
+        return Result.err(refusal);
+      }
       const answers: [string, { answers: readonly string[] }][] = [];
       const shown: [string, { answers: readonly string[] }][] = [];
       for (const question of pending.questions) {
-        const given = response.answers[question.id] ?? [];
-        if (given.length === 0) {
-          return Result.err(`Question ${question.id} has no answer.`);
-        }
         // Native replies are option labels; the label is the option's id.
-        const labels = new Set(question.options.map(({ label }) => label));
-        if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-          return Result.err(
-            `Question ${question.id} takes one of its options.`,
-          );
-        }
+        const given = response.answers[question.id] ?? [];
         answers.push([question.id, { answers: given }]);
         shown.push([
           question.id,
@@ -212,23 +216,29 @@ const interactionResult = (
   }
 };
 
+/**
+ * A turn that fails because the model is at capacity continues on the same
+ * thread with empty input, after a delay that doubles from `baseDelayMs` up
+ * to `maxDelayMs`, at most `maxAttempts` times.
+ */
+export type CodexCapacityRetry = {
+  maxAttempts: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+};
+
 type CodexTurnSessionOptions = {
   gracePeriodMs: number;
   detached: Detached;
   /** The server name the turn registered the stella MCP binding under. */
   stellaServer: string;
+  capacityRetry: CodexCapacityRetry;
 };
 
 export class CodexTurnSession {
-  private readonly queue = createEventQueue<HarnessEvent>();
-  private readonly terminal = Promise.withResolvers<undefined>();
   private readonly started = Promise.withResolvers<undefined>();
-  private readonly gracePeriodMs: number;
-  private client: AppServerClient | null = null;
   private threadId: string | null = null;
   private turnId: string | null = null;
-  private ended = false;
-  private interrupting = false;
   private usage: HarnessUsage | null = null;
   private rateLimits: CodexRateLimits | null = null;
   private lastError: CodexTurnError | null = null;
@@ -238,18 +248,27 @@ export class CodexTurnSession {
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
   private unsupportedItems = 0;
+  private capacityRetries = 0;
 
-  private readonly detached: Detached;
+  private readonly lifecycle: HarnessTurnLifecycle<AppServerClient>;
   private readonly stellaServer: string;
+  private readonly capacityRetry: CodexCapacityRetry;
+  private readonly detached: Detached;
 
   constructor({
     gracePeriodMs,
     detached,
     stellaServer,
+    capacityRetry,
   }: CodexTurnSessionOptions) {
-    this.gracePeriodMs = gracePeriodMs;
-    this.detached = detached;
+    this.lifecycle = new HarnessTurnLifecycle({
+      gracePeriodMs,
+      detached,
+      name: "codex-turn",
+    });
     this.stellaServer = stellaServer;
+    this.capacityRetry = capacityRetry;
+    this.detached = detached;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -283,12 +302,16 @@ export class CodexTurnSession {
       this.violation(message);
     },
     exit: (exit) => {
-      this.exited(exit);
+      this.lifecycle.exited(exit);
     },
   };
 
   attach(client: AppServerClient) {
-    this.client = client;
+    this.lifecycle.attach(client);
+  }
+
+  private get client(): AppServerClient | null {
+    return this.lifecycle.client;
   }
 
   /** The turn was accepted: announce the session and release held messages. */
@@ -304,10 +327,18 @@ export class CodexTurnSession {
       sessionId: harnessSessionId(options.threadId),
       continuation: options.continuation,
     });
-    this.turnId = options.turnId;
+    this.release(options.turnId, options.startedAt);
+  }
+
+  /** Route the native turn's messages, including those held until now. */
+  private release(turnId: string, startedAt: number | null) {
+    if (this.lifecycle.ended) {
+      return;
+    }
+    this.turnId = turnId;
     // A queued turn is acknowledged without a start time; it cannot be
     // interrupted until `turn/started` arrives.
-    if (options.startedAt !== null) {
+    if (startedAt !== null) {
       this.started.resolve(undefined);
     }
     for (const message of this.early.splice(0)) {
@@ -321,70 +352,22 @@ export class CodexTurnSession {
 
   /** The turn never started; nothing more is emitted. */
   abandon() {
-    this.ended = true;
-    this.queue.close();
+    this.lifecycle.abandon();
   }
 
   turn(): HarnessTurn {
-    return {
-      events: this.queue.items,
-      respond: async (response) =>
-        await Promise.resolve(this.respond(response)),
+    return this.lifecycle.turn({
+      respond: (response) => this.respond(response),
       interrupt: async () => this.interrupt(),
-      dispose: async () => this.dispose(),
-    };
+    });
   }
 
   private emit(event: HarnessEvent) {
-    if (this.ended) {
-      return;
-    }
-    this.queue.push(event);
-    if (
-      event.type === "turn.completed" ||
-      event.type === "turn.interrupted" ||
-      event.type === "turn.failed"
-    ) {
-      this.ended = true;
-      this.queue.close();
-      this.terminal.resolve(undefined);
-      this.detached(this.shutdown(), "codex-turn.shutdown");
-    }
+    this.lifecycle.emit(event);
   }
 
   private violation(message: string) {
-    this.emit({
-      type: "turn.failed",
-      failure: { type: "protocol_violation", message },
-    });
-  }
-
-  private exited({ exitCode, signal }: AppServerExit) {
-    if (this.interrupting) {
-      this.emit({ type: "turn.interrupted" });
-      return;
-    }
-    this.emit({
-      type: "turn.failed",
-      failure: {
-        type: "harness_exited",
-        message: "The harness stopped before the turn finished.",
-        exitCode,
-        signal,
-      },
-    });
-  }
-
-  /** Ask the process to exit cleanly so its session is saved, then kill it. */
-  private async shutdown() {
-    const client = this.client;
-    if (client === null) {
-      return;
-    }
-    client.closeInput();
-    if (!(await settlesWithin(client.exited, this.gracePeriodMs))) {
-      await client.kill();
-    }
+    this.lifecycle.violation(message);
   }
 
   private parse<TSchema extends v.GenericSchema>(
@@ -480,15 +463,14 @@ export class CodexTurnSession {
       case "interrupted":
         this.emit({ type: "turn.interrupted" });
         return;
-      case "failed":
-        this.emit({
-          type: "turn.failed",
-          failure: classifyTurnFailure({
-            error: turn.error ?? this.lastError,
-            rateLimits: this.rateLimits,
-          }),
-        });
+      case "failed": {
+        const error = turn.error ?? this.lastError;
+        if (this.retryAtCapacity(error)) {
+          return;
+        }
+        this.failWith(error);
         return;
+      }
       case "inProgress":
         this.violation("turn/completed for a turn still in progress");
         return;
@@ -496,6 +478,67 @@ export class CodexTurnSession {
         turn.status satisfies never;
         panic("Unhandled Codex turn status");
     }
+  }
+
+  private failWith(error: CodexTurnError | null) {
+    this.emit({
+      type: "turn.failed",
+      failure: classifyTurnFailure({ error, rateLimits: this.rateLimits }),
+    });
+  }
+
+  /**
+   * Continue a turn the model's capacity ended. Messages are held until the
+   * continuation's turn id is known, as they are before the first turn.
+   */
+  private retryAtCapacity(error: CodexTurnError | null): boolean {
+    const { maxAttempts, baseDelayMs, maxDelayMs } = this.capacityRetry;
+    if (
+      !isCapacityFailure(error) ||
+      this.lifecycle.interrupting ||
+      this.capacityRetries >= maxAttempts
+    ) {
+      return false;
+    }
+    this.capacityRetries += 1;
+    const delayMs = Math.min(
+      baseDelayMs * 2 ** (this.capacityRetries - 1),
+      maxDelayMs,
+    );
+    this.turnId = null;
+    this.lastError = null;
+    this.emit({
+      type: "retrying",
+      message: error?.message ?? "The model is at capacity.",
+    });
+    this.detached(this.continueAfter(delayMs, error), "codex-turn.continue");
+    return true;
+  }
+
+  private async continueAfter(delayMs: number, error: CodexTurnError | null) {
+    await Bun.sleep(delayMs);
+    const client = this.client;
+    if (
+      this.lifecycle.ended ||
+      this.lifecycle.interrupting ||
+      client === null
+    ) {
+      return;
+    }
+    const started = await client.request("turn/start", {
+      threadId: this.threadId,
+      input: [],
+    });
+    // An interrupt during the request ends the turn; `failWith` and `release`
+    // are both no-ops on an ended turn.
+    const parsed = Result.isOk(started)
+      ? v.safeParse(TurnStartResponseSchema, started.value)
+      : null;
+    if (parsed === null || !parsed.success) {
+      this.failWith(error);
+      return;
+    }
+    this.release(parsed.output.turn.id, parsed.output.turn.startedAt ?? null);
   }
 
   private tokenUsage(
@@ -612,6 +655,7 @@ export class CodexTurnSession {
         description: "",
       })),
       allowsFreeText: true,
+      multiSelect: false,
       secret: false,
     }));
     this.emit({
@@ -790,8 +834,17 @@ export class CodexTurnSession {
     if (parsed === null) {
       return;
     }
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      questionsFromParams(parsed.questions),
+      method,
+    );
+    if (questions === null) {
+      return;
+    }
     const requestId = requestIdFor(id);
-    const questions = questionsFromParams(parsed.questions);
     const toolCall = {
       id: parsed.itemId,
       name: HARNESS_TOOL_NAMES.question,
@@ -829,14 +882,15 @@ export class CodexTurnSession {
     if (interaction === undefined) {
       return respondError("unknown_request", "No pending request has this id.");
     }
-    if (this.ended || this.client === null) {
+    const client = this.client;
+    if (this.lifecycle.ended || client === null) {
       return respondError("turn_ended", "The turn has already ended.");
     }
     const result = interactionResult(interaction, response);
     if (Result.isError(result)) {
       return respondError("invalid_response", result.error);
     }
-    this.client.respond(interaction.jsonRpcId, result.value.reply);
+    client.respond(interaction.jsonRpcId, result.value.reply);
     this.settle(requestId);
     if (interaction.type !== "approval") {
       this.emit({
@@ -852,33 +906,18 @@ export class CodexTurnSession {
   }
 
   private async interrupt() {
-    const client = this.client;
-    if (this.ended || this.interrupting || client === null) {
-      return;
-    }
-    this.interrupting = true;
-    await settlesWithin(this.started.promise, this.gracePeriodMs);
-    const requested = await client.request("turn/interrupt", {
-      threadId: this.threadId,
-      turnId: this.turnId,
+    await this.lifecycle.interrupt(async (client) => {
+      await settlesWithin(this.started.promise, this.lifecycle.gracePeriodMs);
+      if (this.turnId === null) {
+        // Between a capacity failure and its continuation no turn is running:
+        // nothing to ask, so the turn ends as interrupted at once.
+        return false;
+      }
+      const requested = await client.request("turn/interrupt", {
+        threadId: this.threadId,
+        turnId: this.turnId,
+      });
+      return Result.isOk(requested);
     });
-    if (Result.isError(requested)) {
-      // A refused interrupt is never confirmed either; ending the turn here
-      // lets the cleanup that follows the terminal event kill the harness.
-      this.emit({ type: "turn.interrupted" });
-      return;
-    }
-    if (!(await settlesWithin(this.terminal.promise, this.gracePeriodMs))) {
-      // The harness did not confirm; the shutdown that follows kills it.
-      this.emit({ type: "turn.interrupted" });
-    }
-  }
-
-  private async dispose() {
-    if (!this.ended) {
-      this.interrupting = true;
-      this.emit({ type: "turn.interrupted" });
-    }
-    await this.shutdown();
   }
 }

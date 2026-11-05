@@ -501,6 +501,10 @@
     "evidenceTitles": "Nosaukumi",
     "evidenceApps": "Lietotnes",
     "rangeEmpty": "Šajā posmā nekas netika reģistrēts.",
+    "entryStart": "Sākums",
+    "entryEnd": "Beigas",
+    "rangeEndBeforeStart": "Iestatiet beigu laiku pēc sākuma.",
+    "rangeDraftedLeftOut": "{duration}, neskaitot laiku, kas jau ir melnrakstos",
     "calendarHint": "Atveriet ieteikumu ar pārtrauktu līniju, lai to pārskatītu, vai velciet kolonnā Laika ieraksti, lai sagatavotu ierakstu jebkuram posmam.",
     "aiDraftWrite": "Sagatavot ar stella AI",
     "aiDraftAgain": "Sagatavot vēlreiz",
@@ -728,6 +732,36 @@
     "callbackConnectedTitle": "ChatGPT ir savienots",
     "callbackConnectedBody": "Varat aizvērt šo cilni un atgriezties stellā.",
     "callbackNotConnectedTitle": "ChatGPT netika savienots",
-    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz."
+    "callbackNotConnectedBody": "Atgriezieties stellā, lai redzētu, kas notika, un mēģiniet vēlreiz.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Izmantojiet savu Claude abonementu vietējiem aģentiem stellā. Lietojums tiek uzskaitīts jūsu Claude plānā, atsevišķi no stellas abonementa.",
+      "notInstalled": "Claude Code šajā datorā vēl nav instalēts.",
+      "signIn": "Pierakstīties ar Claude",
+      "openSignInPage": "Atvērt pierakstīšanās lapu",
+      "signedIn": "Pierakstījies Claude",
+      "signedInAs": "Pierakstījies Claude · {email}",
+      "signOut": "Izrakstīties",
+      "apiKey": "Claude Code ir pierakstīts ar API atslēgu, ko stella neizmanto. Izrakstieties un pēc tam pierakstieties ar savu Claude abonementu.",
+      "failure": {
+        "notCompleted": "Pierakstīšanās netika pabeigta. Mēģiniet vēlreiz.",
+        "timedOut": "Pierakstīšanās ilga pārāk ilgi. Mēģiniet vēlreiz.",
+        "unavailable": "Claude Code šajā datorā neizdevās palaist. Mēģiniet vēlreiz."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} šajā datorā vēl nav instalēts.",
+      "install": "Instalēt",
+      "downloading": "Lejupielādē {name} {version}: {percent}%",
+      "verifying": "Pārbauda {name} {version}",
+      "ready": "{name} {version} ir instalēts.",
+      "retry": "Mēģināt vēlreiz",
+      "activeStays": "Joprojām tiek izmantota versija {version}.",
+      "failure": {
+        "download": "Neizdevās lejupielādēt {name}. Pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
+        "verification": "Neizdevās pārbaudīt {name}, tāpēc tas netika instalēts.",
+        "storage": "Neizdevās saglabāt {name} šajā datorā. Pārbaudiet, vai diskā ir brīva vieta."
+      }
+    }
   }
 }

@@ -1,8 +1,7 @@
 {
   "id": "no-dynamic-key-in-operator",
   "rules": ["no-dynamic-key-in-operator/no-dynamic-key-in-operator"],
-  "type": "changed-lines",
-  "expiresAt": "2026-11-05T00:00:00.000Z",
+  "type": "full",
   "check": [
     "bun",
     "--bun",

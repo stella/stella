@@ -247,8 +247,24 @@ describe("MCP app registry and contracts", () => {
       }),
     ).toEqual([
       "App SDK import requires the shared bridge: extra/app.ts",
-      "App calls require the shared bridge: extra/app.ts",
+      "App calls require the shared tool-call owner: extra/app.ts",
     ]);
+    // SDK owners may construct the app, but a tool call made beside the owner
+    // would read a host's rejection of a tool error as an unreachable server.
+    const directCall =
+      'export const call = (app) => app.callServerTool({name:"write"});';
+    for (const file of [
+      "shared/bridge.ts",
+      "document-upload/runtime.ts",
+      "file-comparison/runtime.ts",
+    ]) {
+      expect(inspectAppSources({ [file]: directCall })).toEqual([
+        `App calls require the shared tool-call owner: ${file}`,
+      ]);
+    }
+    expect(
+      inspectAppSources({ "shared/server-tool-call.ts": directCall }),
+    ).toEqual([]);
     for (const source of [
       'export { App } from "@modelcontextprotocol/ext-apps";',
       'import("@modelcontextprotocol/ext-apps");',

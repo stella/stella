@@ -17,6 +17,7 @@ import {
   type HarnessTurnInput,
 } from "../adapter";
 import { buildTurnPrompt } from "../transcript-handoff";
+import { settlesWithin } from "../turn-lifecycle";
 import {
   type AppServerClient,
   type AppServerHandlers,
@@ -32,7 +33,7 @@ import {
   TurnStartResponseSchema,
 } from "./protocol";
 import { openThread } from "./thread";
-import { CodexTurnSession } from "./turn";
+import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
  * Codex over `codex app-server` (JSON-RPC on stdio), one process per turn.
@@ -44,9 +45,16 @@ import { CodexTurnSession } from "./turn";
  * process, account read before any session, resume by native thread id.
  */
 
-export const codexAppServerLaunch = (executable: string): AppServerLaunch => ({
+/** `codex app-server`, with each configuration override as `-c <override>`. */
+export const codexAppServerLaunch = (
+  executable: string,
+  configOverrides: readonly string[] = [],
+): AppServerLaunch => ({
   executable,
-  args: ["app-server"],
+  args: [
+    "app-server",
+    ...configOverrides.flatMap((override) => ["-c", override]),
+  ],
 });
 
 export type CodexHarnessAdapterOptions = {
@@ -67,6 +75,22 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /**
+   * Called with each new process's id before it is asked anything; a
+   * process it does not answer `true` for is ended unused.
+   */
+  onProcess?: (pid: number) => Promise<boolean>;
+  /** `initialize`'s client name, when a credential was registered under one. */
+  clientName?: string;
+  /** How a turn ended by the model's capacity continues; defaults below. */
+  capacityRetry?: CodexCapacityRetry;
+};
+
+/** As t3code (MIT) retries: five continuations, 2 s doubling to 30 s. */
+const DEFAULT_CAPACITY_RETRY: CodexCapacityRetry = {
+  maxAttempts: 5,
+  baseDelayMs: 2000,
+  maxDelayMs: 30_000,
 };
 
 const CLIENT_NAME = "stella";
@@ -92,9 +116,6 @@ const capabilities = (): HarnessCapability[] =>
 
 const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CODEX_CAPABILITIES, value);
-
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
 
 const validateOptions = (options: CodexHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {
@@ -151,9 +172,19 @@ const connect = async ({
     });
   }
   const client = started.value;
+  if (
+    options.onProcess !== undefined &&
+    !(await options.onProcess(client.pid))
+  ) {
+    await client.kill();
+    return Result.err({
+      reason: "harness_unavailable",
+      message: "The desktop did not authorize the harness process.",
+    });
+  }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: CLIENT_NAME,
+      name: options.clientName ?? CLIENT_NAME,
       title: "stella",
       version: options.clientVersion,
     },
@@ -300,7 +331,14 @@ const probe = async (
         }),
       );
     }
-    return Result.ok({ version, auth, models, capabilities: capabilities() });
+    return Result.ok({
+      version,
+      auth,
+      models,
+      capabilities: capabilities(),
+      // The probe does not read rate limits; a limited turn reports them.
+      usageLimit: null,
+    });
   })();
   await close(client, options.gracePeriodMs);
   return result;
@@ -324,6 +362,7 @@ const startTurn = async (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
+    capacityRetry: options.capacityRetry ?? DEFAULT_CAPACITY_RETRY,
   });
   const connected = await connect({
     options,

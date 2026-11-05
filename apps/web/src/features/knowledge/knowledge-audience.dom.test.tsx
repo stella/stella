@@ -30,6 +30,23 @@ plugin({
   },
 });
 
+// The member frame holds the signed-in user's event stream open. These pages
+// assert on requests and timing, so the stream stays open and silent instead
+// of dialing a server that is not there.
+class SilentEventSource extends EventTarget {
+  static readonly CLOSED = 2;
+  readyState = 1;
+  readonly url: string;
+  constructor(url: string | URL) {
+    super();
+    this.url = String(url);
+  }
+  close() {
+    this.readyState = SilentEventSource.CLOSED;
+  }
+}
+Object.assign(globalThis, { EventSource: SilentEventSource });
+
 // Build-time constants the member frame shows.
 for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
   Object.defineProperty(globalThis, name, {

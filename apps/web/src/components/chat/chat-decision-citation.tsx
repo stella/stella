@@ -119,7 +119,7 @@ const CitationView = ({
         <CitationChip
           kind="decision"
           decision={decision}
-          onOpen={onOpen}
+          onOpenInSidePanel={onOpen}
           presentation="inline"
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
         />
@@ -138,7 +138,7 @@ const CitationView = ({
           <CitationChip
             kind="decision"
             decision={decision}
-            onOpen={onOpen}
+            onOpenInSidePanel={onOpen}
             presentation="inline"
             paragraphNumber={paragraph?.courtParagraphNumber ?? null}
           />
@@ -149,7 +149,7 @@ const CitationView = ({
           decision={decision}
           passage={passage}
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}
-          onOpen={onOpen}
+          onOpenInSidePanel={onOpen}
         />
       )}
       <CitationReadFeedback read={read} />

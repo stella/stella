@@ -17,6 +17,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
@@ -73,6 +74,12 @@ export const askPresence = (
     case "file":
     case "clip":
       return "present";
+    // A refused tool input never reached its source: no answer to grade.
+    case "record":
+      if (content.state.status === "input-needs-review") {
+        return "missing";
+      }
+      return recordText(content.state).length > 0 ? "present" : "absent";
     default: {
       content satisfies never;
       return panic(`Unhandled content: ${String(content)}`);
@@ -118,6 +125,10 @@ export const extractedFromContent = (
     }
     case "person":
       return { value: content.name, text: content.name };
+    case "record": {
+      const text = recordText(content.state);
+      return text.length > 0 ? { value: text, text } : null;
+    }
     case "file":
     case "clip":
     case "error":
@@ -153,6 +164,10 @@ export const askText = (content: FieldContent | undefined): string | null => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record": {
+      const text = recordText(content.state);
+      return text.length > 0 ? text : null;
+    }
     case "file":
     case "clip":
     case "error":

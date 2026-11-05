@@ -8,7 +8,7 @@ import {
 import type { StoredSession } from "@/connection/session";
 
 import type { Timer } from "./timers";
-import { clockOf, discardTimer, elapsedSeconds, saveTimer } from "./timers";
+import { discardTimer, saveTimer } from "./timers";
 
 const SESSION: StoredSession = {
   signInId: "sign-in-1",
@@ -56,23 +56,6 @@ const recordingServer = () => {
   });
   return { fetch, requests, source };
 };
-
-describe("a timer's time", () => {
-  test("a running timer adds the seconds since it resumed", () => {
-    const now = Date.UTC(2026, 9, 28, 10, 2, 30);
-    expect(elapsedSeconds(TIMER, now)).toBe(90 + 150);
-  });
-
-  test("a paused timer keeps what it counted", () => {
-    const paused: Timer = { ...TIMER, state: "paused", lastResumedAt: null };
-    expect(elapsedSeconds(paused, Date.UTC(2030, 0, 1))).toBe(90);
-  });
-
-  test("reads as a clock", () => {
-    expect(clockOf(309)).toBe("0:05:09");
-    expect(clockOf(45_000)).toBe("12:30:00");
-  });
-});
 
 describe("finishing a timer", () => {
   test("a timer without a matter saves as internal work, dated in the person's zone", async () => {

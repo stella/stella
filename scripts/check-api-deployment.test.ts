@@ -800,7 +800,9 @@ describe("API deployment health receipt", () => {
       "main-heavy.yml",
       "main-pr-depth.yml",
     ]) {
-      expect(stagingJob).toContain(`actions/workflows/${workflow}/dispatches`);
+      expect(stagingJob).toContain(
+        `bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" ${workflow} main`,
+      );
     }
     expect(stagingJob).not.toContain("--draft=false");
     const finalizer = await Bun.file(
@@ -858,7 +860,7 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).not.toContain(`Check https://github.com/\${run_url}`);
     expect(promoteAction).toContain(
-      `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
+      `dispatch_args+=("web_image_digest=\${WEB_IMAGE_DIGEST}")`,
     );
     expect(promoteAction).toContain(
       "Frontend promotions require a prebuilt web image digest.",

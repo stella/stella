@@ -385,6 +385,7 @@ export const useChatSession = ({
     status,
     stop: stopState,
     turnAbandoned,
+    waitingForComputer,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -1845,6 +1846,7 @@ export const useChatSession = ({
     leave,
     isGenerating,
     turnAbandoned,
+    waitingForComputer,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,

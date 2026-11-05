@@ -1,0 +1,9 @@
+{
+  "timer": "Timer",
+  "running": "Running",
+  "paused": "Paused",
+  "noMatter": "No matter",
+  "noDescription": "No description",
+  "more": "{count, plural, one {# more timer} other {# more timers}}",
+  "startedElsewhere": "A timer started on another device"
+}
