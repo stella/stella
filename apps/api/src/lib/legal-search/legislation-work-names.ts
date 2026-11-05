@@ -712,12 +712,12 @@ const statuteQueryReferences = (
 /**
  * When each act stops being in force: the end of its last version under any
  * title, since a court can keep using a name after the act took another. An
- * act with an open version has no end.
+ * act with an open version has no end. Null when there are too many to read.
  */
 const validityEndsOf = async (
   tx: LegislationReadTransaction,
   works: readonly NamedLegislationWork[],
-): Promise<ReadonlyMap<string, string | null>> => {
+): Promise<ReadonlyMap<string, string | null> | null> => {
   if (works.length === 0) {
     return new Map();
   }
@@ -744,10 +744,8 @@ const validityEndsOf = async (
       ),
     NAMED_VERSION_LIMIT,
   );
-  // A name fitting this many acts settles on none: read as open, they all fit
-  // whatever the date, and the choice between them stays ambiguous.
   if (read.type === "overflow") {
-    return new Map();
+    return null;
   }
   return new Map(
     read.rows.map((act) => [
@@ -902,6 +900,10 @@ export const readNamedLegislationWorks = async (
   }
   const chosen = chooseNamedWorks([...works.values()]);
   const ends = await validityEndsOf(tx, chosen);
+  // A name fitting more acts than can be read names none of them.
+  if (ends === null) {
+    return [];
+  }
   // Ordered by key rather than by language: the order only has to be stable.
   const byKey = new Map(
     chosen.map((work) => {
