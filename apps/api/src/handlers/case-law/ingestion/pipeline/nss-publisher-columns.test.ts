@@ -25,12 +25,10 @@ test("publisher columns retain text verbatim and leave absent values nullable", 
 
 test("every publisher projection has a nullable SQL column and paired view columns", async () => {
   const migrationRoot = new URL("../../../../../drizzle/", import.meta.url);
-  const migration = readdirSync(migrationRoot).find((name) =>
-    name.endsWith("_cz_nss_publisher_fields"),
-  );
-  if (migration === undefined) {
-    return panic("NSS publisher migration is missing");
-  }
+  const migration =
+    readdirSync(migrationRoot).find((name) =>
+      name.endsWith("_cz_nss_publisher_fields"),
+    ) ?? panic("NSS publisher migration is missing");
   const migrationSql = readFileSync(
     new URL(`${migration}/migration.sql`, migrationRoot),
     "utf-8",
