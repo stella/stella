@@ -203,7 +203,7 @@ test("without a number series the review step is not ready and names where to se
     screen
       .getByRole("link", { name: messages.billing.numberSeries.title })
       .getAttribute("href"),
-  ).toBe("/admin/number-series");
+  ).toBe("/settings/organization/number-series");
   expect(
     button(messages.billing.invoiceComposer.issueInvoice).disabled,
   ).toBeTrue();
@@ -224,7 +224,7 @@ test("without a seller the review step links to the billing profiles", async () 
     screen
       .getByRole("link", { name: messages.admin.billingProfiles })
       .getAttribute("href"),
-  ).toBe("/admin/billing");
+  ).toBe("/settings/organization/billing");
   expect(
     button(messages.billing.invoiceComposer.issueInvoice).disabled,
   ).toBeTrue();

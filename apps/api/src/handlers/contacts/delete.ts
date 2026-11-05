@@ -14,6 +14,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -160,6 +161,7 @@ export const deleteContactHandler = async function* ({
     "contacts-delete.flush-workspace-search-repairs",
   );
 
+  announceContactSetChanged(organizationId);
   return Result.ok({});
 };
 

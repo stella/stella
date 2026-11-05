@@ -15,6 +15,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockOwnedContactsForBulkDelete } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -157,6 +158,9 @@ const bulkDeleteContacts = createSafeRootHandler(
         ),
       "contacts-bulk-delete.flush-workspace-search-repairs",
     );
+    if (txResult.outcomes.some(({ status }) => status === "deleted")) {
+      announceContactSetChanged(organizationId);
+    }
     return Result.ok({ outcomes: txResult.outcomes });
   },
 );

@@ -103,6 +103,11 @@ impl HarnessInstallState {
   fn settled(active: Option<String>) -> Self {
     active.map_or(Self::NotInstalled, |active| Self::Ready { active })
   }
+
+  /// Whether an install is downloading or verifying.
+  pub fn is_running(&self) -> bool {
+    matches!(self, Self::Downloading { .. } | Self::Verifying { .. })
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -401,10 +406,26 @@ impl HarnessInstallation {
     ))
   }
 
+  /// Marks a removal of the harness as running until the guard drops.
+  #[cfg(test)]
+  pub(crate) fn removing(&self, harness: ManagedHarness) -> impl Drop {
+    struct Removing(Arc<Inner>, ManagedHarness);
+    impl Drop for Removing {
+      fn drop(&mut self) {
+        self.0.slot(self.1).operation = Operation::Idle;
+      }
+    }
+    let mut slot = self.0.slot(harness);
+    assert!(matches!(slot.operation, Operation::Idle));
+    slot.operation = Operation::Removing;
+    drop(slot);
+    Removing(Arc::clone(&self.0), harness)
+  }
+
   /// Removes the harness's own sign-in from its Stella-owned configuration
   /// directory, leaving its settings and sessions in place.
   pub fn remove_sign_in(&self, harness: ManagedHarness) -> std::io::Result<()> {
-    let dir = self.0.config_root.join(harness.id());
+    let dir = self.0.config_dir(harness);
     for name in sign_in_files(harness) {
       match std::fs::remove_file(dir.join(name)) {
         Ok(()) => {}
@@ -418,7 +439,7 @@ impl HarnessInstallation {
   /// The active release's executable, held in place until the lease drops.
   /// An incomplete active release rolls the pointer back to the previous one.
   pub fn acquire(&self, harness: ManagedHarness) -> Result<HarnessLease, HarnessError> {
-    let config_dir = self.0.config_root.join(harness.id());
+    let config_dir = self.0.config_dir(harness);
     crate::local_store::create_private_dir(&config_dir).map_err(
       crate::logging::replaced_logged(
         "managed harness configuration directory was not created",
@@ -472,6 +493,11 @@ impl Inner {
 
   fn harness_dir(&self, harness: ManagedHarness) -> PathBuf {
     self.root.join(harness.id())
+  }
+
+  /// The Stella-owned directory the CLI's configuration variable names.
+  fn config_dir(&self, harness: ManagedHarness) -> PathBuf {
+    self.config_root.join(harness.id())
   }
 
   async fn run(
@@ -729,6 +755,11 @@ impl Inner {
   /// Points new runs at `version`, keeping the release it replaces, and
   /// removes every other release no lease holds.
   async fn activate(&self, harness: ManagedHarness, version: &str) -> Result<(), Stop> {
+    // An active release always has its configuration directory: without it
+    // the CLI cannot start with the directory its variable names.
+    crate::local_store::create_private_dir(&self.config_dir(harness)).map_err(
+      failed_storage("managed harness configuration directory was not created"),
+    )?;
     let dir = self.harness_dir(harness);
     let stale = {
       let slot = self.slot(harness);
@@ -1147,7 +1178,7 @@ impl Digester {
 }
 
 #[cfg(all(test, unix))]
-mod tests {
+pub(crate) mod tests {
   use super::*;
   use crate::harness_archive::tests::{FixtureEntry, TempDir, archive};
   use crate::harness_release::ReleaseAsset;
@@ -1155,7 +1186,7 @@ mod tests {
 
   /// How the fixture server answers one archive URL.
   #[derive(Clone)]
-  enum Serve {
+  pub(crate) enum Serve {
     Bytes(Vec<u8>),
     /// Streams the bytes without a declared length.
     Chunked(Vec<u8>),
@@ -1176,22 +1207,22 @@ mod tests {
     },
   }
 
-  struct Fixture {
+  pub(crate) struct Fixture {
     base: String,
     requests: Arc<AtomicUsize>,
   }
 
   impl Fixture {
-    fn url(&self, path: &str) -> String {
+    pub(crate) fn url(&self, path: &str) -> String {
       format!("{}{path}", self.base)
     }
 
-    fn requests(&self) -> usize {
+    pub(crate) fn requests(&self) -> usize {
       self.requests.load(Ordering::SeqCst)
     }
   }
 
-  async fn serve(routes: Vec<(&'static str, Serve)>) -> Fixture {
+  pub(crate) async fn serve(routes: Vec<(&'static str, Serve)>) -> Fixture {
     use axum::{Router, routing::get};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
@@ -1261,7 +1292,7 @@ mod tests {
 
   /// A Codex-shaped archive whose executable prints `reported`, and only
   /// when it runs with the probe's private home and configuration directory.
-  fn codex_archive(reported: &str) -> Vec<u8> {
+  pub(crate) fn codex_archive(reported: &str) -> Vec<u8> {
     let script = format!(
       "#!/bin/sh\n\
        case \"$HOME\" in */probe-home) ;; *) exit 3 ;; esac\n\
@@ -1283,7 +1314,42 @@ mod tests {
     ])
   }
 
-  fn release(version: &str, url: String, archive: &[u8]) -> HarnessRelease {
+  /// A Claude Code-shaped archive whose executable prints `reported`, and
+  /// only with the probe's private configuration directory.
+  pub(crate) fn claude_code_archive(reported: &str) -> Vec<u8> {
+    let script = format!(
+      "#!/bin/sh\n\
+       [ \"$CLAUDE_CONFIG_DIR\" = \"$HOME\" ] || exit 4\n\
+       echo \"{reported} (Claude Code)\"\n"
+    );
+    archive(&[
+      FixtureEntry::Directory("bin/"),
+      FixtureEntry::File {
+        path: "bin/claude",
+        contents: script.as_bytes(),
+        mode: 0o755,
+      },
+    ])
+  }
+
+  pub(crate) fn release(version: &str, url: String, archive: &[u8]) -> HarnessRelease {
+    release_of("bin/codex", version, url, archive)
+  }
+
+  pub(crate) fn claude_code_release(
+    version: &str,
+    url: String,
+    archive: &[u8],
+  ) -> HarnessRelease {
+    release_of("bin/claude", version, url, archive)
+  }
+
+  fn release_of(
+    executable: &str,
+    version: &str,
+    url: String,
+    archive: &[u8],
+  ) -> HarnessRelease {
     HarnessRelease {
       version: version.to_string(),
       asset: ReleaseAsset {
@@ -1291,12 +1357,12 @@ mod tests {
         digest: ArchiveDigest::Sha256(hex::encode(sha2::Sha256::digest(archive))),
         archive_bytes: archive.len() as u64,
         target: "fixture-target".to_string(),
-        executable: "bin/codex".to_string(),
+        executable: executable.to_string(),
       },
     }
   }
 
-  fn open(dir: &TempDir, codex: HarnessRelease) -> HarnessInstallation {
+  pub(crate) fn open(dir: &TempDir, codex: HarnessRelease) -> HarnessInstallation {
     HarnessInstallation::open(
       dir.path().join("harness"),
       dir.path().join("harness-home"),
@@ -1308,7 +1374,7 @@ mod tests {
     .unwrap()
   }
 
-  fn codex_dir(dir: &TempDir) -> PathBuf {
+  pub(crate) fn codex_dir(dir: &TempDir) -> PathBuf {
     dir.path().join("harness").join("codex")
   }
 
@@ -1331,30 +1397,29 @@ mod tests {
     names.map(String::from).to_vec()
   }
 
-  fn ready(version: &str) -> HarnessInstallState {
+  pub(crate) fn ready(version: &str) -> HarnessInstallState {
     HarnessInstallState::Ready {
       active: version.to_string(),
     }
   }
 
-  fn failed(reason: InstallFailure, active: Option<&str>) -> HarnessInstallState {
+  pub(crate) fn failed(
+    reason: InstallFailure,
+    active: Option<&str>,
+  ) -> HarnessInstallState {
     HarnessInstallState::Failed {
       reason,
       active: active.map(String::from),
     }
   }
 
-  async fn settle(installation: &HarnessInstallation) -> HarnessInstallState {
+  pub(crate) async fn settle(
+    installation: &HarnessInstallation,
+  ) -> HarnessInstallState {
     let mut changes = installation.subscribe(ManagedHarness::Codex);
     tokio::time::timeout(
       Duration::from_secs(30),
-      changes.wait_for(|state| {
-        !matches!(
-          state,
-          HarnessInstallState::Downloading { .. }
-            | HarnessInstallState::Verifying { .. }
-        )
-      }),
+      changes.wait_for(|state| !state.is_running()),
     )
     .await
     .expect("the install settles")
@@ -1362,13 +1427,15 @@ mod tests {
     .clone()
   }
 
-  async fn install(installation: &HarnessInstallation) -> HarnessInstallState {
+  pub(crate) async fn install(
+    installation: &HarnessInstallation,
+  ) -> HarnessInstallState {
     installation.start(ManagedHarness::Codex).unwrap();
     settle(installation).await
   }
 
   /// Fixture executables run as child processes; see `test_child_processes`.
-  fn run<F: Future<Output = ()>>(test: impl FnOnce() -> F) {
+  pub(crate) fn run<F: Future<Output = ()>>(test: impl FnOnce() -> F) {
     let _children = crate::test_child_processes::exclusive();
     tokio::runtime::Builder::new_multi_thread()
       .worker_threads(2)
@@ -1391,7 +1458,8 @@ mod tests {
         HarnessInstallState::NotInstalled
       );
       assert!(
-        !dir.path().join("harness").exists(),
+        !dir.path().join("harness").exists()
+          && !dir.path().join("harness-home").exists(),
         "opening creates nothing"
       );
 
@@ -1405,6 +1473,11 @@ mod tests {
       assert_eq!(entries(&codex_dir(&dir)), names(["1.0.0", ACTIVE_POINTER]));
       assert_eq!(pointer(&dir), ("1.0.0".to_string(), None));
       assert!(codex_dir(&dir).join("1.0.0").join(INSTALL_RECORD).is_file());
+      assert_eq!(
+        private_dir_mode(&dir.path().join("harness-home").join("codex")),
+        Some(0o700),
+        "an installed release has its private configuration directory"
+      );
 
       let lease = installation.acquire(ManagedHarness::Codex).unwrap();
       assert_eq!(lease.version(), "1.0.0");
@@ -1427,6 +1500,33 @@ mod tests {
         ready("1.0.0")
       );
       assert_eq!(fixture.requests(), 1);
+    });
+  }
+
+  fn private_dir_mode(path: &Path) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    metadata
+      .is_dir()
+      .then(|| metadata.permissions().mode() & 0o777)
+  }
+
+  #[test]
+  fn a_lease_recreates_a_missing_configuration_directory() {
+    run(|| async {
+      let bytes = codex_archive("1.0.0");
+      let fixture = serve(vec![("/v1.tar.gz", Serve::Bytes(bytes.clone()))]).await;
+      let dir = TempDir::new();
+      let installation =
+        open(&dir, release("1.0.0", fixture.url("/v1.tar.gz"), &bytes));
+      assert_eq!(install(&installation).await, ready("1.0.0"));
+      let home = dir.path().join("harness-home").join("codex");
+      std::fs::remove_dir(&home).unwrap();
+      assert_eq!(private_dir_mode(&home), None);
+
+      let lease = installation.acquire(ManagedHarness::Codex).unwrap();
+      assert_eq!(lease.config_env(), ("CODEX_HOME", home.as_path()));
+      assert_eq!(private_dir_mode(&home), Some(0o700));
     });
   }
 

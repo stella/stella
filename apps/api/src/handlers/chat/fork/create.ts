@@ -540,7 +540,9 @@ const copyUserFiles = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * A `user_files` row of the copied prefix points at a storage object (or a
@@ -625,6 +627,7 @@ export const createForkThread = ({
       }
 
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId,
       });

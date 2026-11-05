@@ -288,6 +288,16 @@ const useOlderMessagePaging = ({
   return { sentinelRef, triggerLoadOlder };
 };
 
+/** A turn can persist an assistant message that shows nothing (only hidden
+ *  reasoning, for example) ahead of the one holding its tool card and answer.
+ *  Rendered, it is an empty block whose spacing opens a gap under the question.
+ *  The last message always renders: its footer carries retry and stop. */
+const showsNothing = (message: ChatUIMessage, isLast: boolean) =>
+  message.role === "assistant" &&
+  !isLast &&
+  !carriesContextNotice(message) &&
+  !hasVisibleAssistantParts(message.parts);
+
 export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
@@ -317,6 +327,7 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
+  waitingForComputer = false,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -370,17 +381,7 @@ export const ChatThreadMessages = ({
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
   const renderMessageNode = (message: ChatUIMessage, index: number) => {
-    // A turn can persist an assistant message that shows nothing (only
-    // hidden reasoning, for example) ahead of the one holding its tool card
-    // and answer. Rendered, it is an empty block whose spacing opens a gap
-    // under the question. The last message always renders: its footer
-    // carries retry and stop.
-    if (
-      message.role === "assistant" &&
-      index !== messages.length - 1 &&
-      !carriesContextNotice(message) &&
-      !hasVisibleAssistantParts(message.parts)
-    ) {
+    if (showsNothing(message, index === messages.length - 1)) {
       return null;
     }
     // Only an answer offers message actions. Its whole box, gaps between its
@@ -592,11 +593,12 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-        {showThinkingIndicator &&
-          generationActive &&
-          activityIndicatorState && (
-            <ThinkingIndicator state={activityIndicatorState} />
-          )}
+        {generationActive && (
+          <TurnProgressIndicator
+            thinking={showThinkingIndicator ? activityIndicatorState : null}
+            waitingForComputer={waitingForComputer}
+          />
+        )}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -1141,6 +1143,42 @@ const ThinkingIndicator = ({
   );
 };
 
+/**
+ * What a running turn shows below its answer: that its computer is away,
+ * which says more than a thinking indicator, or what it is working on.
+ */
+const TurnProgressIndicator = ({
+  thinking,
+  waitingForComputer,
+}: {
+  thinking: ChatActivityIndicatorState | null;
+  waitingForComputer: boolean;
+}) => {
+  if (waitingForComputer) {
+    return <ComputerWaitingIndicator />;
+  }
+  return thinking === null ? null : <ThinkingIndicator state={thinking} />;
+};
+
+/** The turn's computer went away mid-turn; the turn goes on once it is back. */
+const ComputerWaitingIndicator = () => {
+  const t = useTranslations();
+
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        <div
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <StatusMark status="pending" />
+          <span>{t("chat.localRun.waitingForComputer")}</span>
+        </div>
+      </MessageContent>
+    </Message>
+  );
+};
+
 type ChatErrorTranslationKey =
   | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
@@ -1469,6 +1507,9 @@ type ChatThreadMessagesProps = {
     >,
   ) => Promise<void> | void;
   showThinkingIndicator?: boolean | undefined;
+  /** The turn runs on the member's computer, which is away until it
+   *  reconnects; the turn shows the wait in place of a stalled answer. */
+  waitingForComputer?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

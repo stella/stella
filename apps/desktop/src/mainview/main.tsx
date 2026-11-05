@@ -9,6 +9,7 @@ import { panic } from "better-result";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
 import ClipboardApp from "../clipboard/ClipboardApp";
+import { installClipsCopyRouting } from "../clipboard/clips-copy-routing";
 import {
   applyDocumentLanguage,
   defaultMessages,
@@ -198,6 +199,18 @@ const removeAccountActivity = installAccountActivity({
 
 // Every window renders from this entry: none shows the webview's browser menu.
 const removeNativeContextMenuPolicy = installNativeContextMenuPolicy(document);
+const removeClipsCopyRouting = installClipsCopyRouting({
+  document,
+  windowLabel: getCurrentWindow().label,
+  onFailure: (error) => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      detail: describeError(error),
+      operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
+      window: telemetryWindow,
+    });
+  },
+});
 
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
@@ -234,6 +247,7 @@ reactRoot.render(<Root />);
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     removeAccountActivity();
+    removeClipsCopyRouting();
     removeDesktopErrorTelemetry();
     removeNativeContextMenuPolicy();
   });

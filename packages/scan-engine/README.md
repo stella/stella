@@ -119,4 +119,16 @@ bun run build:wasm && bun run check:wasm --check
 ```
 
 Generated bindings in `generated/` are committed and ship in the package next
-to `dist/`.
+to `dist/`. CI requires them byte for byte, so `build:wasm` runs only on x86_64
+Linux with the Rust version in `rust-toolchain.toml`. On any other host (macOS,
+ARM64 Linux), run `bun run build:wasm:container`: it runs the same script in
+the official `linux/amd64` Rust image pinned by digest, through Docker or a
+compatible runtime such as OrbStack. Crates, the `wasm-bindgen` CLI and the
+build cache stay in Docker volumes, never in the host's `~/.cargo`. A cold run
+compiles `wasm-bindgen` under emulation and takes several minutes.
+
+Update crates with `bun run cargo:update --manifest-path
+packages/scan-engine/Cargo.toml <crate>` from the repository root, never with a
+bare `cargo update`: it keeps every new pin out of the release-age quarantine
+that CI enforces on `Cargo.lock`. `deny.toml` is the crate's `cargo deny`
+policy (licenses, bans, sources and advisories).
