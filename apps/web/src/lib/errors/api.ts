@@ -397,12 +397,32 @@ const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
 type AuthRefusalCandidate = { code?: string | undefined; status: number };
 
 /** Whether this is a plain refusal of who is asking, whatever the action. */
-export const isAuthRefusal = ({
-  code,
-  status,
-}: AuthRefusalCandidate): boolean =>
+const isAuthRefusal = ({ code, status }: AuthRefusalCandidate): boolean =>
   (status === 401 || status === 403) &&
   (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
+/** The session behind this request is gone; signing in again answers it. */
+export const isSessionRefusal = (candidate: AuthRefusalCandidate): boolean =>
+  candidate.status === 401 && isAuthRefusal(candidate);
+
+/**
+ * Codes the auth server sets when it turns down a code the person typed. Each
+ * form that asks for one says so in place and lets them try again.
+ */
+const TYPED_CODE_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "INVALID_BACKUP_CODE",
+  "INVALID_CODE",
+  "INVALID_OTP",
+  "OTP_EXPIRED",
+]);
+
+/** Whether the auth server turned down a code the person typed. */
+export const isTypedCodeRefusal = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  TYPED_CODE_REFUSAL_CODES.has(error.code);
 
 /** The server has nothing to show for this file; retrying cannot help. */
 export const isPreviewUnavailableError = (error: unknown): boolean =>
