@@ -20,6 +20,7 @@ import {
   encodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { PUBLISHER_FIELD_COVERAGE_EVENT } from "@/api/lib/legal-search/publisher-field-coverage";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
@@ -53,7 +54,11 @@ test("publisher drift is retained and counted through live page and reconciliati
   expect(
     await plKioAdapter.sourceFields.listSourceFields(observedParts ?? {}),
   ).toContain("Publisher added field");
-  const page = Result.ok({ decisions: [observed], nextCursor: null });
+  const page = Result.ok<SyncPage, AdapterFetchError>({
+    decisions: [observed],
+    nextCursor: null,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+  });
   const built = { type: "built", decision: observed } as const;
   const adapter = defineSourceAdapter({
     ...plKioAdapter,
@@ -68,7 +73,7 @@ test("publisher drift is retained and counted through live page and reconciliati
   try {
     expect(await adapter.fetchPage(null, {})).toBe(page);
     expect(await adapter.reconciliation.buildDecision({})).toBe(built);
-    expect(await adapter.reconciliation.createSliceBuildDecision()()).toBe(
+    expect(await adapter.reconciliation.createSliceBuildDecision?.()({})).toBe(
       built,
     );
     expect(observed.sourceRaw).toBe(sourceRaw);
