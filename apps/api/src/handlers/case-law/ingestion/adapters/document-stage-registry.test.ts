@@ -73,7 +73,7 @@ test("publisher drift is retained and counted through live page and reconciliati
   try {
     expect(await adapter.fetchPage(null, {})).toBe(page);
     expect(await adapter.reconciliation.buildDecision({})).toBe(built);
-    expect(await adapter.reconciliation.createSliceBuildDecision?.()()).toBe(
+    expect(await adapter.reconciliation.createSliceBuildDecision()()).toBe(
       built,
     );
     expect(observed.sourceRaw).toBe(sourceRaw);
