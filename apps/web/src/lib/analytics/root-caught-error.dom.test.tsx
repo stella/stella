@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
@@ -137,10 +139,10 @@ test("a network error a route boundary is still retrying stays unreported", asyn
 });
 
 class SilentBoundary extends Component<
-  { children: React.ReactNode },
+  { children: ReactNode },
   { failed: boolean }
 > {
-  constructor(props: { children: React.ReactNode }) {
+  constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { failed: false };
   }
@@ -149,7 +151,7 @@ class SilentBoundary extends Component<
     return { failed: true };
   }
 
-  override render() {
+  override render(): ReactNode {
     return this.state.failed ? null : this.props.children;
   }
 }
