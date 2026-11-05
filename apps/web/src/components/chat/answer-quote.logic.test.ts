@@ -39,6 +39,7 @@ const astWith = (text: string) =>
         anchorId: "p-7",
         type: "paragraph",
         inlines: [{ type: "text", text }],
+        plainText: text,
       },
     ],
   }) satisfies DocumentAst;
