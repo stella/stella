@@ -397,10 +397,7 @@ const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
 type AuthRefusalCandidate = { code?: string | undefined; status: number };
 
 /** Whether this is a plain refusal of who is asking, whatever the action. */
-export const isAuthRefusal = ({
-  code,
-  status,
-}: AuthRefusalCandidate): boolean =>
+const isAuthRefusal = ({ code, status }: AuthRefusalCandidate): boolean =>
   (status === 401 || status === 403) &&
   (code === undefined || AUTH_REFUSAL_CODES.has(code));
 
