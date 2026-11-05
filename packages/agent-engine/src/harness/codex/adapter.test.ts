@@ -733,6 +733,15 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
+  test("a question the chat could not answer back fails the turn instead of pausing it", async () => {
+    const { events } = await run("question_twice_named");
+    expect(events.map(({ type }) => type)).not.toContain("question.requested");
+    expect(terminal(events)).toMatchObject({
+      type: "turn.failed",
+      failure: { type: "protocol_violation" },
+    });
+  });
+
   test("a crashed harness fails the turn with its exit code", async () => {
     const { events } = await run("crash");
     expect(terminal(events)).toMatchObject({

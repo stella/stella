@@ -964,6 +964,7 @@ export const streamChat = async ({
           getRestorableCheckpoint: () => run.restorableCheckpoint,
         }),
     deadlineSignal,
+    dismissesAwaited: resumeDismissesAwaited(preparedResume),
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: (event) => {
@@ -2148,7 +2149,21 @@ type ProcessServerChatStreamProps = {
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
   source: AsyncIterable<PublicStreamChunk>;
+  /**
+   * Whether the continuation dismissed every interaction the turn awaited
+   * (each resume item `cancelled`). A run that then ends cancelled was
+   * stopped by the member, as a Stop stops it, not cut off.
+   */
+  dismissesAwaited?: boolean | undefined;
 };
+
+/** Whether `resume` dismisses everything it answers; see `dismissesAwaited`. */
+export const resumeDismissesAwaited = (
+  resume: readonly RunAgentResumeItem[] | undefined,
+): boolean =>
+  resume !== undefined &&
+  resume.length > 0 &&
+  resume.every(({ status }) => status === "cancelled");
 
 /**
  * Which abort cut this run. A stop aborts the run's controller with
@@ -2303,6 +2318,7 @@ const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
       return false;
     case "ask-user":
     case "client-tool":
+    case "harness-question":
       return true;
     default:
       interaction satisfies never;
@@ -2410,6 +2426,7 @@ const interruptToolCallIdsOf = (
 const drainedRunOutcome = ({
   abortSignal,
   deadlineSignal,
+  dismissesAwaited,
   finalRunFinishedChunks,
   responseMessage,
   runCancelled,
@@ -2417,6 +2434,7 @@ const drainedRunOutcome = ({
 }: {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
+  dismissesAwaited: boolean;
   finalRunFinishedChunks: readonly PublicStreamChunk[];
   responseMessage: ChatMessage | null;
   runCancelled: boolean;
@@ -2437,8 +2455,11 @@ const drainedRunOutcome = ({
     // source that simply ended. Grading that silence as a completion
     // persists a turn with no answer and no reason; the signal is what says
     // the turn was cut, and which signal says why. A finish whose outcome is
-    // `cancelled` says the same.
-    return chatCutShortOutcome({ abortSignal, deadlineSignal });
+    // `cancelled` says the same; with no signal, after the member dismissed
+    // what the turn awaited, it is their stop.
+    return !abortSignal.aborted && dismissesAwaited
+      ? USER_STOP_OUTCOME
+      : chatCutShortOutcome({ abortSignal, deadlineSignal });
   }
   const openInteraction = getAwaitingUserInteraction(responseMessage);
   if (
@@ -3307,6 +3328,7 @@ const approvedCallIdsOf = (message: ChatMessage | undefined): Set<string> =>
 
 export const processServerChatStream = async function* ({
   abortSignal,
+  dismissesAwaited = false,
   runSignal = abortSignal,
   reportSnapshotFailure,
   getRestorableCheckpoint,
@@ -3458,6 +3480,7 @@ export const processServerChatStream = async function* ({
     const outcome = drainedRunOutcome({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
+      dismissesAwaited,
       finalRunFinishedChunks,
       responseMessage: getResponseMessage(),
       runCancelled: runState.cancelled,
