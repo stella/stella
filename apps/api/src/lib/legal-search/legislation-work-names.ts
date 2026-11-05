@@ -44,6 +44,7 @@ import {
 } from "@/api/db/schema";
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";
 import { redistributableLegislationVersionFor } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
@@ -720,29 +721,36 @@ const validityEndsOf = async (
   if (works.length === 0) {
     return new Map();
   }
-  const acts = await tx
-    .select({
-      sourceId: legislationDocuments.sourceId,
-      eli: legislationDocuments.eli,
-      language: legislationDocuments.language,
-      versions: count(),
-      endedVersions: count(legislationDocuments.versionValidTo),
-      lastEnd: max(legislationDocuments.versionValidTo),
-    })
-    .from(legislationDocuments)
-    .where(
-      inArray(legislationDocuments.eli, [
-        ...new Set(works.map(({ eli }) => eli)),
-      ]),
-    )
-    .groupBy(
-      legislationDocuments.sourceId,
-      legislationDocuments.eli,
-      legislationDocuments.language,
-    )
-    .limit(NAMED_VERSION_LIMIT);
+  const read = await readBounded(
+    tx
+      .select({
+        sourceId: legislationDocuments.sourceId,
+        eli: legislationDocuments.eli,
+        language: legislationDocuments.language,
+        versions: count(),
+        endedVersions: count(legislationDocuments.versionValidTo),
+        lastEnd: max(legislationDocuments.versionValidTo),
+      })
+      .from(legislationDocuments)
+      .where(
+        inArray(legislationDocuments.eli, [
+          ...new Set(works.map(({ eli }) => eli)),
+        ]),
+      )
+      .groupBy(
+        legislationDocuments.sourceId,
+        legislationDocuments.eli,
+        legislationDocuments.language,
+      ),
+    NAMED_VERSION_LIMIT,
+  );
+  // A name fitting this many acts settles on none: read as open, they all fit
+  // whatever the date, and the choice between them stays ambiguous.
+  if (read.type === "overflow") {
+    return new Map();
+  }
   return new Map(
-    acts.map((act) => [
+    read.rows.map((act) => [
       legislationWorkRefKey(act),
       act.endedVersions === act.versions ? act.lastEnd : null,
     ]),
