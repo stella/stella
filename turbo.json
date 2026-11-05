@@ -1767,6 +1767,7 @@
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/bundled-consumers.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
         "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
@@ -1776,6 +1777,7 @@
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/parser-output-fixtures.ts",
+        "$TURBO_ROOT$/scripts/plan-output-codec.ts",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
