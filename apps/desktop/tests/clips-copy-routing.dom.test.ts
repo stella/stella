@@ -5,7 +5,7 @@ import type { ClipsSelection } from "../src/clipboard/clips-copy-routing";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
-const { clipsSelection, installClipsCopyRouting } =
+const { clipsSelection, installClipsCopyRouting, isClipsCopyFailed } =
   await import("../src/clipboard/clips-copy-routing");
 
 afterAll(async () => {
@@ -67,6 +67,62 @@ const dispatchClipboardEvent = (type: "copy" | "cut") => {
   const event = new Event(type, { bubbles: true, cancelable: true });
   document.body.dispatchEvent(event);
   return event;
+};
+
+/** Selects a span of one text node, or of two when `endText` is given. */
+const selectText = (
+  startText: Node,
+  startOffset: number,
+  endOffset: number,
+  endText: Node = startText,
+) => {
+  const range = document.createRange();
+  range.setStart(startText, startOffset);
+  range.setEnd(endText, endOffset);
+  const selection = document.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+};
+
+/** A clip's content root holding `html`, as both Clips windows render it. */
+const clipWithHtml = (html: string) => {
+  const clip = document.createElement("div");
+  clip.className = "clipboard-html";
+  // safe-html: every caller passes a literal fixture from this file.
+  clip.innerHTML = html;
+  document.body.append(clip);
+  return clip;
+};
+
+const firstText = (root: Element, selector: string) => {
+  const text = root.querySelector(selector)?.firstChild;
+  if (!text) {
+    throw new TypeError(`No text in ${selector}`);
+  }
+  return text;
+};
+
+/**
+ * Installs routing whose write settles only when the test says so. `settle`
+ * returns after the routing has reacted: its reaction to the write was
+ * registered during the event, so it runs before this later `await` resumes.
+ */
+const installHeldWrite = () => {
+  const held = Promise.withResolvers<undefined>();
+  cleanups.push(
+    installClipsCopyRouting({
+      document,
+      windowLabel: "clipboard-editor",
+      write: () => held.promise,
+      onFailure: () => undefined,
+    }),
+  );
+  return {
+    settle: async () => {
+      held.resolve(undefined);
+      await held.promise;
+    },
+  };
 };
 
 /** Records editing commands; `deleted` resolves on the first one. */
@@ -174,5 +230,237 @@ describe("copies inside the Clips windows", () => {
 
     expect(writes).toHaveLength(1);
     expect(deletes).toEqual(["delete"]);
+  });
+
+  test("a cut deletes nothing once focus moved to the same text in another field", async () => {
+    const { deletes } = recordDeletes();
+    const [first, second] = ["clause", "clause"].map((value) => {
+      const field = document.createElement("input");
+      field.value = value;
+      document.body.append(field);
+      return field;
+    });
+    if (!first || !second) {
+      throw new TypeError("Missing fields");
+    }
+    const held = installHeldWrite();
+    first.focus();
+    first.setSelectionRange(0, 6);
+
+    dispatchClipboardEvent("cut");
+    second.focus();
+    second.setSelectionRange(0, 6);
+    await held.settle();
+
+    expect(deletes).toEqual([]);
+  });
+
+  test("a cut deletes nothing once the same text is selected elsewhere in the field", async () => {
+    const { deletes } = recordDeletes();
+    const field = document.createElement("textarea");
+    field.value = "clause clause";
+    document.body.append(field);
+    const held = installHeldWrite();
+    field.focus();
+    field.setSelectionRange(0, 6);
+
+    dispatchClipboardEvent("cut");
+    field.setSelectionRange(7, 13);
+    await held.settle();
+
+    expect(deletes).toEqual([]);
+  });
+
+  test("a cut deletes nothing once the same text is selected elsewhere in the editor", async () => {
+    const { deletes } = recordDeletes();
+    const editor = document.createElement("div");
+    editor.contentEditable = "true";
+    editor.innerHTML = "<p>clause</p><p>clause</p>";
+    document.body.append(editor);
+    const held = installHeldWrite();
+    selectText(firstText(editor, "p:first-child"), 0, 6);
+
+    dispatchClipboardEvent("cut");
+    selectText(firstText(editor, "p:last-child"), 0, 6);
+    await held.settle();
+
+    expect(deletes).toEqual([]);
+  });
+});
+
+describe("a selection keeps the formatting around it", () => {
+  test("inside one formatted run", () => {
+    const clip = clipWithHtml("<p>See <b>Clause 4</b> here</p>");
+
+    selectText(firstText(clip, "b"), 0, 6);
+
+    expect(clipsSelection(document)).toEqual({
+      html: "<b>Clause</b>",
+      plainText: "Clause",
+    });
+  });
+
+  test("inside nested runs, outermost first", () => {
+    const clip = clipWithHtml("<b><i>Clause 4</i></b>");
+
+    selectText(firstText(clip, "i"), 7, 8);
+
+    expect(clipsSelection(document)?.html).toBe("<b><i>4</i></b>");
+  });
+
+  test("across children of a formatted run", () => {
+    const clip = clipWithHtml(
+      "<strong><u>Clause</u> 4 <em>applies</em></strong>",
+    );
+
+    selectText(firstText(clip, "u"), 0, 3, firstText(clip, "em"));
+
+    expect(clipsSelection(document)?.html).toBe(
+      "<strong><u>Clause</u> 4 <em>app</em></strong>",
+    );
+  });
+
+  test("with its inline style attribute", () => {
+    const clip = clipWithHtml('<span style="color: red">Clause 4</span>');
+
+    selectText(firstText(clip, "span"), 0, 6);
+
+    expect(clipsSelection(document)?.html).toBe(
+      '<span style="color: red">Clause</span>',
+    );
+  });
+
+  test("not the paragraph it sits in", () => {
+    const clip = clipWithHtml("<p>Clause 4</p>");
+
+    selectText(firstText(clip, "p"), 0, 6);
+
+    expect(clipsSelection(document)?.html).toBe("Clause");
+  });
+
+  test("a word inside a table cell or list item stays inline", () => {
+    const table = clipWithHtml(
+      "<table><tbody><tr><td><b>Clause 4</b></td></tr></tbody></table>",
+    );
+    selectText(firstText(table, "b"), 0, 6);
+    expect(clipsSelection(document)?.html).toBe("<b>Clause</b>");
+
+    const list = clipWithHtml("<ul><li>Clause 4</li></ul>");
+    selectText(firstText(list, "li"), 0, 6);
+    expect(clipsSelection(document)?.html).toBe("Clause");
+  });
+
+  test("list items keep their list", () => {
+    const clip = clipWithHtml("<ol><li>one</li><li>two</li></ol>");
+
+    selectText(
+      firstText(clip, "li:first-child"),
+      0,
+      3,
+      firstText(clip, "li:last-child"),
+    );
+
+    expect(clipsSelection(document)?.html).toBe(
+      "<ol><li>one</li><li>two</li></ol>",
+    );
+  });
+
+  test("table cells keep their table", () => {
+    const clip = clipWithHtml(
+      "<table><tbody><tr><td>one</td><td>two</td></tr></tbody></table>",
+    );
+
+    selectText(
+      firstText(clip, "td:first-child"),
+      0,
+      3,
+      firstText(clip, "td:last-child"),
+    );
+
+    expect(clipsSelection(document)?.html).toBe(
+      "<table><tbody><tr><td>one</td><td>two</td></tr></tbody></table>",
+    );
+  });
+
+  test("the content root and whatever is outside it stay out", () => {
+    const outer = document.createElement("section");
+    outer.innerHTML =
+      '<b><div class="clipboard-html">Clause</div></b><b><div class="clipboard-html">4</div></b>';
+    document.body.append(outer);
+
+    selectText(firstText(outer, "b:first-child div"), 0, 6);
+    expect(clipsSelection(document)?.html).toBe("Clause");
+
+    selectText(
+      firstText(outer, "b:first-child div"),
+      0,
+      1,
+      firstText(outer, "b:last-child div"),
+    );
+    expect(clipsSelection(document)?.html).toBe(
+      '<b><div class="clipboard-html">Clause</div></b><b><div class="clipboard-html">4</div></b>',
+    );
+  });
+
+  test("text outside any clip is copied as selected", () => {
+    const label = document.createElement("b");
+    label.textContent = "Clause 4";
+    document.body.append(label);
+    const text = label.firstChild;
+    if (!text) {
+      throw new TypeError("Missing label text");
+    }
+
+    selectText(text, 0, 6);
+
+    expect(clipsSelection(document)?.html).toBe("Clause");
+  });
+});
+
+describe("a copy that never reached the clipboard", () => {
+  /** The first write fails; `failed` resolves once the routing reported it. */
+  const installFailingOnce = () => {
+    const failed = Promise.withResolvers<undefined>();
+    let failing = true;
+    cleanups.push(
+      installClipsCopyRouting({
+        document,
+        windowLabel: "clipboard",
+        write: async () => {
+          if (failing) {
+            failing = false;
+            throw new Error("clipboard busy");
+          }
+          await Promise.resolve();
+        },
+        onFailure: () => failed.resolve(undefined),
+      }),
+    );
+    return failed.promise;
+  };
+
+  test("is flagged until the next copy", async () => {
+    const failed = installFailingOnce();
+    selectContents(editorWithText());
+    expect(isClipsCopyFailed()).toBe(false);
+
+    dispatchClipboardEvent("copy");
+    await failed;
+    expect(isClipsCopyFailed()).toBe(true);
+
+    dispatchClipboardEvent("copy");
+    expect(isClipsCopyFailed()).toBe(false);
+  });
+
+  test("stops being flagged once the user leaves the window", async () => {
+    const failed = installFailingOnce();
+    selectContents(editorWithText());
+
+    dispatchClipboardEvent("copy");
+    await failed;
+    expect(isClipsCopyFailed()).toBe(true);
+
+    window.dispatchEvent(new Event("blur"));
+    expect(isClipsCopyFailed()).toBe(false);
   });
 });

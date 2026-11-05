@@ -4087,9 +4087,9 @@ pub(crate) fn write_text_and_html(
   )
 }
 
-/// Upper bound for a selection copied inside a Clips window. Clips hold far
-/// less, so only a malformed request reaches it.
-const MAX_SELECTION_COPY_BYTES: usize = 4 * 1024 * 1024;
+/// Upper bound for a selection copied inside a Clips window: every stored clip
+/// selected at once, with room for the markup around them.
+const MAX_SELECTION_COPY_BYTES: usize = 2 * MAX_HISTORY_BYTES;
 
 /// The pasteboard item for a selection copied or cut inside a Clips window.
 fn selection_clipboard_contents(
@@ -4218,6 +4218,16 @@ mod tests {
       )
       .is_err()
     );
+  }
+
+  #[test]
+  fn a_selection_of_the_whole_history_fits() {
+    let contents = selection_clipboard_contents(
+      "x".repeat(MAX_HISTORY_BYTES),
+      Some("x".repeat(MAX_HISTORY_BYTES)),
+    )
+    .unwrap();
+    assert_eq!(content_formats(&contents), ["text", "html"]);
   }
 
   #[test]
