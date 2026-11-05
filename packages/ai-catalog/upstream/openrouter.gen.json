@@ -1045,18 +1045,6 @@
       }
     },
     {
-      "id": "thinkingmachines/inkling-small:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
       "id": "upstage/solar-mini4",
       "reasoning": {
         "default_effort": "medium"

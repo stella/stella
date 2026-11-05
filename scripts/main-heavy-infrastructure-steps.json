@@ -429,6 +429,7 @@
       "Download planned Postgres test durations",
       "Install dependencies",
       "Prepare the dev seed database",
+      "Replay the local dev seed",
       "Run Postgres-gated API suites",
       "Setup Bun",
       "Upload Postgres test timings",

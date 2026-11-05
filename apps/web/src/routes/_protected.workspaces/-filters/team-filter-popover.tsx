@@ -135,7 +135,7 @@ export const TeamFilterPopover = ({
                 leadValue?.type === "user" && leadValue.userId === m.userId;
               return (
                 <div
-                  className="hover:bg-accent flex items-center gap-2 rounded px-1 py-1"
+                  className="hover:bg-accent flex items-center gap-2 rounded-sm px-1 py-1"
                   key={m.userId}
                 >
                   <Button

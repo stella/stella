@@ -138,6 +138,9 @@ const bindingsFor = (source: Program) => {
         });
       }
     }
+    if (node.type === "CatchClause" && node.param !== null) {
+      declare(node, node.param, { type: "shadow" });
+    }
     if (node.type === "TSImportEqualsDeclaration") {
       const reference = node.moduleReference;
       declare(

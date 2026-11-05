@@ -1753,7 +1753,7 @@ const ClauseSlotEditor = ({
           />
         }
       >
-        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded px-1 py-0.5">
+        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
           <code
             className="overflow-hidden text-xs text-ellipsis whitespace-pre"
             dir="auto"
@@ -1821,7 +1821,7 @@ const FieldPathEditor = ({
           />
         }
       >
-        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded px-1 py-0.5">
+        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
           <code className="overflow-hidden text-xs text-ellipsis whitespace-pre">
             {path}
           </code>
