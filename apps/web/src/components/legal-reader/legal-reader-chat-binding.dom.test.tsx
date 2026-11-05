@@ -57,7 +57,7 @@ test("binding a mounted reader names its thread without writing during render", 
     expect(
       useLegalDocumentChatThreads.getState().threadIdByDocumentKey[
         DOCUMENT_KEY
-      ],
+      ] ?? null,
     ).toBe(threadId);
   } finally {
     consoleError.mockRestore();

@@ -147,7 +147,7 @@ export const DockedComposerPending = ({
       dock={<div aria-hidden className="mt-1.5 h-6" />}
     />
   ) : (
-    <DockedComposer bar={<PromptBarShell aria-hidden />} />
+    <DockedComposer bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>} />
   );
 
 type DockedComposerProps = {
