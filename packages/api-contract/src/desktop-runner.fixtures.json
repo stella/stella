@@ -966,29 +966,6 @@
             ]
           }
         }
-      },
-      {
-        "name": "ready harness without approval modes",
-        "reason": "invalid",
-        "message": {
-          "type": "harness.status",
-          "harness": {
-            "id": "codex",
-            "state": "ready",
-            "version": "0.48.0",
-            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
-            "models": [
-              {
-                "id": "model-large",
-                "label": "Large model"
-              },
-              {
-                "id": "model-small",
-                "label": "Small model"
-              }
-            ]
-          }
-        }
       }
     ],
     "server": [

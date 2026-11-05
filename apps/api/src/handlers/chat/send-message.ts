@@ -2806,7 +2806,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            routedLocally: localRun !== undefined,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,

@@ -32,6 +32,7 @@ import {
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
+  desktopRunnerHarnessReportSchema,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   parseDesktopRunnerFrame,
@@ -220,6 +221,19 @@ describe("desktop runner fixtures", () => {
         ],
       }),
     ).toEqual(normalized(vocabularies));
+  });
+
+  test("a ready report from before approval modes offers the default alone", () => {
+    const report = {
+      state: "ready",
+      id: "codex",
+      version: "0.48.0",
+      capabilities: ["approvals"],
+      models: [{ id: "model-large", label: "Large model" }],
+    };
+    const parsed = v.safeParse(desktopRunnerHarnessReportSchema, report);
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toMatchObject({ approvalModes: ["ask"] });
   });
 
   test("unknown fields are dropped, chunk fields are kept", () => {

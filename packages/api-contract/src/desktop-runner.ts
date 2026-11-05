@@ -453,14 +453,20 @@ const harnessReportSchema = v.variant("state", [
         "Capabilities are listed once",
       ),
     ),
-    /** The approval modes this desktop can run the harness in. */
-    approvalModes: v.pipe(
-      v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
-      v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
-      v.check(
-        (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
-        "Every harness supports the default approval mode",
+    /**
+     * The approval modes this desktop can run the harness in. A desktop or a
+     * stored report from before modes existed offers the default alone.
+     */
+    approvalModes: v.optional(
+      v.pipe(
+        v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
+        v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
+        v.check(
+          (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
+          "Every harness supports the default approval mode",
+        ),
       ),
+      [DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE],
     ),
     models: v.pipe(
       v.array(harnessModelSchema),
