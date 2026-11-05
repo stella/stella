@@ -1903,7 +1903,7 @@
       "unavailable": "Graf se nepodařilo vybrat. Zobrazuje se tabulka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuji s kontextem",
+    "thinking": "Přemýšlení",
     "threadFiles": {
       "title": "Soubory v tomto chatu"
     },
@@ -2030,6 +2030,11 @@
       "needsInputTitle": "stella potřebuje váš vstup",
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Čekání na schválení",
+      "waitingForInput": "Čekání na zadání",
+      "writing": "Psaní"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",

@@ -1903,7 +1903,7 @@
       "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Strādāju ar kontekstu",
+    "thinking": "Domāšana",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
     },
@@ -2030,6 +2030,11 @@
       "needsInputTitle": "stellai vajadzīga jūsu rīcība",
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Gaida apstiprinājumu",
+      "waitingForInput": "Gaida ievadi",
+      "writing": "Raksta"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
