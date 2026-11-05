@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { API, formatDiagnosticsWithColorAndContext } from "tsrs/unstable/async";
+import { API, formatDiagnosticsWithColorAndContext } from "tsrs/async";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

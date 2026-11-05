@@ -1,12 +1,8 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
-import {
-  API,
-  type Checker,
-  type Symbol as CompilerSymbol,
-} from "tsrs/unstable/async";
+import * as ts from "tsrs/ast";
+import { API, type Checker, type Symbol as CompilerSymbol } from "tsrs/async";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";

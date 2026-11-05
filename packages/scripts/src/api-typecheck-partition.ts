@@ -2,7 +2,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

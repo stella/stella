@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
 import * as v from "valibot";
 
 import { CACHE_SAVE_REVISION } from "./ci-store-save";

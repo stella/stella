@@ -8,7 +8,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
 // The repository depends on no `typescript` package: what resolves there is
 // whichever copy a linter peers on. The classic API is `typescript6`, the
-// TypeScript 7 API is `tsrs/unstable/*`. The lint rule covers static imports in linted files;
+// TypeScript 7 API is `tsrs/*`. The lint rule covers static imports in linted files;
 // this census also covers `require`, dynamic `import()`, and files the linter
 // never reads (shell scripts that embed `bun -e` programs, plain .mjs).
 const CLASSIC_API_IMPORT =
@@ -42,7 +42,7 @@ test("the pattern recognizes every import form", () => {
   }
   for (const source of [
     'import ts from "typescript6";',
-    'import { API } from "tsrs/unstable/sync";',
+    'import { API } from "tsrs/sync";',
     'const language = "typescript";',
   ]) {
     expect(CLASSIC_API_IMPORT.test(source)).toBe(false);
