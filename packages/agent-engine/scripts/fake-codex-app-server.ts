@@ -609,6 +609,29 @@ const FAKE_SCENARIOS = {
     ).flat(),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** One blocking question asking two questions under one id. */
+  question_twice_named: [
+    ...freshTurn(),
+    {
+      request: "item/tool/requestUserInput",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-twice",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: ["Czech", "Slovak"].map((law) => ({
+          id: "law",
+          header: "Governing law",
+          question: `Does ${law} law govern the lease?`,
+          isOther: true,
+          isSecret: false,
+          options: null,
+        })),
+      },
+    },
+    { sleep: 5000 },
+  ],
   crash: [
     ...freshTurn(),
     item("started", command("call-x", "inProgress")),

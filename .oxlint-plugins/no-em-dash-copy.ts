@@ -84,8 +84,12 @@ const isComposingUse = (reference: ESTree.Node): boolean => {
   if (parent === null) {
     return false;
   }
-  if (parent.type === "TemplateLiteral" || parent.type === "BinaryExpression") {
+  if (parent.type === "TemplateLiteral") {
     return true;
+  }
+  // Only `+` builds text; a comparison such as `value === marker` reads it.
+  if (parent.type === "BinaryExpression") {
+    return parent.operator === "+";
   }
   return (
     parent.type === "CallExpression" &&

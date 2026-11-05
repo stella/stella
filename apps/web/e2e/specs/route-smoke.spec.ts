@@ -26,6 +26,7 @@ import {
 import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -411,6 +412,7 @@ const declareRouteSmokeGroup = ({
                 isolatedBrowser,
                 storageState,
               );
+              const csp = await installContentSecurityPolicyCollector(page);
               const browserErrors = createBrowserErrorCollector({
                 tolerateColdMountWarning: true,
               });
@@ -422,6 +424,7 @@ const declareRouteSmokeGroup = ({
                   expectation: { kind: "redirectsTo", to: destination },
                 } as const satisfies SmokeRoute;
                 await renderSmokeRoute({ page, route });
+                await csp.assertClean();
                 assertFinalDestination(page, route);
                 await assertNoRouteBoundary(page, template);
                 browserErrors.assertEmpty(
@@ -578,6 +581,7 @@ const measureRouteTarget = async ({
   restoredInspector?: { userId: string; organizationId: string };
 }): Promise<RouteNetworkMetrics> => {
   const { context, page } = await openCleanPage(browser);
+  const csp = await installContentSecurityPolicyCollector(page);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -664,9 +668,11 @@ const measureRouteTarget = async ({
       `${route.template} must show exactly one divider under the app chrome: the chrome owns it, so a page root or a nested layout's first pane draws no top border (border-t, border-y, border) on that line`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
-    // Captured after the route shell and tracked API work are ready, so the
-    // manifest reflects the fully-rendered route.
-    return summarizeCapture(await network.capture());
+    // Capture at the settled route boundary; awaiting the document's CSP
+    // check must not extend the network measurement into background work.
+    const capture = await network.capture();
+    await csp.assertClean();
+    return summarizeCapture(capture);
   } finally {
     try {
       await detachNetwork?.();
@@ -688,12 +694,14 @@ const assertRedirectRoute = async ({
 }) => {
   const { context, page } = await openCleanPage(browser);
   const redirectRoute = { ...route, expectation };
+  const csp = await installContentSecurityPolicyCollector(page);
 
   try {
     await gotoSmokeRoute(page, redirectRoute);
     await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
+    await csp.assertClean();
   } finally {
     await context.close();
   }

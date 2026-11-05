@@ -213,6 +213,7 @@ import {
 } from "./ClipboardGroupFields";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
+import { useClipsCopyFailed } from "./clips-copy-routing";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
@@ -1815,6 +1816,7 @@ const ClipboardApp = () => {
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
+  const copyFailed = useClipsCopyFailed();
   const [dialog, setDialog] = useState<ClipboardDialogState>({
     type: "closed",
   });
@@ -2925,13 +2927,15 @@ const ClipboardApp = () => {
     persistenceWarningLabel = t("imageCleanupPending");
   }
   let feedback: ReactNode = null;
-  if (appError) {
+  const feedbackMessage =
+    appError?.message ?? (copyFailed ? t("errorPaste") : null);
+  if (feedbackMessage !== null) {
     feedback = (
       <div
         className="bg-destructive text-destructive-foreground absolute inset-x-0 top-0 z-20 px-5 py-1.5 text-center text-xs"
         role="alert"
       >
-        {appError.message}
+        {feedbackMessage}
       </div>
     );
   }

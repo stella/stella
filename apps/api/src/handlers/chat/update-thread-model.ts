@@ -108,6 +108,7 @@ const updateThreadModel = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });

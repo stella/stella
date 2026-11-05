@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import type { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import {
+  chatLocalRunAnswersRefusal,
+  chatLocalRunQuestionsSchema,
+} from "@stll/api-contract/chat-run-target";
+
 import type {
   HarnessInteractionResponse,
   HarnessRespondError,
@@ -198,18 +203,16 @@ const interactionResult = (
       if (response.type !== "answers") {
         return Result.err("This request takes answers.");
       }
+      const refusal = chatLocalRunAnswersRefusal(
+        pending.questions,
+        response.answers,
+      );
+      if (refusal !== null) {
+        return Result.err(refusal);
+      }
       const answers: [string, string][] = [];
       for (const question of pending.questions) {
         const given = response.answers[question.id] ?? [];
-        if (given.length === 0) {
-          return Result.err(`Question ${question.id} has no answer.`);
-        }
-        const labels = new Set(question.options.map(({ label }) => label));
-        if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
-          return Result.err(
-            `Question ${question.id} takes one of its options.`,
-          );
-        }
         // Native answers are keyed by the question text; several selected
         // options are one comma-separated answer.
         answers.push([pending.texts.get(question.id) ?? "", given.join(", ")]);
@@ -736,9 +739,8 @@ export class ClaudeCodeTurnSession {
     if (parsed === null) {
       return;
     }
-    const requestId = requestIdFor(controlId);
     const texts = new Map<string, string>();
-    const questions = parsed.questions.map((question, index) => {
+    const asked = parsed.questions.map((question, index) => {
       const id = String(index);
       texts.set(id, question.question);
       return {
@@ -748,9 +750,21 @@ export class ClaudeCodeTurnSession {
         options: question.options,
         // The harness always lets the user write their own answer.
         allowsFreeText: true,
+        multiSelect: question.multiSelect ?? false,
         secret: false,
       };
     });
+    // A question the chat could not carry or answer back ends the turn
+    // instead of pausing it on a question nobody can answer.
+    const questions = this.parse(
+      chatLocalRunQuestionsSchema,
+      asked,
+      "question",
+    );
+    if (questions === null) {
+      return;
+    }
+    const requestId = requestIdFor(controlId);
     this.pending.set(requestId, {
       type: "question",
       controlId,
