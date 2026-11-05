@@ -1912,7 +1912,10 @@ describe("check failure reporting", () => {
       expect(output).toContain("elapsed=");
       expect(output).toContain("Command process tree at SIGTERM");
       expect(output).toContain("Command process tree at SIGKILL");
-      expect(output).toContain("PID PPID PGID STATE COMMAND");
+      expect(output).toContain("PID PPID PGID STATE RSS_KB COMMAND");
+      expect(output).toMatch(
+        /Machine: memory_free_mib=\d+ memory_total_mib=\d+ disk_free_mib=\d+ load=/u,
+      );
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

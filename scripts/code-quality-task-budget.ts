@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import { type ChildProcess, spawn } from "node:child_process";
+import { statfsSync } from "node:fs";
 import { readdir, readFile, realpath } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -522,6 +524,21 @@ type ProcessTreeAtSignalOptions = {
   stallMs: number;
   report: (message: string) => void;
 };
+const MIB = 1024 * 1024;
+
+/** What a runner that is being stopped had left, so a stop names its cause. */
+const machineResources = () => {
+  const disk = Result.try(() => statfsSync(process.cwd()));
+  const diskFree = disk.isOk()
+    ? `${Math.round((disk.value.bavail * disk.value.bsize) / MIB)}`
+    : "unknown";
+  const load = os
+    .loadavg()
+    .map((value) => value.toFixed(1))
+    .join(" ");
+  return `Machine: memory_free_mib=${Math.round(os.freemem() / MIB)} memory_total_mib=${Math.round(os.totalmem() / MIB)} disk_free_mib=${diskFree} load=${load} cpus=${os.availableParallelism()}`;
+};
+
 const processTreeAtSignal = async ({
   group,
   signal,
@@ -532,7 +549,7 @@ const processTreeAtSignal = async ({
   const snapshot = await Result.tryPromise(
     async () =>
       await processSnapshot({
-        columns: "pid=,ppid=,pgid=,stat=,command=",
+        columns: "pid=,ppid=,pgid=,stat=,rss=,command=",
         stallMs,
         report,
       }),
@@ -540,7 +557,7 @@ const processTreeAtSignal = async ({
   const rows = snapshot.isOk()
     ? ownedProcessTreeRows(snapshot.value, group).join("\n")
     : failureMessage(snapshot.error);
-  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\nPID PPID PGID STATE COMMAND\n${rows || "No remaining group members"}\n`;
+  return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\n${machineResources()}\nPID PPID PGID STATE RSS_KB COMMAND\n${rows || "No remaining group members"}\n`;
 };
 
 const PROCESS_GROUP_POLL_MS = 50;
