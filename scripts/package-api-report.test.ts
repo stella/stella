@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
@@ -15,6 +15,10 @@ import {
   checkPackageApi,
   generateApiReport,
 } from "./package-api-report";
+
+// timeout: each case type-checks fixture packages and their published
+// declarations, 5 to 12 seconds on a loaded CI runner.
+setDefaultTimeout(30_000);
 
 const roots: string[] = [];
 afterEach(() => {

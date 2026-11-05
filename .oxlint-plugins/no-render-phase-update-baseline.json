@@ -20,7 +20,7 @@
   "apps/web/src/hooks/use-reader-provision-mode.ts": 1,
   "apps/web/src/lib/folio-ui-components.ts": 1,
   "apps/web/src/routes/-app-frame-host.tsx": 1,
-  "apps/web/src/routes/_protected.admin/-components/organization/use-ai-config-drafts.ts": 10,
+  "apps/web/src/routes/_protected.settings/organization/-components/organization/use-ai-config-drafts.ts": 10,
   "apps/web/src/routes/_protected.workspaces/index.tsx": 1,
   "apps/web/src/routes/knowledge/-components/link-clause-dialog.tsx": 2,
   "apps/web/src/routes/knowledge/-components/skill-editor.tsx": 6,

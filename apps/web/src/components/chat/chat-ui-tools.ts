@@ -9,8 +9,8 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
+  isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
-  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -751,7 +751,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -846,7 +846,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -936,7 +936,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );

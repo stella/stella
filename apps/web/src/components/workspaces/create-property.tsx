@@ -138,7 +138,10 @@ const buildContent = ({
   options,
   fallback,
   currency,
-}: BuildContentArgs): WorkspaceProperty["content"] => {
+}: BuildContentArgs): Exclude<
+  WorkspaceProperty["content"],
+  { type: "record" }
+> => {
   if (contentType === "single-select" || contentType === "multi-select") {
     return {
       version: 1,

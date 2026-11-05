@@ -101,6 +101,22 @@ describe("the Run on choices", () => {
     });
     expect(stateOf(options, "claude-code")).toBe("not_installed");
   });
+
+  test("a harness its computer could not check reads as unavailable, never as unsupported", () => {
+    const options = chatLocalHarnessOptions({
+      status: "enabled",
+      runners: [
+        runner([
+          { id: "codex", state: "unavailable", reason: "harness_failed" },
+          { id: "claude-code", state: "unsupported", version: "1.0.0" },
+        ]),
+      ],
+    });
+    expect(options).toEqual([
+      { harness: "codex", state: "unavailable" },
+      { harness: "claude-code", state: "unsupported" },
+    ]);
+  });
 });
 
 describe("the selected run target", () => {

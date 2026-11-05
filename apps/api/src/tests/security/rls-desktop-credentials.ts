@@ -50,6 +50,10 @@ export const createRlsDesktopCredentials = async (
         name: "Desktop matrix",
         userId: ids.userA1,
         expiresIn: null,
+        // Tests verify a key far more often than a desktop does, so a limit
+        // would refuse whichever test comes after the budget runs out.
+        // desktop-registry/auth.test.ts pins the limit real keys get.
+        rateLimitEnabled: false,
         metadata: {
           purpose: DESKTOP_REGISTRY_KEY_CONFIG,
           organizationId: boundOrganizationId,

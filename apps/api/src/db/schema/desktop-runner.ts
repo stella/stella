@@ -11,7 +11,7 @@ import {
   DESKTOP_RUNNER_STORED_REJECT_REASONS,
 } from "@/api/lib/desktop-runner/states";
 
-import { chatThreads } from "./chat";
+import { chatThreads, chatTurns } from "./chat";
 import {
   jsonb,
   organization,
@@ -149,6 +149,13 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
      */
     chatThreadId: p.uuid("chat_thread_id"),
     /**
+     * The chat turn that reads the run; null for runs started outside chat,
+     * and for a chat run whose turn was deleted. The run lives as long as the
+     * turn holds it: once the turn ends other than paused on an answer the
+     * run can take, or is deleted, the API cancels the run.
+     */
+    chatTurnId: p.uuid("chat_turn_id"),
+    /**
      * Last position of the run's messages a chat turn consumed. A turn that
      * paused for an approval continues reading after it.
      */
@@ -172,6 +179,17 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
       .index("desktop_runner_runs_chat_thread_idx")
       .on(table.chatThreadId, table.desktopId, table.harness)
       .where(sql`${table.chatThreadId} IS NOT NULL`),
+    p
+      .foreignKey({
+        name: "desktop_runner_runs_chat_turn_fk",
+        columns: [table.chatTurnId],
+        foreignColumns: [chatTurns.id],
+      })
+      .onDelete("set null"),
+    p
+      .index("desktop_runner_runs_chat_turn_idx")
+      .on(table.chatTurnId)
+      .where(sql`${table.chatTurnId} IS NOT NULL`),
     p
       .foreignKey({
         name: "desktop_runner_runs_runner_fk",
@@ -249,7 +267,10 @@ export const desktopRunnerCommands = p.pgTable.withRLS(
     kind: p.text({ enum: DESKTOP_RUNNER_COMMAND_KINDS }).notNull(),
     /** The id the command is idempotent on. */
     commandKey: p.uuid("command_key").notNull(),
-    /** The server message as sent, without a token. */
+    /**
+     * The server message as sent, without a token; a `run.answer` holds its
+     * answers sealed (`sealedAnswers`), never as plain text.
+     */
     payload: jsonb("payload").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
@@ -284,7 +305,11 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
       .references(() => desktopRunnerRuns.runId, { onDelete: "cascade" }),
     seq: p.bigint({ mode: "number" }).notNull(),
     type: p.text({ enum: DESKTOP_RUNNER_EVENT_TYPES }).notNull(),
-    /** Set on an approval request, so an answer can be matched to it. */
+    /**
+     * The request an answer is matched to: set on an approval request, and on
+     * an event whose chunk pauses the run for a blocking question (the id of
+     * the question's interrupt).
+     */
     requestId: p.uuid("request_id"),
     /** The desktop message as validated. */
     message: jsonb("message").notNull(),
@@ -309,7 +334,7 @@ export const desktopRunnerEvents = p.pgTable.withRLS(
     ),
     p.check(
       "desktop_runner_events_request_check",
-      sql`(${table.type} = 'run.approval_request') = (${table.requestId} IS NOT NULL)`,
+      sql`(${table.type} <> 'run.approval_request' OR ${table.requestId} IS NOT NULL) AND (${table.type} <> 'run.finished' OR ${table.requestId} IS NULL)`,
     ),
     p.check(
       "desktop_runner_events_message_check",

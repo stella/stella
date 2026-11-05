@@ -90,7 +90,7 @@ const harnessFor = (
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
     codexHome,
-    environment: { FAKE_CODEX_LOG: logPath, PATH: process.env["PATH"] ?? "" },
+    environment: { FAKE_HARNESS_LOG: logPath, PATH: process.env["PATH"] ?? "" },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
@@ -197,7 +197,10 @@ describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
       await run("tool_calls");
-    expect(startup()).toEqual({ codexHome, cwd: realpathSync(workspaceDir) });
+    expect(startup()).toMatchObject({
+      codexHome,
+      cwd: realpathSync(workspaceDir),
+    });
     const threadStart = received().find(
       ({ method }) => method === "thread/start",
     );
@@ -494,7 +497,7 @@ describe("Codex adapter over a stdio app-server", () => {
       }),
       deadlines: { requestMs: 300, terminateMs: 300 },
       cwd: root,
-      env: { FAKE_CODEX_LOG: log, PATH: process.env["PATH"] ?? "" },
+      env: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
       handlers: {
         notification: (method) => {
           if (method === "fake/ready") {
@@ -730,6 +733,15 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
+  test("a question the chat could not answer back fails the turn instead of pausing it", async () => {
+    const { events } = await run("question_twice_named");
+    expect(events.map(({ type }) => type)).not.toContain("question.requested");
+    expect(terminal(events)).toMatchObject({
+      type: "turn.failed",
+      failure: { type: "protocol_violation" },
+    });
+  });
+
   test("a crashed harness fails the turn with its exit code", async () => {
     const { events } = await run("crash");
     expect(terminal(events)).toMatchObject({
@@ -774,6 +786,7 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume"],
+      usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
     expect(methods).not.toContain("thread/start");

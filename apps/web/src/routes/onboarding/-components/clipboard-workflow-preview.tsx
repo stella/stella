@@ -187,7 +187,7 @@ type ClipboardWorkflowPreviewProps = {
 };
 
 const Chip = ({ snippet }: { snippet: Snippet }) => (
-  <span className="bg-foreground text-background text-3xs grid size-4 shrink-0 place-items-center rounded-[4px] leading-none font-semibold">
+  <span className="bg-foreground text-background text-3xs grid size-4 shrink-0 place-items-center rounded-sm leading-none font-semibold">
     <bdi>{snippet.label}</bdi>
   </span>
 );
@@ -212,7 +212,7 @@ const SourceWindow = ({
         src={SOURCE_APP_ICON_PATHS[snippet.sourceApp]}
       />
       <kbd
-        className="cwp-press bg-muted text-muted-foreground ms-auto shrink-0 rounded-[3px] px-1 py-px font-mono text-[9px] leading-none"
+        className="cwp-press bg-muted text-muted-foreground ms-auto shrink-0 rounded-sm px-1 py-px font-mono text-[9px] leading-none"
         dir="ltr"
         style={delay(T.select + index * T.selectStagger)}
       >

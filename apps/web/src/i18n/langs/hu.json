@@ -40,7 +40,6 @@
     "organizationId": "Szervezetazonosító",
     "organizationLeft": "Kilépett a szervezetből.",
     "planAndUsage": "Csomag és használat",
-    "title": "Szervezet adminisztrációja",
     "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Megjelenítés a határozatban",
+      "unverified": "Az idézet nem ellenőrizhető",
+      "unverifiedHint": "A hivatkozott határozatok nem tartalmazzák szó szerint ezt a szöveget",
       "verified": "Ellenőrzött idézet",
       "verifiedHint": "Szó szerint: {source}"
     },
@@ -1698,6 +1699,7 @@
       "stateNeedsLogin": "Bejelentkezés szükséges",
       "stateNotInstalled": "Nincs telepítve",
       "stateOffline": "A számítógép offline",
+      "stateUnavailable": "Jelenleg nem érhető el",
       "stateUnsupported": "Ez a verzió nem támogatott",
       "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Nem sikerült diagramot kiválasztani. A táblázat látható.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Kontextussal dolgozom",
+    "thinking": "Gondolkodás",
     "threadFiles": {
       "title": "Fájlok ebben a csevegésben"
     },
@@ -2031,6 +2033,11 @@
       "replyReadyBody": "A stella befejezte a választ a csevegésben.",
       "replyReadyTitle": "Kész a válasz"
     },
+    "turnStatus": {
+      "waitingForApproval": "Jóváhagyásra vár",
+      "waitingForInput": "Bevitelre vár",
+      "writing": "Írás"
+    },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
     "usageFallbackNotice": "A napi AI-keret elfogyott; a válaszok a normál modellen folytatódnak.",
@@ -2039,7 +2046,6 @@
       "answer": "Webes keresés összefoglalója",
       "answerDisclaimer": "Az alábbi nyilvános webes találatokból összeállítva. Ellenőrizze a hivatkozott források alapján.",
       "fetchedFrom": "{source} forrásból",
-      "openSource": "{source} megnyitása új lapon",
       "sources": "Források",
       "toggleDescription": "Engedélyezi a modellnek, hogy ebben a beszélgetésben a nyilvános weben keressen és oldalakat olvasson.",
       "toggleLabel": "Webes keresés",
@@ -2393,6 +2399,7 @@
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
+    "openInSidePanel": "Megnyitás az oldalpanelen",
     "openInStella": "Megnyitás a Stellában",
     "openOriginalSource": "Eredeti forrás megnyitása",
     "options": "Beállítások",
@@ -2786,6 +2793,11 @@
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
       "undoImport": "Importálás visszavonása ({count})",
+      "undoImportConfirm": "Véglegesen törli az importálással létrehozott {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+      "undoImportTitle": "Visszavonja ezt az importálást?",
+      "undoneRow": "Visszavonással eltávolítva",
+      "undoneSummary": "A visszavonás {count, plural, one {# létrehozott névjegyet} other {# létrehozott névjegyet}} távolított el.",
+      "undoneToast": "Importálás visszavonva: {count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
@@ -3227,7 +3239,6 @@
     "noFileInVersion": "Nincs fájl ebben a verzióban",
     "noFullScreenPreview": "Ehhez a fájltípushoz nincs teljes képernyős előnézet.",
     "noLabel": "Nincs címke",
-    "openInSidePanel": "Megnyitás az oldalpanelen",
     "redlinePreview": "Követett módosítások",
     "removeLabel": "Címke eltávolítása",
     "saveComparison": "Összehasonlítás mentése",
@@ -5755,7 +5766,6 @@
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
-    "openProvision": "Rendelkezés megnyitása",
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
@@ -6534,6 +6544,9 @@
       "calculating": "Számítás...",
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
+      "recordChoose": "{count, plural, one {# találat megerősítése} other {Válasszon # találat közül}}",
+      "recordCount": "{count, plural, one {# rekord} other {# rekord}}",
+      "recordNotFound": "Nem található",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket",
       "wholeNumberOnly": "Adjon meg egy egész számot"
@@ -7226,6 +7239,7 @@
       "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
+      "record": "Rekord",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",

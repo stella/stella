@@ -3,7 +3,6 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { panic } from "better-result";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import ts from "typescript6";
 import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -12,6 +11,7 @@ import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import APP_INPUT_SCHEMAS from "../../../packages/mcp-apps/src/shared/generated/input-schemas.json" with { type: "json" };
 import type {
@@ -475,6 +475,18 @@ const mountReader = async ({
             }
             if (name === "search_case_law") {
               reply({ jsonrpc: "2.0", id, result: toolResult(searchResult) });
+              break;
+            }
+            // No court catalog here: the court filter falls back to the facets.
+            if (name === "list_case_law_courts") {
+              reply({
+                jsonrpc: "2.0",
+                id,
+                result: {
+                  isError: true,
+                  content: [{ type: "text", text: "Court list unavailable" }],
+                },
+              });
               break;
             }
             if (name === "open_case_law_decision") {
@@ -1493,6 +1505,7 @@ test("court multi-selection respects the declared cap, tier unions, search and a
     APP_INPUT_SCHEMAS.search_case_law.properties.courts.maxItems;
   const regionalCourts = Array.from({ length: maxCourts + 1 }, (_, index) => ({
     value: `Regional Court ${index + 1}`,
+    count: 1,
   }));
   const search = {
     ...RESULT_FIXTURE,
@@ -1500,7 +1513,10 @@ test("court multi-selection respects the declared cap, tier unions, search and a
       court: [
         {
           tierLabel: "supreme",
-          courts: [{ value: "Nejvyšší soud" }, { value: "Ústavní soud" }],
+          courts: [
+            { value: "Nejvyšší soud", count: 2 },
+            { value: "Ústavní soud", count: 1 },
+          ],
         },
         { tierLabel: "regional", courts: regionalCourts },
       ],
@@ -1517,6 +1533,11 @@ test("court multi-selection respects the declared cap, tier unions, search and a
   const trigger = app.getByRole("button", { name: /^Court/u });
   await trigger.click();
   const popup = app.locator('[data-slot="popover-popup"][data-open]');
+  // A court's checkbox is named by the court and the count of results it holds.
+  const court = (name: string) =>
+    popup.getByRole("checkbox", {
+      name: new RegExp(`^${name} \\d+$`, "u"),
+    });
   const regionalTier = popup.getByRole("checkbox", {
     name: "High and regional courts",
     exact: true,
@@ -1527,53 +1548,26 @@ test("court multi-selection respects the declared cap, tier unions, search and a
     exact: true,
   });
   await supremeTier.check();
-  await expect(
-    popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true }),
-  ).toBeChecked();
-  await expect(
-    popup.getByRole("checkbox", { name: "Ústavní soud", exact: true }),
-  ).toBeChecked();
+  await expect(court("Nejvyšší soud")).toBeChecked();
+  await expect(court("Ústavní soud")).toBeChecked();
   const searchCourts = popup.getByRole("searchbox", { name: "Search" });
   await searchCourts.fill("ustavni");
-  await expect(
-    popup.getByRole("checkbox", { name: "Ústavní soud", exact: true }),
-  ).toBeVisible();
-  await expect(
-    popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true }),
-  ).toHaveCount(0);
+  await expect(court("Ústavní soud")).toBeVisible();
+  await expect(court("Nejvyšší soud")).toHaveCount(0);
   await supremeTier.uncheck();
   await searchCourts.fill("");
-  await expect(
-    popup.getByRole("checkbox", { name: "Nejvyšší soud", exact: true }),
-  ).toBeChecked();
+  await expect(court("Nejvyšší soud")).toBeChecked();
   await supremeTier.check();
   for (const { value } of regionalCourts.slice(0, maxCourts - 2)) {
-    await popup.getByRole("checkbox", { name: value, exact: true }).check();
+    await court(value).check();
   }
   await expect(popup.getByRole("status")).toContainText(String(maxCourts));
-  await expect(
-    popup.getByRole("checkbox", {
-      name: `Regional Court ${maxCourts - 1}`,
-      exact: true,
-    }),
-  ).toBeDisabled();
+  await expect(court(`Regional Court ${maxCourts - 1}`)).toBeDisabled();
   await expect(regionalTier).toBeDisabled();
-  await popup
-    .getByRole("checkbox", { name: "Nejvyšší soud", exact: true })
-    .uncheck();
+  await court("Nejvyšší soud").uncheck();
   await expect(supremeTier).toHaveAttribute("aria-checked", "mixed");
-  await expect(
-    popup.getByRole("checkbox", {
-      name: `Regional Court ${maxCourts - 1}`,
-      exact: true,
-    }),
-  ).toBeEnabled();
-  await popup
-    .getByRole("checkbox", {
-      name: `Regional Court ${maxCourts - 1}`,
-      exact: true,
-    })
-    .check();
+  await expect(court(`Regional Court ${maxCourts - 1}`)).toBeEnabled();
+  await court(`Regional Court ${maxCourts - 1}`).check();
   await searchCourts.press("Escape");
   await expect(trigger).toHaveAccessibleName(
     new RegExp(`Court.*Ústavní soud.*Regional Court ${maxCourts - 1}`, "u"),
@@ -1725,27 +1719,29 @@ for (const host of ["Claude", "ChatGPT"] as const) {
   });
 }
 
-const manifestSource = ts.createSourceFile(
+const manifestSource = parseSource(
   "manifest.ts",
   await readFile(
     new URL("../../../packages/mcp-apps/src/manifest.ts", import.meta.url),
     "utf-8",
   ),
-  ts.ScriptTarget.Latest,
-  true,
 );
 const registeredDirectories: string[] = [];
-const visitManifest = (node: ts.Node): void => {
+walk(manifestSource.program, (node) => {
   if (
-    ts.isPropertyAssignment(node) &&
-    node.name.getText(manifestSource) === "directory" &&
-    ts.isStringLiteral(node.initializer)
+    node.type === "Property" &&
+    node.kind === "init" &&
+    !node.method &&
+    !node.shorthand &&
+    !node.computed &&
+    node.key.type === "Identifier" &&
+    node.key.name === "directory" &&
+    node.value.type === "Literal" &&
+    typeof node.value.value === "string"
   ) {
-    registeredDirectories.push(node.initializer.text);
+    registeredDirectories.push(node.value.value);
   }
-  ts.forEachChild(node, visitManifest);
-};
-visitManifest(manifestSource);
+});
 expect(registeredDirectories.length).toBeGreaterThan(0);
 
 for (const directory of registeredDirectories) {

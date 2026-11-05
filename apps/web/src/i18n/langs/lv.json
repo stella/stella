@@ -40,7 +40,6 @@
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
     "planAndUsage": "Plāns un lietojums",
-    "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
+      "unverified": "Citātu neizdevās pārbaudīt",
+      "unverifiedHint": "Citētajos nolēmumos šis teksts vārds vārdā nav atrodams",
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
     },
@@ -1698,6 +1699,7 @@
       "stateNeedsLogin": "Jāpiesakās",
       "stateNotInstalled": "Nav instalēts",
       "stateOffline": "Dators ir bezsaistē",
+      "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
     },
@@ -1903,7 +1905,7 @@
       "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Strādāju ar kontekstu",
+    "thinking": "Domāšana",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
     },
@@ -2031,6 +2033,11 @@
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
+    "turnStatus": {
+      "waitingForApproval": "Gaida apstiprinājumu",
+      "waitingForInput": "Gaida ievadi",
+      "writing": "Raksta"
+    },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
     "usageFallbackNotice": "Dienas AI apjoms izlietots; atbildes turpinās ar standarta modeli.",
@@ -2039,7 +2046,6 @@
       "answer": "Tīmekļa meklēšanas kopsavilkums",
       "answerDisclaimer": "Apkopots no zemāk redzamajiem publiskās tīmekļa meklēšanas rezultātiem. Pārbaudiet pēc norādītajiem avotiem.",
       "fetchedFrom": "no {source}",
-      "openSource": "Atvērt {source} jaunā cilnē",
       "sources": "Avoti",
       "toggleDescription": "Atļaut modelim šajā sarunā meklēt publiskajā tīmeklī un lasīt lapas.",
       "toggleLabel": "Meklēšana tīmeklī",
@@ -2393,6 +2399,7 @@
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
+    "openInSidePanel": "Atvērt sānu panelī",
     "openInStella": "Atvērt lietotnē stella",
     "openOriginalSource": "Atvērt sākotnējo avotu",
     "options": "Iespējas",
@@ -2786,6 +2793,11 @@
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
       "undoImport": "Atsaukt importēšanu ({count})",
+      "undoImportConfirm": "Neatgriezeniski dzēst ar šo importēšanu {count, plural, zero {izveidotās # kontaktpersonas} one {izveidoto # kontaktpersonu} other {izveidotās # kontaktpersonas}}? Šo darbību nevar atsaukt.",
+      "undoImportTitle": "Atsaukt šo importēšanu?",
+      "undoneRow": "Noņemts, atsaucot importēšanu",
+      "undoneSummary": "Atsaucot importēšanu, {count, plural, zero {noņemtas # izveidotās kontaktpersonas} one {noņemta # izveidotā kontaktpersona} other {noņemtas # izveidotās kontaktpersonas}}.",
+      "undoneToast": "Importēšana atsaukta: {count, plural, zero {izdzēstas # kontaktpersonas} one {izdzēsta # kontaktpersona} other {izdzēstas # kontaktpersonas}}",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
       "warning": {
         "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
@@ -3227,7 +3239,6 @@
     "noFileInVersion": "Šajā versijā nav faila",
     "noFullScreenPreview": "Šī tipa failam nav pilnekrāna priekšskatījuma.",
     "noLabel": "Nav apzīmējuma",
-    "openInSidePanel": "Atvērt sānu panelī",
     "redlinePreview": "Izsekotās izmaiņas",
     "removeLabel": "Noņemt apzīmējumu",
     "saveComparison": "Saglabāt salīdzinājumu",
@@ -5755,7 +5766,6 @@
     "leadingDecisionsExplanation": "Pirmā pieminēšana katrā nolēmumā, sarindota pēc citēšanas autoritātes: svērti ienākošie citējumi, ņemot vērā tiesas līmeni, citējuma polaritāti un vecumu.",
     "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
     "openEnded": "šobrīd",
-    "openProvision": "Atvērt normu",
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
@@ -6534,6 +6544,9 @@
       "calculating": "Aprēķina...",
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
+      "recordChoose": "{count, plural, zero {Izvēlieties no # atbilstībām} one {Apstipriniet # atbilstību} other {Izvēlieties no # atbilstībām}}",
+      "recordCount": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}}",
+      "recordNotFound": "Nav atrasts",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības",
       "wholeNumberOnly": "Ievadiet veselu skaitli"
@@ -7226,6 +7239,7 @@
       "previewSubject": "Izmēģini paraugā",
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
+      "record": "Ieraksts",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",

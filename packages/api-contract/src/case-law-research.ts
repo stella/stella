@@ -21,13 +21,14 @@ import type { PropertyContentType } from "./entity-find";
  * cannot answer "which kinds are there?" differently. A file is uploaded and a
  * person resolves to a member, so neither is ever extracted; money is extracted
  * for workspace columns but not offered here, because the answers table pins
- * its kinds with a CHECK constraint that would need its own migration.
+ * its kinds with a CHECK constraint that would need its own migration. A record
+ * comes from a data-source tool call, which a decision does not drive.
  *
  * There is no boolean kind in the property model, so a yes/no question is a
  * single-select over two options. The text not settling a question is the
  * `not_stated` cell state, the same for every kind.
  */
-type NotAskedOfDecisionsType = "file" | "money" | "person";
+type NotAskedOfDecisionsType = "file" | "money" | "person" | "record";
 
 export type CaseLawResearchAnswerType = Exclude<
   PropertyContentType,
