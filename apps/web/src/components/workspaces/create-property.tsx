@@ -127,7 +127,7 @@ const buildContent = (
   contentType: CreatableContentType,
   options: SelectPropertyOption[],
   fallback: string | null,
-): WorkspaceProperty["content"] => {
+): Exclude<WorkspaceProperty["content"], { type: "record" }> => {
   if (contentType === "single-select" || contentType === "multi-select") {
     return {
       version: 1,

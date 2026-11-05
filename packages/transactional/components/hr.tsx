@@ -1,5 +1,7 @@
 import type React from "react";
 
+import { brand } from "../emails/_shared.ts";
+
 type Props = {
   style: React.CSSProperties;
 };
@@ -10,7 +12,7 @@ export const Hr = ({ style }: Props) => (
     style={{
       width: "100%",
       border: "none",
-      borderTop: "1px solid #eaeaea",
+      borderTop: `1px solid ${brand.border}`,
       ...style,
     }}
   />

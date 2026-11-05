@@ -368,6 +368,18 @@
         "status": null,
         "grade": "transient"
       }
+    },
+    {
+      "name": "local_runner_turn_too_large",
+      "origin": "local-runner",
+      "evidence": {
+        "code": "ai_local_runner_turn_too_large"
+      },
+      "expected": {
+        "kind": "local_runner_turn_too_large",
+        "status": null,
+        "grade": "client"
+      }
     }
   ]
 }

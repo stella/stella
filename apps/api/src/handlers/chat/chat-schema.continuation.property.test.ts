@@ -138,6 +138,7 @@ const continuationOutcome = async ({
     }),
   );
   const result = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id,
       role: "assistant",

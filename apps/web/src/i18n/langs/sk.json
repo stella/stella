@@ -40,7 +40,6 @@
     "organizationId": "ID organizácie",
     "organizationLeft": "Opustili ste organizáciu.",
     "planAndUsage": "Tarifa a využitie",
-    "title": "Správa organizácie",
     "toolsDescription": "Zapnite alebo vypnite vstavané nástroje pre všetkých v tejto organizácii."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobraziť v rozhodnutí",
+      "unverified": "Citáciu sa nepodarilo overiť",
+      "unverifiedHint": "Citované rozhodnutia tento text doslovne neobsahujú",
       "verified": "Overená citácia",
       "verifiedHint": "Doslovne v {source}"
     },
@@ -1681,9 +1682,26 @@
     "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
     "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "localRun": {
+      "cloud": "Cloud stella",
       "errorLimitReached": "Programovací agent vo vašom počítači vyčerpal svoj limit využitia. Skúste to znova, keď sa limit obnoví.",
       "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
-      "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova."
+      "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
+      "onThisComputer": "{harness} v tomto počítači",
+      "refusalConflictingRunMode": "Táto požiadavka sa má spustiť zároveň v cloudovom agentovi aj vo vašom počítači. Vyberte jedno v ponuke Spustiť na.",
+      "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
+      "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
+      "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
+      "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
+      "runOn": "Spustiť na",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limit vyčerpaný do {time}",
+      "stateNeedsLogin": "Vyžaduje prihlásenie",
+      "stateNotInstalled": "Nie je nainštalované",
+      "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálne nedostupné",
+      "stateUnsupported": "Táto verzia nie je podporovaná",
+      "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {
@@ -1887,7 +1905,7 @@
       "unavailable": "Graf sa nepodarilo vybrať. Zobrazuje sa tabuľka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracujem s kontextom",
+    "thinking": "Premýšľanie",
     "threadFiles": {
       "title": "Súbory v tomto chate"
     },
@@ -1905,6 +1923,7 @@
       "boe_search_legislation": "Vyhľadávanie v BOE",
       "borme_get_summary": "Denný súhrn BORME",
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
+      "command_execution": "Spúšťanie príkazu",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
       "connect_connector": "Žiadosť o pripojenie konektora",
@@ -1930,9 +1949,12 @@
       "execute_typescript": "Čítam dáta spisu",
       "expand-chat-history": "Čítanie histórie chatu",
       "fetch_url": "Čítanie stránky",
+      "file_change": "Úprava súborov",
       "fill_template": "Vypĺňanie vzoru",
       "find_text": "Vyhľadávanie textu v dokumente",
       "get_document_outline": "Čítanie osnovy dokumentu",
+      "harness_unsupported_item": "Krok, ktorý stella nedokáže zobraziť",
+      "harness_web_search": "Vyhľadávanie na webe",
       "infosoud_lookup_case": "Vyhľadanie spisu v InfoSoude",
       "link_matter_contact": "Prepojiť kontakt so spisom",
       "list_stories": "Výpis častí dokumentu",
@@ -1949,7 +1971,9 @@
       "remember": "Ukladanie do pamäte",
       "remove_matter_member": "Odobrať člena spisu",
       "reply_comment": "Odpovedanie na komentár",
+      "request_permissions": "Žiadosť o oprávnenia",
       "request_secret": "Žiadosť o súkromný prístupový údaj",
+      "request_user_input": "Žiadosť o spresnenie",
       "resolve_comment": "Riešenie komentára",
       "review_folder_consistency": "Kontrola konzistentnosti priečinka",
       "run-stella-query": "Čítam dáta spisu",
@@ -2009,6 +2033,11 @@
       "replyReadyBody": "stella dokončila odpoveď vo vašom chate.",
       "replyReadyTitle": "Odpoveď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čakanie na schválenie",
+      "waitingForInput": "Čakanie na zadanie",
+      "writing": "Písanie"
+    },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
     "usageFallbackNotice": "Denný prídel AI je vyčerpaný; odpovede pokračujú na štandardnom modeli.",
@@ -2017,7 +2046,6 @@
       "answer": "Súhrn webového vyhľadávania",
       "answerDisclaimer": "Zostavené z verejných výsledkov z webu uvedených nižšie. Overte si to oproti prepojeným zdrojom.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otvoriť {source} na novej karte",
       "sources": "Zdroje",
       "toggleDescription": "Umožniť modelu v tejto konverzácii vyhľadávať na verejnom webe a čítať stránky.",
       "toggleLabel": "Vyhľadávanie na webe",
@@ -2371,6 +2399,7 @@
     "notes": "Poznámky",
     "open": "Otvoriť",
     "openInNewTab": "Otvoriť na novej karte",
+    "openInSidePanel": "Otvoriť v bočnom paneli",
     "openInStella": "Otvoriť v stelle",
     "openOriginalSource": "Otvoriť originál",
     "options": "Možnosti",
@@ -2764,6 +2793,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
       "undoImport": "Vrátiť import ({count})",
+      "undoImportConfirm": "Natrvalo odstrániť {count, plural, one {kontakt vytvorený} few {# kontakty vytvorené} many {# kontaktu vytvoreného} other {# kontaktov vytvorených}} týmto importom? Túto akciu nemožno vrátiť späť.",
+      "undoImportTitle": "Vrátiť tento import?",
+      "undoneRow": "Odstránené vrátením importu",
+      "undoneSummary": "Vrátenie importu odstránilo {count, plural, one {# vytvorený kontakt} few {# vytvorené kontakty} many {# vytvoreného kontaktu} other {# vytvorených kontaktov}}.",
+      "undoneToast": "Import vrátený: {count, plural, one {odstránený # kontakt} few {odstránené # kontakty} many {odstránených # kontaktu} other {odstránených # kontaktov}}",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
         "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
@@ -3205,7 +3239,6 @@
     "noFileInVersion": "V tejto verzii nie je žiadny súbor",
     "noFullScreenPreview": "Tento typ súboru nemá náhľad na celú obrazovku.",
     "noLabel": "Bez označenia",
-    "openInSidePanel": "Otvoriť v bočnom paneli",
     "redlinePreview": "Sledované zmeny",
     "removeLabel": "Odstrániť označenie",
     "saveComparison": "Uložiť porovnanie",
@@ -5687,6 +5720,7 @@
     "citingDecisionsSortCitations": "Zmienky o tomto ustanovení",
     "citingDecisionsSortDate": "Dátum rozhodnutia",
     "citingDecisionsYear": "Rok rozhodnutia",
+    "citingDecisionsYearOutOfRange": "Zadajte rok od {min} do {max}.",
     "citingDecisionsYearPlaceholder": "Všetky roky",
     "columns": {
       "act": "Predpis",
@@ -5732,7 +5766,6 @@
     "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
-    "openProvision": "Otvoriť ustanovenie",
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",
@@ -6511,6 +6544,9 @@
       "calculating": "Počíta sa...",
       "errored": "Chyba",
       "formatNotSupported": "Formát nie je podporovaný",
+      "recordChoose": "{count, plural, one {Potvrďte # zhodu} few {Vyberte z # zhôd} many {Vyberte z # zhody} other {Vyberte z # zhôd}}",
+      "recordCount": "{count, plural, one {# záznam} few {# záznamy} many {# záznamu} other {# záznamov}}",
+      "recordNotFound": "Nenájdené",
       "selectAValue": "Vyberte hodnotu",
       "selectValues": "Vyberte hodnoty",
       "wholeNumberOnly": "Zadajte celé číslo"
@@ -7203,6 +7239,7 @@
       "previewSubject": "Vyskúšaj na vzorke",
       "previewUnsupported": "Náhľad nie je pre tento typ dokumentu podporovaný.",
       "readingFrom": "AI číta z",
+      "record": "Záznam",
       "referencesItself": "Vlastnosť odkazuje sama na seba cez iné vlastnosti",
       "resultType": "Typ výsledku",
       "returnsLabel": "Formát",

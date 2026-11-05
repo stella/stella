@@ -142,6 +142,7 @@ export const createListUnavailableChatSkills = ({
       let chatContext: ChatSkillContext | undefined;
       if (asksAboutChat) {
         const scope = yield* resolveChatScope({
+          admitted: "active-or-archived",
           getWorkspaceAccess,
           workspaceId: query.workspaceId,
         });

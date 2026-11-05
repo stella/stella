@@ -190,7 +190,7 @@ const auditRowCount = async (
   );
 
 const archiveText = (archive: Uint8Array) =>
-  // client-zip stores entries without compression, so names and rows read
+  // The zip stream stores entries without compression, so names and rows read
   // straight off the archive bytes.
   new TextDecoder().decode(archive);
 

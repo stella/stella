@@ -101,7 +101,9 @@ export const collectTemplateProperties = ({
 
   const templateProperties: ViewTemplateProperty[] = [];
   for (const property of workspaceProperties) {
-    if (property.system) {
+    // A record column's shape belongs to its data source or its AI
+    // definition, neither of which a view template carries.
+    if (property.system || property.content.type === "record") {
       continue;
     }
     if (
