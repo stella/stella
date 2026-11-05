@@ -2,7 +2,10 @@ import { Fragment } from "react";
 import type { ReactElement, ReactNode, Ref } from "react";
 
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
-import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
+import {
+  firstDissentBlock,
+  visibleDecisionBlocks,
+} from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { CitationSpan } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
@@ -940,14 +943,6 @@ export const prepareDecisionTextPlacements = ({
   };
 };
 
-/**
- * Where a separate opinion starts: its byline is drawn above the first
- * paragraph the court gave the `dissent` role.
- */
-const firstDissentBlockId = (blocks: readonly Block[]): string | null =>
-  blocks.find((block) => block.type === "paragraph" && block.role === "dissent")
-    ?.id ?? null;
-
 const renderBlocksWithHoldingZone = ({
   activeMatchIndex,
   anchorsByPieceId,
@@ -1197,12 +1192,12 @@ export const DecisionText = ({
   const dissenters = decision.judges.filter(
     (judge) => judge.role === "dissenting",
   );
-  const dissentBlockId = firstDissentBlockId(bodyBlocks);
+  const dissentBlock = firstDissentBlock(bodyBlocks);
   const dissent =
-    dissenters.length === 0 || dissentBlockId === null
+    dissenters.length === 0 || dissentBlock === null
       ? null
       : {
-          blockId: dissentBlockId,
+          blockId: dissentBlock.id,
           byline: <DissentByline judges={dissenters} />,
         };
 

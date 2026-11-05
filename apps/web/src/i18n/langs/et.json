@@ -1903,7 +1903,7 @@
       "unavailable": "Diagrammi ei õnnestunud valida. Kuvatakse tabel.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Töötan kontekstiga",
+    "thinking": "Mõtlemine",
     "threadFiles": {
       "title": "Selle vestluse failid"
     },
@@ -2030,6 +2030,11 @@
       "needsInputTitle": "stella vajab teie sisendit",
       "replyReadyBody": "stella lõpetas vestluses vastamise.",
       "replyReadyTitle": "Vastus on valmis"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Kinnituse ootamine",
+      "waitingForInput": "Sisendi ootamine",
+      "writing": "Kirjutamine"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
