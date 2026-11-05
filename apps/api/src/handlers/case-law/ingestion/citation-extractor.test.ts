@@ -914,6 +914,9 @@ describe("extractCitations", () => {
       "1 M Obdo V 2/2006",
       "1 Tdo V 14/2007",
       "2 Cdo Pr 3/2016",
+      "1 M Obdo V/13/2005",
+      "1M Obdo V 13/2005",
+      "1 Tdo V/14/2007",
     ]) {
       const citations = extractCitations([
         { index: 0, text: `uznesenie sp. zn. ${docket} z 29. marca 2006` },
@@ -940,6 +943,10 @@ describe("extractCitations", () => {
       ],
       ["1tdov/14/2007", ["1 Tdo V 14/2007", "1 TdoV 14/2007", "1TdoV/14/2007"]],
       ["2cdopr/3/2016", ["2 Cdo Pr 3/2016", "2 CdoPr 3/2016", "2CdoPr/3/2016"]],
+      [
+        "1mobdopr/3/2016",
+        ["1 M Obdo Pr 3/2016", "1 MObdo Pr 3/2016", "1 MObdoPr 3/2016"],
+      ],
     ] as const;
     for (const [key, variants] of spellings) {
       for (const variant of variants) {

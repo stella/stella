@@ -961,7 +961,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // two words more than CASE_NUMBER_BODY allows. The period after "zn" is
   // optional, matching the general sp. zn. pattern above ("sp. zn 4 M Cdo
   // 15/2010").
-  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s+(?:M\s+\p{L}{1,6}(?:\s+(?:V|Pr))?|\p{L}{1,6}\s+(?:V|Pr))\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s{0,3}(?:M\s+\p{L}{1,6}(?:\s+(?:V|Pr))?|\p{L}{1,6}\s+(?:V|Pr))[\s/]{1,3}\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak Special Court (Špeciálny súd v Pezinku, 2004-2009) case numbers
   // carry a "PK" panel prefix before the ordinary senate/registry/number
@@ -1209,12 +1209,14 @@ const SEPARATOR_NORMALIZE_RE =
  * Matches a Slovak numeric-first case number whose compound register is
  * printed in separate words ("4 M Cdo 15/2010", "1 Tdo V 14/2007", "2 Cdo Pr
  * 3/2016", "1 M Obdo V 13/2005"), so the dedup key can rebuild it as the one
- * word the glued spelling already keys under ("1MObdoV/13/2005"). A register
- * with neither part is `SEPARATOR_NORMALIZE_RE`'s. Case-insensitive because
- * this normalizer also runs on stored publisher text and on lowercased input.
+ * word the glued spelling already keys under ("1MObdoV/13/2005"). The panel
+ * may be glued too, because "MObdoPr" is one letter wider than
+ * `SEPARATOR_NORMALIZE_RE` reads. A register with neither part is that
+ * pattern's. Case-insensitive because this normalizer also runs on stored
+ * publisher text and on lowercased input.
  */
 const SPACED_COMPOUND_REGISTER_RE =
-  /^(?<number>\d{1,3})\s?(?<panel>M\s)?(?<registry>\p{L}{1,6})(?:\s(?<part>V|Pr))?[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
+  /^(?<number>\d{1,3})\s?(?<panel>M\s?)?(?<registry>\p{L}{1,6})(?:\s(?<part>V|Pr))?[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
 
 /**
  * Matches a Czech/Slovak numeric-first case number whose docket joins a
