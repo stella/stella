@@ -187,6 +187,7 @@
     "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:",
+    "zod": "^4.6.6",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
