@@ -35,10 +35,11 @@ pub(super) fn open(dir: &Path, now: SystemTime) -> std::io::Result<()> {
     crate::local_store::create_private_dir(parent)?;
   }
   crate::local_store::create_private_dir(dir)?;
-  std::fs::write(
-    dir.with_extension(USED_EXTENSION),
-    seconds(now).unwrap_or(0).to_string(),
+  crate::local_store::write_private_atomic(
+    &dir.with_extension(USED_EXTENSION),
+    seconds(now).unwrap_or(0).to_string().as_bytes(),
   )
+  .map_err(std::io::Error::other)
 }
 
 fn is_idle(dir: &Path, now: SystemTime) -> bool {
@@ -94,7 +95,8 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &Mutex<()>) {
     // finds its folder recorded as used, or finds no folder and makes one.
     let moved = {
       let _held = lock.lock().unwrap_or_else(PoisonError::into_inner);
-      let moved = is_idle(&path, now) && std::fs::rename(&path, &leaving).is_ok();
+      let moved = is_idle(&path, now)
+        && crate::local_store::publish_directory(&path, &leaving).is_ok();
       if moved {
         drop(std::fs::remove_file(path.with_extension(USED_EXTENSION)));
       }
@@ -107,6 +109,10 @@ pub(super) fn remove_idle(folders: &Path, now: SystemTime, lock: &Mutex<()>) {
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use std::{path::PathBuf, time::Duration};
 
