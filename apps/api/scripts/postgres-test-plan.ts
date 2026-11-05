@@ -13,6 +13,7 @@ import { compareCodeUnit } from "@stll/collation";
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
+    "src/db/contacts-rls-maintenance.postgres.test.ts",
     "src/db/entity-feature-gate-maintenance.postgres.test.ts",
     "src/db/entity-feature-search-budget.postgres.test.ts",
     "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
@@ -217,4 +218,30 @@ export const classifyPostgresTestIsolation = async (
       .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
       .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
   );
+};
+
+// Importing one of these boots the shared PGlite test database. Without a
+// snapshot, each boot builds the whole schema in-process (drizzle-kit push and
+// every PGlite install) inside the suite's setup hook.
+const PGLITE_TEST_DATABASE_MODULES = [
+  "tests/pglite-test-db",
+  "tests/security/rls-fixture",
+  "tests/security/test-utils",
+] as const;
+
+/** Whether a test file boots the shared PGlite test database. */
+export const bootsPgliteTestDatabase = (source: string): boolean =>
+  PGLITE_TEST_DATABASE_MODULES.some((module) => source.includes(module));
+
+/** Whether any selected Postgres suite also boots the PGlite test database. */
+export const anyBootsPgliteTestDatabase = async (
+  apiRoot: string,
+  testPaths: readonly string[],
+): Promise<boolean> => {
+  const sources = await Promise.all(
+    testPaths.map(
+      async (testPath) => await Bun.file(path.join(apiRoot, testPath)).text(),
+    ),
+  );
+  return sources.some(bootsPgliteTestDatabase);
 };

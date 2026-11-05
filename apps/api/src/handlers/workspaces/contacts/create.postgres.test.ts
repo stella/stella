@@ -6,7 +6,6 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  contacts,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -22,6 +21,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 import { readWorkspaceContactsHandler } from "../workspace-contacts-read";
 import { createWorkspaceContactHandler } from "./create";
@@ -58,12 +58,14 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Isolation fixture",
             reference: "CONTACT-ISOLATION",
           });
-          await setup.db.insert(contacts).values({
-            id: contactId,
-            organizationId,
-            type: "person",
-            displayName: "Isolation fixture",
-          });
+          await insertOwnerContacts(setup.db, [
+            {
+              id: contactId,
+              organizationId,
+              type: "person",
+              displayName: "Isolation fixture",
+            },
+          ]);
           const outcome = await Result.tryPromise(
             async () =>
               await writer.sql.begin(async (tx) => {
@@ -206,7 +208,8 @@ if (!databaseUrl || !runPostgresTests) {
               workspaceId,
               userId,
             });
-            await setup.db.insert(contacts).values(
+            await insertOwnerContacts(
+              setup.db,
               contactIds.map((id, index) => ({
                 id,
                 organizationId,

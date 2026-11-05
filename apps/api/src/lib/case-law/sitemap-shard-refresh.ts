@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { compareCodeUnit } from "@stll/collation";
 
+import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb } from "@/api/db/root";
 import {
   caseLawDecisions,
@@ -113,6 +114,41 @@ type RefreshDb = Pick<typeof rootDb, "transaction">;
 type RefreshTransaction = Parameters<
   Parameters<RefreshDb["transaction"]>[0]
 >[0];
+
+/**
+ * How long one refresh transaction keeps trying the corpus schema lane. The
+ * refresh is deferrable: while a schema upgrade holds the lane the run
+ * rejects with `CorpusSchemaLaneUnavailableError` and its task schedules a
+ * later run. A month a refused transaction did not work is still logged, so
+ * yielding loses nothing: the later run continues from the log.
+ */
+const SITEMAP_REFRESH_LANE_WAIT_MS = 5000;
+
+/**
+ * The refresh's transactions read and rewrite `case_law_*` for seconds at a
+ * time, so each holds the corpus schema lane shared (see
+ * `db/corpus-schema-lane.ts`) as the corpus batches do: an upgrade drains
+ * them before its DDL instead of losing its table lock to them.
+ */
+const underCorpusSchemaLane = (
+  db: RefreshDb,
+  {
+    signal,
+    sleep,
+  }: {
+    signal: AbortSignal | undefined;
+    sleep: ((ms: number) => Promise<void>) | undefined;
+  },
+): RefreshDb => ({
+  transaction: async (work) =>
+    await runUnderCorpusSchemaLane({
+      database: db,
+      work,
+      laneWaitMs: SITEMAP_REFRESH_LANE_WAIT_MS,
+      ...(signal === undefined ? {} : { signal }),
+      ...(sleep === undefined ? {} : { sleep }),
+    }),
+});
 
 /** Both budgets end with the transaction. */
 const setTransactionBudget = async (
@@ -807,6 +843,7 @@ export const refreshCaseLawSitemapShards = async (
     changeRowBudget = DEFAULT_CHANGE_ROW_BUDGET,
     discoveryTargetBudget = DEFAULT_DISCOVERY_TARGET_BUDGET,
     clock = () => performance.now(),
+    laneSleep,
     signal,
   }: {
     /** The idle timeout of the pool `db` draws from; see `sitemapRefreshBudget`. */
@@ -818,6 +855,8 @@ export const refreshCaseLawSitemapShards = async (
     discoveryTargetBudget?: number;
     /** Monotonic milliseconds; only differences are read. */
     clock?: () => number;
+    /** Test seam: how a refused lane try waits before the next. */
+    laneSleep?: (ms: number) => Promise<void>;
     signal?: AbortSignal;
   } = {},
 ): Promise<SitemapRefreshOutcome> => {
@@ -842,7 +881,8 @@ export const refreshCaseLawSitemapShards = async (
   const startedAt = clock();
   const budget = sitemapRefreshBudget(poolIdleTimeoutS);
   throwIfAborted(signal);
-  const run: RunContext = { db, budget, signal };
+  const laneDb = underCorpusSchemaLane(db, { signal, sleep: laneSleep });
+  const run: RunContext = { db: laneDb, budget, signal };
   // A month worked in this run is not worked again in it: changes committed
   // to it meanwhile wait for the next run, so a month written to without
   // pause cannot keep one run going.
@@ -938,7 +978,7 @@ export const refreshCaseLawSitemapShards = async (
     }
   }
 
-  const extent = await readPublicShardExtent(db, budget);
+  const extent = await readPublicShardExtent(laneDb, budget);
   if (
     extent.largestShard > LIMITS.caseLawSitemapShardUrlLimit ||
     extent.shards > LIMITS.caseLawSitemapIndexEntryLimit - 1

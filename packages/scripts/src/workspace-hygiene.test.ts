@@ -802,8 +802,7 @@ describe("workspace hygiene", () => {
     expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
-          message:
-            "devDependencies.oxlint-tsgolint must be 7.0.2003; found 0.25.0",
+          message: `devDependencies.oxlint-tsgolint must be ${repositoryPackage.devDependencies["oxlint-tsgolint"]}; found 0.25.0`,
           path: "package.json",
         },
         {
@@ -881,6 +880,32 @@ describe("workspace hygiene", () => {
       path: "packages/scripts/package.json",
     });
   });
+
+  test("the TypeScript 6 root-only check sees an npm alias", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/package.json"),
+      JSON.stringify({
+        dependencies: { compiler: "npm:typescript@6.0.3" },
+        name: "@stll/scripts",
+        scripts: {
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      }),
+    );
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+      path: "packages/scripts/package.json",
+    });
+  });
 });
 
 type CreateWorkspaceRootOptions = {
@@ -920,7 +945,7 @@ const createWorkspaceRoot = ({
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
       typescript6: "catalog:",
-      "oxlint-tsgolint": "7.0.2003",
+      "oxlint-tsgolint": repositoryPackage.devDependencies["oxlint-tsgolint"],
       tsrs: "catalog:",
       ...rootDevDependencies,
     },
@@ -952,7 +977,7 @@ const createWorkspaceRoot = ({
     path.join(rootDir, "apps/landing/package.json"),
     JSON.stringify({
       devDependencies: {
-        "@astrojs/check": "^0.9.11",
+        "@astrojs/check": "^0.9.12",
         typescript: "catalog:ts6",
       },
       name: "@stll/landing",

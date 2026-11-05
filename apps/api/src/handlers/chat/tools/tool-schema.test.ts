@@ -82,6 +82,7 @@ import {
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
@@ -397,6 +398,7 @@ const autoApplyActiveFile = {
 } as const;
 
 const autoApplyBaseArgs = {
+  workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
   orgAIConfig: null,
   managedAIResidency: "eu" as const,
   organizationId,
@@ -880,6 +882,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -964,6 +967,7 @@ describe("chat tool schemas", () => {
 
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1038,6 +1042,7 @@ describe("chat tool schemas", () => {
 
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1200,6 +1205,7 @@ describe("chat tool schemas", () => {
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1260,6 +1266,7 @@ describe("chat tool schemas", () => {
 
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1306,6 +1313,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -2310,6 +2318,7 @@ describe("chat tool schemas", () => {
   // includes archived matters).
   describe("create_matter_document authorization", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
@@ -2575,6 +2584,7 @@ describe("registry write tool approval policy", () => {
 
   const buildToolsWithWorkspace = () =>
     getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       featureAccessSnapshot: enrolledTimeBillingSnapshot({
         organizationId,
         userId,
@@ -2668,6 +2678,7 @@ describe("registry write tool approval policy", () => {
 
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       featureAccessSnapshot: enrolledTimeBillingSnapshot({
         organizationId,
         userId,

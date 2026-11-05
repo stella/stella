@@ -364,6 +364,14 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Reads the stored courts a court filter is matched against; without them the filter runs as sent and the search reports filter_unread.",
   },
   {
+    site: "apps/api/src/mcp/case-law-court-catalog-tool.ts#LIST_CASE_LAW_COURTS_READ_BUDGET_MS",
+    path: "request",
+    tools: ["list_case_law_courts"],
+    bound: "own",
+    onExpiry: "fails-fast",
+    why: "Reads one page of a country's admitted courts; a page it cannot read in time is a retryable error, never a list read without the source policy.",
+  },
+  {
     site: "apps/api/src/mcp/gateway/rate-limit.ts#REDIS_COMMAND_TIMEOUT_MS",
     path: "request",
     tools: ["external_mcp"],
@@ -535,6 +543,22 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "The corpus request's timeout after the clamp every corpus request passes (`requestBoundedTimeout`: its own timeout, or what is left of the request's budget), passed to the fetch.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#waiting.timeoutMs",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "A search read's wait for an engine slot, bounded by the read's own timeout after the request clamp (`requestBoundedTimeout`), so queueing never outwaits the request.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#remainingAfterWait",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "A queued search read's own timeout less the time it queued, clamped again to the request before transport.",
   },
   {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS)",

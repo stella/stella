@@ -3,9 +3,8 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 

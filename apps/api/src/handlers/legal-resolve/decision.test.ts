@@ -780,6 +780,38 @@ describe("a docket at other courts", () => {
     "OS Kolín 65 A 3/2025",
     "os Kolín 65 A 3/2025",
   ])(
+    "a court no decision of the docket is stored under is another court: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          { court: "Krajský soud v Českých Budějovicích" },
+        ],
+      });
+    },
+  );
+  test.each([
+    "Okresní soud v Neznámově 65 A 3/2025",
+    "rozsudek Okresního soudu v Neznámově 65 A 3/2025-12",
+    "OS Neznámov 65 A 3/2025",
+  ])(
     "a named court the corpus does not know never resolves another court's holder: %s",
     async (identifier) => {
       const [budejovice] = regionalHolders();
@@ -968,6 +1000,115 @@ describe("a docket at other courts", () => {
       otherCourtCandidates: [
         { court: "Krajský soud v Hradci Králové", subjectSummary: null },
       ],
+    });
+  });
+});
+
+// A district-court docket held by one court only, cited with another
+// court's name, alias or ECLI code. Synthetic dockets; the court shapes are
+// the ones citations write.
+const districtRow = (
+  court: string,
+  ecliCode: string,
+  caseNumber: string,
+): DecisionIdentityRow => ({
+  ...row(caseNumber),
+  court,
+  courtAbbreviation: "OS",
+  ecli: `ECLI:CZ:${ecliCode}:2025:${caseNumber.replace(/[ /]/gu, ".")}.1`,
+  decisionDate: "2025-03-04",
+});
+
+describe("a district court named around the docket", () => {
+  const elsewhere = () =>
+    districtRow("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
+  test.each([
+    "8 C 123/2024 Obvodní soud pro Prahu 6",
+    "8 C 123/2024 OS Praha 6",
+    "8 C 123/2024 OS P6",
+    "8 C 123/2024 OS pro Prahu 6",
+    "8 C 123/2024 Obvodní soud Praha 6",
+    "8 C 123/2024 OSPH06",
+    "Obvodní soud pro Prahu 6 8 C 123/2024",
+    "OS Praha 6 8 C 123/2024",
+    "rozsudek Obvodního soudu pro Prahu 6 sp. zn. 8 C 123/2024",
+  ])(
+    "never resolves the docket's only holder at another court: %s",
+    async (identifier) => {
+      const holder = elsewhere();
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([holder]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toEqual({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          expect.objectContaining({
+            decisionId: holder.id,
+            court: "Okresní soud v Kladně",
+          }),
+        ],
+      });
+    },
+  );
+  test.each([
+    "20 C 45/2026 Obvodní soud pro Prahu 6",
+    "20 C 45/2026 OS Praha 6",
+    "20 C 45/2026 OS P6",
+    "20 C 45/2026 OSPH06",
+    "OS pro Prahu 6 20 C 45/2026",
+  ])(
+    "resolves the holder at the named court and lists the other: %s",
+    async (identifier) => {
+      const prague = districtRow(
+        "Obvodní soud pro Prahu 6",
+        "OSPH06",
+        "20 C 45/2026",
+      );
+      const olomouc = districtRow(
+        "Okresní soud v Olomouci",
+        "OSOL",
+        "20 C 45/2026",
+      );
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([olomouc, prague]),
+          read: readableDecision,
+        },
+      });
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: {
+          decisionId: prague.id,
+          court: "Obvodní soud pro Prahu 6",
+        },
+        otherCourtCandidates: [{ decisionId: olomouc.id }],
+      });
+    },
+  );
+  test("a court code the directory lacks is compared with the decision's ECLI", async () => {
+    const holder = elsewhere();
+    const named = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "OSXQ 8 C 123/2024",
+      dependencies: { lookup: lookupRows([holder]) },
+    });
+    expect(named).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
     });
   });
 });

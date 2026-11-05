@@ -122,9 +122,9 @@ const BABEL_TOOLCHAINS = [
 // `typescript6` alias, and Astro's checker, which supports only TypeScript 5
 // and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
-  oxlint: "1.87.0",
+  oxlint: "1.89.0",
   oxlintConfig: "1.7.0",
-  tsgolint: "7.0.2003",
+  tsgolint: "7.0.2005",
   tsrs: "0.18.0-ts7.1.0-dev.20260929",
   typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
@@ -140,7 +140,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.11",
+    specifier: "^0.9.12",
   },
   // Only root scripts still import the TypeScript 6 compiler API; every
   // workspace reads syntax with oxc and programs with tsrs.
@@ -349,6 +349,36 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
       ];
     });
   });
+
+/** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean => {
+  if (readDependencySpecifier(packageJsonPath, "typescript6") !== null) {
+    return true;
+  }
+  let packageJson: unknown;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+  } catch {
+    return false;
+  }
+  if (!isRecord(packageJson)) {
+    return false;
+  }
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = packageJson[field];
+    if (
+      isRecord(dependencies) &&
+      Object.values(dependencies).some(
+        (specifier) =>
+          typeof specifier === "string" &&
+          /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const readDependencySpecifier = (
   packageJsonPath: string,
@@ -674,7 +704,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      if (readDependencySpecifier(packageJsonPath, "typescript6") !== null) {
+      if (declaresTypescript6Compiler(packageJsonPath)) {
         issues.push({
           message:
             "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",

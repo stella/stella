@@ -16,6 +16,8 @@ import type {
   ContactMetadata as SharedContactMetadata,
   ContactPhone as SharedContactPhone,
 } from "@stll/api-contract/contact-write";
+import { recordCellStateSchema } from "@stll/api-contract/record-cell";
+import { recordSchemaSchema } from "@stll/api-contract/record-schema";
 
 import type { JsonObject } from "@/api/lib/json-value";
 import {
@@ -75,6 +77,7 @@ const dateType = v.literal("date");
 const intType = v.literal("int");
 const moneyType = v.literal("money");
 const personType = v.literal("person");
+const recordType = v.literal("record");
 
 /**
  * ISO 4217 alphabetic code for a workspace money or int field, normalized to
@@ -114,7 +117,7 @@ export type { EntityKind } from "@stll/api-contract";
 // No default: a request that omits this required field is a 400, never a
 // silent "file". `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
 // so a new property type still has to be classified for find.
-export const propertyContentTypeSchema = v.union([
+const scalarPropertyContentTypes = [
   fileType,
   textType,
   singleSelectType,
@@ -123,7 +126,21 @@ export const propertyContentTypeSchema = v.union([
   intType,
   moneyType,
   personType,
+] as const;
+
+export const propertyContentTypeSchema = v.union([
+  ...scalarPropertyContentTypes,
+  recordType,
 ]);
+
+/**
+ * The content types the generic create and update bodies take. A record column
+ * is configured through its data source or declared schema, never as a bare
+ * content type with no shape.
+ */
+export const scalarPropertyContentTypeSchema = v.union(
+  scalarPropertyContentTypes,
+);
 
 export type PropertyContentType = v.InferOutput<
   typeof propertyContentTypeSchema
@@ -162,11 +179,26 @@ const moneyPropertyContentSchema = v.object({
 const personPropertyContentSchema = v.object({ version: v1, type: personType });
 
 /**
+ * A column of typed records. `tool-output`: the column's `tool-call` tool owns
+ * the schema (its data source's output), so no copy is stored that could drift
+ * from it. `declared`: the column states the shape an AI answer must take.
+ */
+const recordPropertyContentSchema = v.object({
+  version: v1,
+  type: recordType,
+  shape: v.variant("type", [
+    v.object({ type: v.literal("tool-output") }),
+    v.object({ type: v.literal("declared"), schema: recordSchemaSchema }),
+  ]),
+});
+
+/**
  * Property content an AI tool can produce a value for. A file is uploaded, a
  * money amount needs a currency the model has no way to choose, and a person
  * has to resolve to a workspace member; all three are entered by hand, so the
  * execution plan never schedules them and the prompt/validator switches below
- * have no branch for them.
+ * have no branch for them. A record is produced by a data-source tool call,
+ * never by the scalar extraction these switches describe.
  *
  * The same subset a case-law question column offers, which is why it is a
  * schema rather than a type-level `Exclude`: both boundaries parse against it.
@@ -182,7 +214,7 @@ export type AiExtractablePropertyContent = v.InferOutput<
   typeof aiExtractablePropertyContentSchema
 >;
 
-export const propertyContentSchema = v.union([
+const scalarPropertyContentSchemas = [
   filePropertyContentSchema,
   textPropertyContentSchema,
   selectPropertyContentSchema,
@@ -190,7 +222,21 @@ export const propertyContentSchema = v.union([
   intPropertyContentSchema,
   moneyPropertyContentSchema,
   personPropertyContentSchema,
+] as const;
+
+export const propertyContentSchema = v.union([
+  ...scalarPropertyContentSchemas,
+  recordPropertyContentSchema,
 ]);
+
+/** See `scalarPropertyContentTypeSchema`. */
+export const scalarPropertyContentSchema = v.union(
+  scalarPropertyContentSchemas,
+);
+
+export type ScalarPropertyContent = v.InferOutput<
+  typeof scalarPropertyContentSchema
+>;
 
 export type PropertyContent = v.InferOutput<typeof propertyContentSchema>;
 
@@ -199,7 +245,8 @@ export const isAiExtractablePropertyContent = (
 ): content is AiExtractablePropertyContent =>
   content.type !== "file" &&
   content.type !== "money" &&
-  content.type !== "person";
+  content.type !== "person" &&
+  content.type !== "record";
 
 export const aiModelToolSchema = v.object({
   version: v1,
@@ -362,6 +409,14 @@ export const fieldContentSchema = v.union([
     userId: v.nullable(v.pipe(v.string(), v.maxLength(128))),
     name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     image: v.nullable(v.pipe(v.string(), v.maxLength(2048))),
+  }),
+  v.object({
+    version: v1,
+    type: v.literal("record"),
+    // The output schema version of the record's source when it was written;
+    // a record from another version is stale, never read as current.
+    schemaVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    state: recordCellStateSchema,
   }),
   v.object({
     version: v1,

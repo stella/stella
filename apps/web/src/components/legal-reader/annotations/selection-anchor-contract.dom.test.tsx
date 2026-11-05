@@ -15,8 +15,7 @@ import {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 import { assertProperty } from "@stll/property-testing";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   isInnermostAnchoredBlock,
@@ -55,7 +54,10 @@ const messages = {
   "caseLaw.notesFilter.ai": "AI",
   "common.court": "Court",
   "statutes.wordingVersionUnknown": "Wording version unknown",
-  "statutes.openProvision": "Open provision",
+  "common.openInSidePanel": "Open in side panel",
+  "common.openInStella": "Open in stella",
+  "inspector.external.openOriginal": "Open original",
+  "caseLaw.citation.notInStella": "Not in stella",
   "statutes.provisionTextUnavailable": "Text not available",
   "statutes.showCitedPartOnly": "Show cited part only",
   "statutes.showFullProvision": "Show full provision",

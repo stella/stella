@@ -185,7 +185,8 @@ const relationalSessionExpiryConditions = (node: CallExpression) => {
   return node.arguments.some(hasExpiryComparison);
 };
 
-/** Whether `root` holds `expiresAt: { gt | gte | lt | lte: ... }`. */
+/** Whether `root` holds `expiresAt: { gt | gte | lt | lte: ... }`, or reads
+ *  `expiresAt` inside a `RAW` callback, whose parameter is the session row. */
 const hasExpiryComparison = (root: Node) => {
   let found = false;
   walk(root, (child) => {
@@ -197,6 +198,13 @@ const hasExpiryComparison = (root: Node) => {
       )
     ) {
       found = true;
+    }
+    if (namedProperty(child, "RAW")) {
+      walk(child.value, (inner) => {
+        if (memberName(inner) === "expiresAt") {
+          found = true;
+        }
+      });
     }
   });
   return found;
@@ -322,6 +330,12 @@ describe("session liveness owner", () => {
   );
 
   test.each([
+    {
+      name: "expiry comparison in a RAW callback",
+      source:
+        "db.query.session.findMany({ where: { RAW: (fields) => gt(fields.expiresAt, now) } });",
+      file: "src/lib/other.ts",
+    },
     {
       name: "aliased Drizzle comparison",
       source:
