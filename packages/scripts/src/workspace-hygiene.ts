@@ -351,38 +351,15 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
   });
 
 /** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
-const declaresTypescript6Compiler = (packageJsonPath: string): boolean => {
-  if (readDependencySpecifier(packageJsonPath, "typescript6") !== null) {
-    return true;
-  }
-  let packageJson: unknown;
-  try {
-    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-  } catch {
-    return false;
-  }
-  if (!isRecord(packageJson)) {
-    return false;
-  }
-  for (const field of DEPENDENCY_FIELDS) {
-    const dependencies = packageJson[field];
-    if (
-      isRecord(dependencies) &&
-      Object.values(dependencies).some(
-        (specifier) =>
-          typeof specifier === "string" &&
-          /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
-      )
-    ) {
-      return true;
-    }
-  }
-  return false;
-};
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean =>
+  readDependencySpecifier(packageJsonPath, "typescript6") !== null ||
+  readDependencySpecifier(packageJsonPath, (specifier) =>
+    /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+  ) !== null;
 
 const readDependencySpecifier = (
   packageJsonPath: string,
-  dependencyName: string,
+  dependency: string | ((specifier: string) => boolean),
 ): string | null => {
   let packageJson: unknown;
   try {
@@ -401,7 +378,12 @@ const readDependencySpecifier = (
       continue;
     }
 
-    const specifier = dependencies[dependencyName];
+    const specifier =
+      typeof dependency === "string"
+        ? dependencies[dependency]
+        : Object.values(dependencies).find(
+            (value) => typeof value === "string" && dependency(value),
+          );
     if (typeof specifier === "string") {
       return specifier;
     }
