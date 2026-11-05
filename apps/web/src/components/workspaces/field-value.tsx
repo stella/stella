@@ -15,6 +15,7 @@ import {
   getSelectPropertyColor,
   PendingSkeleton,
   PersonAvatar,
+  RecordFieldValue,
   UnsupportedFieldValue,
 } from "@stll/workspace-ui/field-value";
 import type { FieldValueVariant } from "@stll/workspace-ui/field-value";
@@ -132,6 +133,10 @@ export const FieldValue = ({
         variant={resolvedVariant}
       />
     );
+  }
+
+  if (content.type === "record") {
+    return <RecordFieldValue content={content} variant={resolvedVariant} />;
   }
 
   return <ClipFieldValue content={content} variant={resolvedVariant} />;

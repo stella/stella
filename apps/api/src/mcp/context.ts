@@ -214,6 +214,11 @@ export type McpRequestContext = {
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
+    readAdmittedCaseLawCourtPage?: (request: {
+      country: string;
+      after: string | null;
+      limit: number;
+    }) => Promise<{ courts: string[]; more: boolean }>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     admitLawRead?: typeof admitLawRead;
