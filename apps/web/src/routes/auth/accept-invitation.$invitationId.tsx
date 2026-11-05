@@ -1,12 +1,7 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  notFound,
-  redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@stll/ui/button";
@@ -25,37 +20,43 @@ import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
+import { InvitationRefusal, loadInvitationView } from "./-invitation-view";
+
 export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
   beforeLoad: ({ context, location }) => {
-    if (!context.session) {
+    if (!context.session || !context.user) {
       throw redirect({
         to: "/auth",
         search: { redirectTo: location.pathname },
         replace: true,
       });
     }
+    return { signedInEmail: context.user.email };
   },
-  loader: async ({ params }) => {
-    const { data } = await authClient.organization.getInvitation({
-      query: { id: params.invitationId },
-    });
-
-    if (data === null) {
-      throw notFound();
-    }
-
-    if (data.status !== "pending") {
-      throw notFound();
-    }
-
-    return { invitation: data };
-  },
-  component: AcceptInvitation,
+  loader: async ({ params }) => await loadInvitationView(params.invitationId),
+  component: InvitationPage,
 });
 
-function AcceptInvitation() {
+function InvitationPage() {
+  const view = Route.useLoaderData();
+  const email = Route.useRouteContext({ select: (c) => c.signedInEmail });
+
+  if (view.type === "refused") {
+    return <InvitationRefusal code={view.code} email={email} />;
+  }
+
+  return <AcceptInvitation invitation={view.invitation} />;
+}
+
+type AcceptInvitationProps = {
+  invitation: Extract<
+    Awaited<ReturnType<typeof loadInvitationView>>,
+    { type: "invitation" }
+  >["invitation"];
+};
+
+function AcceptInvitation({ invitation }: AcceptInvitationProps) {
   const invitationId = Route.useParams({ select: (p) => p.invitationId });
-  const { invitation } = Route.useLoaderData();
   const analytics = useAnalytics();
   const navigate = Route.useNavigate();
   const invalidateSession = useInvalidateSession();

@@ -162,7 +162,9 @@
       "declinedDescription": "Ha rechazado esta invitación. Puede cerrar esta página.",
       "description": "{inviterEmail} le ha invitado a unirse a {organizationName} como {role}.",
       "goToWorkspaces": "Ir a asuntos",
-      "title": "Invitación a la organización"
+      "title": "Invitación a la organización",
+      "verifyEmailHint": "Para verificar {email}, cierre sesión e inicie sesión con un código de un solo uso que enviaremos a esa dirección.",
+      "wrongAccountHint": "Ha iniciado sesión como {email}. Cierre sesión e inicie sesión con la dirección a la que se envió la invitación."
     },
     "lastUsed": "Último utilizado",
     "oneTimeCodeExpired": "Tu código de un solo uso ha caducado. Solicita un código nuevo.",

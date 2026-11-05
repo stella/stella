@@ -162,7 +162,9 @@
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
       "description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
       "goToWorkspaces": "Go to matters",
-      "title": "Organization invitation"
+      "title": "Organization invitation",
+      "verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",
+      "wrongAccountHint": "You are signed in as {email}. Sign out, then sign in with the address the invitation was sent to."
     },
     "lastUsed": "Last used",
     "oneTimeCodeExpired": "Your one-time code has expired. Request a new code.",

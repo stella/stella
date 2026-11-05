@@ -162,7 +162,9 @@
       "declinedDescription": "Vous avez refusé cette invitation. Vous pouvez fermer cette page.",
       "description": "Vous avez été invité à rejoindre {organizationName} par {inviterEmail} en tant que {role}.",
       "goToWorkspaces": "Accéder aux dossiers",
-      "title": "Invitation à l'organisation"
+      "title": "Invitation à l'organisation",
+      "verifyEmailHint": "Pour vérifier {email}, déconnectez-vous, puis connectez-vous avec un code à usage unique envoyé à cette adresse.",
+      "wrongAccountHint": "Votre session est ouverte avec {email}. Déconnectez-vous, puis connectez-vous avec l’adresse à laquelle l’invitation a été envoyée."
     },
     "lastUsed": "Dernière utilisation",
     "oneTimeCodeExpired": "Votre code à usage unique a expiré. Demandez un nouveau code.",

@@ -162,7 +162,9 @@
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
       "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
-      "title": "Einladung zur Organisation"
+      "title": "Einladung zur Organisation",
+      "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
+      "wrongAccountHint": "Sie sind als {email} angemeldet. Melden Sie sich ab und mit der Adresse an, an die die Einladung gesendet wurde."
     },
     "lastUsed": "Zuletzt verwendet",
     "oneTimeCodeExpired": "Ihr Einmalcode ist abgelaufen. Fordern Sie einen neuen Code an.",

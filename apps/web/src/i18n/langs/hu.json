@@ -162,7 +162,9 @@
       "declinedDescription": "Elutasította ezt a meghívót. Biztonságosan bezárhatja ezt az oldalt.",
       "description": "{inviterEmail} meghívta Önt a(z) {organizationName} szervezetbe {role} szerepkörrel.",
       "goToWorkspaces": "Ügyekhez",
-      "title": "Szervezeti meghívó"
+      "title": "Szervezeti meghívó",
+      "verifyEmailHint": "A(z) {email} cím megerősítéséhez jelentkezzen ki, majd jelentkezzen be az erre a címre küldött egyszer használatos kóddal.",
+      "wrongAccountHint": "Jelenleg ezzel a címmel van bejelentkezve: {email}. Jelentkezzen ki, majd jelentkezzen be azzal a címmel, amelyre a meghívót küldték."
     },
     "lastUsed": "Legutóbb használt",
     "oneTimeCodeExpired": "Az egyszer használatos kód lejárt. Kérjen új kódot.",

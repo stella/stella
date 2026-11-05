@@ -162,7 +162,9 @@
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
       "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName} liikmeks rolliga {role}.",
       "goToWorkspaces": "Mine toimikutesse",
-      "title": "Kutse organisatsiooni"
+      "title": "Kutse organisatsiooni",
+      "verifyEmailHint": "Aadressi {email} kinnitamiseks logige välja ja logige sisse ühekordse koodiga, mille sellele aadressile saadame.",
+      "wrongAccountHint": "Olete sisse logitud kontoga {email}. Logige välja ja logige sisse aadressiga, kuhu kutse saadeti."
     },
     "lastUsed": "Viimati kasutatud",
     "oneTimeCodeExpired": "Sinu ühekordne kood on aegunud. Küsi uus kood.",
