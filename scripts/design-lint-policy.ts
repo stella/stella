@@ -382,7 +382,7 @@ export const THIRD_PARTY_ARTWORK_FILES = [
   "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
   "apps/web/src/components/ai-provider-icons.tsx",
   "apps/web/src/components/auth/sign-in-brand-marks.tsx",
-  "apps/web/src/components/document-icon.tsx",
+  "packages/ui/src/components/document-mark.shared.ts",
 ] as const;
 
 export const SHADCN_LINT_POLICY_OVERRIDES = [
