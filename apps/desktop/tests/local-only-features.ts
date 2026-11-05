@@ -26,11 +26,13 @@ export const LOCAL_ONLY_FEATURES = [
         "src/clipboard/ClipboardEditor.tsx",
         "src/clipboard/ClipboardGroupFields.tsx",
         "src/clipboard/ClipboardImagePreview.tsx",
+        "src/clipboard/clips-copy-routing.ts",
       ],
       "src-tauri/capabilities/clipboard.json": [
         "src/clipboard/ClipboardApp.tsx",
         "src/clipboard/ClipboardGroupFields.tsx",
         "src/clipboard/ClipboardImagePreview.tsx",
+        "src/clipboard/clips-copy-routing.ts",
         "src/registry/RegistrySearch.tsx",
         "src/shared/use-clipboard-shortcut.ts",
       ],

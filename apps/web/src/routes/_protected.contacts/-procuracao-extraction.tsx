@@ -296,6 +296,7 @@ export const ProcuracaoDropZone = ({
       <Button
         aria-busy={isExtracting}
         aria-disabled={isExtracting || undefined}
+        tabIndex={isExtracting ? -1 : undefined}
         className="w-full items-stretch"
         onClick={openPicker}
         variant="plain"

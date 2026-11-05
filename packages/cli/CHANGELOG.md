@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.8.1
+
+### Patch Changes
+
+- [#7887](https://github.com/stella/stella/pull/7887) [`f902f3b`](https://github.com/stella/stella/commit/f902f3b736adb0ac24e749876e319ad554cdc710) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `search_case_law` returns the phrasings that finished when another phrasing runs out of its time budget; that phrasing reports a `time_budget` truncated outcome and a `phrasing_timed_out` warning instead of failing the call.
+
 ## 6.8.0
 
 ### Minor Changes

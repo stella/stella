@@ -9,23 +9,7 @@ import { KnowledgeLandingView } from "@/features/knowledge/views/knowledge-landi
 import type { KnowledgeLandingCard } from "@/features/knowledge/views/knowledge-landing-view";
 import { useMountEffect } from "@/hooks/use-effect";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
-import type { KnowledgeSection } from "@/lib/knowledge/navigation";
 import { normalizeRedirectTo } from "@/lib/redirect";
-
-// Readable without an account: the catalogue behind each of these is the same
-// for every visitor.
-const OPEN_SECTIONS: readonly KnowledgeSection["key"][] = [
-  "tools",
-  "templates",
-  "playbooks",
-];
-
-// An organization's own: shown so the visitor knows they exist, opened with an
-// account.
-const ACCOUNT_SECTIONS: readonly KnowledgeSection["key"][] = [
-  "clauses",
-  "styles",
-];
 
 type PublicKnowledgeLandingProps = {
   /** A page that needs an account, asked for before this one: sign-in is
@@ -66,12 +50,9 @@ export const PublicKnowledgeLanding = ({
           ? t("styleSets.description")
           : t(`knowledge.sections.${section.key}.description`),
     };
-    if (OPEN_SECTIONS.includes(section.key)) {
+    if (section.publicAccess === "catalogue") {
       cards.push({ ...content, to: section.to });
-    } else if (
-      ACCOUNT_SECTIONS.includes(section.key) &&
-      requestSignIn !== null
-    ) {
+    } else if (section.publicAccess === "account" && requestSignIn !== null) {
       cards.push({
         ...content,
         note: t("knowledge.landing.withAccount"),

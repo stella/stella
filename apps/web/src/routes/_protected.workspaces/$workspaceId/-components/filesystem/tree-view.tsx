@@ -36,6 +36,7 @@ import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -1846,6 +1847,16 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
     return (
       <span className="text-muted-foreground truncate text-xs">
         {formatted || "-"}
+      </span>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <span className="text-muted-foreground truncate text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
       </span>
     );
   }

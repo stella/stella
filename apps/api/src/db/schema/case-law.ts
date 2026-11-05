@@ -2957,6 +2957,12 @@ export const caseLawPopulationProjections = p.pgTable(
       .index("case_law_population_projection_activity_idx")
       .on(t.country, t.court, t.updatedAt.desc(), t.sourceId, t.createdAt)
       .where(sql`${t.publication} = 'published'`),
+    // A court's arrivals as a `created_at` range: a reparse rewrites
+    // `updated_at` across the court, so the activity index cannot bound them.
+    p
+      .index("case_law_population_projection_arrivals_idx")
+      .on(t.country, t.court, t.createdAt, t.sourceId)
+      .where(sql`${t.publication} = 'published'`),
     p.pgPolicy("public_law_reader_access", {
       for: "select",
       to: stellaPublicLawReader,

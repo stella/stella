@@ -2,8 +2,11 @@ import * as v from "valibot";
 
 import type { AgentHarness } from "./agent-harness";
 import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_HARNESS_STATE,
   type DesktopRunnerHarnessReport,
+  desktopRunnerQuestionAnswersSchema,
+  desktopRunnerQuestionIdSchema,
 } from "./desktop-runner";
 
 /**
@@ -95,3 +98,120 @@ export type ChatLocalRunReadiness =
   | { status: "enabled"; runners: ChatLocalRunnerReadiness[] };
 
 export const CHAT_LOCAL_HARNESS_STATE = DESKTOP_RUNNER_HARNESS_STATE;
+
+/**
+ * The resume payload that answers a local run's blocking question: the
+ * interrupt the question paused the turn with (`metadata.kind: "question"`,
+ * its questions in `metadata.questions`) is resumed with `status: "resolved"`
+ * and this payload. Answers are keyed by question id and hold option labels
+ * or free text; every question asked takes at least one, and a question
+ * without free text takes only its option labels. A `cancelled` resume
+ * stops the run's turn instead of answering.
+ */
+export const chatLocalRunQuestionReplySchema = v.strictObject({
+  answers: desktopRunnerQuestionAnswersSchema,
+});
+export type ChatLocalRunQuestionReply = v.InferOutput<
+  typeof chatLocalRunQuestionReplySchema
+>;
+
+/**
+ * The tool call a local run's question is persisted as, for every harness:
+ * Codex's native item name, which a Claude Code `AskUserQuestion` takes too.
+ */
+export const CHAT_LOCAL_RUN_QUESTION_TOOL = "request_user_input";
+
+/**
+ * One question of a local run's blocking question, as its interrupt carries
+ * it (`metadata.questions`). An answer names an option by its `label`, which
+ * is the harness's native reply. `multiSelect` lets one answer pick several
+ * options; `allowsFreeText` lets it be the member's own words; a `secret`
+ * answer is never shown back.
+ */
+export const chatLocalRunQuestionSchema = v.object({
+  id: desktopRunnerQuestionIdSchema,
+  header: v.string(),
+  prompt: v.string(),
+  options: v.array(v.object({ label: v.string(), description: v.string() })),
+  allowsFreeText: v.boolean(),
+  multiSelect: v.boolean(),
+  secret: v.boolean(),
+});
+/**
+ * The questions one blocking question asks: at least one, each under its own
+ * id, and no more than one answer may carry
+ * (`DESKTOP_RUNNER_ANSWER_LIMITS`), so every pause can be answered.
+ */
+export const chatLocalRunQuestionsSchema = v.pipe(
+  v.array(chatLocalRunQuestionSchema),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_ANSWER_LIMITS.maxQuestions),
+  v.check(
+    (questions) =>
+      new Set(questions.map(({ id }) => id)).size === questions.length,
+    "Each question has its own id",
+  ),
+);
+export type ChatLocalRunQuestion = Readonly<
+  Omit<v.InferOutput<typeof chatLocalRunQuestionSchema>, "options">
+> & {
+  readonly options: readonly { label: string; description: string }[];
+};
+
+/**
+ * Why `answers` do not answer `questions`, or `null` when they do. Every
+ * question takes at least one answer, a single-choice question takes only one,
+ * a question without free text takes only its option labels, and only the
+ * questions asked are answered. The browser checks it before sending, the API
+ * before an answer leaves for the computer, and every harness before replying,
+ * so an answer the harness would refuse never leaves its run waiting.
+ */
+export const chatLocalRunAnswersRefusal = (
+  questions: readonly ChatLocalRunQuestion[],
+  answers: Readonly<Record<string, readonly string[]>>,
+): string | null => {
+  const asked = new Set(questions.map(({ id }) => id));
+  const unasked = Object.keys(answers).find((id) => !asked.has(id));
+  if (unasked !== undefined) {
+    return `Question ${unasked} was not asked.`;
+  }
+  for (const question of questions) {
+    const given = Object.hasOwn(answers, question.id)
+      ? (answers[question.id] ?? [])
+      : [];
+    if (given.length === 0) {
+      return `Question ${question.id} has no answer.`;
+    }
+    if (!question.multiSelect && given.length > 1) {
+      return `Question ${question.id} takes one answer.`;
+    }
+    const labels = new Set(question.options.map(({ label }) => label));
+    if (!question.allowsFreeText && given.some((a) => !labels.has(a))) {
+      return `Question ${question.id} takes one of its options.`;
+    }
+  }
+  return null;
+};
+
+/**
+ * The CUSTOM stream event a turn running on a computer sends when that
+ * computer goes away mid-turn and when it is back. The turn stays open while
+ * the computer is away and continues once it reconnects, so the chat shows
+ * the wait instead of a stalled answer. A rejoined stream replays these
+ * events from the run log, so a reload shows the same state.
+ */
+export const CHAT_LOCAL_RUN_COMPUTER_EVENT = "stella.local-run.computer";
+
+export const CHAT_LOCAL_RUN_COMPUTER_STATUSES = [
+  "waiting",
+  "connected",
+] as const;
+export type ChatLocalRunComputerStatus =
+  (typeof CHAT_LOCAL_RUN_COMPUTER_STATUSES)[number];
+
+export const chatLocalRunComputerEventSchema = v.strictObject({
+  status: v.picklist(CHAT_LOCAL_RUN_COMPUTER_STATUSES),
+});
+export type ChatLocalRunComputerEvent = v.InferOutput<
+  typeof chatLocalRunComputerEventSchema
+>;

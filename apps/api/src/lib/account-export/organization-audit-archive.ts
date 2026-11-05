@@ -208,14 +208,14 @@ export const buildOrganizationAuditArchive = async ({
   };
 
   const entries = async function* () {
-    yield { name: ORGANIZATION_AUDIT_ARCHIVE_TABLE, input: auditTable() };
-    // client-zip consumes each entry before requesting the next, so the
+    yield { path: ORGANIZATION_AUDIT_ARCHIVE_TABLE, data: auditTable() };
+    // The zip stream consumes each entry before requesting the next, so the
     // count below describes the rows written. An organization deleted while
     // the archive was being read leaves no owner, and no archive.
     await requireOwner(db, { organizationId, userId });
     yield {
-      name: "manifest.json",
-      input: encoder.encode(
+      path: "manifest.json",
+      data: encoder.encode(
         JSON.stringify({
           schemaVersion: 1,
           kind: "organization_audit",

@@ -40,7 +40,6 @@
     "organizationId": "Organizacijos ID",
     "organizationLeft": "Išėjote iš organizacijos.",
     "planAndUsage": "Planas ir naudojimas",
-    "title": "Organizacijos administravimas",
     "toolsDescription": "Įjunkite arba išjunkite integruotus įrankius visiems šios organizacijos nariams."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rodyti sprendime",
+      "unverified": "Citatos patikrinti nepavyko",
+      "unverifiedHint": "Cituojamuose sprendimuose šio teksto pažodžiui nėra",
       "verified": "Patikrinta citata",
       "verifiedHint": "Pažodžiui: {source}"
     },
@@ -1681,9 +1682,26 @@
     "loadEarlierMessagesError": "Nepavyko įkelti ankstesnių žinučių",
     "loadingEarlierMessages": "Kraunamos ankstesnės žinutės…",
     "localRun": {
+      "cloud": "stella debesis",
       "errorLimitReached": "Programavimo agentas jūsų kompiuteryje pasiekė naudojimo limitą. Bandykite dar kartą, kai limitas atsinaujins.",
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
-      "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą."
+      "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
+      "onThisComputer": "{harness} šiame kompiuteryje",
+      "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
+      "refusalHarnessUnavailable": "Programavimo agentas jūsų kompiuteryje dabar negali priimti šios užklausos. Patikrinkite jį per stella desktop.",
+      "refusalModelUnavailable": "Programavimo agentas jūsų kompiuteryje šio modelio nebesiūlo. Pasirinkite kitą meniu Paleisti.",
+      "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
+      "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
+      "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
+      "runOn": "Paleisti",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limitas pasiektas iki {time}",
+      "stateNeedsLogin": "Reikia prisijungti",
+      "stateNotInstalled": "Neįdiegta",
+      "stateOffline": "Kompiuteris neprisijungęs",
+      "stateUnavailable": "Šiuo metu nepasiekiama",
+      "stateUnsupported": "Ši versija nepalaikoma",
+      "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
@@ -1887,7 +1905,7 @@
       "unavailable": "Nepavyko parinkti diagramos. Rodoma lentelė.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Dirbama su kontekstu",
+    "thinking": "Mąstymas",
     "threadFiles": {
       "title": "Šio pokalbio failai"
     },
@@ -1905,6 +1923,7 @@
       "boe_search_legislation": "BOE teisės aktų paieška",
       "borme_get_summary": "BORME dienos suvestinė",
       "business_registry_lookup": "Ieškoma įmonių registre",
+      "command_execution": "Vykdoma komanda",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
       "connect_connector": "Prašoma prijungti jungtį",
@@ -1930,9 +1949,12 @@
       "execute_typescript": "Skaitomi bylos duomenys",
       "expand-chat-history": "Skaitoma pokalbio istorija",
       "fetch_url": "Skaitomas puslapis",
+      "file_change": "Keičiami failai",
       "fill_template": "Pildomas šablonas",
       "find_text": "Ieškoma teksto dokumente",
       "get_document_outline": "Skaitoma dokumento struktūra",
+      "harness_unsupported_item": "Žingsnis, kurio stella negali parodyti",
+      "harness_web_search": "Ieškoma žiniatinklyje",
       "infosoud_lookup_case": "InfoSoud bylos paieška",
       "link_matter_contact": "Susieti kontaktą su byla",
       "list_stories": "Išvardijamos dokumento dalys",
@@ -1949,7 +1971,9 @@
       "remember": "Įsimenama",
       "remove_matter_member": "Pašalinti bylos narį",
       "reply_comment": "Atsakoma į komentarą",
+      "request_permissions": "Prašoma leidimų",
       "request_secret": "Prašoma privačių prisijungimo duomenų",
+      "request_user_input": "Prašoma patikslinimo",
       "resolve_comment": "Išsprendžiamas komentaras",
       "review_folder_consistency": "Tikrinamas aplanko nuoseklumas",
       "run-stella-query": "Skaitomi bylos duomenys",
@@ -2009,6 +2033,11 @@
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
     },
+    "turnStatus": {
+      "waitingForApproval": "Laukiama patvirtinimo",
+      "waitingForInput": "Laukiama įvesties",
+      "writing": "Rašoma"
+    },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
     "usageFallbackNotice": "Dienos DI kvota išnaudota; atsakymai toliau teikiami standartiniu modeliu.",
@@ -2017,7 +2046,6 @@
       "answer": "Interneto paieškos santrauka",
       "answerDisclaimer": "Apibendrinta iš toliau pateiktų viešų interneto rezultatų. Patikrinkite pagal pateiktus šaltinius.",
       "fetchedFrom": "iš {source}",
-      "openSource": "Atidaryti {source} naujame skirtuke",
       "sources": "Šaltiniai",
       "toggleDescription": "Leisti modeliui šiame pokalbyje ieškoti viešajame internete ir skaityti puslapius.",
       "toggleLabel": "Paieška internete",
@@ -2371,6 +2399,7 @@
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
+    "openInSidePanel": "Atidaryti šoniniame skydelyje",
     "openInStella": "Atverti programoje stella",
     "openOriginalSource": "Atverti pirminį šaltinį",
     "options": "Parinktys",
@@ -2764,6 +2793,11 @@
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
       "undoImport": "Atšaukti importavimą ({count})",
+      "undoImportConfirm": "Visam laikui ištrinti šiuo importavimu {count, plural, one {sukurtą # kontaktą} few {sukurtus # kontaktus} many {sukurto # kontakto} other {sukurtų # kontaktų}}? Šio veiksmo anuliuoti negalima.",
+      "undoImportTitle": "Atšaukti šį importavimą?",
+      "undoneRow": "Pašalinta atšaukus",
+      "undoneSummary": "Atšaukus importavimą pašalinta {count, plural, one {# sukurtas kontaktas} few {# sukurti kontaktai} many {# sukurto kontakto} other {# sukurtų kontaktų}}.",
+      "undoneToast": "Importavimas atšauktas: ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
       "validateFailed": "Nepavyko patikrinti šių kontaktų.",
       "warning": {
         "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
@@ -3205,7 +3239,6 @@
     "noFileInVersion": "Šioje versijoje failo nėra",
     "noFullScreenPreview": "Šio tipo failas neturi viso ekrano peržiūros.",
     "noLabel": "Nėra žymės",
-    "openInSidePanel": "Atidaryti šoniniame skydelyje",
     "redlinePreview": "Sekami pakeitimai",
     "removeLabel": "Pašalinti žymę",
     "saveComparison": "Išsaugoti palyginimą",
@@ -5687,6 +5720,7 @@
     "citingDecisionsSortCitations": "Šios nuostatos paminėjimai",
     "citingDecisionsSortDate": "Sprendimo data",
     "citingDecisionsYear": "Sprendimo metai",
+    "citingDecisionsYearOutOfRange": "Įveskite metus nuo {min} iki {max}.",
     "citingDecisionsYearPlaceholder": "Visi metai",
     "columns": {
       "act": "Teisės aktas",
@@ -5732,7 +5766,6 @@
     "leadingDecisionsExplanation": "Pirmasis paminėjimas kiekviename sprendime, surikiuotas pagal citavimo autoritetą: įvertintos gaunamos citatos, atsižvelgiant į teismo rangą, citatos pobūdį ir senumą.",
     "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
-    "openProvision": "Atverti nuostatą",
     "outline": "Turinys",
     "outlineJumpLabel": "Pereiti prie nuostatos",
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
@@ -6511,6 +6544,9 @@
       "calculating": "Skaičiuojama...",
       "errored": "Klaida",
       "formatNotSupported": "Formatas nepalaikomas",
+      "recordChoose": "{count, plural, one {Patvirtinkite # atitikmenį} few {Pasirinkite iš # atitikmenų} many {Pasirinkite iš # atitikmens} other {Pasirinkite iš # atitikmenų}}",
+      "recordCount": "{count, plural, one {# įrašas} few {# įrašai} many {# įrašo} other {# įrašų}}",
+      "recordNotFound": "Nerasta",
       "selectAValue": "Pasirinkite reikšmę",
       "selectValues": "Pasirinkite reikšmes",
       "wholeNumberOnly": "Įveskite sveikąjį skaičių"
@@ -7203,6 +7239,7 @@
       "previewSubject": "Išbandyk pavyzdyje",
       "previewUnsupported": "Peržiūra šio tipo dokumentui nepalaikoma.",
       "readingFrom": "DI skaito iš",
+      "record": "Įrašas",
       "referencesItself": "Savybė nurodo pati save per kitas savybes",
       "resultType": "Rezultato tipas",
       "returnsLabel": "Formatas",
