@@ -48,6 +48,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -57,6 +58,8 @@ import {
 import { completeOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import type { CompletedOrganizationAuditExport } from "@/api/tests/helpers/organization-audit-export";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const oauthCredential = await admittedOAuthCredentialForTest("cli");
 
 // timeout: real email-code sign-ins and organization writes on PGlite.
 setDefaultTimeout(120_000);
@@ -107,7 +110,7 @@ const downloadServer = serveRoutesForTest(
               organizationId: membership.organizationId,
               memberId: membership.id,
               scopes: [ACCOUNT_EXPORT_SCOPES.read],
-              credential: { type: "oauth_client" as const, clientId: "cli" },
+              credential: oauthCredential,
             });
           },
         }),

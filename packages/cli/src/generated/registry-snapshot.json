@@ -62,7 +62,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -729,7 +729,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -2584,6 +2584,92 @@
   },
   {
     "cli": {
+      "command": ["case-law", "courts"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "list_case_law_courts",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["country"],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": ["CZE", "EU", "HUN", "POL", "SVK"],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "courts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tierLabel": {
+                "enum": ["constitutional", "supreme", "regional", "other"],
+                "type": "string"
+              },
+              "courts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": ["tierLabel", "courts"],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["country", "courts", "nextCursor"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["legislation", "search"],
       "scope": "search",
       "itemsKey": "results",
@@ -2735,7 +2821,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },

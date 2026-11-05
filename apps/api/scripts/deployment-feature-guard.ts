@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/v1/chat/local-runners",
+    "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
+  ],
+  [
     "/v1/desktop/time-entries",
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
@@ -125,6 +129,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
   ],
   [
+    "/v1/me/timer-activity-devices",
+    "Lock Screen timer registration is available on every deployment; updates are sent only where APNs credentials are configured",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
@@ -135,6 +143,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/files/:workspaceId/marked",
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
+  ],
+  [
+    "/v1/desktop/runner",
+    "The desktop runner socket authenticates the desktop account and device on every deployment; runs reach it only when the API assigns them",
   ],
   [
     "/v1/tasks",

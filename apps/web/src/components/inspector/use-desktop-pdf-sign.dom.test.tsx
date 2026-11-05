@@ -12,9 +12,8 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 let fetchBoundary: Mock<typeof globalThis.fetch>;

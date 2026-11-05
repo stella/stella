@@ -48,6 +48,15 @@ export type CitedDecisionTarget = {
   languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
   slug: string | null;
 };
+/**
+ * A citation the corpus could not resolve to a held decision: the citing
+ * text's words and where they sit, nothing more.
+ */
+export type UnresolvedCitationAnchorSource = {
+  citationText: string;
+  id: string;
+  sectionIndex?: number | null | undefined;
+};
 export type CitationAnchorSource = {
   citationText: string;
   decision: CitedDecisionTarget;

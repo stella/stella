@@ -146,6 +146,9 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/workspaces/")) {
     return `/workspaces/${workspace.id}/${workspace.viewId}`;
   }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }
@@ -658,7 +661,7 @@ const measureRouteTarget = async ({
     // with its own top border on that line doubles it into a 2px rule.
     expect(
       await findChromeDividerProblems(page),
-      `${route.template} must show exactly one divider under the app chrome`,
+      `${route.template} must show exactly one divider under the app chrome: the chrome owns it, so a page root or a nested layout's first pane draws no top border (border-t, border-y, border) on that line`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the

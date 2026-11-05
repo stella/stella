@@ -19,6 +19,7 @@ import {
   parseAppToolPayload,
 } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
+import { callAppServerTool } from "../shared/server-tool-call";
 import { mountAppViewport } from "../shared/size";
 import {
   bindUploadSdkErrors,
@@ -218,21 +219,18 @@ export const createDocumentUploadRuntime = (
     input: Record<string, unknown>,
     confirm?: true,
   ): Promise<Result<unknown, UploadError>> => {
-    const called = await Result.tryPromise(
-      async () =>
-        await protocol.callServerTool({
-          name: MCP_CAPABILITY_EXECUTORS.write,
-          arguments: {
-            capability,
-            input,
-            ...(confirm === true ? { confirm: true } : {}),
-          },
-        }),
-    );
-    if (Result.isError(called)) {
-      return Result.err(new UploadAppError({ message: called.error.message }));
+    const called = await callAppServerTool(protocol, {
+      name: MCP_CAPABILITY_EXECUTORS.write,
+      arguments: {
+        capability,
+        input,
+        ...(confirm === true ? { confirm: true } : {}),
+      },
+    });
+    if (called.status === "unreachable") {
+      return Result.err(new LocalizedAppError({ key: "bridgeUnavailable" }));
     }
-    const result = called.value;
+    const result = called.result;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
       return Result.err(

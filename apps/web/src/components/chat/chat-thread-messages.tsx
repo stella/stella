@@ -335,6 +335,7 @@ export const ChatThreadMessages = ({
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
+  waitingForComputer = false,
   queuedMessages,
   queuedMessageActions,
   streamdownComponents,
@@ -558,9 +559,10 @@ export const ChatThreadMessages = ({
             (item) => item.message.role === "assistant",
           )?.message;
           const active = generationActive && turnIndex === turns.length - 1;
-          const status = active ? (
-            <ActiveTurnStatus assistant={assistant} />
-          ) : null;
+          const status =
+            active && !waitingForComputer ? (
+              <ActiveTurnStatus assistant={assistant} />
+            ) : null;
           if (turn.type === "orphan") {
             return (
               <Fragment key={turn.body.at(0)?.message.id}>
@@ -602,6 +604,7 @@ export const ChatThreadMessages = ({
             onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
+        {generationActive && waitingForComputer && <ComputerWaitingIndicator />}
         {queuedMessageActions &&
           queuedMessages !== undefined &&
           queuedMessages.length > 0 && (
@@ -1120,6 +1123,25 @@ const MessageRenderFallback = ({ message }: { message: ChatUIMessage }) => {
   );
 };
 
+/** The turn's computer went away mid-turn; the turn goes on once it is back. */
+const ComputerWaitingIndicator = () => {
+  const t = useTranslations();
+
+  return (
+    <Message from="assistant">
+      <MessageContent>
+        <div
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <StatusMark status="pending" />
+          <span>{t("chat.localRun.waitingForComputer")}</span>
+        </div>
+      </MessageContent>
+    </Message>
+  );
+};
+
 type ChatErrorTranslationKey =
   | AIFailureTranslationKey
   | "chat.sendErrorAnonymizationBlocked"
@@ -1411,6 +1433,9 @@ type ChatThreadMessagesProps = {
       { entityId: string }
     >,
   ) => Promise<void> | void;
+  /** The turn runs on the member's computer, which is away until it
+   *  reconnects; the turn shows the wait in place of its live status. */
+  waitingForComputer?: boolean | undefined;
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**

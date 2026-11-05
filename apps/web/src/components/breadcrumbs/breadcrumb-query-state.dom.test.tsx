@@ -3,11 +3,11 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import type { ChatThreadFetched } from "@/features/chat/queries";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;

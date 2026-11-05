@@ -5,6 +5,7 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-column-preferences.logic";
@@ -12,7 +13,6 @@ import type { QuestionColumnSurface } from "@/features/case-law/research/questio
 import { UNSEARCHED_SCOPE } from "@/features/case-law/research/question-columns.logic";
 import de from "@/i18n/langs/de.json";
 import en from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const originalFetch = globalThis.fetch;

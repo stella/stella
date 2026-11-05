@@ -7,15 +7,22 @@ import {
   readFile,
   rename,
   rm,
+  stat,
 } from "node:fs/promises";
 import path from "node:path";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { TAILWIND_CLASS_CACHE } from "../packages/scripts/src/generated-files";
+import { hasPreparedGeneratedDirectory } from "../packages/scripts/src/prepared-generated-sources";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
-const generatedCache = path.join(repositoryRoot, ".tailwind-cache");
+const generatedCache = path.join(
+  repositoryRoot,
+  TAILWIND_CLASS_CACHE.directory,
+);
+const artifact = TAILWIND_CLASS_CACHE.file;
 const staleLockAgeMs = 5 * 60_000;
 const tailwindSettings = v.object({
   tailwindcss: v.object({
@@ -36,7 +43,6 @@ export const tailwindEntryPoints = v
     stylesheet: use,
   }));
 const lintTargets = tailwindEntryPoints.map(({ root }) => root);
-const artifact = /^[0-9a-f]{32}(?:\.json|\.decl-[0-9a-f]{2}\.json)$/u;
 
 const lintReport = v.object({
   diagnostics: v.array(v.object({ message: v.string() })),
@@ -62,28 +68,150 @@ export const tailwindFailureMessages = (
   ].toSorted();
 
 /**
+ * How long one oxlint pass over the Tailwind sources may run. A cold pass
+ * takes about a minute on a CI runner; one still running after this has
+ * stalled, and is stopped so the step fails instead of hanging.
+ */
+export const lintPassTimeoutMs = 5 * 60_000;
+
+/** The prefix of the Tailwind plugin's debug lines (`DEBUG=oxlint-tailwindcss`). */
+export const pluginProgressPrefix = "[oxlint-tailwindcss]";
+/** How many of the plugin's latest debug lines a stalled pass reports. */
+export const progressTailLines = 40;
+
+/**
+ * Forwards a pass's stderr, keeping the plugin's debug lines out of the log
+ * and only the latest `progressTailLines` of them in memory: they are the
+ * pass's progress, worth printing only when it stalls.
+ */
+const collectProgress = async (
+  stderr: ReadableStream<Uint8Array>,
+  tail: string[],
+) => {
+  const decoder = new TextDecoder();
+  let pending = "";
+  const take = (line: string) => {
+    if (!line.startsWith(pluginProgressPrefix)) {
+      process.stderr.write(`${line}\n`);
+      return;
+    }
+    tail.push(line);
+    if (tail.length > progressTailLines) {
+      tail.shift();
+    }
+  };
+  for await (const chunk of stderr) {
+    pending += decoder.decode(chunk, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      take(line);
+    }
+  }
+  if (pending !== "") {
+    take(pending);
+  }
+};
+
+/** The cache directory's entries with sizes and ages, to show what a stalled pass had written. */
+const describeCacheDirectory = async (directory: string | undefined) => {
+  if (directory === undefined) {
+    return "no cache directory set";
+  }
+  const entries = await readdir(directory).catch(() => null);
+  if (entries === null) {
+    return `${directory} is missing`;
+  }
+  if (entries.length === 0) {
+    return `${directory} is empty`;
+  }
+  const now = Date.now();
+  const described = await Promise.all(
+    entries.toSorted().map(async (name) => {
+      const info = await stat(path.join(directory, name)).catch(() => null);
+      return info === null
+        ? `${name} (gone)`
+        : `${name} ${info.size} bytes, ${Math.round((now - info.mtimeMs) / 1000)} s old`;
+    }),
+  );
+  return described.join("\n");
+};
+
+/**
+ * Runs one lint pass and returns its exit code and report. The report is read
+ * while the pass runs, so a large one cannot fill the pipe and block it. A
+ * pass still running after `timeoutMs` is killed and fails generation with a
+ * message naming the pass, its last plugin progress lines and the cache
+ * directory's state, so the stall can be diagnosed from the log.
+ */
+export const runLintPass = async (
+  command: readonly string[],
+  {
+    env,
+    pass,
+    timeoutMs = lintPassTimeoutMs,
+  }: {
+    env: Record<string, string | undefined>;
+    pass: string;
+    timeoutMs?: number;
+  },
+): Promise<{ exitCode: number; stdout: string }> => {
+  const child = Bun.spawn([...command], {
+    cwd: repositoryRoot,
+    env,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = new Response(child.stdout).text();
+  const progress: string[] = [];
+  const stderr = collectProgress(child.stderr, progress);
+  const deadline = { passed: false };
+  const timer = setTimeout(() => {
+    deadline.passed = true;
+    child.kill("SIGKILL");
+  }, timeoutMs);
+  const exitCode = await child.exited;
+  clearTimeout(timer);
+  await stderr;
+  if (deadline.passed) {
+    panic(
+      [
+        `Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the ${pass} oxlint pass was still running after ${timeoutMs / 1000} s and was stopped. A normal pass takes about a minute; rerun the step, and if it stalls again, run the command locally: ${command.join(" ")}`,
+        `Last plugin progress (${progress.length} lines):`,
+        progress.length === 0 ? "(none)" : progress.join("\n"),
+        "Cache directory:",
+        await describeCacheDirectory(env["OXLINT_TAILWINDCSS_CACHE_DIR"]),
+      ].join("\n"),
+    );
+  }
+  return { exitCode, stdout: await stdout };
+};
+
+/**
  * Lints every Tailwind entry point and returns why its rules did not run. The
  * pass runs only the Tailwind rules (oxlint.tailwind.config.ts), which ask the
- * design system for the same classes as the repository lint.
+ * design system for the same classes as the repository lint. Oxlint's own
+ * entry runs in this Bun process's runtime directly, so a timeout kills the
+ * whole pass; `bun --bun oxlint` would start it under a wrapper process.
  */
-const tailwindFailures = async (env: Record<string, string | undefined>) => {
-  const child = Bun.spawn(
+const tailwindFailures = async (
+  env: Record<string, string | undefined>,
+  pass: string,
+) => {
+  const { exitCode, stdout } = await runLintPass(
     [
-      "bun",
-      "--bun",
-      "oxlint",
+      process.execPath,
+      path.join(repositoryRoot, "node_modules/oxlint/bin/oxlint"),
       "-c",
       "oxlint.tailwind.config.ts",
       "--format",
       "json",
       ...lintTargets,
     ],
-    { cwd: repositoryRoot, env, stdout: "pipe", stderr: "inherit" },
+    // The plugin's debug lines are the pass's progress; runLintPass keeps
+    // them out of the log unless the pass stalls.
+    { env: { ...env, DEBUG: "oxlint-tailwindcss" }, pass },
   );
-  const [stdout, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    child.exited,
-  ]);
   // oxlint exits 1 when it reports findings; anything else is a crash.
   if (exitCode !== 0 && exitCode !== 1) {
     panic(`oxlint exited with ${exitCode} while linting the Tailwind sources.`);
@@ -105,7 +233,7 @@ const generate = async (cacheDirectory: string) => {
     OXLINT_TAILWINDCSS_CACHE_DIR: cacheDirectory,
     OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "0",
   };
-  const generationFailures = await tailwindFailures(env);
+  const generationFailures = await tailwindFailures(env, "cache-filling");
   if (generationFailures.length > 0) {
     panic(
       `Tailwind rules failed while generating the cache:\n${generationFailures.join("\n")}`,
@@ -123,10 +251,10 @@ const generate = async (cacheDirectory: string) => {
     }
     await Bun.write(file, `${JSON.stringify(value)}\n`);
   }
-  const missing = await tailwindFailures({
-    ...env,
-    OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1",
-  });
+  const missing = await tailwindFailures(
+    { ...env, OXLINT_TAILWINDCSS_CACHE_READ_ONLY: "1" },
+    "read-only verification",
+  );
   if (missing.length > 0) {
     panic(
       `Read-only lint misses answers in the generated Tailwind cache:\n${missing.join("\n")}`,
@@ -368,7 +496,17 @@ const check = async () => {
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "--write") {
-    await writeCache();
+    // A CI consumer restored the cache the generated-sources producer filled
+    // for this exact tree. Filling it again would repeat the heaviest pass of
+    // the lint jobs beside their type-aware lint, which stalled on CI runners.
+    if (
+      !hasPreparedGeneratedDirectory(
+        repositoryRoot,
+        TAILWIND_CLASS_CACHE.directory,
+      )
+    ) {
+      await writeCache();
+    }
   } else if (mode === "--check") {
     await check();
   } else {

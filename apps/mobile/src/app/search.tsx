@@ -459,6 +459,7 @@ const SearchResultRow = ({
         createdAt: result.updatedAt,
         createdBy: null,
         entityId: idOf(result),
+        format: result.kind === "entity" ? result.format : undefined,
         kind,
         name: result.title,
         parentId: null,

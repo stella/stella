@@ -40,7 +40,6 @@
     "organizationId": "Szervezetazonosító",
     "organizationLeft": "Kilépett a szervezetből.",
     "planAndUsage": "Csomag és használat",
-    "title": "Szervezet adminisztrációja",
     "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
   },
   "agentClaim": {
@@ -210,12 +209,12 @@
   "avt": {
     "anchorFacts": {
       "addInterpretationNote": "Értelmezési megjegyzés hozzáadása",
-      "description": "Közvetlen bizonyítékok — e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények — olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
+      "description": "Közvetlen bizonyítékok (e-mailek, üzenetek, banki nyilvántartások és nem vitatott tények) olyan referenciatény-nyilvántartásba rendezve, amelyhez az állításokat viszonyítjuk. A tények ellenőrizhetők, szerkeszthetők vagy kézzel hozzáadhatók.",
       "editInterpretationNote": "Értelmezési megjegyzés szerkesztése",
       "empty": "Jelölje meg a lista elemeit tényként, amelyekhez az iratokat viszonyítja a rendszer.",
       "extractionAndReview": "Kinyerés és ellenőrzés",
       "factCount": "{count, plural, one {# tény} other {# tény}}",
-      "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong> — a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
+      "heldDescription": "E kinyert adatok jelentése <strong>valóban bizonytalan</strong>: a tartalom előzetes vagy nincs megerősítve, nem pusztán kézzel írt. Addig nem számítanak bele az értékelésbe, amíg egy ellenőr meg nem erősíti, nem szerkeszti vagy újra nem gépeli őket. Olvasható forrás soha nem kerül várólistára pusztán az adathordozója miatt.",
       "heldForReview": "Ellenőrzésre visszatartva",
       "holdOutOfScoring": "Kihagyás a pontozásból",
       "inScoring": "Pontozásban",
@@ -229,10 +228,10 @@
       "title": "Referenciatények"
     },
     "claimDetail": {
-      "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak — az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
+      "escalatedReview": "Továbbítva a bizonyítékkezelő csapatnak; az alapul szolgáló ellentmondás feloldásáig itt nincs megerősíthető vagy vitatható következtetés.",
       "flagDispute": "Vita megjelölése",
       "humanReview": "Emberi ellenőrzés",
-      "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik — a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
+      "interpretationCaveat": "Az egyik figyelembe vett tényhez lényeges értelmezési fenntartás tartozik: a bizonyíték jelentése bizonytalan, nem pedig az adathordozó, amelyen érkezett.",
       "notVerifiable": {
         "reopen": "Újranyitás → összevetés a nyilvántartással",
         "reopenExplanation": "<strong>Nem ellenőrizhetőként félretéve.</strong> Ha ez az állítás mégis ellenőrizhető, nyissa újra: az AVT megőrzi az átsorolást, és csak a korábban kihagyott nyilvántartás-ellenőrzést futtatja le.",
@@ -242,15 +241,15 @@
         "add": "Megjegyzés / javítás hozzáadása",
         "heading": "Saját megjegyzés · {savedAt}",
         "headingUndated": "Saját megjegyzés",
-        "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést — nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
+        "placeholder": "Rögzítsen egy javítást vagy magyarázatot. A mentés csak ehhez az állításhoz rögzíti a megjegyzést; nem módosítja a következtetést vagy a referenciatény-nyilvántartást.",
         "saveCorrection": "Javítás mentése"
       },
       "overridden": "Felülírva",
-      "overrideNotice": "A következtetés felülírva erre: <strong>{verdict}</strong> — az eszköz saját elemzése változatlanul látható alább.",
+      "overrideNotice": "A következtetés felülírva erre: <strong>{verdict}</strong>; az eszköz saját elemzése változatlanul látható alább.",
       "overrideTooltip": "Egy ellenőr eltérő következtetést rögzített. Az eszköz saját elemzése változatlanul látható alább.",
       "overrideVerdict": "Következtetés felülírása",
       "recordConflict": {
-        "description": "Két referenciatény ugyanarra a kérdésre vonatkozik — <strong>{subject}</strong> —, de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli — az eszköz nem dönthet erről észrevétlenül.",
+        "description": "Két referenciatény ugyanarra a kérdésre vonatkozik (<strong>{subject}</strong>), de ellentmond egymásnak. Mindkettő <strong>nagy bizonyosságú</strong> forrásból származik, ezért ez nem megbízhatósági probléma: maga a nyilvántartás belsőleg ellentmondásos. Az AVT nem ad következtetést és nem pontozza az állítást, mert annak eldöntése és rögzítése, hogy melyik adat legyen irányadó, az Ön mérlegelését igényli; az eszköz nem dönthet erről észrevétlenül.",
         "escalatedNotice": "Megjelölve a bizonyítékkezelő csapatnak. A nyilvántartási ellentmondás mindaddig nyitott és beleszámít az összesítésbe, amíg nincs kiválasztva az irányadó nyilvántartás.",
         "flagForEvidenceTeam": "Megjelölés a bizonyítékkezelő csapatnak",
         "governed": "<strong>{value}</strong> az irányadó: az állítást e nyilvántartás alapján ítéljük meg. A másik nyilvántartás megmarad.",
@@ -267,46 +266,46 @@
       "score": {
         "anchorFactsDisagree": "A referenciatények ellentmondanak egymásnak",
         "conflictCount": "{count, plural, one {# ellentmondás} other {# ellentmondás}}",
-        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent — egyelőre nincs mihez viszonyítani az állítást.",
-        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el — például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
+        "noCoverage": "<strong>A nyilvántartás nem tartalmaz erre vonatkozó adatot.</strong> Az adatbázis egyetlen referenciaténye sem foglalkozik ezzel az állítással. Ez nem gyenge értékelést jelent: egyelőre nincs mihez viszonyítani az állítást.",
+        "notVerifiable": "<strong>Nem ellenőrizhető állítás.</strong> Ezt a fajta állítást egyetlen irat sem döntheti el: például feltételezés, előrejelzés, szándéknyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás helyett félretesszük.",
         "outOf100": "<strong>/ 100</strong> alátámasztottsági pontszám",
         "supportCount": "{count, plural, one {# alátámasztó tény} other {# alátámasztó tény}}",
         "verdictWithheld": "Következtetés visszatartva"
       },
       "sourceCount": "{count, plural, one {# forrás} other {# forrás}}",
-      "whyScore": "A pontszám indoka — referenciatények"
+      "whyScore": "A pontszám indoka: referenciatények"
     },
     "claimTypes": {
       "fact": {
-        "hint": "Objektív, ellenőrizhető állítás — a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
+        "hint": "Objektív, ellenőrizhető állítás; a nyilvántartás alapján pontozzuk. Ide tartoznak a beismerésként vagy tagadásként megfogalmazott állítások is: az alapul szolgáló kijelentést értékeljük, nem pusztán a szavakat."
       },
       "opinion": {
-        "hint": "Értékítélet vagy minősítés — egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
+        "hint": "Értékítélet vagy minősítés: egyetlen irat sem tudja megerősíteni vagy cáfolni, ezért pontozás nélkül félretesszük.",
         "label": "Vélemény"
       },
       "setAside": "félretéve",
       "unverifiable": {
-        "hint": "Olyan állítás, amelyet egyetlen irat sem dönthet el — feltételezés, előrejelzés, szándék- vagy véleménynyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás nélkül félretesszük. Nem azonos a Nincs lefedettség állapottal, amely ellenőrizhető tényt jelöl, de a nyilvántartás nem tartalmaz róla adatot.",
+        "hint": "Olyan állítás, amelyet egyetlen irat sem dönthet el: feltételezés, előrejelzés, szándék- vagy véleménynyilatkozat, jogi következtetés vagy túl homályos állítás. Pontozás nélkül félretesszük. Nem azonos a Nincs lefedettség állapottal, amely ellenőrizhető tényt jelöl, de a nyilvántartás nem tartalmaz róla adatot.",
         "label": "Nem ellenőrizhető"
       }
     },
     "confidence": {
       "interpretation": "Értelmezés",
-      "tooltip": "Értelmezési bizonyosság — mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
+      "tooltip": "Értelmezési bizonyosság: mennyire egyértelmű e bizonyíték jelentése. Független a forrás adathordozójától (kézírás, szkennelt kép stb.)."
     },
     "confirm": {
       "acknowledge": "Tudomásul veszem",
       "recordConflict": "Feloldás megerősítése",
-      "supported": "Megerősítés — kész",
+      "supported": "Megerősítés: kész",
       "verdict": "Következtetés megerősítése"
     },
     "disposition": {
-      "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott — jóváhagyás előtt érdemes átnézni.",
+      "contested": "A következtetés egyértelmű, de az egyik figyelembe vett tény értelmezése vitatott; jóváhagyás előtt érdemes átnézni.",
       "contradicted": "A nyilvántartás eltér ettől az állítástól. A következtetés jóváhagyásához emberi döntés szükséges.",
       "nocover": "Egyetlen referenciatény sem foglalkozik ezzel az állítással, ezért nincs mihez viszonyítani. A jóváhagyás nem kötelező.",
-      "notverifiable": "Nem ellenőrizhetőként félretéve — a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
-      "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak — az eszköz nem dönt Ön helyett.",
-      "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte — nincs szükség mérlegelésre.",
+      "notverifiable": "Nem ellenőrizhetőként félretéve; a jóváhagyás nem kötelező. Ha mégis ellenőrizhető, nyissa újra alább.",
+      "recordconflict": "Az ügyirat két bizonyítéka ellentmond egymásnak. Fent válassza ki az irányadó bizonyítékot, vagy jelezze a bizonyítékkezelő csapatnak; az eszköz nem dönt Ön helyett.",
+      "supported": "A nyilvántartás megerősíti ezt az állítást. Jóváhagyásával azt igazolja, hogy az eszköz helyesen értelmezte; nincs szükség mérlegelésre.",
       "tension": "A nyilvántartás csak részben támasztja alá ezt az állítást. A következtetés jóváhagyása előtt mérlegelje a fenti alátámasztó és ellentmondó tényeket."
     },
     "documents": {
@@ -365,7 +364,7 @@
       "failed": "Nincs mentve",
       "failedTitle": "A módosítás mentése sikertelen volt"
     },
-    "sourceMediumTooltip": "A forrás adathordozója — semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
+    "sourceMediumTooltip": "A forrás adathordozója: semleges leíró adat. Önmagában nem csökkenti a bizonyosságot.",
     "states": {
       "contradicted": {
         "chip": "Cáfolt",
@@ -395,7 +394,7 @@
     "verification": {
       "acceptRoutine": "{count, plural, one {# rutinjellegű állítás} other {# rutinjellegű állítás}} elfogadása",
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
-      "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
+      "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong>: ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
       "documentView": {
         "label": "Dokumentumnézet",
@@ -1412,6 +1411,18 @@
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
+    "anonymizationPreview": {
+      "answer": "<person1>Kovács Éva</person1> késedelmi kamattal együtt követelheti <person2>Szabó Gábortól</person2> a tartozást.",
+      "off": "Az anonimizált AI mód ki van kapcsolva: az AI úgy kapja meg a szöveget, ahogy megírta, a személyes adatokkal együtt.",
+      "on": "Az anonimizált AI mód be van kapcsolva: a személyes adatok küldés előtt helyőrzőkre cserélődnek, a válaszban pedig visszaállnak.",
+      "prompt": "Írj választ <person1>Kovács Évának</person1> (személyi azonosító <nationalId>2-851212-4219</nationalId>, <address>Fő utca 14., Debrecen</address>) a <person2>Szabó Gábortól</person2> követelt tartozásról.",
+      "steps": {
+        "answered": "Az AI válaszol",
+        "restored": "Ön olvassa",
+        "sent": "Az AI megkapja",
+        "written": "Ön írja"
+      }
+    },
     "anonymizedMode": "Anonimizált AI mód",
     "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
     "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",
@@ -1518,7 +1529,7 @@
       "updatingDescription": "A stella bővítménye régebbi verzió. A Chrome automatikusan frissíti, általában néhány órán belül; utána a stella ismét megnyithat és elolvashat weboldalakat Önnek."
     },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
-    "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
+    "caseLawGreeting": "Kérdezzen erről a határozatról; a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI-csevegésbe",
     "choosePromptImprovementStrategy": "Promptjavítási lehetőségek",
     "commandsSection": "Parancsok",
@@ -1668,6 +1679,28 @@
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
     "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
     "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
+    "localRun": {
+      "cloud": "stella-felhő",
+      "errorLimitReached": "A számítógépén futó kódoló ügynök elérte a használati korlátját. Próbálja újra, amint a korlát visszaáll.",
+      "errorNeedsLogin": "A számítógépén futó kódoló ügynök újbóli bejelentkezést kér. Jelentkezzen be a stella desktopban, majd próbálja újra.",
+      "errorUnavailable": "A számítógépe leállította ennek a válasznak a feldolgozását. Ellenőrizze, hogy a stella desktop meg van nyitva és csatlakozik, majd próbálja újra.",
+      "onThisComputer": "{harness} ezen a számítógépen",
+      "refusalConflictingRunMode": "Ez a kérés egyszerre futna a felhőbeli ügynökkel és a számítógépén. Válasszon egyet a Futtatás itt menüben.",
+      "refusalHarnessUnavailable": "A számítógépén futó kódoló ügynök most nem tudja fogadni ezt a kérést. Ellenőrizze a stella desktopban.",
+      "refusalModelUnavailable": "A számítógépén futó kódoló ügynök már nem kínálja ezt a modellt. Válasszon másikat a Futtatás itt menüben.",
+      "refusalNoComputer": "Egyik számítógépe sem csatlakozik. Nyissa meg a stella desktopot, majd küldje el újra.",
+      "refusalTooLarge": "Ez a beszélgetés túl hosszú ahhoz, hogy átadja a számítógépének. Kezdjen új csevegést, hogy ott futtassa.",
+      "refusalUnavailable": "A csevegések futtatása a számítógépén nem érhető el a fiókjában.",
+      "runOn": "Futtatás itt",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Korlát elérve eddig: {time}",
+      "stateNeedsLogin": "Bejelentkezés szükséges",
+      "stateNotInstalled": "Nincs telepítve",
+      "stateOffline": "A számítógép offline",
+      "stateUnavailable": "Jelenleg nem érhető el",
+      "stateUnsupported": "Ez a verzió nem támogatott",
+      "waitingForComputer": "Várakozás a számítógép újracsatlakozására…"
+    },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# további} other {+# további}}",
@@ -1888,6 +1921,7 @@
       "boe_search_legislation": "BOE jogszabálykeresés",
       "borme_get_summary": "BORME napi összefoglaló",
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
+      "command_execution": "Parancs futtatása",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
       "connect_connector": "Csatlakozó csatlakoztatásának kérése",
@@ -1913,9 +1947,12 @@
       "execute_typescript": "Ügyadatok olvasása",
       "expand-chat-history": "Csevegési előzmények olvasása",
       "fetch_url": "Oldal olvasása",
+      "file_change": "Fájlok módosítása",
       "fill_template": "Sablon kitöltése",
       "find_text": "Szöveg keresése a dokumentumban",
       "get_document_outline": "Dokumentum vázlatának olvasása",
+      "harness_unsupported_item": "A stella által nem megjeleníthető lépés",
+      "harness_web_search": "Keresés a weben",
       "infosoud_lookup_case": "InfoSoud ügykeresés",
       "link_matter_contact": "Kapcsolat társítása ügyhöz",
       "list_stories": "Dokumentumrészek listázása",
@@ -1932,7 +1969,9 @@
       "remember": "Mentés a memóriába",
       "remove_matter_member": "Ügytag eltávolítása",
       "reply_comment": "Megjegyzés megválaszolása",
+      "request_permissions": "Engedélyek kérése",
       "request_secret": "Privát hitelesítő adat kérése",
+      "request_user_input": "Pontosítás kérése",
       "resolve_comment": "Megjegyzés megoldása",
       "review_folder_consistency": "Mappa konzisztenciájának ellenőrzése",
       "run-stella-query": "Ügyadatok olvasása",
@@ -1974,7 +2013,7 @@
       "characterCount": "{count, plural, one {# karakter} other {# karakter}}",
       "consoleLogs": "Konzolkimenet",
       "exactCall": "Pontos hívás",
-      "failed": "Ez a lépés nem sikerült — a stella másképp oldja meg.",
+      "failed": "Ez a lépés nem sikerült; a stella másképp oldja meg.",
       "field": "Mező",
       "input": "Bemenet",
       "interrupted": "Befejezés előtt megszakadt",
@@ -1999,13 +2038,12 @@
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
-    "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak.",
+    "usageFallbackNotice": "A napi AI-keret elfogyott; a válaszok a normál modellen folytatódnak.",
     "videoContent": "Generált videó",
     "webSearch": {
       "answer": "Webes keresés összefoglalója",
       "answerDisclaimer": "Az alábbi nyilvános webes találatokból összeállítva. Ellenőrizze a hivatkozott források alapján.",
       "fetchedFrom": "{source} forrásból",
-      "openSource": "{source} megnyitása új lapon",
       "sources": "Források",
       "toggleDescription": "Engedélyezi a modellnek, hogy ebben a beszélgetésben a nyilvános weben keressen és oldalakat olvasson.",
       "toggleLabel": "Webes keresés",
@@ -2359,6 +2397,7 @@
     "notes": "Megjegyzések",
     "open": "Megnyitás",
     "openInNewTab": "Megnyitás új lapon",
+    "openInSidePanel": "Megnyitás az oldalpanelen",
     "openInStella": "Megnyitás a Stellában",
     "openOriginalSource": "Eredeti forrás megnyitása",
     "options": "Beállítások",
@@ -2752,6 +2791,11 @@
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
       "undoImport": "Importálás visszavonása ({count})",
+      "undoImportConfirm": "Véglegesen törli az importálással létrehozott {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+      "undoImportTitle": "Visszavonja ezt az importálást?",
+      "undoneRow": "Visszavonással eltávolítva",
+      "undoneSummary": "A visszavonás {count, plural, one {# létrehozott névjegyet} other {# létrehozott névjegyet}} távolított el.",
+      "undoneToast": "Importálás visszavonva: {count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
@@ -3193,7 +3237,6 @@
     "noFileInVersion": "Nincs fájl ebben a verzióban",
     "noFullScreenPreview": "Ehhez a fájltípushoz nincs teljes képernyős előnézet.",
     "noLabel": "Nincs címke",
-    "openInSidePanel": "Megnyitás az oldalpanelen",
     "redlinePreview": "Követett módosítások",
     "removeLabel": "Címke eltávolítása",
     "saveComparison": "Összehasonlítás mentése",
@@ -4313,7 +4356,7 @@
       "derivedQuestion": "Kinyerési kérdés",
       "derivedType": "Válaszformátum",
       "descriptionPlaceholder": "Mit ellenőriz ez a playbook?",
-      "disabledBadge": "Kikapcsolva — a futtatások kihagyják",
+      "disabledBadge": "Kikapcsolva: a futtatások kihagyják",
       "discardChanges": "Módosítások elvetése",
       "duplicatePosition": "Álláspont duplikálása",
       "empty": "Még nincsenek playbookok",
@@ -4328,7 +4371,7 @@
         "restricted": "A válasznak hiányoznia kell"
       },
       "extractOnlyBadge": "Csak kinyerés",
-      "extractOnlyDescription": "Nincs értékelés — az érték bekerül a táblázatba.",
+      "extractOnlyDescription": "Nincs értékelés; az érték bekerül a táblázatba.",
       "extraction": "Kinyerés",
       "extractionAuto": "Automatikus",
       "extractionManual": "Kézi",
@@ -4730,7 +4773,7 @@
     "continue": "Folytatás",
     "enterTeamName": "Adja meg fent a csapat nevét",
     "getStarted": "Kezdés",
-    "inviteExternal": "Külső felhasználó — hozzáférést kap a dokumentumaihoz",
+    "inviteExternal": "Külső felhasználó: hozzáférést kap a dokumentumaihoz",
     "inviteHint": "Több címet vesszővel válasszon el, vagy illesszen be egy listát.",
     "inviteInvalidEmail": "Érvénytelen e-mail: {value}",
     "inviteSubtitle": "E-mailt kapnak egy csatlakozási linkkel.",
@@ -5561,7 +5604,7 @@
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "promptCaching": {
-        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
+        "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak; csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
         "toggleLabel": "Prompt gyorsítótárazás engedélyezése az AI-szolgáltatóknál"
       },
@@ -5675,6 +5718,7 @@
     "citingDecisionsSortCitations": "A rendelkezés említései",
     "citingDecisionsSortDate": "A határozat dátuma",
     "citingDecisionsYear": "A határozat éve",
+    "citingDecisionsYearOutOfRange": "Adjon meg egy évet {min} és {max} között.",
     "citingDecisionsYearPlaceholder": "Minden év",
     "columns": {
       "act": "Jogszabály",
@@ -5720,7 +5764,6 @@
     "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
-    "openProvision": "Rendelkezés megnyitása",
     "outline": "Tartalom",
     "outlineJumpLabel": "Ugrás rendelkezéshez",
     "outlineJumpPlaceholder": "§ 10 vagy cím",
@@ -6202,7 +6245,7 @@
       "fieldSettingBrackets": "A sablonjelölő nem tartalmazhat kapcsos zárójelet. Távolítsa el őket a(z) „{fieldPath}” beállításaiból.",
       "fieldWithoutMarker": "A(z) „{fieldPath}” mezőnek nincs jelölője a dokumentumban, ezért a beállításai nem lettek mentve.",
       "fillFormPreview": "Így jelenik meg az űrlapon",
-      "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
+      "fillStale": "Mentetlen módosítások; mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",
       "formulaExampleLabel": "Példa",
       "formulaNoFields": "Először adjon hozzá egy számmezőt, hogy a képletnek legyen mit kiszámítania.",
@@ -6499,6 +6542,9 @@
       "calculating": "Számítás...",
       "errored": "Hiba",
       "formatNotSupported": "Formátum nem támogatott",
+      "recordChoose": "{count, plural, one {# találat megerősítése} other {Válasszon # találat közül}}",
+      "recordCount": "{count, plural, one {# rekord} other {# rekord}}",
+      "recordNotFound": "Nem található",
       "selectAValue": "Válasszon értéket",
       "selectValues": "Válasszon értékeket",
       "wholeNumberOnly": "Adjon meg egy egész számot"
@@ -6965,7 +7011,7 @@
       "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
       "personalLabel": "Személyes",
       "promoteCta": "Előléptetés ügyfélüggyé",
-      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
+      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges: az előléptetett ügy nem vonható vissza személyesre.",
       "promoteToClientConfirm": "A(z) <bdi>{matterName}</bdi> ügyet hozzárendeljük a(z) <bdi>{clientName}</bdi> ügyfélhez, és megosztjuk a csapattal. Ezután nem állítható vissza személyesre.",
       "promotedSuccess": "Ügy előléptetve",
       "recentClients": "Legutóbbi ügyfelek",
@@ -7185,12 +7231,13 @@
       "optionsLabel": "Lehetőségek",
       "person": "Személy",
       "previewEmpty": "Az AI nem adott vissza értéket.",
-      "previewMockNotice": "Mock előnézet — a háttér még nincs bekötve.",
+      "previewMockNotice": "Mock előnézet: a háttér még nincs bekötve.",
       "previewOnFirst": "Előnézet: {document}",
       "previewSkipped": "Ezen a dokumentumon nincs alkalmazható bemenet.",
       "previewSubject": "Próbálja ki egy mintán",
       "previewUnsupported": "Az előnézet ehhez a dokumentumtípushoz nem támogatott.",
       "readingFrom": "Az AI innen olvas:",
+      "record": "Rekord",
       "referencesItself": "A tulajdonság más tulajdonságokon keresztül hivatkozik önmagára",
       "resultType": "Eredmény típusa",
       "returnsLabel": "Formátum",
