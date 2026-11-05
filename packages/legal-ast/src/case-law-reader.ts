@@ -103,6 +103,34 @@ export const visibleDecisionBlocks = (
 };
 
 /**
+ * The first paragraph of a decision's separate opinions: the one the court
+ * gave the `dissent` role. The AST marks where the opinions are, not whose
+ * each one is.
+ */
+export const firstDissentBlock = (
+  blocks: readonly Block[],
+): ParagraphBlock | null =>
+  blocks.find(
+    (block): block is ParagraphBlock =>
+      block.type === "paragraph" && block.role === "dissent",
+  ) ?? null;
+
+/**
+ * Where a reader lands to read the separate opinions: the heading that opens
+ * them when the court printed one right above, else their first paragraph.
+ */
+export const separateOpinionStartAnchorId = (
+  blocks: readonly Block[],
+): string | null => {
+  const first = firstDissentBlock(blocks);
+  if (first === null) {
+    return null;
+  }
+  const opener = blocks[blocks.indexOf(first) - 1];
+  return opener?.type === "heading" ? opener.anchorId : first.anchorId;
+};
+
+/**
  * The pieces of a decision's AST the reader shows and lets someone select.
  * The reader's check before Explain and every server read of a decision for
  * Explain or for a mark use this one list, so the server never accepts or

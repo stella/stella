@@ -40,7 +40,6 @@
     "organizationId": "ID da organização",
     "organizationLeft": "Você saiu da organização.",
     "planAndUsage": "Plano e uso",
-    "title": "Administração da organização",
     "toolsDescription": "Ative ou desative as ferramentas integradas para todas as pessoas desta organização."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Ver na decisão",
+      "unverified": "Citação não verificada",
+      "unverifiedHint": "As decisões citadas não contêm este texto palavra por palavra",
       "verified": "Citação verificada",
       "verifiedHint": "Palavra por palavra em {source}"
     },
@@ -1681,9 +1682,26 @@
     "loadEarlierMessagesError": "Não foi possível carregar as mensagens anteriores",
     "loadingEarlierMessages": "Carregando mensagens anteriores…",
     "localRun": {
+      "cloud": "Nuvem da stella",
       "errorLimitReached": "O agente de programação do seu computador atingiu o limite de uso. Tente de novo quando o limite for renovado.",
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
-      "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo."
+      "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
+      "onThisComputer": "{harness} neste computador",
+      "refusalConflictingRunMode": "Esta solicitação pede para rodar com o agente na nuvem e no seu computador ao mesmo tempo. Escolha um em Executar em.",
+      "refusalHarnessUnavailable": "O agente de programação do seu computador não pode atender a esta solicitação agora. Verifique-o no stella desktop.",
+      "refusalModelUnavailable": "O agente de programação do seu computador não oferece mais este modelo. Escolha outro em Executar em.",
+      "refusalNoComputer": "Nenhum dos seus computadores está conectado. Abra o stella desktop e envie de novo.",
+      "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
+      "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
+      "runOn": "Executar em",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limite atingido até {time}",
+      "stateNeedsLogin": "É preciso entrar",
+      "stateNotInstalled": "Não instalado",
+      "stateOffline": "Computador offline",
+      "stateUnavailable": "Indisponível no momento",
+      "stateUnsupported": "Esta versão não é compatível",
+      "waitingForComputer": "Aguardando seu computador se reconectar…"
     },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {
@@ -1887,7 +1905,7 @@
       "unavailable": "Não foi possível selecionar um gráfico. A tabela é exibida.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Trabalhando com contexto",
+    "thinking": "Raciocinando",
     "threadFiles": {
       "title": "Arquivos deste chat"
     },
@@ -1905,6 +1923,7 @@
       "boe_search_legislation": "Busca no BOE",
       "borme_get_summary": "Resumo diário BORME",
       "business_registry_lookup": "Buscando no registro de empresas",
+      "command_execution": "Executando um comando",
       "compare_versions": "Comparando versões",
       "configure_template_fields": "Configurar campos do modelo",
       "connect_connector": "Solicitando a conexão de um conector",
@@ -1930,9 +1949,12 @@
       "execute_typescript": "Lendo dados do caso",
       "expand-chat-history": "Lendo o histórico do chat",
       "fetch_url": "Lendo página",
+      "file_change": "Alterando arquivos",
       "fill_template": "Preenchendo modelo",
       "find_text": "Pesquisando texto do documento",
       "get_document_outline": "Lendo a estrutura do documento",
+      "harness_unsupported_item": "Etapa que a stella não consegue mostrar",
+      "harness_web_search": "Pesquisando na web",
       "infosoud_lookup_case": "Busca de processo no InfoSoud",
       "link_matter_contact": "Vincular contato ao caso",
       "list_stories": "Listando partes do documento",
@@ -1949,7 +1971,9 @@
       "remember": "Salvando na memória",
       "remove_matter_member": "Remover membro do caso",
       "reply_comment": "Respondendo ao comentário",
+      "request_permissions": "Solicitando permissões",
       "request_secret": "Solicitando uma credencial privada",
+      "request_user_input": "Pedindo esclarecimento",
       "resolve_comment": "Resolvendo comentário",
       "review_folder_consistency": "Verificando a consistência da pasta",
       "run-stella-query": "Lendo dados do caso",
@@ -2009,6 +2033,11 @@
       "replyReadyBody": "A stella terminou de responder no seu chat.",
       "replyReadyTitle": "Resposta pronta"
     },
+    "turnStatus": {
+      "waitingForApproval": "Aguardando aprovação",
+      "waitingForInput": "Aguardando informações",
+      "writing": "Escrevendo"
+    },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
     "usageFallbackNotice": "Cota diária de IA esgotada; as respostas continuam no modelo padrão.",
@@ -2017,7 +2046,6 @@
       "answer": "Resumo da pesquisa na web",
       "answerDisclaimer": "Sintetizado a partir dos resultados públicos da web abaixo. Verifique nas fontes vinculadas.",
       "fetchedFrom": "de {source}",
-      "openSource": "Abrir {source} em uma nova aba",
       "sources": "Fontes",
       "toggleDescription": "Permitir que o modelo pesquise na web pública e leia páginas nesta conversa.",
       "toggleLabel": "Busca na web",
@@ -2371,6 +2399,7 @@
     "notes": "Notas",
     "open": "Abrir",
     "openInNewTab": "Abrir em nova aba",
+    "openInSidePanel": "Abrir no painel lateral",
     "openInStella": "Abrir no stella",
     "openOriginalSource": "Abrir fonte original",
     "options": "Opções",
@@ -2764,6 +2793,11 @@
       "taxIdSchemeNone": "Sem validação da identificação fiscal",
       "title": "Importar contatos",
       "undoImport": "Desfazer importação ({count})",
+      "undoImportConfirm": "Excluir permanentemente {count, plural, one {o contato criado} many {os # contatos criados} other {os # contatos criados}} por esta importação? Esta ação não pode ser desfeita.",
+      "undoImportTitle": "Desfazer esta importação?",
+      "undoneRow": "Removido ao desfazer",
+      "undoneSummary": "Desfazer removeu {count, plural, one {# contato criado} many {# contatos criados} other {# contatos criados}} por esta importação.",
+      "undoneToast": "Importação desfeita: {count, plural, one {# contato excluído} many {# contatos excluídos} other {# contatos excluídos}}",
       "validateFailed": "Não foi possível verificar estes contatos.",
       "warning": {
         "ignored_populated_column": "A coluna “{column}” contém dados, mas será ignorada.",
@@ -3205,7 +3239,6 @@
     "noFileInVersion": "Nenhum arquivo nesta versão",
     "noFullScreenPreview": "Este tipo de arquivo não tem visualização em tela cheia.",
     "noLabel": "Sem rótulo",
-    "openInSidePanel": "Abrir no painel lateral",
     "redlinePreview": "Controle de alterações",
     "removeLabel": "Remover rótulo",
     "saveComparison": "Salvar comparação",
@@ -5687,6 +5720,7 @@
     "citingDecisionsSortCitations": "Menções a este dispositivo",
     "citingDecisionsSortDate": "Data da decisão",
     "citingDecisionsYear": "Ano da decisão",
+    "citingDecisionsYearOutOfRange": "Informe um ano entre {min} e {max}.",
     "citingDecisionsYearPlaceholder": "Todos os anos",
     "columns": {
       "act": "Norma",
@@ -5732,7 +5766,6 @@
     "leadingDecisionsExplanation": "A primeira menção em cada decisão, classificada pela autoridade da citação: citações recebidas ponderadas, ajustadas pelo nível do tribunal, pela polaridade da citação e pela idade.",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
-    "openProvision": "Abrir o dispositivo",
     "outline": "Sumário",
     "outlineJumpLabel": "Ir para um dispositivo",
     "outlineJumpPlaceholder": "§ 10 ou um título",
@@ -6511,6 +6544,9 @@
       "calculating": "Calculando...",
       "errored": "Erro",
       "formatNotSupported": "Formato não suportado",
+      "recordChoose": "{count, plural, one {Confirmar # correspondência} many {Escolher entre # correspondências} other {Escolher entre # correspondências}}",
+      "recordCount": "{count, plural, one {# registro} many {# registros} other {# registros}}",
+      "recordNotFound": "Não encontrado",
       "selectAValue": "Selecione um valor",
       "selectValues": "Selecione valores",
       "wholeNumberOnly": "Insira um número inteiro"
@@ -7203,6 +7239,7 @@
       "previewSubject": "Experimente em uma amostra",
       "previewUnsupported": "A visualização não é compatível com este tipo de documento.",
       "readingFrom": "A IA lê de",
+      "record": "Registro",
       "referencesItself": "A propriedade faz referência a si mesma por meio de outras propriedades",
       "resultType": "Tipo de resultado",
       "returnsLabel": "Formato",

@@ -324,24 +324,30 @@ const SourceChip = ({
   };
 
   return (
-    <button
+    <Button
       className={cn(
-        "inline-flex max-w-full min-w-0 shrink-0 items-center gap-1 rounded-md border",
-        "bg-muted/50 px-1.5 py-0.5 text-xs",
-        resolvedWorkspaceId
-          ? "hover:bg-muted cursor-pointer"
-          : "cursor-default",
+        "group/plain max-w-full min-w-0 shrink-0",
+        !resolvedWorkspaceId && "cursor-default",
       )}
       onClick={handleClick}
-      type="button"
+      variant="plain"
     >
-      <SourceIcon
-        sourceDocument={sourceDocument}
-        workspaceId={resolvedWorkspaceId}
-      />
-      <BidiText as="span" className="max-w-full min-w-0 truncate">
-        {sourceDocument.title}
-      </BidiText>
-    </button>
+      {/* The chip draws itself: a hairline pill in the answer's own type,
+          lit while pointed at when it opens a document. */}
+      <span
+        className={cn(
+          "bg-muted/50 text-foreground inline-flex max-w-full min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
+          resolvedWorkspaceId && "group-hover/plain:bg-muted",
+        )}
+      >
+        <SourceIcon
+          sourceDocument={sourceDocument}
+          workspaceId={resolvedWorkspaceId}
+        />
+        <BidiText as="span" className="max-w-full min-w-0 truncate">
+          {sourceDocument.title}
+        </BidiText>
+      </span>
+    </Button>
   );
 };

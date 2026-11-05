@@ -42,8 +42,17 @@ type ColorPickerProps = {
   defaultExpanded?: boolean;
   /** Localized label for expanding the custom color controls. */
   moreLabel: string;
-  /** Popover trigger element */
-  children: React.ReactNode;
+  /**
+   * The popover trigger: one focusable element (normally a named button)
+   * that becomes the trigger itself, so the picker never wraps it in a
+   * second, unnamed button.
+   */
+  trigger: React.ReactElement;
+  /**
+   * Whether `trigger` renders a native `<button>` (default). Pass `false`
+   * only for a non-button element; Base UI then gives it button semantics.
+   */
+  nativeButton?: boolean;
   /** Popover placement side */
   side?: "top" | "bottom" | "left" | "right";
   /** Popover placement alignment */
@@ -479,7 +488,8 @@ const ColorPicker = ({
   columns = 9,
   defaultExpanded = false,
   moreLabel,
-  children,
+  nativeButton = true,
+  trigger,
   side = "bottom",
   align = "start",
   className,
@@ -487,11 +497,9 @@ const ColorPicker = ({
   <PopoverPrimitive.Root>
     <PopoverPrimitive.Trigger
       data-slot="color-picker-trigger"
-      nativeButton={false}
-      render={<div className="inline-flex" />}
-    >
-      {children}
-    </PopoverPrimitive.Trigger>
+      nativeButton={nativeButton}
+      render={trigger}
+    />
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
         align={align}

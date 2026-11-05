@@ -29,7 +29,7 @@
     "lint:fix": "cd ../.. && ([ -n \"$TURBO_HASH\" ] || bun run generate) && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "i18n:accept": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --accept",
     "i18n:brief": "bun ../../packages/scripts/src/i18n-brief.ts src/i18n/langs --usage-in=src --usage-in=scripts --usage-in=../../packages/ai-catalog/src",
-    "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --unused-in=src --unused-in=scripts --unused-in=../../packages/ai-catalog/src && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check && bun scripts/sync-withdrawn-decision-labels.ts --check",
+    "i18n:check": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --unused-in=src --unused-in=scripts --unused-in=../../packages/ai-catalog/src --unused-in=../../packages/workspace-ui/src && bun ../../packages/scripts/src/glossary-gen.ts src/i18n --check && bun ../../packages/scripts/src/i18n-lint.ts src/i18n/langs && bun scripts/sync-prepaint-locales.ts --check && bun scripts/sync-withdrawn-decision-labels.ts --check",
     "i18n:sync": "bun ../../packages/scripts/src/i18n-check.ts src/i18n/langs --sync && bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs && bun ../../packages/scripts/src/glossary-gen.ts src/i18n && bun scripts/sync-prepaint-locales.ts && bun scripts/sync-withdrawn-decision-labels.ts",
     "test": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
     "test:timings": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && mkdir -p .cache && bun test --parallel=2 --timings=.cache/e2e-unit-timings.json --update-timings e2e/unit",
@@ -73,6 +73,7 @@
     "@stll/api-client": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/auth-model": "workspace:*",
+    "@stll/brand": "workspace:*",
     "@stll/business-registries": "workspace:*",
     "@stll/calculations": "workspace:*",
     "@stll/catalogue": "workspace:*",
@@ -153,7 +154,6 @@
     "driver.js": "1.10.2",
     "immer": "^11.2.9",
     "isbot": "5.2.2",
-    "jszip": "catalog:",
     "katex": "^0.16.47",
     "lucide-react": "catalog:",
     "mdast-util-from-markdown": "2.1.0",
@@ -187,6 +187,7 @@
     "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:",
+    "zod": "^4.6.6",
     "zustand": "^5.0.16"
   },
   "devDependencies": {

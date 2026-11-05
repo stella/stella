@@ -32,6 +32,7 @@ import {
   SHADCN_LINT_SETTINGS,
   SIZE_LINT_POLICY_OVERRIDES,
   SIZE_LINT_RULES,
+  THIRD_PARTY_ARTWORK_FILES,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP, STATUS_TRANSITION_OWNERSHIP } from "./scripts/ownership.ts";
 import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.ts";
@@ -69,6 +70,117 @@ export const NO_RENDER_PHASE_UPDATE_GOVERNED_PATHS = [
   "apps",
   "packages",
 ] as const;
+
+// A colour is a theme token or a @stll/brand constant (DESIGN.md, Colour
+// Discipline). These are the only files where the colour rules are off, each
+// group with its reason: colour that is data rather than design, and the few
+// surfaces no stylesheet reaches, which name their palette once. Interface
+// chrome is never listed here.
+const COLOUR_RULES = [
+  "no-raw-color-literals/no-raw-color-literals",
+  "no-raw-color-literals/no-raw-pdf-color-operators",
+  "no-inline-style-colors/no-inline-style-colors",
+] as const;
+
+type ColourExemption = {
+  readonly reason: string;
+  readonly files: readonly string[];
+};
+
+const colourExemptions = [
+  {
+    reason: "The brand palette itself.",
+    files: ["packages/brand/src/palette.ts"],
+  },
+  {
+    reason:
+      "Tests, fixtures and browser-test harnesses assert the colours code " +
+      "produces or a file contains; they define no design. Other rules' " +
+      "fixtures are written to trigger those rules.",
+    files: [
+      "**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts}",
+      "**/__tests__/**",
+      "**/__fixtures__/**",
+      "**/fixtures/**",
+      "**/e2e/**",
+      "apps/api/src/tests/**",
+      "apps/desktop/tests/**",
+    ],
+  },
+  {
+    reason:
+      "Theme values written outside a stylesheet because none is loaded " +
+      "there: the sandboxed visual's fallback tokens (the host theme replaces " +
+      "them), the browser's theme-color meta and the desktop pre-paint, " +
+      "which carry the theme's resolved background. Tests pin the meta and " +
+      "the pre-paint to the resolved theme (apps/mobile/src/ui-theme.gen.ts).",
+    files: [
+      "apps/api/src/handlers/visual-sandbox/browser/presentation-css.ts",
+      "apps/web/src/routes/-root-head.ts",
+      "apps/desktop/src/mainview/public/prepaint-theme.js",
+      // React Native reads no CSS: the mobile theme is theme.css resolved to
+      // sRGB by scripts/generate-mobile-ui-theme.ts, checked in CI.
+      "apps/mobile/src/ui-theme.gen.ts",
+    ],
+  },
+  {
+    reason: "Third-party brand artwork, drawn in its owner's colours.",
+    files: [...THIRD_PARTY_ARTWORK_FILES],
+  },
+  {
+    reason:
+      "Colour choices offered to the user: preset swatches and the picker's " +
+      "spectrum are the values a user picks from and are stored as data.",
+    files: [
+      "packages/ui/src/components/color-picker.tsx",
+      "packages/ui/src/components/hex-color-picker.tsx",
+      "apps/desktop/src/clipboard/clipboard-style.ts",
+    ],
+  },
+  {
+    reason:
+      "The press kit's released swatches: published values a reader copies, " +
+      "changed only with a deliberate brand release.",
+    files: ["apps/landing/src/lib/press-kit-swatches.ts"],
+  },
+  {
+    reason:
+      "Document data: a user's file, a source's markup, a sample document or " +
+      "a file format's own default.",
+    files: [
+      // The hidden-text style the court's published HTML uses.
+      "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts",
+      // Class styles restored for the sender's own email markup.
+      "apps/api/src/lib/files/email-sender-styles.ts",
+      // Seeded sample emails and documents.
+      "apps/api/scripts/seed-content/**",
+      // The XLSX comment shape's fill is Excel's own comment default.
+      "apps/api/src/lib/views/table-export.ts",
+      // An awareness placeholder the collaboration server replaces; never drawn.
+      "apps/web/src/components/docx/use-folio-collaboration-room.ts",
+      // A third-party page's computed colours, compared to find hidden text.
+      "apps/extension/src/lib/tab-executor.ts",
+    ],
+  },
+  {
+    reason:
+      "Surfaces no stylesheet reaches name their palette once: mail clients " +
+      "drop CSS custom properties, the email preview is a standalone " +
+      "document, the OG card is rasterised SVG, and the CLI's sign-in page " +
+      "is served by the CLI itself.",
+    files: [
+      "packages/transactional/emails/_shared.ts",
+      "apps/api/src/lib/files/email-preview-palette.ts",
+      "apps/landing/src/lib/og-card.ts",
+      "packages/cli/src/auth/callback-page-theme.ts",
+    ],
+  },
+] as const satisfies readonly ColourExemption[];
+
+const colourExemptionOverrides = colourExemptions.map(({ files }) => ({
+  files: [...files],
+  rules: Object.fromEntries(COLOUR_RULES.map((rule) => [rule, "off"] as const)),
+}));
 
 // Only the rows that declare an enforcement kind reach the lint rule; the rest
 // document an owner that no rule can yet prove.
@@ -366,6 +478,10 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
+  ]),
+  fixtureRuleOverride("no-raw-color-literals.fixture.ts", [
+    "no-raw-color-literals/no-raw-color-literals",
+    "no-raw-color-literals/no-raw-pdf-color-operators",
   ]),
   fixtureRuleOverride("no-inline-heavy-host-props.fixture.tsx", [
     "no-inline-heavy-host-props/no-inline-heavy-host-props",
@@ -818,6 +934,19 @@ const noRetiredHttpFrameworkImports = [
   message:
     "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; the browser uses @stll/api-client.",
 }));
+
+// ZIP archives are read and written with @stll/docx-core/zip, whose reads
+// stay within the sizes an archive declares.
+const noRetiredZipImports = [
+  {
+    name: "jszip",
+    message: "Use ZipArchive from '@stll/docx-core/zip'.",
+  },
+  {
+    name: "client-zip",
+    message: "Use createZipStream from '@stll/docx-core/zip/stream'.",
+  },
+];
 
 // Transactional emails render through @stll/transactional's own components
 // and renderer: react-email brought a Tailwind compiler, a syntax
@@ -1397,6 +1526,11 @@ const config = defineConfig({
     "no-first-observer-entry/no-first-observer-entry": "error",
     "no-plan-scan-node-literals/no-plan-scan-node-literals": "error",
     "no-raw-colors/no-raw-colors": "error",
+    // Colour comes from the theme tokens or @stll/brand everywhere; the
+    // exemptions are `colourExemptions` above, each with its reason.
+    "no-raw-color-literals/no-raw-color-literals": "error",
+    "no-raw-color-literals/no-raw-pdf-color-operators": "error",
+    "no-inline-style-colors/no-inline-style-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
     // A `.then` callback returns or throws; `no-useless-return` is off below
@@ -1589,6 +1723,7 @@ const config = defineConfig({
           noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
+          ...noRetiredZipImports,
           ...noReactEmailImports,
         ],
       },
@@ -1622,7 +1757,6 @@ const config = defineConfig({
     "no-direct-clause-variant-insert/no-direct-clause-variant-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
-    "no-raw-zip-load/no-raw-zip-load": "error",
     "no-document-xml-element-regex/no-document-xml-element-regex": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
@@ -1937,6 +2071,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
+    "./.oxlint-plugins/no-raw-color-literals.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
     "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
@@ -2081,7 +2216,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
-    "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-document-xml-element-regex.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
@@ -2175,7 +2309,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
-    "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -2427,6 +2560,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
             ],
             patterns: noRetiredHttpFrameworkImportPatterns,
@@ -3360,21 +3494,6 @@ const config = defineConfig({
       ],
       rules: {
         "no-adhoc-email-fold/no-adhoc-email-fold": "error",
-      },
-    },
-    {
-      // Zip entry writes belong to writeZipEntry in @stll/docx-utils, which
-      // UTF-8 encodes text in one pass; JSZip's own string encoding splits
-      // surrogate pairs at its 16 KiB piece boundaries.
-      files: [
-        "apps/**/*.{ts,tsx}",
-        "packages/**/*.{ts,tsx}",
-        "scripts/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-string-zip-entry.fixture.ts",
-      ],
-      excludeFiles: ["packages/docx-utils/src/zip-entry.ts"],
-      rules: {
-        "no-string-zip-entry/no-string-zip-entry": "error",
       },
     },
     {
@@ -4462,6 +4581,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
@@ -4485,6 +4605,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
@@ -4511,6 +4632,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
             ],
             patterns: [
@@ -4543,6 +4665,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               workspaceUiUseIntlFormattingImport,
             ],
@@ -4720,6 +4843,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -4754,6 +4878,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -4796,6 +4921,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -5029,6 +5155,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -5068,6 +5195,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -5102,6 +5230,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -5144,6 +5273,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -5197,6 +5327,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -5248,6 +5379,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
@@ -6080,6 +6212,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
@@ -6104,6 +6237,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
@@ -6136,6 +6270,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               {
                 name: "@/api/db/root",
@@ -6172,6 +6307,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
@@ -6196,6 +6332,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -6223,6 +6360,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
@@ -6767,6 +6905,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               {
@@ -6826,6 +6965,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
             ],
@@ -6902,6 +7042,7 @@ const config = defineConfig({
               noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
@@ -7328,6 +7469,7 @@ const config = defineConfig({
         "require-valibot-message/require-valibot-message": "error",
       },
     },
+    ...colourExemptionOverrides,
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables
     // a tracked rule after this point would hand it back to a backlog file.

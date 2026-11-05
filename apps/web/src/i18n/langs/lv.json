@@ -40,7 +40,6 @@
     "organizationId": "Organizācijas ID",
     "organizationLeft": "Jūs pametāt organizāciju.",
     "planAndUsage": "Plāns un lietojums",
-    "title": "Organizācijas administrēšana",
     "toolsDescription": "Iespējojiet vai atspējojiet iebūvētos rīkus visiem šīs organizācijas dalībniekiem."
   },
   "agentClaim": {
@@ -1461,6 +1460,8 @@
     },
     "answerQuote": {
       "showInDecision": "Rādīt nolēmumā",
+      "unverified": "Citātu neizdevās pārbaudīt",
+      "unverifiedHint": "Citētajos nolēmumos šis teksts vārds vārdā nav atrodams",
       "verified": "Pārbaudīts citāts",
       "verifiedHint": "Vārds vārdā: {source}"
     },
@@ -1681,9 +1682,26 @@
     "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
     "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "localRun": {
+      "cloud": "stella mākonis",
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
-      "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz."
+      "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "onThisComputer": "{harness} šajā datorā",
+      "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
+      "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
+      "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
+      "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
+      "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
+      "runOn": "Palaist",
+      "selectionLabel": "{harness} · {model}",
+      "stateLimitUntil": "Limits sasniegts līdz {time}",
+      "stateNeedsLogin": "Jāpiesakās",
+      "stateNotInstalled": "Nav instalēts",
+      "stateOffline": "Dators ir bezsaistē",
+      "stateUnavailable": "Pašlaik nav pieejams",
+      "stateUnsupported": "Šī versija netiek atbalstīta",
+      "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
@@ -1887,7 +1905,7 @@
       "unavailable": "Neizdevās izvēlēties diagrammu. Tiek rādīta tabula.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Strādāju ar kontekstu",
+    "thinking": "Domāšana",
     "threadFiles": {
       "title": "Šīs tērzēšanas faili"
     },
@@ -1905,6 +1923,7 @@
       "boe_search_legislation": "BOE tiesību aktu meklēšana",
       "borme_get_summary": "BORME dienas kopsavilkums",
       "business_registry_lookup": "Meklēšana uzņēmumu reģistrā",
+      "command_execution": "Komandas izpilde",
       "compare_versions": "Versiju salīdzināšana",
       "configure_template_fields": "Konfigurēt veidnes laukus",
       "connect_connector": "Lūdz pievienot savienotāju",
@@ -1930,9 +1949,12 @@
       "execute_typescript": "Lietas datu lasīšana",
       "expand-chat-history": "Lasa tērzēšanas vēsturi",
       "fetch_url": "Lapas lasīšana",
+      "file_change": "Failu mainīšana",
       "fill_template": "Veidnes aizpildīšana",
       "find_text": "Teksta meklēšana dokumentā",
       "get_document_outline": "Dokumenta struktūras lasīšana",
+      "harness_unsupported_item": "Darbība, ko stella nevar parādīt",
+      "harness_web_search": "Meklēšana tīmeklī",
       "infosoud_lookup_case": "InfoSoud lietas meklēšana",
       "link_matter_contact": "Sasaistīt kontaktu ar lietu",
       "list_stories": "Dokumenta daļu uzskaitīšana",
@@ -1949,7 +1971,9 @@
       "remember": "Saglabāšana atmiņā",
       "remove_matter_member": "Noņemt lietas dalībnieku",
       "reply_comment": "Atbildēšana uz komentāru",
+      "request_permissions": "Atļauju pieprasīšana",
       "request_secret": "Pieprasa privātu piekļuves informāciju",
+      "request_user_input": "Precizējuma pieprasīšana",
       "resolve_comment": "Komentāra atrisināšana",
       "review_folder_consistency": "Mapes konsekvences pārbaude",
       "run-stella-query": "Lietas datu lasīšana",
@@ -2009,6 +2033,11 @@
       "replyReadyBody": "stella pabeidza atbildēt jūsu tērzēšanā.",
       "replyReadyTitle": "Atbilde gatava"
     },
+    "turnStatus": {
+      "waitingForApproval": "Gaida apstiprinājumu",
+      "waitingForInput": "Gaida ievadi",
+      "writing": "Raksta"
+    },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
     "usageFallbackNotice": "Dienas AI apjoms izlietots; atbildes turpinās ar standarta modeli.",
@@ -2017,7 +2046,6 @@
       "answer": "Tīmekļa meklēšanas kopsavilkums",
       "answerDisclaimer": "Apkopots no zemāk redzamajiem publiskās tīmekļa meklēšanas rezultātiem. Pārbaudiet pēc norādītajiem avotiem.",
       "fetchedFrom": "no {source}",
-      "openSource": "Atvērt {source} jaunā cilnē",
       "sources": "Avoti",
       "toggleDescription": "Atļaut modelim šajā sarunā meklēt publiskajā tīmeklī un lasīt lapas.",
       "toggleLabel": "Meklēšana tīmeklī",
@@ -2371,6 +2399,7 @@
     "notes": "Piezīmes",
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
+    "openInSidePanel": "Atvērt sānu panelī",
     "openInStella": "Atvērt lietotnē stella",
     "openOriginalSource": "Atvērt sākotnējo avotu",
     "options": "Iespējas",
@@ -2764,6 +2793,11 @@
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
       "undoImport": "Atsaukt importēšanu ({count})",
+      "undoImportConfirm": "Neatgriezeniski dzēst ar šo importēšanu {count, plural, zero {izveidotās # kontaktpersonas} one {izveidoto # kontaktpersonu} other {izveidotās # kontaktpersonas}}? Šo darbību nevar atsaukt.",
+      "undoImportTitle": "Atsaukt šo importēšanu?",
+      "undoneRow": "Noņemts, atsaucot importēšanu",
+      "undoneSummary": "Atsaucot importēšanu, {count, plural, zero {noņemtas # izveidotās kontaktpersonas} one {noņemta # izveidotā kontaktpersona} other {noņemtas # izveidotās kontaktpersonas}}.",
+      "undoneToast": "Importēšana atsaukta: {count, plural, zero {izdzēstas # kontaktpersonas} one {izdzēsta # kontaktpersona} other {izdzēstas # kontaktpersonas}}",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
       "warning": {
         "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
@@ -3205,7 +3239,6 @@
     "noFileInVersion": "Šajā versijā nav faila",
     "noFullScreenPreview": "Šī tipa failam nav pilnekrāna priekšskatījuma.",
     "noLabel": "Nav apzīmējuma",
-    "openInSidePanel": "Atvērt sānu panelī",
     "redlinePreview": "Izsekotās izmaiņas",
     "removeLabel": "Noņemt apzīmējumu",
     "saveComparison": "Saglabāt salīdzinājumu",
@@ -5687,6 +5720,7 @@
     "citingDecisionsSortCitations": "Šīs normas pieminējumi",
     "citingDecisionsSortDate": "Nolēmuma datums",
     "citingDecisionsYear": "Nolēmuma gads",
+    "citingDecisionsYearOutOfRange": "Ievadiet gadu no {min} līdz {max}.",
     "citingDecisionsYearPlaceholder": "Visi gadi",
     "columns": {
       "act": "Tiesību akts",
@@ -5732,7 +5766,6 @@
     "leadingDecisionsExplanation": "Pirmā pieminēšana katrā nolēmumā, sarindota pēc citēšanas autoritātes: svērti ienākošie citējumi, ņemot vērā tiesas līmeni, citējuma polaritāti un vecumu.",
     "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
     "openEnded": "šobrīd",
-    "openProvision": "Atvērt normu",
     "outline": "Saturs",
     "outlineJumpLabel": "Pāriet uz normu",
     "outlineJumpPlaceholder": "§ 10 vai virsraksts",
@@ -6511,6 +6544,9 @@
       "calculating": "Aprēķina...",
       "errored": "Kļūda",
       "formatNotSupported": "Formāts netiek atbalstīts",
+      "recordChoose": "{count, plural, zero {Izvēlieties no # atbilstībām} one {Apstipriniet # atbilstību} other {Izvēlieties no # atbilstībām}}",
+      "recordCount": "{count, plural, zero {# ierakstu} one {# ieraksts} other {# ieraksti}}",
+      "recordNotFound": "Nav atrasts",
       "selectAValue": "Izvēlieties vērtību",
       "selectValues": "Izvēlieties vērtības",
       "wholeNumberOnly": "Ievadiet veselu skaitli"
@@ -7203,6 +7239,7 @@
       "previewSubject": "Izmēģini paraugā",
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "AI lasa no",
+      "record": "Ieraksts",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Formāts",

@@ -23,6 +23,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
@@ -513,11 +514,11 @@ const PositionSourcesRow = ({
       <ul className="flex min-w-0 flex-wrap items-center gap-1">
         {sources.map((source) => (
           <li
-            className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md text-xs"
+            className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md ps-2 text-xs"
             key={`${source.workspaceId}:${source.entityId}`}
           >
-            <button
-              className="hover:text-foreground flex min-w-0 items-baseline gap-1.5 py-1 ps-2 text-start"
+            <Button
+              className="group/plain flex min-w-0 self-stretch"
               onClick={() =>
                 detached(
                   openEntityInInspector({
@@ -531,15 +532,17 @@ const PositionSourcesRow = ({
                   "position-editor.open-source",
                 )
               }
-              type="button"
+              variant="plain"
             >
-              <UserText className="truncate font-medium">
-                {source.name}
-              </UserText>
-              <UserText className="text-muted-foreground truncate">
-                {source.workspaceName}
-              </UserText>
-            </button>
+              <span className="group-hover/plain:text-foreground flex min-w-0 items-baseline gap-1.5 py-1">
+                <UserText className="truncate font-medium">
+                  {source.name}
+                </UserText>
+                <UserText className="text-muted-foreground truncate">
+                  {source.workspaceName}
+                </UserText>
+              </span>
+            </Button>
             <Button
               aria-label={t("knowledge.playbooks.removeSource", {
                 documentName: source.name,
@@ -1610,26 +1613,24 @@ const ExtractionAdvanced = ({
           {t("knowledge.playbooks.derivedAutomatically")}
         </p>
         {ask.derived ? (
-          <dl className="border-border/60 divide-border/60 divide-y rounded-md border">
-            <div className="space-y-1 p-2.5">
-              <dt className="text-foreground-label text-2xs font-medium">
-                {t("knowledge.playbooks.derivedQuestion")}
-              </dt>
-              <dd className="text-foreground text-sm leading-5 text-pretty">
-                <bdi>{ask.derived.question}</bdi>
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3 p-2.5 text-xs">
-              <dt className="text-foreground-label">
-                {t("knowledge.playbooks.derivedType")}
-              </dt>
-              <dd className="text-foreground font-medium">
+          <div className="border-border/60 rounded-md border p-2.5">
+            <DetailsGrid orientation="vertical">
+              <DetailsItem
+                label={t("knowledge.playbooks.derivedQuestion")}
+                span="wide"
+              >
+                <bdi className="text-pretty">{ask.derived.question}</bdi>
+              </DetailsItem>
+              <DetailsItem
+                label={t("knowledge.playbooks.derivedType")}
+                span="wide"
+              >
                 {t(
                   ASK_CONTENT_LABEL_KEYS[toAskContentType(ask.derived.content)],
                 )}
-              </dd>
-            </div>
-          </dl>
+              </DetailsItem>
+            </DetailsGrid>
+          </div>
         ) : null}
         <Button
           onClick={() =>

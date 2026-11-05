@@ -12,7 +12,10 @@ import {
   resolveDocumentHeadingAnchor,
 } from "./document-ast.js";
 import type { Block, HeadingBlock } from "./document-ast.js";
-import { anchorWithin } from "./statute-anchor-scheme.js";
+import {
+  anchorContinuesSubsection,
+  anchorWithin,
+} from "./statute-anchor-scheme.js";
 import type {
   StatuteAnchorNesting,
   StatuteBlocks,
@@ -38,15 +41,16 @@ const blocksOwnedByHeading = (
 };
 
 /**
- * The blocks a cited subdivision owns: itself, plus the subdivisions nested
- * under it.
+ * The blocks a cited subdivision owns: itself, the subdivisions nested under
+ * it and, for a subsection, the unnumbered wording that carries it on.
  *
  * Statute subdivisions are not headings, so their nesting lives in the anchor
  * path rather than in a level: `par_3-odst_2` owns `par_3-odst_2-pism_a`,
  * which in turn owns `par_3-odst_2-pism_d-bod_1`, as `paragraf-3.odsek-2`
  * owns `paragraf-3.odsek-2.pismeno-a`. Descendants follow their parent
- * contiguously, so the range ends at the first block that is not one — a
- * cited paragraph therefore stops before the next paragraph.
+ * contiguously, so the range ends at the first block that is neither — a
+ * cited paragraph therefore runs from its number up to the next paragraph,
+ * with its closing line, and a cited letter stops before that line.
  */
 export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
   { blocks, scheme }: StatuteBlocks<T>,
@@ -63,6 +67,10 @@ export const blocksNestedUnder = <T extends Pick<Block, "anchorId">>(
       !anchorWithin(scheme, {
         ancestor: cited.anchorId,
         anchor: block.anchorId,
+      }) &&
+      !anchorContinuesSubsection(scheme, {
+        anchor: block.anchorId,
+        subsection: cited.anchorId,
       })
     ) {
       break;
@@ -90,8 +98,9 @@ type ProvisionPreviewTarget = {
 
 /**
  * The narrowest truthful wording for a citation preview: the cited unit and
- * everything it owns. A cited paragraph shows its letters and their points, a
- * cited letter shows its points, a cited point shows itself, and a cited
+ * everything it owns. A cited paragraph shows its letters, their points and
+ * its unnumbered wording, a cited letter shows its points, a cited point
+ * shows itself, and a cited
  * nested heading keeps its owned text. A provision-level citation shows the
  * provision body.
  */

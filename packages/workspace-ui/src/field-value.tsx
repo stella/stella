@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import { useTranslations } from "use-intl";
 
@@ -9,7 +9,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { emptyColor, resolveOptionColor } from "./colors";
-import { getClipFieldValueLabel } from "./field-value-logic";
+import {
+  getClipFieldValueLabel,
+  summarizeRecordField,
+} from "./field-value-logic";
 import { useFormatter, useFormattingLocale } from "./formatting";
 import type { GenericProperty, WorkspaceFieldContent } from "./types";
 
@@ -106,7 +109,67 @@ export const FieldValue = ({
     );
   }
 
+  if (content.type === "record") {
+    return <RecordFieldValue content={content} variant={resolvedVariant} />;
+  }
+
   return <ClipFieldValue content={content} variant={resolvedVariant} />;
+};
+
+export const RecordFieldValue = ({
+  content,
+  variant,
+}: {
+  content: Extract<WorkspaceFieldContent, { type: "record" }>;
+  variant: FieldValueVariant;
+}) => {
+  const t = useTranslations();
+  const locale = useFormattingLocale();
+  if (variant === "kanban") {
+    return null;
+  }
+  const summary = summarizeRecordField(
+    content.state,
+    ({ amountMinor, currency }) =>
+      formatMoneyCents({ amountCents: amountMinor, currency, locale }),
+  );
+  const className =
+    variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
+  switch (summary.type) {
+    case "text":
+      return (
+        <BidiText as="span" className={className}>
+          {summary.text}
+        </BidiText>
+      );
+    case "records":
+      return (
+        <span className={className}>
+          {t("workspaces.fields.recordCount", { count: summary.count })}
+        </span>
+      );
+    case "choose":
+      return (
+        <span className={cn(className, "text-warning-foreground italic")}>
+          {t("workspaces.fields.recordChoose", { count: summary.count })}
+        </span>
+      );
+    case "needs-review":
+      return (
+        <span className={cn(className, "text-warning-foreground italic")}>
+          {t("workspaces.table.flags.needsReview")}
+        </span>
+      );
+    case "not-found":
+      return (
+        <span className={cn(className, "text-muted-foreground italic")}>
+          {t("workspaces.fields.recordNotFound")}
+        </span>
+      );
+    default:
+      summary satisfies never;
+      return panic("Unknown record field summary");
+  }
 };
 
 export const IntFieldValue = ({

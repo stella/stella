@@ -93,7 +93,10 @@ export const EditableField = ({
     // (isCreatableContentType), so a workspace only holds one if the API put
     // it there.
     type === "money" ||
-    type === "person"
+    type === "person" ||
+    // A record comes from its data source or AI column, never typed in.
+    type === "record" ||
+    content?.type === "record"
   ) {
     return (
       <FieldValue

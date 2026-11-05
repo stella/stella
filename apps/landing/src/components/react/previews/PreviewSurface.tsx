@@ -22,7 +22,7 @@ export const PreviewSurface = ({ title, children }: PreviewSurfaceProps) => (
       // --card is translucent in the dark theme; composite it over the page
       // background for an opaque window instead of a translucency artifact.
       background: "linear-gradient(var(--card), var(--card)) var(--background)",
-      boxShadow: "0 42px 110px -54px rgba(15, 23, 42, 0.5)",
+      boxShadow: "0 42px 110px -54px var(--preview-window-shadow)",
     }}
     aria-hidden="true"
   >

@@ -208,6 +208,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "database_backfill_states",
   "case_law_sitemap_changes",
   "case_law_sitemap_drain_progress",
+  // Ranking-signal changes: owner-run triggers enqueue, the ingestion role's
+  // projection drain consumes; request code never reads them.
+  "case_law_ranking_signal_changes",
   "case_law_sitemap_refresh_cursor",
   "case_law_sitemap_shard_counts",
   // Coverage populations: owner-maintained, read only by the public-law reader.

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
@@ -134,6 +135,7 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
   page,
 }) => {
   await setEnglishLocale(page);
+  const csp = await installContentSecurityPolicyCollector(page);
   for (const viewport of [
     { width: 1280, height: 720 },
     { width: 390, height: 844 },
@@ -152,6 +154,7 @@ test("OAuth consent keeps its decision in view on a laptop and a phone", async (
         ratio: 1,
       });
     }
+    await csp.assertClean();
     // A registered client is unverified: its own name, no product mark.
     await expect(page.getByText("Unverified app")).toBeVisible();
     await expect(

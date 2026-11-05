@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode, SyntheticEvent } from "react";
+import type { ReactElement, ReactNode, SyntheticEvent } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -18,12 +18,21 @@ import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { matterRouteView } from "@/lib/workspaces/archived-matters.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 
 type MatterColorIdentity = {
   color: string | null;
   id: string;
+  /**
+   * Required so no caller can offer the picker without knowing the matter is
+   * writable: an archived matter is read-only, so it shows its icon only.
+   */
+  status: string;
 };
+
+const canChangeMatterColor = (matter: MatterColorIdentity) =>
+  matterRouteView(matter.status) === "active";
 
 type MatterColorPickerContentProps = {
   matter: MatterColorIdentity;
@@ -47,11 +56,17 @@ const MatterColorPickerContent = ({
 };
 
 type MatterColorPickerProps = {
-  children: ReactNode;
+  /** The matter icon; the picker supplies the named trigger button. */
+  children: ReactElement;
+  className?: string;
+  label: string;
   matter: MatterColorIdentity;
 };
 
-type MatterColorContextPickerProps = MatterColorPickerProps & {
+type MatterColorContextPickerProps = {
+  children: ReactNode;
+  matter: MatterColorIdentity;
+} & {
   className?: string;
 } & (
     | {
@@ -69,7 +84,19 @@ type MatterColorContextPickerProps = MatterColorPickerProps & {
       }
   );
 
-const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
+const MatterColorPicker = (props: MatterColorPickerProps) => {
+  if (!canChangeMatterColor(props.matter)) {
+    return props.children;
+  }
+  return <WritableMatterColorPicker {...props} />;
+};
+
+const WritableMatterColorPicker = ({
+  children,
+  className,
+  label,
+  matter,
+}: MatterColorPickerProps) => {
   const { moreLabel, selectColor } = useMatterColorPicker(matter);
 
   return (
@@ -77,14 +104,38 @@ const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
       defaultExpanded={false}
       moreLabel={moreLabel}
       onSelect={selectColor}
+      trigger={
+        <Button
+          aria-label={label}
+          className={className}
+          size="icon-xs"
+          variant="ghost"
+        >
+          {children}
+        </Button>
+      }
       value={getMatterPickerColor(matter.id, matter.color)}
-    >
-      {children}
-    </ColorPicker>
+    />
   );
 };
 
-const MatterColorContextPicker = ({
+const MatterColorContextPicker = (props: MatterColorContextPickerProps) => {
+  if (!canChangeMatterColor(props.matter)) {
+    return (
+      <span
+        className={cn(
+          "relative flex shrink-0 items-center justify-center",
+          props.className,
+        )}
+      >
+        {props.children}
+      </span>
+    );
+  }
+  return <WritableMatterColorContextPicker {...props} />;
+};
+
+const WritableMatterColorContextPicker = ({
   children,
   className,
   matter,

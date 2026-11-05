@@ -6,11 +6,12 @@ import entry4 from "./scheduled.legislation.backfillExpressionIds";
 import entry5 from "./scheduled.requests.sweepReceipts";
 import entry6 from "./scheduled.usage.eraseHostedCustomers";
 import entry7 from "./statement.caseLaw.backgroundReplayProbe";
-import entry8 from "./statement.caseLaw.coverageSources";
-import entry9 from "./statement.caseLaw.euCompletionPage";
-import entry10 from "./statement.caseLaw.globalSearchHits";
-import entry11 from "./statement.documents.searchHits";
-import entry12 from "./statement.legislation.candidateRows";
+import entry8 from "./statement.caseLaw.courtCatalogPage";
+import entry9 from "./statement.caseLaw.coverageSources";
+import entry10 from "./statement.caseLaw.euCompletionPage";
+import entry11 from "./statement.caseLaw.globalSearchHits";
+import entry12 from "./statement.documents.searchHits";
+import entry13 from "./statement.legislation.candidateRows";
 
 export default {
   "scheduled.caseLaw.backfillProvisionState": entry0,
@@ -21,9 +22,10 @@ export default {
   "scheduled.requests.sweepReceipts": entry5,
   "scheduled.usage.eraseHostedCustomers": entry6,
   "statement.caseLaw.backgroundReplayProbe": entry7,
-  "statement.caseLaw.coverageSources": entry8,
-  "statement.caseLaw.euCompletionPage": entry9,
-  "statement.caseLaw.globalSearchHits": entry10,
-  "statement.documents.searchHits": entry11,
-  "statement.legislation.candidateRows": entry12,
+  "statement.caseLaw.courtCatalogPage": entry8,
+  "statement.caseLaw.coverageSources": entry9,
+  "statement.caseLaw.euCompletionPage": entry10,
+  "statement.caseLaw.globalSearchHits": entry11,
+  "statement.documents.searchHits": entry12,
+  "statement.legislation.candidateRows": entry13,
 } as const;

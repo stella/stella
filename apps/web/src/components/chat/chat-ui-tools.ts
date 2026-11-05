@@ -9,8 +9,8 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
+  isBrowserResolvedChatToolCall,
   isChatPastedTextPart,
-  isServerChatToolCall,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
@@ -344,9 +344,25 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 
+/**
+ * Actions a coding agent on the member's computer takes itself, persisted
+ * under the harness-native names the agent engine gives them
+ * (`HARNESS_TOOL_NAMES` in `@stll/agent-engine`). Its MCP calls to stella use
+ * the registry names above and need no entry here.
+ */
+const HARNESS_TOOL_TITLE_KEYS = {
+  command_execution: "chat.tool.command_execution",
+  file_change: "chat.tool.file_change",
+  harness_web_search: "chat.tool.harness_web_search",
+  request_user_input: "chat.tool.request_user_input",
+  request_permissions: "chat.tool.request_permissions",
+  harness_unsupported_item: "chat.tool.harness_unsupported_item",
+} as const satisfies Record<string, TranslationKey>;
+
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
+  ...HARNESS_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -735,7 +751,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -830,7 +846,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -920,7 +936,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );

@@ -80,6 +80,11 @@ are redefined per palette; components need no palette-specific code.
 
 ### Brand Colours (Reference)
 
+Rendered from `BRAND_PALETTE` in `packages/brand/src/palette.ts`
+(`@stll/brand`), which also exports the sRGB triples PDF output draws with.
+
+<!-- BEGIN GENERATED BRAND COLOURS -->
+
 | Name        | Hex       | Usage                          |
 | ----------- | --------- | ------------------------------ |
 | Black       | `#000`    | Primary text, logo mark        |
@@ -87,8 +92,16 @@ are redefined per palette; components need no palette-specific code.
 | Pale Blue   | `#e2f6fd` | Light tint surfaces            |
 | Blue Accent | `#59a1d4` | Accent in marketing material   |
 
+<!-- END GENERATED BRAND COLOURS -->
+
 ### Colour Discipline
 
+- A colour is a theme token (`var(--token)` or a token class) or a
+  `@stll/brand` constant. The `no-raw-color-literals` lint rule and the
+  stylelint colour rules reject a raw hex, `rgb()`, `hsl()`, `oklch()` or
+  `color()` anywhere else; colour that is document data, not design, is
+  exempted by path in `oxlint.config.ts` and `.stylelintrc.json`, each entry
+  with its reason.
 - One accent colour per surface region; everything else is neutral
   or a semantic status colour.
 - No pure `#000000` backgrounds in app chrome (dark mode uses a
@@ -270,24 +283,27 @@ an `overflow-hidden` container where an outside ring would be clipped.
 When a screen needs a look the components lack, add it once here and in
 `packages/ui`, under these names:
 
-| Concept                                                            | API                                                                      |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                        |
-| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)          |
-| Long reference that wraps with running text                        | `ButtonTextRun`                                                          |
-| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options              |
-| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                     |
-| A button that stays pressed                                        | `Toggle`                                                                 |
-| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`               |
-| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                       |
-| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                          |
-| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                               |
-| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                           |
-| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                  |
-| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                    |
-| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`) |
-| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                           |
-| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds          |
+| Concept                                                            | API                                                                                    |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                                      |
+| Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)                        |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                                        |
+| Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options                            |
+| Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                                   |
+| A button that stays pressed                                        | `Toggle`                                                                               |
+| Setting row with a switch                                          | `SwitchField` (`label`, `description`); `Switch size="sm"`                             |
+| Keyboard shortcut                                                  | `Kbd keys={["mod", "K"]}` (platform spelling); `MenuShortcut`, `TooltipPopup shortcut` |
+| Menu row that navigates                                            | `MenuLinkItem` (an `<a>`)                                                              |
+| Fact with no value                                                 | `DetailsItem` with empty children (draws a dash)                                       |
+| Quiet disclosure line                                              | `AccordionTrigger variant="muted"`                                                     |
+| Disclosure inside a dialog or card                                 | `AccordionTrigger`/`AccordionPanel` `size="sm"`                                        |
+| Choice row or card around a radio                                  | `Label variant="choice"` / `"choice-card"`                                             |
+| Short label and value record                                       | `DetailsGrid variant="list"` (+ `orientation`)                                         |
+| Small muted caption in a filter bar or dense form                  | `Label variant="muted"`                                                                |
+| One-line or compact form                                           | `Form layout="inline"`, `density="snug" \| "compact"`                                  |
+| Borderless field in a line of text                                 | `Input inline`, `Textarea inline` (one class: `INLINE_FIELD_CLASS_NAME`)               |
+| Fixed-height text area in a row or cell                            | `Textarea fieldSizing="fixed"`                                                         |
+| Number with a unit; stepping number                                | `NumberInput suffix`; it reads as a spin button with its bounds                        |
 | A small control renders small type itself; do not add `text-xs` to |
 | a `sm` button, select, or input.                                   |
 

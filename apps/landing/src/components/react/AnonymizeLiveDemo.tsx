@@ -5,6 +5,8 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
+import { Button } from "@stll/ui/button";
+import { Label } from "@stll/ui/label";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
@@ -111,11 +113,11 @@ const bucketOf = (label: string): Bucket => LABEL_TO_BUCKET[label] ?? "misc";
 // theme-paired --auth-gradient-end/--terminal-accent/--warning/
 // --muted-foreground tokens) rather than inventing new colors.
 const BUCKET_STYLE: Record<Bucket, { fg: string; displayLabel: string }> = {
-  person: { fg: "rgb(22,163,74)", displayLabel: "Person" },
-  organization: { fg: "rgb(37,99,235)", displayLabel: "Organization" },
-  id: { fg: "rgb(217,119,6)", displayLabel: "ID / number" },
-  phone: { fg: "#6264a7", displayLabel: "Phone" },
-  address: { fg: "#d97757", displayLabel: "Address" },
+  person: { fg: "var(--preview-green)", displayLabel: "Person" },
+  organization: { fg: "var(--preview-blue)", displayLabel: "Organization" },
+  id: { fg: "var(--preview-amber)", displayLabel: "ID / number" },
+  phone: { fg: "var(--accent-iris)", displayLabel: "Phone" },
+  address: { fg: "var(--accent-ember)", displayLabel: "Address" },
   country: { fg: "var(--auth-gradient-end)", displayLabel: "Country" },
   email: { fg: "var(--terminal-accent)", displayLabel: "Email" },
   date: { fg: "var(--muted-foreground)", displayLabel: "Date" },
@@ -411,9 +413,9 @@ export const AnonymizeLiveDemo = () => {
             ),
           )}
         </div>
-        <label htmlFor="anon-demo-textarea" className="sr-only">
+        <Label className="sr-only" htmlFor="anon-demo-textarea">
           Try the anonymization engine: edit this paragraph
-        </label>
+        </Label>
         <textarea
           id="anon-demo-textarea"
           className={`${textLayerClassName} absolute inset-0 border-0 bg-transparent text-transparent caret-[var(--foreground)] outline-none [-webkit-text-fill-color:transparent]`}
@@ -437,18 +439,9 @@ export const AnonymizeLiveDemo = () => {
             {describeEngineStatus(engine, highlights)}
           </p>
           {engine.status === "error" && (
-            <button
-              type="button"
-              className="cursor-pointer rounded border px-2 py-0.5 underline-offset-2 hover:underline"
-              style={{
-                borderColor:
-                  "color-mix(in srgb, var(--border) 65%, transparent)",
-                color: "var(--foreground)",
-              }}
-              onClick={retry}
-            >
+            <Button onClick={retry} size="xs" variant="outline">
               {engine.recovery === "reload" ? "Reload" : "Retry"}
-            </button>
+            </Button>
           )}
         </div>
         {legend.length > 0 && (

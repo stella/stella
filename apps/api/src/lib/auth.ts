@@ -88,7 +88,11 @@ import {
 } from "@/api/lib/auth-artifacts";
 import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "@/api/lib/auth/access-token-lifetime";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import {
+  type AccessibleWorkspace,
+  admitsWorkspaceStatus,
+  type WorkspaceStatusAccess,
+} from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import {
   admitApiAccessTokenRoute,
@@ -161,6 +165,7 @@ import type {
 } from "@/api/lib/auth/member-caller";
 import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
+import { withConfiguredOAuthResources } from "@/api/lib/auth/oauth-configured-resources";
 import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
@@ -349,6 +354,7 @@ import {
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import { memoizePerRequest } from "@/api/lib/request-memo";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -1643,7 +1649,12 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+      // The provider reads OAuth resources only as this code configures
+      // them, whatever a newer release has added to the stored policy.
+      adapter: withConfiguredOAuthResources(
+        withBatchedOrganizationMemberships(rawAuthAdapter(options)),
+        oauthResources,
+      ),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -2134,6 +2145,8 @@ export const createAuth = (
           }
           throw removal.error;
         }
+        // The removal cleared the member's attorney assignments on contacts.
+        announceContactSetChanged(organizationId);
       },
     },
     async sendInvitationEmail(data, request) {
@@ -3118,7 +3131,10 @@ type ValidateAuthRejection = { ok: false } & ValidateAuthRefusal;
 
 const rejectValidateAuth = (
   rejection: ValidateAuthRefusal,
-): ValidateAuthRejection => ({ ok: false, ...rejection });
+): ValidateAuthRejection => ({
+  ok: false,
+  ...rejection,
+});
 
 /**
  * Account routes confirm the session still exists in storage. Organization
@@ -4202,9 +4218,6 @@ export type {
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
 
-/** Which matter statuses a workspace route admits; archived only where it says so. */
-export type WorkspaceStatusAccess = "active" | "active-or-archived";
-
 /**
  * Matter access for a member: the matter the validated `:workspaceId` names
  * must be one the member may use, in a status the route admits. Its audit
@@ -4217,10 +4230,7 @@ export const authorizeWorkspace = async (
   admitted: WorkspaceStatusAccess,
 ): Promise<CallerOutcome<WorkspaceCaller>> => {
   const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
-  const admittedStatus =
-    workspace?.status === "active" ||
-    (admitted === "active-or-archived" && workspace?.status === "archived");
-  if (!admittedStatus) {
+  if (!admitsWorkspaceStatus(workspace?.status, admitted)) {
     return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
   }
   return {
