@@ -8,6 +8,8 @@ import { panic } from "better-result";
 import { createCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
+import { answerQuoteChecksByKey } from "@/components/chat/answer-quote.logic";
+import type { AnswerQuoteCheck } from "@/components/chat/answer-quote.logic";
 import {
   openCaseLawDecision,
   openReadCaseLawDecision,
@@ -52,6 +54,7 @@ type CitationCacheRequest =
 type AnswerDecisionContextValue = {
   reads: ReadonlyMap<string, DecisionCitationRead>;
   routes: ReadonlyMap<string, DecisionCitationRead>;
+  quoteChecks: ReadonlyMap<string, AnswerQuoteCheck> | null;
 };
 type CommonCitationProps = {
   passage?: ReactNode;
@@ -352,7 +355,13 @@ export const ChatAnswerDecisionProvider = ({
     }
   }
   return (
-    <AnswerDecisionContext value={{ reads, routes }}>
+    <AnswerDecisionContext
+      value={{
+        reads,
+        routes,
+        quoteChecks: answerQuoteChecksByKey(message.metadata?.answerQuotes),
+      }}
+    >
       {children}
     </AnswerDecisionContext>
   );
@@ -380,6 +389,15 @@ export const useAnswerCitedDecisions = (): PublicCaseLawDecision[] => {
   }
   return [...decisions.values()];
 };
+
+/**
+ * The server's checks of this answer's quotations, by quotation key; null
+ * outside an answer and for an answer stored without them.
+ */
+export const useAnswerQuoteChecks = (): ReadonlyMap<
+  string,
+  AnswerQuoteCheck
+> | null => useContext(AnswerDecisionContext)?.quoteChecks ?? null;
 
 /** A quotation remains prose; its decision annotation owns metadata and actions. */
 // Explicit ReactNode: returning the bare passage infers a type containing
