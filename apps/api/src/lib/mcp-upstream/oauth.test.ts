@@ -612,7 +612,7 @@ describe("a third party's answer at its OAuth endpoints", () => {
     test(`a refused ${name} grades as the upstream, not a defect here`, async () => {
       const result = await call(400, '{"error":"invalid_request"}');
       if (!Result.isError(result)) {
-        return panic("Expected a refusal");
+        panic("Expected a refusal");
       }
       expect(result.error.code).toBe("upstream_unavailable");
       expect(
@@ -623,7 +623,7 @@ describe("a third party's answer at its OAuth endpoints", () => {
     test(`a ${name} answer that breaks the contract stays reported`, async () => {
       const result = await call(200, '{"unexpected":true}');
       if (!Result.isError(result)) {
-        return panic("Expected a contract failure");
+        panic("Expected a contract failure");
       }
       expect(result.error.code).toBe("internal_error");
     });
@@ -639,7 +639,7 @@ describe("a third party's answer at its OAuth endpoints", () => {
       requestedScopes: [],
     });
     if (!Result.isError(result)) {
-      return panic("Expected no registration");
+      panic("Expected no registration");
     }
     expect(result.error.code).toBe("upstream_unavailable");
   });
