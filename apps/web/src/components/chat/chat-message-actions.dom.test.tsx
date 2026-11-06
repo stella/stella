@@ -24,6 +24,7 @@ const { ChatMattersContext } =
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 
 const queryClients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
@@ -55,35 +56,37 @@ const threadWith = (
   <ChatThreadTestRouter>
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatMattersContext
-          value={{ createDocumentMattersView: { type: "empty" } }}
-        >
-          <ChatApprovalContext value={testChatApprovalContextValue}>
-            <ChatEditorProvider>
-              <ChatThreadMessages
-                activitySession={{
-                  reportedUnknownActivityTypes: new Set<string>(),
-                }}
-                approvalPendingMessageId={null}
-                isGenerating={isGenerating}
-                messages={[message]}
-                onAskUserSubmit={() => {}}
-                onCreateDocumentResolve={() => {}}
-                onOpenCreatedDocument={() => {}}
-                onResend={() => {}}
-                streamdownComponents={{
-                  a: ({ children, ...props }) => <a {...props}>{children}</a>,
-                }}
-                threadRef={{
-                  scope: "global",
-                  threadId: toSafeId<"chatThread">(
-                    "00000000-0000-4000-8000-000000000002",
-                  ),
-                }}
-              />
-            </ChatEditorProvider>
-          </ChatApprovalContext>
-        </ChatMattersContext>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ChatMattersContext
+            value={{ createDocumentMattersView: { type: "empty" } }}
+          >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <ChatEditorProvider>
+                <ChatThreadMessages
+                  activitySession={{
+                    reportedUnknownActivityTypes: new Set<string>(),
+                  }}
+                  approvalPendingMessageId={null}
+                  isGenerating={isGenerating}
+                  messages={[message]}
+                  onAskUserSubmit={() => {}}
+                  onCreateDocumentResolve={() => {}}
+                  onOpenCreatedDocument={() => {}}
+                  onResend={() => {}}
+                  streamdownComponents={{
+                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                  }}
+                  threadRef={{
+                    scope: "global",
+                    threadId: toSafeId<"chatThread">(
+                      "00000000-0000-4000-8000-000000000002",
+                    ),
+                  }}
+                />
+              </ChatEditorProvider>
+            </ChatApprovalContext>
+          </ChatMattersContext>
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>
   </ChatThreadTestRouter>
