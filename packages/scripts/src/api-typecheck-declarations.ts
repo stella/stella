@@ -309,7 +309,10 @@ export const emitApiTypecheckDeclarations = async (project: string) => {
         sourceFiles: (await program.getSourceFileNames()).length,
       });
       const resolver = await compiler.createModuleResolver(parsed.options);
-      const queue = [...parsed.fileNames];
+      // The compiler brands its paths; the queue also takes resolved module
+      // paths, which it returns as plain strings.
+      const roots: ReadonlySet<string> = new Set(parsed.fileNames);
+      const queue: string[] = [...roots];
       const parents = new Map<string, string>();
       const emitted = new Set<string>();
       const outputs = new Map<string, string>();
@@ -364,10 +367,7 @@ export const emitApiTypecheckDeclarations = async (project: string) => {
               );
             }
             const dependencyName = resolved.resolvedFileName;
-            if (
-              !parents.has(dependencyName) &&
-              !parsed.fileNames.includes(dependencyName)
-            ) {
+            if (!parents.has(dependencyName) && !roots.has(dependencyName)) {
               parents.set(dependencyName, filename);
             }
             queue.push(dependencyName);

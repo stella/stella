@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { API } from "tsrs/async";
+import { toRootedFilePath } from "tsrs/path";
 import * as v from "valibot";
 
 import { CACHE_SAVE_REVISION } from "./ci-store-save";
@@ -511,11 +512,14 @@ test("scoped store saves are non-fatal in-step saves, and containers cannot rest
   expect(project.options.allowJs).toBe(true);
   expect(project.options.checkJs).toBe(true);
   expect(project.fileNames).toContain(
-    fileURLToPath(
-      new URL(
-        `../.github/actions/ci-store-save/${cleanup.runs.main}`,
-        import.meta.url,
+    toRootedFilePath(
+      fileURLToPath(
+        new URL(
+          `../.github/actions/ci-store-save/${cleanup.runs.main}`,
+          import.meta.url,
+        ),
       ),
+      undefined,
     ),
   );
 });
