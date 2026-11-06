@@ -11,11 +11,17 @@ import { and, eq } from "drizzle-orm";
 
 import {
   DESKTOP_RUNNER_OUTPUT_MAX_BYTES,
+  DESKTOP_RUNNER_PROTOCOL,
   desktopRunnerOutputPath,
 } from "@stll/api-contract/desktop-runner";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, desktopRunnerRuns, userFiles } from "@/api/db/schema";
+import {
+  auditLogs,
+  desktopRunnerRuns,
+  desktopRunners,
+  userFiles,
+} from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import type { UploadUserFileDependencies } from "@/api/handlers/chat/upload-files";
@@ -59,6 +65,8 @@ type Claims = {
 
 /** Tokens the fake verifier knows; anything else is refused as forged. */
 const tokens = new Map<string, Claims>();
+/** A bearer the fake verifier answers as an outage, not as a bad token. */
+const VERIFIER_DOWN = "verifier-down";
 /** Members whose access the live check has taken away. */
 const revoked = new Set<string>();
 
@@ -87,16 +95,35 @@ const insertRun = async ({
   organizationId: SafeId<"organization">;
 }) => {
   const runId = Bun.randomUUIDv7();
+  const desktopId = Bun.randomUUIDv7();
+  const seen = new Date("2026-01-01T00:00:00.000Z");
+  await testDb.insert(desktopRunners).values({
+    userId,
+    organizationId,
+    desktopId,
+    deviceJkt: "jkt",
+    keyId: "key",
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-elsewhere",
+    connection: "connected",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [],
+    connectedAt: seen,
+    lastSeenAt: seen,
+  });
   await testDb.insert(desktopRunnerRuns).values({
     runId,
     userId,
     organizationId,
-    desktopId: Bun.randomUUIDv7(),
+    desktopId,
     deviceJkt: "jkt",
     harness: "codex",
     harnessVersion: "1.0.0",
     workspaceIds: [],
     state,
+    ...(state === "finished" ? { outcome: "completed" as const } : {}),
     leaseExpiresAt: new Date("2099-01-01T00:00:00.000Z"),
     chatThreadId: threadId,
   });
@@ -142,8 +169,15 @@ beforeAll(async () => {
   const upload = createUploadRunOutput({
     verifyToken: async (token) => {
       const claims = token === undefined ? undefined : tokens.get(token);
+      if (token === VERIFIER_DOWN) {
+        throw new Error("The key set could not be fetched");
+      }
       if (claims === undefined) {
-        throw new Error("UNAUTHORIZED");
+        // What the provider's verifier raises for a token it rejects.
+        throw Object.assign(new Error("Invalid token"), {
+          name: "APIError",
+          status: "UNAUTHORIZED",
+        });
       }
       return await Promise.resolve(claims);
     },
@@ -285,6 +319,11 @@ describe("what the endpoint refuses", () => {
     const runId = await runOfA1();
     expect((await post(runId, { token: null })).status).toBe(401);
     expect((await post(runId, { token: "forged" })).status).toBe(401);
+  });
+
+  test("a verifier outage is an outage, not a bad token", async () => {
+    const runId = await runOfA1();
+    expect((await post(runId, { token: VERIFIER_DOWN })).status).toBe(503);
   });
 
   test("a token of another run of the same member", async () => {

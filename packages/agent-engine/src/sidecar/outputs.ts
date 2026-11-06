@@ -25,7 +25,7 @@ import {
  * swapped in on the way to a file, must not read something the agent could not.
  */
 
-export const OUTPUTS_FOLDER = "outputs";
+const OUTPUTS_FOLDER = "outputs";
 
 /** How many files one turn shares; the rest stay on the computer. */
 export const MAX_RUN_OUTPUT_FILES = 20;

@@ -550,9 +550,11 @@ const LOCAL_RUN_OUTPUT_REFUSED_SINK = failureSink({
 });
 
 /** What a stored chunk reports about one output file, if that is what it is. */
-const runOutputReportOf = (chunk: PublicStreamChunk) =>
+const runOutputReportOf = (
+  chunk: PublicStreamChunk,
+): { value: unknown } | null =>
   chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_OUTPUT_EVENT
-    ? { value: chunk.value as unknown }
+    ? { value: chunk.value }
     : null;
 
 /**

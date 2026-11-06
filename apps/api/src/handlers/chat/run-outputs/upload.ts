@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import { runOutputMimeTypeOf } from "@stll/api-contract/chat-file-types";
 import { DESKTOP_RUNNER_OUTPUT_MAX_BYTES } from "@stll/api-contract/desktop-runner";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -21,6 +22,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fileSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -58,6 +60,21 @@ type RunOutputDependencies = {
 const refused = (status: 401 | 403 | 404, message: string) =>
   Result.err(new HandlerError({ status, message }));
 
+/** The state that decides this request could not be read; the sidecar retries nothing. */
+const unreadable = (message: string, cause: unknown) =>
+  Result.err(
+    classifyFailure(
+      new HandlerError({
+        status: 503,
+        code: "service_unavailable",
+        message,
+        retryable: true,
+        cause,
+      }),
+      "organization_state_unreadable",
+    ),
+  );
+
 /**
  * The caller is the run: its agent token names this run, the member who owns it
  * and their organization, the run row confirms all three, and the row, never the
@@ -82,12 +99,16 @@ const verifyRunCaller =
     if (Result.isError(verified)) {
       return verified.error._tag === "McpTokenVerificationError"
         ? Result.err(
-            new HandlerError({
-              status: 503,
-              code: "service_unavailable",
-              message: "The token could not be verified",
-              retryable: true,
-            }),
+            classifyFailure(
+              new HandlerError({
+                status: 503,
+                code: "service_unavailable",
+                message: "The token could not be verified",
+                retryable: true,
+                cause: verified.error,
+              }),
+              "upstream_unavailable",
+            ),
           )
         : refused(401, "A run's agent token is required");
     }
@@ -114,13 +135,7 @@ const verifyRunCaller =
       if (McpOrganizationAccessError.is(context.error)) {
         return refused(403, "The member cannot write to this chat");
       }
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "The run's member could not be read",
-          cause: context.error,
-        }),
-      );
+      return unreadable("The run's member could not be read", context.error);
     }
     const { organizationId, userId } = brandActorSessionIdentity({
       organizationId: session.organizationId,
@@ -131,13 +146,7 @@ const verifyRunCaller =
       runId: runId.output,
     });
     if (Result.isError(thread)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "The run could not be read",
-          cause: thread.error,
-        }),
-      );
+      return unreadable("The run could not be read", thread.error);
     }
     if (thread.value === null) {
       return refused(404, "This run takes no files");
@@ -233,4 +242,12 @@ export const createUploadRunOutput = (
     },
   );
 
-export default createUploadRunOutput();
+const uploadRunOutput = createUploadRunOutput();
+
+declareAggregateMutation(uploadRunOutput, {
+  type: "independent",
+  reason:
+    "Adds one immutable file row, its audit event and its storage object to the run's chat thread; it changes no aggregate's ordered state.",
+});
+
+export default uploadRunOutput;

@@ -16,11 +16,6 @@ import {
   withCurrentChatMessages,
 } from "./chat-persisted-messages";
 
-const asChatClientMessage = (message: object) =>
-  // A fixture of the shapes the stream hands the page; the projection reads no
-  // more of it than this.
-  message as UIMessage<ChatClientTools>;
-
 test("a resumed stream retains history added between the persistence read and SDK hydration", async () => {
   const initialMessages = [
     {
@@ -148,13 +143,14 @@ describe("a file a local run handed back", () => {
     source: { type: "url", value: url, mimeType: "application/pdf" },
     metadata: { filename: "report.pdf" },
   } as const;
-  const message = (overrides: object) =>
-    asChatClientMessage({
-      id: "answer",
-      role: "assistant",
-      parts: [{ type: "text", content: "Here it is." }],
-      ...overrides,
-    });
+  const message = (
+    overrides: Partial<UIMessage<ChatClientTools>>,
+  ): UIMessage<ChatClientTools> => ({
+    id: "answer",
+    role: "assistant",
+    parts: [{ type: "text", content: "Here it is." }],
+    ...overrides,
+  });
 
   test("the live answer's metadata reads as the part the stored answer holds", () => {
     const [live] = toPersistedChatMessages([

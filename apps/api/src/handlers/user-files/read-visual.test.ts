@@ -116,5 +116,5 @@ test("never renders a run's HTML output, even when it reads as a generated view"
     threadId: ids.chatThreadWorkspaceA1,
   });
   const response = await read(fileId);
-  expect(response).toMatchObject({ status: 404 });
+  expect(response).toMatchObject({ code: 404 });
 });

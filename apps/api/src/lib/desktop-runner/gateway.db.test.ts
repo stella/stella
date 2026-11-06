@@ -2540,11 +2540,14 @@ describe("chat turns on a computer", () => {
       value,
     });
 
+    /** What the server told the answer about files, each time it said so. */
     const answerMetadata = (chunks: readonly unknown[]) =>
       chunks.flatMap((chunk) =>
         isRecord(chunk) &&
         chunk["type"] === EventType.TEXT_MESSAGE_START &&
-        isRecord(chunk["metadata"])
+        isRecord(chunk["metadata"]) &&
+        (CHAT_LOCAL_RUN_FILES_METADATA_KEY in chunk["metadata"] ||
+          CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY in chunk["metadata"])
           ? [chunk["metadata"]]
           : [],
       );

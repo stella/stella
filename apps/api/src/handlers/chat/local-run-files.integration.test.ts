@@ -74,6 +74,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (seededThreadIds.length > 0) {
+    // A thread's files hold it back: its delete path removes them first.
+    await testDb
+      .delete(userFiles)
+      .where(inArray(userFiles.threadId, seededThreadIds));
     await testDb
       .delete(chatThreads)
       .where(inArray(chatThreads.id, seededThreadIds));
@@ -493,7 +497,7 @@ describe("a file a turn on the computer hands back", () => {
       // The object is never fetched: a missing one could not fail the turn.
       expect(gets()).toBe(readsBefore);
 
-      const sent = JSON.stringify(model.takeRequests(threadId));
+      const sent = JSON.stringify(model.promptsOf(threadId));
       expect(sent).toContain("The report is ready.");
       expect(sent).not.toContain(fileName);
       expect(sent).not.toContain("stella://file::");
