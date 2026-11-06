@@ -19,6 +19,7 @@ import {
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observedStatus } from "@/api/lib/observability/server-error-answer";
@@ -112,4 +113,9 @@ export const createVerifyQuotationHandler = ({
   });
 
 const verifyQuotation = createVerifyQuotationHandler();
+declareAggregateMutation(verifyQuotation, {
+  type: "independent",
+  reason:
+    "Reads one gated decision and writes nothing; POST only carries the quote in its body.",
+});
 export default verifyQuotation;
