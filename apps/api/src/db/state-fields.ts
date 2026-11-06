@@ -40,8 +40,13 @@ export const stateFieldsCheck = <TColumn extends AnyPgColumn>({
         sql` AND `,
       ),
   );
+  // A value outside the domain is the domain check's refusal, not this one's.
+  const outsideDomain = sql`${state} NOT IN (${sql.join(
+    Object.keys(rules).map(stateLiteral),
+    sql`, `,
+  )})`;
   const condition: SQL = sql.join(
-    branches.map((branch) => sql`(${branch})`),
+    [...branches, outsideDomain].map((branch) => sql`(${branch})`),
     sql` OR `,
   );
   return p.check(name, condition);
