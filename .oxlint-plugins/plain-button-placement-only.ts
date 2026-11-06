@@ -50,7 +50,11 @@ const PLACEMENT_ALTERNATIVES = [
   "flex|inline-flex|grid|inline-grid",
   "flex-.+|grow(?:-.+)?|shrink(?:-.+)?|basis-.+|order-.+",
   "(?:col|row)-.+|grid-(?:cols|rows|flow)-.+|auto-(?:cols|rows)-.+",
-  "(?:self|justify-self|place-self|items|justify|content|place)-.+",
+  "(?:self|justify-self|place-self|items|justify|place)-.+",
+  // Lines of content placed, or the empty pseudo-element of a hit target; any
+  // other generated content is something the reader sees.
+  "content-(?:none|normal|center|start|end|between|around|evenly|stretch|baseline)",
+  "content-\\[(?:''|\"\")\\]",
   "(?:gap|gap-x|gap-y)-.+",
   "float-.+|clear-.+|align-.+",
   // display and visibility
@@ -133,8 +137,11 @@ const classStrings = (node: unknown): string[] => {
         ...classStrings(node.consequent),
         ...classStrings(node.alternate),
       ];
+    // `a && b` only ever renders `b` as a class; `||` and `??` may render either.
     case "LogicalExpression":
-      return classStrings(node.right);
+      return node.operator === "&&"
+        ? classStrings(node.right)
+        : [...classStrings(node.left), ...classStrings(node.right)];
     case "CallExpression":
       return Array.isArray(node.arguments)
         ? node.arguments.flatMap(classStrings)

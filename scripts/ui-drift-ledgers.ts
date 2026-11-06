@@ -226,7 +226,9 @@ export const readUiUsage = (
   const counts = new Map<UiUsageKind, [string, number][]>(
     UI_USAGE_KINDS.map((kind) => [kind, []]),
   );
-  for (const file of files) {
+  for (const file of files.filter(
+    (candidate) => !candidate.endsWith(".gen.ts"),
+  )) {
     const source = readFileSync(path.join(REPOSITORY_ROOT, file), "utf-8");
     for (const kind of UI_USAGE_KINDS) {
       const count = usageCount(kind, source);

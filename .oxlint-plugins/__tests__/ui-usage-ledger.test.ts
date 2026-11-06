@@ -22,6 +22,13 @@ const HOW_TO_UPDATE =
   `count went down, run \`${UI_DRIFT_WRITE}\` and commit the ledger with it.`;
 
 describe("ui usage ledger", () => {
+  test("generated files render nothing, so the census leaves them out", () => {
+    const counted = Object.values(readUiUsage()).flatMap((perFile) =>
+      Object.keys(perFile),
+    );
+    expect(counted.filter((file) => file.endsWith(".gen.ts"))).toEqual([]);
+  });
+
   test("matches the plain buttons and raw key caps each file renders", () => {
     const errors = usageMismatches(readCommittedUiUsage(), readUiUsage());
     expect(errors, `${errors.join("\n")}\n\n${HOW_TO_UPDATE}`).toEqual([]);

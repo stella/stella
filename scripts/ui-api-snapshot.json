@@ -2268,6 +2268,8 @@
       "xs"
     ],
     "ToggleGroupItem.variant": ["ghost", "muted", "outline"],
-    "ToolbarIconAction.density": ["header", "toolbar"]
+    "ToolbarIconAction.density": ["header", "toolbar"],
+    "UserText.as": ["bdi", "div", "p", "span"],
+    "UserText.direction": ["auto", "ltr", "rtl"]
   }
 }

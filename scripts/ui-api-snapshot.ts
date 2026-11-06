@@ -601,6 +601,19 @@ const componentFunction = (node: AnyNode): AnyNode | null => {
   return init !== null && FUNCTION_TYPES.has(init.type) ? init : null;
 };
 
+/** The declaration behind `name`, through `const Alias = Component` chains. */
+const aliasTarget = (
+  module: UiModule,
+  name: string,
+  depth = 0,
+): ReturnType<typeof lookup> => {
+  const found = lookup(module, name);
+  const target = identifierName(unwrapExpression(nodeAt(found?.node, "init")));
+  return found === null || target === null || depth > 8
+    ? found
+    : aliasTarget(found.module, target, depth + 1);
+};
+
 const isComponentName = (name: string): boolean => /^[A-Z]/u.test(name);
 
 const sortedUnique = (values: Iterable<string>): string[] =>
@@ -691,7 +704,7 @@ export const readUiApiSnapshot = (): UiApiSnapshot => {
       }
       const exported = exportedDeclaration(module, name);
       const found =
-        exported === null ? null : lookup(exported.module, exported.local);
+        exported === null ? null : aliasTarget(exported.module, exported.local);
       const component = found === null ? null : componentFunction(found.node);
       if (found === null || component === null) {
         continue;

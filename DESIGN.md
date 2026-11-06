@@ -327,8 +327,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `AnimatedPreview` `playback`: `loop`, `once`
 - `Badge`, `ReviewDecisionActions`, `ReviewStatusBadge` `size`: `sm`, `xs`
 - `Badge` `tone`: `destructive`, `info`, `neutral`, `success`, `warning`
-- `BidiText` `as`: `bdi`, `div`, `p`, `span`
-- `BidiText` `direction`: `auto`, `ltr`, `rtl`
+- `BidiText`, `UserText` `as`: `bdi`, `div`, `p`, `span`
+- `BidiText`, `UserText` `direction`: `auto`, `ltr`, `rtl`
 - `Button` `focusRing`: `inside`, `outside`
 - `Button`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`

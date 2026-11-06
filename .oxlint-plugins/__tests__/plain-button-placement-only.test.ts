@@ -61,3 +61,23 @@ test("an arbitrary placement utility stays one token", () => {
     ),
   ).toEqual([]);
 });
+
+test("generated content is appearance, an empty hit target is not", () => {
+  expect(
+    appearanceTokens(
+      "before:content-['x'] before:content-[''] content-center content-none",
+    ),
+  ).toEqual(["before:content-['x']"]);
+});
+
+test.concurrent(
+  "reads both operands of || and ?? but only the right of &&",
+  async () => {
+    const source = [
+      'export const a = <Button variant="plain" className={cn((on ? "rounded-md" : null) ?? fallback)} />;',
+      'export const b = <Button variant="plain" className={cn("rounded-md" || fallback)} />;',
+      'export const c = <Button variant="plain" className={cn("flex" && "w-full")} />;',
+    ].join("\n");
+    expect(await lint(source)).toEqual([1, 2]);
+  },
+);
