@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "critères proposés à partir des références",
         "unnamedReferences": "{count, plural, one {# document de référence} other {# documents de référence} many {# documents de référence}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Une révision complète de cette version</link>, avec liens et modifications proposées, est disponible dans l’historique des révisions.",
+        "origin": "<strong>Lancée depuis le tableau.</strong> Ces constats ont été évalués à partir des valeurs extraites pour le tableau : ils ne renvoient donc pas au document et ne comportent aucune modification proposée.",
+        "runAnotherReview": "Pour obtenir les liens et les modifications proposées, utilisez le bouton <action>{label}</action>."
+      },
       "targetAsReference": "Le document examiné ne peut pas être sa propre référence.",
       "targetColumn": "Ce document",
       "targetDocument": "Document cible",

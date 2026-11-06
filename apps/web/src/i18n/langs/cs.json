@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "pozice navržené z referencí",
         "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů} many {# referenčního dokumentu}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola této verze</link> s odkazy a navrhovanými změnami je k dispozici v historii kontrol.",
+        "origin": "<strong>Spuštěno z tabulky.</strong> Tato zjištění byla vyhodnocena podle hodnot vytěžených pro tabulku, proto neodkazují na dokument a neobsahují navrhované změny.",
+        "runAnotherReview": "Odkazy a navrhované změny získáte přes tlačítko <action>{label}</action>."
+      },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",
       "targetDocument": "Cílový dokument",

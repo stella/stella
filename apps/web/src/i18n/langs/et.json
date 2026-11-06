@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "Võrdlustest pakutud seisukohad",
         "unnamedReferences": "{count, plural, one {# võrdlusdokument} other {# võrdlusdokumenti}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Selle versiooni täielik ülevaatus</link> koos linkide ja kavandatavate muudatustega on saadaval ülevaatuste ajaloos.",
+        "origin": "<strong>Käivitatud tabelist.</strong> Need leiud hinnati tabeli jaoks eraldatud väärtuste põhjal, mistõttu need ei viita dokumendile ega sisalda kavandatavaid muudatusi.",
+        "runAnotherReview": "Linkide ja kavandatavate muudatuste saamiseks kasutage nuppu <action>{label}</action>."
+      },
       "targetAsReference": "Ülevaadatav dokument ei saa olla iseenda võrdlusdokument.",
       "targetColumn": "See dokument",
       "targetDocument": "Sihtdokument",

@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "positions proposed from the references",
         "unnamedReferences": "{count, plural, one {# reference document} other {# reference documents}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>A full review of this version</link>, with links and proposed changes, is available in the review history.",
+        "origin": "<strong>From a table run.</strong> These findings were graded on the values extracted for the table, so they don't link to the document and include no proposed changes.",
+        "runAnotherReview": "To get links and proposed changes, use <action>{label}</action>."
+      },
       "targetAsReference": "The reviewed document cannot be its own reference.",
       "targetColumn": "This document",
       "targetDocument": "Target document",

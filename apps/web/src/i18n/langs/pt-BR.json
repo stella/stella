@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "posições propostas a partir das referências",
         "unnamedReferences": "{count, plural, one {# documento de referência} other {# documentos de referência} many {# documentos de referência}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Uma revisão completa desta versão</link>, com links e alterações propostas, está disponível no histórico de revisões.",
+        "origin": "<strong>Iniciada pela tabela.</strong> Estas constatações foram avaliadas com base nos valores extraídos para a tabela, por isso não têm links para o documento nem incluem alterações propostas.",
+        "runAnotherReview": "Para obter links e alterações propostas, use o botão <action>{label}</action>."
+      },
       "targetAsReference": "O documento revisado não pode ser sua própria referência.",
       "targetColumn": "Este documento",
       "targetDocument": "Documento-alvo",

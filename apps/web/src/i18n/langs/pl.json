@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "stanowiska zaproponowane z referencji",
         "unnamedReferences": "{count, plural, one {# dokument referencyjny} few {# dokumenty referencyjne} many {# dokumentów referencyjnych} other {# dokumentu referencyjnego}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Pełna weryfikacja tej wersji</link> z odnośnikami i proponowanymi zmianami jest dostępna w historii weryfikacji.",
+        "origin": "<strong>Uruchomiono z tabeli.</strong> Te ustalenia oceniono na podstawie wartości wyodrębnionych do tabeli, dlatego nie odsyłają do dokumentu i nie zawierają proponowanych zmian.",
+        "runAnotherReview": "Aby uzyskać odnośniki i proponowane zmiany, użyj przycisku <action>{label}</action>."
+      },
       "targetAsReference": "Sprawdzany dokument nie może być własną referencją.",
       "targetColumn": "Ten dokument",
       "targetDocument": "Dokument docelowy",

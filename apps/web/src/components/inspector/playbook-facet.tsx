@@ -111,6 +111,7 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
+  resolveTableRunNotice,
   restoredRunId,
   restoreReviewRun,
   reviewDecisionProgress,
@@ -124,6 +125,7 @@ import type {
   RestoredReviewFinding,
   ReviewPlaybookFreshness,
   ReviewRunFreshness,
+  TableRunNotice,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   reviewSessionKey,
@@ -1467,6 +1469,11 @@ const ReviewRunPanel = ({
       runId={run.id}
       saveAsPlaybookPending={saveAsPlaybook.isPending}
       suggestions={suggestions}
+      tableRunNotice={resolveTableRunNotice({
+        shownRun: run,
+        runs: history.runs,
+        currentEntityVersionId,
+      })}
       targetFileFieldId={targetFileFieldId}
       targetName={reviewedVersion?.file?.fileName ?? ""}
       targetVersionNumber={reviewedVersion?.versionNumber ?? null}
@@ -2744,6 +2751,7 @@ type ResultsViewProps = {
   decisionCounts: Parameters<typeof reviewDecisionProgress>[0];
   decisionPending: boolean;
   freshness: ReviewRunFreshness;
+  tableRunNotice: TableRunNotice;
   history: ReviewRunHistoryView;
   /** Set while the worker is still committing findings; `null` once the run
    *  has settled. */
@@ -2802,6 +2810,7 @@ const ResultsView = ({
   decisionCounts,
   decisionPending,
   freshness,
+  tableRunNotice,
   history,
   progress: runProgress,
   readOnly,
@@ -3028,6 +3037,12 @@ const ResultsView = ({
       </header>
 
       <ReviewHistorySection history={history} />
+
+      <TableRunNoticeSection
+        notice={tableRunNotice}
+        onOpenRun={history.onSelect}
+        onReviewAgain={onReviewAgain}
+      />
 
       {resultsBody}
     </div>
@@ -3400,6 +3415,92 @@ const ReviewFreshnessNotice = ({
         </Button>
       )}
     </div>
+  );
+};
+
+const TableRunNextStep = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: Exclude<TableRunNotice, { type: "none" | "explanation-only" }>;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  switch (notice.type) {
+    case "open-full-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.openFullReview", {
+            link: (chunks) => (
+              <Button
+                onClick={() => onOpenRun(notice.runId)}
+                size="inline"
+                variant="link"
+              >
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    case "run-another-review":
+      return (
+        <>
+          {t.rich("inspector.review.tableRunNotice.runAnotherReview", {
+            label: t("inspector.review.reviewAgain"),
+            action: (chunks) => (
+              <Button onClick={onReviewAgain} size="inline" variant="link">
+                {chunks}
+              </Button>
+            ),
+          })}
+        </>
+      );
+    default:
+      notice satisfies never;
+      return panic("Unhandled table run notice");
+  }
+};
+
+/**
+ * Why these findings have no links or proposed changes. It sits outside the
+ * findings list so the margin layout shows it too: that is where findings with
+ * nothing to pin to are most puzzling.
+ */
+const TableRunNoticeSection = ({
+  notice,
+  onOpenRun,
+  onReviewAgain,
+}: {
+  notice: TableRunNotice;
+  onOpenRun: (runId: string) => void;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  if (notice.type === "none") {
+    return null;
+  }
+  return (
+    <section className="text-muted-foreground shrink-0 space-y-1 border-b px-3 py-1.5 text-xs">
+      <p>
+        {t.rich("inspector.review.tableRunNotice.origin", {
+          strong: (chunks) => (
+            <strong className="text-foreground font-medium">{chunks}</strong>
+          ),
+        })}
+      </p>
+      {notice.type !== "explanation-only" && (
+        <p>
+          <TableRunNextStep
+            notice={notice}
+            onOpenRun={onOpenRun}
+            onReviewAgain={onReviewAgain}
+          />
+        </p>
+      )}
+    </section>
   );
 };
 

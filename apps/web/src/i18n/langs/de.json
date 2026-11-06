@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte",
         "unnamedReferences": "{count, plural, one {# Referenzdokument} other {# Referenzdokumente}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Eine vollständige Prüfung dieser Version</link> mit Verweisen und vorgeschlagenen Änderungen finden Sie im Prüfverlauf.",
+        "origin": "<strong>Aus der Tabelle gestartet.</strong> Diese Ergebnisse wurden anhand der für die Tabelle extrahierten Werte bewertet. Sie verweisen daher nicht auf das Dokument und enthalten keine vorgeschlagenen Änderungen.",
+        "runAnotherReview": "Verweise und vorgeschlagene Änderungen erhalten Sie über die Schaltfläche <action>{label}</action>."
+      },
       "targetAsReference": "Das geprüfte Dokument kann nicht seine eigene Referenz sein.",
       "targetColumn": "Dieses Dokument",
       "targetDocument": "Zieldokument",

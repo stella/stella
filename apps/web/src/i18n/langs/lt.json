@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "Pozicijos, pasiūlytos iš referencijų",
         "unnamedReferences": "{count, plural, one {# referencinis dokumentas} few {# referenciniai dokumentai} many {# referencinio dokumento} other {# referencinių dokumentų}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Visa šios versijos peržiūra</link> su nuorodomis ir siūlomais pakeitimais pasiekiama peržiūrų istorijoje.",
+        "origin": "<strong>Paleista iš lentelės.</strong> Šios išvados įvertintos pagal lentelei išgautas reikšmes, todėl jos nesusietos su dokumentu ir neapima siūlomų pakeitimų.",
+        "runAnotherReview": "Kad gautumėte nuorodas ir siūlomus pakeitimus, naudokite mygtuką <action>{label}</action>."
+      },
       "targetAsReference": "Peržiūrimas dokumentas negali būti pats sau referencinis dokumentas.",
       "targetColumn": "Šis dokumentas",
       "targetDocument": "Tikslinis dokumentas",

@@ -4161,6 +4161,11 @@
         "proposedFromReferences": "a referenciákból javasolt álláspontok",
         "unnamedReferences": "{count, plural, one {# referenciadokumentum} other {# referenciadokumentum}}"
       },
+      "tableRunNotice": {
+        "openFullReview": "<link>Ennek a verziónak a teljes ellenőrzése</link> hivatkozásokkal és javasolt módosításokkal elérhető az ellenőrzési előzményekben.",
+        "origin": "<strong>A táblázatból indítva.</strong> Ezek a megállapítások a táblázathoz kinyert értékek alapján készültek, ezért nem hivatkoznak a dokumentumra, és nem tartalmaznak javasolt módosításokat.",
+        "runAnotherReview": "A hivatkozásokhoz és a javasolt módosításokhoz használja a következő gombot: <action>{label}</action>."
+      },
       "targetAsReference": "Az ellenőrzött dokumentum nem lehet saját referenciája.",
       "targetColumn": "Ez a dokumentum",
       "targetDocument": "Céldokumentum",
