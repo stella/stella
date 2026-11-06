@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { skillEditAccess } from "./skill-history.logic";
+import {
+  isOpenProposalStatus,
+  isReviewableProposalStatus,
+  skillEditAccess,
+} from "./skill-history.logic";
 
 const OWNER_ID = "user-owner";
 const OTHER_ID = "user-other";
@@ -76,5 +80,18 @@ describe("skill edit access", () => {
         userId: OTHER_ID,
       }),
     ).toBe("enablement");
+  });
+});
+
+describe("proposal review decisions", () => {
+  test("only a submitted proposal can be decided", () => {
+    expect(isReviewableProposalStatus("proposed")).toBe(true);
+    expect(isReviewableProposalStatus("accepted")).toBe(false);
+    expect(isReviewableProposalStatus("rejected")).toBe(false);
+  });
+
+  test("a draft is open but cannot be decided yet", () => {
+    expect(isOpenProposalStatus("draft")).toBe(true);
+    expect(isReviewableProposalStatus("draft")).toBe(false);
   });
 });

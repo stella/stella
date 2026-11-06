@@ -68,10 +68,10 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessModel, HarnessReport, HarnessUnavailableReason,
-  JsonObject, LimitedHarness, ReadyHarness, RejectReason, RunAnswer, RunApproval,
-  RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness, UnavailableHarness,
-  UnsupportedHarness,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessModel, HarnessReport,
+  HarnessUnavailableReason, JsonObject, LimitedHarness, ReadyHarness, RejectReason,
+  RunAnswer, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
+  UnavailableHarness, UnsupportedHarness,
 };
 
 const LOG_TARGET: &str = "harness_sidecar";
@@ -544,6 +544,7 @@ pub(crate) fn harness_report(
     ProbeOutcome::Ready {
       version,
       capabilities,
+      approval_modes,
       models,
     } => {
       let mut seen = std::collections::HashSet::new();
@@ -567,10 +568,17 @@ pub(crate) fn harness_report(
         .copied()
         .filter(|capability| listed.insert(capability.wire_name()))
         .collect();
+      // Each mode once, in the contract's order; `Ask` is always offered.
+      let approval_modes = ApprovalMode::ALL
+        .iter()
+        .copied()
+        .filter(|mode| *mode == ApprovalMode::Ask || approval_modes.contains(mode))
+        .collect();
       HarnessReport::Ready(ReadyHarness {
         id: harness,
         version: version.clone(),
         capabilities,
+        approval_modes,
         models,
       })
     }

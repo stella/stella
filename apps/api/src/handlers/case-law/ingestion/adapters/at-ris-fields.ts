@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
  * One field inventory for the eleven tribunals this publisher serves.
@@ -30,7 +31,7 @@ import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-fiel
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { excludedSourceField } from "@/api/lib/legal-search/ingestion-types";
+import { legacyExcludedSourceField } from "@/api/lib/legal-search/ingestion-types";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,
@@ -88,9 +89,11 @@ const DOCUMENT_PARTS_TARGET = {
   target: { type: "metadata", key: "documentParts" },
 } as const satisfies SourceFieldDisposition;
 
+type AtRisCommonPublisherRecord = Readonly<Record<AtRisCommonField, unknown>>;
+
 const AT_RIS_COMMON_FIELDS = {
   "Technisch/ID": { disposition: "stored", target: { type: "identity" } },
-  "Technisch/Applikation": excludedSourceField(
+  "Technisch/Applikation": legacyExcludedSourceField(
     "the application this adapter names in its own query, restated in the answer",
   ),
   "Technisch/Organ": {
@@ -101,7 +104,7 @@ const AT_RIS_COMMON_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "submitter" },
   },
-  "Technisch/ImportTimestamp": excludedSourceField(
+  "Technisch/ImportTimestamp": legacyExcludedSourceField(
     "nil on every search answer; only the change feed carries a value in it",
   ),
   "Allgemein/Veroeffentlicht": {
@@ -140,14 +143,14 @@ const AT_RIS_COMMON_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "Judikatur/GesamteEntscheidungUrl": excludedSourceField(
+  "Judikatur/GesamteEntscheidungUrl": legacyExcludedSourceField(
     "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
   ),
   "Judikatur/EntscheidungstextUrl": {
     disposition: "stored",
     target: { type: "metadata", key: "decisionTextDocument" },
   },
-  "Judikatur/RechtssaetzeUrl": excludedSourceField(
+  "Judikatur/RechtssaetzeUrl": legacyExcludedSourceField(
     "the address of a page listing the headnotes the row stores as a part of its own",
   ),
   "Dokumentliste/ContentReference/ContentType": DOCUMENT_PARTS_TARGET,
@@ -155,7 +158,10 @@ const AT_RIS_COMMON_FIELDS = {
   "Dokumentliste/ContentReference/Urls/ContentUrl/DataType":
     DOCUMENT_PARTS_TARGET,
   "Dokumentliste/ContentReference/Urls/ContentUrl/Url": DOCUMENT_PARTS_TARGET,
-} as const satisfies Record<AtRisCommonField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof AtRisCommonPublisherRecord,
+  SourceFieldDisposition
+>;
 
 // ── The per-application branch ───────────────────────────
 
@@ -205,6 +211,8 @@ export type AtRisBranchField = (typeof BRANCH_SOURCE_FIELDS)[number];
  * schema — courts state `Gericht`, administrative authorities state
  * `EntscheidendeBehoerde` — and one target, because the row has one court.
  */
+type AtRisBranchPublisherRecord = Readonly<Record<AtRisBranchField, unknown>>;
+
 const AT_RIS_BRANCH_FIELDS = {
   Anfechtung: {
     disposition: "stored",
@@ -283,7 +291,7 @@ const AT_RIS_BRANCH_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalAreas" },
   },
-  Rechtssatzkette: excludedSourceField(
+  Rechtssatzkette: legacyExcludedSourceField(
     "the address of a chain page on the host that answers an automated client with a challenge; the parent headnote it chains is named by an identifier the branch already states",
   ),
   Rechtssatznummer: {
@@ -318,7 +326,10 @@ const AT_RIS_BRANCH_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "priorProceedings" },
   },
-} as const satisfies Record<AtRisBranchField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof AtRisBranchPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /**
  * The element a branch field is read under, where the schema spells it
@@ -368,26 +379,32 @@ const IN_DOCUMENT = {
   target: { type: "document" },
 } as const satisfies SourceFieldDisposition;
 
+type AtRisDocumentPublisherRecord = Readonly<
+  Record<AtRisDocumentField, unknown>
+>;
+
 const AT_RIS_DOCUMENT_FIELDS = {
   begruendung: IN_DOCUMENT,
   betreff: {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  ecli: excludedSourceField(
+  ecli: legacyExcludedSourceField(
     "the listing states the identifier as a field of its own",
   ),
-  entscheidungsdatum: excludedSourceField(
+  entscheidungsdatum: legacyExcludedSourceField(
     "the listing states the decision date as a date",
   ),
   entscheidungstexte: {
     disposition: "stored",
     target: { type: "metadata", key: "adoptingDecisions" },
   },
-  gericht: excludedSourceField(
+  gericht: legacyExcludedSourceField(
     "the listing states the deciding body in a field of its own",
   ),
-  gz: excludedSourceField("the listing states every docket of the decision"),
+  gz: legacyExcludedSourceField(
+    "the listing states every docket of the decision",
+  ),
   hinweisstrs: {
     disposition: "stored",
     target: { type: "metadata", key: "parentHeadnote" },
@@ -401,10 +418,10 @@ const AT_RIS_DOCUMENT_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "abstract" },
   },
-  norm: excludedSourceField(
+  norm: legacyExcludedSourceField(
     "the listing states the same provisions as a list of its own",
   ),
-  organ: excludedSourceField(
+  organ: legacyExcludedSourceField(
     "the listing states the deciding body in a field of its own",
   ),
   rechtlichebeurteilung: IN_DOCUMENT,
@@ -422,7 +439,10 @@ const AT_RIS_DOCUMENT_FIELDS = {
     target: { type: "textField", key: "legalSentence" },
   },
   text: IN_DOCUMENT,
-} as const satisfies Record<AtRisDocumentField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof AtRisDocumentPublisherRecord,
+  SourceFieldDisposition
+>;
 
 // ── What each application fills ──────────────────────────
 

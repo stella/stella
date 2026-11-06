@@ -18,6 +18,7 @@ import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagno
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 beforeEach(() => {
@@ -1155,6 +1156,117 @@ describe("PostHog browser analytics adapter", () => {
       });
     },
   );
+
+  test("captureError records a native fetch deadline as one transient signal", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new DOMException("signal timed out", "TimeoutError"),
+      {
+        fingerprintKey: "auth.role:query",
+        scope: { type: "handler", handlerId: "auth.role" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "auth.role:query",
+      transport_kind: "timeout",
+    });
+  });
+
+  test.each([
+    { error: new TypeError("Load failed"), transportKind: "network" },
+    {
+      error: new DOMException("signal timed out", "TimeoutError"),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError keeps a user-visible $transportKind failure a transient signal",
+    ({ error, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(error, {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/law" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/law",
+          feature: "law",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "reportUserVisibleError:failure",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
+  test.each([
+    "INVALID_BACKUP_CODE",
+    "INVALID_CODE",
+    "INVALID_OTP",
+    "OTP_EXPIRED",
+  ])(
+    "captureError records nothing for a typed code the auth server refused (%s)",
+    (code) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      const refusal = {
+        code,
+        message: "Refused",
+        status: 400,
+        statusText: "Bad Request",
+      };
+      const options = {
+        fingerprintKey: "OTPPanel:failure-2",
+        scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+      } as const;
+      analytics.captureError(toAuthClientError(refusal), options);
+      analytics.captureError(refusal, options);
+      analytics.captureError(toAuthClientError(refusal), {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/auth/otp" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/auth/otp",
+          feature: "auth",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("captureError still reports another 400 from the auth server", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      toAuthClientError({
+        code: "FAILED_TO_CREATE_SESSION",
+        message: "Refused",
+        status: 400,
+        statusText: "Bad Request",
+      }),
+      {
+        fingerprintKey: "OTPPanel:failure-2",
+        scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+      },
+    );
+
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
 
   test.each([
     "Failed to fetch dynamically imported module: https://app.test/a.js",

@@ -1873,5 +1873,7 @@ export const useChatSession = ({
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion: snapshot.localRunQuestion,
+    answerLocalRunQuestion: chat.answerLocalRunQuestion,
   };
 };

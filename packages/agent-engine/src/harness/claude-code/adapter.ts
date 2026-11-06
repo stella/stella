@@ -4,6 +4,10 @@ import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 import { createDetached, type DetachedRejectionSink } from "@stll/errors";
 
 import {
@@ -24,6 +28,7 @@ import {
   type HarnessSessionId,
   harnessSessionId,
 } from "../events";
+import { packageCacheEnvironment } from "../package-cache";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -79,6 +84,8 @@ export type ClaudeCodeHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /** The platform the CLI runs on, which decides whether it can sandbox. */
+  platform: NodeJS.Platform;
 };
 
 /**
@@ -101,17 +108,74 @@ const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CLAUDE_CODE_CAPABILITIES, value);
 
 /**
- * Edits inside the working directory go ahead; anything else, including a
- * path outside it, is asked about through the permission prompt. A mode that
- * skips permission checks is never used.
+ * The CLI's permission mode per approval mode. In `acceptEdits`, edits inside
+ * the working directory go ahead and anything else, including a path outside
+ * it, is asked about through the permission prompt; in `auto`, the CLI's own
+ * review approves what it judges safe and asks about the rest. Full auto adds
+ * the CLI's OS sandbox to `acceptEdits` (see `sandboxSettings`). A mode that
+ * skips permission checks is never used: it would also approve a command's
+ * request to leave the sandbox.
  */
 const PERMISSION_MODE = {
-  workspace: "acceptEdits",
-} as const satisfies Record<HarnessRunPolicy["fs"], string>;
-/** The CLI's network is open; its own sandbox, which would close it, is off. */
+  ask: "acceptEdits",
+  auto: "auto",
+  full_auto: "acceptEdits",
+} as const satisfies Record<HarnessRunPolicy["approvals"], string>;
+/**
+ * The CLI's network is open. Outside full auto its sandbox is off; in full
+ * auto the sandbox's proxy asks about each new host and the turn allows it.
+ */
 const NETWORK_ARGS = {
   open: [],
 } as const satisfies Record<HarnessRunPolicy["network"], readonly string[]>;
+
+/**
+ * Where the CLI's OS sandbox runs: macOS (Seatbelt). The pinned release's
+ * Windows sandbox is not generally available, so full auto is not offered
+ * there.
+ */
+const SANDBOX_PLATFORMS: ReadonlySet<NodeJS.Platform> = new Set(["darwin"]);
+
+/**
+ * Full auto's sandbox, passed with `--settings`. Bash commands run inside the
+ * OS sandbox, which confines writes to the working directory, the sandbox's
+ * own temp directory (its `TMPDIR`) and the package cache, and they run
+ * without asking. A command that asks to run outside the sandbox is asked
+ * about like any other action, never approved on its own. When the sandbox
+ * cannot start the CLI refuses to start instead of running commands
+ * unconfined.
+ */
+const sandboxSettings = (cacheDir: string) => ({
+  sandbox: {
+    enabled: true,
+    failIfUnavailable: true,
+    autoAllowBashIfSandboxed: true,
+    allowUnsandboxedCommands: true,
+    filesystem: { allowWrite: [cacheDir] },
+  },
+});
+
+/** The CLI's refusal when the sandbox it was told to require cannot start. */
+const SANDBOX_REFUSAL = "Sandbox required but unavailable";
+
+const approvalModes = (
+  platform: NodeJS.Platform,
+): DesktopRunnerApprovalMode[] =>
+  DESKTOP_RUNNER_APPROVAL_MODES.filter(
+    (mode) => mode !== "full_auto" || SANDBOX_PLATFORMS.has(platform),
+  );
+
+const APPROVAL_ARGS = {
+  ask: () => [],
+  auto: () => [],
+  full_auto: (input: HarnessTurnInput) => [
+    "--settings",
+    JSON.stringify(sandboxSettings(input.cacheDir)),
+  ],
+} as const satisfies Record<
+  HarnessRunPolicy["approvals"],
+  (input: HarnessTurnInput) => readonly string[]
+>;
 
 /**
  * Variables dropped from the CLI's environment: an API key, auth token,
@@ -184,10 +248,14 @@ const isStripped = (name: string) =>
   STRIPPED_ENV_NAMES.has(name) ||
   STRIPPED_ENV_PREFIXES.some((prefix) => name.startsWith(prefix));
 
-const childEnvironment = (options: ClaudeCodeHarnessAdapterOptions) => ({
+const childEnvironment = (
+  options: ClaudeCodeHarnessAdapterOptions,
+  environment: Readonly<Record<string, string>>,
+) => ({
   ...Object.fromEntries(
     Object.entries(options.environment).filter(([name]) => !isStripped(name)),
   ),
+  ...environment,
   ...FIXED_ENV,
   CLAUDE_CONFIG_DIR: options.claudeConfigDir,
 });
@@ -195,8 +263,15 @@ const childEnvironment = (options: ClaudeCodeHarnessAdapterOptions) => ({
 type Initialized = v.InferOutput<typeof InitializeResponseSchema>;
 type Connection = { client: ClaudeCliClient; init: Initialized };
 type ConnectFailure = {
-  /** `start_rejected`: the CLI started and reported why it cannot run. */
-  reason: "harness_unavailable" | "protocol_violation" | "start_rejected";
+  /**
+   * `start_rejected`: the CLI started and reported why it cannot run;
+   * `sandbox_unavailable`: the reason was the sandbox it was told to require.
+   */
+  reason:
+    | "harness_unavailable"
+    | "protocol_violation"
+    | "start_rejected"
+    | "sandbox_unavailable";
   message: string;
 };
 
@@ -204,6 +279,8 @@ type ConnectOptions = {
   options: ClaudeCodeHarnessAdapterOptions;
   cwd: string;
   args: readonly string[];
+  /** Set over the base environment for this process. */
+  environment: Readonly<Record<string, string>>;
   handlers: ClaudeCliHandlers;
   /** Extra `initialize` fields, such as the turn's instructions. */
   initialize: Record<string, unknown>;
@@ -214,6 +291,7 @@ const connect = async ({
   options,
   cwd,
   args,
+  environment,
   handlers,
   initialize,
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
@@ -233,7 +311,7 @@ const connect = async ({
         terminateMs: options.gracePeriodMs,
       },
       cwd,
-      env: childEnvironment(options),
+      env: childEnvironment(options, environment),
       handlers: {
         ...handlers,
         message: (type, raw) => {
@@ -268,7 +346,12 @@ const connect = async ({
   }
   await client.kill();
   if (startup.refusal !== null) {
-    return Result.err({ reason: "start_rejected", message: startup.refusal });
+    return Result.err({
+      reason: startup.refusal.startsWith(SANDBOX_REFUSAL)
+        ? "sandbox_unavailable"
+        : "start_rejected",
+      message: startup.refusal,
+    });
   }
   return Result.err(
     Result.isError(initialized)
@@ -385,6 +468,7 @@ const probe = async (
     options,
     cwd: options.claudeConfigDir,
     args: [...PROTOCOL_ARGS, "--no-session-persistence"],
+    environment: {},
     handlers: refusingHandlers(holder),
     initialize: {},
   });
@@ -416,6 +500,7 @@ const probe = async (
           auth,
           models: auth.type === "signed_out" ? [] : modelsOf(init),
           capabilities: capabilities(),
+          approvalModes: approvalModes(options.platform),
           usageLimit:
             auth.type === "signed_out" ? null : await readUsageLimit(client),
         });
@@ -431,7 +516,8 @@ const turnArgs = (input: HarnessTurnInput, target: SessionTarget) => [
   ...PROTOCOL_ARGS,
   "--include-partial-messages",
   "--permission-mode",
-  PERMISSION_MODE[input.policy.fs],
+  PERMISSION_MODE[input.policy.approvals],
+  ...APPROVAL_ARGS[input.policy.approvals](input),
   ...NETWORK_ARGS[input.policy.network],
   // The stella MCP server enforces its own approvals for writes.
   "--allowedTools",
@@ -460,11 +546,13 @@ const openSession = async (
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
     stellaServer: input.mcp.serverName,
+    allowSandboxNetwork: input.policy.approvals === "full_auto",
   });
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
     args: turnArgs(input, target),
+    environment: packageCacheEnvironment(input.cacheDir),
     handlers: session.handlers,
     // Instructions travel over stdio, never on the command line.
     initialize: { appendSystemPrompt: input.instructions },
@@ -543,6 +631,19 @@ const startTurn = async (
   }
   if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
     panic("Claude Code adapter: the MCP server name must be plain");
+  }
+  if (!path.isAbsolute(input.cacheDir)) {
+    panic("Claude Code adapter: the cache directory must be an absolute path");
+  }
+  // Full auto never runs without the sandbox, so where the CLI has none the
+  // turn fails before the CLI starts.
+  if (!approvalModes(options.platform).includes(input.policy.approvals)) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "sandbox_unavailable",
+        message: "This computer cannot run the harness in its sandbox.",
+      }),
+    );
   }
   const fresh = (): SessionTarget => ({
     type: "fresh",

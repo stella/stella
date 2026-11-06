@@ -38,7 +38,7 @@ export type NonChatAuditResourceType = Exclude<
 const CHAT_THREAD_SETTING_FIELDS = [
   "chatModel",
   "chatReasoningEffort",
-  "chatRunTarget",
+  "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
   "titleChanged",

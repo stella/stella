@@ -6,6 +6,8 @@ import type { SQL } from "drizzle-orm";
 import { getTableConfig, getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   SITEMAP_LANGUAGE_GROUP_INDEX,
   SITEMAP_MONTH_INDEX,
@@ -26,6 +28,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
+import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 /**
  * A month of a country's decisions, each probing its language group twice. The
@@ -124,8 +127,8 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
       ALTER TABLE case_law_decisions ADD PRIMARY KEY (id);
     `);
     const vacuum = async () => {
-      await client.exec("VACUUM (ANALYZE) case_law_decisions");
-      await client.exec("VACUUM (ANALYZE) case_law_sources");
+      await vacuumUntilAllVisible({ db, table: "case_law_decisions" });
+      await vacuumUntilAllVisible({ db, table: "case_law_sources" });
     };
     const heapRows = async (statement: SQL): Promise<number> => {
       const { sql: text, params } = new PgDialect().sqlToQuery(statement);
@@ -142,7 +145,7 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
       bucket: "00",
     });
     if (!Array.isArray(shardConditions)) {
-      return panic("The shard fixture must be valid");
+      panic("The shard fixture must be valid");
     }
     const shardRead = async () =>
       await sitemapShardDecisionsQuery(
@@ -193,7 +196,9 @@ test("a sitemap month and a shard page read the heap only for the page's rows", 
     expect(heapRowsAfter).toBe(0);
 
     const page = await shardRead();
-    expect(page.map(({ id }) => id)).toEqual(pageBefore.map(({ id }) => id));
+    const pageIds = (rows: readonly { id: string }[]) =>
+      rows.map(({ id }) => id).toSorted(compareCodeUnit);
+    expect(pageIds(page)).toEqual(pageIds(pageBefore));
     expect(page.length).toBeLessThanOrEqual(
       LIMITS.caseLawSitemapShardUrlLimit + 1,
     );

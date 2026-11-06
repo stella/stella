@@ -112,7 +112,7 @@ const mount = async ({
   );
 };
 
-test("statute shell shows linked hierarchy, identity, short title and the full title tooltip", async () => {
+test("statute shell shows linked hierarchy, identity, short title and a tooltip with the full title and status", async () => {
   const { container } = await mount({ kind: "statute" });
   expect(
     screen
@@ -143,7 +143,7 @@ test("statute shell shows linked hierarchy, identity, short title and the full t
       screen
         .getByText(statute.title)
         .closest('[data-slot="tooltip-popup"][data-open]')?.textContent,
-    ).toBe(statute.title),
+    ).toBe(`${statute.title}${en.statutes.status.current}`),
   );
 });
 

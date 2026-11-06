@@ -31,6 +31,7 @@ import {
   PUBLIC_READ_TIMEOUT_CODE,
   PUBLIC_READ_TIMEOUT_HINT,
   publicReadTimeoutError,
+  publicReadTimeoutRefusal,
 } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
@@ -554,7 +555,10 @@ export const caseLawSearchTimeoutResult = (
   if (!isCaseLawSearchTimeout(error)) {
     return null;
   }
-  observeFailure(error, {
+  // Observed as the refusal it stands for, whichever shape it arrived in: a
+  // handler's returned 503 is a status body and a cancelled statement a driver
+  // error, and neither grades as a timeout on its own.
+  observeFailure(publicReadTimeoutRefusal(error), {
     sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
     ctx: { source: "mcp" },
   });

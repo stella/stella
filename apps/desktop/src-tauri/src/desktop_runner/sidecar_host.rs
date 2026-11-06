@@ -106,6 +106,8 @@ pub(crate) struct HostSettings {
   pub(crate) sidecar: SidecarSettings,
   /// Where each run's own folder is made.
   pub(crate) workspaces: PathBuf,
+  /// The package-manager cache every run on this computer shares.
+  pub(crate) package_cache: PathBuf,
   pub(crate) probe_interval: Duration,
 }
 
@@ -230,6 +232,8 @@ fn refusal(report: Option<&HarnessReport>, start: &RunStart) -> Option<RejectRea
         Some(RejectReason::HarnessVersionUnavailable)
       } else if !ready.models.iter().any(|model| model.id == start.model) {
         Some(RejectReason::ModelUnavailable)
+      } else if !ready.approval_modes.contains(&start.policy.approvals) {
+        Some(RejectReason::PolicyUnsupported)
       } else {
         None
       }
@@ -794,6 +798,12 @@ impl HarnessHost for SidecarHarnessHost {
       tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "a run's folder could not be made");
       return Err(RejectReason::AtCapacity);
     }
+    let package_cache = &self.shared.settings.package_cache;
+    if let Err(error) = crate::local_store::create_private_dir(package_cache) {
+      tracing::warn!(target: LOG_TARGET, kind = ?error.kind(), "the package cache could not be made");
+      remove_workspace(workspace);
+      return Err(RejectReason::AtCapacity);
+    }
     let credentials = cached.and_then(|cached| cached.credentials);
     let thread_id = start
       .harness_session_id
@@ -817,6 +827,7 @@ impl HarnessHost for SidecarHarnessHost {
       config_dir: installed.config_dir.to_string_lossy().into_owned(),
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
+      cache_dir: package_cache.to_string_lossy().into_owned(),
       model: start.model,
       instructions: start.instructions,
       messages: start.messages,

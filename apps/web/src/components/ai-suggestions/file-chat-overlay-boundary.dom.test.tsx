@@ -1,3 +1,5 @@
+import { use } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   afterAll,
@@ -190,6 +192,7 @@ test("a dismissed overlay failure leaves the reader working without the overlay"
             area="file-chat-overlay"
             onRetry={() => undefined}
             overlayKey="statute:89/2012"
+            pending={null}
           >
             <FailingOverlay />
           </FileChatOverlayBoundary>
@@ -235,6 +238,7 @@ test("try again re-renders the overlay after preparing a fresh attempt", async (
               failing = false;
             }}
             overlayKey="statute:89/2012"
+            pending={null}
           >
             <RecoveringOverlay />
           </FileChatOverlayBoundary>
@@ -253,4 +257,29 @@ test("try again re-renders the overlay after preparing a fresh attempt", async (
   } finally {
     console.error = originalConsoleError;
   }
+});
+
+test("the overlay's place is held while it loads", async () => {
+  const { promise: stillLoading } = Promise.withResolvers<undefined>();
+  const Overlay = () => {
+    use(stillLoading);
+    return <aside data-testid="overlay" />;
+  };
+  const view = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages}>
+        <FileChatOverlayBoundary
+          area="file-chat-overlay"
+          onRetry={() => undefined}
+          overlayKey="statute:89/2012"
+          pending={<div data-testid="pending" />}
+        >
+          <Overlay />
+        </FileChatOverlayBoundary>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() => expect(view.getByTestId("pending")).toBeDefined());
+  expect(view.queryByTestId("overlay")).toBe(null);
 });

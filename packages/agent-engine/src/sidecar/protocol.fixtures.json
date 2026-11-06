@@ -109,6 +109,7 @@
           "processGrant": true
         },
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
+        "cacheDir": "C:\\data\\agent-package-cache",
         "model": "gpt-test",
         "instructions": "Answer briefly.",
         "messages": [
@@ -120,7 +121,8 @@
         "harnessSessionId": null,
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -144,6 +146,7 @@
           "processGrant": false
         },
         "workspaceDir": "/data/runs/0b6f5c8e",
+        "cacheDir": "/data/agent-package-cache",
         "model": "gpt-test",
         "instructions": "",
         "messages": [
@@ -163,7 +166,8 @@
         "harnessSessionId": "thread-old",
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "ask"
         },
         "mcp": {
           "serverName": "stella",
@@ -256,6 +260,7 @@
           "type": "ready",
           "version": "0.165.0",
           "capabilities": ["approvals", "interrupt", "resume"],
+          "approvalModes": ["ask"],
           "models": [
             {
               "id": "gpt-test",
@@ -448,6 +453,16 @@
       {
         "name": "grant for an id that is not a UUID",
         "line": "{\"type\":\"harness.process_granted\",\"id\":\"run-1\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with a relative cache directory",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"agent-package-cache\",\"model\":\"gpt-test\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"harnessSessionId\":\"thread-old\",\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"ask\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run.start with an unknown approval mode",
+        "line": "{\"type\":\"run.start\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"threadId\":\"thread-1\",\"harness\":\"codex\",\"executable\":\"/data/harness/codex/0.165.0/codex\",\"configDir\":\"/data/harness-home/codex\",\"launch\":{\"configOverrides\":[],\"environment\":{},\"removedEnvironment\":[],\"clientName\":null,\"processGrant\":false},\"workspaceDir\":\"/data/runs/0b6f5c8e\",\"cacheDir\":\"/data/agent-package-cache\",\"model\":\"gpt-test\",\"instructions\":\"\",\"messages\":[{\"role\":\"user\",\"content\":\"First question.\"},{\"role\":\"assistant\",\"content\":\"First answer.\"},{\"role\":\"user\",\"content\":\"Second question.\"}],\"harnessSessionId\":\"thread-old\",\"policy\":{\"network\":\"open\",\"fs\":\"workspace\",\"approvals\":\"bypass\"},\"mcp\":{\"serverName\":\"stella\",\"url\":\"https://api.example.test/mcp\",\"token\":\"run-token-1\",\"expiresAt\":\"2026-10-28T12:00:00.000Z\"}}",
         "reason": "invalid"
       }
     ],

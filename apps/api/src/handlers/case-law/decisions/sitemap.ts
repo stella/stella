@@ -6,6 +6,7 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
 
@@ -205,9 +206,10 @@ export const readSitemapDecisionAlternates = async (
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
 
 /**
- * One shard's URLs. The page is chosen first, from what the month's index and
- * the language group's index hold, so a bucket of a split month does not read
- * the heap of every other bucket; only the rows on the page are then fetched.
+ * One shard's URLs, in no order. The page is chosen first, from what the
+ * month's index and the language group's index hold, so a bucket of a split
+ * month does not read the heap of every other bucket; only the rows on the page
+ * are then fetched.
  */
 export const sitemapShardDecisionsQuery = (
   tx: CaseLawPublicReadTransaction,
@@ -251,12 +253,7 @@ export const sitemapShardDecisionsQuery = (
     .innerJoin(
       publishedCaseLawDecisions,
       eq(publishedCaseLawDecisions.id, page.pageId),
-    )
-    .orderBy(
-      desc(publishedCaseLawDecisions.updatedAt),
-      desc(publishedCaseLawDecisions.id),
-    )
-    .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
+    );
 };
 
 /**
@@ -344,7 +341,11 @@ export const listSitemapShardDecisionsHandler = async (
   const queryResult = await caseLawPublicReadUnderSchemaLane(
     caseLawDb,
     async (tx) => {
-      const rows = await sitemapShardDecisionsQuery(tx, conditions);
+      const rows = (await sitemapShardDecisionsQuery(tx, conditions)).toSorted(
+        (left, right) =>
+          right.updatedAt.getTime() - left.updatedAt.getTime() ||
+          compareCodeUnit(right.id, left.id),
+      );
 
       const weightedTotal = rows.reduce(
         (total, row) =>
