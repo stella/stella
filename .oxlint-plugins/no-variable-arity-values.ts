@@ -69,7 +69,7 @@ export default eslintCompatPlugin({
           "Program:exit"(program) {
             const file = repoRelativeFilename(context);
             // One-off scripts and tests hold no long-lived pooled connection.
-            if (/(?:^|\/)(?:scripts|tests|evals)\//u.test(file)) {
+            if (/(?:^|\/)(?:scripts|tests|evals)\/|\.test\.tsx?$/u.test(file)) {
               return;
             }
             const allowed = knownSites[file] ?? 0;
