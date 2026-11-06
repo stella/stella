@@ -1,0 +1,17 @@
+{
+  "id": "no-raw-workspace-status",
+  "rules": ["no-raw-workspace-status/no-raw-workspace-status"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-workspace-status/no-raw-workspace-status",
+    "."
+  ]
+}
