@@ -1,0 +1,19 @@
+{
+  "reason": "Managed lifecycles whose per-state fields no CHECK binds yet. Shrink-only: declare a table's fields with stateFieldsCheck (or a CHECK naming its state column) and remove it here.",
+  "tables": [
+    "caseLawDecisionCitationStatsState",
+    "caseLawPopulationSeedState",
+    "caseLawSitemapDrainProgress",
+    "contacts",
+    "desktopEditSessions",
+    "hostedCustomerErasures",
+    "invoices",
+    "legalReaderAnswerMessages",
+    "organizationSettings",
+    "pdfSigningSessions",
+    "sanctionsContactMatches",
+    "sanctionsEditionFanouts",
+    "sanctionsMonitoringBackfills",
+    "syntheticSessionControl"
+  ]
+}
