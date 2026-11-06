@@ -25,6 +25,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -416,7 +417,9 @@ describe.skipIf(!enabled)(
             }
           }
         }
-        await client`DELETE FROM organization WHERE id = ${organizationId}`;
+        await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+          organizationId,
+        ]);
         reportStage("cleanup-organization-deleted");
         await client`DELETE FROM "user" WHERE id = ${userId}`;
         reportStage("cleanup-user-deleted");

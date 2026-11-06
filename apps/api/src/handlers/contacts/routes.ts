@@ -1,3 +1,4 @@
+import bulkDeleteContacts from "@/api/handlers/contacts/bulk/delete";
 import businessRegistriesCheck from "@/api/handlers/contacts/business-registries/check";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries/lookup";
 import createContact from "@/api/handlers/contacts/create";
@@ -23,7 +24,7 @@ import { routes } from "@/api/http/route";
 // Every `/:contactId` route declares and validates the id in its own config.
 export const contactsRoute = routes(
   {
-    "/": { GET: readContacts, PUT: createContact },
+    "/": { DELETE: bulkDeleteContacts, GET: readContacts, PUT: createContact },
     "/sanctions/matches": { GET: listSanctionsMatches },
     "/sanctions/events": { GET: listSanctionsEvents },
     "/search": { GET: searchContacts },

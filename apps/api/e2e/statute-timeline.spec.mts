@@ -19,7 +19,12 @@ declare global {
   var statuteTimelineFixtureHost: FixtureHost;
 }
 
-const INPUT = { eli: "cz:act:2012:89", anchor: "par_1", language: "cs" };
+const INPUT = {
+  eli: "89/2012 Sb.",
+  anchor: "par_1",
+  language: "cs",
+  limit: 50,
+};
 const VERSION_2020 = {
   url: "https://stella.example/legislation/2020",
   documentId: "00000000-0000-4000-8000-000000000001",

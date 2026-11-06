@@ -568,6 +568,27 @@ export const toMajorUnits = ({
 }: ToMajorUnitsParams): number =>
   amountCents / 10 ** currencyMinorUnitDigits(currency);
 
+/**
+ * A stored amount as exact major-unit decimal text, with no grouping and a
+ * dot separator: 123456 EUR is "1234.56", 1500 JPY is "1500". The digits are
+ * moved, not divided, so a value near the safe-integer edge keeps every minor
+ * unit that `toMajorUnits` would round away. For machine readers (a prompt,
+ * an export), not for display; display goes through `formatMoneyCents`.
+ */
+export const toMajorUnitsText = ({
+  amountCents,
+  currency,
+}: ToMajorUnitsParams): string => {
+  const digits = currencyMinorUnitDigits(currency);
+  const magnitude = BigInt(Math.abs(amountCents)).toString();
+  const sign = amountCents < 0 ? "-" : "";
+  if (digits === 0) {
+    return `${sign}${magnitude}`;
+  }
+  const padded = magnitude.padStart(digits + 1, "0");
+  return `${sign}${padded.slice(0, -digits)}.${padded.slice(-digits)}`;
+};
+
 export type FormatMoneyCentsParams = {
   amountCents: number;
   currency: string;

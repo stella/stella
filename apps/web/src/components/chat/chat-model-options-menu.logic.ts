@@ -111,12 +111,17 @@ const classifySelectableModels = (
   // the frontier nor pushes a current model off it.
   return new Map(
     classifyBenchmarkModelOptions(
-      benchmarks.filter(
-        ({ availability, value }) =>
-          availability === "available" &&
-          selectable.has(value) &&
-          lineageOf(value)?.supersededBy === undefined,
-      ),
+      benchmarks.filter(({ availability, value }) => {
+        if (availability !== "available" || !selectable.has(value)) {
+          return false;
+        }
+        // A model the catalogue has no lineage for is not superseded.
+        const lineage = lineageOf(value);
+        if (lineage === undefined) {
+          return true;
+        }
+        return lineage.supersededBy === undefined;
+      }),
     ).map(({ tradeoff, value }) => [value, tradeoff] as const),
   );
 };

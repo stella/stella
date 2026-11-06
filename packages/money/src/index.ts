@@ -252,6 +252,7 @@ export {
   type ParseLocaleMinorUnitsParams,
   toMajorUnits,
   type ToMajorUnitsParams,
+  toMajorUnitsText,
   toMinorUnits,
   type ToMinorUnitsParams,
   tryToMinorUnits,

@@ -578,6 +578,21 @@ describe("API deployment health receipt", () => {
     expect(workflow).not.toContain("\n  verify-staging:\n");
   });
 
+  test("supplies required storage configuration to the web smoke image", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    const smokeJob = workflow
+      .split("\n  web-image-smoke:")
+      .at(1)
+      ?.split("\n  # Expo/Metro")
+      .at(0);
+    expect(smokeJob).toContain("--build-arg S3_BUCKET=documents");
+    expect(smokeJob).toContain(
+      "--build-arg S3_ENDPOINT=https://objects.smoke.invalid",
+    );
+  });
+
   test("builds web images publicly from an allowlisted browser contract", async () => {
     const [action, contract, production, staging] = await Promise.all([
       Bun.file(
@@ -785,7 +800,9 @@ describe("API deployment health receipt", () => {
       "main-heavy.yml",
       "main-pr-depth.yml",
     ]) {
-      expect(stagingJob).toContain(`actions/workflows/${workflow}/dispatches`);
+      expect(stagingJob).toContain(
+        `bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" ${workflow} main`,
+      );
     }
     expect(stagingJob).not.toContain("--draft=false");
     const finalizer = await Bun.file(
@@ -843,7 +860,7 @@ describe("API deployment health receipt", () => {
     );
     expect(promoteAction).not.toContain(`Check https://github.com/\${run_url}`);
     expect(promoteAction).toContain(
-      `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
+      `dispatch_args+=("web_image_digest=\${WEB_IMAGE_DIGEST}")`,
     );
     expect(promoteAction).toContain(
       "Frontend promotions require a prebuilt web image digest.",
@@ -1241,9 +1258,9 @@ describe("desktop release workflows", () => {
       const strategy = isRecord(build["strategy"]) ? build["strategy"] : {};
       const matrix = isRecord(strategy["matrix"]) ? strategy["matrix"] : {};
       const legs = Array.isArray(matrix["include"]) ? matrix["include"] : [];
-      expect(
-        legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined)),
-      ).toEqual(Object.keys(worstInstallMinutes));
+      expect([
+        ...new Set(legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined))),
+      ]).toEqual(Object.keys(worstInstallMinutes));
       for (const leg of legs) {
         const os = isRecord(leg) ? String(leg["os"]) : "";
         const deadline = isRecord(leg) ? leg["install_timeout_minutes"] : 0;

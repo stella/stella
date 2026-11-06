@@ -12,8 +12,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
@@ -76,8 +75,12 @@ const scrollerOf = (element: Element): HTMLElement | undefined =>
   [...scrollers].find(
     (scroller) => scroller !== element && scroller.contains(element),
   );
+// An open popover's focus guards around its trigger are visually hidden and
+// fixed, so they take no row.
 const contentTop = (scroller: HTMLElement, element: Element): number =>
-  [...scroller.querySelectorAll("*")].indexOf(element) * ROW_PX;
+  [...scroller.querySelectorAll(":not([data-base-ui-focus-guard])")].indexOf(
+    element,
+  ) * ROW_PX;
 const setScrollTop = (scroller: HTMLElement, value: number) => {
   scrollTops.set(scroller, Math.max(0, value));
 };
@@ -93,7 +96,9 @@ const registerScroller = (scroller: HTMLElement) => {
   Object.defineProperty(scroller, "scrollTop", {
     configurable: true,
     get: () => scrollTops.get(scroller) ?? 0,
-    set: (value: number) => setScrollTop(scroller, value),
+    set: (value: number) => {
+      setScrollTop(scroller, value);
+    },
   });
   Object.defineProperty(scroller, "clientHeight", {
     configurable: true,

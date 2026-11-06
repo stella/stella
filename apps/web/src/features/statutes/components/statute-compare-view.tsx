@@ -6,17 +6,18 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
-import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
@@ -212,7 +213,7 @@ export const StatuteCompareView = ({
     older: resolved.older,
     onClose: close,
     onPick: pick,
-    statuteLists: statuteListSchemeFor(onScreen.country),
+    statuteAnchors: statuteAnchorSchemeFor(onScreen.country),
     textScale,
     versions,
   };
@@ -260,7 +261,7 @@ type CompareFrame = {
     picked: PublicStatuteVersion,
   ) => void;
   /** The act's publisher scheme, which both sides' anchors nest lists in. */
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
   textScale: ReaderTextScale;
   /** Every consolidation of the act, for either column to take. */
   versions: readonly PublicStatuteVersion[];
@@ -338,8 +339,8 @@ const ActComparison = ({
   return (
     <CompareFrameLayout
       actions={
-        <label
-          className="text-muted-foreground flex items-center gap-2 text-xs"
+        <Label
+          className="text-xs font-normal sm:text-xs"
           htmlFor={showUnchangedId}
         >
           <Checkbox
@@ -353,8 +354,10 @@ const ActComparison = ({
               )
             }
           />
-          {t("statutes.compareShowUnchanged")}
-        </label>
+          <span className="text-muted-foreground">
+            {t("statutes.compareShowUnchanged")}
+          </span>
+        </Label>
       }
       frame={frame}
       title={t("statutes.compareTitle")}
@@ -397,13 +400,21 @@ const ProvisionComparison = ({
   const { data, isError } = useQuery(
     provisionInVersionOptions({ anchor: provision, documentId: other.id }),
   );
+  const scheme = statuteAnchorSchemeFor(onScreen.country);
   const heading =
     onScreenBlocks === null
       ? null
-      : resolveDocumentHeadingAnchor(onScreenBlocks, provision);
+      : resolveDocumentHeadingAnchor(
+          { blocks: onScreenBlocks, scheme },
+          provision,
+        );
   const sides = orderSides({
     frame,
-    onScreen: provisionCompareSide({ blocks: onScreenBlocks, provision }),
+    onScreen: provisionCompareSide({
+      blocks: onScreenBlocks,
+      provision,
+      scheme,
+    }),
     onScreenId: onScreen.id,
     other: otherProvisionSide(data),
   });
@@ -999,7 +1010,7 @@ const CompareCell = ({
           <ReaderBlocks
             language={frame.language}
             side={wording}
-            statuteLists={frame.statuteLists}
+            statuteAnchors={frame.statuteAnchors}
           />
         </div>
       </div>
@@ -1046,12 +1057,12 @@ const CompareCell = ({
 const ReaderBlocks = ({
   language,
   side,
-  statuteLists,
+  statuteAnchors,
 }: {
   /** The act's language; the chrome around the cell is the reader's own. */
   language: string;
   side: StatuteCompareSide;
-  statuteLists: StatuteListScheme;
+  statuteAnchors: StatuteAnchorScheme;
 }) => (
   <div
     className="flex flex-col gap-[var(--reader-paragraph-gap)] *:my-0"
@@ -1063,7 +1074,7 @@ const ReaderBlocks = ({
         block={block}
         key={block.id}
         rangesByPieceId={rangesByPieceId}
-        statuteLists={statuteLists}
+        statuteAnchors={statuteAnchors}
       />
     ))}
   </div>
@@ -1149,7 +1160,7 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   const wording = (
     <ReaderBlocks
       language={frame.language}
-      statuteLists={frame.statuteLists}
+      statuteAnchors={frame.statuteAnchors}
       side={{
         blocks: sides.blocks,
         segments: [{ type: "equal", text: compareText(sides.blocks) }],

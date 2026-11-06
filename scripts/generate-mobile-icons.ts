@@ -57,6 +57,7 @@ export const mobileIcons = (webIcons: string): string => {
 export const BAR_GLYPH_SIZES = {
   "circle-user-round": 22,
   plus: 22,
+  search: 22,
   share: 22,
   "sliders-horizontal": 22,
   x: 22,

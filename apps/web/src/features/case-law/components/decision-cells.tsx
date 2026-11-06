@@ -432,7 +432,7 @@ export const DecisionKeywords = ({
           // same class, so a change to how the hook is set moves both.
           className={cn(
             SUMMARY_TEXT_CLASS_NAME,
-            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+            "bg-muted shrink-0 rounded-sm px-1.5 py-0.5",
           )}
           key={item}
         >
@@ -648,15 +648,20 @@ export const HeadnoteProse = ({
               {t("errors.actionFailed")}
             </span>
           )}
-          <button
-            aria-expanded={showingWhole}
-            // The vertical padding extends the hit area without growing the row.
-            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2"
-            onClick={onActivate}
-            type="button"
-          >
-            {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
-          </button>
+          {/* Muted like the line it closes; the underline marks it as the
+              control, and it brightens while pointed at. */}
+          <span className="text-muted-foreground">
+            <Button
+              aria-expanded={showingWhole}
+              className="group/plain"
+              onClick={onActivate}
+              variant="plain"
+            >
+              <span className="group-hover/plain:text-foreground underline underline-offset-2">
+                {t(HEADNOTE_CONTROL_LABEL_KEYS[view.type])}
+              </span>
+            </Button>
+          </span>
         </div>
       )}
     </div>
@@ -822,7 +827,7 @@ export const DecisionLanguageMenu = ({
 };
 
 export const CountryPill = ({ country }: { country: string }) => (
-  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+  <span className="bg-muted rounded-sm px-1.5 py-0.5 text-xs">
     <HighlightedText columnId="country" text={country} />
   </span>
 );

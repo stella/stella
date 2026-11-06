@@ -58,6 +58,7 @@ const USER_INPUT_TURN_OWNERS = {
   "ask-user": "ask-user",
   connect_connector: "connector",
   request_secret: "secret",
+  request_user_input: "ask-user",
 } as const satisfies Record<UserInputChatToolName, UserInputTurnOwner>;
 
 type ResolveSuggestedPromptsTurnOwnerOptions = {

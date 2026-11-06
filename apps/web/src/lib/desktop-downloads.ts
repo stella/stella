@@ -4,7 +4,7 @@ const BASE = env.VITE_DESKTOP_RELEASES_BASE_URL.replace(/\/$/u, "");
 
 export const MACOS_DMG_URL = `${BASE}/Stella-macos-universal.dmg`;
 export const WINDOWS_EXE_URL = `${BASE}/Stella-windows-x64-setup.exe`;
-export const WINDOWS_MSI_URL = `${BASE}/Stella-windows-x64.msi`;
+export const WINDOWS_ARM64_EXE_URL = `${BASE}/Stella-windows-arm64-setup.exe`;
 
 export type DesktopPlatform = "mac" | "windows" | "other";
 

@@ -56,6 +56,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { seedIssuingSeller } from "@/api/tests/helpers/issuing-seller";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -78,6 +79,7 @@ const seededInvoiceIds: SafeId<"invoice">[] = [];
 const seededTimeEntryIds: SafeId<"timeEntry">[] = [];
 const seededExpenseIds: SafeId<"expense">[] = [];
 const seededSellerProfileIds: SafeId<"sellerProfile">[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -98,6 +100,8 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
+  seededSellerProfileIds.push(issuingSellerId);
 });
 
 afterAll(async () => {
@@ -1691,6 +1695,7 @@ const seedInvoice = async () => {
     invoiceNumber: `INV-LINES-${invoiceId}`,
     invoiceDate: "2026-09-29",
     currency: "USD",
+    sellerProfileId: issuingSellerId,
     status: INVOICE_STATUS.DRAFT,
   });
   return invoiceId;

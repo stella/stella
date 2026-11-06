@@ -1,0 +1,190 @@
+{
+  "package": "@stll/mcp-kit",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "CAPABILITY_TOOL_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CompactSchemaOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KIT_ERROR_CODES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ListedTool",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MAX_TOOL_NAME_CHARS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "McpJsonSchema",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "McpJsonValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ReadInput",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolAccess",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolCallResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolDefinition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolError",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolFailureEvent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolFailureObserver",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolInputIssue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolOutcome",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolSurface",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToolSurfaceOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "advertisedBytes",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "closestNames",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "compactSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createToolSurface",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "didYouMean",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "failure",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "hoistRepeatedSchemas",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "localMcpClientHeaders",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "readToolInput",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "success",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toCallResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toolError",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toolNameDistance",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toolNameKey",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "validationError",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./package.json": {
+      "type": "asset",
+      "target": "./package.json",
+      "files": ["./package.json"]
+    }
+  },
+  "declarations": {
+    "./src/envelope.d.ts": "import type { McpJsonValue, ToolCallResult, ToolError, ToolInputIssue, ToolOutcome } from \"./types\";\nexport declare const KIT_ERROR_CODES: {\n    readonly validation: \"validation_error\";\n    readonly unknownTool: \"unknown_tool\";\n    readonly notFound: \"not_found\";\n    readonly internal: \"internal_error\";\n};\nexport declare const KIT_INTERNAL_MESSAGE = \"The tool could not complete the request.\";\nexport declare const MAX_TOOL_NAME_CHARS = 128;\nexport declare const toolError: (error: {\n    code: string;\n    message: string;\n    hint?: string | undefined;\n    retryable?: boolean | undefined;\n    issues?: readonly ToolInputIssue[] | undefined;\n    details?: unknown;\n}) => ToolError;\nexport declare const failure: (error: Parameters<typeof toolError>[0]) => ToolOutcome;\nexport declare const success: (value: McpJsonValue) => ToolOutcome;\nexport declare const jsonSuccess: (value: unknown) => ToolOutcome;\nexport declare const validationError: (message: string, issues: readonly ToolInputIssue[], hint?: string) => ToolOutcome;\nexport declare const toCallResult: (outcome: ToolOutcome, notes?: readonly string[], onSerializationError?: (cause: unknown) => undefined) => ToolCallResult;\nexport declare const toolNameKey: (name: string) => string;\nexport declare const toolNameDistance: (target: string, name: string) => number;\nexport declare const closestNames: (name: string, known: readonly string[]) => string[];\nexport declare const didYouMean: (suggestions: readonly string[]) => string;\n",
+    "./src/index.d.ts": "export { closestNames, didYouMean, failure, KIT_ERROR_CODES, MAX_TOOL_NAME_CHARS, success, toCallResult, toolError, validationError, toolNameDistance, toolNameKey, } from \"./envelope\";\nexport { readToolInput, type ReadInput } from \"./input\";\nexport { localMcpClientHeaders } from \"./local-client-identity\";\nexport { advertisedBytes, compactSchema, hoistRepeatedSchemas, type CompactSchemaOptions, } from \"./schema\";\nexport { CAPABILITY_TOOL_NAMES, createToolSurface, type ToolFailureEvent, type ToolFailureObserver, type ToolSurface, type ToolSurfaceOptions, } from \"./surface\";\nexport type { McpJsonSchema, McpJsonValue, ListedTool, ToolAccess, ToolCallResult, ToolDefinition, ToolError, ToolInputIssue, ToolOutcome, } from \"./types\";\n",
+    "./src/input.d.ts": "import type { McpJsonSchema, ToolAccess, ToolInputIssue } from \"./types\";\nexport type ReadInput = {\n    ok: true;\n    value: Record<string, unknown>;\n    notes: readonly string[];\n} | {\n    ok: false;\n    message: string;\n    issues: readonly ToolInputIssue[];\n    hint: string;\n};\nexport declare const assertToolInputSchema: (schema: McpJsonSchema) => void;\ntype ReadInputOptions = {\n    schema: McpJsonSchema;\n    value: unknown;\n    access: ToolAccess;\n    exactProperties?: readonly string[];\n};\nexport declare const readToolInput: ({ schema, value, access, exactProperties, }: ReadInputOptions) => ReadInput;\nexport {};\n",
+    "./src/local-client-identity.d.ts": "export declare const localMcpClientHeaders: (version: string) => Headers;\n",
+    "./src/schema.d.ts": "import type { ListedTool, McpJsonSchema } from \"./types\";\nexport type CompactSchemaOptions = {\n    describedDepth?: number;\n    omitMaxSafeInteger?: boolean;\n    schemaDialect?: \"preserve\" | \"omit\";\n};\nexport declare const compactSchema: (schema: McpJsonSchema, { describedDepth, omitMaxSafeInteger, schemaDialect, }?: CompactSchemaOptions) => McpJsonSchema;\nexport declare const hoistRepeatedSchemas: (schema: McpJsonSchema, { minBytes, definitionNames, }?: {\n    minBytes?: number;\n    definitionNames?: \"keyword\" | \"property\";\n}) => McpJsonSchema;\nexport declare const advertisedBytes: (tools: readonly ListedTool[]) => number;\n",
+    "./src/surface.d.ts": "import type { ListedTool, ToolCallResult, ToolDefinition } from \"./types\";\nexport declare const CAPABILITY_TOOL_NAMES: {\n    readonly list: \"list_capabilities\";\n    readonly describe: \"describe_capability\";\n    readonly invoke: \"invoke_capability\";\n};\nexport type ToolFailureEvent = {\n    readonly tool: string;\n    readonly phase: \"handler\" | \"serialization\";\n};\nexport type ToolFailureObserver = (cause: unknown, event: ToolFailureEvent) => undefined;\nexport type ToolSurfaceOptions<Context> = {\n    readonly tools: readonly ToolDefinition<Context>[];\n    readonly onError?: ToolFailureObserver;\n    readonly discovery?: {\n        readonly type: \"bounded\" | \"outline\";\n    };\n    readonly fullSchema?: \"input\" | \"described\";\n    readonly capabilityResult?: \"wrapped\" | \"payload\";\n    readonly validationResult?: \"receipt\" | \"input\";\n    readonly capabilityList?: \"detailed\" | \"minimal\";\n    readonly metaDescriptions?: \"fixed\" | \"enumerated\";\n};\nexport type ToolSurface<Context> = {\n    readonly listTools: () => ListedTool[];\n    readonly callTool: (name: string, args: unknown, context: Context) => Promise<ToolCallResult>;\n};\nexport declare const createToolSurface: <Context>({ tools, onError, discovery, fullSchema, capabilityResult, validationResult, capabilityList, metaDescriptions, }: ToolSurfaceOptions<Context>) => ToolSurface<Context>;\n",
+    "./src/types.d.ts": "export type McpJsonValue = null | boolean | number | string | readonly McpJsonValue[] | {\n    readonly [key: string]: McpJsonValue;\n};\nexport type McpJsonSchema = Readonly<Record<string, unknown>>;\nexport type ToolAccess = \"read\" | \"write\";\nexport type ToolInputIssue = {\n    readonly path: string;\n    readonly message: string;\n};\nexport type ToolError = {\n    readonly code: string;\n    readonly message: string;\n    readonly hint?: string;\n    readonly retryable: boolean;\n    readonly issues?: readonly ToolInputIssue[];\n    readonly details?: unknown;\n};\nexport type ToolOutcome = {\n    readonly ok: true;\n    readonly value: McpJsonValue;\n} | {\n    readonly ok: false;\n    readonly error: ToolError;\n};\nexport type ToolDefinition<Context> = {\n    readonly name: string;\n    readonly summary: string;\n    readonly guide?: string;\n    readonly brief?: string;\n    readonly access: ToolAccess;\n    readonly destructive?: boolean;\n    readonly domain?: string;\n    readonly inputSchema: McpJsonSchema;\n    readonly exampleInput?: Readonly<Record<string, unknown>>;\n    readonly describedSchema?: McpJsonSchema;\n    readonly direct?: {\n        readonly inputSchema: McpJsonSchema;\n    };\n    readonly exactProperties?: readonly string[];\n    readonly run: (args: Record<string, unknown>, context: Context) => Promise<ToolOutcome>;\n};\nexport type ListedTool = {\n    name: string;\n    description: string;\n    inputSchema: {\n        type: \"object\";\n        [keyword: string]: unknown;\n    };\n    annotations: {\n        readOnlyHint: boolean;\n        destructiveHint: boolean;\n        openWorldHint: boolean;\n    };\n};\nexport type ToolCallResult = {\n    content: {\n        type: \"text\";\n        text: string;\n    }[];\n    isError: boolean;\n};\n"
+  }
+}

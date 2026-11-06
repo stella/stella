@@ -2,6 +2,7 @@ import {
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   INVOICE_LANGUAGES,
 } from "@stll/api-contract";
+import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -80,6 +81,19 @@ export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =
   "off" as const satisfies DocumentProcessingMode;
+
+export const AI_BILLING_DRAFTS_MODE = {
+  DISABLED: "disabled",
+  ENABLED: "enabled",
+} as const;
+export const AI_BILLING_DRAFTS_MODES = [
+  AI_BILLING_DRAFTS_MODE.DISABLED,
+  ...Object.values(AI_BILLING_DRAFTS_MODE).filter(
+    (mode) => mode !== AI_BILLING_DRAFTS_MODE.DISABLED,
+  ),
+] as const;
+/** Drafting is on until an administrator turns it off; no setup is needed. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.ENABLED;
 
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
@@ -184,6 +198,10 @@ export const organizationSettings = p.pgTable(
       .notNull()
       .unique()
       .references(() => organization.id, { onDelete: "cascade" }),
+    aiBillingDraftsMode: p
+      .text("ai_billing_drafts_mode", { enum: AI_BILLING_DRAFTS_MODES })
+      .notNull()
+      .default(DEFAULT_AI_BILLING_DRAFTS_MODE),
     personalApiKeyPolicy: p
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()
@@ -251,6 +269,9 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
+    // The organization's own data-box IDs (lowercase); they decide whether a
+    // filed data-box message is outgoing or incoming.
+    dataBoxIds: jsonb("data_box_ids").$type<string[]>().notNull().default([]),
     /**
      * Per-slug overrides for built-in native tools (e.g. ARES). The
      * effective state of a tool is `overrides[slug] ?? jurisdictionDefault`,
@@ -343,6 +364,13 @@ export const organizationSettings = p.pgTable(
   },
   (table) => [
     p.check(
+      "organization_settings_ai_billing_drafts_mode_check",
+      sql`${table.aiBillingDraftsMode} IN (${sql.join(
+        AI_BILLING_DRAFTS_MODES.map((mode) => sql.raw(`'${mode}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "organization_settings_personal_api_key_policy_check",
       sql`${table.personalApiKeyPolicy} IN (${sql.join(
         PERSONAL_API_KEY_POLICIES.map((policy) => sql.raw(`'${policy}'`)),
@@ -355,6 +383,10 @@ export const organizationSettings = p.pgTable(
         MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
         sql`, `,
       )})`,
+    ),
+    p.check(
+      "organization_settings_data_box_ids_check",
+      sql`jsonb_typeof(${table.dataBoxIds}) = 'array' AND jsonb_array_length(${table.dataBoxIds}) <= ${sql.raw(String(ORGANIZATION_DATA_BOX_LIMIT))}`,
     ),
     p.check(
       "organization_settings_invoice_language_check",
