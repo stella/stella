@@ -24,7 +24,11 @@ import {
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
-import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
+import {
+  isOutboundTransportFailure,
+  SafeOutboundFetchError,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
@@ -776,12 +780,16 @@ export const buildOAuthClientRegistrationRequest = ({
 /**
  * A third party's refusal or outage at its OAuth endpoint is its answer, not a
  * fault here. A successful response that does not parse breaks the endpoint's
- * contract, so it stays an internal failure that is reported.
+ * contract, and a request this client refused to send or finish (its URL policy,
+ * its size limit) never got that answer, so both stay internal failures that
+ * are reported.
  */
 const oauthEndpointFailureCode = (
   cause: unknown,
 ): "internal_error" | "upstream_unavailable" =>
-  cause instanceof SyntaxError || v.isValiError(cause)
+  cause instanceof SyntaxError ||
+  v.isValiError(cause) ||
+  (SafeOutboundFetchError.is(cause) && !isOutboundTransportFailure(cause))
     ? "internal_error"
     : "upstream_unavailable";
 
