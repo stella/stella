@@ -102,6 +102,8 @@ describe("reconcileOrphanedFlowRuns", () => {
         status: row.status,
         currentStepIndex: 0,
         createdAt: STALLED_AT,
+        // A run that left pending records when it started.
+        startedAt: row.status === "running" ? STALLED_AT : null,
       };
     });
     await testDb.insert(flowRuns).values(rows);
