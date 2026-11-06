@@ -5,12 +5,12 @@ import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import { resolveEditedUserMessageId } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { canAcceptChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnRefusal } from "@/api/handlers/chat/chat-turn-persistence";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type AuthorizeChatUserMessageEditArgs = {

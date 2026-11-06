@@ -5,12 +5,12 @@ import * as v from "valibot";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { lockThreadStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -186,42 +186,43 @@ const deleteThread = createSafeRootHandler(
     // The delete cascades to the thread's unfinished turns, so its owner's other
     // tabs must drop the chat's run mark.
     yield* Result.await(
-      withChatRunPings((pings) =>
-        safeDb(async (tx) => {
-          await lockThreadStoredContentTransitionOnTx(tx, params.threadId);
-          const result = await tx
-            .delete(chatThreads)
-            .where(
-              and(
-                eq(chatThreads.id, params.threadId),
-                eq(chatThreads.userId, user.id),
-                scope.scope === "workspace"
-                  ? eq(chatThreads.workspaceId, scope.workspaceId)
-                  : isNull(chatThreads.workspaceId),
-              ),
-            )
-            .returning({
-              id: chatThreads.id,
-              organizationId: chatThreads.organizationId,
-            });
+      withChatRunPings(
+        async (pings) =>
+          await safeDb(async (tx) => {
+            await lockThreadStoredContentTransitionOnTx(tx, params.threadId);
+            const result = await tx
+              .delete(chatThreads)
+              .where(
+                and(
+                  eq(chatThreads.id, params.threadId),
+                  eq(chatThreads.userId, user.id),
+                  scope.scope === "workspace"
+                    ? eq(chatThreads.workspaceId, scope.workspaceId)
+                    : isNull(chatThreads.workspaceId),
+                ),
+              )
+              .returning({
+                id: chatThreads.id,
+                organizationId: chatThreads.organizationId,
+              });
 
-          const [deleted] = result;
-          if (deleted !== undefined) {
-            pings.changed({
-              organizationId: deleted.organizationId,
-              userId: user.id,
-            });
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.DELETE,
-              resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-              resourceId: params.threadId,
-              workspaceId:
-                scope.scope === "workspace" ? scope.workspaceId : null,
-            });
-          }
+            const [deleted] = result;
+            if (deleted !== undefined) {
+              pings.changed({
+                organizationId: deleted.organizationId,
+                userId: user.id,
+              });
+              await recordAuditEvent(tx, {
+                action: AUDIT_ACTION.DELETE,
+                resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+                resourceId: params.threadId,
+                workspaceId:
+                  scope.scope === "workspace" ? scope.workspaceId : null,
+              });
+            }
 
-          return result;
-        }, defaultDatabaseRetry),
+            return result;
+          }, defaultDatabaseRetry),
       ),
     );
 

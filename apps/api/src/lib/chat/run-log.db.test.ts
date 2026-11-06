@@ -26,7 +26,6 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -54,6 +53,7 @@ import type {
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,

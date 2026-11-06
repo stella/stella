@@ -17,7 +17,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -30,6 +29,7 @@ import { createHttpApp } from "@/api/http/app";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {

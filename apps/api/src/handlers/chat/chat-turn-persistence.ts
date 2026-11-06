@@ -21,8 +21,6 @@ import {
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
-import type { ChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   closeCutShortCalls,
   settleOpenToolCallsForOutcome,
@@ -51,6 +49,8 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import { CHAT_TURN_TIMING_ACTIVE_STATUSES } from "@/api/lib/chat/turn-status";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";

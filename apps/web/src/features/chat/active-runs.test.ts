@@ -11,7 +11,7 @@ afterEach(() => {
 
 test("reads every page, so working chats behind the waiting ones still count", async () => {
   const cursors: (string | null)[] = [];
-  spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+  const respond = async (input: URL | RequestInfo) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const cursor = url.searchParams.get("cursor");
     cursors.push(cursor);
@@ -20,7 +20,10 @@ test("reads every page, so working chats behind the waiting ones still count", a
         ? { items: [{ threadId: "waiting" }], nextCursor: "second-page" }
         : { items: [{ threadId: "working" }], nextCursor: null },
     );
-  });
+  };
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(respond, { preconnect: () => {} }),
+  );
 
   const runs = await new QueryClient().fetchQuery(
     activeChatRunsOptions({ activeOrganizationId: "firm", userId: "reader" }),

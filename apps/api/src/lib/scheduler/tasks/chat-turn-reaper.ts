@@ -5,9 +5,9 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import { chatTurns } from "@/api/db/schema";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
-import type { ChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const REAP_OWNERLESS_CHAT_TURNS_TASK =

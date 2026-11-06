@@ -16,7 +16,6 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -38,6 +37,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";

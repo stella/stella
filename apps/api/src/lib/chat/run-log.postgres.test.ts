@@ -9,13 +9,13 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   readChatTurnTiming,
   settleChatTurnOnTx,
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   createChatRunLog,
   createChatRunLogReplay,

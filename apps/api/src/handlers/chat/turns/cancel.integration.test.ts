@@ -29,7 +29,6 @@ import {
   persistFailedChatTurn,
   persistInterruptedChatTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -49,6 +48,7 @@ import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";

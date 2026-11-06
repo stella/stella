@@ -1718,8 +1718,8 @@
       "secretPlaceholder": "Votre réponse reste masquée"
     },
     "matterRuns": {
-      "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent}}",
-      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours}}"
+      "needsYou": "{count, plural, one {# conversation vous attend} other {# conversations vous attendent} many {# conversations vous attendent}}",
+      "working": "{count, plural, one {# conversation en cours} other {# conversations en cours} many {# conversations en cours}}"
     },
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mcpReconnect": {

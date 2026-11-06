@@ -12,7 +12,6 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   bindChatTurnRunId,
   CHAT_TURN_RUN_LEASE_MS,
@@ -36,6 +35,7 @@ import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

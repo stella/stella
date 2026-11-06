@@ -21,7 +21,6 @@ import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   bindChatTurnRunId,
   claimChatTurnForExecution,
@@ -40,6 +39,7 @@ import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
@@ -298,6 +298,7 @@ const deleteThroughRoute = async (
       memberRole: sessionMemberRole("owner"),
       params: { threadId },
       query: { workspaceId: member.workspaceId },
+      recordAuditEvent: async () => {},
       request: new Request(`http://localhost/v1/chat/threads/${threadId}`, {
         method: "DELETE",
       }),

@@ -22,7 +22,6 @@ import {
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -34,6 +33,7 @@ import { ChatSendLifecycle } from "@/api/handlers/chat/send-message";
 import { createLazyExternalMcpToolsLoader } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,

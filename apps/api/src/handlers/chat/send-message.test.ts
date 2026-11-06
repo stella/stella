@@ -1031,7 +1031,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -1051,7 +1056,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1153,7 +1160,9 @@ describe("send message disconnect handling", () => {
         acceptanceTransaction = safeDbTransaction;
         return {
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            returning: async () => [
+              { id: turnId, cancelRequestedAt: null, organizationId, userId },
+            ],
           }),
         };
       },
@@ -1172,7 +1181,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1256,7 +1267,9 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1270,7 +1283,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1367,7 +1382,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -1379,7 +1399,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1492,7 +1514,12 @@ describe("send message disconnect handling", () => {
               ? {
                   onConflictDoNothing: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }
@@ -1514,7 +1541,12 @@ describe("send message disconnect handling", () => {
               return {
                 where: () => ({
                   returning: async () => [
-                    { id: turnId, cancelRequestedAt: null },
+                    {
+                      id: turnId,
+                      cancelRequestedAt: null,
+                      organizationId,
+                      userId,
+                    },
                   ],
                 }),
               };
@@ -1683,7 +1715,9 @@ describe("send message disconnect handling", () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
       onConflictDoNothing: () => ({
-        returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+        returning: async () => [
+          { id: turnId, cancelRequestedAt: null, organizationId, userId },
+        ],
       }),
     }));
     const updateWhere = mock(async () => {
@@ -1754,7 +1788,12 @@ describe("send message disconnect handling", () => {
                 set: () => ({
                   where: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }),
@@ -2025,7 +2064,9 @@ describe("assistant turn settlement", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -2047,7 +2088,9 @@ describe("assistant turn settlement", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ cancelRequestedAt: null, id: turnId }],
+              returning: async () => [
+                { cancelRequestedAt: null, id: turnId, organizationId, userId },
+              ],
             }),
           };
         }

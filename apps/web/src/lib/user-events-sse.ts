@@ -75,7 +75,7 @@ const useUserEventsSSE = (
     onEvent: (event: UserRealtimeEvent) => UserEventRefresh[];
     /**
      * Everything the stream keeps fresh. Events sent while the stream was
-     * not registered are lost, so every open re-reads all of it.
+     * down are lost, so every reopen after the first re-reads all of it.
      */
     onResync: () => UserEventRefresh[];
   },
@@ -90,6 +90,7 @@ const useUserEventsSSE = (
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let consecutiveFailures = 0;
     let disposed = false;
+    let hasOpened = false;
 
     const connect = () => {
       const stream = new EventSource(
@@ -101,11 +102,14 @@ const useUserEventsSSE = (
       stream.addEventListener("open", () => {
         consecutiveFailures = 0;
         // The browser's own retries and ours both land here; either way the
-        // gap may have swallowed events. So may the first open: a query read
-        // before the server registered this stream misses what changed since.
-        for (const { queryKey, prepare } of handleResync()) {
-          realtimeRefresh.refresh(queryKey, prepare);
+        // gap may have swallowed events. The first open re-reads nothing: the
+        // queries were just fetched, and a second read would only double them.
+        if (hasOpened) {
+          for (const { queryKey, prepare } of handleResync()) {
+            realtimeRefresh.refresh(queryKey, prepare);
+          }
         }
+        hasOpened = true;
       });
       stream.addEventListener("message", (event: MessageEvent) => {
         const payload = jsonOrNull(String(event.data));

@@ -11,7 +11,6 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -25,6 +24,7 @@ import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";

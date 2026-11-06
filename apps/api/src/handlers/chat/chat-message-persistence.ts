@@ -12,8 +12,6 @@ import {
   mergeAnonRestorations,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
-import { withChatRunPings } from "@/api/handlers/chat/chat-run-pings";
-import type { ChatRunPings } from "@/api/handlers/chat/chat-run-pings";
 import {
   canAcceptChatTurnOnTx,
   ChatTurnNotOwnedError,
@@ -61,6 +59,8 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,

@@ -39,7 +39,7 @@ describe("matterRunStatusByWorkspace", () => {
 
   test("every chat in a matter is counted exactly once, under its own state", () => {
     assertProperty(
-      "per-matter counts partition the runs that belong to a matter",
+      "every chat in a matter is counted exactly once, under its own state",
       fc.property(fc.array(runArbitrary, { maxLength: 40 }), (runs) => {
         const status = matterRunStatusByWorkspace(runs);
         for (const matter of MATTERS) {
