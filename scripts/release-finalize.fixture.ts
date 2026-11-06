@@ -20,6 +20,15 @@ const git = (cwd: string, ...args: string[]) => {
 
 type ProofFixture = {
   states?: Record<string, string>;
+  /** A failed main/heavy run: its conclusion and latest-attempt jobs. */
+  heavyRun?: {
+    conclusion: string;
+    jobs: readonly {
+      name: string;
+      status: string;
+      conclusion: string | null;
+    }[];
+  };
   runSha?: string;
   incidents?: boolean;
   noRc?: boolean;
@@ -95,11 +104,24 @@ export const finalize = (fixture: ProofFixture = {}) => {
           head_branch: "main",
           event: "workflow_dispatch",
           display_title: `${title}${fixture.runSha ?? sha}`,
+          run_attempt: 1,
           status: "completed",
-          conclusion: "success",
+          conclusion:
+            title.startsWith("Main heavy") && fixture.heavyRun
+              ? fixture.heavyRun.conclusion
+              : "success",
         }),
       );
     }
+    writeFileSync(
+      path.join(root, "jobs.json"),
+      JSON.stringify([
+        {
+          total_count: fixture.heavyRun?.jobs.length ?? 0,
+          jobs: fixture.heavyRun?.jobs ?? [],
+        },
+      ]),
+    );
     writeFileSync(
       path.join(root, "incidents.json"),
       JSON.stringify([fixture.incidents ? [{ id: 1 }] : []]),
@@ -116,6 +138,7 @@ esac
 case "$*" in
   'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
+  *actions/runs/*/jobs?*) cat "$TEST_ROOT/jobs.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;
   'release edit '*)

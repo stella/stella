@@ -3,10 +3,10 @@ import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
+import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
 import { useLayout, useSelection } from "@/components/selection";
-import { Text } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 import { CircleIcon } from "@/icons.gen";
 import { setTaskStatus } from "@/state/tasks";

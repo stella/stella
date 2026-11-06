@@ -6,6 +6,8 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_COMPACT_ROW_CLASS,
@@ -25,7 +27,10 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
-import { useDockedChatSlotRef } from "@/components/chat/docked-chat-stack";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  useDockedChatSlotRef,
+} from "@/components/chat/docked-chat-stack";
 
 /**
  * Styled placeholder label rendered in the prompt bar when the editor
@@ -126,6 +131,39 @@ export const PromptBarPending = ({ children }: { children: ReactNode }) => (
   </PromptBarShell>
 );
 
+/**
+ * The docked composer while its code or thread loads, at the height of what is
+ * coming: the chat's bar and status row, or the sign-in bar. The composer
+ * publishes the height everything else on the page lays out around, so it holds
+ * that height from the first paint instead of leaving and coming back.
+ */
+export const DockedComposerPending = ({
+  surface,
+}: {
+  surface: "chat" | "sign-in";
+}) => {
+  const t = useTranslations("common");
+  return (
+    <>
+      {/* The placeholder is hidden from assistive technology; this says why. */}
+      <span className="sr-only" role="status">
+        {t("loading")}
+      </span>
+      {surface === "chat" ? (
+        <DockedComposer
+          bar={<PromptBarPending>{null}</PromptBarPending>}
+          // The status row's height: its controls, and the gap above them.
+          dock={<div aria-hidden className="mt-1.5 h-6" />}
+        />
+      ) : (
+        <DockedComposer
+          bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>}
+        />
+      )}
+    </>
+  );
+};
+
 type DockedComposerProps = {
   /**
    * Follow-up chips stacked directly above the bar. Owns no offset of
@@ -169,6 +207,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
         DOCKED_COMPOSER_INSET_START_CLASS,
         OVERLAY_LAYER_CLASS_NAMES.chrome,
       )}
+      data-slot={DOCKED_CHAT_COLUMN_SLOT}
       ref={publishDocumentPanelInset}
     >
       {/* The docked surfaces of this host (thread card, review pill) render

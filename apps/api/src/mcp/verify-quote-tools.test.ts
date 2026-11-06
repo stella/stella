@@ -66,6 +66,8 @@ const readOf = () =>
     citationsTo: [],
     citationsNextCursor: null,
     caseFile: { items: [], nextCursor: null, limit: 50 },
+    extractionWarnings: [],
+    sourceLanguages: [],
   }) satisfies ReadCaseLawDecisionSuccess;
 
 type ToolContext = Parameters<

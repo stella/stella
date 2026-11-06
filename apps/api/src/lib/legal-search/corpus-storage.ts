@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import {
   type DocumentAst,
+  headMatterOrderDegradations,
   persistedAstDegradations,
 } from "@stll/legal-ast/document-ast";
 
@@ -60,6 +61,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   deleteCorpusS3ObjectWithSignal,
   isMissingCorpusObjectError,
@@ -161,6 +163,7 @@ export const parsePersistedCorpusAst = (
   value: unknown,
   documentId?: string,
 ): DocumentAst | EmptyAst | null => {
+  recordReadWork("astParses");
   const parsed = v.safeParse(persistedCorpusAstSchema, value);
   if (!parsed.success) {
     const paths = new Set(issueDotPaths(parsed.issues, []));
@@ -174,11 +177,16 @@ export const parsePersistedCorpusAst = (
     }
     throw error;
   }
-  const degradations = persistedAstDegradations(value);
+  const degradations = [
+    ...persistedAstDegradations(value),
+    ...(parsed.output !== null && "blocks" in parsed.output
+      ? headMatterOrderDegradations(parsed.output.blocks)
+      : []),
+  ];
   if (degradations.length > 0) {
     captureError(
       new StoredAstDegradedError({
-        message: "Stored document AST carries undeclared vocabulary",
+        message: "Stored document AST was degraded on read",
         degradations,
       }),
       handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
@@ -194,11 +202,24 @@ const STORED_CORPUS_VALIDATION_SINK = failureSink({
   expected: [],
 });
 
+const reportedStoredValidationErrors = new WeakMap<
+  StoredCorpusValidationError,
+  Set<string>
+>();
+
 /** Correlate a rejected payload without logging its values or validator messages. */
 const reportStoredCorpusValidation = (
   error: StoredCorpusValidationError,
   documentId: string,
 ): void => {
+  // A row parser and its recovery boundary can observe the same rejection.
+  const reportedDecisions =
+    reportedStoredValidationErrors.get(error) ?? new Set<string>();
+  if (reportedDecisions.has(documentId)) {
+    return;
+  }
+  reportedDecisions.add(documentId);
+  reportedStoredValidationErrors.set(error, reportedDecisions);
   observeFailure(error, {
     sink: STORED_CORPUS_VALIDATION_SINK,
     ctx: { decisionId: documentId },
@@ -630,14 +651,18 @@ export const corpusPayloadDisposition = ({
 export const writeCorpusDocument = async (
   uncheckedInput: WriteCorpusInput,
   { signal, s3Policy }: CorpusIoOptions = {},
-): Promise<CorpusWriteOutcome> => {
-  const input = {
-    ...uncheckedInput,
-    ast: prepareCorpusAst({ ast: uncheckedInput.ast }).ast,
-  };
+): Promise<Result<CorpusWriteOutcome, StoredCorpusValidationError>> => {
+  const prepared = prepareCorpusAst({
+    ast: uncheckedInput.ast,
+    fallbackText: uncheckedInput.text,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  const input = { ...uncheckedInput, ast: prepared.value.ast };
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
-    return plan;
+    return Result.ok(plan);
   }
   const { written } = plan;
   const frames = await corpusPayloadFrames(input);
@@ -697,7 +722,7 @@ export const writeCorpusDocument = async (
     operations: writes,
   });
 
-  return { type: "written", written };
+  return Result.ok({ type: "written", written });
 };
 
 type BoundedObjectReader = (options: {
@@ -752,34 +777,20 @@ type ReadPackedMemberOptions = {
   readTombstones: CorpusTombstoneReader;
 };
 
-/**
- * The three ways a packed member can be refused, answered before the caller
- * sees any bytes: past the transfer ceiling, erased, or not the bytes the
- * address records. Returned rather than thrown so the read path keeps one
- * failure site.
- */
-const readPackedMember = async ({
+type ReadableCorpusMemberOptions<T> = {
+  location: PackedCorpusLocation;
+  readTombstones: CorpusTombstoneReader;
+  read: () => Promise<T>;
+};
+
+/** Revalidate erasure before serving either stored bytes or an immutable cache entry. */
+export const withReadableCorpusMember = async <T>({
   location,
-  maxBytes,
-  signal,
-  s3Policy,
-  readRange,
   readTombstones,
-}: ReadPackedMemberOptions): Promise<
-  Result<
-    Uint8Array,
-    | PayloadBudgetError
-    | CorpusMemberTombstonedError
-    | CorpusMemberDigestMismatchError
-  >
+  read,
+}: ReadableCorpusMemberOptions<T>): Promise<
+  Result<T, CorpusMemberTombstonedError>
 > => {
-  if (location.length > maxBytes) {
-    return Result.err(
-      new PayloadBudgetError({
-        message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
-      }),
-    );
-  }
   const address = formatCorpusLocation(location);
   const tombstoned = await readTombstones([address]);
   if (tombstoned.has(address)) {
@@ -790,23 +801,74 @@ const readPackedMember = async ({
       }),
     );
   }
-  const bytes = await readRange({
-    key: location.packKey,
-    offset: location.offset,
-    length: location.length,
-    signal,
-    ...(s3Policy === undefined ? {} : { s3Policy }),
+  return Result.ok(await read());
+};
+
+type PackedMemberRefusal =
+  | PayloadBudgetError
+  | CorpusMemberTombstonedError
+  | CorpusMemberDigestMismatchError;
+
+/**
+ * Transfer and integrity failures are returned to the storage boundary.
+ * Erasure is enforced by the shared admission gate before the range read.
+ */
+const readPackedMember = async ({
+  location,
+  maxBytes,
+  signal,
+  s3Policy,
+  readRange,
+  readTombstones,
+}: ReadPackedMemberOptions): Promise<
+  Result<Uint8Array, PackedMemberRefusal>
+> => {
+  if (location.length > maxBytes) {
+    return Result.err(
+      new PayloadBudgetError({
+        message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
+      }),
+    );
+  }
+  const address = formatCorpusLocation(location);
+  const admitted = await withReadableCorpusMember({
+    location,
+    readTombstones,
+    read: async () => {
+      const bytes = await readRange({
+        key: location.packKey,
+        offset: location.offset,
+        length: location.length,
+        signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      });
+      const digest = corpusMemberDigest(bytes);
+      return digest === location.sha256
+        ? Result.ok(bytes)
+        : Result.err(
+            new CorpusMemberDigestMismatchError({
+              message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
+              location: address,
+              digest,
+            }),
+          );
+    },
   });
-  const digest = corpusMemberDigest(bytes);
-  return digest === location.sha256
-    ? Result.ok(bytes)
-    : Result.err(
-        new CorpusMemberDigestMismatchError({
-          message: `Corpus member at ${address} hashes to ${digest}, not the digest its address records`,
-          location: address,
-          digest,
-        }),
-      );
+  return admitted.andThen((member) => member);
+};
+
+/**
+ * The packed read path's one failure site, shared by storage reads and cache
+ * hits: a refused member rejects with its typed error unchanged, which is what
+ * every corpus reader handles.
+ */
+export const unwrapPackedMemberRead = <T>(
+  read: Result<T, PackedMemberRefusal>,
+): T => {
+  if (Result.isError(read)) {
+    throw read.error;
+  }
+  return read.value;
 };
 
 export const readCorpusBytesAt = async ({
@@ -835,10 +897,7 @@ export const readCorpusBytesAt = async ({
         readRange,
         readTombstones,
       });
-      if (Result.isError(member)) {
-        throw member.error;
-      }
-      return member.value;
+      return unwrapPackedMemberRead(member);
     }
     default: {
       location satisfies never;
@@ -952,9 +1011,17 @@ export const readSizedCorpusAst = async (
     { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
-  const parsed: unknown = JSON.parse(decoded);
+  const parsed = Result.try((): unknown => JSON.parse(decoded));
+  if (!Result.isOk(parsed)) {
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: ["$"],
+    });
+    throw error;
+  }
   return {
-    ast: parsePersistedCorpusAst(parsed),
+    ast: parsePersistedCorpusAst(parsed.value),
     decodedLength: decoded.length,
   };
 };
@@ -1020,6 +1087,33 @@ export const storedCorpusValidationFailure = (
   }
   const cause = rejectionCause(raised.cause);
   return StoredCorpusValidationError.is(cause) ? cause : null;
+};
+
+type RecoverableCorpusReadOptions<T> = {
+  documentId: string;
+  read: () => Promise<T>;
+};
+
+/** Classified validation failures are recoverable; other read failures propagate. */
+export const readCorpusForRecovery = async <T>({
+  documentId,
+  read,
+}: RecoverableCorpusReadOptions<T>): Promise<
+  Result<T, StoredCorpusValidationError>
+> => {
+  const outcome = await Result.tryPromise(read);
+  if (Result.isOk(outcome)) {
+    return Result.ok(outcome.value);
+  }
+  const raised = rejectionCause(outcome.error);
+  const invalid = storedCorpusValidationFailure(raised);
+  if (invalid === null) {
+    throw raised;
+  }
+  if (StoredCorpusValidationError.is(raised)) {
+    reportStoredCorpusValidation(invalid, documentId);
+  }
+  return Result.err(invalid);
 };
 
 type CorpusReadWithFallbackInput<T> = {

@@ -34,11 +34,14 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
+import { inBackfillTransaction } from "@/api/lib/case-law/provision-state-backfill/step";
+import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -77,6 +80,8 @@ const CHANGED_INPUT_DECISION_ID = seedId<"caseLawDecision">(
   "synthetic-provision-input-changed-after-preparation",
 );
 let changedInputFailure: unknown;
+let unitFailure: unknown;
+let lostUnitRaces = 0;
 let changedInputSnapshot: SeededDecision;
 // A payload rewritten under its old content hash, so the input digest holds.
 const CHANGED_PAYLOAD_DECISION_ID = seedId<"caseLawDecision">(
@@ -96,6 +101,32 @@ let db: ReturnType<typeof drizzle>;
 let caseLawDb: CaseLawPublicReadDb;
 const seeded: SeededDecision[] = [];
 type SeedOptions = Parameters<typeof seedSyntheticProvisionLinks>[0];
+
+/**
+ * The session with its first unit failing in Postgres under `sqlState`, rolled
+ * back like any unit; later units run untouched.
+ */
+const failFirstUnit = (
+  session: ProvisionBackfillSession,
+  sqlState: string,
+  onFailure: () => void = () => undefined,
+): ProvisionBackfillSession => {
+  let failed = false;
+  return {
+    ...session,
+    runUnit: async (budget, work) =>
+      await inBackfillTransaction(session, budget, async () => {
+        if (!failed) {
+          failed = true;
+          onFailure();
+          await session.execute(
+            `DO $$ BEGIN RAISE EXCEPTION 'injected' USING ERRCODE = '${sqlState}'; END $$`,
+          );
+        }
+        await work();
+      }),
+  };
+};
 
 /** The reader's status columns, granted as the reader-grants rollout does. */
 const grantProvisionStatusReads = async () => {
@@ -256,9 +287,24 @@ beforeAll(async () => {
     .update(caseLawDecisions)
     .set({ decisionDate: sql`${caseLawDecisions.decisionDate} + 1` })
     .where(eq(caseLawDecisions.id, CHANGED_INPUT_DECISION_ID));
+  unitFailure = await rejectionOf(
+    seedSyntheticProvisionLinks({
+      ...options,
+      backfill: failFirstUnit(options.backfill, PG_ERROR.CHECK_VIOLATION),
+    }),
+  );
+  // The publication fence rejects only after the backfill completed, so this
+  // run also proves the seed outlived the race a running scheduler causes.
   changedInputFailure = await rejectionOf(
     seedSyntheticProvisionLinks({
       ...options,
+      backfill: failFirstUnit(
+        options.backfill,
+        PG_ERROR.SERIALIZATION_FAILURE,
+        () => {
+          lostUnitRaces += 1;
+        },
+      ),
       decisions: [changedInputSnapshot],
     }),
   );
@@ -295,6 +341,19 @@ beforeAll(async () => {
 }, PGLITE_SEED_SETUP_TIMEOUT_MS);
 
 afterAll(async () => await client.close());
+
+test("the seed retries a backfill unit that lost a race with another runner", () => {
+  expect(lostUnitRaces).toBe(1);
+  expect(changedInputFailure).toMatchObject({
+    message: "Synthetic seed input changed before provision publication",
+  });
+});
+
+test("any other backfill unit failure fails the seed", () => {
+  expect(unitFailure).toMatchObject({
+    message: expect.stringContaining("Provision state backfill failed"),
+  });
+});
 
 const seededByCaseNumber = (caseNumber: string) =>
   seeded.find(({ decision }) => decision.case_number === caseNumber) ??

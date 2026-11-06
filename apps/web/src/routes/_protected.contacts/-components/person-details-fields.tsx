@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import {
+  CONTACT_BIRTH_YEAR_MIN,
+  isValidContactBirthDate,
+} from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
+import { Temporal } from "@stll/time";
 import {
   Combobox,
   ComboboxChip,
@@ -26,11 +31,13 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
 import {
   filterNationalityOptions,
   normalizeBirthDateDigits,
+  parseBirthDateDraft,
 } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 
@@ -48,6 +55,13 @@ export const PersonDetailsFields = ({
   onNationalityCodesChange,
 }: PersonDetailsFieldsProps) => {
   const t = useTranslations();
+  const birthDateLabelId = useId();
+  const precisionLabelId = useId();
+  const parsedBirthDate = parseBirthDateDraft(birthDate);
+  const pickerValue =
+    parsedBirthDate?.precision === "day"
+      ? Temporal.PlainDate.from(parsedBirthDate).toString()
+      : null;
   const format = useFormatter();
   const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
@@ -67,87 +81,121 @@ export const PersonDetailsFields = ({
   return (
     <div className="flex flex-col gap-4">
       <Field>
-        <FieldLabel>{t("common.anonymizationLabels.dateOfBirth")}</FieldLabel>
-        <div className="flex flex-wrap gap-2" dir="ltr">
-          <Select
-            onValueChange={(precision) => {
-              if (precision === null) {
-                return;
-              }
-              onBirthDateChange({
-                ...birthDate,
-                precision,
-                ...(precision !== "day" && { day: "" }),
-                ...(precision === "year" && { month: "" }),
-              });
-            }}
-            value={birthDate.precision}
-          >
-            <SelectTrigger
-              aria-label={t("contacts.datePrecision")}
-              className="w-32"
+        <FieldLabel id={birthDateLabelId}>
+          {t("common.anonymizationLabels.dateOfBirth")}
+        </FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          {birthDate.precision === "day" ? (
+            <DatePickerPopover
+              className="w-auto max-w-full"
+              dateInputLabel={t("common.anonymizationLabels.dateOfBirth")}
+              labelledBy={birthDateLabelId}
+              minDate={`${CONTACT_BIRTH_YEAR_MIN}-01-01`}
+              isDateDisabled={(value) => {
+                const { year, month, day } = Temporal.PlainDate.from(value);
+                return !isValidContactBirthDate({
+                  precision: "day",
+                  year,
+                  month,
+                  day,
+                });
+              }}
+              onChange={(value) => {
+                if (value === null) {
+                  onBirthDateChange({
+                    precision: "day",
+                    year: "",
+                    month: "",
+                    day: "",
+                  });
+                  return;
+                }
+                const date = Temporal.PlainDate.from(value);
+                onBirthDateChange({
+                  precision: "day",
+                  year: String(date.year),
+                  month: String(date.month),
+                  day: String(date.day),
+                });
+              }}
+              value={pickerValue}
+              variant="field"
+            />
+          ) : (
+            <>
+              {birthDate.precision === "month" && (
+                <Input
+                  aria-label={t("contacts.fields.month")}
+                  className="w-24"
+                  dir="ltr"
+                  inputMode="numeric"
+                  nativeInput
+                  maxLength={2}
+                  onChange={(event) =>
+                    onBirthDateChange({
+                      ...birthDate,
+                      month: normalizeBirthDateDigits(event.target.value),
+                    })
+                  }
+                  placeholder={t("contacts.fields.month")}
+                  value={birthDate.month}
+                />
+              )}
+              <Input
+                aria-label={t("contacts.fields.year")}
+                className="w-28"
+                dir="ltr"
+                inputMode="numeric"
+                nativeInput
+                maxLength={4}
+                onChange={(event) =>
+                  onBirthDateChange({
+                    ...birthDate,
+                    year: normalizeBirthDateDigits(event.target.value),
+                  })
+                }
+                placeholder={t("contacts.fields.year")}
+                value={birthDate.year}
+              />
+            </>
+          )}
+          <Field>
+            <FieldLabel className="sr-only" id={precisionLabelId}>
+              {t("contacts.datePrecision")}
+            </FieldLabel>
+            <Select
+              onValueChange={(precision) => {
+                if (precision === null) {
+                  return;
+                }
+                onBirthDateChange({
+                  ...birthDate,
+                  precision,
+                  ...(precision !== "day" && { day: "" }),
+                  ...(precision === "year" && { month: "" }),
+                });
+              }}
+              value={birthDate.precision}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="year">
-                {t("contacts.precision.year")}
-              </SelectItem>
-              <SelectItem value="month">
-                {t("contacts.precision.month")}
-              </SelectItem>
-              <SelectItem value="day">{t("contacts.precision.day")}</SelectItem>
-            </SelectPopup>
-          </Select>
-          {birthDate.precision === "day" && (
-            <Input
-              aria-label={t("contacts.fields.day")}
-              className="w-20"
-              dir="ltr"
-              inputMode="numeric"
-              maxLength={2}
-              onChange={(event) =>
-                onBirthDateChange({
-                  ...birthDate,
-                  day: normalizeBirthDateDigits(event.target.value),
-                })
-              }
-              placeholder={t("contacts.fields.day")}
-              value={birthDate.day}
-            />
-          )}
-          {birthDate.precision !== "year" && (
-            <Input
-              aria-label={t("contacts.fields.month")}
-              className="w-24"
-              dir="ltr"
-              inputMode="numeric"
-              maxLength={2}
-              onChange={(event) =>
-                onBirthDateChange({
-                  ...birthDate,
-                  month: normalizeBirthDateDigits(event.target.value),
-                })
-              }
-              placeholder={t("contacts.fields.month")}
-              value={birthDate.month}
-            />
-          )}
-          <Input
-            aria-label={t("contacts.fields.year")}
-            className="w-28"
-            dir="ltr"
-            inputMode="numeric"
-            maxLength={4}
-            onChange={(event) =>
-              onBirthDateChange({
-                ...birthDate,
-                year: normalizeBirthDateDigits(event.target.value),
-              })
-            }
-            placeholder={t("contacts.fields.year")}
-            value={birthDate.year}
-          />
+              <SelectTrigger
+                aria-labelledby={precisionLabelId}
+                className="w-32"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="year">
+                  {t("contacts.precision.year")}
+                </SelectItem>
+                <SelectItem value="month">
+                  {t("contacts.precision.month")}
+                </SelectItem>
+                <SelectItem value="day">
+                  {t("contacts.precision.day")}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          </Field>
         </div>
       </Field>
       <Field>

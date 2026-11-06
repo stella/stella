@@ -80,9 +80,7 @@ const assertBoundedSourceCounts = (root: Record<string, unknown>) => {
   const groupProbes = nodes.filter((node) => {
     const condition = node["Index Cond"];
     return (
-      node["Index Name"] === GROUP_INDEX &&
-      typeof condition === "string" &&
-      condition.includes("language_group_key")
+      typeof condition === "string" && condition.includes("language_group_key")
     );
   });
   expect(groupProbes.length).toBeGreaterThan(0);

@@ -14,6 +14,7 @@ import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { devPublicRoute } from "@/api/handlers/dev/routes";
 import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
@@ -35,6 +36,7 @@ import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-que
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
+import { timeEntryReportRoute } from "@/api/handlers/time-entries/report/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { visualSandboxRoute } from "@/api/handlers/visual-sandbox/routes";
 import { wellKnownRoute } from "@/api/handlers/well-known/routes";
@@ -125,6 +127,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   authUiRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
+  desktopRunnerRoute,
   desktopTimeEntriesRoute,
   devPublicRoute,
   feedbackPublicRoute,
@@ -137,6 +140,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   memberTimeTargetsRoute,
   memoriesRoute,
   myTimeEntriesRoute,
+  timeEntryReportRoute,
   notificationsRoute,
   operatorRoute,
   pdfSigningSessionsRoute,

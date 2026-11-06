@@ -31,6 +31,14 @@
     "subject": "Az Ön stella ellenőrző kódja",
     "twoFactorManage": "Használja ezt a kódot a kétfaktoros hitelesítés beállításainak módosítására vonatkozó megerősítéshez."
   },
+  "pushAlert": {
+    "announcement": "A szervezete közleményt tett közzé",
+    "flowRunAwaitingApproval": "Egy munkafolyamat a jóváhagyására vár",
+    "flowRunCompleted": "Egy munkafolyamat befejeződött",
+    "flowRunFailed": "Egy munkafolyamat sikertelen",
+    "mention": "Megemlítették Önt egy hozzászólásban",
+    "taskAssigned": "Feladatot rendeltek önhöz"
+  },
   "reportExportStatus": {
     "action": "stella megnyitása",
     "completedBody": "A jelentés exportálása elkészült. Nyissa meg a stellát a megtekintéshez vagy letöltéshez.",

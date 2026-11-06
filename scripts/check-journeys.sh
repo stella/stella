@@ -13,13 +13,22 @@ unset MCP_CANARY_TOKEN
 protocol_version=2025-11-25
 session_id=
 request_count=0
-# At most three extra HTTP requests: the hourly run stays within ten.
+# At most three extra HTTP requests: the hourly run stays within eleven.
 retry_budget=3
+request_limit=11
 pause="${JOURNEY_RETRY_PAUSE_SECONDS:-5}"
 deadline="${JOURNEY_TIMEOUT_SECONDS:-15}"
 web="${JOURNEY_WEB_URL:-https://my.stll.app}"
 mcp="${JOURNEY_MCP_URL:-https://api.stll.app/mcp}"
 cli_server="${JOURNEY_CLI_URL:-https://api.stll.app}"
+# Each run searches one public case-law country, so a day covers every one of
+# them on the web and on MCP. The slot is the UTC hour unless pinned.
+search_countries=(CZE SVK POL HUN EU)
+search_queries=(smlouva zmluva umowa "szerződés" contract)
+search_slot="${JOURNEY_SEARCH_SLOT:-$((10#$(date -u +%H)))}"
+search_country="${search_countries[$((search_slot % ${#search_countries[@]}))]}"
+search_query="${search_queries[$((search_slot % ${#search_queries[@]}))]}"
+search_path="$(printf '%s' "$search_country" | tr '[:upper:]' '[:lower:]')"
 decision_id="01a10c6e-cd77-77cc-97bd-19a8dc2e360c"
 decision_path="/law/cze/cases/nejvyssi-spravni-soud/2-azs-146-2026"
 
@@ -44,9 +53,9 @@ report() {
 request() {
   detail=
   local response status redirects allowed_redirects="${redirect_limit:-0}" rc=0
-  if [[ "$request_count" -ge 10 ]]; then reason=http_status; return 1; fi
+  if [[ "$request_count" -ge "$request_limit" ]]; then reason=http_status; return 1; fi
   request_count=$((request_count + 1))
-  if [[ "$allowed_redirects" -gt $((10 - request_count)) ]]; then allowed_redirects=$((10 - request_count)); fi
+  if [[ "$allowed_redirects" -gt $((request_limit - request_count)) ]]; then allowed_redirects=$((request_limit - request_count)); fi
   response="$(curl --silent --location --max-redirs "$allowed_redirects" --max-time "$deadline" --max-filesize 4000000 \
     --dump-header "$scratch/headers" --output "$scratch/body" --write-out '%{http_code} %{num_redirects}' "$@" 2>"$scratch/error")" || rc=$?
   status="${response%% *}"
@@ -139,6 +148,11 @@ validate_payload() {
   reason=empty_result
   detail="payload nonempty check: $2"
   jq -e "$2" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+  if [[ -n "${3:-}" ]]; then
+    reason=stale_result
+    detail="payload freshness check: $3"
+    jq -e "$3" "$scratch/payload" >/dev/null 2>"$scratch/error" || return 1
+  fi
   reason=contract_error
 }
 
@@ -148,6 +162,10 @@ read_shape='.items | type == "array" and all(.[]; .status == "found" and (.decis
 read_nonempty='.items | length > 0 and all(.[]; .decision.text | type == "string" and test("\\S"))'
 statute_shape='.results | type == "array" and all(.[]; type == "object" and (.documentId | type == "string" and length > 0) and (.eli | type == "string" and length > 0) and (.title | type == "string" and length > 0))'
 statute_nonempty='.results | length > 0'
+coverage_shape='(.asOf | type == "string") and (.freshness.status | type == "string") and (.countries | type == "array" and all(.[]; type == "object" and (.country | type == "string") and (.sources | type == "array")))'
+coverage_nonempty='[.countries[] | select(.availability == "searchable")] | length > 0 and all(.[]; .sources | length > 0)'
+# Figures older than three refresh intervals mean refreshes are not landing.
+coverage_current='.freshness.status == "current"'
 
 mcp_tool() {
   local payload
@@ -161,7 +179,7 @@ mcp_tool() {
   detail="tool content check: expected exactly one JSON text payload"
   jq -e '.result.content | map(select(.type == "text") | .text | fromjson) | if length == 1 then .[0] else error("contract") end' \
     "$scratch/body" > "$scratch/payload" 2>"$scratch/error" || return 1
-  validate_payload "$3" "$4"
+  validate_payload "$3" "$4" "${5:-}"
 }
 
 cli_version() {
@@ -208,7 +226,7 @@ auth_rejection() {
   fi
 }
 
-case_args='{"queries":["smlouva"],"country":"CZE","limit":1}'
+case_args="$(jq -nc --arg query "$search_query" --arg country "$search_country" '{queries:[$query],country:$country,limit:1}')"
 read_args="$(jq -nc --arg id "$decision_id" '{decision_ids:[$id],max_chars:1000,include:[]}')"
 if [[ "${1:-}" == --cli ]]; then
   probe cli_version cli_version
@@ -223,20 +241,22 @@ if [[ "${1:-}" == --cli ]]; then
     report cli_search skipped no_credential
     report cli_read skipped no_credential
   else
-    probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries smlouva --country CZE --limit 1
+    probe cli_search cli_tool "$case_shape" "$case_nonempty" case-law search --queries "$search_query" --country "$search_country" --limit 1
     probe cli_read cli_tool "$read_shape" "$read_nonempty" case-law read --decision-ids "$decision_id"
   fi
 else
-  probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$web/law/cases?q=smlouva&country=cze}" '<a[[:space:]][^>]*href="/law/cze/cases/[^" ]+"'
+  search_url="$web/law/cases?q=$(jq -rn --arg query "$search_query" '$query | @uri')&country=$search_path"
+  probe web_search web_check "${JOURNEY_WEB_SEARCH_URL:-$search_url}" "<a[[:space:]][^>]*href=\"/law/$search_path/cases/[^\" ]+\""
   probe web_decision web_check "${JOURNEY_WEB_DECISION_URL:-$web$decision_path}" '<article[ >]'
   probe web_statutes web_check "${JOURNEY_WEB_STATUTES_URL:-$web/law/cze/statutes/}" '<a[[:space:]][^>]*href="/law/cze/statutes/[^" ]+"'
   if [[ -z "$credential" ]]; then
-    for name in mcp_initialize mcp_search mcp_read mcp_legislation; do report "$name" skipped no_credential; done
+    for name in mcp_initialize mcp_search mcp_read mcp_legislation mcp_coverage; do report "$name" skipped no_credential; done
   else
     probe mcp_initialize initialize
     probe mcp_search mcp_tool search_case_law "$case_args" "$case_shape" "$case_nonempty"
     probe mcp_read mcp_tool read_case_law_decision "$read_args" "$read_shape" "$read_nonempty"
     probe mcp_legislation mcp_tool search_legislation '{"query":"smlouva","country":"CZE","limit":1}' "$statute_shape" "$statute_nonempty"
+    probe mcp_coverage mcp_tool case_law_coverage '{}' "$coverage_shape" "$coverage_nonempty" "$coverage_current"
   fi
 fi
 exit "$failed"

@@ -2,20 +2,37 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { useTimeZone, useTranslations } from "use-intl";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
+import { useFormatter, useTimeZone, useTranslations } from "use-intl";
+
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { Text, TextInput } from "@/components/ui/text";
+import { MemberList } from "@/components/task-assignees";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { listMatters } from "@/state/matters";
-import { createTask, dayAt } from "@/state/tasks";
+import { pickerDate } from "@/state/picked-day";
+import {
+  chosenDueDate,
+  createTask,
+  dayAt,
+  listMatterMembers,
+  newTaskAssignees,
+} from "@/state/tasks";
 import { useAppColors, useUiColors } from "@/theme";
 
 /** The due dates the sheet offers, as days from today; null leaves it undated. */
@@ -26,12 +43,14 @@ const DUE_CHOICES = [
   { key: "nextWeek", days: 7 },
 ] as const;
 
-type DueChoice = (typeof DUE_CHOICES)[number]["key"];
+/** A preset, or "pick": the day chosen in the calendar. */
+type DueChoice = (typeof DUE_CHOICES)[number]["key"] | "pick";
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
- * and the matter it belongs to. The bar's Add creates it, and the tasks
- * underneath load afresh.
+ * (a preset or any day from the calendar), the matter it belongs to and who
+ * works on it, the creator to begin with. The bar's Add creates it, and the
+ * tasks underneath load afresh.
  */
 const NewTaskScreen = () => {
   const { state } = useSession();
@@ -44,15 +63,32 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("tasks");
   const tabs = useTranslations("tabs");
   const colors = useAppColors();
-  const ui = useUiColors();
   const router = useRouter();
   const { end } = useSession();
   const changed = useChanged();
+  const format = useFormatter();
   const timeZone = useTimeZone() ?? "UTC";
   const params = useLocalSearchParams<{ matterId?: string }>();
+  const today = dayAt(epochMilliseconds(), timeZone);
   const [name, setName] = useState("");
   const [due, setDue] = useState<DueChoice>("none");
+  const [pickedOn, setPickedOn] = useState(() =>
+    today.add({ days: 1 }).toString(),
+  );
   const [matterId, setMatterId] = useState(params.matterId ?? null);
+  // The chosen matter's members, loading; held in a box so a new matter
+  // replaces the load rather than chaining onto it.
+  const membersOf = (id: string | null) =>
+    id === null
+      ? null
+      : { load: listMatterMembers({ fetch, matterId: id, source }) };
+  const [members, setMembers] = useState(() => membersOf(matterId));
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(() => {
+    // Signed out meanwhile: no one is preselected, and adding fails as
+    // signed out.
+    const session = source.session();
+    return new Set(session === undefined ? [] : [session.userId]);
+  });
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
@@ -69,13 +105,18 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
+    const dueDate = chosenDueDate(
+      { days, picked: due === "pick" ? pickedOn : null },
+      today,
+    );
     startAdding(async () => {
       setFailure(null);
       const created = await createTask({
-        dueDate:
-          days === null
-            ? null
-            : dayAt(epochMilliseconds(), timeZone).add({ days }).toString(),
+        assigneeIds: newTaskAssignees(
+          chosen,
+          members === null ? null : await members.load,
+        ),
+        dueDate,
         fetch,
         matterId,
         name: name.trim(),
@@ -120,12 +161,13 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         }}
       />
       <ScrollView
+        alwaysBounceVertical={false}
         className="bg-background flex-1"
         contentContainerStyle={screenStyles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <TextInput
+        <Input
           accessibilityLabel={t("name")}
           autoFocus
           onChangeText={setName}
@@ -141,30 +183,45 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           </View>
           <View className="flex-row flex-wrap gap-2">
             {DUE_CHOICES.map((choice) => (
-              <Pressable
-                accessibilityRole="radio"
-                accessibilityState={{ selected: due === choice.key }}
-                className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
-                  due === choice.key
-                    ? "border-foreground bg-foreground"
-                    : "border-border bg-card"
-                }`}
+              <DueChip
                 key={choice.key}
+                label={t(`dueChoice.${choice.key}`)}
                 onPress={() => {
                   setDue(choice.key);
                 }}
-              >
-                <Text
-                  style={
-                    due === choice.key ? { color: ui.background } : undefined
-                  }
-                  variant="label"
-                >
-                  {t(`dueChoice.${choice.key}`)}
-                </Text>
-              </Pressable>
+                selected={due === choice.key}
+              />
             ))}
+            {/* The web build has no calendar to pick a day from. */}
+            {Platform.OS === "web" ? null : (
+              <DueChip
+                label={
+                  due === "pick"
+                    ? format.dateTime(
+                        pickerDate(pickedOn, { timeZone, plainTime: "12:00" }),
+                        {
+                          day: "numeric",
+                          month: "short",
+                          timeZone,
+                          weekday: "short",
+                        },
+                      )
+                    : t("dueChoice.pick")
+                }
+                onPress={() => {
+                  setDue("pick");
+                }}
+                selected={due === "pick"}
+              />
+            )}
           </View>
+          {due === "pick" ? (
+            <DueDatePicker
+              day={pickedOn}
+              earliest={today.toString()}
+              onChange={setPickedOn}
+            />
+          ) : null}
         </View>
         <View className="gap-2">
           <View className="px-1">
@@ -173,13 +230,72 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
             <MatterPicker
               matters={matters}
-              onSelect={setMatterId}
+              onSelect={(id) => {
+                setMatterId(id);
+                setMembers(membersOf(id));
+              }}
               selected={matterId}
             />
           </Suspense>
         </View>
+        {members === null ? null : (
+          <View className="gap-2">
+            <View className="px-1">
+              <Text variant="section">{t("assignedTo")}</Text>
+            </View>
+            <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+              <MemberList
+                assigned={chosen}
+                load={members.load}
+                onToggle={(member, assign) => {
+                  setChosen((current) => {
+                    const next = new Set(current);
+                    if (assign) {
+                      next.add(member.userId);
+                    } else {
+                      next.delete(member.userId);
+                    }
+                    return next;
+                  });
+                }}
+                saving={adding}
+                source={source}
+              />
+            </Suspense>
+          </View>
+        )}
       </ScrollView>
     </>
+  );
+};
+
+/** One of the due choices, filled while it is the chosen one. */
+const DueChip = ({
+  label,
+  onPress,
+  selected,
+}: {
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) => {
+  const ui = useUiColors();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      className={`rounded-full border px-3 py-1.5 active:opacity-60 ${
+        selected ? "border-foreground bg-foreground" : "border-border bg-card"
+      }`}
+      onPress={onPress}
+    >
+      <Text
+        style={selected ? { color: ui.background } : undefined}
+        variant="label"
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 };
 

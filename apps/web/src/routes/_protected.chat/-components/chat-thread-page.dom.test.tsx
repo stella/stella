@@ -4,12 +4,13 @@ import { plugin } from "bun";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
 import type { WebApiRoutes } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -31,7 +32,8 @@ const sends: unknown[] = [];
 const unexpected: string[] = [];
 
 const testing = await import("@testing-library/react");
-const query = await import("@tanstack/react-query");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -106,7 +108,7 @@ const savedThread = {
   webSearchAvailable: false,
   webSearchEnabled: false,
 } satisfies ThreadResponse;
-const clients: InstanceType<typeof query.QueryClient>[] = [];
+const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
   testing.cleanup();
@@ -259,7 +261,7 @@ const serveSavedBuilder = ({ aiAvailable = true } = {}) => {
 };
 
 const createClient = () => {
-  const client = new query.QueryClient({
+  const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
@@ -281,9 +283,7 @@ const draftPrompt = (text: string) => {
 };
 
 /** The mounted thread page after its availability read settles. */
-const openThreadPage = async (
-  client: InstanceType<typeof query.QueryClient>,
-) => {
+const openThreadPage = async (client: InstanceType<typeof QueryClient>) => {
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
     getParentRoute: () => root,
@@ -310,7 +310,7 @@ const openThreadPage = async (
   await appRouter.load();
   const ui = testing.render(
     <AnalyticsContext value={noopAnalytics}>
-      <query.QueryClientProvider client={client}>
+      <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
             <AuthenticatedUserProvider user={user}>
@@ -320,7 +320,7 @@ const openThreadPage = async (
             </AuthenticatedUserProvider>
           </FormattingProvider>
         </IntlProvider>
-      </query.QueryClientProvider>
+      </QueryClientProvider>
     </AnalyticsContext>,
   );
   await ui.findByRole("textbox");

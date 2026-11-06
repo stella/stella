@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CI_GENERATED_DIRECTORIES } from "../packages/scripts/src/generated-files";
 import { PR_CODE_QUALITY_CANCEL_JOBS } from "./ci-cancellation-contract";
 import { CI_GENERATION_COMMANDS } from "./generated-files";
 import { lexShell, programWords } from "./install-free-ci";
@@ -71,6 +72,15 @@ const artifact = `generated-sources-\${{ needs.generated-sources.outputs.input_h
 const producedHash = `\${{ steps.generate.outputs.input_hash || steps.cached.outputs.input_hash }}`;
 const restoreCommand =
   'bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"';
+// The script reads artifacts of this run only (GITHUB_RUN_ID).
+const downloadCommand =
+  'bash scripts/download-run-artifact.sh --name "$ARTIFACT_NAME" --path "$RUNNER_TEMP/generated-sources"';
+const downloadEnvKeys = new Set([
+  "ARTIFACT_NAME",
+  "CI_CHECK_CONTEXT",
+  "CI_CHECK_KIND",
+  "GH_TOKEN",
+]);
 const oldPreparation = new Set([
   "Generate web sources",
   "Generate web route tree",
@@ -203,13 +213,17 @@ const assertHandoff = (source: Workflow) => {
       : undefined;
     expect(download?.if, id).toBe(hydrationCondition);
     expect(restore?.if, id).toBe(hydrationCondition);
-    expect(download?.uses, id).toMatch(
-      /^actions\/download-artifact@[0-9a-f]{40}$/u,
-    );
-    expect(download?.with, id).toEqual({
-      name: artifact,
-      path: `\${{ runner.temp }}/generated-sources`,
-    });
+    expect(download?.uses, id).toBeUndefined();
+    expect(download?.with, id).toBeUndefined();
+    expect(download?.run, id).toBe(downloadCommand);
+    expect(download?.env?.["ARTIFACT_NAME"], id).toBe(artifact);
+    expect(download?.env?.["GH_TOKEN"], id).toBe(`\${{ github.token }}`);
+    expect(
+      Object.keys(download?.env ?? {}).filter(
+        (key) => !downloadEnvKeys.has(key),
+      ),
+      id,
+    ).toEqual([]);
     expect(download?.["continue-on-error"], id).toBeUndefined();
     expect(restore?.run, id).toBe(restoreCommand);
     expect(restore?.["continue-on-error"], id).toBeUndefined();
@@ -236,6 +250,7 @@ const assertHandoff = (source: Workflow) => {
         step.run &&
         index > installIndex &&
         step.name !== "Prepare environment" &&
+        step.name !== "Download generated sources" &&
         step.name !== "Restore generated sources"
       ) {
         expect(index, `${id}/${step.name}`).toBeGreaterThan(restoreIndex);
@@ -443,7 +458,7 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
       const restore = job.steps.find(
         ({ name }) => name === "Restore generated sources",
       );
-      if (!download?.with || !restore || !job.env) {
+      if (!download?.env || !restore || !job.env) {
         panic(`Incomplete hydration mutation fixture: ${id}`);
       }
       switch (mutation) {
@@ -460,10 +475,10 @@ test("consumer hydration rejects missing dependencies, provenance, ordering and 
           job.steps = job.steps.filter((step) => step !== restore);
           break;
         case "artifact":
-          download.with["name"] = "generated-sources-other";
+          download.env["ARTIFACT_NAME"] = "generated-sources-other";
           break;
         case "cross-run":
-          download.with["run-id"] = "123";
+          download.env["GITHUB_RUN_ID"] = "123";
           break;
         case "continue":
           restore["continue-on-error"] = true;
@@ -667,7 +682,9 @@ const generationCommandViolations = (command: readonly string[]) => {
       : ["Turbo owner package script does not exist"];
   }
   if (!target.startsWith("--cwd=")) {
-    return command.length === 2 &&
+    // A generator that also has a check mode is asked to write.
+    return (command.length === 2 ||
+      (command.length === 3 && action === "--write")) &&
       existsSync(new URL(`../${target}`, import.meta.url))
       ? []
       : ["Expected a direct generator file or explicit package script"];
@@ -693,7 +710,10 @@ const generationCommandViolations = (command: readonly string[]) => {
 };
 
 test("every preparation command resolves a real generator file or package script", () => {
-  for (const command of CI_GENERATION_COMMANDS) {
+  for (const command of [
+    ...CI_GENERATION_COMMANDS,
+    ...CI_GENERATED_DIRECTORIES.map((directory) => directory.command),
+  ]) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
   }
   for (const command of [
@@ -731,6 +751,9 @@ test("every preparation command resolves a real generator file or package script
     "utf-8",
   );
   expect(producer).toContain("for (const command of CI_GENERATION_COMMANDS)");
+  expect(producer).toContain(
+    "for (const { command } of CI_GENERATED_DIRECTORIES)",
+  );
   expect(
     generationCommandViolations([
       "bun",

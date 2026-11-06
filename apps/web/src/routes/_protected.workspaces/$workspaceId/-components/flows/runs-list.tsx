@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 
@@ -54,39 +55,37 @@ const RunRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <FlowStatusBadge status={run.status} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {run.name}
-          </p>
-          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <FlowTriggerBadge triggerType={run.triggerType} />
-            <span className="tabular-nums">
-              {format.dateTime(
-                Temporal.Instant.from(timestamp).epochMilliseconds,
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )}
-            </span>
-            <span className="tabular-nums">
-              {t("flows.runs.stepProgress", {
-                current: format.number(
-                  Math.min(run.currentStepIndex + 1, run.stepCount),
-                ),
-                total: format.number(run.stepCount),
-              })}
-            </span>
+      <Button className="block w-full" onClick={onSelect} variant="plain">
+        <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3">
+          <FlowStatusBadge status={run.status} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" dir="auto">
+              {run.name}
+            </p>
+            <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+              <FlowTriggerBadge triggerType={run.triggerType} />
+              <span className="tabular-nums">
+                {format.dateTime(
+                  Temporal.Instant.from(timestamp).epochMilliseconds,
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
+              </span>
+              <span className="tabular-nums">
+                {t("flows.runs.stepProgress", {
+                  current: format.number(
+                    Math.min(run.currentStepIndex + 1, run.stepCount),
+                  ),
+                  total: format.number(run.stepCount),
+                })}
+              </span>
+            </div>
           </div>
-        </div>
-        <DirectionalIcon
-          className="text-muted-foreground size-4 shrink-0"
-          icon={ChevronRightIcon}
-        />
-      </button>
+          <DirectionalIcon
+            className="text-muted-foreground size-4 shrink-0"
+            icon={ChevronRightIcon}
+          />
+        </span>
+      </Button>
     </li>
   );
 };

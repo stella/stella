@@ -18,6 +18,7 @@ export const TIME_ENTRY_SUBMITTED_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261026230000_time_entry_submitted_status",
   name: TIME_ENTRY_INTERNAL_SHAPE_CONSTRAINT.constraintName,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

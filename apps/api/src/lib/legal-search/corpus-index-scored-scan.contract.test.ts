@@ -178,6 +178,11 @@ const decisionDocuments = (batch: number, slot: number) => {
     redacted: false,
     listingOnly: false,
     provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
     vacatedFrom: null,
     caseNumber: `${String(slot + 1)} Cdo ${String(batch + 1)}/2020`,
     identifiers: [],
@@ -214,6 +219,11 @@ const tiedDocuments = (serial: number) => {
     redacted: false,
     listingOnly: false,
     provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
     vacatedFrom: null,
     caseNumber: "",
     identifiers: [],
@@ -259,6 +269,11 @@ const provisionDocuments = () =>
         redacted: false,
         listingOnly: false,
         provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
         vacatedFrom: null,
         caseNumber: "",
         identifiers: [],
@@ -317,6 +332,11 @@ const floodDocuments = () =>
         redacted: false,
         listingOnly: false,
         provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
         vacatedFrom: null,
         caseNumber: "",
         identifiers: [],
@@ -666,6 +686,11 @@ describe.skipIf(!runEngineTests)(
           redacted: false,
           listingOnly: false,
           provisionKeys: [],
+          rankingSignals: {
+            citationAuthorityBucket: 0,
+            languageGroupKey: null,
+            languageGroupShared: false,
+          },
           vacatedFrom: null,
           caseNumber: "1 Cdo 1/2024",
           identifiers: [],
@@ -759,8 +784,9 @@ describe.skipIf(!runEngineTests)(
           }
           // Equal-count buckets have no tie order in the engine contract.
           // Compare every facet's complete bucket contents across the flip.
+          const { country, court, year } = result.value;
           return Object.fromEntries(
-            Object.entries(result.value).map(([name, buckets]) => [
+            Object.entries({ country, court, year }).map(([name, buckets]) => [
               name,
               buckets.toSorted((left, right) =>
                 getCollator("en").compare(left.value, right.value),

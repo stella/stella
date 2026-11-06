@@ -52,8 +52,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
-import ts from "typescript6";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 import {
   getPropertyName,
   isAstNode,
@@ -72,57 +72,52 @@ const getBoundedReadExports = () => {
     return boundedReadExports;
   }
   // Read the declaration without initializing the owner's runtime dependencies.
-  const source = ts.createSourceFile(
+  const source = parseSource(
     "read-bounded.ts",
     readFileSync(
       new URL("../apps/api/src/lib/db/read-bounded.ts", import.meta.url),
       "utf-8",
     ),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
   );
-  for (const statement of source.statements) {
+  for (const statement of source.program.body) {
     if (
-      !ts.isVariableStatement(statement) ||
-      !statement.modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      )
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.declaration?.type !== "VariableDeclaration"
     ) {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declaration.declarations) {
       if (
-        !ts.isIdentifier(declaration.name) ||
-        declaration.name.text !== "BOUNDED_READ_EXPORTS"
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== "BOUNDED_READ_EXPORTS"
       ) {
         continue;
       }
-      let initializer = declaration.initializer;
+      let initializer = declaration.init;
       while (
-        initializer !== undefined &&
-        (ts.isAsExpression(initializer) ||
-          ts.isSatisfiesExpression(initializer) ||
-          ts.isParenthesizedExpression(initializer))
+        initializer?.type === "TSAsExpression" ||
+        initializer?.type === "TSSatisfiesExpression" ||
+        initializer?.type === "ParenthesizedExpression"
       ) {
         initializer = initializer.expression;
       }
-      if (
-        initializer === undefined ||
-        !ts.isObjectLiteralExpression(initializer)
-      ) {
+      if (initializer?.type !== "ObjectExpression") {
         panic(
           "Bounded-read exports must be an object of owner function references",
         );
       }
       const names = new Set<string>();
       for (const property of initializer.properties) {
-        if (!ts.isShorthandPropertyAssignment(property)) {
+        if (
+          property.type !== "Property" ||
+          !property.shorthand ||
+          property.key.type !== "Identifier"
+        ) {
           panic(
             "Bounded-read exports must use shorthand owner function references",
           );
         }
-        names.add(property.name.text);
+        names.add(property.key.name);
       }
       if (names.size === 0) {
         panic("Bounded-read exports must declare at least one entry point");

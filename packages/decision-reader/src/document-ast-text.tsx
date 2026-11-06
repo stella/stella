@@ -18,13 +18,15 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import {
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
-import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
+import { Button } from "@stll/ui/button";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -586,9 +588,13 @@ const renderInline = ({
   if (safeHref.startsWith("#")) {
     // An excerpt carries none of the ids a fragment points at, and the page
     // around it may carry the same id for something else: the reference
-    // keeps its words and loses the jump.
+    // keeps its words and its superscript, and loses the jump.
     if (!ANCHOR_ATTRIBUTES[context.anchorPresentation].domId) {
-      return <Fragment key={key}>{children}</Fragment>;
+      return (
+        <span className="reader-note-ref" key={key}>
+          {children}
+        </span>
+      );
     }
     return (
       <NoteRefLink key={key} targetId={safeHref.slice(1)}>
@@ -869,8 +875,8 @@ export type ReaderVariant = "case-law" | "statute";
  * because the same anchor shape means different things to two publishers.
  */
 type BlockRendererCorpus =
-  | { statuteLists?: never; variant: "case-law" }
-  | { statuteLists: StatuteListScheme; variant: "statute" };
+  | { statuteAnchors?: never; variant: "case-law" }
+  | { statuteAnchors: StatuteAnchorScheme; variant: "statute" };
 
 /**
  * Class per variant and heading depth. Total over both, so neither a new
@@ -928,7 +934,7 @@ const PERMALINK_PLACEMENT_CLASS = {
   inline: "ms-1",
 } as const satisfies Record<PermalinkPlacement, string>;
 
-/** Running document text: start-aligned and hyphenated (see `reader.css`). */
+/** Running document text alignment (see `reader.css`). */
 export const READER_PROSE_CLASS = "reader-prose";
 
 /**
@@ -1032,16 +1038,18 @@ const jumpToNoteReference = (anchorId: string) => {
 const NoteBackJump = ({ headAnchorId }: { headAnchorId: string }) => {
   const messages = useReaderMessages();
   return (
-    <button
-      aria-label={messages["common.back"]}
-      className="reader-note-back"
-      data-reader-chrome=""
-      onClick={() => jumpToNoteReference(headAnchorId)}
-      title={messages["common.back"]}
-      type="button"
-    >
-      {"\u21B5"}
-    </button>
+    // The span carries the reader's note type (size, colour, spacing and
+    // the hover underline); the plain button inherits it.
+    <span className="reader-note-back" data-reader-chrome="">
+      <Button
+        aria-label={messages["common.back"]}
+        onClick={() => jumpToNoteReference(headAnchorId)}
+        tooltip={messages["common.back"]}
+        variant="plain"
+      >
+        {"\u21B5"}
+      </Button>
+    </span>
   );
 };
 
@@ -1121,7 +1129,7 @@ export const BlockRenderer = ({
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
-  statuteLists,
+  statuteAnchors,
   variant,
 }: {
   activeMatchIndex: number;
@@ -1281,7 +1289,7 @@ export const BlockRenderer = ({
       // where every statute surface draws its paragraphs.
       block:
         variant === "statute"
-          ? withStatuteListDepth(block, statuteLists)
+          ? withStatuteListDepth(block, statuteAnchors)
           : block,
       documentAnchorProps,
       isAddressable,
@@ -1289,7 +1297,7 @@ export const BlockRenderer = ({
       noteHead,
       permalink,
       rangesByPieceId,
-      statuteLists: variant === "statute" ? statuteLists : null,
+      statuteAnchors: variant === "statute" ? statuteAnchors : null,
     });
   }
 
@@ -1350,7 +1358,7 @@ type RenderTextBlockOptions = {
 type RenderParagraphOptions = RenderTextBlockOptions & {
   block: ParagraphBlock;
   /** The statute's list scheme; null for a decision, whose items never hang. */
-  statuteLists: StatuteListScheme | null;
+  statuteAnchors: StatuteAnchorScheme | null;
 };
 
 /** The case number a decision prints at its head, set to the end edge. */
@@ -1373,16 +1381,18 @@ type HangingListMarker = { end: number; marker: string; rest: Inline[] };
 type HangingListMarkerOptions = {
   anchors: readonly TextAnchor[];
   block: ParagraphBlock;
-  statuteLists: StatuteListScheme | null;
+  statuteAnchors: StatuteAnchorScheme | null;
 };
 
 const hangingListMarker = ({
   anchors,
   block,
-  statuteLists,
+  statuteAnchors,
 }: HangingListMarkerOptions): HangingListMarker | null => {
   const end =
-    statuteLists === null ? null : statuteListMarkerEnd(block, statuteLists);
+    statuteAnchors === null
+      ? null
+      : statuteListMarkerEnd(block, statuteAnchors);
   if (end === null || anchors.some((anchor) => anchor.start < end)) {
     return null;
   }
@@ -1430,6 +1440,7 @@ const paragraphClassValues = (block: ParagraphBlock) => {
     !isRomanNumeralDivider &&
     (block.role === undefined || !nonProseRoles.has(block.role));
   return [
+    LEGAL_TEXT_CLASS_NAME,
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
     isProse && READER_PROSE_CLASS,
     block.role === "holding" && "font-[520]",
@@ -1470,7 +1481,7 @@ const renderParagraphBlock = ({
   noteHead,
   permalink,
   rangesByPieceId,
-  statuteLists,
+  statuteAnchors,
 }: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
@@ -1479,7 +1490,7 @@ const renderParagraphBlock = ({
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
   const anchors = anchorsForPiece(anchorsByPieceId, block.id);
   const ranges = rangesForPiece(rangesByPieceId, block.id);
-  const listMarker = hangingListMarker({ anchors, block, statuteLists });
+  const listMarker = hangingListMarker({ anchors, block, statuteAnchors });
   return (
     <p
       className={cn(
@@ -1497,14 +1508,14 @@ const renderParagraphBlock = ({
         </span>
       )}
       {showNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {noteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {noteLabel}
+          </Button>
+        </span>
       )}
       {block.number !== undefined && (
         <HighlightedText
@@ -1720,14 +1731,14 @@ const renderTableBlock = ({
         </span>
       )}
       {showTableNoteLabel && isAddressable && (
-        <button
-          className="reader-note-label"
-          data-reader-chrome=""
-          onClick={() => jumpToNoteReference(block.anchorId)}
-          type="button"
-        >
-          {tableNoteLabel}
-        </button>
+        <span className="reader-note-label" data-reader-chrome="">
+          <Button
+            onClick={() => jumpToNoteReference(block.anchorId)}
+            variant="plain"
+          >
+            {tableNoteLabel}
+          </Button>
+        </span>
       )}
       <table
         className={cn(
@@ -1816,6 +1827,7 @@ export const FulltextFallback = ({
           <Fragment key={pieceId}>
             <p
               className={cn(
+                LEGAL_TEXT_CLASS_NAME,
                 READER_PROSE_CLASS,
                 "mb-[var(--reader-paragraph-gap)] last:mb-0",
               )}

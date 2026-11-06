@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { lookup } from "node:dns/promises";
+import { lookup, Resolver } from "node:dns/promises";
 import { request as requestHttp } from "node:http";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
@@ -13,6 +13,7 @@ import { Temporal } from "@stll/time";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { PublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { APP_VERSION } from "@/api/lib/version";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export class SafeOutboundFetchError extends TaggedError(
@@ -28,10 +29,33 @@ export type SafeOutboundAddress = {
 };
 
 const MAX_OUTBOUND_URL_LENGTH = 2048;
+const DNS_RESOLVER_TIMEOUT_MS = 1000;
+
+/** Resolver acquisition stays at the outbound boundary; callers own total deadlines and cancellation. */
+export const createBoundedDnsResolver = () =>
+  new Resolver({ timeout: DNS_RESOLVER_TIMEOUT_MS, tries: 1 });
 
 export type SafeOutboundFetchBody =
   ArrayBuffer | string | Uint8Array | URLSearchParams;
 export type SafeOutboundHeaders = Headers | Record<string, string>;
+
+/**
+ * Who is asking, on every request that does not say so itself. Node's
+ * client sends no `User-Agent`, and firewalls in front of services, ours
+ * among them, refuse requests without one.
+ */
+export const OUTBOUND_USER_AGENT = `stella-api/${APP_VERSION}`;
+
+/** The headers a request goes out with: the caller's, and a `User-Agent`. */
+const outboundRequestHeaders = (
+  headers: SafeOutboundHeaders | undefined,
+): Headers => {
+  const requestHeaders = new Headers(headers);
+  if (!requestHeaders.has("User-Agent")) {
+    requestHeaders.set("User-Agent", OUTBOUND_USER_AGENT);
+  }
+  return requestHeaders;
+};
 
 export type SafeOutboundFetchResponse = {
   body: ArrayBuffer;
@@ -164,7 +188,7 @@ const executeResolvedAddressRequest = async ({
   return await Result.tryPromise({
     try: async () =>
       await new Promise<SafeOutboundFetchResponse>((resolve, reject) => {
-        const requestHeaders = new Headers(headers);
+        const requestHeaders = outboundRequestHeaders(headers);
         const bodyBytes = bodyToBytes(body);
         let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {
@@ -294,7 +318,7 @@ const executeResolvedAddressStreamRequest = async ({
   return await Result.tryPromise({
     try: async () =>
       await new Promise<SafeOutboundFetchStreamResponse>((resolve, reject) => {
-        const requestHeaders = new Headers(headers);
+        const requestHeaders = outboundRequestHeaders(headers);
         const bodyBytes = bodyToBytes(body);
         let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {

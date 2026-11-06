@@ -68,7 +68,9 @@ export type CapabilityCatalogEntry = {
   access: "read" | "write";
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
@@ -625,6 +627,9 @@ export const deriveCapabilityLeaf = (
       ...(paginationPart === undefined ? {} : { paginationPart }),
       ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
       destructive: entry.destructive,
+      ...(entry.idempotency === undefined
+        ? {}
+        : { idempotency: entry.idempotency }),
       ...(entry.confirmation === undefined
         ? {}
         : { confirmation: entry.confirmation }),

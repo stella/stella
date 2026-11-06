@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
+import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -24,10 +25,12 @@ import {
   EMPTY_CHAT_THREAD_NAMES_READ,
   readChatThreadNames,
 } from "@/api/lib/chat/thread-names";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 type ReadThreadValidationStateProps = {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   initialActiveSkill?: ChatSendRequest["activeSkill"];
   messageId: SafeId<"chatMessage">;
   organizationId: SafeId<"organization">;
@@ -57,6 +60,7 @@ export const readThreadValidationState = async ({
   threadId,
   userId,
   workspaceId,
+  caseLawDb,
 }: ReadThreadValidationStateProps): Promise<
   Result<ThreadValidationState, HandlerError<400> | SafeDbError>
 > =>
@@ -86,7 +90,21 @@ export const readThreadValidationState = async ({
         }
         // The thread's ownership was read in this transaction.
         const threadNames = await readChatThreadNames({ threadId, tx });
-        return { thread, threadNames };
+        const { projection, subjectByThread } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: thread.messages,
+          caseLawDb,
+        });
+        return {
+          thread: {
+            ...thread,
+            messages: thread.messages.map((row) =>
+              projection.chat(row, subjectByThread.get(threadId)),
+            ),
+          },
+          threadNames,
+        };
       }),
     );
 
@@ -133,6 +151,8 @@ type ChatThreadRecord = {
   webSearchEnabled: boolean;
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
+  /** The stored run target (`storedChatRunTarget`); null runs in the cloud. */
+  chatLocalRunTarget: ChatLocalRunTarget | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -143,6 +163,7 @@ type ChatThreadRecord = {
 };
 
 type LoadThreadProps = {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   initialActiveSkill?: ChatSendRequest["activeSkill"];
   /**
    * Server-derived workspace scope inherited by a newly created draft chat.
@@ -194,6 +215,7 @@ type LoadThreadAttemptProps = LoadThreadProps & {
 
 const loadThreadAttempt = async ({
   claimAttempt,
+  caseLawDb,
   initialActiveSkill,
   initialDataWorkspaceIds,
   initialContextMatterIds,
@@ -221,6 +243,7 @@ const loadThreadAttempt = async ({
       webSearchEnabled: boolean;
       chatModel: string | null;
       chatReasoningEffort: ReasoningEffort | null;
+      chatLocalRunTarget: ChatLocalRunTarget | null;
       rollbackToken: string | null;
     };
 
@@ -241,6 +264,7 @@ const loadThreadAttempt = async ({
             webSearchEnabled: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatLocalRunTarget: true,
             rollbackToken: true,
           },
         }),
@@ -274,6 +298,7 @@ const loadThreadAttempt = async ({
           webSearchEnabled: existing.webSearchEnabled,
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
+          chatLocalRunTarget: existing.chatLocalRunTarget,
           messages: [],
           historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
@@ -330,6 +355,7 @@ const loadThreadAttempt = async ({
         );
       }
       return await loadThreadAttempt({
+        caseLawDb,
         claimAttempt: claimAttempt + 1,
         initialActiveSkill,
         initialDataWorkspaceIds,
@@ -357,7 +383,7 @@ const loadThreadAttempt = async ({
         return Result.ok(retried);
       }
       const history = yield* Result.await(
-        loadWindowedThreadHistory({ safeDb, threadId }),
+        loadWindowedThreadHistory({ safeDb, threadId, caseLawDb }),
       );
       existingResult.value.data.messages = history.messages;
       existingResult.value.data.historySnapshot = history.snapshot;
@@ -469,7 +495,7 @@ const loadThreadAttempt = async ({
           return Result.ok(retried);
         }
         const recoveredHistory = yield* Result.await(
-          loadWindowedThreadHistory({ safeDb, threadId }),
+          loadWindowedThreadHistory({ safeDb, threadId, caseLawDb }),
         );
         recoveredResult.value.data.messages = recoveredHistory.messages;
         recoveredResult.value.data.historySnapshot = recoveredHistory.snapshot;
@@ -494,6 +520,7 @@ const loadThreadAttempt = async ({
         webSearchEnabled: false,
         chatModel: null,
         chatReasoningEffort: null,
+        chatLocalRunTarget: null,
         messages: [],
         historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },

@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_AVAILABILITY,
@@ -106,6 +107,7 @@ const caseLawSearchIdentityFields = {
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
+  decisionTypeKind: v.nullable(v.picklist(DECISION_TYPE_KINDS)),
   ecli: v.nullable(v.string()),
   language: v.string(),
   // Which of the call's `queries` returned this decision, by index,

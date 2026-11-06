@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -40,9 +41,7 @@ import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { createUuid } from "@/lib/uuid";
 import type { MatterDraftClient } from "@/lib/workspaces/create-matter-store";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
@@ -87,18 +86,26 @@ const toActionErrorTitle = ({
 }) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
-  const { closeDialog, dialog } = useCreateMatterStore(
-    useShallow((s) => ({
-      closeDialog: s.closeDialog,
-      dialog: s.dialog,
-    })),
-  );
+  const { closeDialog, dialog, finishClosing, returnFocus } =
+    useCreateMatterStore(
+      useShallow((s) => ({
+        closeDialog: s.closeDialog,
+        dialog: s.dialog,
+        finishClosing: s.finishClosing,
+        returnFocus: s.returnFocus,
+      })),
+    );
   const isOpen = dialog.status === "open";
-  const draftClient = dialog.status === "open" ? dialog.draftClient : null;
-  const onCreated = dialog.status === "open" ? dialog.onCreated : undefined;
+  const draftClient = dialog.status !== "closed" ? dialog.draftClient : null;
+  const onCreated = dialog.status !== "closed" ? dialog.onCreated : undefined;
 
   return (
     <Dialog
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
       onOpenChange={(open) => {
         if (!open) {
           closeDialog();
@@ -106,11 +113,12 @@ export const CreateMatterDialog = () => {
       }}
       open={isOpen}
     >
-      {isOpen ? (
+      {dialog.status !== "closed" ? (
         <CreateMatterDialogBody
           closeDialog={closeDialog}
           draftClient={draftClient}
           key={draftClient?.id ?? "new"}
+          returnFocus={returnFocus}
           {...(onCreated === undefined ? {} : { onCreated })}
         />
       ) : null}
@@ -122,12 +130,14 @@ type CreateMatterDialogBodyProps = {
   closeDialog: () => void;
   draftClient: MatterDraftClient | null;
   onCreated?: (workspaceId: string) => void | Promise<void>;
+  returnFocus: RefObject<HTMLElement | null>;
 };
 
 const CreateMatterDialogBody = ({
   closeDialog,
   draftClient,
   onCreated,
+  returnFocus,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -153,12 +163,9 @@ const CreateMatterDialogBody = ({
   };
 
   const handleCreateClient = async (displayName: string, type: ContactType) => {
-    const id = toSafeId<"contact">(createUuid());
-
     const result = await Result.tryPromise(
       async () =>
         await createContact.mutateAsync({
-          id,
           type,
           displayName,
         }),
@@ -180,7 +187,7 @@ const CreateMatterDialogBody = ({
     });
 
     setSelectedClient({
-      id,
+      id: result.value.id,
       displayName,
       type,
     });
@@ -261,7 +268,7 @@ const CreateMatterDialogBody = ({
         });
 
   return (
-    <DialogPopup className="max-w-md">
+    <DialogPopup className="max-w-md" finalFocus={returnFocus}>
       <DialogFormState
         dirty={name !== "" || selectedClient?.id !== draftClient?.id}
         onDiscard={() => {

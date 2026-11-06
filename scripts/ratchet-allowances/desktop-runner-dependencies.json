@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The API checks each desktop runner run event against the AG-UI event schemas before storing it, so it declares @ag-ui/core at the version @stll/chat already pins. No new package resolves."
+}

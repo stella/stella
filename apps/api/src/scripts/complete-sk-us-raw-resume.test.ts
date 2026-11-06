@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   journalSkUsRawOutcome,
   persistSkUsRawCheckpoint,

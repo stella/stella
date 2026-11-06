@@ -60,7 +60,12 @@ export const normalizeQuote = (source: string) => {
   return { text: characters.join(""), starts, ends };
 };
 
-const rawQuoteSegments = (text: string) =>
+/**
+ * An ellipsis splits the quote; empty pieces go. A leading or trailing ellipsis
+ * only marks that the quote was cut, which is how a lawyer quotes a passage, so
+ * it claims no text and leaves nothing to verify.
+ */
+export const rawQuoteSegments = (text: string) =>
   text
     .split(/\[\s*(?:\.{3}|…)\s*\]|\(\s*(?:\.{3}|…)\s*\)|\.{3}|…/u)
     .map((segment) => segment.trim())
@@ -87,6 +92,20 @@ export const quoteInputWithinBudget = (text: string) => {
 };
 
 type Span = { start: number; end: number };
+
+// Two code units: the neighbour may be a surrogate pair.
+const WORD_AT_END = /[\p{L}\p{N}\p{M}]$/u;
+const WORD_AT_START = /^[\p{L}\p{N}\p{M}]/u;
+
+/**
+ * Whether a match stops at the edges of the words it quotes. Without this, `ne`
+ * would verify inside `nesplnil`, confirming a word the decision does not use.
+ */
+const endsOnWordEdges = (text: string, query: string, { start, end }: Span) =>
+  (!WORD_AT_START.test(query) ||
+    !WORD_AT_END.test(text.slice(Math.max(0, start - 2), start))) &&
+  (!WORD_AT_END.test(query) || !WORD_AT_START.test(text.slice(end, end + 2)));
+
 const exactSpans = (text: string, query: string): Span[] => {
   const spans: Span[] = [];
   let offset = 0;
@@ -95,7 +114,10 @@ const exactSpans = (text: string, query: string): Span[] => {
     if (start === -1) {
       break;
     }
-    spans.push({ start, end: start + query.length });
+    const span = { start, end: start + query.length };
+    if (endsOnWordEdges(text, query, span)) {
+      spans.push(span);
+    }
     offset = start + 1;
   }
   return spans;
@@ -267,12 +289,16 @@ export const verifyQuote = ({
     return {
       status: "exact" as const,
       verified: true as const,
-      segments: queries.map((query, index) => ({
-        text: query,
-        occurrences: (exact[index] ?? panic("Segment occurrences exist")).map(
-          locate,
-        ),
-      })),
+      segments: queries.map((query, index) => {
+        const all = exact[index] ?? panic("Segment occurrences exist");
+        return {
+          text: query,
+          occurrenceCount: all.length,
+          occurrences: all
+            .slice(0, LIMITS.caseLawQuoteMaxOccurrences)
+            .map(locate),
+        };
+      }),
     };
   }
   let after = 0;

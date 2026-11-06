@@ -78,6 +78,9 @@ export const QuestionCell = ({
   let failure: ReactNode;
   if (answer !== undefined) {
     switch (answer.state) {
+      case "withdrawn":
+        value = <span>{t("caseLaw.withdrawnByPublisher")}</span>;
+        break;
       case "answered":
         value = (
           <FieldValue

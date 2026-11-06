@@ -148,6 +148,19 @@ const readProviderConfig = async ({
   }
 };
 
+let observeDiscardedProviderError: ((error: HandlerError<503>) => void) | null =
+  null;
+
+/** Test seam for the auth-only branch that intentionally disposes this error. */
+export const installDiscardedProviderErrorObserverForTest = (
+  observer: (error: HandlerError<503>) => void,
+): (() => void) => {
+  observeDiscardedProviderError = observer;
+  return () => {
+    observeDiscardedProviderError = null;
+  };
+};
+
 /**
  * Refuses a member the organization does not admit to AI work, whichever key
  * would serve it. A null config means "run on the instance provider"; refuses
@@ -341,6 +354,7 @@ export const loadOrgSettingsForAuth = async (
   const { row } = settings;
   const configResult = await readProviderConfig({ organizationId, settings });
   if (Result.isError(configResult)) {
+    observeDiscardedProviderError?.(configResult.error);
     return {
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,

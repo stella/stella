@@ -26,7 +26,10 @@ import {
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
-import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import {
+  extractLangFromRequest,
+  FORMATTING_LOCALE_HEADER,
+} from "@/api/lib/locale";
 import {
   clientTooOldError,
   LOCAL_CLIENT_IDENTITY_HEADER,
@@ -97,7 +100,7 @@ const requestScope: Middleware = async (ctx, inner) =>
           run: inner,
         }),
     );
-  });
+  }, extractLangFromRequest(ctx.request));
 
 /**
  * Who is calling and from where, resolved once while the edge headers are
@@ -111,6 +114,7 @@ const requestIdentity: Middleware = async ({ request, server }, inner) => {
       SESSION_ID_PATTERN.test(rawSessionId)
       ? rawSessionId
       : undefined,
+    request,
   );
   // Both addresses start from the socket peer, read from the socket once.
   const socket = socketPeerOnce(request, server ?? null);
@@ -181,6 +185,7 @@ export const apiPipeline: readonly Middleware[] = [
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
+      "Idempotency-Key",
       "Authorization",
       "MCP-Protocol-Version",
       LOCAL_CLIENT_IDENTITY_HEADER,

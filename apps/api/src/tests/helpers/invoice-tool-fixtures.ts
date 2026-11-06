@@ -23,6 +23,10 @@ export const invoiceDetailRowFixture = (options: InvoiceDetailFixtureOptions) =>
   ({
     organizationId: toSafeId<"organization">("org_1"),
     clientId: null,
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     invoiceNumber: null,
     documentType: "invoice",
     originalInvoiceId: null,

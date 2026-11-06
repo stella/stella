@@ -17,6 +17,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 // A tuple of literals keeps each option in the route types, where a mapped
 // array widens to `never`; `satisfies` fails when the contract list changes.
@@ -73,6 +74,25 @@ const businessRegistriesLookup = createSafeRootHandler(
       registry: query.registry,
       q: query.q,
       detail: query.detail,
+      loadWebSearch: async () =>
+        await Result.tryPromise({
+          try: async () => {
+            const { webSearchProvider } = await scopedDb(async (tx) =>
+              loadWebSearchProvidersForOrg(tx, session.activeOrganizationId),
+            );
+            return webSearchProvider === null
+              ? null
+              : {
+                  provider: webSearchProvider,
+                  observer: actionRequestObserver(
+                    session.activeOrganizationId,
+                    ACTION_COST_CALL_KIND.webSearchRequest,
+                  ).onRequest,
+                };
+          },
+          catch: (cause) =>
+            new Error("Could not load web search configuration", { cause }),
+        }),
     });
     if (Result.isError(result)) {
       return yield* Result.err(result.error);

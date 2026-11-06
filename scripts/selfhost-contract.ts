@@ -14,7 +14,7 @@ export const SELFHOST_COMPOSE_ENV = {
 
 export const SELFHOST_APPLICATION_IMAGE_EXPRESSION = `\${${SELFHOST_COMPOSE_ENV.applicationImage}:?set ${SELFHOST_COMPOSE_ENV.applicationImage} to a digest-qualified image}`;
 export const SELFHOST_GOTENBERG_IMAGE =
-  "gotenberg/gotenberg:8.37.0@sha256:f29984bd1e226bf1b93ba90af06000afa8b315853e99d27b9aaa41b93f15c769";
+  "gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b";
 
 export const SELFHOST_SERVICE = {
   api: "api",

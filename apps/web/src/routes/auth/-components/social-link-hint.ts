@@ -22,7 +22,12 @@ export const loadSocialLinkHint = async (
 ) => {
   const response = await Result.tryPromise(
     async () =>
-      await authClient.$fetch(SOCIAL_LINK_HINT_PATH, { method: "POST" }),
+      await authClient.$fetch(SOCIAL_LINK_HINT_PATH, {
+        method: "POST",
+        // An explicit JSON body fixes the content type before fetch plugins
+        // that append to the body run.
+        body: {},
+      }),
   );
   const hint = response.andThen(({ data, error }) =>
     error ? Result.err(toAuthClientError(error)) : Result.ok(data),

@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 import { normalizeUnicode } from "@stll/text-normalize";
 
@@ -230,7 +231,7 @@ test("the committed statute recall floor and nonempty coverage only increase", (
   // and names it; a local checkout resolves it from origin/main.
   const base =
     process.env["STATUTE_RECALL_BASE_REF"] ??
-    git(["merge-base", "origin/main", "HEAD"]);
+    treeBaseRevision({ repoRoot: process.cwd() });
   const previousPath = git([
     "ls-tree",
     "--full-tree",

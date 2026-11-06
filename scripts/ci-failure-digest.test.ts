@@ -347,6 +347,12 @@ test.each(["stall", "signal"])(
   },
 );
 
+test("typed scope detector crashes remain infrastructure failures through the digest", () => {
+  const message =
+    'kind=infra class=scope-detector detector="service suite" error="forced"';
+  expect(classify("Plan CI", [{ message }])).toBe("infra");
+});
+
 test("a rate-limited E2E stack is a typed infrastructure failure", () => {
   const message =
     "kind=infra class=e2e-stack-rate-limited Docker Hub rate-limited E2E infrastructure pulls; browser tests did not run";

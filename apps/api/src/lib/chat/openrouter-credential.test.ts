@@ -1,7 +1,8 @@
 import { STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
+
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/api/lib/observability/request-metrics";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -738,30 +738,14 @@ describe("managed OpenRouter credentials", () => {
       });
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(ACCESS_TOKEN);
-      const metricSchema = v.object({
-        _aws: v.object({
-          CloudWatchMetrics: v.array(
-            v.object({
-              Dimensions: v.array(v.array(v.string())),
-              Metrics: v.array(v.object({ Name: v.string() })),
-            }),
-          ),
-        }),
-      });
-      const dimensions = lines.flatMap((line) =>
-        v
-          .parse(metricSchema, JSON.parse(line))
-          ._aws.CloudWatchMetrics.map((metric) => metric.Dimensions),
+      expect(lines.map((line) => JSON.parse(line))).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ OpenRouterTokenExchange: 1 }),
+        ]),
       );
-      expect(dimensions).toContainEqual([["outcome"]]);
-      expect(dimensions).toContainEqual([[]]);
-      expect(
-        dimensions.every(
-          (value) =>
-            JSON.stringify(value) === JSON.stringify([["outcome"]]) ||
-            JSON.stringify(value) === JSON.stringify([[]]),
-        ),
-      ).toBe(true);
+      for (const line of lines) {
+        expect(JSON.parse(line)).not.toHaveProperty("_aws");
+      }
     } finally {
       resetMetricLineSinkForTesting();
       logger.restore();

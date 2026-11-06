@@ -59,6 +59,21 @@ describe("MCP tool registry", () => {
     ).toBe(true);
   });
 
+  test("organization creation is offered only with its advanced account scope", () => {
+    expect(
+      getStaticMcpToolDefinition("create_organization", "default"),
+    ).toBeUndefined();
+    expect(
+      getStaticMcpToolDefinition("create_organization", "advanced")?.scope,
+    ).toBe("stella:organization_create");
+    expect(
+      getStaticMcpToolDefinition("create_organization", "anonymized"),
+    ).toBeUndefined();
+    expect(MCP_DEFAULT_RESOURCE_SCOPES).not.toContain(
+      "stella:organization_create",
+    );
+  });
+
   test("anonymizing tools declare at least one text field", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       const { anonymized } = tool;
@@ -227,6 +242,7 @@ describe("MCP tool registry", () => {
       "open_case_law_decision",
       "read_case_law_decision_blocks",
       "preview_cited_provision",
+      "list_case_law_courts",
       "search_legislation",
       "read_statute",
       "read_statute_provisions",

@@ -2,9 +2,11 @@ import { Link, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { Text } from "@stll/ui/text";
+
 import { useLayout, useSelection } from "@/components/selection";
-import { MatterIcon } from "@/components/ui/matter-icon";
-import { Text } from "@/components/ui/text";
+import { usePickDocument } from "@/components/use-pick-document";
 import { useScan } from "@/components/use-scan";
 import { canScan } from "@/native/document-scanner";
 import type { MatterSummary } from "@/state/matters";
@@ -29,6 +31,7 @@ export const MatterRow = ({
   const t = useTranslations("matter");
   const router = useRouter();
   const scan = useScan(matter.id);
+  const pick = usePickDocument(matter.id);
   const layout = useLayout();
   const selection = useSelection();
   const open =
@@ -98,6 +101,9 @@ export const MatterRow = ({
           }}
         >
           {t("newTask")}
+        </Link.MenuAction>
+        <Link.MenuAction icon="doc" onPress={pick}>
+          {t("uploadDocument")}
         </Link.MenuAction>
         <Link.MenuAction
           hidden={!canScan()}

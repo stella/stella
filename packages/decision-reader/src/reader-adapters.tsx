@@ -11,7 +11,6 @@ import type {
   CitedDecisionTarget,
   CitedProvisionTarget,
   CitedStatuteTarget,
-  ProvisionPreviewData,
   ProvisionViewPayload,
 } from "./reader-types";
 
@@ -40,8 +39,6 @@ export type ReaderDecisionLinkProps = {
   treatment: ReaderCitationTreatment;
   /** The block whose text names the decision at this link. */
   blockId: string;
-  /** Only the citation range's first rendered segment owns its badge. */
-  showBadge: boolean;
 };
 
 export type ReaderStatuteLinkProps =
@@ -52,12 +49,6 @@ export type ReaderStatuteLinkProps =
       /** The citations of one provision in one paragraph, sharing a card. */
       citations: readonly CitedProvisionTarget[];
     };
-
-export type ProvisionPreviewRef = {
-  anchor: string;
-  citedAnchor: string | undefined;
-  documentId: string;
-};
 
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
@@ -76,10 +67,10 @@ export type DecisionReaderAdapters = ReaderPresentationAdapters & {
     decisionId: string;
     reason: MissingBodyReason;
   }) => ReactNode;
+  /** Opens the provision in the side panel beside the text. */
   openProvision: (provision: ProvisionViewPayload) => void;
-  loadProvisionPreview: (
-    ref: ProvisionPreviewRef,
-  ) => Promise<ProvisionPreviewData | null>;
+  /** A router link to the provision on its act's own page. */
+  provisionPageLink: (provision: CitedProvisionTarget) => ReactElement;
 };
 
 const ReaderPresentationContext =

@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_NS",
+  "key": "cz-ns",
+  "parserVersion": 24,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own."
+  }
+}

@@ -50,6 +50,7 @@ export const propertyAiCellState = (
     case "money":
     case "person":
     case "clip":
+    case "record":
       return { type: "done" };
     default:
       content satisfies never;
@@ -80,6 +81,7 @@ export const questionAiCellState = ({
   switch (answer.state) {
     case "pending":
       return { type: "running" };
+    case "withdrawn":
     case "answered":
     case "not_stated":
       return { type: "done" };

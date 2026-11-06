@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -24,7 +25,6 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import readActivity from "./activity/list";

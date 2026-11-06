@@ -19,6 +19,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -43,7 +45,6 @@ import { createMemoryExtractorTask } from "@/api/lib/scheduler/tasks/memory-extr
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import * as tanstackGenerate from "@/api/lib/tanstack-ai-generate";
 import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

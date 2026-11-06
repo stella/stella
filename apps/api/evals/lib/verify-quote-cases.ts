@@ -81,9 +81,10 @@ export const publicQuoteCases = (text: string, otherText: string) => {
     following === null
       ? firstStart + firstParagraph.length
       : firstStart + firstParagraph.length + following.index + 60;
+  // Whole words at both ends: a quote cut mid-word is not found, by design.
   const paragraphSpan = text.slice(
-    firstStart + firstParagraph.length - 60,
-    spanEnd,
+    text.indexOf(" ", firstStart + firstParagraph.length - 60) + 1,
+    text.lastIndexOf(" ", spanEnd),
   );
   return [
     { name: "paragraph_span", quote: paragraphSpan, expected: "exact" },

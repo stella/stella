@@ -1,3 +1,5 @@
+import { DATABASE_COMPONENT_KEYS } from "./db-components";
+
 const DEPLOY_TASK = {
   api: "api",
   documentProcessing: "document-processing",
@@ -22,6 +24,11 @@ type DeployEnvEntry = {
   readonly kind: "environment" | "secrets" | "either";
   readonly reason: string;
   readonly readinessField?: "deployEnvironment";
+  /**
+   * Name sets the task may carry instead of `name`: every name of one set
+   * must be present. They come from the code that accepts them.
+   */
+  readonly alternatives?: readonly (readonly string[])[];
 };
 
 export const DEPLOY_ENV_CONTRACT: readonly DeployEnvEntry[] = [
@@ -43,7 +50,9 @@ export const DEPLOY_ENV_CONTRACT: readonly DeployEnvEntry[] = [
     name: "DATABASE_URL",
     tasks: ALL_TASKS,
     kind: "either",
-    reason: "Database connection is required at boot.",
+    reason:
+      "Database connection is required at boot, as a URL or as the components the URL is assembled from.",
+    alternatives: [DATABASE_COMPONENT_KEYS],
   },
   {
     name: "S3_ENDPOINT",

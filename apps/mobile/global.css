@@ -3,9 +3,11 @@
 @import "uniwind";
 @import "./ui-theme.gen.css";
 
-/* Classes the app takes from the web's shared tokens, which uniwind
-   generates only for the files it scans. */
+/* Classes the app takes from @stll/ui, which uniwind generates only for the
+   files it scans: the shared tokens and the React Native renderers. */
 @source "../../packages/ui/src/components/composer-tokens.ts";
+@source "../../packages/ui/src/components/*.shared.ts";
+@source "../../packages/ui/src/components/*.native.tsx";
 
 @theme {
   /* The web's typeface, DM Sans, by the names the expo-font plugin embeds. */

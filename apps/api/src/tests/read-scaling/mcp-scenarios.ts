@@ -12,11 +12,18 @@ import {
   measureWebHandoff,
 } from "@/api/tests/read-scaling/handoff";
 
+import { measureCourtCatalogTool } from "./case-law-courts";
+import { measureCreateOrganizationTool } from "./organization-create";
 import { measureVerifyQuote } from "./verify-quote";
 
 type ReadFixture = Awaited<ReturnType<typeof seedEntityReadScaling>>;
 
 export const mcpScalingScenarios = [
+  {
+    name: "create_organization" satisfies McpToolName,
+    kind: "account-create" as const,
+    measure: measureCreateOrganizationTool,
+  },
   {
     name: "verify_quote" satisfies McpToolName,
     kind: "stored-decision" as const,
@@ -60,6 +67,11 @@ export const mcpScalingScenarios = [
           rows: response.payload["documents"].length,
         };
       }),
+  },
+  {
+    name: "list_case_law_courts" satisfies McpToolName,
+    kind: "database-page" as const,
+    measure: measureCourtCatalogTool,
   },
   {
     name: "mint_web_handoff" satisfies McpToolName,

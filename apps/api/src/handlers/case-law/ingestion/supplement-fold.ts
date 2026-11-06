@@ -24,18 +24,19 @@ import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
-import type {
-  SourceAdapter,
-  StoredRawReparseRejection,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import type { SupplementDisposition } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type {
+  SourceAdapter,
+  StoredRawReparseRejection,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 
 /** What folding one stored row came to. */
 export const SUPPLEMENT_FOLD_OUTCOME = {
@@ -77,6 +78,49 @@ export type SupplementFoldReport = {
 };
 
 const SUPPLEMENT_FOLD_LISTED_ROWS = 50;
+
+/**
+ * What a placed supplement counts as in the fold's report. Every way the
+ * pipeline keeps a supplement unpublished (a takedown of its judgment, an
+ * erasure of its own row, an erasure or takedown that removed its row while
+ * it moved) reads as withheld, with the decision that withheld it.
+ */
+export const foldOutcomeOf = (
+  disposition: SupplementDisposition,
+): { outcome: SupplementFoldOutcome; detail: string } => {
+  switch (disposition.type) {
+    case "merged":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.MERGED,
+        detail: disposition.judgmentId,
+      };
+    case "standalone":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.STANDALONE,
+        detail: disposition.reason,
+      };
+    case "withheld":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.judgmentId,
+      };
+    case "erased":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.decisionId,
+      };
+    case "removed":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.formerJudgmentId,
+      };
+    default:
+      disposition satisfies never;
+      return panic(
+        `Unhandled supplement disposition: ${JSON.stringify(disposition)}`,
+      );
+  }
+};
 
 const emptyOutcomes = (): Record<SupplementFoldOutcome, number> => ({
   [SUPPLEMENT_FOLD_OUTCOME.MERGED]: 0,
@@ -194,25 +238,25 @@ export const foldStoredSupplements = async ({
 
   const foldRow = async (
     row: FoldRow & { sourceRawS3Key: string },
-  ): Promise<SupplementFoldRowReport> => {
+  ): Promise<Result<SupplementFoldRowReport, unknown>> => {
     const base = { id: row.id, caseNumber: row.caseNumber };
     const read = await readStoredRaw(row.sourceRawS3Key);
     if (Result.isError(read)) {
-      return {
+      return Result.ok({
         ...base,
         outcome: read.error.permanent
           ? SUPPLEMENT_FOLD_OUTCOME.REJECTED
           : SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
         detail: read.error.message,
-      };
+      });
     }
     const raw = read.value;
     if (raw === null) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.MISSING_PAYLOAD,
         detail: row.sourceRawS3Key,
-      };
+      });
     }
     const reparsed = await reparseStoredRaw({
       raw,
@@ -230,14 +274,17 @@ export const foldStoredSupplements = async ({
     });
     switch (reparsed.type) {
       case "rejected":
-        return {
+        return Result.ok({
           ...base,
           outcome: SUPPLEMENT_FOLD_OUTCOME.REJECTED,
           rejection: reparsed.rejection,
           detail: reparsed.detail,
-        };
+        });
       case "parsed":
-        return { ...base, outcome: SUPPLEMENT_FOLD_OUTCOME.NOT_A_SUPPLEMENT };
+        return Result.ok({
+          ...base,
+          outcome: SUPPLEMENT_FOLD_OUTCOME.NOT_A_SUPPLEMENT,
+        });
       case "supplement":
         break;
       default: {
@@ -248,13 +295,13 @@ export const foldStoredSupplements = async ({
     if (
       reparsed.supplement.document.sourceDocumentId !== row.sourceDocumentId
     ) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.REJECTED,
         detail: `the payload names ${reparsed.supplement.document.sourceDocumentId}`,
-      };
+      });
     }
-    const placed = await processSupplement({
+    const placement = await processSupplement({
       // The bytes this run read: the standalone row keeps its pointer on the
       // same content-addressed object.
       supplement: {
@@ -275,46 +322,18 @@ export const foldStoredSupplements = async ({
       readStoredRaw,
       ...(corpus === undefined ? {} : { corpus }),
     });
+    if (placement.isErr()) {
+      return placement;
+    }
+    const placed = placement.value;
     if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-      return {
+      return Result.ok({
         ...base,
         outcome: SUPPLEMENT_FOLD_OUTCOME.RETRYABLE,
         detail: placed.reason,
-      };
+      });
     }
-    const { disposition } = placed;
-    switch (disposition.type) {
-      case "merged":
-        return {
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.MERGED,
-          detail: disposition.judgmentId,
-        };
-      case "standalone":
-        return {
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.STANDALONE,
-          detail: disposition.reason,
-        };
-      case "withheld":
-        return {
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
-          detail: disposition.judgmentId,
-        };
-      case "erased":
-        return {
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
-          detail: disposition.decisionId,
-        };
-      default: {
-        disposition satisfies never;
-        return panic(
-          `Unhandled supplement disposition: ${JSON.stringify(disposition)}`,
-        );
-      }
-    }
+    return Result.ok({ ...base, ...foldOutcomeOf(placed.disposition) });
   };
 
   let cursor = after;
@@ -335,11 +354,13 @@ export const foldStoredSupplements = async ({
       if (sourceRawS3Key === null) {
         continue;
       }
-      const folded = await Result.tryPromise({
-        // db-await-in-loop: each supplement row folds into its own judgment, one locked write per row
-        try: async () => await foldRow({ ...row, sourceRawS3Key }),
-        catch: (cause) => cause,
-      });
+      const folded = (
+        await Result.tryPromise({
+          // db-await-in-loop: each supplement row folds into its own judgment, one locked write per row
+          try: async () => await foldRow({ ...row, sourceRawS3Key }),
+          catch: (cause) => cause,
+        })
+      ).andThen((outcome) => outcome);
       if (Result.isError(folded)) {
         // Says nothing about the row: hold the cursor behind it.
         report.haltReason = `${row.caseNumber} ${row.id} could not be folded: ${

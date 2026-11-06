@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "packages/chat declares cheerio and domhandler (both already declared by apps/api and packages/mcp-apps) because the chat HTML to Markdown conversion moved into @stll/chat/html-to-markdown, so the web edit form round-trips a sent message through the same conversion the server stores it with; apps/api still parses HTML with both elsewhere, so its declarations stay."
+}

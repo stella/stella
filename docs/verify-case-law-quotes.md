@@ -8,8 +8,8 @@ The tool requires `stella:read` and the public-law feature.
 Only `status: "exact", verified: true` confirms that the supplied text occurs.
 It does not establish that a truncated quote fairly represents the decision.
 `fuzzy` always has `verified: false`: report it as an altered quote, never as
-confirmed. `not_found` also has `verified: false` and returns a closest passage
-for inspection. `cannot_verify` identifies pending, unavailable, failed,
+confirmed. `not_found` also has `verified: false` and may return a closest
+passage for inspection; `closest` is null once the remaining text is exhausted. `cannot_verify` identifies pending, unavailable, failed,
 licence-withheld or empty text; it is never evidence that the quote is absent.
 An unknown or restricted decision ID returns the standard `not_found` error
 envelope rather than a quotation verdict.
@@ -20,8 +20,10 @@ curly quotation marks and guillemets, dash variants, soft hyphens, hyphenated
 line endings, and spacing in `č. j.`. Literal substrings remain exact at
 normalization boundaries. Double and single quotation marks remain distinct.
 Ellipses `...`, `…`, `[…]` and `(...)` split the quote into ordered, nonempty
-segments; each segment reports its occurrences. The tool returns all occurrences
-that can participate in an ordered match, without enumerating combinations.
+segments; a leading or trailing ellipsis only marks a cut. A match must stop at
+the edges of the words it quotes, so `ne` does not match inside `nesplnil`. Each
+segment reports `occurrenceCount`, the occurrences that can participate in an
+ordered match, and returns the first 20 of them.
 
 Each passage carries original UTF-16 `start` (inclusive) and `end` (exclusive)
 offsets, its text, and the covering paragraph positions, canonical labels,
@@ -40,9 +42,9 @@ suffix has `closest: null`. This heuristic is not semantic verification.
 
 Input is bounded to 4,000 characters, 128 total word/punctuation tokens and 16
 segments. Comparison costs are bounded by document length times that fixed
-token budget, plus returned occurrences. The tool reads one gated decision
-without fetching a publisher document. Chat's bounded reader projection does
-not expose this unpaginated occurrence list.
+token budget, plus at most 20 returned occurrences per segment. The tool reads
+one gated decision without fetching a publisher document. Chat's bounded reader
+projection does not expose this occurrence list.
 
 Run the deterministic calibration with
 `bun --preload ./src/tests/setup-env.ts evals/verify-quote-local.ts` from

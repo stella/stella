@@ -24,6 +24,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestClock, waitFor } from "@stll/test-kit";
 
 import { env } from "@/api/env";
 import {
@@ -34,6 +35,10 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  requestBoundedTimeoutMs,
+  runBoundedRequestStep,
+} from "@/api/lib/load/request-latency-budget";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -71,6 +76,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
+import { mcpRequestStartedAt } from "@/api/mcp/request-metrics";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -80,6 +86,7 @@ import {
   LAW_MCP_TOOL_DEFINITIONS,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -266,7 +273,10 @@ describe("handleMcpHttpRequest", () => {
       lines.push(line);
     });
     authenticateMcpRequestMock.mockImplementation(async () => {
-      await Bun.sleep(5);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 2 ? true : undefined), {
+        description: "the authentication phase delay",
+      });
       return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
@@ -278,7 +288,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     listMcpToolsMock.mockImplementation(async () => {
-      await Bun.sleep(toolProjectionDelayMs);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 11 ? true : undefined), {
+        description: "the tool projection phase delay",
+      });
       return [];
     });
 
@@ -345,6 +358,57 @@ describe("handleMcpHttpRequest", () => {
     ).toMatchObject({ method: "tools/list", path: "modern" });
   });
 
+  test("a tool's budget counts from the request start, preparation included", async () => {
+    const preparationMs = 400;
+    const budgetMs = mcpToolLatencyBudgetMs("list_matters");
+    const staticDefinition = listStaticMcpToolDefinitions("default").find(
+      ({ name }) => name === "list_matters",
+    );
+    if (staticDefinition === undefined) {
+      panic("Canonical list_matters tool definition is missing");
+    }
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      // real-time: preparation time is what the deadline must charge.
+      await Bun.sleep(preparationMs);
+      return Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      });
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolDefinitionMock.mockResolvedValue(staticDefinition);
+    let dependencyTimeoutMs = Number.POSITIVE_INFINITY;
+    let endedAfterRequestStartMs = Number.POSITIVE_INFINITY;
+    handleMcpToolCallMock.mockImplementation(async () => {
+      const requestStartedAt = mcpRequestStartedAt() ?? Number.NaN;
+      // A dependency that would wait a minute takes whatever is left.
+      dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
+      const step = await runBoundedRequestStep(
+        async () => await Promise.withResolvers<never>().promise,
+        { label: "slow-dependency", budgetMs: 60_000 },
+      );
+      endedAfterRequestStartMs = performance.now() - requestStartedAt;
+      return { content: [{ type: "text", text: step.status }] };
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({
+        id: 1,
+        method: "tools/call",
+        params: { arguments: {}, name: "list_matters" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(dependencyTimeoutMs).toBeLessThanOrEqual(budgetMs - preparationMs);
+    // The dependency gives way at the request's deadline, counted from the
+    // request's start as the metric and the canary count it, not at
+    // preparation plus a fresh budget.
+    expect(endedAfterRequestStartMs).toBeGreaterThanOrEqual(budgetMs - 50);
+    expect(endedAfterRequestStartMs).toBeLessThan(budgetMs + 150);
+  });
+
   test.each([
     ["list_matters", "list_matters"],
     ["mcp__tenant_connector__lookup", "external_mcp"],
@@ -393,6 +457,10 @@ describe("handleMcpHttpRequest", () => {
       expect(phaseRecord).toMatchObject({
         method: "tools/call",
         toolName: metricToolName,
+        // The slow-tool alarm counts `overBudget`, judged by the same table
+        // the canary reads.
+        budget: mcpToolLatencyBudgetMs(metricToolName),
+        overBudget: false,
       });
       if (toolName !== metricToolName) {
         expect(JSON.stringify(phaseRecord)).not.toContain(toolName);
@@ -1387,6 +1455,7 @@ describe("handleMcpHttpRequest", () => {
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
+        "list_case_law_courts",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -1474,7 +1543,11 @@ describe("handleMcpHttpRequest", () => {
       firstRead.then(({ done }) =>
         done ? ("ended" as const) : ("open" as const),
       ),
-      Bun.sleep(20).then(() => "open" as const),
+      // A clock advance drains an event-loop turn, so an immediate close
+      // reaches firstRead before the pending-stream observation wins.
+      createTestClock()
+        .advance(0)
+        .then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");
 
@@ -1531,7 +1604,22 @@ describe("handleMcpHttpRequest", () => {
       );
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
-      expect((await reader.read()).done).toBe(true);
+      // The only frame the stream may carry before it ends is the tool-list
+      // signal it sends once it opens.
+      const decoder = new TextDecoder();
+      const framesBeforeEnd = async (
+        frames: readonly string[],
+      ): Promise<readonly string[]> => {
+        const read = await reader.read();
+        return read.done
+          ? frames
+          : await framesBeforeEnd([...frames, decoder.decode(read.value)]);
+      };
+      const frames = await framesBeforeEnd([]);
+      expect(frames.length).toBeLessThanOrEqual(1);
+      for (const frame of frames) {
+        expect(frame).toContain("notifications/tools/list_changed");
+      }
     } finally {
       await reader.cancel();
     }
@@ -1580,7 +1668,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1649,7 +1741,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",

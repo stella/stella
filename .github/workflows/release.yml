@@ -210,7 +210,7 @@ jobs:
           persist-credentials: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -352,7 +352,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -462,7 +462,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -697,7 +697,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -907,7 +907,7 @@ jobs:
           path: .release-source
           persist-credentials: false
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -982,7 +982,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1304,7 +1304,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1503,6 +1503,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
@@ -1521,6 +1522,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/scripts/check-api-deployment.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
 
       - name: Checkout workflow source
@@ -1645,7 +1647,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -1801,7 +1803,9 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/gh-dispatch-workflow.sh
           sparse-checkout-cone-mode: false
 
       - name: Dispatch release-health.yml
@@ -1812,15 +1816,13 @@ jobs:
         run: |
           runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
           if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then exit 0; fi
-          bash scripts/gh-retry.sh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/release-health.yml/dispatches" \
-            -f ref=main \
-            -f "inputs[release_ref]=${RELEASE_REF}"
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" release-health.yml main \
+            "Release health $RELEASE_REF" "release_ref=$RELEASE_REF"
 
   promote-staging:
     name: Dispatch RC proofs
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: [resolve, manifest]
     if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
@@ -1842,15 +1844,18 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-actions: write
       - name: Dispatch staging and heavy on the candidate SHA
-        timeout-minutes: 5
+        # Each dispatch may wait out a few unconfirmed attempts.
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           SHA: ${{ needs.resolve.outputs.release_sha }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-staging.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true" -f "inputs[release_ref]=$RELEASE_REF"
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-heavy.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA" -f "inputs[release_candidate]=true"
-          bash scripts/gh-retry.sh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/main-pr-depth.yml/dispatches" -f ref=main -f "inputs[sha]=$SHA"
+          # Titles are the targets' run-names: a dispatch GitHub answers with a
+          # server error is repeated only when no run with its title appeared.
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" deploy-staging.yml main "Staging release proof $RELEASE_REF $SHA" "sha=$SHA" release_candidate=true "release_ref=$RELEASE_REF"
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" main-heavy.yml main "Main heavy suites $SHA" "sha=$SHA" release_candidate=true
+          bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" main-pr-depth.yml main "Main PR-depth checks $SHA" "sha=$SHA"
 
   release-complete:
     name: Reconcile final release receipts
@@ -1879,7 +1884,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

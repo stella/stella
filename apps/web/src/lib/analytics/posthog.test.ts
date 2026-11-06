@@ -18,6 +18,7 @@ import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagno
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import { APIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 beforeEach(() => {
@@ -968,7 +969,9 @@ describe("PostHog browser analytics adapter", () => {
     const chunkId = "0199f2a4-5d1e-7c3a-9b2f-1e4d5c6b7a80";
     expect(
       sanitizeFrame({ filename: "app.js", lineno: 3, chunk_id: chunkId }),
-    ).toMatchObject({ chunk_id: chunkId });
+    ).toMatchObject({
+      chunk_id: chunkId,
+    });
     expect(
       sanitizeFrame({ filename: "app.js", chunk_id: "Smith v Example" }),
     ).not.toHaveProperty("chunk_id");
@@ -1052,7 +1055,11 @@ describe("PostHog browser analytics adapter", () => {
 
     expect(captureMock).toHaveBeenCalledWith(
       WEB_ANALYTICS_EVENTS.keyActionTimed,
-      { action: "search-results", durationBucketMs: 750, surface: "case-law" },
+      {
+        action: "search-results",
+        durationBucketMs: 750,
+        surface: "case-law",
+      },
     );
     expect(
       initOptions?.before_send({
@@ -1087,7 +1094,9 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
-  test("captureError ignores aborted transport failures", () => {
+  const expectTransientSignal = (
+    transportKind: "network" | "timeout" | "aborted",
+  ) => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
@@ -1095,14 +1104,195 @@ describe("PostHog browser analytics adapter", () => {
     analytics.captureError(
       new APIError({
         status: 0,
-        message: "Request aborted",
-        transportKind: "aborted",
+        message: "Private browser transport detail",
+        transportKind,
       }),
       {
-        fingerprintKey: "posthog:aborted-transport",
-        scope: { type: "handler", handlerId: "posthog:aborted-transport" },
+        fingerprintKey: "desktop-presence:query",
+        scope: { type: "handler", handlerId: "desktop-presence" },
       },
     );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "desktop-presence:query",
+      transport_kind: transportKind,
+    });
+  };
+
+  test("captureError records a network API transport failure as one transient signal", () => {
+    expectTransientSignal("network");
+  });
+
+  test("captureError records a timeout API transport failure as one transient signal", () => {
+    expectTransientSignal("timeout");
+  });
+
+  test("captureError records an aborted API transport failure as one transient signal", () => {
+    expectTransientSignal("aborted");
+  });
+
+  test.each([
+    "Failed to fetch",
+    "NetworkError when attempting to fetch resource.",
+    "Load failed",
+  ])(
+    "captureError records a native fetch rejection (%s) as one transient signal",
+    (message) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(new TypeError(message), {
+        fingerprintKey: "auth.role:query",
+        scope: { type: "handler", handlerId: "auth.role" },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "auth.role:query",
+        transport_kind: "network",
+      });
+    },
+  );
+
+  test("captureError records a native fetch deadline as one transient signal", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new DOMException("signal timed out", "TimeoutError"),
+      {
+        fingerprintKey: "auth.role:query",
+        scope: { type: "handler", handlerId: "auth.role" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "auth.role:query",
+      transport_kind: "timeout",
+    });
+  });
+
+  test.each([
+    { error: new TypeError("Load failed"), transportKind: "network" },
+    {
+      error: new DOMException("signal timed out", "TimeoutError"),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError keeps a user-visible $transportKind failure a transient signal",
+    ({ error, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(error, {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/law" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/law",
+          feature: "law",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "reportUserVisibleError:failure",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
+  test.each([
+    "INVALID_BACKUP_CODE",
+    "INVALID_CODE",
+    "INVALID_OTP",
+    "OTP_EXPIRED",
+  ])(
+    "captureError records nothing for a typed code the auth server refused (%s)",
+    (code) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      const refusal = {
+        code,
+        message: "Refused",
+        status: 400,
+        statusText: "Bad Request",
+      };
+      const options = {
+        fingerprintKey: "OTPPanel:failure-2",
+        scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+      } as const;
+      analytics.captureError(toAuthClientError(refusal), options);
+      analytics.captureError(refusal, options);
+      analytics.captureError(toAuthClientError(refusal), {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/auth/otp" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/auth/otp",
+          feature: "auth",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test("captureError still reports another 400 from the auth server", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      toAuthClientError({
+        code: "FAILED_TO_CREATE_SESSION",
+        message: "Refused",
+        status: 400,
+        statusText: "Bad Request",
+      }),
+      {
+        fingerprintKey: "OTPPanel:failure-2",
+        scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+      },
+    );
+
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    "Failed to fetch dynamically imported module: https://app.test/a.js",
+    "x is not a function",
+  ])("captureError keeps capturing a TypeError of ours (%s)", (message) => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(new TypeError(message), {
+      fingerprintKey: "posthog:type-error",
+      scope: { type: "handler", handlerId: "posthog:type-error" },
+    });
+
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).not.toHaveBeenCalledWith(
+      "client_transient",
+      expect.anything(),
+    );
+  });
+
+  test("captureError ignores a bare abort exception", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     analytics.captureError(new DOMException("Cancelled", "AbortError"), {
       fingerprintKey: "posthog:abort-error",
       scope: { type: "handler", handlerId: "posthog:abort-error" },
@@ -2684,6 +2874,9 @@ describe("PostHog browser analytics adapter", () => {
       expect(fingerprint).toContain(
         JSON.stringify(["cause0.StructuredFailure.reason.kind", kind]),
       );
+      expect(event?.properties?.["exception_fields"]).toEqual({
+        "cause0.StructuredFailure.reason.kind": kind,
+      });
       expect(JSON.stringify(event)).not.toContain("PRIVATE_");
       return fingerprint;
     };

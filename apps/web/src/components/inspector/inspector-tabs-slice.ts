@@ -850,6 +850,9 @@ export const createInspectorTabsSlice = (
         }
         state.tabs.splice(index, 1);
         removeGroupAssignment(state, id);
+        if (options?.movedToMain === true) {
+          state.minimized = true;
+        }
         if (state.activeId === id) {
           const next = state.tabs[Math.min(index, state.tabs.length - 1)];
           if (next === undefined) {

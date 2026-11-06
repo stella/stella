@@ -12,6 +12,82 @@ export const ledgerGitEnv = (): Record<string, string> =>
     ),
   );
 
+export type NormalizeBaseEntriesOptions = {
+  entries: readonly string[];
+  baseCommit: string;
+  /** The ledger being checked: a copy only relocates a site its source no longer lists. */
+  current: readonly string[];
+};
+
+type RelocateLedgerEntriesOptions = NormalizeBaseEntriesOptions & {
+  repoRoot: string;
+  pathIndex?: number;
+};
+
+const FILE_MOVE = { rename: "rename", copy: "copy" } as const;
+
+type FileMove = {
+  type: (typeof FILE_MOVE)[keyof typeof FILE_MOVE];
+  to: string;
+};
+
+export const relocateLedgerEntries = ({
+  entries,
+  baseCommit,
+  current,
+  repoRoot,
+  pathIndex = 0,
+}: RelocateLedgerEntriesOptions): string[] => {
+  const diff = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--name-status",
+      "-z",
+      "--find-renames",
+      "--find-copies",
+      "--diff-filter=RC",
+      baseCommit,
+      "--",
+    ],
+    { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
+  );
+  if (diff.exitCode !== 0) {
+    return panic(`Cannot read ledger renames: ${diff.stderr.toString()}`);
+  }
+  const diffFields = diff.stdout.toString().split("\0");
+  const moves = new Map<string, FileMove>();
+  for (let index = 0; index < diffFields.length - 1; index += 3) {
+    const status = diffFields.at(index);
+    const from = diffFields.at(index + 1);
+    const to = diffFields.at(index + 2);
+    if (status === undefined || !/^[CR]\d+$/u.test(status) || !from || !to) {
+      return panic("Malformed ledger rename record");
+    }
+    const type = status.startsWith("R") ? FILE_MOVE.rename : FILE_MOVE.copy;
+    // A rename moves the source itself; it outranks any copy of it.
+    if (moves.get(from)?.type !== FILE_MOVE.rename) {
+      moves.set(from, { type, to });
+    }
+  }
+  const listed = new Set(current);
+  // A move keeps every other field and cannot add a site. A copy is an
+  // extraction only when the source entry is gone; a source that keeps its
+  // site keeps its entry, and the copy cannot list it a second time.
+  return entries.map((entry) => {
+    const fields = entry.split("::");
+    const move = moves.get(fields[pathIndex] ?? "");
+    if (
+      move === undefined ||
+      (move.type === FILE_MOVE.copy && listed.has(entry))
+    ) {
+      return entry;
+    }
+    fields[pathIndex] = move.to;
+    return fields.join("::");
+  });
+};
+
 type LedgerMergeBaseOptions = { repoRoot: string; baseRef: string };
 
 export const ledgerMergeBase = ({
@@ -37,7 +113,7 @@ type ReadBaseLedgerOptions = {
   repoRoot: string;
   parseLedger: (text: string, label: string) => string[];
   normalizeBaseEntries?:
-    ((entries: string[], baseCommit: string) => string[]) | undefined;
+    ((options: NormalizeBaseEntriesOptions) => string[]) | undefined;
 };
 
 type CompareLedgerMembershipOptions = ReadBaseLedgerOptions & {
@@ -88,7 +164,10 @@ const compareLedgerMembership = ({
     });
     return entries === null
       ? []
-      : [normalizeBaseEntries?.(entries, commit) ?? entries];
+      : [
+          normalizeBaseEntries?.({ entries, baseCommit: commit, current }) ??
+            entries,
+        ];
   });
   return {
     type: "compared",
@@ -180,6 +259,12 @@ type RunLedgerMembershipGuardOptions = {
   args?: readonly string[];
   log?: (message: string) => void;
   error?: (message: string) => void;
+  reviewedEntryAdmission?:
+    | {
+        type: "reasoned";
+        entries: readonly { id: string; reason: string }[];
+      }
+    | undefined;
 };
 
 export const runLedgerMembershipGuard = ({
@@ -192,6 +277,7 @@ export const runLedgerMembershipGuard = ({
   args = process.argv.slice(2),
   log = console.log,
   error = console.error,
+  reviewedEntryAdmission,
 }: RunLedgerMembershipGuardOptions): number => {
   if (args[0] === "--self-test") {
     return selfTestLedgerMembership(`check-${label}-ledger`);
@@ -222,16 +308,32 @@ export const runLedgerMembershipGuard = ({
     return 2;
   }
   const { added } = comparison;
-  if (added.length === 0) {
+  const reviewedById = new Map(
+    reviewedEntryAdmission?.entries.map(({ id, reason }) => [id, reason]),
+  );
+  const admitted: { id: string; reason: string }[] = [];
+  const refused: string[] = [];
+  for (const id of added) {
+    const reason = reviewedById.get(id);
+    if (reason === undefined || reason.trim().length === 0) {
+      refused.push(id);
+      continue;
+    }
+    admitted.push({ id, reason });
+  }
+  for (const { id, reason } of admitted) {
+    log(`reviewed entry admitted: ${id} (${reason})`);
+  }
+  if (refused.length === 0) {
     log(
-      `${label} ledger: OK. ${current.length} entries, none new vs ${baseRef}.`,
+      `${label} ledger: OK. ${current.length} entries, ${admitted.length === 0 ? "none new" : `${admitted.length} reviewed`} vs ${baseRef}.`,
     );
     return 0;
   }
   error(
-    `${label} ledger: ${added.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
+    `${label} ledger: ${refused.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
   );
-  for (const entry of added) {
+  for (const entry of refused) {
     error(`  ${entry}`);
   }
   return 1;

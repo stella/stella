@@ -8,7 +8,7 @@ import {
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   compareText,
@@ -64,20 +64,22 @@ describe("splitSurroundingWhitespace", () => {
   });
 
   test("rebuilds the run exactly for any mix of whitespace and text", () => {
-    fc.assert(
+    assertProperty(
+      "rebuilds the run exactly for any mix of whitespace and text",
       fc.property(segmentText, (text) => {
         const { core, leading, trailing } = splitSurroundingWhitespace(text);
         expect(leading + core + trailing).toBe(text);
         expect(core.trim()).toBe(core);
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   });
 });
 
 describe("diffMarkRanges", () => {
   test("marks exactly the visible text of every changed run", () => {
-    fc.assert(
+    assertProperty(
+      "marks exactly the visible text of every changed run",
       fc.property(fc.array(segmentArbitrary, { maxLength: 12 }), (segments) => {
         const text = segments.map((segment) => segment.text).join("");
         const ranges = diffMarkRanges(segments);
@@ -108,7 +110,7 @@ describe("diffMarkRanges", () => {
           }
         }
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   });
 
@@ -233,7 +235,8 @@ const sideDiff = (value: string): fc.Arbitrary<WordDiffSegment[]> =>
 
 describe("compareText", () => {
   test("is the reader's plain text for every block kind, piece by piece", () => {
-    fc.assert(
+    assertProperty(
+      "is the reader's plain text for every block kind, piece by piece",
       fc.property(blockArbitrary("b"), (block) => {
         const expected =
           block.type === "image"
@@ -248,14 +251,15 @@ describe("compareText", () => {
           expect(compareText([block])).toBe(inlinesToPlainText(block.inlines));
         }
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   });
 });
 
 describe("markSide", () => {
   test("puts every mark on the characters the side's diff marks", () => {
-    fc.assert(
+    assertProperty(
+      "puts every mark on the characters the side's diff marks",
       fc.property(
         blocksArbitrary.chain((blocks) =>
           sideDiff(compareText(blocks)).map(
@@ -311,7 +315,7 @@ describe("markSide", () => {
           );
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   });
 

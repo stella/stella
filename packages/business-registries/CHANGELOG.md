@@ -1,5 +1,20 @@
 # @stll/business-registries
 
+## 0.13.7
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
+## 0.13.6
+
+### Patch Changes
+
+- [#7546](https://github.com/stella/stella/pull/7546) [`c2b11b8`](https://github.com/stella/stella/commit/c2b11b8dc7a7e8165b5beda248efb2decf3c2691) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Send Czech insolvency register queries with their criteria in the order the service schema defines, which the service now enforces.
+- Updated dependencies [[`5a7bfa7`](https://github.com/stella/stella/commit/5a7bfa7e45b652a24792c542e43b96dbeb52145b)]:
+  - @stll/text-normalize@0.5.2
+
 ## 0.13.5
 
 ### Patch Changes

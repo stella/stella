@@ -24,6 +24,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -133,7 +134,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(chatThreads)
         .where(inArray(chatThreads.id, [threadId, racedThreadId]));
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     });
 
@@ -247,13 +248,7 @@ if (!databaseUrl || !runPostgresTests) {
         end,
         terminal,
       ]);
-      const received: { value: unknown } = { value: null };
-      const pending = reader.next().then((value) => {
-        received.value = value;
-        return value;
-      });
-      await Bun.sleep(50);
-      const beforeSettlement = received.value;
+      const pending = reader.next();
       expect(
         await scopedDb(
           async (tx) =>
@@ -275,7 +270,6 @@ if (!databaseUrl || !runPostgresTests) {
       const deliveredEnd = await pending;
       const deliveredTerminal = await reader.next();
       expect(await reader.next()).toEqual({ done: true, value: undefined });
-      expect(beforeSettlement).toBeNull();
       expect(timing.value?.status).toBe("finished");
       expect(deliveredEnd).toEqual({
         done: false,

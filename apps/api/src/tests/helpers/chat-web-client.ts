@@ -45,6 +45,9 @@ const WEB_CHAT_USER_ACTIONS_URL = new URL(
 
 /** The web app's API origin in tests (`apps/web/src/test-setup.ts`). */
 const WEB_TEST_API_URL = "http://localhost:3001";
+/** The web app's required document storage settings, as its test preload sets them. */
+const WEB_TEST_DOCUMENTS_BUCKET = "stella";
+const WEB_TEST_DOCUMENTS_ENDPOINT = "http://localhost:9000";
 
 type WebChatSnapshot = {
   error: Error | undefined;
@@ -136,6 +139,8 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     return loadedWebChat;
   }
   process.env["VITE_API_URL"] ??= WEB_TEST_API_URL;
+  process.env["VITE_DOCUMENTS_BUCKET"] ??= WEB_TEST_DOCUMENTS_BUCKET;
+  process.env["VITE_DOCUMENTS_ENDPOINT"] ??= WEB_TEST_DOCUMENTS_ENDPOINT;
   const runtime: unknown = await import(WEB_CHAT_RUNTIME_URL);
   const uiTools: unknown = await import(WEB_CHAT_UI_TOOLS_URL);
   const userActions: unknown = await import(WEB_CHAT_USER_ACTIONS_URL);

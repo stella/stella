@@ -9,6 +9,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
+import { nullAsAbsent, uuidInputSchema } from "./input-schemas";
 import {
   defaultReadGatedDecisionWithDocument,
   isReadCaseLawDecisionSuccess,
@@ -18,10 +19,8 @@ import type { TypedMcpToolHandler } from "./tool-types";
 import {
   handlerStatusOf,
   notFoundResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "./tool-utils";
 import {
@@ -84,7 +83,11 @@ export const verifyQuoteOutputSchema = v.variant("status", [
     decisionId: v.string(),
     textSource: v.picklist(["ast", "fulltext"]),
     segments: v.array(
-      v.object({ text: v.string(), occurrences: v.array(passageSchema) }),
+      v.object({
+        text: v.string(),
+        occurrenceCount: v.number(),
+        occurrences: v.array(passageSchema),
+      }),
     ),
   }),
   v.object({

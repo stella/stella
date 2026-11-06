@@ -1,7 +1,9 @@
 /**
  * Which cited-provision cards the reader's margin lists. A focused paragraph
  * narrows the list to what that paragraph cites, a selection to what the
- * selected words cite; with neither, the margin lists every card.
+ * selected words cite; with neither, the margin lists every card. A filter
+ * that would leave no card does not apply: words that cite nothing are no
+ * reason to empty the margin.
  *
  * Cards and selections share one offset axis: a card's ranges are where its
  * citation links sit in the paragraph's rendered text, and a selection anchor
@@ -115,16 +117,6 @@ export const selectionCitationFilter = ({
         citationIds: citationIdsInSelection({ cards, spans }),
       };
 
-/** A selection speaks for the words the reader is on; a focused paragraph
- * is what remains once it is cleared. */
-export const resolveMarginCitationFilter = ({
-  paragraph,
-  selection,
-}: {
-  paragraph: ParagraphCitationFilter | null;
-  selection: SelectionCitationFilter | null;
-}): MarginCitationFilter => selection ?? paragraph ?? ALL_CITATIONS;
-
 export const visibleProvisionCards = <TCard extends FilterableCard>(
   cards: readonly TCard[],
   filter: MarginCitationFilter,
@@ -148,3 +140,21 @@ export const visibleProvisionCards = <TCard extends FilterableCard>(
     }
   }
 };
+
+/**
+ * A selection speaks for the words the reader is on; a focused paragraph is
+ * what remains once it is cleared, or while the selected words cite nothing.
+ */
+export const resolveMarginCitationFilter = ({
+  cards,
+  paragraph,
+  selection,
+}: {
+  cards: readonly FilterableCard[];
+  paragraph: ParagraphCitationFilter | null;
+  selection: SelectionCitationFilter | null;
+}): MarginCitationFilter =>
+  [selection, paragraph].find(
+    (filter) =>
+      filter !== null && visibleProvisionCards(cards, filter).length > 0,
+  ) ?? ALL_CITATIONS;

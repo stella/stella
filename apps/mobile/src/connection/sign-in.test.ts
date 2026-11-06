@@ -8,6 +8,7 @@ import {
 import type { Fetch } from "./http";
 import { deriveCodeChallenge } from "./pkce";
 import { type OpenAuthSession, signIn } from "./sign-in";
+import { unsignedIdToken } from "./test-support/id-token";
 import { webCrypto } from "./test-support/web-crypto";
 
 const SERVER = "https://stella.example.com";
@@ -26,9 +27,15 @@ const METADATA = {
   authorization_response_iss_parameter_supported: true,
 };
 
-type Tokens = { refresh_token?: string };
+type Tokens = { refresh_token?: string; id_token?: string };
 
-const ROTATING: Tokens = { refresh_token: "refresh-1" };
+const ID_TOKEN = unsignedIdToken({
+  iss: ISSUER,
+  aud: CLIENT_ID,
+  sub: "user-1",
+});
+
+const ROTATING: Tokens = { refresh_token: "refresh-1", id_token: ID_TOKEN };
 
 /**
  * A server publishing stella's metadata whose token endpoint redeems `code`
@@ -124,7 +131,9 @@ describe("sign-in", () => {
         tokenEndpoint: METADATA.token_endpoint,
         revocationEndpoint: METADATA.revocation_endpoint,
         resource: RESOURCE,
+        signInId: expect.any(String),
         refreshToken: "refresh-1",
+        userId: "user-1",
       },
       access: { token: "access-1", expiresAt: 1_000_000 + 900_000 },
     });
@@ -187,9 +196,39 @@ describe("sign-in", () => {
   });
 
   test("a session without a refresh token is refused", async () => {
-    expect(await failure(approved, {})).toEqual({
+    expect(await failure(approved, { id_token: ID_TOKEN })).toEqual({
       error: "TokenError",
       redeemed: 1,
     });
   });
+
+  test("a session that cannot say whose it is is refused", async () => {
+    expect(await failure(approved, { refresh_token: "refresh-1" })).toEqual({
+      error: "TokenError",
+      redeemed: 1,
+    });
+    expect(
+      await failure(approved, {
+        refresh_token: "refresh-1",
+        id_token: unsignedIdToken({
+          iss: ISSUER,
+          aud: "another-client",
+          sub: "user-1",
+        }),
+      }),
+    ).toEqual({ error: "TokenError", redeemed: 1 });
+  });
+});
+
+test("each completed sign-in has its own persisted identity", async () => {
+  const first = stellaServer();
+  const second = stellaServer();
+  const a = await signInWith(first, first.approve(approved));
+  const b = await signInWith(second, second.approve(approved));
+  expect(a.isOk()).toBeTrue();
+  expect(b.isOk()).toBeTrue();
+  if (a.isOk() && b.isOk()) {
+    expect(a.value.session.signInId.length).toBeGreaterThan(0);
+    expect(a.value.session.signInId).not.toBe(b.value.session.signInId);
+  }
 });

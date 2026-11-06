@@ -4,10 +4,13 @@ import fc from "fast-check";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { LIMITS } from "@/api/lib/limits";
+
 import { locateDecisionBlocks } from "./case-law-decision-outline";
 import {
   normalizeQuote,
   quoteInputWithinBudget,
+  rawQuoteSegments,
   verifyQuote,
 } from "./verify-quote.logic";
 
@@ -21,6 +24,8 @@ const paragraph = (text: string, number: number): Block => ({
   plainText: text,
   inlines: [{ type: "text", text }],
 });
+
+const WORD_CHARACTER = /[\p{L}\p{N}\p{M}]/u;
 
 describe("quotation verification", () => {
   test("normalizes typography without changing letters, case or punctuation", () => {
@@ -36,8 +41,32 @@ describe("quotation verification", () => {
       expect(run("řízení", quote).verified).toBe(false);
     }
   });
+  test("a quote is whole words: a fragment of a longer word is not found", () => {
+    expect(run("Žalovaný nesplnil povinnost.", "ne").verified).toBe(false);
+    expect(run("Žalovaný nesplnil povinnost.", "splnil").verified).toBe(false);
+    expect(run("Žalovaný ne splnil povinnost.", "ne").verified).toBe(true);
+    expect(run("Soud ne-rozhodl.", "ne").verified).toBe(true);
+  });
+  test("names how many occurrences there are and returns a bounded number", () => {
+    const result = run("a ".repeat(LIMITS.caseLawQuoteMaxOccurrences + 5), "a");
+    expect(result.status).toBe("exact");
+    if (result.status !== "exact") {
+      return;
+    }
+    const segment = result.segments.at(0);
+    expect(segment?.occurrenceCount).toBe(
+      LIMITS.caseLawQuoteMaxOccurrences + 5,
+    );
+    expect(segment?.occurrences).toHaveLength(
+      LIMITS.caseLawQuoteMaxOccurrences,
+    );
+  });
+  test("a leading or trailing ellipsis marks a cut, not a segment", () => {
+    expect(run("Soud rozhodl.", "… Soud rozhodl").verified).toBe(true);
+    expect(run("Soud rozhodl.", "Soud rozhodl …").verified).toBe(true);
+  });
   test("returns every overlapping occurrence and original positions", () => {
-    const result = run("aaaa", "aa");
+    const result = run("a a a", "a a");
     expect(result.status).toBe("exact");
     if (result.status !== "exact") {
       return;
@@ -45,9 +74,8 @@ describe("quotation verification", () => {
     expect(
       result.segments.at(0)?.occurrences.map(({ start, end }) => [start, end]),
     ).toEqual([
-      [0, 2],
-      [1, 3],
-      [2, 4],
+      [0, 3],
+      [2, 5],
     ]);
   });
   test("locates a quote crossing paragraphs with canonical labels and deep links", () => {
@@ -157,8 +185,23 @@ describe("quotation verification", () => {
           const body = chars.join("");
           const prefix = "Záhlaví\n\n";
           const text = `${prefix}${body}\n\nKonec`;
-          const start = Math.min(first % body.length, second % body.length);
-          const end = Math.max(first % body.length, second % body.length) + 1;
+          let start = Math.min(first % body.length, second % body.length);
+          let end = Math.max(first % body.length, second % body.length) + 1;
+          // A quote is whole words, so widen the slice to its word edges.
+          while (
+            start > 0 &&
+            WORD_CHARACTER.test(body.charAt(start - 1)) &&
+            WORD_CHARACTER.test(body.charAt(start))
+          ) {
+            start -= 1;
+          }
+          while (
+            end < body.length &&
+            WORD_CHARACTER.test(body.charAt(end - 1)) &&
+            WORD_CHARACTER.test(body.charAt(end))
+          ) {
+            end += 1;
+          }
           const quote = body.slice(start, end);
           fc.pre(quoteInputWithinBudget(quote));
           const result = verifyQuote({
@@ -185,7 +228,9 @@ describe("quotation verification", () => {
               ?.occurrences.some(
                 ({ start: foundStart, paragraphs }) =>
                   foundStart ===
-                    prefix.length + start + quote.indexOf(quote.trim()) &&
+                    prefix.length +
+                      start +
+                      quote.indexOf(rawQuoteSegments(quote).at(0) ?? "") &&
                   paragraphs.at(0)?.position === 2,
               ),
           ).toBe(true);

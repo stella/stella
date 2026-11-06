@@ -63,6 +63,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -82,6 +83,7 @@ import type {
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
+import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
@@ -132,6 +134,7 @@ import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-worksp
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
+import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
 import type {
@@ -166,6 +169,8 @@ export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    loadCapabilityEndpoint?: typeof loadCapabilityEndpoint;
+    readWithdrawnCopies?: typeof readWithdrawnCopyProjection | undefined;
     admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
@@ -196,7 +201,10 @@ export type McpRequestContext = {
     listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     /** Reads a provision's citing set once per agent search. */
     readCaseLawProvisionScope?: (
-      scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
+      scope: Omit<
+        Parameters<typeof readCaseLawProvisionScope>[1],
+        "idSetMax" | "linkScanMax"
+      >,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
     /** Whether any recorded link names the provision's act. */
     readProvisionWorkLinked?: (
@@ -206,6 +214,11 @@ export type McpRequestContext = {
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
+    readAdmittedCaseLawCourtPage?: (request: {
+      country: string;
+      after: string | null;
+      limit: number;
+    }) => Promise<{ courts: string[]; more: boolean }>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
     admitLawRead?: typeof admitLawRead;
@@ -300,6 +313,7 @@ export type McpRequestContext = {
    * empty list (it never dispatches the generic path).
    */
   grantedScopes: readonly string[];
+  credential?: McpSession["credential"];
   /**
    * Registry slugs this org may actually call (credential/deployment available
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
@@ -385,9 +399,9 @@ export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
       type: "user",
     },
     trigger: currentExecution?.trigger ?? { type: "direct" },
-    ...(currentExecution?.runId === undefined
-      ? {}
-      : { runId: currentExecution.runId }),
+    ...(currentExecution?.runId !== undefined
+      ? { runId: currentExecution.runId }
+      : {}),
     approval: {
       status: "approved",
       userId: context.userId,
@@ -578,8 +592,68 @@ const readEnabledRegistrySlugs = async ({
   );
 };
 
+type AdmitMcpMemberOptions = {
+  session: McpSession;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  resolveAuthorization: ResolveCredentialMemberAuthorization;
+  checkAccountOperation: typeof checkDemoAccountOperation;
+  checkAccountOrganization: typeof checkReviewAccountOrganization;
+};
+
+/** The live membership a credential acts as, or why it may not act. */
+const admitMcpMember = async ({
+  session,
+  organizationId,
+  userId,
+  resolveAuthorization,
+  checkAccountOperation,
+  checkAccountOrganization,
+}: AdmitMcpMemberOptions) => {
+  const authorization = await resolveAuthorization({
+    organizationId,
+    userId,
+  });
+  if (!authorization || authorization.userDeleted) {
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: "User is not a member of this organization",
+      }),
+    );
+  }
+  const accountOperation = checkAccountOperation(authorization.email);
+  const accountAccess = Result.isError(accountOperation)
+    ? accountOperation
+    : checkAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      });
+  if (Result.isError(accountAccess)) {
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: accountAccess.error.message,
+      }),
+    );
+  }
+  // OAuth access tokens issued before the member_id claim existed carry none
+  // and open on live membership alone. Remove this allowance (require the
+  // claim on OAuth client tokens) once every such token has expired, i.e.
+  // one maximum access-token lifetime after the claim shipped.
+  if (
+    session.memberId !== undefined &&
+    session.memberId !== authorization.memberId
+  ) {
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: "Token was issued for a previous membership",
+      }),
+    );
+  }
+  return Result.ok(authorization);
+};
+
 export const resolveMcpSessionContext = async (
-  session: McpSession,
+  session: AdmittedMcpSession,
   {
     clientIp = null,
     request,
@@ -598,45 +672,23 @@ export const resolveMcpSessionContext = async (
     organizationId: session.organizationId,
     userId: session.userId,
   });
-  const authorization = await resolveAuthorization({
+  const admitted = await admitMcpMember({
+    session,
     organizationId,
     userId,
+    resolveAuthorization,
+    checkAccountOperation,
+    checkAccountOrganization,
   });
-  if (!authorization) {
-    throw new McpOrganizationAccessError({
-      message: "User is not a member of this organization",
-    });
+  if (Result.isError(admitted)) {
+    throw admitted.error;
   }
-  const accountOperation = checkAccountOperation(authorization.email);
-  const accountAccess = Result.isError(accountOperation)
-    ? accountOperation
-    : checkAccountOrganization({
-        email: authorization.email,
-        organizationId,
-      });
-  if (Result.isError(accountAccess)) {
-    throw new McpOrganizationAccessError({
-      message: accountAccess.error.message,
-    });
-  }
-  // OAuth access tokens issued before the member_id claim existed carry none
-  // and open on live membership alone. Remove this allowance (require the
-  // claim on OAuth client tokens) once every such token has expired, i.e.
-  // one maximum access-token lifetime after the claim shipped.
-  if (
-    session.memberId !== undefined &&
-    session.memberId !== authorization.memberId
-  ) {
-    throw new McpOrganizationAccessError({
-      message: "Token was issued for a previous membership",
-    });
-  }
+  const authorization = admitted.value;
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
-  const auditExecution = await resolveAgentAuditExecution({
+  const auditExecution = resolveAgentAuditExecution({
     credential: session.credential,
-    organizationId,
     userId,
   });
   const memberRole = authorization.role;
@@ -733,6 +785,9 @@ export const resolveMcpSessionContext = async (
   return {
     ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
+    ...(session.credential === undefined
+      ? {}
+      : { credential: session.credential }),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(

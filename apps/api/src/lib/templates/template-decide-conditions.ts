@@ -406,19 +406,20 @@ export const templateDecideConditionsLogic = async ({
     );
   }
 
-  let manifest = template.manifest;
-  if (manifest?.clauseSlots === undefined) {
-    const derived = await derivedPreviewManifest({
-      templateId,
-      organizationId,
-      scopedDb,
-      cacheKey: `${organizationId}:${templateId}:${template.currentVersion}:${template.s3Key}`,
-    });
-    if (Result.isError(derived)) {
-      return Result.err(derived.error);
-    }
-    manifest = derived.value;
+  const stored = template.manifest;
+  const manifestResult =
+    stored?.clauseSlots !== undefined
+      ? Result.ok(stored)
+      : await derivedPreviewManifest({
+          templateId,
+          organizationId,
+          scopedDb,
+          cacheKey: `${organizationId}:${templateId}:${template.currentVersion}:${template.s3Key}`,
+        });
+  if (Result.isError(manifestResult)) {
+    return Result.err(manifestResult.error);
   }
+  const manifest = manifestResult.value;
   let fields = manifest.fields;
   const slots =
     manifest.clauseSlots ??

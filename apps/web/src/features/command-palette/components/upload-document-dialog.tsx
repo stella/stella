@@ -15,6 +15,7 @@ import {
 } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { UploadIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -88,9 +89,7 @@ export const UploadDocumentDialog = ({
             )
           ) : (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium" htmlFor="upload-matter">
-                {t("common.selectAMatter")}
-              </label>
+              <Label htmlFor="upload-matter">{t("common.selectAMatter")}</Label>
               <MatterCombobox
                 activeOrganizationId={activeOrganizationId}
                 userId={userId}

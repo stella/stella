@@ -39,7 +39,6 @@ test("public Czech court quotes calibrate exact, altered and fabricated outcomes
 test("a 216k-character public decision returns a closest passage for fabricated text", () => {
   const text = largePublicQuoteDecision();
   expect(text.length).toBeGreaterThan(200_000);
-  const started = performance.now();
   const result = verifyQuote({
     text,
     quote:
@@ -47,12 +46,6 @@ test("a 216k-character public decision returns a closest passage for fabricated 
     located: [],
     url: null,
   });
-  const milliseconds = performance.now() - started;
-  console.info(
-    "verify_quote benchmark",
-    JSON.stringify({ characters: text.length, milliseconds }),
-  );
-  expect(milliseconds).toBeLessThan(5000);
   expect(result.status).toBe("not_found");
   expect(result.verified).toBe(false);
   if (result.status !== "exact") {

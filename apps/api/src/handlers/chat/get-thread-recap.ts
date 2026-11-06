@@ -112,6 +112,7 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   }
 
   const scope = yield* resolveChatScope({
+    admitted: "active-or-archived",
     getWorkspaceAccess,
     workspaceId,
   });
@@ -156,6 +157,12 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
   );
   if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
     return Result.ok<ThreadRecapResult>({ recap: null });
+  }
+
+  if (messageWindow.withdrawnMarker !== null) {
+    return Result.ok<ThreadRecapResult>({
+      recap: messageWindow.withdrawnMarker,
+    });
   }
 
   // Only recap a completed exchange the user is returning to after a

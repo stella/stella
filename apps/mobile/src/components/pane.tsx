@@ -2,8 +2,9 @@ import { Pressable, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { useLayout, useSelection } from "@/components/selection";
-import { Text } from "@/components/ui/text";
 import { PanelLeftIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 

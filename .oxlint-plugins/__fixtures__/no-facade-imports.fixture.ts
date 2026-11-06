@@ -7,6 +7,7 @@ import type { UnsafeDbFacade } from "@/api/db/convenience";
 // Leaf imports remain valid.
 // expect-clean: no-facade-imports/no-facade-imports
 import type { SafeDb } from "@/api/db/safe-db";
+import { decodeStoredChatContent } from "@/api/db/stored-chat-part-codec";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { toAPIError } from "@/lib/errors/api";
 // oxlint-disable-next-line no-facade-imports/no-facade-imports -- fixture proves the analytics facade is rejected
@@ -18,6 +19,7 @@ const loadErrors = async () =>
 
 void loadErrors;
 void captureRequestError;
+void decodeStoredChatContent;
 void toAPIError;
 type _SafeDb = SafeDb;
 type _ScopedDb = ScopedDb;
