@@ -6503,6 +6503,10 @@
       "noProperties": "No property to calculate",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Original AI value",
+      "reasonPlaceholder": "Reason for the change (optional)"
+    },
     "copyToMatter": {
       "copied": "Copied to Matter",
       "copyOption": "Copy (keep original)",

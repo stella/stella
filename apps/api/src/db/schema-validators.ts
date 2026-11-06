@@ -5,6 +5,7 @@ import {
   REVIEW_FLAGS,
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
+import type { AiCellSettlement } from "@stll/api-contract";
 import { apiDateSchema, apiDateTimeSchema } from "@stll/api-contract/api-date";
 import type {
   ContactAddress as SharedContactAddress,
@@ -19,6 +20,7 @@ import type {
 import { recordCellStateSchema } from "@stll/api-contract/record-cell";
 import { recordSchemaSchema } from "@stll/api-contract/record-schema";
 
+import type { JustificationContent } from "@/api/db/schema";
 import type { JsonObject } from "@/api/lib/json-value";
 import {
   positionRuleSchema,
@@ -357,6 +359,14 @@ const derivativeStateSchema = v.union([
   }),
 ]);
 
+/** Why a person replaced a machine value; optional, set after the edit. */
+export const cellOverrideReasonSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(1),
+  v.maxLength(500),
+);
+
 export const fieldContentSchema = v.union([
   v.object({ version: v1, type: v.literal("error") }),
   v.object({ version: v1, type: v.literal("pending") }),
@@ -445,6 +455,52 @@ export type FieldContent = v.InferOutput<typeof fieldContentSchema>;
 
 const cellLockReasonSchema = v.picklist(["manual-edit", "explicit"]);
 
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The value a run settled in a cell, kept when a person overwrites it. The
+ * justification row is copied as stored (it cascades away with the field row
+ * the manual write replaces), so the original can be shown with its citations
+ * and restored exactly.
+ */
+const machineCellValueSchema = v.object({
+  content: fieldContentSchema,
+  settlement: v.custom<AiCellSettlement>(
+    (value) => isJsonObject(value) && typeof value["type"] === "string",
+  ),
+  justification: v.nullable(
+    v.object({
+      content: v.custom<JustificationContent>(
+        (value) => isJsonObject(value) && Array.isArray(value["blocks"]),
+      ),
+      boundingBoxes: v.nullable(
+        v.custom<BoundingBoxes>(
+          (value) => isJsonObject(value) && Array.isArray(value["boxes"]),
+        ),
+      ),
+      fileFieldIds: v.array(v.pipe(v.string(), v.uuid())),
+    }),
+  ),
+});
+
+export type MachineCellValue = v.InferOutput<typeof machineCellValueSchema>;
+
+/**
+ * A person's value over a machine one: what the run produced, who replaced
+ * it last and when, and an optional reason. It stays while the cell's current
+ * value is a person's; once a run settles the cell again the record is stale
+ * (see `activeCellOverride`).
+ */
+const cellOverrideSchema = v.object({
+  machine: machineCellValueSchema,
+  editedBy: v.pipe(v.string(), v.minLength(1)),
+  editedAt: apiDateTimeSchema,
+  reason: v.nullable(cellOverrideReasonSchema),
+});
+
+export type CellOverride = v.InferOutput<typeof cellOverrideSchema>;
+
 const cellMetadataSchema = v.object({
   version: v1,
   // One flag vocabulary for every reviewed thing (see `REVIEW_FLAGS`), so a
@@ -472,6 +528,7 @@ const cellMetadataSchema = v.object({
       reason: cellLockReasonSchema,
     }),
   ),
+  override: v.exactOptional(cellOverrideSchema),
 });
 
 export type CellMetadata = v.InferOutput<typeof cellMetadataSchema>;

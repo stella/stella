@@ -6503,6 +6503,10 @@
       "noProperties": "Arvutamiseks pole omadust",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Algne AI väärtus",
+      "reasonPlaceholder": "Muudatuse põhjus (valikuline)"
+    },
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",

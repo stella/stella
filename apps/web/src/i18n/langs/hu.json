@@ -6503,6 +6503,10 @@
       "noProperties": "Nincs számítható tulajdonság",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Eredeti AI-érték",
+      "reasonPlaceholder": "A módosítás indoka (nem kötelező)"
+    },
     "copyToMatter": {
       "copied": "Másolva az ügyiratba",
       "copyOption": "Másolás (eredeti megtartása)",

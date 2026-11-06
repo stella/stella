@@ -6503,6 +6503,10 @@
       "noProperties": "Nav rekvizīta, ko aprēķināt",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Sākotnējā AI vērtība",
+      "reasonPlaceholder": "Izmaiņu iemesls (neobligāti)"
+    },
     "copyToMatter": {
       "copied": "Nokopēts lietā",
       "copyOption": "Kopēt (saglabāt oriģinālu)",

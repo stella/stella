@@ -5498,6 +5498,8 @@
   "workspaces.calculations.kinds.sum": "Sum",
   "workspaces.calculations.noProperties": "No property to calculate",
   "workspaces.calculations.unavailable": "—",
+  "workspaces.cellOverride.machineValue": "Original AI value",
+  "workspaces.cellOverride.reasonPlaceholder": "Reason for the change (optional)",
   "workspaces.copyToMatter.copied": "Copied to Matter",
   "workspaces.copyToMatter.copyOption": "Copy (keep original)",
   "workspaces.copyToMatter.description": "Copy or move \"{name}\" to another Matter",

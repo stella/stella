@@ -6503,6 +6503,10 @@
       "noProperties": "Brak właściwości do obliczenia",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Pierwotna wartość z AI",
+      "reasonPlaceholder": "Powód zmiany (opcjonalnie)"
+    },
     "copyToMatter": {
       "copied": "Skopiowano do sprawy",
       "copyOption": "Kopiuj (zachowaj oryginał)",

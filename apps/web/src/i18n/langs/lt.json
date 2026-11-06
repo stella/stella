@@ -6503,6 +6503,10 @@
       "noProperties": "Nėra savybės, kurią būtų galima apskaičiuoti",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Pradinė DI reikšmė",
+      "reasonPlaceholder": "Pakeitimo priežastis (neprivaloma)"
+    },
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",

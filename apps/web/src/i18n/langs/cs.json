@@ -6503,6 +6503,10 @@
       "noProperties": "Žádná vlastnost k výpočtu",
       "unavailable": "—"
     },
+    "cellOverride": {
+      "machineValue": "Původní hodnota z AI",
+      "reasonPlaceholder": "Důvod změny (nepovinné)"
+    },
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",
       "copyOption": "Kopírovat (ponechat originál)",
