@@ -417,6 +417,15 @@ export const workspaces = p.pgTable(
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    // Readable-workspace queries test `<> 'deleting'`, so a value outside the
+    // domain must be unwritable rather than silently readable.
+    p.check(
+      "workspaces_status_values_check",
+      sql`${table.status} IN (${sql.join(
+        WORKSPACE_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
     ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
