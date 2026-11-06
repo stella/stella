@@ -25,7 +25,7 @@ test("reads every page, so working chats behind the waiting ones still count", a
     Object.assign(respond, { preconnect: () => {} }),
   );
 
-  const runs = await new QueryClient().fetchQuery(
+  const runs = await new QueryClient().query(
     activeChatRunsOptions({ activeOrganizationId: "firm", userId: "reader" }),
   );
 
