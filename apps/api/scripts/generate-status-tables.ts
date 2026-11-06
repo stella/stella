@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getColumns, isTable, isView } from "drizzle-orm";
+import { getColumns, getTableName, isTable, isView } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -43,6 +43,24 @@ export const statusColumnMaps = (
   const inventory = new Map<string, string[]>();
   const writable = new Map<string, string[]>();
   const enumColumns = new Map<string, string[]>();
+  const inventoryRelation = ({
+    name,
+    relation,
+    columns,
+  }: {
+    name: string;
+    relation: unknown;
+    columns: readonly string[];
+  }) => {
+    if (columns.length === 0) {
+      return;
+    }
+    const sorted = columns.toSorted();
+    inventory.set(name, sorted);
+    if (isTable(relation)) {
+      writable.set(name, sorted);
+    }
+  };
   for (const [name, relation] of Object.entries(exports).toSorted(([a], [b]) =>
     compareCodeUnit(a, b),
   )) {
@@ -52,36 +70,31 @@ export const statusColumnMaps = (
     const relationColumns = getColumns(relation);
     const keys = Object.keys(relationColumns);
     const named = keys.filter((column) => LIFECYCLE_NAME.test(column));
-    const unnamedEnums = keys
-      .filter(
-        (column) =>
-          !LIFECYCLE_NAME.test(column) &&
-          enumValuesOf(relationColumns[column]).length > 1,
-      )
-      .toSorted();
-    const viewSource = isView(relation);
+    const unnamedEnums = keys.filter(
+      (column) =>
+        !LIFECYCLE_NAME.test(column) &&
+        enumValuesOf(relationColumns[column]).length > 1,
+    );
+    if (!isTable(relation) || unnamedEnums.length === 0) {
+      inventoryRelation({ name, relation, columns: named });
+      continue;
+    }
+    // Roles name schema columns as SQL does: the census enumerates them, it
+    // does not read them, so code scanners never mistake it for a use.
+    const tableName = getTableName(relation);
+    const sqlName = (column: string) =>
+      relationColumns[column]?.name ??
+      panic(`Column ${name}.${column} has no SQL name`);
     const classified = unnamedEnums.filter((column) => {
-      if (viewSource) {
-        return false;
-      }
       const role =
-        roles[name]?.[column] ??
+        roles[tableName]?.[sqlName(column)] ??
         panic(
-          `Classify ${name}.${column} in apps/api/src/lib/db/enum-column-roles.ts as a lifecycle or an attribute`,
+          `Classify ${tableName}.${sqlName(column)} in apps/api/src/lib/db/enum-column-roles.ts as a lifecycle or an attribute`,
         );
       return role === ENUM_COLUMN_ROLE.lifecycle;
     });
-    if (isTable(relation) && unnamedEnums.length > 0) {
-      enumColumns.set(name, unnamedEnums);
-    }
-    const columns = [...named, ...classified].toSorted();
-    if (columns.length === 0) {
-      continue;
-    }
-    inventory.set(name, columns);
-    if (isTable(relation)) {
-      writable.set(name, columns);
-    }
+    enumColumns.set(tableName, unnamedEnums.map(sqlName).toSorted());
+    inventoryRelation({ name, relation, columns: [...named, ...classified] });
   }
   return {
     statusColumns: Object.fromEntries(inventory),

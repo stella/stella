@@ -1,9 +1,10 @@
 import type { ENUM_COLUMNS } from "@/api/lib/db/status-tables.gen";
 
 /**
- * What an enum-valued column is to its row. A lifecycle column moves between
- * its values over the row's life and joins the status inventory, so its writes
- * go through the transition owner; an attribute is a fact about the row.
+ * What an enum-valued column is to its row. A lifecycle column's moves are
+ * constrained (some value may not follow another), so it joins the status
+ * inventory and its writes go through the transition owner. An attribute is a
+ * fact about the row, including a flag any value of which may follow any other.
  */
 export const ENUM_COLUMN_ROLE = {
   lifecycle: "lifecycle",
@@ -17,7 +18,8 @@ const LIFECYCLE = ENUM_COLUMN_ROLE.lifecycle;
 const ATTRIBUTE = ENUM_COLUMN_ROLE.attribute;
 
 // Total over every enum-valued table column whose name does not already mark
-// it as a lifecycle: a new one fails to compile until it is classified here.
+// it as a lifecycle, keyed by SQL table and column names: a new one fails to
+// compile until it is classified here.
 type EnumColumnRoles = {
   readonly [TTable in keyof typeof ENUM_COLUMNS]: Readonly<
     Record<(typeof ENUM_COLUMNS)[TTable][number], EnumColumnRole>
@@ -25,533 +27,530 @@ type EnumColumnRoles = {
 };
 
 export const ENUM_COLUMN_ROLES = {
-  accountAuditLogs: {
-    eventType: ATTRIBUTE,
+  account_audit_logs: {
+    event_type: ATTRIBUTE,
   },
-  accountExports: {
+  account_exports: {
     kind: ATTRIBUTE,
   },
-  agentSkills: {
+  agent_skills: {
     invocation: ATTRIBUTE,
     origin: ATTRIBUTE,
     scope: ATTRIBUTE,
   },
-  aiMemories: {
+  ai_memories: {
     kind: ATTRIBUTE,
     scope: ATTRIBUTE,
     source: ATTRIBUTE,
   },
-  anonymizationAllowlistEntries: {
-    entityFeatureGate: ATTRIBUTE,
+  anonymization_allowlist_entries: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  auditLogs: {
-    activityCategory: ATTRIBUTE,
-    performerType: ATTRIBUTE,
-    triggerType: ATTRIBUTE,
+  audit_logs: {
+    activity_category: ATTRIBUTE,
+    performer_type: ATTRIBUTE,
+    trigger_type: ATTRIBUTE,
   },
-  bilingualTranslationRows: {
+  bilingual_translation_rows: {
     disposition: ATTRIBUTE,
-    dispositionOrigin: ATTRIBUTE,
+    disposition_origin: ATTRIBUTE,
     kind: ATTRIBUTE,
-    tableLayout: ATTRIBUTE,
+    table_layout: ATTRIBUTE,
   },
-  billingArrangements: {
+  billing_arrangements: {
     mode: ATTRIBUTE,
   },
-  billingCodes: {
+  billing_codes: {
     type: ATTRIBUTE,
   },
-  businessRegistryCredentials: {
+  business_registry_credentials: {
     registry: ATTRIBUTE,
   },
-  caseLawAnalysisFailures: {
+  case_law_analysis_failures: {
     code: ATTRIBUTE,
-    keySource: ATTRIBUTE,
+    key_source: ATTRIBUTE,
   },
-  caseLawBrowseFacetCounts: {
+  case_law_browse_facet_counts: {
     kind: ATTRIBUTE,
   },
-  caseLawCitationDoctrineReviews: {
-    doctrinalTreatment: ATTRIBUTE,
+  case_law_citation_doctrine_reviews: {
+    doctrinal_treatment: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
-  caseLawCitationResolutionCensus: {
+  case_law_citation_resolution_census: {
     kind: ATTRIBUTE,
   },
-  caseLawCitationReviews: {
+  case_law_citation_reviews: {
     origin: ATTRIBUTE,
   },
-  caseLawCitations: {
-    doctrinalTreatment: ATTRIBUTE,
+  case_law_citations: {
+    doctrinal_treatment: ATTRIBUTE,
   },
-  caseLawCorpusPackRefs: {
+  case_law_corpus_pack_refs: {
     kind: ATTRIBUTE,
   },
-  caseLawCorpusTombstones: {
+  case_law_corpus_tombstones: {
     reason: ATTRIBUTE,
   },
-  caseLawDecisionCitationStats: {
+  case_law_decision_citation_stats: {
     direction: ATTRIBUTE,
     polarity: ATTRIBUTE,
   },
-  caseLawDecisionJudges: {
+  case_law_decision_judges: {
     role: ATTRIBUTE,
   },
-  caseLawDecisions: {
-    caseNumberType: ATTRIBUTE,
+  case_law_decisions: {
+    case_number_type: ATTRIBUTE,
   },
-  caseLawPopulationCounts: {
+  case_law_population_counts: {
     kind: ATTRIBUTE,
   },
-  caseLawPopulationDeltas: {
+  case_law_population_deltas: {
     kind: ATTRIBUTE,
   },
-  caseLawPopulationProjections: {
+  case_law_population_projections: {
     publication: ATTRIBUTE,
   },
-  caseLawProvisionCitations: {
-    appliedVersionBasis: ATTRIBUTE,
-    appliedVersionDateRelation: ATTRIBUTE,
+  case_law_provision_citations: {
+    applied_version_basis: ATTRIBUTE,
+    applied_version_date_relation: ATTRIBUTE,
     selection: ATTRIBUTE,
-    spanRole: ATTRIBUTE,
+    span_role: ATTRIBUTE,
     unit: ATTRIBUTE,
-    versionEvidenceKind: ATTRIBUTE,
-    workSource: ATTRIBUTE,
+    version_evidence_kind: ATTRIBUTE,
+    work_source: ATTRIBUTE,
   },
-  caseLawProvisionExtractions: {
-    enqueueReason: ATTRIBUTE,
+  case_law_provision_extractions: {
+    enqueue_reason: ATTRIBUTE,
     lane: ATTRIBUTE,
     outcome: ATTRIBUTE,
-    payloadClass: ATTRIBUTE,
-    terminalReason: ATTRIBUTE,
+    payload_class: ATTRIBUTE,
+    terminal_reason: ATTRIBUTE,
   },
-  caseLawProvisionRepairCursors: {
+  case_law_provision_repair_cursors: {
     name: ATTRIBUTE,
   },
-  caseLawProvisionScopeTransitions: {
+  case_law_provision_scope_transitions: {
     action: ATTRIBUTE,
   },
-  caseLawRemovalReconciliationItems: {
+  case_law_removal_reconciliation_items: {
     kind: ATTRIBUTE,
   },
-  caseLawReplayAuditEvents: {
+  case_law_replay_audit_events: {
     action: ATTRIBUTE,
   },
-  caseLawReplayBatches: {
-    failureCode: ATTRIBUTE,
+  case_law_replay_batches: {
+    failure_code: ATTRIBUTE,
   },
-  caseLawReplayBlocked: {
+  case_law_replay_blocked: {
     outcome: ATTRIBUTE,
     reason: ATTRIBUTE,
   },
-  caseLawResearchAnswers: {
-    failureReason: ATTRIBUTE,
+  case_law_research_answers: {
+    failure_reason: ATTRIBUTE,
   },
-  caseLawSources: {
-    ingestionLeasePurpose: ATTRIBUTE,
+  case_law_sources: {
+    ingestion_lease_purpose: ATTRIBUTE,
   },
-  caseLawStatuteCitationCounts: {
-    targetType: ATTRIBUTE,
+  case_law_statute_citation_counts: {
+    target_type: ATTRIBUTE,
   },
-  caseLawStatuteCitationMemberships: {
-    targetType: ATTRIBUTE,
+  case_law_statute_citation_memberships: {
+    target_type: ATTRIBUTE,
   },
-  cellMetadata: {
-    entityFeatureGate: ATTRIBUTE,
+  cell_metadata: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  chatContentV3BackfillReceipts: {
+  chat_content_v3_backfill_receipts: {
     outcome: ATTRIBUTE,
     source: ATTRIBUTE,
   },
-  chatSecrets: {
+  chat_secrets: {
     decision: ATTRIBUTE,
   },
-  chatThreads: {
-    chatReasoningEffort: ATTRIBUTE,
+  chat_threads: {
+    chat_reasoning_effort: ATTRIBUTE,
   },
-  chatToolGrants: {
+  chat_tool_grants: {
     scope: ATTRIBUTE,
   },
-  chatTurns: {
-    cancellationReason: ATTRIBUTE,
-    failureCode: ATTRIBUTE,
-    interactionType: ATTRIBUTE,
-    interruptionReason: ATTRIBUTE,
+  chat_turns: {
+    cancellation_reason: ATTRIBUTE,
+    failure_code: ATTRIBUTE,
+    interaction_type: ATTRIBUTE,
+    interruption_reason: ATTRIBUTE,
   },
-  contactRelationships: {
-    relationshipType: ATTRIBUTE,
+  contact_relationships: {
+    relationship_type: ATTRIBUTE,
   },
-  contactSearchDocuments: {
-    contactType: ATTRIBUTE,
+  contact_search_documents: {
+    contact_type: ATTRIBUTE,
   },
   contacts: {
-    invoiceLanguage: ATTRIBUTE,
-    sanctionsMonitoringMode: ATTRIBUTE,
-    timeBillingFormat: ATTRIBUTE,
+    invoice_language: ATTRIBUTE,
+    sanctions_monitoring_mode: ATTRIBUTE,
+    time_billing_format: ATTRIBUTE,
     type: ATTRIBUTE,
   },
-  corpusIndexGenerations: {
+  corpus_index_generations: {
     family: ATTRIBUTE,
   },
-  corpusIndexGroupEnrollments: {
-    contractVersion: ATTRIBUTE,
+  corpus_index_group_enrollments: {
+    contract_version: ATTRIBUTE,
     family: ATTRIBUTE,
   },
-  corpusIndexGroupWithdrawals: {
+  corpus_index_group_withdrawals: {
     family: ATTRIBUTE,
   },
-  corpusIndexJurisdictionServing: {
+  corpus_index_jurisdiction_serving: {
     family: ATTRIBUTE,
   },
-  corpusIndexProjectionIntents: {
+  corpus_index_projection_intents: {
     family: ATTRIBUTE,
   },
-  corpusIndexProjectionRevisions: {
+  corpus_index_projection_revisions: {
     family: ATTRIBUTE,
   },
-  corpusIndexProjectionStates: {
-    appendMode: ATTRIBUTE,
-    appliedAction: ATTRIBUTE,
-    desiredAction: ATTRIBUTE,
+  corpus_index_projection_states: {
+    append_mode: ATTRIBUTE,
+    applied_action: ATTRIBUTE,
+    desired_action: ATTRIBUTE,
     family: ATTRIBUTE,
-    lastFailureKind: ATTRIBUTE,
+    last_failure_kind: ATTRIBUTE,
   },
   correspondence: {
     channel: ATTRIBUTE,
     direction: ATTRIBUTE,
     dkim: ATTRIBUTE,
     dmarc: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
     intake: ATTRIBUTE,
     source: ATTRIBUTE,
     spf: ATTRIBUTE,
   },
-  correspondenceAllowedSenders: {
+  correspondence_allowed_senders: {
     kind: ATTRIBUTE,
     scope: ATTRIBUTE,
   },
-  correspondenceAttachments: {
-    entityFeatureGate: ATTRIBUTE,
-    scanVerdict: ATTRIBUTE,
+  correspondence_attachments: {
+    entity_feature_gate: ATTRIBUTE,
+    scan_verdict: ATTRIBUTE,
   },
-  correspondenceDropLogs: {
+  correspondence_drop_logs: {
     reason: ATTRIBUTE,
   },
-  correspondenceFilers: {
-    entityFeatureGate: ATTRIBUTE,
+  correspondence_filers: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  correspondenceSources: {
-    entityFeatureGate: ATTRIBUTE,
+  correspondence_sources: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  desktopEditHandoffs: {
-    entityFeatureGate: ATTRIBUTE,
-    failureReason: ATTRIBUTE,
+  desktop_edit_handoffs: {
+    entity_feature_gate: ATTRIBUTE,
+    failure_reason: ATTRIBUTE,
   },
-  desktopEditSessions: {
-    entityFeatureGate: ATTRIBUTE,
-    fileType: ATTRIBUTE,
+  desktop_edit_sessions: {
+    entity_feature_gate: ATTRIBUTE,
+    file_type: ATTRIBUTE,
   },
-  desktopRunnerCommands: {
+  desktop_runner_commands: {
     kind: ATTRIBUTE,
   },
-  desktopRunnerEvents: {
+  desktop_runner_events: {
     type: ATTRIBUTE,
   },
-  desktopRunnerRuns: {
+  desktop_runner_runs: {
     harness: ATTRIBUTE,
     outcome: ATTRIBUTE,
-    rejectReason: ATTRIBUTE,
+    reject_reason: ATTRIBUTE,
   },
-  desktopRunners: {
-    connection: LIFECYCLE,
+  desktop_runners: {
+    connection: ATTRIBUTE,
   },
-  documentProcessingRuns: {
-    entityFeatureGate: ATTRIBUTE,
+  document_processing_runs: {
+    entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
-    requestSource: ATTRIBUTE,
+    request_source: ATTRIBUTE,
   },
-  documentReviewFindings: {
+  document_review_findings: {
     decision: ATTRIBUTE,
     flags: ATTRIBUTE,
   },
-  documentReviewParties: {
-    entityFeatureGate: ATTRIBUTE,
+  document_review_parties: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  documentReviewReferencePassages: {
-    entityFeatureGate: ATTRIBUTE,
+  document_review_reference_passages: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  documentReviewRuns: {
+  document_review_runs: {
     executor: ATTRIBUTE,
   },
-  documentTranslationRuns: {
-    commentPolicy: ATTRIBUTE,
+  document_translation_runs: {
+    comment_policy: ATTRIBUTE,
     engine: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
     output: ATTRIBUTE,
   },
-  documentTranslationUnits: {
-    entityFeatureGate: ATTRIBUTE,
+  document_translation_units: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  docxSuggestions: {
-    appliedMode: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
+  docx_suggestions: {
+    applied_mode: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
   entities: {
-    agendaKind: ATTRIBUTE,
-    agendaSource: ATTRIBUTE,
+    agenda_kind: ATTRIBUTE,
+    agenda_source: ATTRIBUTE,
     availability: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
-    listItemType: ATTRIBUTE,
+    list_item_type: ATTRIBUTE,
     sensitivity: ATTRIBUTE,
   },
-  entityLinks: {
-    entityFeatureGate: ATTRIBUTE,
+  entity_links: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  entityVersionAiSummaries: {
-    entityFeatureGate: ATTRIBUTE,
+  entity_version_ai_summaries: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  entityVersions: {
-    entityFeatureGate: ATTRIBUTE,
+  entity_versions: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  euCompletionReceipts: {
+  eu_completion_receipts: {
     mode: ATTRIBUTE,
     target: ATTRIBUTE,
   },
   expenses: {
     category: ATTRIBUTE,
   },
-  extractedContent: {
-    entityFeatureGate: ATTRIBUTE,
+  extracted_content: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  extractionRuns: {
+  extraction_runs: {
     scope: ATTRIBUTE,
   },
-  feedbackReports: {
+  feedback_reports: {
     area: ATTRIBUTE,
     kind: ATTRIBUTE,
     via: ATTRIBUTE,
   },
   fields: {
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
   },
-  fileChatThreads: {
-    entityFeatureGate: ATTRIBUTE,
+  file_chat_threads: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  fileComparisonUploads: {
+  file_comparison_uploads: {
     kind: ATTRIBUTE,
   },
-  flowRunSteps: {
-    entityFeatureGate: ATTRIBUTE,
+  flow_run_steps: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  folioCollabContributions: {
-    entityFeatureGate: ATTRIBUTE,
+  folio_collab_contributions: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  folioCollabPublications: {
-    entityFeatureGate: ATTRIBUTE,
+  folio_collab_publications: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  folioCollabRoomTokens: {
-    entityFeatureGate: ATTRIBUTE,
+  folio_collab_room_tokens: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  folioCollabRooms: {
-    entityFeatureGate: ATTRIBUTE,
+  folio_collab_rooms: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  hostedUsageWebhookEvents: {
-    result: LIFECYCLE,
-  },
-  invoiceLines: {
-    billingPurpose: ATTRIBUTE,
+  invoice_lines: {
+    billing_purpose: ATTRIBUTE,
     source: ATTRIBUTE,
-    vatTreatment: ATTRIBUTE,
+    vat_treatment: ATTRIBUTE,
   },
-  invoicePayments: {
+  invoice_payments: {
     method: ATTRIBUTE,
     origin: ATTRIBUTE,
   },
   invoices: {
-    billingMode: ATTRIBUTE,
-    documentType: ATTRIBUTE,
+    billing_mode: ATTRIBUTE,
+    document_type: ATTRIBUTE,
     language: ATTRIBUTE,
   },
   justifications: {
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListClaimReviewEvents: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_claim_review_events: {
+    entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
   },
-  legalListClaims: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_claims: {
+    entity_feature_gate: ATTRIBUTE,
     framing: ATTRIBUTE,
     type: ATTRIBUTE,
   },
-  legalListFactDetails: {
+  legal_list_fact_details: {
     confidence: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
-    occurredOnPrecision: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
+    occurred_on_precision: ATTRIBUTE,
     scoring: ATTRIBUTE,
   },
-  legalListGenerationCandidateSources: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_generation_candidate_sources: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListGenerationCandidates: {
-    entityFeatureGate: ATTRIBUTE,
-    itemType: ATTRIBUTE,
+  legal_list_generation_candidates: {
+    entity_feature_gate: ATTRIBUTE,
+    item_type: ATTRIBUTE,
     priority: ATTRIBUTE,
   },
-  legalListGenerationSources: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_generation_sources: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListItemComments: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_item_comments: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListItemReviews: {
+  legal_list_item_reviews: {
     decision: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListItemSourceDecisions: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_item_source_decisions: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListItemSources: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_item_sources: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListItems: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_items: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListVerificationBlocks: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_verification_blocks: {
+    entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
   },
-  legalListVerificationReadReceipts: {
-    entityFeatureGate: ATTRIBUTE,
+  legal_list_verification_read_receipts: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  legalListVerificationRuns: {
-    entityFeatureGate: ATTRIBUTE,
-    errorCode: ATTRIBUTE,
+  legal_list_verification_runs: {
+    entity_feature_gate: ATTRIBUTE,
+    error_code: ATTRIBUTE,
   },
-  legalReaderAnnotations: {
+  legal_reader_annotations: {
     color: ATTRIBUTE,
     kind: ATTRIBUTE,
     style: ATTRIBUTE,
-    targetType: ATTRIBUTE,
+    target_type: ATTRIBUTE,
     visibility: ATTRIBUTE,
   },
-  legalReaderAnswerMessages: {
+  legal_reader_answer_messages: {
     role: ATTRIBUTE,
   },
-  legalReaderAnswers: {
+  legal_reader_answers: {
     kind: ATTRIBUTE,
     visibility: ATTRIBUTE,
   },
-  legislationAmendments: {
-    changeKind: ATTRIBUTE,
-    effectiveType: ATTRIBUTE,
+  legislation_amendments: {
+    change_kind: ATTRIBUTE,
+    effective_type: ATTRIBUTE,
   },
-  legislationDocuments: {
-    expressionKind: ATTRIBUTE,
-    identityMode: ATTRIBUTE,
-    windowDisposition: ATTRIBUTE,
+  legislation_documents: {
+    expression_kind: ATTRIBUTE,
+    identity_mode: ATTRIBUTE,
+    window_disposition: ATTRIBUTE,
   },
-  legislationSources: {
-    identityMode: ATTRIBUTE,
+  legislation_sources: {
+    identity_mode: ATTRIBUTE,
   },
-  legislationWorkNames: {
+  legislation_work_names: {
     derivation: ATTRIBUTE,
   },
-  mcpConnectors: {
-    authType: ATTRIBUTE,
+  mcp_connectors: {
+    auth_type: ATTRIBUTE,
   },
-  mcpUserConnections: {
-    responseDisposition: ATTRIBUTE,
+  mcp_user_connections: {
+    response_disposition: ATTRIBUTE,
   },
-  mcpWebHandoff: {
+  mcp_web_handoff: {
     kind: ATTRIBUTE,
   },
   notifications: {
-    entityType: ATTRIBUTE,
+    entity_type: ATTRIBUTE,
     kind: ATTRIBUTE,
   },
-  numberSeries: {
-    documentType: ATTRIBUTE,
+  number_series: {
+    document_type: ATTRIBUTE,
   },
-  numberSeriesAllocations: {
-    documentType: ATTRIBUTE,
+  number_series_allocations: {
+    document_type: ATTRIBUTE,
   },
-  oauthClient: {
-    registrationOrigin: ATTRIBUTE,
+  oauth_client: {
+    registration_origin: ATTRIBUTE,
   },
-  officeFileEvidence: {
-    entityFeatureGate: ATTRIBUTE,
+  office_file_evidence: {
+    entity_feature_gate: ATTRIBUTE,
     format: ATTRIBUTE,
   },
-  organizationAccessStates: {
+  organization_access_states: {
     origin: ATTRIBUTE,
   },
-  organizationSettings: {
-    aiBillingDraftsMode: ATTRIBUTE,
-    documentProcessingMode: ATTRIBUTE,
-    invoiceLanguage: ATTRIBUTE,
-    managedAIResidency: ATTRIBUTE,
-    personalApiKeyPolicy: ATTRIBUTE,
-    sanctionsMonitoringMode: ATTRIBUTE,
+  organization_settings: {
+    ai_billing_drafts_mode: ATTRIBUTE,
+    document_processing_mode: ATTRIBUTE,
+    invoice_language: ATTRIBUTE,
+    managed_ai_residency: ATTRIBUTE,
+    personal_api_key_policy: ATTRIBUTE,
+    sanctions_monitoring_mode: ATTRIBUTE,
   },
-  pdfSigningSessions: {
-    closeReason: ATTRIBUTE,
-    entityFeatureGate: ATTRIBUTE,
-    keyType: ATTRIBUTE,
+  pdf_signing_sessions: {
+    close_reason: ATTRIBUTE,
+    entity_feature_gate: ATTRIBUTE,
+    key_type: ATTRIBUTE,
   },
-  pendingUploads: {
+  pending_uploads: {
     purpose: ATTRIBUTE,
   },
-  pushDevices: {
-    bundleId: ATTRIBUTE,
+  push_devices: {
+    bundle_id: ATTRIBUTE,
     environment: ATTRIBUTE,
   },
-  rateEntries: {
+  rate_entries: {
     role: ATTRIBUTE,
   },
-  registrationDailyBudget: {
+  registration_daily_budget: {
     kind: ATTRIBUTE,
   },
-  reportExports: {
-    entityFeatureGate: ATTRIBUTE,
+  report_exports: {
+    entity_feature_gate: ATTRIBUTE,
     format: ATTRIBUTE,
     mode: ATTRIBUTE,
   },
-  sanctionsContactMatches: {
+  sanctions_contact_matches: {
     disposition: ATTRIBUTE,
   },
-  sanctionsEditions: {
-    guardCode: ATTRIBUTE,
+  sanctions_editions: {
+    guard_code: ATTRIBUTE,
   },
-  sanctionsScreeningEvents: {
+  sanctions_screening_events: {
     type: ATTRIBUTE,
   },
-  sanctionsSources: {
-    heldGuardCode: ATTRIBUTE,
-    lastFailureCode: ATTRIBUTE,
+  sanctions_sources: {
+    held_guard_code: ATTRIBUTE,
+    last_failure_code: ATTRIBUTE,
   },
-  searchDocumentPreviewPassages: {
-    entityFeatureGate: ATTRIBUTE,
+  search_document_preview_passages: {
+    entity_feature_gate: ATTRIBUTE,
   },
-  searchDocuments: {
-    entityFeatureGate: ATTRIBUTE,
+  search_documents: {
+    entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
   },
-  searchHistoryEntries: {
+  search_history_entries: {
     kind: ATTRIBUTE,
   },
-  searchHistoryTombstones: {
+  search_history_tombstones: {
     kind: ATTRIBUTE,
   },
-  searchProjectionRepairQueue: {
+  search_projection_repair_queue: {
     kind: ATTRIBUTE,
   },
   session: {
-    refreshMode: ATTRIBUTE,
+    refresh_mode: ATTRIBUTE,
   },
-  signalEvents: {
+  signal_events: {
     type: ATTRIBUTE,
   },
   signals: {
@@ -559,80 +558,83 @@ export const ENUM_COLUMN_ROLES = {
     origin: ATTRIBUTE,
     severity: ATTRIBUTE,
   },
-  softLawDocumentVersions: {
-    extractionQuality: ATTRIBUTE,
+  soft_law_document_versions: {
+    extraction_quality: ATTRIBUTE,
   },
-  softLawDocuments: {
+  soft_law_documents: {
     kind: ATTRIBUTE,
-    validityBasis: ATTRIBUTE,
+    validity_basis: ATTRIBUTE,
   },
-  softLawIngestionAttempts: {
+  soft_law_ingestion_attempts: {
     tag: ATTRIBUTE,
   },
-  softLawSources: {
-    failureTag: ATTRIBUTE,
+  soft_law_sources: {
+    failure_tag: ATTRIBUTE,
   },
-  taskAssignees: {
-    entityFeatureGate: ATTRIBUTE,
+  task_assignees: {
+    entity_feature_gate: ATTRIBUTE,
     role: ATTRIBUTE,
   },
-  templateLookupFormatUserDefaults: {
+  template_lookup_format_user_defaults: {
     registry: ATTRIBUTE,
   },
-  templateLookupFormats: {
+  template_lookup_formats: {
     preference: ATTRIBUTE,
     registry: ATTRIBUTE,
   },
   templates: {
     kind: ATTRIBUTE,
-    originType: ATTRIBUTE,
+    origin_type: ATTRIBUTE,
   },
-  timeEntries: {
-    activityGroup: ATTRIBUTE,
-    invoiceAttachment: ATTRIBUTE,
+  time_entries: {
+    activity_group: ATTRIBUTE,
+    invoice_attachment: ATTRIBUTE,
     source: ATTRIBUTE,
   },
-  timerActivityDevices: {
-    bundleId: ATTRIBUTE,
+  timer_activity_devices: {
+    bundle_id: ATTRIBUTE,
     environment: ATTRIBUTE,
   },
-  usageAllocations: {
+  usage_allocations: {
     reason: ATTRIBUTE,
-    sourceType: ATTRIBUTE,
+    source_type: ATTRIBUTE,
   },
-  usageEntitlements: {
+  usage_entitlements: {
     source: ATTRIBUTE,
   },
-  usageEvents: {
-    actionType: ATTRIBUTE,
+  usage_events: {
+    action_type: ATTRIBUTE,
     lane: ATTRIBUTE,
-    serviceTier: ATTRIBUTE,
+    service_tier: ATTRIBUTE,
   },
-  usageLaneCounters: {
+  usage_lane_counters: {
     kind: ATTRIBUTE,
   },
-  usagePolicies: {
-    billingInterval: ATTRIBUTE,
+  usage_policies: {
+    billing_interval: ATTRIBUTE,
     kind: ATTRIBUTE,
-    priceBasis: ATTRIBUTE,
+    price_basis: ATTRIBUTE,
     visibility: ATTRIBUTE,
   },
-  user: {
-    readerAnswerLanguage: ATTRIBUTE,
+  usage_provider_webhook_events: {
+    result: LIFECYCLE,
   },
-  userProfessionalUseAcceptances: {
+  user: {
+    reader_answer_language: ATTRIBUTE,
+  },
+  user_professional_use_acceptances: {
     source: ATTRIBUTE,
   },
-  workObligationEvents: {
-    entityFeatureGate: ATTRIBUTE,
+  work_obligation_events: {
+    entity_feature_gate: ATTRIBUTE,
     type: ATTRIBUTE,
   },
-  workObligations: {
-    entityFeatureGate: ATTRIBUTE,
-    sourceType: ATTRIBUTE,
+  work_obligations: {
+    entity_feature_gate: ATTRIBUTE,
+    source_type: ATTRIBUTE,
     type: ATTRIBUTE,
   },
-  workspaceContacts: {
+  workspace_contacts: {
     role: ATTRIBUTE,
   },
 } as const satisfies EnumColumnRoles;
