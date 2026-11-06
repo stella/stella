@@ -1,13 +1,16 @@
 import type { RunAgentResumeItem } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
   type ChatRunTarget,
+  chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FEATURE_ID,
 } from "@stll/api-contract/desktop-runner";
 
@@ -15,8 +18,9 @@ import { approvalDecisionOf } from "@/api/handlers/chat/local-run-chunks";
 import { resolveChatLocalRun } from "@/api/handlers/chat/local-run-plan";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  decodeChatRunTarget,
-  encodeChatRunTarget,
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
 } from "@/api/lib/chat/run-target";
 import type {
   DesktopRunnerControl,
@@ -37,7 +41,12 @@ const ORGANIZATION_ID = toSafeId<"organization">(
 const USER_ID = toSafeId<"user">("00000000-0000-4000-8000-000000000002");
 const THREAD_ID = toSafeId<"chatThread">(Bun.randomUUIDv7());
 const MODEL = "gpt-5-codex";
-const LOCAL: ChatRunTarget = { kind: "local", harness: "codex", model: MODEL };
+const LOCAL: ChatRunTarget = {
+  kind: "local",
+  harness: "codex",
+  model: MODEL,
+  approvals: "ask",
+};
 
 const snapshotWith = (granted: boolean) =>
   createFeatureAccessSnapshot({
@@ -94,6 +103,8 @@ const READY: PickedDesktop = {
     state: "ready",
     version: "0.50.0",
     capabilities: ["approvals", "interrupt"],
+    // Codex runs in one approval mode.
+    approvalModes: ["ask"],
     models: [{ id: MODEL, label: "GPT-5 Codex" }],
   },
 };
@@ -187,6 +198,19 @@ describe("routing a chat turn to the member's computer", () => {
     }
   });
 
+  test("an approval mode the computer does not report is refused with its own code", async () => {
+    for (const approvals of ["auto", "full_auto"] as const) {
+      const { resolved } = await resolve({
+        runTarget: { ...LOCAL, approvals },
+      });
+      expect(refusalCodeOf(resolved)).toBe(
+        CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
+      );
+    }
+    const allowed = await resolve({ runTarget: LOCAL });
+    expect(allowed.resolved.isOk()).toBe(true);
+  });
+
   test("a ready computer with the model takes the turn on the chosen harness", async () => {
     const { resolved, picks } = await resolve();
     expect(resolved.isOk() && resolved.value?.harness).toBe("codex");
@@ -255,23 +279,52 @@ describe("answering a paused run's approval", () => {
 
 describe("a thread's stored run target", () => {
   test("a local target survives the thread column and cloud stores nothing", () => {
-    expect(decodeChatRunTarget(encodeChatRunTarget(LOCAL))).toEqual(LOCAL);
-    expect(encodeChatRunTarget({ kind: "cloud" })).toBeNull();
-    expect(decodeChatRunTarget(null)).toEqual({ kind: "cloud" });
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const target: ChatRunTarget = { ...LOCAL, approvals };
+      expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
+    }
+    expect(storedChatRunTarget({ kind: "cloud" })).toBeNull();
+    expect(chatRunTargetOf(null)).toEqual({ kind: "cloud" });
   });
 
-  test("a stored value no harness accepts reads as cloud", () => {
-    for (const stored of ["opencode::m", "codex::", "codex", "::m"]) {
-      expect(decodeChatRunTarget(stored)).toEqual({ kind: "cloud" });
+  test("a send keeps the stored target only when it runs the same way", () => {
+    expect(
+      sameChatRunTarget(LOCAL, chatRunTargetOf(storedChatRunTarget(LOCAL))),
+    ).toBe(true);
+    expect(sameChatRunTarget({ kind: "cloud" }, { kind: "cloud" })).toBe(true);
+    for (const other of [
+      { kind: "cloud" },
+      { ...LOCAL, model: `${MODEL}-mini` },
+      { ...LOCAL, approvals: "full_auto" },
+    ] satisfies ChatRunTarget[]) {
+      expect(sameChatRunTarget(LOCAL, other)).toBe(false);
+      expect(sameChatRunTarget(other, LOCAL)).toBe(false);
     }
   });
 
-  test("a model id may itself contain the separator", () => {
-    const target: ChatRunTarget = {
-      kind: "local",
-      harness: "claude-code",
-      model: "vendor::model",
-    };
-    expect(decodeChatRunTarget(encodeChatRunTarget(target))).toEqual(target);
+  test("a stored value the contract no longer accepts reads as cloud", () => {
+    for (const stored of [
+      { ...LOCAL, harness: "opencode" },
+      { ...LOCAL, model: "" },
+      { ...LOCAL, approvals: "bypass" },
+      "codex::gpt-5-codex",
+      {},
+    ]) {
+      expect(chatRunTargetOf(stored)).toEqual({ kind: "cloud" });
+    }
+  });
+
+  test("a send that names no approval mode asks", () => {
+    expect(
+      v.parse(chatRunTargetSchema, {
+        kind: "local",
+        harness: "codex",
+        model: MODEL,
+      }),
+    ).toEqual(LOCAL);
+    expect(
+      v.safeParse(chatRunTargetSchema, { ...LOCAL, approvals: "bypass" })
+        .success,
+    ).toBe(false);
   });
 });

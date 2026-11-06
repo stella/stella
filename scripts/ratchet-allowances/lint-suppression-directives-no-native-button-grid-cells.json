@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "Two workspace grid controls keep native buttons with reasoned no-native-button suppressions: the cell trigger wraps cell children that can hold their own flag buttons (neither a native button nor Button may contain interactive content), and the add row's pinned cells must follow the grid's column template and sticky offsets, which a Button wrapping block cells cannot."
+}

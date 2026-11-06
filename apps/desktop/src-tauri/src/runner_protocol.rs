@@ -188,6 +188,13 @@ wire_values!(NetworkPolicy { Open => "open" });
 
 wire_values!(FsPolicy { Workspace => "workspace" });
 
+// How much a run asks before it acts; `Ask` is every harness's default.
+wire_values!(ApprovalMode {
+  Ask => "ask",
+  Auto => "auto",
+  FullAuto => "full_auto",
+});
+
 /// A run-scoped MCP token. `Debug` never prints it.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -257,10 +264,13 @@ pub(crate) struct HarnessModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ReadyHarness {
   pub(crate) id: Harness,
   pub(crate) version: String,
   pub(crate) capabilities: Vec<HarnessCapability>,
+  /// The approval modes this desktop can run the harness in; lists `Ask`.
+  pub(crate) approval_modes: Vec<ApprovalMode>,
   pub(crate) models: Vec<HarnessModel>,
 }
 
@@ -409,6 +419,7 @@ pub(crate) struct Reconnect {
 pub(crate) struct RunPolicy {
   pub(crate) network: NetworkPolicy,
   pub(crate) fs: FsPolicy,
+  pub(crate) approvals: ApprovalMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -608,6 +619,10 @@ mod tests {
       (
         "fsPolicies",
         names(FsPolicy::ALL.iter().map(|value| value.wire_name())),
+      ),
+      (
+        "approvalModes",
+        names(ApprovalMode::ALL.iter().map(|value| value.wire_name())),
       ),
       ("harnessStates", names(HarnessReport::TAGS.iter().copied())),
       (

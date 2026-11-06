@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -294,7 +295,11 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
-import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
+import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
@@ -1336,15 +1341,15 @@ const keepThreadRunTarget = async ({
   if (!routedLocally || runTarget === undefined) {
     return Result.ok();
   }
-  const runsOn = encodeChatRunTarget(runTarget);
-  const stored = thread.data.chatRunTarget;
-  if (stored === runsOn) {
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatRunTarget: runsOn })
+      .set({ chatLocalRunTarget: runsOn })
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1357,7 +1362,7 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatRunTarget: { old: stored, new: runsOn } },
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
     });
   });
 };
@@ -2802,7 +2807,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            routedLocally: localRun !== undefined,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,
@@ -4191,6 +4198,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4248,6 +4256,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),
