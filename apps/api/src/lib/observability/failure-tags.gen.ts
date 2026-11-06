@@ -145,6 +145,7 @@ export const FAILURE_TAGS = [
   "CzUsRosterListingError",
   "CzUsRosterParseError",
   "DataBoxMessageParseError",
+  "DataSourceUnavailableError",
   "DataUrlError",
   "DatabaseCensusError",
   "DatabaseError",
