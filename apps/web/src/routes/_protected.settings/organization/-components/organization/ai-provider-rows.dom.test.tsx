@@ -1,7 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
@@ -23,7 +22,7 @@ const MASKED_KEY = "sk-or-v1****1234";
 afterEach(cleanup);
 afterAll(async () => {
   cleanup();
-  await act(async () => await sleep(50));
+  await act(async () => await Promise.resolve());
   await unregisterDomEnvironment();
 });
 
