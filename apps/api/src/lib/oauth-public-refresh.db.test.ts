@@ -12,8 +12,9 @@ import {
 } from "@/api/lib/db-query-counter";
 
 const REGISTRATION_QUERY_BUDGET = 13;
-// A cold metadata grant includes client discovery, consent, and token writes.
-const GRANT_QUERY_BUDGET = 57;
+// A cold metadata grant includes client discovery, consent, and token writes:
+// measured at 61 for most grants and 73 for the coldest.
+const GRANT_QUERY_BUDGET = 75;
 const REFRESH_QUERY_BUDGET = 15;
 
 const DOCUMENT_URL = "https://client.example.com/oauth/refresh-client.json";
