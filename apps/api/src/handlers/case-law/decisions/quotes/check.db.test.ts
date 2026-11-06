@@ -182,6 +182,5 @@ test("a quote beyond the input bound is refused before any read", async () => {
     openId,
     "a".repeat(LIMITS.caseLawQuoteMaxChars + 1),
   );
-  expect(status).toBeGreaterThanOrEqual(400);
-  expect(status).toBeLessThan(500);
+  expect(status).toBe(422);
 });

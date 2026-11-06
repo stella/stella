@@ -377,9 +377,9 @@
       "name": "read_case_law_decision",
       "nameChars": 22,
       "descriptionChars": 499,
-      "inputSchemaChars": 2162,
-      "totalChars": 2683,
-      "estimatedTokens": 1075
+      "inputSchemaChars": 2220,
+      "totalChars": 2741,
+      "estimatedTokens": 1099
     },
     {
       "name": "read_case_law_decision_blocks",
@@ -647,7 +647,7 @@
     }
   ],
   "totals": {
-    "characters": 133772,
-    "estimatedTokens": 53146
+    "characters": 133830,
+    "estimatedTokens": 53170
   }
 }

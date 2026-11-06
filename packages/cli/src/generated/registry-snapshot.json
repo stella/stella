@@ -1234,7 +1234,7 @@
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. Replaces paging; no page/full."
+          "description": "Find all words (any inflection): matching paragraphs with neighbours, 1-based position, publisher label/null, verbatim enclosing headingPath and deep link. If none, matches.warnings names the words and next query. Replaces paging; no page/full."
         },
         "include": {
           "type": "array",
