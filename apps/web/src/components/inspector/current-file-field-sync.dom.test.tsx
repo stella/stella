@@ -3,6 +3,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
+import type { FileTab } from "./file-tab";
+
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const previousFetch = globalThis.fetch;
 // The entity is seeded; a refetch of it stays in flight for the whole test.
@@ -36,6 +38,13 @@ const TAB = {
   workspaceId: WORKSPACE_ID,
 } as const;
 
+const { propertyId: _propertyId, ...TAB_WITHOUT_PROPERTY } = TAB;
+
+const DISPLAY_KEY = fileContentQueryKey({
+  fieldId: FIELD_ID,
+  workspaceId: WORKSPACE_ID,
+});
+
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(async () => {
@@ -63,47 +72,56 @@ const fileField = (id: string) => ({
 /** Mounts the sync over an entity holding `fields`, its file read settled. */
 const mountSync = async ({
   fields,
+  fileKey = DISPLAY_KEY,
   fileResponds,
+  isEntityRefreshing = false,
   isFieldIdPinned = false,
+  tab = TAB,
 }: {
   fields: readonly ReturnType<typeof fileField>[];
+  fileKey?: readonly unknown[];
   fileResponds: boolean;
+  isEntityRefreshing?: boolean;
   isFieldIdPinned?: boolean;
+  tab?: FileTab;
 }) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   clients.push(client);
-  client.setQueryData(entityOptions(WORKSPACE_ID, ENTITY_ID).queryKey, {
-    fields,
-  } as never);
+  const entityKey: readonly unknown[] = entityOptions(
+    WORKSPACE_ID,
+    ENTITY_ID,
+  ).queryKey;
+  client.setQueryData(entityKey, { fields });
+  if (isEntityRefreshing) {
+    // Stale on mount, so the observer refetches into the never-settling fetch.
+    await client.invalidateQueries({
+      queryKey: entityKey,
+      refetchType: "none",
+    });
+  }
   const readFile = async () => {
     if (fileResponds) {
       return await Promise.resolve("file");
     }
     throw new APIError({ message: "File not found", status: 404 });
   };
-  await client.prefetchQuery({
-    queryFn: readFile,
-    queryKey: fileContentQueryKey({
-      fieldId: FIELD_ID,
-      workspaceId: WORKSPACE_ID,
-    }),
-  });
-  useInspectorTabsStore.setState({ activeId: FIELD_ID, tabs: [TAB] });
+  await client.prefetchQuery({ queryFn: readFile, queryKey: fileKey });
+  useInspectorTabsStore.setState({ activeId: FIELD_ID, tabs: [tab] });
   render(
     <QueryClientProvider client={client}>
       <CurrentFileFieldSync
         isActive
         isFieldIdPinned={isFieldIdPinned}
-        tab={TAB}
+        tab={tab}
       />
     </QueryClientProvider>,
   );
   await act(async () => {
     await Promise.resolve();
   });
-  return useInspectorTabsStore.getState().tabs.map((tab) => tab.id);
+  return useInspectorTabsStore.getState().tabs.map(({ id }) => id);
 };
 
 test("closes the tab of a deleted file field that left no successor", async () => {
@@ -133,4 +151,44 @@ test("moves the tab to the field that replaced the deleted one", async () => {
       fileResponds: false,
     }),
   ).toEqual(["field-current"]);
+});
+
+test("closes the tab when the text viewer found the file missing", async () => {
+  expect(
+    await mountSync({
+      fields: [],
+      fileKey: ["files", "text", WORKSPACE_ID, FIELD_ID],
+      fileResponds: false,
+    }),
+  ).toEqual([]);
+});
+
+test("waits for an entity refresh that may bring the replacement", async () => {
+  expect(
+    await mountSync({
+      fields: [],
+      fileResponds: false,
+      isEntityRefreshing: true,
+    }),
+  ).toEqual([FIELD_ID]);
+});
+
+test("keeps a tab with no known property while the entity holds another file", async () => {
+  expect(
+    await mountSync({
+      fields: [fileField("field-other")],
+      fileResponds: false,
+      tab: TAB_WITHOUT_PROPERTY,
+    }),
+  ).toEqual([FIELD_ID]);
+});
+
+test("closes a tab with no known property once the entity holds no file", async () => {
+  expect(
+    await mountSync({
+      fields: [],
+      fileResponds: false,
+      tab: TAB_WITHOUT_PROPERTY,
+    }),
+  ).toEqual([]);
 });

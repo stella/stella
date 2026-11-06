@@ -30,9 +30,11 @@ export const CurrentFileFieldSync = ({
   const [currentFileFieldIdsByProperty] = useState(
     () => new Map<string, string>(),
   );
-  const { data: entity, error } = useQuery(
-    entityOptions(tab.workspaceId, tab.entityId),
-  );
+  const {
+    data: entity,
+    error,
+    isFetching: isEntityFetching,
+  } = useQuery(entityOptions(tab.workspaceId, tab.entityId));
 
   useExternalSyncEffect(() => {
     if (APIError.is(error) && error.status === 404) {
@@ -68,9 +70,16 @@ export const CurrentFileFieldSync = ({
 
   // The field went away and left nothing to move to, so the tab has nothing to
   // show. An older version also has no field on the entity, but its file loads.
+  // A refresh in flight may bring the replacement. Without a known property any
+  // file on the entity could be the replacement.
+  const mayHaveReplacement =
+    filePropertyId === undefined
+      ? entity?.fields.some((field) => field.content.type === "file")
+      : latestFileFieldForProperty !== undefined;
   const hasNothingLeftToShow =
     entity !== undefined &&
-    latestFileFieldForProperty === undefined &&
+    !isEntityFetching &&
+    mayHaveReplacement === false &&
     isSelectedFieldMissing &&
     !isFieldIdPinned;
   useExternalSyncEffect(() => {
