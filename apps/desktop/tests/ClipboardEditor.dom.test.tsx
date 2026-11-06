@@ -46,11 +46,11 @@ type NativeRead = { type: "open" } | { message: string; type: "failed" };
 const renderEditor = async (native: { read: NativeRead }) => {
   const reports: unknown[] = [];
   mockIPC(
-    (command, payload) => {
+    async (command, payload) => {
       if (command === "clipboard_get_editor_context") {
         if (native.read.type === "failed") {
           // A native command rejects with its bare message.
-          return Promise.reject<never>(native.read.message);
+          await Promise.reject(native.read.message);
         }
         return CONTEXT;
       }
