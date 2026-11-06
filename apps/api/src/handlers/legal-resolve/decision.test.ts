@@ -133,27 +133,6 @@ const readableDecisionWith =
     return { ...base, ast };
   };
 
-const readableResult = (
-  result: Awaited<ReturnType<typeof resolveDecision>>,
-  source: DocumentAst,
-) => {
-  if (
-    result.status !== "resolved" ||
-    result.document.kind !== "decision" ||
-    result.document.text.status !== "readable"
-  ) {
-    return panic("Expected readable decision fixture");
-  }
-  const ast = parseCaseLawDecisionAst({
-    ...source,
-    blocks: result.document.text.blocks,
-  });
-  if (ast === null) {
-    return panic("Resolved decision blocks are not a case-law AST");
-  }
-  return { ast, text: result.document.text };
-};
-
 const missingDecision: typeof readDecisionReaderSource = async () => null;
 
 const licensedDecision: typeof readDecisionReaderSource = async () => {
@@ -220,7 +199,7 @@ describe("decision legal resolution", () => {
     });
   });
 
-  test("returns readable blocks for an exact identity", async () => {
+  test("returns identity and text status for an exact identity, never the text", async () => {
     const result = await resolveDecision({
       admission,
       country: "CZE",
@@ -232,11 +211,7 @@ describe("decision legal resolution", () => {
       document: {
         kind: "decision",
         decisionId: expect.any(String),
-        text: {
-          status: "readable",
-          blocks: decisionAst().blocks,
-          extent: { type: "complete" },
-        },
+        text: { status: "readable", charCount: expect.any(Number) },
       },
     });
     if (result.status === "resolved" && result.document.kind === "decision") {
@@ -254,78 +229,21 @@ describe("decision legal resolution", () => {
     }
   });
 
-  test("bounds large decisions at whole blocks", async () => {
-    const ast = decisionAst([
-      "a".repeat(MCP_CONTENT_MAX_CHARS - 2),
-      "second block",
-    ]);
-    const result = await resolveDecision({
-      admission,
-      country: "CZE",
-      identifier: "3 Afs 41/2008 - 98",
-      dependencies: {
-        lookup: lookupRows([row()]),
-        read: readableDecisionWith(ast),
-      },
-    });
-    expect(result).toMatchObject({
-      status: "resolved",
-      document: {
-        kind: "decision",
-        decisionId: expect.any(String),
-        readerUrl: expect.any(String),
-        text: {
-          status: "readable",
-          blocks: [ast.blocks.at(0)],
-          extent: {
-            type: "partial",
-            returnedChars: MCP_CONTENT_MAX_CHARS - 2,
-            totalChars: MCP_CONTENT_MAX_CHARS + "second block".length,
-          },
-        },
-      },
-    });
-  });
-
-  test("cuts an oversized first block without splitting a surrogate pair", async () => {
-    const text = `${"a".repeat(MCP_CONTENT_MAX_CHARS - 1)}😀tail`;
-    const result = await resolveDecision({
-      admission,
-      country: "CZE",
-      identifier: "3 Afs 41/2008 - 98",
-      dependencies: {
-        lookup: lookupRows([row()]),
-        read: readableDecisionWith(decisionAst([text])),
-      },
-    });
-    const readable = readableResult(result, decisionAst([text]));
-    const returned = readable.ast.blocks.at(0);
-    expect(returned?.plainText).toBe("a".repeat(MCP_CONTENT_MAX_CHARS - 1));
-    expect(returned?.plainText.length).toBeGreaterThan(0);
-    expect(readable.text.extent).toEqual({
-      type: "partial",
-      returnedChars: MCP_CONTENT_MAX_CHARS - 1,
-      totalChars: text.length,
-    });
-  });
-
-  test("legal-resolve.decision-readable-extent-bound", async () => {
+  test("legal-resolve.decision-identity-carries-no-text", async () => {
     await assertProperty(
-      "legal-resolve.decision-readable-extent-bound",
+      "legal-resolve.decision-identity-carries-no-text",
       fc.asyncProperty(
         fc.array(
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
           { minLength: 1, maxLength: 4 },
         ),
         // Court-numbered paragraphs are served with their number, which the
-        // extent has to count like the text does.
+        // count has to include the way read_case_law_decision's charCount does.
         fc.boolean(),
         async (texts, numbered) => {
           const source = decisionAst(texts, numbered);
-          const fullBlocks = parseCaseLawDecisionAst(source)?.blocks ?? [];
-          const totalChars =
-            toPlainCorpusText({ blocks: fullBlocks, fulltext: null })?.length ??
-            0;
+          const parsed = parseCaseLawDecisionAst(source)?.blocks ?? [];
+          const served = toPlainCorpusText({ blocks: parsed, fulltext: null });
           const result = await resolveDecision({
             admission,
             country: "CZE",
@@ -335,24 +253,17 @@ describe("decision legal resolution", () => {
               read: readableDecisionWith(source),
             },
           });
-          const readable = readableResult(result, source);
-          const returnedChars =
-            toPlainCorpusText({
-              blocks: readable.ast.blocks,
-              fulltext: null,
-            })?.length ?? 0;
-          expect(returnedChars).toBeLessThanOrEqual(MCP_CONTENT_MAX_CHARS);
-          switch (readable.text.extent.type) {
-            case "complete":
-              expect(returnedChars).toBe(totalChars);
-              break;
-            case "partial":
-              expect(readable.text.extent.returnedChars).toBe(returnedChars);
-              expect(readable.text.extent.totalChars).toBe(totalChars);
-              break;
-            default:
-              readable.text.extent satisfies never;
+          if (
+            result.status !== "resolved" ||
+            result.document.kind !== "decision"
+          ) {
+            return panic("Expected a resolved decision");
           }
+          expect(result.document.text).toEqual(
+            served === null
+              ? { status: "unavailable" }
+              : { status: "readable", charCount: served.length },
+          );
         },
       ),
     );

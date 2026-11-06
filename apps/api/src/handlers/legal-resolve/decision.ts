@@ -14,7 +14,6 @@ import {
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
-import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -35,15 +34,10 @@ import {
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  MCP_CONTENT_MAX_CHARS,
-  resolveTextWindowBounds,
-  toPlainCorpusText,
-} from "@/api/mcp/tool-utils";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
@@ -68,80 +62,14 @@ const decisionText = (
     if (document === null || document.blocks.length === 0) {
       return { status: "unavailable" };
     }
-    const { blocks } = document;
-    const plainText = toPlainCorpusText({ blocks, fulltext: null });
+    const plainText = toPlainCorpusText({
+      blocks: document.blocks,
+      fulltext: null,
+    });
     if (plainText === null) {
       return { status: "unavailable" };
     }
-    const totalChars = plainText.length;
-    if (totalChars <= MCP_CONTENT_MAX_CHARS) {
-      return {
-        status: "readable",
-        blocks,
-        extent: { type: "complete" },
-      };
-    }
-
-    const returnedBlocks: Block[] = [];
-    let returnedChars = 0;
-    for (const [index, block] of blocks.entries()) {
-      const served = servedBlockText(block, blocks[index - 1]);
-      const separatorChars =
-        returnedChars > 0 && block.plainText !== "" ? 2 : 0;
-      // Counted as the served text prints the block, with its number and
-      // note mark, so the extent agrees with `totalChars`.
-      const candidateChars =
-        returnedChars +
-        separatorChars +
-        (block.plainText === "" ? 0 : served.length);
-      if (candidateChars > MCP_CONTENT_MAX_CHARS) {
-        if (returnedChars === 0) {
-          // The number or note mark the served text prints before the block
-          // shares the window with its words.
-          const numberChars = served.length - block.plainText.length;
-          const { end } = resolveTextWindowBounds({
-            text: block.plainText,
-            offset: 0,
-            size: MCP_CONTENT_MAX_CHARS - numberChars,
-          });
-          const text = block.plainText.slice(0, end);
-          switch (block.type) {
-            case "heading":
-            case "paragraph":
-              returnedBlocks.push({
-                ...block,
-                inlines: [{ type: "text", text }],
-                plainText: text,
-              });
-              break;
-            case "table":
-              returnedBlocks.push({
-                ...block,
-                rows: [
-                  [{ inlines: [{ type: "text", text }], plainText: text }],
-                ],
-                plainText: text,
-              });
-              break;
-            case "image":
-              returnedBlocks.push({ ...block, alt: text, plainText: text });
-              break;
-            default:
-              block satisfies never;
-              return panic("Unhandled decision block type");
-          }
-          returnedChars = text.length + numberChars;
-        }
-        break;
-      }
-      returnedBlocks.push(block);
-      returnedChars = candidateChars;
-    }
-    return {
-      status: "readable",
-      blocks: returnedBlocks,
-      extent: { type: "partial", returnedChars, totalChars },
-    };
+    return { status: "readable", charCount: plainText.length };
   }
   return { status: "withheld", reason: "licence" };
 };
