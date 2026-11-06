@@ -162,7 +162,9 @@
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
       "description": "{inviterEmail} zaprosił/a Cię do organizacji {organizationName} jako {role}.",
       "goToWorkspaces": "Przejdź do spraw",
-      "title": "Zaproszenie do organizacji"
+      "title": "Zaproszenie do organizacji",
+      "verifyEmailHint": "Aby zweryfikować adres {email}, wyloguj się, a następnie zaloguj się kodem jednorazowym, który wyślemy na ten adres.",
+      "wrongAccountHint": "Zalogowano jako {email}. Wyloguj się, a następnie zaloguj się adresem, na który wysłano zaproszenie."
     },
     "lastUsed": "Ostatnio użyte",
     "oneTimeCodeExpired": "Twój kod jednorazowy wygasł. Poproś o nowy kod.",

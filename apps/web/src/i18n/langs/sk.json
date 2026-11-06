@@ -162,7 +162,9 @@
       "declinedDescription": "Odmietli ste túto pozvánku. Môžete túto stránku zavrieť.",
       "description": "{inviterEmail} vás pozval/a do organizácie {organizationName} ako {role}.",
       "goToWorkspaces": "Prejsť na spisy",
-      "title": "Pozvánka do organizácie"
+      "title": "Pozvánka do organizácie",
+      "verifyEmailHint": "Ak chcete overiť adresu {email}, odhláste sa a prihláste sa jednorazovým kódom, ktorý na ňu odošleme.",
+      "wrongAccountHint": "Ste prihlásení ako {email}. Odhláste sa a prihláste sa adresou, na ktorú bola pozvánka odoslaná."
     },
     "lastUsed": "Naposledy použité",
     "oneTimeCodeExpired": "Platnosť jednorazového kódu vypršala. Požiadajte o nový kód.",

@@ -162,7 +162,9 @@
       "declinedDescription": "Você recusou este convite. Você pode fechar esta página com segurança.",
       "description": "Você foi convidado para participar do {organizationName} por {inviterEmail} como {role}.",
       "goToWorkspaces": "Ir para casos",
-      "title": "Convite da organização"
+      "title": "Convite da organização",
+      "verifyEmailHint": "Para verificar {email}, saia e faça login com um código único enviado para esse endereço.",
+      "wrongAccountHint": "Você entrou como {email}. Saia e faça login com o endereço para o qual o convite foi enviado."
     },
     "lastUsed": "Usado pela última vez",
     "oneTimeCodeExpired": "Seu código único expirou. Solicite um novo código.",

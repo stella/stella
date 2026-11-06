@@ -162,7 +162,9 @@
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
       "description": "{inviterEmail} ir uzaicinājis jūs pievienoties organizācijai {organizationName} kā {role}.",
       "goToWorkspaces": "Doties uz lietām",
-      "title": "Uzaicinājums organizācijā"
+      "title": "Uzaicinājums organizācijā",
+      "verifyEmailHint": "Lai apstiprinātu adresi {email}, atslēdzieties un pieslēdzieties ar vienreizējo kodu, ko nosūtīsim uz šo adresi.",
+      "wrongAccountHint": "Pašlaik izmantojat kontu {email}. Atslēdzieties un pieslēdzieties ar adresi, uz kuru tika nosūtīts uzaicinājums."
     },
     "lastUsed": "Pēdējoreiz izmantots",
     "oneTimeCodeExpired": "Jūsu vienreizējā koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",

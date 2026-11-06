@@ -135,6 +135,8 @@
   "auth.invitation.description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
   "auth.invitation.goToWorkspaces": "Go to matters",
   "auth.invitation.title": "Organization invitation",
+  "auth.invitation.verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",
+  "auth.invitation.wrongAccountHint": "You are signed in as {email}. Sign out, then sign in with the address the invitation was sent to.",
   "auth.lastUsed": "Last used",
   "auth.oneTimeCodeExpired": "Your one-time code has expired. Request a new code.",
   "auth.openInProvider": "Open {provider}",
