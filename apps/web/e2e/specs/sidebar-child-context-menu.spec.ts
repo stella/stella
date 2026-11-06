@@ -46,7 +46,9 @@ for (const kind of ["document", "task"] as const) {
         .filter({ has: page.getByText(name, { exact: true }) });
       await expect(row).toBeVisible();
       await row.getByText(name, { exact: true }).click({ button: "right" });
-      await page.getByRole("menuitem", { exact: true, name: "Delete" }).click();
+      await page
+        .getByRole("menuitem", { exact: true, name: "Delete from matter…" })
+        .click();
       const confirmation = page.getByRole("alertdialog");
       await expect(confirmation).toContainText(name);
       const deleted = page.waitForResponse(

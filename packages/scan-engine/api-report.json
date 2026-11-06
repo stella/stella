@@ -1,0 +1,139 @@
+{
+  "package": "@stll/scan-engine",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/scan-engine.d.ts",
+      "exports": [
+        {
+          "name": "createScanEngine",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "scanEngine",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./review": {
+      "type": "module",
+      "file": "./src/review.d.ts",
+      "exports": [
+        {
+          "name": "CleanScanPageReview",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CleanScanReview",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TargetPageBox",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "applyAll",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "applyOne",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createCleanScanReview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "rejectOne",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "reviewPage",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "setPageReview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "targetPageBox",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "undoCleanScanReview",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./types": {
+      "type": "module",
+      "file": "./src/types.d.ts",
+      "exports": [
+        {
+          "name": "CleanScanResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CleanedScanImage",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ContentBox",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PhysicalPageSize",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RasterizedScanPage",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ScanEngine",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ScanEngineError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ScanOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ScanPageRotation",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/review.d.ts": "import { Result } from \"better-result\";\nimport type { CleanScanResult, PhysicalPageSize, RasterizedScanPage, ScanEngine, ScanEngineError, ScanOptions, ScanPageRotation } from \"./types\";\ntype CleanedScan = Extract<CleanScanResult, {\n    type: \"cleaned\";\n}>;\nexport type CleanScanPageReview = {\n    type: \"pending\";\n    pageId: string;\n} | {\n    type: \"preview\";\n    pageId: string;\n    scan: CleanedScan;\n} | {\n    type: \"applied\";\n    pageId: string;\n    scan: CleanedScan;\n} | {\n    type: \"rejected\";\n    pageId: string;\n    scan: CleanedScan;\n} | {\n    type: \"unrecognized\";\n    pageId: string;\n    reason: string;\n};\nexport type CleanScanReview = {\n    pages: readonly CleanScanPageReview[];\n    past: readonly (readonly CleanScanPageReview[])[];\n};\ntype ReviewPageOptions = {\n    engine: ScanEngine;\n    pageId: string;\n    page: RasterizedScanPage;\n    options: ScanOptions;\n};\nexport declare const reviewPage: ({ engine, pageId, page, options, }: ReviewPageOptions) => Promise<Result<CleanScanPageReview, ScanEngineError>>;\nexport declare const createCleanScanReview: (pageIds: readonly string[]) => CleanScanReview;\nexport declare const applyOne: (review: CleanScanReview, pageId: string) => CleanScanReview;\nexport declare const applyAll: (review: CleanScanReview) => CleanScanReview;\nexport declare const rejectOne: (review: CleanScanReview, pageId: string) => CleanScanReview;\nexport declare const setPageReview: (review: CleanScanReview, pageReview: CleanScanPageReview) => CleanScanReview;\nexport declare const undoCleanScanReview: (review: CleanScanReview) => CleanScanReview;\nexport type TargetPageBox = PhysicalPageSize & {\n    xPoints: 0;\n    yPoints: 0;\n    rotation: ScanPageRotation;\n};\nexport declare const targetPageBox: (pageSize: PhysicalPageSize, rotation: ScanPageRotation) => TargetPageBox;\nexport {};\n",
+    "./src/scan-engine.d.ts": "import type { ScanEngine } from \"./types\";\nimport type { WorkerRequest, WorkerResponse } from \"./worker-protocol\";\ntype WasmScanResult = {\n    free: () => void;\n    readonly status: string;\n    readonly reason: string;\n    readonly pixels: Uint8Array;\n    readonly width: number;\n    readonly height: number;\n    readonly skew_degrees: number;\n    readonly content_box: Uint32Array;\n    readonly applied_quad: Float32Array;\n};\ntype WasmBindings = {\n    clean_scan_rgba: (...args: [\n        width: number,\n        height: number,\n        pixels: Uint8Array,\n        dpi: number,\n        output: string,\n        contentCrop: boolean,\n        deskew: boolean\n    ]) => WasmScanResult;\n};\ntype WasmLoader = () => Promise<WasmBindings>;\ntype WorkerClient = {\n    addEventListener: (type: \"message\" | \"error\", listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void) => void;\n    removeEventListener: (type: \"message\" | \"error\", listener: (event: MessageEvent<WorkerResponse> | ErrorEvent) => void) => void;\n    postMessage: (message: WorkerRequest, transfer: ArrayBuffer[]) => void;\n    terminate: () => void;\n};\ntype WorkerEngineOptions = {\n    createWorker?: () => WorkerClient;\n    requestTimeoutMs?: number;\n};\nexport declare const createScanEngine: (load?: WasmLoader, workerOptions?: WorkerEngineOptions) => ScanEngine;\nexport declare const scanEngine: ScanEngine;\nexport {};\n",
+    "./src/types.d.ts": "import type { Result } from \"better-result\";\nexport type ScanPageRotation = 0 | 90 | 180 | 270;\nexport type PhysicalPageSize = {\n    widthPoints: number;\n    heightPoints: number;\n};\nexport type RasterizedScanPage = {\n    pixels: Uint8ClampedArray;\n    width: number;\n    height: number;\n    pageSize: PhysicalPageSize;\n    dpi: number;\n    rotation: ScanPageRotation;\n};\nexport type ScanOptions = {\n    output: \"grayscale\" | \"binary\";\n    contentCrop: \"on\" | \"off\";\n    deskew: \"on\" | \"off\";\n};\nexport type ContentBox = {\n    x: number;\n    y: number;\n    width: number;\n    height: number;\n};\nexport type CleanedScanImage = {\n    pixels: Uint8Array;\n    width: number;\n    height: number;\n    format: ScanOptions[\"output\"];\n};\nexport type CleanScanResult = {\n    type: \"cleaned\";\n    image: CleanedScanImage;\n    appliedQuad: {\n        topLeft: {\n            x: number;\n            y: number;\n        };\n        topRight: {\n            x: number;\n            y: number;\n        };\n        bottomRight: {\n            x: number;\n            y: number;\n        };\n        bottomLeft: {\n            x: number;\n            y: number;\n        };\n    } | null;\n    skewDegrees: number;\n    contentBox: ContentBox;\n} | {\n    type: \"unrecognized\";\n    reason: string;\n};\ndeclare const ScanEngineError_base: import(\"better-result\").TaggedErrorClass<\"ScanEngineError\">;\nexport declare class ScanEngineError extends ScanEngineError_base<{\n    type: \"engine-failure\" | \"engine-timeout\";\n    message: string;\n    cause?: unknown;\n}> {\n}\nexport type ScanEngine = {\n    clean: (page: RasterizedScanPage, options: ScanOptions) => Promise<Result<CleanScanResult, ScanEngineError>>;\n};\nexport {};\n",
+    "./src/worker-protocol.d.ts": "import type { RasterizedScanPage, ScanOptions } from \"./types\";\ntype SerializedWasmResult = {\n    status: string;\n    reason: string;\n    pixels: Uint8Array;\n    width: number;\n    height: number;\n    skew_degrees: number;\n    content_box: Uint32Array;\n    applied_quad: Float32Array;\n};\nexport type WorkerRequest = {\n    page: Omit<RasterizedScanPage, \"pixels\">;\n    pixels: ArrayBuffer;\n    options: ScanOptions;\n};\nexport type WorkerResponse = {\n    type: \"result\";\n    result: SerializedWasmResult;\n} | {\n    type: \"error\";\n    errorType: \"runtime-trap\" | \"failure\";\n    message: string;\n};\nexport {};\n"
+  }
+}

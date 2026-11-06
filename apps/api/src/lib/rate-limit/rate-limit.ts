@@ -1,3 +1,4 @@
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
@@ -5,11 +6,16 @@ import type { ResponseSet } from "@/api/http/context";
 import { isEarlyHttpFailure } from "@/api/http/errors";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
-import { status } from "@/api/http/status";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
 } from "@/api/lib/client-ip";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import {
+  type AnswerCause,
+  observedStatus,
+} from "@/api/lib/observability/server-error-answer";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import type {
   RateLimitBudget,
@@ -152,6 +158,24 @@ export class InMemoryRateLimitContext implements ReadableRateLimitContext {
 type RateLimitCharge = { key: string; windowStart: number };
 
 export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
+
+const CAPACITY_REFUSED = failureSink({
+  event: "api.capacity_refused",
+  expected: [],
+});
+
+/**
+ * The cause of a load-shedding refusal: the server declined the work for its
+ * own capacity, so a 503 built from it is graded transient
+ * (`work_capacity_unavailable`), never unclassified.
+ */
+export const capacityRefusalCause = (message: string): AnswerCause => ({
+  sink: CAPACITY_REFUSED,
+  cause: classifyFailure(
+    new HandlerError({ status: 503, code: "service_unavailable", message }),
+    "work_capacity_unavailable",
+  ),
+});
 
 /**
  * Middleware `rateLimit` built. The composed-route census asserts every `/v1`
@@ -327,7 +351,14 @@ export const rateLimit = ({
             });
           }
           onLimit?.({ key: budget.key, duration: budget.duration });
-          return toResponse(status(refusalStatus, errorResponse), ctx.set);
+          return toResponse(
+            observedStatus(
+              capacityRefusalCause("rate-limit budget refused"),
+              refusalStatus,
+              errorResponse,
+            ),
+            ctx.set,
+          );
         }
       }
       try {

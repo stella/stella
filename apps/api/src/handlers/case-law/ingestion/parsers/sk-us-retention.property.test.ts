@@ -1,17 +1,20 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import {
   expectMarkerRetention,
   injectMarkupMarkers,
   markerPlan,
 } from "./marker-injection.test-helper";
-import { parseSkUsDocumentXhtml } from "./sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "./sk-us";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const shapes = fc.array(
   fc.constantFrom(
@@ -42,7 +45,7 @@ test(
         shapes,
         wrappers,
         (plan, fragments, ancestors) => {
-          const fixture = cheerio.load(
+          const fixture = load(
             `<html><body><p class="fixture-title"><span style="font-size: 18px">UZNESENIE</span></p><main><p><span style="font-size: 12px">Ústavný súd rozhodol: Návrh sa zamieta.</span></p><p>Odôvodnenie: Posúdenie návrhu.</p>${fragments.join("")}<span class="fixture-hidden" style="color: #000000; background-color: #000000">hiddenqzexcluded</span><script>scriptqzexcluded</script><style>styleqzexcluded</style></main><p class="fixture-footer">42</p></body></html>`,
           );
           for (const tag of ancestors) {

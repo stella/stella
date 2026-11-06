@@ -8,12 +8,13 @@
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
 import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
   type CaseLawWorkExpression,
 } from "@stll/api-contract/case-law-source-languages";
+// parser-output-unchanged: [eu-ecj] the Formex archive reader keeps the same file entries in the same order.
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
@@ -621,31 +622,24 @@ const queryDecisions = async ({
  * e.g. "62024CJ0436" → "C-436/24"
  *      "62023TJ0201" → "T-201/23"
  */
+/**
+ * A case-law CELEX number: sector 6, the year, a two-letter descriptor and
+ * the case number. The descriptor's first letter names the court (C the Court
+ * of Justice, T the General Court, F the Civil Service Tribunal) and its
+ * second the document (J judgment, O order, C opinion, T third-party
+ * proceedings, …), so every document form of a court maps to that court's
+ * register, `62013FO0060` (an order) as much as `62009FJ0100`.
+ */
+const CASE_LAW_CELEX =
+  /^6(?<year>\d{4})(?<court>[CTF])[A-Z](?<num>\d{1,4})(?!\d)/u;
+
 export const celexToCaseNumber = (celex: string): string => {
-  const match = /^6(?<year>\d{4})(?<type>CJ|TJ|CC|CO|TO|FJ)(?<num>\d+)/u.exec(
-    celex,
-  );
-  if (!match) {
+  const { year, court, num } = CASE_LAW_CELEX.exec(celex)?.groups ?? {};
+  if (year === undefined || court === undefined || num === undefined) {
     return celex;
   }
-
-  const { year: yearStr, type: typeStr, num: numStr } = match.groups ?? {};
-  if (!yearStr || !typeStr || !numStr) {
-    return celex;
-  }
-  const year = yearStr.slice(2); // "2024" → "24"
-  const caseNum = Number.parseInt(numStr, 10);
-  const CELEX_PREFIX: Record<string, string> = {
-    CJ: "C",
-    CC: "C",
-    CO: "C",
-    TJ: "T",
-    TO: "T",
-    FJ: "F",
-  };
-  const prefix = CELEX_PREFIX[typeStr] ?? "C";
-
-  return `${prefix}-${caseNum}/${year}`;
+  // "2024" → "24"; leading zeros of the case number drop.
+  return `${court}-${String(Number.parseInt(num, 10))}/${year.slice(2)}`;
 };
 
 /**
@@ -2364,12 +2358,13 @@ const fetchFormex = async (
 export const readEcjFormexArchive = async (
   bytes: ArrayBuffer,
 ): Promise<string> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const archive = await JSZip.loadAsync(bytes);
+  // The reader's default limits bound the entry count and the declared
+  // sizes, and each entry inflates no further than its declared size.
+  const archive = await ZipArchive.read(bytes);
   const entries = await Promise.all(
-    Object.values(archive.files).map(
-      async (file) => [file.name, await file.async("uint8array")] as const,
-    ),
+    archive
+      .entries()
+      .map(async (file) => [file.path, await file.bytes()] as const),
   );
   return encodeEcjFormexArchive(entries);
 };

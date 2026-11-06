@@ -1,6 +1,9 @@
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import * as v from "valibot";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { organizationCreateOutputSchema } from "@stll/api-contract/organization-create";
 import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
@@ -22,11 +25,23 @@ const createSignedInAccount = async (
   });
   const suffix = randomUUID().slice(0, 8);
   await signIn(api, `professional-use-${suffix}@stella.dev`);
-  const organization = await api.post(
-    `${E2E_API_ORIGIN}/api/auth/organization/create`,
-    { data: { name: `Professional Use ${suffix}`, slug: `pro-use-${suffix}` } },
-  );
+  const organization = await api.post(`${E2E_API_ORIGIN}/v1/organizations`, {
+    data: { name: `Professional Use ${suffix}`, slug: `pro-use-${suffix}` },
+    headers: {
+      "Idempotency-Key": `pro-use-${suffix}`,
+      [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+    },
+  });
   expect(organization.ok(), await organization.text()).toBe(true);
+  const created = v.parse(
+    organizationCreateOutputSchema,
+    await organization.json(),
+  );
+  const activation = await api.post(
+    `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
+    { data: { organizationId: created.organizationId } },
+  );
+  expect(activation.ok(), await activation.text()).toBe(true);
   return api;
 };
 

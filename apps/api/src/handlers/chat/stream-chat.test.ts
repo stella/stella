@@ -1503,6 +1503,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
     v.safeParse(visualPreviewToolOutputSchema, previewCall.output).success,
   ).toBe(true);
   validateToolCallParts({
+    ownership: "cloud",
     message: settledMessage,
     tools: { [VISUAL_PREVIEW_TOOL_NAME]: visualTool },
   }).unwrap();
@@ -2644,6 +2645,7 @@ describe("native interrupt boundary persistence", () => {
       },
     ]);
     const validated = validateToolCallParts({
+      ownership: "cloud",
       message: finish.responseMessage,
       tools: { [SPAWN_SUBAGENTS_TOOL_NAME]: spawnSubagents },
     });
@@ -3047,6 +3049,13 @@ describe("approved client tool with an output schema", () => {
       elements: [],
       revision: "revision-1",
       tabId: 1,
+      tabs: [
+        {
+          active: true,
+          tabId: 1,
+          url: "https://example.com/",
+        },
+      ],
       text: "Example Domain",
       textOffset: 0,
       textTotalChars: 14,
@@ -3192,6 +3201,7 @@ describe("approved client tool with an output schema", () => {
     expect(
       Result.isOk(
         validateToolCallParts({
+          ownership: "cloud",
           allowPartialInput: false,
           allowDeferredServerInput: true,
           message: stored,
@@ -3215,6 +3225,7 @@ describe("approved client tool with an output schema", () => {
       approved.browser.getMessages().find(({ id }) => id === owningMessageId) ??
       panic("The browser lost the answered message");
     const continuation = await validateMessage({
+      toolCallOwnership: "cloud",
       message: {
         id: owningMessageId,
         role: "assistant",

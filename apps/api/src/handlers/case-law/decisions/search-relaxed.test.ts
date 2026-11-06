@@ -4,9 +4,18 @@ import { describe, expect, test } from "bun:test";
 import { SEARCH_PAGE_END } from "@stll/api-contract/search";
 import { readFailureBrand } from "@stll/errors";
 
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  corpusIndexBudgetExpiry,
+  CorpusIndexError,
+} from "@/api/lib/legal-search/corpus-index-client";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 
 import {
   rankByTermCoverage,
@@ -200,6 +209,49 @@ test("an unavailable coverage read returns its tagged failure", async () => {
     message: "Search term coverage is temporarily unavailable",
     cause,
   });
+});
+
+const coverageFailure = async (cause: CorpusIndexError) => {
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () => Result.err(cause),
+  });
+  return Result.isOk(result)
+    ? expect.unreachable("A failed coverage read must fail")
+    : result.error;
+};
+
+test.each(["unreachable", "index_missing"] as const)(
+  "an %s index answers coverage with the index refusal",
+  async (reach) => {
+    const error = await coverageFailure(
+      new CorpusIndexError({ message: "index gone", reach }),
+    );
+
+    expect(error).toMatchObject({
+      status: 503,
+      code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    });
+  },
+);
+
+test("a coverage read the request's budget ended is a public read timeout", async () => {
+  const error = await runWithinRequestLatencyBudget(
+    { label: "search_case_law", budgetMs: 0 },
+    async () =>
+      await coverageFailure(
+        corpusIndexBudgetExpiry({
+          label: "POST /coverage",
+          cause: new DOMException("The operation timed out.", "TimeoutError"),
+        }) ?? expect.unreachable("A budget expiry needs a request scope"),
+      ),
+  );
+
+  expect(error).toMatchObject({ status: 503, code: PUBLIC_READ_TIMEOUT_CODE });
+  expect(isSearchIndexUnavailable(error)).toBe(false);
 });
 
 test.each([

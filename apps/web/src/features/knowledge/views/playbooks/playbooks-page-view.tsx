@@ -189,8 +189,13 @@ const SectionHeading = ({ id, title }: SectionHeadingProps) => (
   </div>
 );
 
+// The card is drawn by the content of a plain Button: it lights while the
+// button is pointed at and fades while the button is disabled.
 const STARTER_CARD_CLASS =
-  "border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60";
+  "border-border bg-card group-hover/plain:border-foreground/25 group-hover/plain:bg-muted/30 group-disabled/plain:opacity-60 flex h-full min-h-44 w-full flex-col rounded-xl border p-4";
+
+const PLAYBOOK_ROW_CLASS =
+  "group-hover/plain:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3";
 
 type StarterCardActionProps = {
   isPending: boolean;
@@ -222,23 +227,25 @@ const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
   const t = useTranslations();
   return (
     <li>
-      <button
-        className={STARTER_CARD_CLASS}
+      <Button
+        className="group/plain flex h-full min-h-44 w-full"
         disabled={disabled}
         onClick={onStart}
-        type="button"
+        variant="plain"
       >
-        <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
-          <SparklesIcon className="text-muted-foreground size-5" />
-        </span>
-        <span className="mt-3 font-medium">
-          {t("knowledge.playbooks.buildWithAi.title")}
-        </span>
-        <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-          {t("knowledge.playbooks.buildWithAi.description")}
-        </span>
-        <StarterCardAction isPending={false} label={t("common.start")} />
-      </button>
+        <div className={STARTER_CARD_CLASS}>
+          <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+            <SparklesIcon className="text-muted-foreground size-5" />
+          </span>
+          <span className="mt-3 font-medium">
+            {t("knowledge.playbooks.buildWithAi.title")}
+          </span>
+          <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+            {t("knowledge.playbooks.buildWithAi.description")}
+          </span>
+          <StarterCardAction isPending={false} label={t("common.start")} />
+        </div>
+      </Button>
     </li>
   );
 };
@@ -290,34 +297,36 @@ const PlaybookStarterCards = ({
         const isPending = starters.pendingStarterId === starter.starterId;
         return (
           <li key={starter.starterId}>
-            <button
-              className={STARTER_CARD_CLASS}
+            <Button
+              className="group/plain flex h-full min-h-44 w-full"
               disabled={anyPending}
               onClick={() => onStart(starter)}
-              type="button"
+              variant="plain"
             >
-              <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
-                <ClipboardListIcon className="text-muted-foreground size-5" />
-              </span>
-              <span className="mt-3 font-medium" dir="auto">
-                {starter.name}
-              </span>
-              <span
-                className="text-muted-foreground mt-1 line-clamp-2 text-sm"
-                dir="auto"
-              >
-                {starter.description}
-              </span>
-              <span className="text-muted-foreground mt-2 text-xs">
-                {t("knowledge.playbooks.starters.positionCount", {
-                  count: starter.positionCount,
-                })}
-              </span>
-              <StarterCardAction
-                isPending={isPending}
-                label={t("knowledge.playbooks.starters.useStarter")}
-              />
-            </button>
+              <div className={STARTER_CARD_CLASS}>
+                <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+                  <ClipboardListIcon className="text-muted-foreground size-5" />
+                </span>
+                <span className="mt-3 font-medium" dir="auto">
+                  {starter.name}
+                </span>
+                <span
+                  className="text-muted-foreground mt-1 line-clamp-2 text-sm"
+                  dir="auto"
+                >
+                  {starter.description}
+                </span>
+                <span className="text-muted-foreground mt-2 text-xs">
+                  {t("knowledge.playbooks.starters.positionCount", {
+                    count: starter.positionCount,
+                  })}
+                </span>
+                <StarterCardAction
+                  isPending={isPending}
+                  label={t("knowledge.playbooks.starters.useStarter")}
+                />
+              </div>
+            </Button>
           </li>
         );
       })}
@@ -336,29 +345,31 @@ const RecentPlaybookRow = ({
   const format = useFormatter();
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+      <Button
+        className="group/plain flex w-full"
         onClick={onSelect}
-        type="button"
+        variant="plain"
       >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Clock3Icon className="text-muted-foreground size-4" />
+        <div className={PLAYBOOK_ROW_CLASS}>
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Clock3Icon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" dir="auto">
+              {playbook.name}
+            </p>
+            <p className="text-muted-foreground mt-0.5 truncate text-xs">
+              {t("knowledge.playbooks.lastUsed", {
+                date: format.dateTime(
+                  new Date(playbook.lastUsedAt),
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                ),
+              })}
+            </p>
+          </div>
+          <PlaybookStatusBadge status={playbook.status} />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
-            {t("knowledge.playbooks.lastUsed", {
-              date: format.dateTime(
-                new Date(playbook.lastUsedAt),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              ),
-            })}
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-      </button>
+      </Button>
     </li>
   );
 };
@@ -392,28 +403,30 @@ const PlaybookRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+      <Button
+        className="group/plain flex w-full"
         onClick={onSelect}
-        type="button"
+        variant="plain"
       >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <ClipboardCheckIcon className="text-muted-foreground size-4" />
+        <div className={PLAYBOOK_ROW_CLASS}>
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <ClipboardCheckIcon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" dir="auto">
+              {playbook.name}
+            </p>
+            <p
+              className="text-muted-foreground mt-0.5 truncate text-xs"
+              dir="auto"
+            >
+              <PlaybookRowDetail playbook={playbook} />
+            </p>
+          </div>
+          <PlaybookStatusBadge status={playbook.status} />
+          <span className="sr-only">{t("common.edit")}</span>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p
-            className="text-muted-foreground mt-0.5 truncate text-xs"
-            dir="auto"
-          >
-            <PlaybookRowDetail playbook={playbook} />
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-        <span className="sr-only">{t("common.edit")}</span>
-      </button>
+      </Button>
     </li>
   );
 };

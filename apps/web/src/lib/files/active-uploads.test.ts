@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { BLOB_HASH_CHUNK_BYTES, sha256Hex } from "@stll/sha256/browser";
 
@@ -10,6 +11,7 @@ import {
   retainActiveUpload,
   withActiveUpload,
 } from "@/lib/files/active-uploads";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 
 afterEach(() => {
   resetActiveUploadsForTests();
@@ -91,4 +93,55 @@ test("a failed standalone hash releases only its own reload guard", async () => 
   expect(hasActiveUpload()).toBe(true);
   releaseUpload();
   expect(hasActiveUpload()).toBe(false);
+});
+
+test.each([
+  {
+    name: "an empty file",
+    size: 0,
+    message: "The file is empty.",
+  },
+  {
+    name: "a file over the limit",
+    size: UPLOAD_DOCUMENT_MAX_BYTES + 1,
+    message: "The file is larger than 50 MB.",
+  },
+])(
+  "$name is refused by size without reading a byte",
+  async ({ size, message }) => {
+    let reads = 0;
+    class SizedFile extends Blob {
+      override get size(): number {
+        return size;
+      }
+      override slice(): Blob {
+        reads += 1;
+        return new Blob();
+      }
+    }
+
+    const rejection = await rejectionOf(hashActiveUploadFile(new SizedFile()));
+
+    expect(UploadFileSizeError.is(rejection)).toBe(true);
+    expect(rejection).toMatchObject({ message });
+    expect(reads).toBe(0);
+    expect(hasActiveUpload()).toBe(false);
+  },
+);
+
+test("a file of exactly the limit is hashed", async () => {
+  let reads = 0;
+  class SizedFile extends Blob {
+    override get size(): number {
+      return UPLOAD_DOCUMENT_MAX_BYTES;
+    }
+    override slice(): Blob {
+      reads += 1;
+      return new Blob(["x"]);
+    }
+  }
+
+  await hashActiveUploadFile(new SizedFile());
+
+  expect(reads).toBeGreaterThan(0);
 });

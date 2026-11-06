@@ -3,8 +3,8 @@ import { expect, test } from "bun:test";
 import type { backfillHeartbeat } from "@stll/db-load-gate/health";
 
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 
 import { publishBackfillHeartbeats } from "./backfill-heartbeat";
@@ -62,7 +62,7 @@ test.each([
     enabled: true,
     pausedUntil: null,
     heldSince: null,
-    age: SCHEDULER_BACKFILL_CONFIG.maxStalenessMs,
+    age: schedulerBackfillConfig().maxStalenessMs,
     yielded: 0,
     band: "normal",
   },
@@ -71,7 +71,7 @@ test.each([
     enabled: true,
     pausedUntil: null,
     heldSince: null,
-    age: SCHEDULER_BACKFILL_CONFIG.maxStalenessMs + 1,
+    age: schedulerBackfillConfig().maxStalenessMs + 1,
     yielded: 0,
     band: "normal",
   },

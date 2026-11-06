@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "apps/web declares the already locked zod, which the chat runtime loads through @tanstack/ai, only to select its interpreted parser before any schema is built; its JIT probe evaluates a string, which the content security policy blocks and reports. App schemas stay on valibot."
+}

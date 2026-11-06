@@ -17,6 +17,7 @@ import {
   type BrowserObservedTab,
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
+  parseBrowserExtensionPeerVersion,
   parseBrowserExtensionResponse,
 } from "@stll/api-contract/browser-control";
 
@@ -48,9 +49,21 @@ const BROWSER_EXTENSION_STATES = {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "not-paired",
   },
+  "extension-outdated": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "extension-outdated",
+  },
+  "stella-outdated": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "stella-outdated",
+  },
   "unsupported-browser": {
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
     status: "unsupported-browser",
+  },
+  "unsupported-device": {
+    protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    status: "unsupported-device",
   },
 } satisfies Record<BrowserExtensionStatus, BrowserExtensionCapability>;
 
@@ -73,6 +86,11 @@ type BrowserExtensionBridgeRuntime = {
   announcementDeadline: ReturnType<typeof setTimeout> | null;
   announced: boolean;
   controllerId: string | null;
+  /**
+   * The protocol version the extension last spoke when it differs from this
+   * tab's; null while the two match or nothing has been heard yet.
+   */
+  extensionProtocolVersion: number | null;
   /** Unset until the extension first reports; the first report changes nothing. */
   identity: ExtensionIdentity | null;
   mountCount: number;
@@ -97,6 +115,7 @@ const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
     announcementDeadline: null,
     announced: false,
     controllerId: null,
+    extensionProtocolVersion: null,
     identity: null,
     mountCount: 0,
     observedTab: null,
@@ -167,6 +186,14 @@ const observeIdentity = (
   resetBrowserApproval();
 };
 
+const markAnnounced = (runtime: BrowserExtensionBridgeRuntime): void => {
+  runtime.announced = true;
+  if (runtime.announcementDeadline !== null) {
+    clearTimeout(runtime.announcementDeadline);
+    runtime.announcementDeadline = null;
+  }
+};
+
 const handleMessage = ({ data, origin, source }: MessageEvent): void => {
   if (source !== window || origin !== window.location.origin) {
     return;
@@ -174,16 +201,25 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
 
   const response = parseBrowserExtensionResponse(data);
   if (!response) {
+    // An extension on another protocol version is installed, not missing:
+    // which side is older decides whether Chrome's update or a reload helps.
+    const peerVersion = parseBrowserExtensionPeerVersion(data);
+    if (
+      peerVersion !== null &&
+      peerVersion !== BROWSER_CONTROL_PROTOCOL_VERSION
+    ) {
+      const runtime = getBridgeRuntime();
+      markAnnounced(runtime);
+      runtime.extensionProtocolVersion = peerVersion;
+      notifyConnectionListeners();
+    }
     return;
   }
 
   const runtime = getBridgeRuntime();
   if (response.type === "pong") {
-    runtime.announced = true;
-    if (runtime.announcementDeadline !== null) {
-      clearTimeout(runtime.announcementDeadline);
-      runtime.announcementDeadline = null;
-    }
+    markAnnounced(runtime);
+    runtime.extensionProtocolVersion = null;
     runtime.allSitesGranted = response.allSitesGranted;
     runtime.controllerId = response.controllerId;
     notifyConnectionListeners();
@@ -276,45 +312,66 @@ export const isBrowserExtensionBridgeMounted = (): boolean =>
   bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
 
 type BrowserExtensionNavigator = {
+  maxTouchPoints?: number;
   userAgent: string;
   userAgentData?: { brands: readonly { brand: string }[]; mobile?: boolean };
 };
 
-export const supportsBrowserExtension = (
+/**
+ * An iPad browser asks for desktop sites by default and then names itself a
+ * Mac; only its touch screen gives it away, since a Mac reports no touch
+ * points.
+ */
+const isIpadAsMac = (browser: BrowserExtensionNavigator): boolean =>
+  /Macintosh/u.test(browser.userAgent) && (browser.maxTouchPoints ?? 0) > 1;
+
+type BrowserExtensionSupport =
+  | "supported"
+  | typeof BROWSER_EXTENSION_STATUS.unsupportedBrowser
+  | typeof BROWSER_EXTENSION_STATUS.unsupportedDevice;
+
+/**
+ * Whether this browser can run the Chrome extension. A computer with another
+ * browser can still switch to Chrome; a phone or tablet cannot run it at all,
+ * so the chat tells the two apart.
+ */
+export const browserExtensionSupport = (
   browser: BrowserExtensionNavigator | undefined,
-): boolean => {
+): BrowserExtensionSupport => {
   if (
     !browser ||
-    /Android|Firefox|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    /Android|FxiOS|CriOS|iPhone|iPad|iPod/u.test(browser.userAgent) ||
+    isIpadAsMac(browser) ||
     browser.userAgentData?.mobile === true
   ) {
-    return false;
+    return BROWSER_EXTENSION_STATUS.unsupportedDevice;
   }
-  if (browser.userAgentData) {
-    return browser.userAgentData.brands.some(
-      ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
-    );
+  if (/Firefox/u.test(browser.userAgent)) {
+    return BROWSER_EXTENSION_STATUS.unsupportedBrowser;
   }
-  return /Chrome|Chromium/u.test(browser.userAgent);
+  const chromium = browser.userAgentData
+    ? browser.userAgentData.brands.some(
+        ({ brand }) => brand === "Chromium" || brand === "Google Chrome",
+      )
+    : /Chrome|Chromium/u.test(browser.userAgent);
+  return chromium ? "supported" : BROWSER_EXTENSION_STATUS.unsupportedBrowser;
 };
 
 /**
  * The single live state of the extension for this stella tab. Unsupported means
- * the browser cannot run the Chrome extension; checking lasts until the first
- * announcement or deadline; not-installed follows one missed
- * announcement deadline; access and pairing are reported by the extension;
- * connected means this tab owns a controller and can execute commands.
+ * the browser (or the whole device) cannot run the Chrome extension; checking
+ * lasts until the first announcement or deadline; not-installed follows one
+ * missed announcement deadline; an extension on another protocol version is
+ * outdated on whichever side is older; access and pairing are reported by the
+ * extension; connected means stella can execute commands from this tab.
  */
 export const getBrowserExtensionState = (): BrowserExtensionCapability => {
   const runtime = bridgeRuntime;
-  if (
-    !supportsBrowserExtension(
-      typeof navigator === "undefined" ? undefined : navigator,
-    )
-  ) {
-    return BROWSER_EXTENSION_STATES[
-      BROWSER_EXTENSION_STATUS.unsupportedBrowser
-    ];
+  const support = browserExtensionSupport(
+    typeof navigator === "undefined" ? undefined : navigator,
+  );
+  if (support !== "supported") {
+    return BROWSER_EXTENSION_STATES[support];
   }
   if (
     runtime === null ||
@@ -324,6 +381,13 @@ export const getBrowserExtensionState = (): BrowserExtensionCapability => {
   }
   if (!runtime.announced) {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.checking];
+  }
+  if (runtime.extensionProtocolVersion !== null) {
+    return BROWSER_EXTENSION_STATES[
+      runtime.extensionProtocolVersion < BROWSER_CONTROL_PROTOCOL_VERSION
+        ? BROWSER_EXTENSION_STATUS.extensionOutdated
+        : BROWSER_EXTENSION_STATUS.stellaOutdated
+    ];
   }
   if (!runtime.allSitesGranted) {
     return BROWSER_EXTENSION_STATES[BROWSER_EXTENSION_STATUS.needsSiteAccess];

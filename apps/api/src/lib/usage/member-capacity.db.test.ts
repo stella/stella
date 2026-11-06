@@ -58,6 +58,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -700,9 +701,7 @@ describe("AI access for members", () => {
   });
 
   afterAll(async () => {
-    await testDb
-      .delete(organization)
-      .where(inArray(organization.id, fixtureOrgIds));
+    await deleteOrganizationsForTest(testDb, fixtureOrgIds);
     await testDb.delete(user).where(inArray(user.id, fixtureUserIds));
   });
 

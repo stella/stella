@@ -40,7 +40,10 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const LISTING_FIXTURE = new URL(
   "__fixtures__/pl-uodo-listing-2023.json.gz",
@@ -103,7 +106,6 @@ test("unmapped body markup is retained in the document and decision metadata", a
   expect(decision.metadata["unmappedMarkup"]).toContain("xUnknown");
 });
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 
 /** The UTC day a crawl run now parks on. */
@@ -119,7 +121,7 @@ const parkedYesterday = (cursor: string | null): string => {
 };
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -291,9 +293,11 @@ const answerPortal = async (
 };
 
 const servePortal = (model: PortalModel): void => {
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) =>
-      await refusingRedirects(await answerPortal(model, input), init),
+  testFetchState.set(
+    asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) =>
+        await refusingRedirects(await answerPortal(model, input), init),
+    ),
   );
 };
 
@@ -906,11 +910,13 @@ describe("the crawl over modification time", () => {
     Bun.sleep = async () => {
       // no-op
     };
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.resolve(
-          new Response("Server got itself in trouble", { status: 500 }),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response("Server got itself in trouble", { status: 500 }),
+          ),
+      ),
     );
     const cursor = encodePlUodoCursor({ mtimeMs: 1, afterId: undefined });
     const result = await plUodoAdapter.fetchPage(cursor, {});
@@ -918,13 +924,15 @@ describe("the crawl over modification time", () => {
   });
 
   test("a 200 that is not a list of records is a failure, not an empty page", async () => {
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.resolve(
-          new Response(JSON.stringify({ error: "nope" }), {
-            headers: { "Content-Type": "application/json" },
-          }),
-        ),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(JSON.stringify({ error: "nope" }), {
+              headers: { "Content-Type": "application/json" },
+            }),
+          ),
+      ),
     );
     const result = await plUodoAdapter.fetchPage(null, {});
     expect(Result.isError(result)).toBe(true);
@@ -1207,16 +1215,18 @@ describe("a listed record is never dropped silently", () => {
 
 describe("a listing that does not deliver what it lists", () => {
   test("entries that are not records fail the page instead of advancing past them", async () => {
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.resolve(
-          new Response(
-            JSON.stringify([
-              "PublicDocument-20230314-000000-000-13c64879b3624c79a3cd13a8e39754fb",
-            ]),
-            { headers: { "Content-Type": "application/json" } },
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.resolve(
+            new Response(
+              JSON.stringify([
+                "PublicDocument-20230314-000000-000-13c64879b3624c79a3cd13a8e39754fb",
+              ]),
+              { headers: { "Content-Type": "application/json" } },
+            ),
           ),
-        ),
+      ),
     );
     const result = await plUodoAdapter.fetchPage(null, {});
     expect(Result.isError(result)).toBe(true);
@@ -1224,15 +1234,17 @@ describe("a listing that does not deliver what it lists", () => {
 
   test("a redirected search fails the page rather than reading as empty", async () => {
     for (const status of [301, 307]) {
-      globalThis.fetch = asFetchMock(
-        async (_input: string | URL | Request, init?: RequestInit) =>
-          await refusingRedirects(
-            new Response(null, {
-              status,
-              headers: { Location: "https://example.org/" },
-            }),
-            init,
-          ),
+      testFetchState.set(
+        asFetchMock(
+          async (_input: string | URL | Request, init?: RequestInit) =>
+            await refusingRedirects(
+              new Response(null, {
+                status,
+                headers: { Location: "https://example.org/" },
+              }),
+              init,
+            ),
+        ),
       );
       const result = await plUodoAdapter.fetchPage(null, {});
       expect(Result.isError(result), String(status)).toBe(true);
