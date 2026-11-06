@@ -837,6 +837,7 @@ if (import.meta.main) {
     startup: {
       args,
       cwd: process.cwd(),
+      path: process.env["PATH"],
       env: Object.fromEntries(
         Object.entries(process.env).filter(([name]) => OBSERVED_ENV.test(name)),
       ),

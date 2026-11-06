@@ -114,6 +114,7 @@
         "skillFolders": [
           { "name": "fixture-skill", "path": "C:\\skills\\fixture-skill" }
         ],
+        "toolPath": ["C:\\data\\harness\\bun\\1.4.4\\package\\bin"],
         "model": "gpt-test",
         "instructions": "Answer briefly.",
         "messages": [
@@ -153,6 +154,7 @@
         "attachments": [],
         "cacheDir": "/data/agent-package-cache",
         "skillFolders": [],
+        "toolPath": [],
         "model": "gpt-test",
         "instructions": "",
         "messages": [
