@@ -21,7 +21,7 @@ import { organizationEventQueryKeys } from "@/lib/organization/realtime.logic";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 /** A query the user stream refreshes, and what to trim before it does. */
-export type UserEventRefresh = {
+type UserEventRefresh = {
   queryKey: QueryKey;
   prepare?: () => void;
 };

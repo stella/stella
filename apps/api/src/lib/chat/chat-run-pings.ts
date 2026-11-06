@@ -4,7 +4,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { broadcastToUser } from "@/api/lib/sse";
 
 /** The member whose active chat runs a turn status write changed. */
-export type ChatRunOwner = {
+type ChatRunOwner = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };

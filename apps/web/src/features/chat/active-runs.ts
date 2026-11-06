@@ -24,7 +24,7 @@ const fetchActiveChatRunsPage = async (
   return unwrapApiResponse(response);
 };
 
-export type ActiveChatRun = Awaited<
+type ActiveChatRun = Awaited<
   ReturnType<typeof fetchActiveChatRunsPage>
 >["items"][number];
 
