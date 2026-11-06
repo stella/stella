@@ -57,6 +57,22 @@ export const ThreadResponseSchema = v.object({
   thread: v.object({ id: v.string() }),
 });
 
+/** The skills the app server found per working directory. */
+export const SkillsListResponseSchema = v.object({
+  data: v.array(
+    v.object({
+      skills: v.array(
+        v.object({
+          /** The `SKILL.md`, as `skills.config` names it. */
+          path: v.string(),
+          /** `system` is one Codex installs with itself. */
+          scope: v.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
 const TurnStatusSchema = v.picklist([
   "completed",
   "interrupted",

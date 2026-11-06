@@ -763,5 +763,30 @@
         "storage": "Nie udało się zapisać {name} na tym komputerze. Sprawdź, czy na dysku jest wolne miejsce."
       }
     }
+  },
+  "localSkills": {
+    "title": "Umiejętności lokalne",
+    "description": "Foldery z umiejętnościami na tym komputerze. Lokalne uruchomienia na tym komputerze mogą z nich korzystać, a nic z ich zawartości nie jest przesyłane.",
+    "add": "Dodaj folder",
+    "remove": "Usuń",
+    "removeFolder": "Usuń {path}",
+    "unusable": "Nie można użyć",
+    "notice": {
+      "action_failed": "Nie udało się. Spróbuj ponownie.",
+      "too_many": "Ten komputer ma już tyle folderów z umiejętnościami, ile może wykorzystać. Najpierw usuń jeden.",
+      "already_listed": "Ten folder jest już na liście.",
+      "missing": "Ten folder już nie istnieje.",
+      "not_a_folder": "To już nie jest folder.",
+      "no_skill_file": "Ten folder nie zawiera pliku SKILL.md.",
+      "skill_file_not_regular": "SKILL.md musi być zwykłym plikiem, a nie dowiązaniem.",
+      "skill_file_too_large": "SKILL.md jest za duży, aby go odczytać.",
+      "unreadable": "Nie udało się odczytać tego folderu.",
+      "no_name": "Nagłówek SKILL.md nie zawiera nazwy.",
+      "invalid_name": "Nazwa w SKILL.md może zawierać tylko litery, cyfry, kropki, myślniki i podkreślenia i musi zaczynać się od litery lub cyfry.",
+      "duplicate_name": "Inny folder na liście ma umiejętność o tej nazwie.",
+      "runs_can_write": "Lokalne uruchomienia mogą zapisywać w tym folderze, więc nie może on zawierać umiejętności.",
+      "network_folder": "Ten folder znajduje się w udziale sieciowym. Umiejętności muszą być na dysku tego komputera.",
+      "path_changed": "Zmienił się folder nadrzędny. Usuń ten folder i dodaj go ponownie."
+    }
   }
 }

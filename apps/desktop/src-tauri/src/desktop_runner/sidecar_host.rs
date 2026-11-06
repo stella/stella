@@ -47,6 +47,7 @@ use super::run_folders;
 use crate::harness_sidecar::{
   self, HarnessLaunchSettings, HarnessProbe, HarnessProcess, HarnessSidecar,
   ResumeError, SidecarDelivery, SidecarRunOutput, SidecarRunStart, SidecarSettings,
+  SkillFolderRef,
 };
 use crate::runner_protocol::{
   Harness, HarnessReport, HarnessUnavailableReason, JsonObject, MAX_FRAME_BYTES,
@@ -61,6 +62,9 @@ pub(crate) const PROBE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const STORAGE_RETRY_CAP: Duration = Duration::from_secs(30);
 const STORAGE_RETRY_FIRST: Duration = Duration::from_millis(250);
 const INPUT_UNSUPPORTED: &str = "input_unsupported";
+/// How long a run's start waits for its skill folders. A folder can sit on a
+/// mount that hangs, and a start runs on the runner's loop.
+const SKILL_FOLDER_BUDGET: Duration = Duration::from_secs(2);
 const OUTPUT_TOO_LARGE: &str = "output_too_large";
 /// Outputs journaled in one write at most.
 const JOURNAL_BATCH: usize = 256;
@@ -100,6 +104,8 @@ pub(crate) trait LocalHarnesses: Send + Sync + 'static {
   /// Calls `settled` each time a CLI's install or removal ends, from then
   /// on: what `installed` returns may have changed, so the reports do too.
   fn on_install_settled(&self, settled: InstallSettled);
+  /// The skill folders the member listed for this computer, as they stand.
+  fn skill_folders(&self) -> Vec<SkillFolderRef>;
 }
 
 pub(crate) struct HostSettings {
@@ -496,6 +502,29 @@ async fn grant_processes(
   }
 }
 
+/// The listed skill folders, read on a thread of their own. A list that does
+/// not come in time leaves the run without skills, not the runner waiting; the
+/// stuck thread ends when the mount answers.
+pub(crate) fn skill_folders_within(
+  budget: Duration,
+  harnesses: Arc<dyn LocalHarnesses>,
+) -> Vec<SkillFolderRef> {
+  let (sender, receiver) = std::sync::mpsc::channel();
+  let reader = std::thread::Builder::new()
+    .name("skill-folders".to_owned())
+    .spawn(move || {
+      let _gone = sender.send(harnesses.skill_folders());
+    });
+  if let Err(error) = reader {
+    tracing::warn!(target: LOG_TARGET, ?error, "the skill folders could not be read");
+    return Vec::new();
+  }
+  receiver.recv_timeout(budget).unwrap_or_else(|_late| {
+    tracing::warn!(target: LOG_TARGET, "the skill folders did not answer in time");
+    Vec::new()
+  })
+}
+
 /// Probe every harness now, then on the interval or when asked to. Folders
 /// no run has used for too long are removed on the same beat.
 async fn refresh_reports(shared: Arc<Shared>, sidecar: HarnessSidecar) {
@@ -820,6 +849,10 @@ impl HarnessHost for SidecarHarnessHost {
       launch: credentials.map(|held| held.settings).unwrap_or_default(),
       workspace_dir: workspace.to_string_lossy().into_owned(),
       cache_dir: package_cache.to_string_lossy().into_owned(),
+      skill_folders: skill_folders_within(
+        SKILL_FOLDER_BUDGET,
+        Arc::clone(&self.shared.harnesses),
+      ),
       model: start.model,
       instructions: start.instructions,
       messages: start.messages,

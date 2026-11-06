@@ -38,6 +38,17 @@ export type HarnessCapability =
 export type HarnessContinuationRequest =
   { type: "fresh" } | { type: "resume"; sessionId: HarnessSessionId };
 
+/**
+ * A skill folder the member listed on this computer. It reaches the turn from
+ * the desktop alone and is never sent to the API.
+ */
+export type HarnessSkillFolder = {
+  /** The skill's name, from its `SKILL.md`. */
+  name: string;
+  /** Absolute path of the folder holding that `SKILL.md`; never written to. */
+  path: string;
+};
+
 export type HarnessTurnInput = {
   /** Stella run id; stamped on every chunk the turn produces. */
   runId: string;
@@ -50,6 +61,8 @@ export type HarnessTurnInput = {
    * the computer's runs; writable inside every harness sandbox.
    */
   cacheDir: string;
+  /** Skills the harness loads for the turn, through its own mechanism. */
+  skillFolders: readonly HarnessSkillFolder[];
   /** A model id the harness itself reported through `probe`. */
   model: string;
   /** Developer instructions for the harness. */
