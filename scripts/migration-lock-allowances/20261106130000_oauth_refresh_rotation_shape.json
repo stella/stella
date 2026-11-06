@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The three rotation-shape CHECK constraints are added NOT VALID, enforcing new writes without scanning existing rows; each catalog addition is bounded by the 1s lock_timeout and 5s statement_timeout."
+}
