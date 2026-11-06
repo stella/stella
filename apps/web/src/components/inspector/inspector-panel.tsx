@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
@@ -174,20 +174,24 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // route so the metadata persona can drive the route's
   // `?justification=` (which controls bboxes on the route's PDF
   // viewer) instead of touching the inspector tab.
-  const pdfRouteMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/document",
-    shouldThrow: false,
+  const pdfRouteSearch = useRouterState({
+    select: (routerState) =>
+      routerState.matches.find(
+        (match) =>
+          match.routeId ===
+          "/_protected/workspaces/$workspaceId/$viewId/document",
+      )?.search,
   });
-  const pdfRouteJustification = pdfRouteMatch?.search.justification ?? null;
-  const routeOwnedEditingFieldId = pdfRouteMatch?.search.editing
-    ? (pdfRouteMatch.search.field ?? null)
+  const pdfRouteJustification = pdfRouteSearch?.justification ?? null;
+  const routeOwnedEditingFieldId = pdfRouteSearch?.editing
+    ? (pdfRouteSearch.field ?? null)
     : null;
   // The document route can hand its main pane to the review, in which case the
   // inspector is where that document is read. Only that one field's tab swaps:
   // every other tab keeps the fullscreen persona.
   const documentReviewPaneFieldId =
-    pdfRouteMatch?.search.pane === DOCUMENT_PANE.review
-      ? (pdfRouteMatch.search.field ?? null)
+    pdfRouteSearch?.pane === DOCUMENT_PANE.review
+      ? (pdfRouteSearch.field ?? null)
       : null;
 
   // A revive suggestion for a route-owned view is only meaningful

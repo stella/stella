@@ -4,7 +4,10 @@ import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import { createTestState } from "@stll/test-state";
 
@@ -417,6 +420,84 @@ test("unreadable settings reject a chat turn before provider work", async () => 
   expect(transactions).toBe(0);
 });
 
+describe("user messages with nothing to read", () => {
+  const sendWith = async (content: string) => {
+    const streamResponse = mock(
+      async () =>
+        ({
+          type: "streaming",
+          response: new Response("", {
+            headers: { "content-type": "text/event-stream" },
+          }),
+        }) as const,
+    );
+    const insertValues = mock(async () => undefined);
+    const send = createSendMessage({
+      compactMessagesForContext: compactMessagesForContextMock,
+      createRefRegistry: createChatRefRegistry,
+      indexThread: upsertChatThreadSearchDocumentMock,
+      loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+      loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+      rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+      streamResponse,
+      uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+    });
+    // A message that passes the check goes on into turn work this fake
+    // database does not model; only how far it got matters here.
+    const result = await Result.tryPromise(
+      async () =>
+        await send.handler(
+          createContext({
+            contextMatterIds: [],
+            message: {
+              id: messageId,
+              role: "user",
+              parts: [{ type: "text", content }],
+            },
+            transaction: {
+              delete: () => ({
+                where: () => ({ returning: async () => [{ id: threadId }] }),
+              }),
+              insert: () => ({ values: insertValues }),
+              query: {
+                chatMessages: { findFirst: async () => null },
+                chatThreadCompactions: { findFirst: async () => null },
+                chatThreads: { findFirst: async () => undefined },
+                organizationSettings: { findFirst: async () => null },
+              },
+              select: selectChatMessages,
+            },
+          }),
+        ),
+    );
+    return { insertValues, result, streamResponse };
+  };
+
+  test.each(["<p> </p>", "<p><br></p>", "<p>&nbsp;</p>"])(
+    "refuses %s with a typed 422 before creating the thread or calling a provider",
+    async (html) => {
+      const { insertValues, result, streamResponse } = await sendWith(html);
+      expect(Result.isOk(result)).toBe(true);
+      expect(Result.isOk(result) ? result.value : undefined).toMatchObject({
+        code: 422,
+        response: { code: CHAT_MESSAGE_EMPTY_ERROR_CODE },
+      });
+      expect(insertValues).not.toHaveBeenCalled();
+      expect(streamResponse).not.toHaveBeenCalled();
+    },
+  );
+
+  test("a message with text passes the check and goes on to create its thread", async () => {
+    const { insertValues, result } = await sendWith(
+      "<p>Summarize the lease</p>",
+    );
+    expect(insertValues).toHaveBeenCalled();
+    expect(Result.isOk(result) ? result.value : undefined).not.toMatchObject({
+      response: { code: CHAT_MESSAGE_EMPTY_ERROR_CODE },
+    });
+  });
+});
+
 describe("send message context-matter authorization", () => {
   test("rejects a requested matter outside the caller's accessible set", async () => {
     const result = await sendMessage.handler(
@@ -606,7 +687,9 @@ describe("send message disconnect handling", () => {
   test("treats every thread mutation as rollback ownership adoption", () => {
     const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
     if (!(adoptionUpdate instanceof SQL)) {
-      throw new Error("Expected rollback ownership to have a SQL update hook");
+      throw new TypeError(
+        "Expected rollback ownership to have a SQL update hook",
+      );
     }
 
     expect(new PgDialect().sqlToQuery(adoptionUpdate).sql).toBe("null");

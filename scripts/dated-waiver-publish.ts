@@ -4,7 +4,7 @@ import { API } from "tsrs/unstable/async";
 import { serverFS } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
-import { waiverKey } from "./dated-waiver-fix-task";
+import { waiverKey } from "./dated-waiver-core";
 import type { DatedWaiver } from "./dated-waivers";
 
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";

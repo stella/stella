@@ -154,6 +154,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
           async *connect(messages, _data, _signal, runContext) {
             if (runContext?.resume !== undefined) {
               submitted.resolve({
+                toolCallOwnership: "cloud",
                 message: assistantFromSdk(messages.at(-1)),
                 persistedMessage: stored,
                 refRegistry,
@@ -186,6 +187,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
         panic("The SDK approval must contain supported chat parts");
       }
       const canonicalParts = validateToolCallParts({
+        ownership: "cloud",
         message: {
           id: generated.id,
           role: generated.role,

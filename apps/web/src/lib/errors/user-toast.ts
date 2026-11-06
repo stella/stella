@@ -1,13 +1,10 @@
 import { createElement } from "react";
 
-import { Result } from "better-result";
-
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { createDetached } from "@stll/errors";
+import { createDetached, type DetachedOperand } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
-import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
@@ -16,9 +13,15 @@ import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
 import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError, isCancellation } from "@/lib/errors/api";
+import {
+  APIError,
+  apiFieldIssueMessage,
+  isCancellation,
+} from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
+import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type UserErrorToastOptions = Omit<
@@ -175,6 +178,12 @@ export const notifyUserError = <Cause>(
   if (notifyStepUp(error)) {
     return false;
   }
+  if (notifySessionExpired(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
+    return false;
+  }
   // The stable refusal id coalesces the API client's observer and local error
   // handlers; raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
@@ -209,28 +218,18 @@ export const notifyUserError = <Cause>(
     }
     return false;
   }
-  const diagnostic = providerDiagnosticFromThrown(error);
+  // A provider refusal adds its setup fix; its own wording stays out of sight.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const toast = {
     ...options,
-    title:
-      diagnostic === undefined
-        ? title
-        : createElement(ProviderDiagnosticToast, {
-            diagnostic,
-            onCopy: async () => {
-              const copied = await copyToClipboard(
-                `${diagnostic.provider}: ${diagnostic.message}`,
-              );
-              if (Result.isError(copied)) {
-                notifyUserError(
-                  copied.error,
-                  getTranslator()("errors.actionFailed"),
-                );
-                return false;
-              }
-              return true;
-            },
+    ...(providerSetupGuidance(setupCode ?? undefined) === null
+      ? {}
+      : {
+          description: createElement(ProviderSetupGuidanceNotice, {
+            code: setupCode,
           }),
+        }),
+    title,
     type: "error",
   } as const;
   if (toastId !== undefined) {
@@ -239,6 +238,25 @@ export const notifyUserError = <Cause>(
   }
   stellaToast.add(toast);
   return true;
+};
+
+/**
+ * One failure, one message: the issue a rejected request names on `field`, for
+ * the form to show beside it, or a toast when the failure names no such issue
+ * or the form closed while the request was running.
+ */
+export const fieldIssueOrToast = (
+  error: unknown,
+  field: string,
+  fallback: string,
+  isFormOpen: () => boolean = () => true,
+): string | undefined => {
+  const issue = apiFieldIssueMessage(error, field);
+  if (issue === undefined || !isFormOpen()) {
+    notifyUserError(error, fallback);
+    return undefined;
+  }
+  return issue;
 };
 
 const SERVER_ERROR_THRESHOLD = 500;
@@ -266,11 +284,11 @@ type DetachedUserActionOptions = {
  * `detached`, a rejection is shown as well as reported: a press must never
  * end in nothing.
  */
-export const detachedUserAction = (
-  operation: unknown,
+export const detachedUserAction = <Operand>(
+  operation: DetachedOperand<Operand>,
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
   createDetached((error) => {
     notifyUserError(error, failureMessage);
-  })(operation, context);
+  })<Operand>(operation, context);
 };

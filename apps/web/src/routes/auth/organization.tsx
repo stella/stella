@@ -14,7 +14,7 @@ import {
   redirect,
   useNavigate,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -32,6 +32,7 @@ import {
 import { getInitials } from "@stll/ui/initials";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import {
   OAuthAccountList,
@@ -41,15 +42,20 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries } from "@/lib/auth-queries";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import {
   notifyAuthClientError,
   notifyUserError,
 } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -59,7 +65,7 @@ import {
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { getOrganizationSchema } from "@/lib/organization/utils";
 import { queryView } from "@/lib/query-view.logic";
 import {
   destinationNavigation,
@@ -384,21 +390,30 @@ const OrganizationList = ({
       </FrameHeader>
       <FramePanel className="flex flex-col gap-2">
         {organizations.map((org) => (
-          <button
-            className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start disabled:opacity-64"
+          <Button
+            className="w-full"
             disabled={isSelectPending}
             key={org.id}
             onClick={() => selectOrg(org.id)}
-            type="button"
+            variant="plain"
           >
-            <Avatar className="size-10">
-              <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{org.name}</p>
-              <p className="text-muted-foreground text-sm">{org.slug}</p>
-            </div>
-          </button>
+            <span
+              className={cn(
+                "hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start",
+                isSelectPending && "opacity-64",
+              )}
+            >
+              <Avatar className="size-10">
+                <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
+              </Avatar>
+              <span>
+                <span className="block font-medium">{org.name}</span>
+                <span className="text-muted-foreground block text-sm">
+                  {org.slug}
+                </span>
+              </span>
+            </span>
+          </Button>
         ))}
       </FramePanel>
     </Frame>
@@ -416,57 +431,56 @@ const CreateOrganizationForm = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const createIntent = useIdempotentSubmit();
+  const creationFlight = useSingleFlight();
+
   const form = useForm(
     schemaFormOptions({
       schema: getOrganizationSchema(),
       defaultValues: { name: "", slug: "" },
       submitValues: "schema-output",
-      onSubmit: async ({ value, formApi }) => {
-        const { data: slugCheckData, error: slugCheckError } =
-          await authClient.organization.checkSlug({
-            slug: value.slug,
-          });
+      onSubmit: async ({ value }) => {
+        const createResult = await Result.tryPromise({
+          try: async () =>
+            await invokeCapability("organizations.create", async (request) =>
+              unwrapApiResponse(
+                await api.organizations.post(
+                  {
+                    name: value.name,
+                    ...(value.slug === undefined ? {} : { slug: value.slug }),
+                  },
+                  {
+                    ...request,
+                    headers: {
+                      "Idempotency-Key": createIntent.prepare({
+                        body: value,
+                        operation: "organizations.create",
+                      }).headers["Idempotency-Key"],
+                      ...request.headers,
+                    },
+                  },
+                ),
+              ),
+            ),
+          catch: (error) => error,
+        });
 
-        if (slugCheckError) {
-          analytics.captureError(toAuthClientError(slugCheckError), {
-            fingerprintKey: "CreateOrganizationForm.onSubmit:failure",
-            scope: {
-              type: "handler",
-              handlerId: "CreateOrganizationForm.onSubmit:failure",
-            },
-          });
-          notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
-          return;
-        }
-
-        if (!slugCheckData.status) {
-          formApi.setErrorMap({
-            onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
-          });
-          return;
-        }
-
-        const { data, error: createError } =
-          await authClient.organization.create({
-            name: value.name,
-            slug: value.slug,
-          });
-
-        if (createError) {
-          analytics.captureError(toAuthClientError(createError), {
+        if (Result.isError(createResult)) {
+          analytics.captureError(createResult.error, {
             fingerprintKey: "CreateOrganizationForm.onSubmit:failure-2",
             scope: {
               type: "handler",
               handlerId: "CreateOrganizationForm.onSubmit:failure-2",
             },
           });
-          notifyAuthClientError(createError, t("errors.actionFailed"));
+          notifyUserError(createResult.error, t("errors.actionFailed"));
           return;
         }
+        const data = createResult.value;
 
         const { error: setActiveError } =
           await authClient.organization.setActive({
-            organizationId: data.id,
+            organizationId: data.organizationId,
           });
 
         if (setActiveError) {
@@ -517,7 +531,10 @@ const CreateOrganizationForm = ({
           errors={formErrors}
           onSubmit={(event) => {
             event.preventDefault();
-            detached(form.handleSubmit(), "auth-organization.submit");
+            detached(
+              creationFlight.run(async () => await form.handleSubmit()),
+              "auth-organization.submit",
+            );
           }}
         >
           <form.Field name="name">
@@ -527,11 +544,7 @@ const CreateOrganizationForm = ({
                 <Input
                   autoFocus
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    field.handleChange(value);
-                    form.setFieldValue("slug", createSlug(value));
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
                   placeholder={t("auth.organizationNamePlaceholder")}
                   required
                   value={field.state.value}
@@ -548,8 +561,6 @@ const CreateOrganizationForm = ({
                   dir="ltr"
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder={t("common.urlIdentifierPlaceholder")}
-                  required
                   value={field.state.value}
                 />
                 <FieldError />

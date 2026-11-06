@@ -49,4 +49,4 @@ jobs:
         uses: ./.github/actions/build-e2e-web
 
       - name: Bundle size report
-        run: bun scripts/bundle-baseline.ts --check
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check

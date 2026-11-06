@@ -11,6 +11,7 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawPopulationDeltas,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawSearchDocumentPreviewPassages,
@@ -473,6 +474,34 @@ export const seedQueryPlanData = async (
       ${QUERY_PLAN_SAMPLE.systemAudit.now}::timestamptz
         - make_interval(mins => n * 384)
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+
+  // The decision write triggers leave aggregated population deltas. They fold
+  // through the owner, then a self-cancelling backlog of one row per seeded
+  // decision gives the queue its corpus-sized shape without moving any count.
+  await db.execute(sql`
+    DO $seed$
+    DECLARE
+      fold_done boolean := false;
+      attempts integer := 0;
+    BEGIN
+      WHILE NOT fold_done LOOP
+        attempts := attempts + 1;
+        IF attempts > 10000 THEN
+          RAISE EXCEPTION 'Query-plan population fold did not finish';
+        END IF;
+        SELECT done INTO STRICT fold_done
+        FROM public.fold_case_law_population_counts(2048);
+      END LOOP;
+    END
+    $seed$
+  `);
+  await db.execute(sql`
+    INSERT INTO ${caseLawPopulationDeltas} (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${caseLawSourceId}::uuid, 'Query Plan Court 0',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+    ORDER BY n
   `);
 
   for (const table of PLAN_GUARD_TABLES) {

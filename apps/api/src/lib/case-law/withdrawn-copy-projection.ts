@@ -15,6 +15,9 @@ import type {
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 
 import { isDecisionReferenceKey } from "./withdrawn-copy-fields";
+import { quoteFieldsForProjection } from "./withdrawn-copy-registry";
+
+const annotationQuoteFields = quoteFieldsForProjection("annotation");
 
 type DecisionReferences = Set<string>;
 
@@ -103,7 +106,14 @@ export class WithdrawnCopyProjection {
     >,
   >(row: T, decisionId: string | null): T {
     const marker = this.marker(null, decisionId);
-    return marker === null ? row : { ...row, quote: marker };
+    return marker === null
+      ? row
+      : {
+          ...row,
+          ...Object.fromEntries(
+            annotationQuoteFields.map((field) => [field, marker] as const),
+          ),
+        };
   }
 
   answer<

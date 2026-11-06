@@ -10,11 +10,16 @@ import {
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed registry previews only the Constitutional Court and the common courts portal, and enrolment validates its budget and reviewed dry run", () => {
+test("the committed registry previews paragraph-label sources and the common courts portal, and enrolment validates its budget and reviewed dry run", () => {
   expect(
     Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
   ).toEqual([
+    [ADAPTER_KEYS.CZ_REGIONAL, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.CZ_NS, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.CZ_NSS, { mode: "dry-run", dailyBudget: 10_000 }],
     [ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.SK_COURTS, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.SK_US, { mode: "dry-run", dailyBudget: 10_000 }],
     [ADAPTER_KEYS.PL_NCOURT, { mode: "dry-run", dailyBudget: 10_000 }],
   ]);
   for (const policy of Object.values(REPLAY_ENROLMENT)) {

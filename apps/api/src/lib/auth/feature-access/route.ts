@@ -3,7 +3,11 @@ import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
 import { status } from "@/api/http/status";
-import { AUTH_REJECTION_BODY, resolveRequestAuth } from "@/api/lib/auth";
+import {
+  AUTH_REJECTION_BODY,
+  authUnavailableAnswer,
+  resolveRequestAuth,
+} from "@/api/lib/auth";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 
@@ -38,7 +42,7 @@ export const featureAccessGate = (
     const authorization = await resolveAuth(ctx);
     if (!authorization.ok) {
       if (authorization.statusCode === 500) {
-        return toResponse(status(500, AUTH_REJECTION_BODY[500]), ctx.set);
+        return toResponse(authUnavailableAnswer(authorization.cause), ctx.set);
       }
       // An access token the resolver challenged (expired, or without this
       // route's scope) hears the challenge, so its client can refresh or ask
@@ -46,10 +50,9 @@ export const featureAccessGate = (
       // server. Every other refusal still answers like an absent route.
       if (bearerChallenge(ctx.set.headers)) {
         return toResponse(
-          status(
-            authorization.statusCode,
-            AUTH_REJECTION_BODY[authorization.statusCode],
-          ),
+          authorization.statusCode === 401
+            ? status(401, AUTH_REJECTION_BODY[401])
+            : status(403, AUTH_REJECTION_BODY[403]),
           ctx.set,
         );
       }

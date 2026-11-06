@@ -3,6 +3,7 @@ import { type PropsWithChildren, useId, useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -119,23 +120,26 @@ export const PassagesDisclosure = ({
       {/* The same typography as the card's other disclosure ("Why"): one
           size, sentence case, a chevron; two toggles in one card must read as
           the same control. */}
-      <button
+      <Button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs"
+        className="-mx-1 flex"
         onClick={() => setOpen((current) => !current)}
-        type="button"
+        size="inline"
+        variant="muted"
       >
-        <DirectionalIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-          flip={!open}
-          icon={ChevronRightIcon}
-        />
-        {t("inspector.review.passagesToggle")}
-        <span className="text-foreground-ghost tabular-nums">
-          {format.number(count)}
+        <span className="flex min-h-8 items-center gap-1 px-1 text-xs">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          {t("inspector.review.passagesToggle")}
+          <span className="text-foreground-ghost tabular-nums">
+            {format.number(count)}
+          </span>
         </span>
-      </button>
+      </Button>
       {open && (
         <div className="mt-1" id={panelId}>
           {children}

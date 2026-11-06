@@ -1,5 +1,4 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
@@ -23,6 +22,8 @@ import { createUploadedDocumentRoute } from "./document";
 import { expect } from "./test";
 import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
 
+const createdContactSchema = v.object({ id: v.string() });
+
 const sessionSchema = v.object({
   user: v.object({ id: v.string() }),
   session: v.object({ activeOrganizationId: v.string() }),
@@ -30,14 +31,17 @@ const sessionSchema = v.object({
 
 export const createDockedChatWorld = async (request: APIRequestContext) => {
   const workspace = await createTestWorkspace(request, "dock-geometry");
-  const contactId = randomUUID();
+  let contactId: string | undefined;
   let templateId: string | undefined;
   try {
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName: "Dock geometry fixture",
-    });
+    const contact = v.parse(
+      createdContactSchema,
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName: "Dock geometry fixture",
+      }),
+    );
+    contactId = contact.id;
     const document = await createUploadedDocumentRoute({
       request,
       workspace,
@@ -82,7 +86,7 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
     return {
       workspace,
       document,
-      contactId,
+      contactId: contact.id,
       templateId: template.id,
       session,
       fileTab,
@@ -91,7 +95,9 @@ export const createDockedChatWorld = async (request: APIRequestContext) => {
     if (templateId !== undefined) {
       await apiDelete(request, `/templates/${templateId}`);
     }
-    await apiDelete(request, `/contacts/${contactId}`);
+    if (contactId !== undefined) {
+      await apiDelete(request, `/contacts/${contactId}`);
+    }
     await deleteTestWorkspace(request, workspace.id);
     throw error;
   }

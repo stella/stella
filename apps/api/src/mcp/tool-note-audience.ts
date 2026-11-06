@@ -9,8 +9,10 @@ export const MCP_NOTE_AUDIENCE = {
   partial_matches_appended: "agent",
   filter_read: "agent",
   filter_dropped: "agent",
+  filter_unread: "agent",
   many_required_terms: "agent",
   provision_cited_widely: "agent",
+  phrasing_timed_out: "agent",
 } as const satisfies Record<
   AgentCaseLawSearchWarning["code"] | "input_read",
   "agent" | "user"

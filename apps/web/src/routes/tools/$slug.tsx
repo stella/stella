@@ -19,7 +19,10 @@ import {
   SetupBadge,
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import {
   DownloadAffordance,
   InstallButtonPlaceholder,
@@ -95,6 +98,10 @@ function PublicToolDetail() {
   const navigate = Route.useNavigate();
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
   const displayName = labelKey ? t(labelKey) : entry.displayName;
+  const descriptionKey = nativeToolDescriptionKey({
+    slug: entry.slug,
+    kind: entry.kind,
+  });
   const homepage = entry.homepage ? sanitizeHref(entry.homepage) : undefined;
 
   return (
@@ -102,11 +109,12 @@ function PublicToolDetail() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <div className="flex items-start gap-3">
           <CatalogueEntryIcon
-            className="text-muted-foreground mt-0.5 shrink-0"
+            className="mt-0.5 shrink-0"
             icon={entry.icon}
             iconUrl={entry.iconUrl ?? null}
             size={32}
             slug={entry.slug}
+            tone="muted"
           />
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +130,7 @@ function PublicToolDetail() {
         </div>
 
         <p className="text-foreground text-sm" dir="auto">
-          {entry.description}
+          {descriptionKey ? t(descriptionKey) : entry.description}
         </p>
 
         <div className="flex flex-wrap items-center gap-1.5">

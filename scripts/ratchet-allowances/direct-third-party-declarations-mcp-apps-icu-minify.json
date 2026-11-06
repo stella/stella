@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "packages/mcp-apps declares icu-minify as a dev dependency to precompile its message catalogues at build time, which removes the ICU parser from every shipped MCP app bundle; the same version is already installed through use-intl."
+}

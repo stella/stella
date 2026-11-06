@@ -74,6 +74,21 @@ const STRAY_LEADING_NUMBER_RE = /^\d{1,3}\s+\p{Ll}/u;
  */
 const OPENS_ON_LABEL_RE = /^[^:\n]{1,25}:/u;
 
+/**
+ * One word and no punctuation, between two labelled lines: the separator a
+ * court sets on its own line between parties (`žalobce: …` / `proti` /
+ * `žalovaná: …`), not the rest of a cut sentence.
+ */
+const SEPARATOR_WORD_RE = /^\p{L}+$/u;
+
+const separatesLabelledLines = (
+  nextText: string,
+  afterNext: Block | undefined,
+): boolean =>
+  SEPARATOR_WORD_RE.test(nextText) &&
+  afterNext?.type === "paragraph" &&
+  OPENS_ON_LABEL_RE.test(afterNext.plainText.trim());
+
 /** Units a table row prints beside its figures, compared lowercased. */
 const TABLE_UNITS: ReadonlySet<string> = new Set([
   "%",
@@ -169,6 +184,7 @@ export const structureFidelityIn = (
       !OPENS_ON_LABEL_RE.test(nextText) &&
       !isTableRow(text) &&
       !isTableRow(nextText) &&
+      !separatesLabelledLines(nextText, blocks[index + 2]) &&
       continuesAcrossPageBreak(text, nextText)
     ) {
       finding(

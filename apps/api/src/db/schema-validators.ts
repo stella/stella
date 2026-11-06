@@ -6,6 +6,18 @@ import {
   REVIEW_FLAGS_MAX_ITEMS,
 } from "@stll/api-contract";
 import { apiDateSchema, apiDateTimeSchema } from "@stll/api-contract/api-date";
+import type {
+  ContactAddress as SharedContactAddress,
+  ContactBankAccount,
+  ContactBillingAddress,
+  ContactCustomField as SharedContactCustomField,
+  ContactDataBox as SharedContactDataBox,
+  ContactEmail as SharedContactEmail,
+  ContactMetadata as SharedContactMetadata,
+  ContactPhone as SharedContactPhone,
+} from "@stll/api-contract/contact-write";
+import { recordCellStateSchema } from "@stll/api-contract/record-cell";
+import { recordSchemaSchema } from "@stll/api-contract/record-schema";
 
 import type { JsonObject } from "@/api/lib/json-value";
 import {
@@ -65,6 +77,7 @@ const dateType = v.literal("date");
 const intType = v.literal("int");
 const moneyType = v.literal("money");
 const personType = v.literal("person");
+const recordType = v.literal("record");
 
 /**
  * ISO 4217 alphabetic code for a workspace money or int field, normalized to
@@ -104,7 +117,7 @@ export type { EntityKind } from "@stll/api-contract";
 // No default: a request that omits this required field is a 400, never a
 // silent "file". `schema-validators.test.ts` binds the members to `PROPERTY_CONTENT_TYPES`,
 // so a new property type still has to be classified for find.
-export const propertyContentTypeSchema = v.union([
+const scalarPropertyContentTypes = [
   fileType,
   textType,
   singleSelectType,
@@ -113,7 +126,21 @@ export const propertyContentTypeSchema = v.union([
   intType,
   moneyType,
   personType,
+] as const;
+
+export const propertyContentTypeSchema = v.union([
+  ...scalarPropertyContentTypes,
+  recordType,
 ]);
+
+/**
+ * The content types the generic create and update bodies take. A record column
+ * is configured through its data source or declared schema, never as a bare
+ * content type with no shape.
+ */
+export const scalarPropertyContentTypeSchema = v.union(
+  scalarPropertyContentTypes,
+);
 
 export type PropertyContentType = v.InferOutput<
   typeof propertyContentTypeSchema
@@ -152,11 +179,26 @@ const moneyPropertyContentSchema = v.object({
 const personPropertyContentSchema = v.object({ version: v1, type: personType });
 
 /**
+ * A column of typed records. `tool-output`: the column's `tool-call` tool owns
+ * the schema (its data source's output), so no copy is stored that could drift
+ * from it. `declared`: the column states the shape an AI answer must take.
+ */
+const recordPropertyContentSchema = v.object({
+  version: v1,
+  type: recordType,
+  shape: v.variant("type", [
+    v.object({ type: v.literal("tool-output") }),
+    v.object({ type: v.literal("declared"), schema: recordSchemaSchema }),
+  ]),
+});
+
+/**
  * Property content an AI tool can produce a value for. A file is uploaded, a
  * money amount needs a currency the model has no way to choose, and a person
  * has to resolve to a workspace member; all three are entered by hand, so the
  * execution plan never schedules them and the prompt/validator switches below
- * have no branch for them.
+ * have no branch for them. A record is produced by a data-source tool call,
+ * never by the scalar extraction these switches describe.
  *
  * The same subset a case-law question column offers, which is why it is a
  * schema rather than a type-level `Exclude`: both boundaries parse against it.
@@ -172,7 +214,7 @@ export type AiExtractablePropertyContent = v.InferOutput<
   typeof aiExtractablePropertyContentSchema
 >;
 
-export const propertyContentSchema = v.union([
+const scalarPropertyContentSchemas = [
   filePropertyContentSchema,
   textPropertyContentSchema,
   selectPropertyContentSchema,
@@ -180,7 +222,21 @@ export const propertyContentSchema = v.union([
   intPropertyContentSchema,
   moneyPropertyContentSchema,
   personPropertyContentSchema,
+] as const;
+
+export const propertyContentSchema = v.union([
+  ...scalarPropertyContentSchemas,
+  recordPropertyContentSchema,
 ]);
+
+/** See `scalarPropertyContentTypeSchema`. */
+export const scalarPropertyContentSchema = v.union(
+  scalarPropertyContentSchemas,
+);
+
+export type ScalarPropertyContent = v.InferOutput<
+  typeof scalarPropertyContentSchema
+>;
 
 export type PropertyContent = v.InferOutput<typeof propertyContentSchema>;
 
@@ -189,7 +245,8 @@ export const isAiExtractablePropertyContent = (
 ): content is AiExtractablePropertyContent =>
   content.type !== "file" &&
   content.type !== "money" &&
-  content.type !== "person";
+  content.type !== "person" &&
+  content.type !== "record";
 
 export const aiModelToolSchema = v.object({
   version: v1,
@@ -355,6 +412,14 @@ export const fieldContentSchema = v.union([
   }),
   v.object({
     version: v1,
+    type: v.literal("record"),
+    // The output schema version of the record's source when it was written;
+    // a record from another version is stale, never read as current.
+    schemaVersion: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    state: recordCellStateSchema,
+  }),
+  v.object({
+    version: v1,
     type: v.literal("clip"),
     url: v.pipe(v.string(), v.maxLength(2048)),
     snippet: v.exactOptional(v.pipe(v.string(), v.maxLength(10_000))),
@@ -418,100 +483,16 @@ const boundingBoxesSchema = v.object({
 export type BoundingBoxes = v.InferOutput<typeof boundingBoxesSchema>;
 export type BoundingBox = BoundingBoxes["boxes"][number];
 
-// -- Billing schemas --
-
-export const bankAccountSchema = v.object({
-  iban: v.exactOptional(v.pipe(v.string(), v.maxLength(34))),
-  bic: v.exactOptional(v.pipe(v.string(), v.maxLength(11))),
-  accountNumber: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
-  bankName: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  currency: v.exactOptional(currencyCode),
-});
-
-export type BankAccount = v.InferOutput<typeof bankAccountSchema>;
-
-export const billingAddressSchema = v.object({
-  line1: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  line2: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  city: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  state: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  postalCode: v.exactOptional(v.pipe(v.string(), v.maxLength(32))),
-  country: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type BillingAddress = v.InferOutput<typeof billingAddressSchema>;
-
-// -- Contact schemas --
-
-export const contactEmailSchema = v.object({
-  type: v.picklist(["work", "personal", "other"]),
-  address: v.pipe(v.string(), v.email(), v.maxLength(320)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactEmail = v.InferOutput<typeof contactEmailSchema>;
-
-export const contactPhoneSchema = v.object({
-  type: v.picklist(["mobile", "office", "home", "fax", "other"]),
-  number: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactPhone = v.InferOutput<typeof contactPhoneSchema>;
-
-export const contactDataBoxSchema = v.object({
-  id: v.pipe(v.string(), v.regex(/^[A-Za-z0-9]{7}$/u)),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactDataBox = v.InferOutput<typeof contactDataBoxSchema>;
-
-export const contactCustomFieldSchema = v.object({
-  id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-  label: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
-  value: v.pipe(v.string(), v.maxLength(2000)),
-});
-
-export type ContactCustomField = v.InferOutput<typeof contactCustomFieldSchema>;
-
-const contactMetadataFields = {
-  dataBoxes: v.exactOptional(
-    v.pipe(v.array(contactDataBoxSchema), v.maxLength(20)),
-  ),
-  customFields: v.exactOptional(
-    v.pipe(v.array(contactCustomFieldSchema), v.maxLength(50)),
-  ),
-};
-
-export const contactMetadataSchema = v.object(contactMetadataFields);
-
-export type ContactMetadata = v.InferOutput<typeof contactMetadataSchema>;
+export type BankAccount = ContactBankAccount;
+export type BillingAddress = ContactBillingAddress;
+export type ContactEmail = SharedContactEmail;
+export type ContactPhone = SharedContactPhone;
+export type ContactDataBox = SharedContactDataBox;
+export type ContactCustomField = SharedContactCustomField;
+export type ContactMetadata = SharedContactMetadata;
+export type ContactAddress = SharedContactAddress;
 
 export type ContactPersistedMetadata = ContactMetadata & {
   version: 1;
   custom?: JsonObject;
 };
-
-export const contactAddressSchema = v.object({
-  type: v.picklist([
-    "office",
-    "mailing",
-    "billing",
-    "service",
-    "home",
-    "other",
-  ]),
-  line1: v.pipe(v.string(), v.maxLength(512)),
-  line2: v.exactOptional(v.pipe(v.string(), v.maxLength(512))),
-  city: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  state: v.exactOptional(v.pipe(v.string(), v.maxLength(256))),
-  postalCode: v.exactOptional(v.pipe(v.string(), v.maxLength(32))),
-  country: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-  isPrimary: v.boolean(),
-  label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
-});
-
-export type ContactAddress = v.InferOutput<typeof contactAddressSchema>;

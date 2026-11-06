@@ -56,15 +56,8 @@ export const CalendarHeader = ({
         <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Popover>
-        <PopoverTrigger
-          render={
-            <button
-              className="text-sm font-medium hover:underline"
-              type="button"
-            />
-          }
-        >
-          {headerLabel}
+        <PopoverTrigger render={<Button size="inline" variant="link" />}>
+          <span className="text-sm font-medium">{headerLabel}</span>
         </PopoverTrigger>
         <PopoverPopup padding="sm" side="bottom">
           <div className="flex items-center justify-between pb-1">

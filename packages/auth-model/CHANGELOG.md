@@ -1,5 +1,31 @@
 # @stll/auth-model
 
+## 0.7.0
+
+### Minor Changes
+
+- [#7920](https://github.com/stella/stella/pull/7920) [`668938a`](https://github.com/stella/stella/commit/668938a1fad9d45c6cc6bb211daf52e3bec16558) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.16 after confirming the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.16"`; no entrypoints are removed.
+
+## 0.6.0
+
+### Minor Changes
+
+- Export the opaque organization slug pattern next to its generator.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#7600](https://github.com/stella/stella/pull/7600) [`cd76389`](https://github.com/stella/stella/commit/cd7638987595cc0f1776b204073fb958bf94bf35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose a shared invitation lifecycle classifier for pending, past, and accepted invitations.
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the opaque organization slug generator next to the shared slug rules.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
 ## 0.3.0
 
 ### Minor Changes

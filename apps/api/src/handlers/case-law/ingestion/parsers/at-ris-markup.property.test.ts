@@ -3,9 +3,9 @@
  * and its plain text, whatever order a decision prints them in.
  */
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
 import type { Inline } from "@stll/legal-ast/document-ast";
 import {
   assertProperty,
@@ -13,12 +13,15 @@ import {
   propertySeed,
 } from "@stll/property-testing";
 
-import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
+import { parseRisDecisionXml as uncheckedParseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import {
   normalizeInlineLayout,
   readRisContent,
   RIS_ELEMENTS,
 } from "@/api/handlers/case-law/ingestion/parsers/at-ris-markup";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRisDecisionXml = guardParser(uncheckedParseRisDecisionXml);
 
 const config = (numRuns: number) =>
   propertyConfig({ numRuns, seed: propertySeed() });
@@ -193,7 +196,7 @@ const BLOCK_BODIES = [
 ] as const;
 
 const readItems = (body: string) => {
-  const $ = cheerio.load(`<risdok><nutzdaten>${body}</nutzdaten></risdok>`, {
+  const $ = load(`<risdok><nutzdaten>${body}</nutzdaten></risdok>`, {
     xml: true,
   });
   const content = $("nutzdaten").first().get(0);

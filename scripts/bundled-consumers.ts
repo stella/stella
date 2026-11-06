@@ -320,6 +320,15 @@ export const BUNDLED_CONSUMERS = [
     },
   },
   {
+    file: "packages/agent-engine/scripts/build-sidecar.ts",
+    command: "Bun.build(entrypoints: [ENTRYPOINT])",
+    bootCheck: {
+      type: "none",
+      reason:
+        "The desktop release compiles the sidecar in Tauri's beforeBuildCommand, outside CI; sidecar.test.ts boots the same entry from source over stdio.",
+    },
+  },
+  {
     file: "apps/api/scripts/build-mcp-country-filter-fixture.ts",
     command:
       'Bun.build(entrypoints: [ path.resolve( import.meta.dirname, "../../../packages/mcp-apps/src/case-law-results/app.html", ), ])',

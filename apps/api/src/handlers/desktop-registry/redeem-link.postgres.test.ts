@@ -37,6 +37,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 // Every authorization operation and credential write here uses the production
@@ -229,9 +230,7 @@ describe.skipIf(
               .where(eq(auditLogs.organizationId, organizationId));
             await db.delete(apikey).where(eq(apikey.referenceId, userId));
             await db.delete(member).where(eq(member.userId, userId));
-            await db
-              .delete(organization)
-              .where(eq(organization.id, organizationId));
+            await deleteOrganizationsForTest(db, [organizationId]);
             await db.delete(user).where(eq(user.id, userId));
           }
         });

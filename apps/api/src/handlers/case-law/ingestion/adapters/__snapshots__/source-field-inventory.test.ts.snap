@@ -1108,11 +1108,6 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
       "reason": "the repository address of the work, which the row holds as the address the document was served from",
     },
     {
-      "field": "notice.WORK/WORK_HAS_EXPRESSION",
-      "policy": "legacy",
-      "reason": "the other language expressions of this work, each of which is a row of its own",
-    },
-    {
       "field": "notice.WORK/WORK_ID_DOCUMENT",
       "policy": "legacy",
       "reason": "the CELEX number with its scheme prefixed",
