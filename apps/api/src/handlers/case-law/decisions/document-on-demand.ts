@@ -234,24 +234,24 @@ const isReadBudgetExpiry = (error: unknown): boolean => {
 };
 
 /**
- * Runs one fetch under its wall-clock budget. A publisher too slow for the
- * budget is the source's state rather than a fault here: the reader was
- * already answered and the queue keeps the work, so the failure the expiry
- * caused grades as the upstream being unavailable, as any failure the budget
- * did not cause keeps its own grade.
+ * Grades the expiry of a fetch's wall-clock budget. A publisher too slow for
+ * the budget is the source's state rather than a fault here: the reader was
+ * already answered and the queue keeps the work. The fetch rejects with the
+ * budget's own abort reason, so that reason carries the grade, and a failure
+ * the budget did not cause keeps its own.
  */
-export const withDocumentFetchBudget = async <T>(
-  budget: AbortSignal,
-  run: () => Promise<T>,
-): Promise<T> => {
-  try {
-    return await run();
-  } catch (error: unknown) {
-    if (budget.aborted && typeof error === "object" && error !== null) {
-      classifyFailure(error, "upstream_unavailable");
-    }
-    throw error;
-  }
+export const gradedDocumentFetchBudget = (budget: AbortSignal): AbortSignal => {
+  budget.addEventListener(
+    "abort",
+    () => {
+      const reason: unknown = budget.reason;
+      if (typeof reason === "object" && reason !== null) {
+        classifyFailure(reason, "upstream_unavailable");
+      }
+    },
+    { once: true },
+  );
+  return budget;
 };
 
 type FetchDeferredDocumentOptions = {
