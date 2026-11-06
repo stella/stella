@@ -2182,6 +2182,20 @@ const atRisHeadnoteListing = (adapter: AtRisFixtureAdapter): string => {
 export const atRisFixture = (
   adapter: AtRisFixtureAdapter,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "Technisch/Applikation": AT_RIS_APPLICATIONS[adapter].application,
+    "Technisch/ImportTimestamp": { "@xsi:nil": "true" },
+    "Judikatur/GesamteEntscheidungUrl": `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${AT_RIS_APPLICATIONS[adapter].application}&IncludeSelf=True`,
+    "Judikatur/RechtssaetzeUrl": `https://ogd.ris.bka.gv.at/JudikaturEntscheidung.wxe?Abfrage=${AT_RIS_APPLICATIONS[adapter].application}&IncludeSelf=False`,
+    [`Judikatur/${AT_RIS_APPLICATIONS[adapter].application}/RechtssatzketteUrl`]:
+      AT_RIS_BRANCH_VALUES.Rechtssatzkette,
+    ...Object.fromEntries(
+      AT_RIS_APPLICATIONS[adapter].document.map((field) => [
+        `Dokument/${field}`,
+        atRisDocumentXml(adapter),
+      ]),
+    ),
+  },
   buildDecision: async () =>
     await Promise.resolve(
       assembleAtRisDecision(
@@ -2270,6 +2284,21 @@ const AT_FINDOK_HEADNOTE_XML =
   `</Segk></Segment></Segmente>`;
 
 export const atFindokFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    gueltig: true,
+    inFindokSeit: "17.09.2026 02:15:26",
+    ...Object.fromEntries(
+      load(AT_FINDOK_DECISION_XML, { xml: true })("Grundk > *, Segk > *")
+        .toArray()
+        .flatMap((node) => {
+          const parent = node.parent;
+          if (parent === null || !("name" in parent)) {
+            return [];
+          }
+          return [[`${parent.name}/${node.name}`, AT_FINDOK_DECISION_XML]];
+        }),
+    ),
+  },
   buildDecision: async () => {
     const manifest = parseFindokManifest("bfg", AT_FINDOK_MANIFEST);
     const item = manifest.items.at(0);
