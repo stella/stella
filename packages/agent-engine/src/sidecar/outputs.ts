@@ -35,6 +35,8 @@ export const MAX_REPORTED_UNSHARED_OUTPUTS = 20;
 const MAX_SCANNED_ENTRIES = 5000;
 const MAX_FOLDER_DEPTH = 8;
 const UPLOAD_TIMEOUT_MS = 120_000;
+/** The chat turn waits for these before it ends, so they get a bound together. */
+const OUTPUT_SHARING_BUDGET_MS = 5 * 60_000;
 const MAX_FILE_NAME_CHARS = 255;
 
 type OutputEntry = {
@@ -197,6 +199,10 @@ export async function* shareOutputs({
   upload,
   signal,
 }: ShareOutputsOptions): AsyncGenerator<DesktopRunnerOutputEvent> {
+  const stopped = AbortSignal.any([
+    signal,
+    AbortSignal.timeout(OUTPUT_SHARING_BUDGET_MS),
+  ]);
   const current = await snapshotOutputs(workspaceDir);
   const changed = [...current]
     .filter(([entryPath, entry]) => isChanged(entry, before.get(entryPath)))
@@ -208,11 +214,11 @@ export async function* shareOutputs({
     const mayUpload =
       entry.kind === "file" &&
       attempted < MAX_RUN_OUTPUT_FILES &&
-      !signal.aborted;
+      !stopped.aborted;
     if (mayUpload) {
       attempted += 1;
       // await-in-loop: one file in memory at a time.
-      const fileId = await shareOne(workspaceDir, entryPath, upload, signal);
+      const fileId = await shareOne(workspaceDir, entryPath, upload, stopped);
       if (fileId !== null) {
         yield { status: "uploaded", fileId, fileName };
         continue;

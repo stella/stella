@@ -14,9 +14,11 @@ import {
   desktopRunnerOutputPath,
 } from "@stll/api-contract/desktop-runner";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs, desktopRunnerRuns, userFiles } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import type { UploadUserFileDependencies } from "@/api/handlers/chat/upload-files";
 import { routes } from "@/api/http/route";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +30,7 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestServer } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -137,8 +140,8 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   const upload = createUploadRunOutput({
-    verifyToken: async (token: string) => {
-      const claims = tokens.get(token);
+    verifyToken: async (token) => {
+      const claims = token === undefined ? undefined : tokens.get(token);
       if (claims === undefined) {
         throw new Error("UNAUTHORIZED");
       }
@@ -153,11 +156,13 @@ beforeAll(async () => {
       const organizationId = toSafeId<"organization">(session.organizationId);
       const userId = toSafeId<"user">(session.userId);
       return await Promise.resolve({
-        safeDb: createSafeDb(
-          testDb,
-          (session.workspaceIds ?? []).map((id) => toSafeId<"workspace">(id)),
-          organizationId,
-          userId,
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(
+            testDb,
+            (session.workspaceIds ?? []).map((id) => toSafeId<"workspace">(id)),
+            organizationId,
+            userId,
+          ),
         ),
         recordAuditEvent: createAuditRecorder({
           organizationId,
@@ -170,7 +175,12 @@ beforeAll(async () => {
     },
     readRunThread: async (options) =>
       Result.ok(await readOpenRunChatThread(testDb, options)),
-    uploads: { organizationFileUsageDb: testDb },
+    uploads: {
+      organizationFileUsageDb:
+        asTestRaw<UploadUserFileDependencies["organizationFileUsageDb"]>(
+          testDb,
+        ),
+    },
   });
   server = serveRoutesForTest(
     routes(

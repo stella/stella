@@ -4,6 +4,7 @@ import { userFiles } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -35,6 +36,9 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+/** No browser session stands behind the request: nothing reads its authority. */
+const tokenSession = { activeOrganizationId: ids.orgA, id: null };
+
 const storedFile = async (fileName: string, mimeType: string) => {
   const id = createSafeId<"userFile">();
   await database.insert(userFiles).values({
@@ -44,7 +48,11 @@ const storedFile = async (fileName: string, mimeType: string) => {
     mimeType,
     sizeBytes: 10,
     sha256Hex: "e".repeat(64),
-    s3Key: `${ids.orgA}/${id}.bin`,
+    s3Key: createUserFileKey({
+      fileId: id,
+      mimeType,
+      organizationId: ids.orgA,
+    }),
     threadId: ids.chatThreadWorkspaceA1,
   });
   return id;
@@ -60,7 +68,7 @@ const deliveryOf = async (
       {
         scopedDb: NO_DB,
         params: { fileId },
-        session: { activeOrganizationId: ids.orgA, id: "session" },
+        session: tokenSession,
         user: { id: ids.userA1 },
         workspaceId: ids.wsA1,
         safeDb: createSafeDb(database, [ids.wsA1], ids.orgA, ids.userA1),

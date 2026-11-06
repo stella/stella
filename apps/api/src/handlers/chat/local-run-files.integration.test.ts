@@ -30,6 +30,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { createLocalRunBell } from "@/api/lib/desktop-runner/doorbell";
 import { readRunOutputFile } from "@/api/lib/desktop-runner/store";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
@@ -226,7 +227,11 @@ const storeFile = async ({
     mimeType,
     sizeBytes: 10,
     sha256Hex: "a".repeat(64),
-    s3Key: `${ids.orgA}/${id}.bin`,
+    s3Key: createUserFileKey({
+      fileId: id,
+      mimeType,
+      organizationId: ids.orgA,
+    }),
     threadId,
     placeholder,
   });

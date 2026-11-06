@@ -55,7 +55,7 @@ type RunOutputDependencies = {
   uploads?: UploadUserFileDependencies;
 };
 
-const refused = (status: 401 | 403 | 404 | 503, message: string) =>
+const refused = (status: 401 | 403 | 404, message: string) =>
   Result.err(new HandlerError({ status, message }));
 
 /**
@@ -81,7 +81,14 @@ const verifyRunCaller =
     });
     if (Result.isError(verified)) {
       return verified.error._tag === "McpTokenVerificationError"
-        ? refused(503, "The token could not be verified")
+        ? Result.err(
+            new HandlerError({
+              status: 503,
+              code: "service_unavailable",
+              message: "The token could not be verified",
+              retryable: true,
+            }),
+          )
         : refused(401, "A run's agent token is required");
     }
     if (verified.value.type !== "user") {

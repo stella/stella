@@ -4,6 +4,7 @@ import { userFiles } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import {
   createTestHandlerContext,
   NO_DB,
@@ -107,7 +108,11 @@ test("never renders a run's HTML output, even when it reads as a generated view"
     mimeType: "text/html",
     sizeBytes: 10,
     sha256Hex: "e".repeat(64),
-    s3Key: `${ids.orgA}/${fileId}.html`,
+    s3Key: createUserFileKey({
+      fileId,
+      mimeType: "text/html",
+      organizationId: ids.orgA,
+    }),
     threadId: ids.chatThreadWorkspaceA1,
   });
   const response = await read(fileId);

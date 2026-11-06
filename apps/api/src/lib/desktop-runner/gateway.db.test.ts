@@ -136,6 +136,7 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
@@ -2523,7 +2524,11 @@ describe("chat turns on a computer", () => {
         mimeType: "application/pdf",
         sizeBytes: 10,
         sha256Hex: "a".repeat(64),
-        s3Key: `${ids.orgA}/${id}.pdf`,
+        s3Key: createUserFileKey({
+          fileId: id,
+          mimeType: overrides.mimeType ?? "application/pdf",
+          organizationId: ids.orgA,
+        }),
         threadId,
         ...overrides,
       });

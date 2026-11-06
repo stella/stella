@@ -543,6 +543,18 @@ const LOCAL_RUN_OUTPUT_REFUSED_SINK = failureSink({
   expected: [],
 });
 
+/** What a stored chunk reports about one output file, if that is what it is. */
+const runOutputReportOf = (chunk: PublicStreamChunk) =>
+  chunk.type === EventType.CUSTOM && chunk.name === DESKTOP_RUNNER_OUTPUT_EVENT
+    ? { value: chunk.value as unknown }
+    : null;
+
+/**
+ * How many files one answer names. A computer's sidecar holds itself to less;
+ * this bounds what any desktop can make the stored answer carry.
+ */
+const MAX_ANSWER_RUN_FILES = 50;
+
 /**
  * What one read of a run has told the chat about the files it handed back. Each
  * report restates all of it: a stream processor merges metadata key by key.
@@ -569,7 +581,10 @@ const createRunOutputs = (
   };
   return async (value: unknown): Promise<PublicStreamChunk[]> => {
     const report = v.safeParse(desktopRunnerOutputEventSchema, value);
-    if (!report.success) {
+    if (
+      !report.success ||
+      files.length + notShared.length >= MAX_ANSWER_RUN_FILES
+    ) {
       return [];
     }
     if (report.output.status === "failed") {
@@ -789,12 +804,10 @@ async function* readRunChunks({
             if (!isPublicStreamChunk(message.chunk)) {
               panic("A stored desktop runner chunk no longer folds");
             }
-            if (
-              message.chunk.type === EventType.CUSTOM &&
-              message.chunk.name === DESKTOP_RUNNER_OUTPUT_EVENT
-            ) {
+            const output = runOutputReportOf(message.chunk);
+            if (output !== null) {
               yield* start();
-              yield* await runOutputChunks(message.chunk.value);
+              yield* await runOutputChunks(output.value);
               continue;
             }
             const chunk = asChatChunk(message.chunk, rewrite);

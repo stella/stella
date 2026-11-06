@@ -22,6 +22,7 @@ import type {
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -543,7 +544,9 @@ export const createApprovalHarness = ({
       );
       return await streamChat({
         ...props,
-        localRun: localRunOf?.(props.threadId),
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
         onFinish: async (event) => {
           await beforeTurnSettles?.({
             outcome: event.outcome,
