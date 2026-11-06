@@ -54,6 +54,7 @@ impl LocalHarnesses for FakeHarnesses {
       version: VERSION.to_owned(),
       executable: self.root.join("harness/codex"),
       config_dir: self.root.join("harness-home/codex"),
+      tool_path: vec![self.root.join("harness/bun/1.4.4/package/bin")],
       lease: Box::new(()),
     })
   }
@@ -422,6 +423,15 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
   );
   assert_eq!(start["cacheDir"], place.package_cache().to_str().unwrap());
   assert!(place.package_cache().is_dir());
+  assert_eq!(
+    start["toolPath"],
+    json!([place
+      .fixture
+      .root
+      .join("harness/bun/1.4.4/package/bin")
+      .to_str()
+      .unwrap()])
+  );
   assert_eq!(
     start["skillFolders"],
     json!([{

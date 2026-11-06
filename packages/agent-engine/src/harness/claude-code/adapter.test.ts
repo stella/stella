@@ -101,6 +101,7 @@ const LogEntrySchema = v.looseObject({
     v.object({
       args: v.array(v.string()),
       cwd: v.string(),
+      path: v.optional(v.string()),
       env: v.record(v.string(), v.string()),
     }),
   ),
@@ -204,6 +205,7 @@ const turnInput = (
   continuation: { type: "fresh" },
   cacheDir: CACHE_DIR,
   skillFolders: [],
+  toolPath: [],
   ...overrides,
 });
 
@@ -1161,6 +1163,24 @@ describe("Claude Code approval modes", () => {
       );
       expect(existsSync(unsandboxed.logPath)).toBe(false);
     }
+  });
+});
+
+describe("Claude Code managed tools", () => {
+  const toolDir = path.join(tmpdir(), "stella-managed-bun", "bin");
+
+  test("a managed tool comes first on the CLI's PATH and the inherited PATH stays", async () => {
+    const { startups } = await run("tool_calls", {
+      overrides: { toolPath: [toolDir] },
+    });
+    expect(startups()[0]?.path).toBe(
+      `${toolDir}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    );
+  });
+
+  test("without a managed tool the inherited PATH is untouched", async () => {
+    const { startups } = await run("tool_calls");
+    expect(startups()[0]?.path).toBe(process.env["PATH"]);
   });
 });
 

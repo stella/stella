@@ -30,6 +30,7 @@ import {
 } from "../events";
 import { packageCacheEnvironment } from "../package-cache";
 import { redactingSkillPaths } from "../skill-redaction";
+import { toolPathEnvironment } from "../tool-path";
 import { buildTurnPrompt } from "../transcript-handoff";
 import { settlesWithin } from "../turn-lifecycle";
 import {
@@ -586,7 +587,10 @@ const openSession = async (
     options,
     cwd: input.workspaceDir,
     args: turnArgs(options, input, target, skills),
-    environment: packageCacheEnvironment(input.cacheDir),
+    environment: {
+      ...packageCacheEnvironment(input.cacheDir),
+      ...toolPathEnvironment(options.environment, input.toolPath),
+    },
     handlers: session.handlers,
     // Instructions travel over stdio, never on the command line.
     initialize: { appendSystemPrompt: input.instructions },
