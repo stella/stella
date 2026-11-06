@@ -51,7 +51,7 @@ const binaryTiming = ({
   if (
     (left === "instant" &&
       right === null &&
-      ["+", "-"].includes(`${operator}`)) ||
+      (operator === "+" || operator === "-")) ||
     (left === null && right === "instant" && operator === "+")
   ) {
     return "instant";

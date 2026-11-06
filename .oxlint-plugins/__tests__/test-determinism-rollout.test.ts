@@ -7,28 +7,28 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 const ROOT = path.resolve(import.meta.dir, "../..");
 const RULE = "no-ambient-time-in-tests";
 
-for (const { name, now, changedLines, expected } of [
+for (const { name, rolloutType, changedLines, expected } of [
   {
     name: "unchanged legacy calls",
-    now: "2026-10-31",
+    rolloutType: "changed-lines",
     changedLines: [],
     expected: [],
   },
   {
     name: "a new call before an unchanged call",
-    now: "2026-10-31",
+    rolloutType: "changed-lines",
     changedLines: [1],
     expected: [1],
   },
   {
     name: "a changed line inside a multiline call",
-    now: "2026-10-31",
+    rolloutType: "changed-lines",
     changedLines: [2],
     expected: [1],
   },
   {
-    name: "full enforcement at the deadline",
-    now: "2026-11-06",
+    name: "full enforcement once healing restores the full rollout",
+    rolloutType: "full",
     changedLines: [],
     expected: [3],
   },
@@ -56,7 +56,7 @@ const rule = createTestDeterminismRule({
   createDetector: (context) => createTimeResolver(context).isAmbientRead,
 }, (options) => guardEnforcesLine({
   ...options,
-  now: new Date(${JSON.stringify(now)}),
+  rollouts: [{ id: ${JSON.stringify(RULE)}, type: ${JSON.stringify(rolloutType)} }],
   changedLines: new Map([[
     path.isAbsolute(options.file) ? repoRelativePath(${JSON.stringify(ROOT)}, options.file) : options.file,
     new Set(${JSON.stringify(changedLines)}),
