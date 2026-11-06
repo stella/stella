@@ -2425,7 +2425,6 @@ const caseLawSearchResult = ({
           keywords: null,
           headnote: null,
         }),
-    sourceUrl: hit.sourceUrl,
   };
 };
 

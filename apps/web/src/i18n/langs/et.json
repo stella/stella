@@ -1719,6 +1719,10 @@
       "secretAnswer": "Vastus on peidetud",
       "secretPlaceholder": "Teie vastus jääb peidetuks"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# vestlus ootab teid} other {# vestlust ootab teid}}",
+      "working": "{count, plural, one {# vestlus on töös} other {# vestlust on töös}}"
+    },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# veel} other {+# veel}}",

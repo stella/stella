@@ -865,9 +865,6 @@
                 "enum": ["all_terms", "some_terms"],
                 "type": "string"
               },
-              "sourceUrl": {
-                "type": ["string", "null"]
-              },
               "snippet": {
                 "type": ["string", "null"]
               },
@@ -917,7 +914,6 @@
               "matchingPassages",
               "textAvailability",
               "match",
-              "sourceUrl",
               "keywords",
               "headnote"
             ],
@@ -2960,9 +2956,6 @@
               "snippet": {
                 "type": ["string", "null"]
               },
-              "sourceUrl": {
-                "type": ["string", "null"]
-              },
               "status": {
                 "type": "string"
               },
@@ -2984,7 +2977,6 @@
               "resourceName",
               "score",
               "snippet",
-              "sourceUrl",
               "status",
               "title"
             ],
@@ -3111,9 +3103,6 @@
             "resourceName": {
               "type": "string"
             },
-            "sourceUrl": {
-              "type": ["string", "null"]
-            },
             "status": {
               "type": "string"
             },
@@ -3190,7 +3179,6 @@
             "eli",
             "language",
             "resourceName",
-            "sourceUrl",
             "status",
             "text",
             "title",

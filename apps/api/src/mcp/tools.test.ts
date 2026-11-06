@@ -3003,7 +3003,6 @@ describe("OpenAI-compatible MCP tools", () => {
             matchingPassages: 4,
             match: "all_terms",
             snippet: 'Relevant holding on "smlouva"',
-            sourceUrl: "https://example.test/decision",
           },
         ],
         total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -3043,6 +3042,51 @@ describe("OpenAI-compatible MCP tools", () => {
       });
     },
   );
+
+  test("search_case_law carries a publisher link only through the link rule", async () => {
+    const hitWith = (sourceUrl: string | null) => ({
+      ...createCaseLawHit(DECISION_ID, "holding"),
+      sourceUrl,
+    });
+    const linksOf = async (sourceUrl: string | null) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [hitWith(sourceUrl)],
+        nextCursor: null,
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "smlouva",
+        warnings: [],
+      });
+      const payload = parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["smlouva"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      );
+      return v
+        .parse(
+          v.object({ results: v.array(v.record(v.string(), v.unknown())) }),
+          payload,
+        )
+        .results.at(0);
+    };
+
+    const http = await linksOf("https://example.test/decision");
+    expect(http).toHaveProperty("source_url", "https://example.test/decision");
+    expect(http).not.toHaveProperty("sourceUrl");
+
+    // A stored value the rule does not accept reaches the caller nowhere.
+    const other = await linksOf("ftp://example.test/decision");
+    expect(other).not.toHaveProperty("source_url");
+    expect(other).not.toHaveProperty("sourceUrl");
+    expect(JSON.stringify(other)).not.toContain("ftp://");
+
+    const none = await linksOf(null);
+    expect(none).not.toHaveProperty("source_url");
+    expect(none).not.toHaveProperty("sourceUrl");
+  });
 
   test("search_case_law withholds a result's text when its source licence keeps it from AI use", async () => {
     const hit = {
@@ -3329,7 +3373,6 @@ describe("OpenAI-compatible MCP tools", () => {
           matchingPassages: 1,
           match: "all_terms",
           snippet: "Relevant holding",
-          sourceUrl: "https://example.test/decision",
         },
       ],
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
@@ -4833,7 +4876,6 @@ describe("OpenAI-compatible MCP tools", () => {
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             score: 1.5,
             snippet: "nahrada skody",
-            sourceUrl: "https://example.test/89-2012",
             status: "in_force",
             title: STATUTE_TITLE,
           },
@@ -4985,7 +5027,6 @@ describe("OpenAI-compatible MCP tools", () => {
         ],
         outlineTruncated: false,
         resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
-        sourceUrl: "https://example.test/89-2012",
         status: "in_force",
         text: expectedText.slice(0, 8000),
         title: STATUTE_TITLE,
