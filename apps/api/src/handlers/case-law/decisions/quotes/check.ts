@@ -87,6 +87,7 @@ export const createVerifyQuotationHandler = ({
             sink: QUOTE_DECISION_UNREADABLE,
             cause: new HandlerError({
               status: 503,
+              code: "QUOTE_DECISION_UNREADABLE",
               message: `Decision read answered ${readStatus?.code ?? "without a status"}`,
             }),
           },
