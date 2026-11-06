@@ -29,6 +29,8 @@ import {
 } from "@/api/mcp/verify-quote-tools";
 
 const config = {
+  description:
+    "Check whether a quotation occurs word for word in one stored decision. Answers with its exact occurrences, the closest passage and differences for an altered quote, or that the text cannot be verified.",
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "verify_quote" },
