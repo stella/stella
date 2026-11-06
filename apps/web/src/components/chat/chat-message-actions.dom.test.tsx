@@ -41,51 +41,61 @@ afterAll(async () => {
 
 const ANSWER = "The lease ends on 31 March.";
 
-const renderAnswer = () => {
+const answerMessage = {
+  id: "00000000-0000-4000-8000-000000000001",
+  role: "assistant",
+  parts: [{ type: "text", content: ANSWER }],
+} satisfies ChatUIMessage;
+
+const threadWith = (
+  queryClient: InstanceType<typeof QueryClient>,
+  message: ChatUIMessage,
+  isGenerating = false,
+) => (
+  <ChatThreadTestRouter>
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatMattersContext
+          value={{ createDocumentMattersView: { type: "empty" } }}
+        >
+          <ChatApprovalContext value={testChatApprovalContextValue}>
+            <ChatEditorProvider>
+              <ChatThreadMessages
+                activitySession={{
+                  reportedUnknownActivityTypes: new Set<string>(),
+                }}
+                approvalPendingMessageId={null}
+                isGenerating={isGenerating}
+                messages={[message]}
+                onAskUserSubmit={() => {}}
+                onCreateDocumentResolve={() => {}}
+                onOpenCreatedDocument={() => {}}
+                onResend={() => {}}
+                streamdownComponents={{
+                  a: ({ children, ...props }) => <a {...props}>{children}</a>,
+                }}
+                threadRef={{
+                  scope: "global",
+                  threadId: toSafeId<"chatThread">(
+                    "00000000-0000-4000-8000-000000000002",
+                  ),
+                }}
+              />
+            </ChatEditorProvider>
+          </ChatApprovalContext>
+        </ChatMattersContext>
+      </IntlProvider>
+    </QueryClientProvider>
+  </ChatThreadTestRouter>
+);
+
+const newQueryClient = () => {
   const queryClient = new QueryClient();
   queryClients.push(queryClient);
-  const message = {
-    id: "00000000-0000-4000-8000-000000000001",
-    role: "assistant",
-    parts: [{ type: "text", content: ANSWER }],
-  } satisfies ChatUIMessage;
-  return render(
-    <ChatThreadTestRouter>
-      <QueryClientProvider client={queryClient}>
-        <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <ChatMattersContext
-            value={{ createDocumentMattersView: { type: "empty" } }}
-          >
-            <ChatApprovalContext value={testChatApprovalContextValue}>
-              <ChatEditorProvider>
-                <ChatThreadMessages
-                  activitySession={{
-                    reportedUnknownActivityTypes: new Set<string>(),
-                  }}
-                  approvalPendingMessageId={null}
-                  messages={[message]}
-                  onAskUserSubmit={() => {}}
-                  onCreateDocumentResolve={() => {}}
-                  onOpenCreatedDocument={() => {}}
-                  onResend={() => {}}
-                  streamdownComponents={{
-                    a: ({ children, ...props }) => <a {...props}>{children}</a>,
-                  }}
-                  threadRef={{
-                    scope: "global",
-                    threadId: toSafeId<"chatThread">(
-                      "00000000-0000-4000-8000-000000000002",
-                    ),
-                  }}
-                />
-              </ChatEditorProvider>
-            </ChatApprovalContext>
-          </ChatMattersContext>
-        </IntlProvider>
-      </QueryClientProvider>
-    </ChatThreadTestRouter>,
-  );
+  return queryClient;
 };
+
+const renderAnswer = () => render(threadWith(newQueryClient(), answerMessage));
 
 /** The items of the open popup with this slot, by their visible text. */
 const popupItems = (slot: string) => {
@@ -196,4 +206,66 @@ test("right-clicking a gap between the answer's parts opens its actions", async 
       messages.common.export.title,
     ]);
   });
+});
+
+const QUESTION_INPUT = {
+  analysis: "The answer depends on the side the user represents.",
+  questions: [{ question: "Which side?", reason: "It decides the draft." }],
+};
+
+const questionMessage = {
+  id: "00000000-0000-4000-8000-000000000003",
+  role: "assistant",
+  parts: [
+    {
+      type: "tool-call",
+      name: "ask-user",
+      id: "ask",
+      state: "input-complete",
+      arguments: JSON.stringify(QUESTION_INPUT),
+      input: QUESTION_INPUT,
+    },
+  ],
+} satisfies ChatUIMessage;
+
+test("an answer being typed survives the generation ending", async () => {
+  const queryClient = newQueryClient();
+  const view = render(threadWith(queryClient, questionMessage, true));
+  const input = await waitFor(() =>
+    view.getByPlaceholderText(messages.chat.askUser.placeholder),
+  );
+  fireEvent.change(input, { target: { value: "Buyer" } });
+
+  // The answer becomes forkable here, which gives it its actions.
+  view.rerender(threadWith(queryClient, questionMessage, false));
+
+  const after = view.getByPlaceholderText(messages.chat.askUser.placeholder);
+  expect(after).toBe(input);
+  expect(after).toHaveProperty("value", "Buyer");
+});
+
+test("the answer keeps its elements when its actions arrive", async () => {
+  const queryClient = newQueryClient();
+  const view = render(threadWith(queryClient, answerMessage, true));
+  const body = await waitFor(() => view.getByText(ANSWER));
+
+  view.rerender(threadWith(queryClient, answerMessage, false));
+
+  expect(view.getByText(ANSWER)).toBe(body);
+});
+
+test("a generating answer leaves right-click to the browser", async () => {
+  const view = render(threadWith(newQueryClient(), answerMessage, true));
+  const body = await waitFor(() => view.getByText(ANSWER));
+
+  const event = new MouseEvent("contextmenu", {
+    bubbles: true,
+    button: 2,
+    cancelable: true,
+  });
+  act(() => {
+    body.dispatchEvent(event);
+  });
+
+  expect(event.defaultPrevented).toBe(false);
 });
