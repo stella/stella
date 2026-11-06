@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   link,
@@ -36,7 +37,7 @@ const recording = () => {
   const uploaded: Uploaded[] = [];
   const upload: UploadOutput = async (file) => {
     uploaded.push({ name: file.name, text: await file.text() });
-    return FILE_ID;
+    return Result.ok(FILE_ID);
   };
   return { uploaded, upload };
 };
@@ -192,7 +193,7 @@ describe("sharing what a turn wrote to its outputs folder", () => {
       uploaded.push(file.name);
       await rm(report);
       await symlink(secret, report);
-      return FILE_ID;
+      return Result.ok(FILE_ID);
     };
     const reports = await collect(
       shareOutputs({ workspaceDir: workspace, before, upload, signal }),
@@ -217,7 +218,7 @@ describe("sharing what a turn wrote to its outputs folder", () => {
       uploaded.push(file.name);
       await rm(drafts, { recursive: true });
       await symlink(outside, drafts);
-      return FILE_ID;
+      return Result.ok(FILE_ID);
     };
     const reports = await collect(
       shareOutputs({ workspaceDir: workspace, before, upload, signal }),
@@ -287,10 +288,11 @@ describe("sharing what a turn wrote to its outputs folder", () => {
       if (file.name === "a.txt") {
         throw new Error("the line dropped");
       }
-      if (file.name === "b.txt") {
-        throw new OutputUploadFailed({ message: "refused" });
-      }
-      return await Promise.resolve(FILE_ID);
+      return await Promise.resolve(
+        file.name === "b.txt"
+          ? Result.err(new OutputUploadFailed({ message: "refused" }))
+          : Result.ok(FILE_ID),
+      );
     };
     const reports = await collect(
       shareOutputs({ workspaceDir: workspace, before, upload, signal }),
@@ -311,7 +313,7 @@ describe("sharing what a turn wrote to its outputs folder", () => {
     const upload: UploadOutput = async (file) => {
       uploaded.push(file.name);
       stopped.abort();
-      return await Promise.resolve(FILE_ID);
+      return await Promise.resolve(Result.ok(FILE_ID));
     };
     const reports = await collect(
       shareOutputs({
@@ -383,7 +385,7 @@ describe("posting a run's file to the API", () => {
       token: () => token,
     });
     token = "refreshed";
-    expect(await upload(file(), never)).toBe(FILE_ID);
+    expect((await upload(file(), never)).unwrap()).toBe(FILE_ID);
     expect(seen).toEqual([
       {
         url: desktopRunnerOutputPath(RUN_ID),
@@ -413,11 +415,7 @@ describe("posting a run's file to the API", () => {
       runId: RUN_ID,
       token: () => "token",
     });
-    const outcome = await upload(file(), never).then(
-      () => "answered",
-      () => "refused",
-    );
-    expect(outcome).toBe("refused");
+    expect(Result.isError(await upload(file(), never))).toBe(true);
     expect(elsewhere).toBe(0);
   });
 
@@ -436,11 +434,7 @@ describe("posting a run's file to the API", () => {
         token: () => "token",
       });
       // await-in-loop: each origin answers its own request.
-      const failure = await upload(file(), never).then(
-        () => null,
-        (error: unknown) => error,
-      );
-      expect(OutputUploadFailed.is(failure)).toBe(true);
+      expect(Result.isError(await upload(file(), never))).toBe(true);
     }
   });
 
@@ -455,11 +449,7 @@ describe("posting a run's file to the API", () => {
       runId: RUN_ID,
       token: () => null,
     });
-    const failure = await upload(file(), never).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(OutputUploadFailed.is(failure)).toBe(true);
+    expect(Result.isError(await upload(file(), never))).toBe(true);
     expect(requests).toBe(0);
   });
 });

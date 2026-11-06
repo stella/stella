@@ -150,10 +150,14 @@ const readOutput = async (workspaceDir: string, entryPath: string) => {
 
 export class OutputUploadFailed extends TaggedError("OutputUploadFailed")<{
   message: string;
+  cause?: unknown;
 }> {}
 
 /** Sends one file to the API and answers the id it stored it under. */
-export type UploadOutput = (file: File, signal: AbortSignal) => Promise<string>;
+export type UploadOutput = (
+  file: File,
+  signal: AbortSignal,
+) => Promise<Result<string, OutputUploadFailed>>;
 
 const fileNameOf = (entryPath: string) =>
   path.posix.basename(entryPath).slice(0, MAX_FILE_NAME_CHARS);
@@ -174,7 +178,10 @@ const shareOne = async (
       AbortSignal.any([signal, AbortSignal.timeout(UPLOAD_TIMEOUT_MS)]),
     );
   });
-  return Result.isOk(shared) ? shared.value : null;
+  if (Result.isError(shared) || shared.value === null) {
+    return null;
+  }
+  return Result.isOk(shared.value) ? shared.value.value : null;
 };
 
 type ShareOutputsOptions = {
@@ -245,35 +252,53 @@ export const runOutputUploader =
   async (file, signal) => {
     const bearer = token();
     if (bearer === null) {
-      throw new OutputUploadFailed({ message: "The run holds no token." });
+      return Result.err(
+        new OutputUploadFailed({ message: "The run holds no token." }),
+      );
     }
     const body = new FormData();
     body.set("file", file);
-    const response = await fetch(
-      new URL(desktopRunnerOutputPath(runId), apiOrigin),
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${bearer}` },
-        body,
-        // A redirect would move the token to another URL.
-        redirect: "error",
-        signal,
-      },
-    );
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new OutputUploadFailed({
-        message: `The API answered ${String(response.status)}.`,
-      });
+    const unreachable = (cause: unknown) =>
+      new OutputUploadFailed({ message: "The API did not answer.", cause });
+    const response = await Result.tryPromise({
+      try: async () =>
+        await fetch(new URL(desktopRunnerOutputPath(runId), apiOrigin), {
+          method: "POST",
+          headers: { authorization: `Bearer ${bearer}` },
+          body,
+          // A redirect would move the token to another URL.
+          redirect: "error",
+          signal,
+        }),
+      catch: unreachable,
+    });
+    if (Result.isError(response)) {
+      return response;
     }
-    const answer = v.safeParse(
+    if (!response.value.ok) {
+      await response.value.body?.cancel();
+      return Result.err(
+        new OutputUploadFailed({
+          message: `The API answered ${String(response.value.status)}.`,
+        }),
+      );
+    }
+    const answer = await Result.tryPromise({
+      try: async (): Promise<unknown> => await response.value.json(),
+      catch: unreachable,
+    });
+    if (Result.isError(answer)) {
+      return answer;
+    }
+    const uploaded = v.safeParse(
       desktopRunnerOutputUploadedSchema,
-      await response.json(),
+      answer.value,
     );
-    if (!answer.success) {
-      throw new OutputUploadFailed({ message: "The API named no file." });
-    }
-    return answer.output.fileId;
+    return uploaded.success
+      ? Result.ok(uploaded.output.fileId)
+      : Result.err(
+          new OutputUploadFailed({ message: "The API named no file." }),
+        );
   };
 
 /** A report as the chunk it travels in on the run's stream. */
