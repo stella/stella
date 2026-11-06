@@ -39,10 +39,12 @@ export const VISIBLE_WORKSPACE_STATUSES = WORKSPACE_STATUSES.filter(
   isVisibleWorkspaceStatus,
 );
 
+// Both predicates are type guards, so a caller's `workspace?.status` check
+// still narrows `workspace` to present.
 /** Only an active workspace accepts new writes; an absent status accepts none. */
 export const workspaceAcceptsWrites = (
   status: WorkspaceStatus | null | undefined,
-): boolean => {
+): status is typeof WORKSPACE_STATUS.active => {
   switch (status) {
     case WORKSPACE_STATUS.active:
       return true;
@@ -60,5 +62,5 @@ export const workspaceAcceptsWrites = (
 /** Active and archived workspaces are readable; a deleting or absent one is not. */
 export const workspaceIsVisible = (
   status: WorkspaceStatus | null | undefined,
-): boolean =>
+): status is VisibleWorkspaceStatus =>
   status !== null && status !== undefined && isVisibleWorkspaceStatus(status);
