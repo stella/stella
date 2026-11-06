@@ -260,6 +260,8 @@ const startInstance = async (
     instanceId,
     authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
     mintRunToken,
+    signAttachmentLink: async ({ s3Key }) =>
+      await Promise.resolve(`https://files.example.test/${s3Key}?signed`),
     now,
     random: () => 0.5,
     timing: { ...TIMING, ...overrides.timing },
@@ -565,6 +567,7 @@ const startInput = (
   harnessSessionId: null,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
+  attachments: [],
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
 });
@@ -768,6 +771,48 @@ describe("run messages", () => {
       reason: DESKTOP_RUNNER_CLOSE.sequenceGap.reason,
     });
     expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1, 2]);
+  });
+
+  test("an attached file's link is signed on send and never stored", async () => {
+    const instance = await startInstance("api-attachments", sharedDoorbell);
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(instance, desktopId);
+    await desktop.hello();
+    const fileId = "019a0000-0000-7000-8000-000000000001";
+    const path = `attachments/${fileId}/a.pdf`;
+    const outcome = (
+      await control.startRun({
+        ...startInput(desktopId),
+        attachments: [
+          { path, fileId, fileName: "a.pdf", s3Key: "org/file.pdf" },
+        ],
+      })
+    ).unwrap();
+    if (outcome.type !== "assigned") {
+      panic(`the run was not assigned: ${outcome.type}`);
+    }
+    const start = await desktop.receive("run.start", ofRun(outcome.runId));
+    expect(start).toMatchObject({
+      attachments: [
+        { path, url: "https://files.example.test/org/file.pdf?signed" },
+      ],
+    });
+    const stored = JSON.stringify(
+      await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, outcome.runId)),
+    );
+    expect(stored).toContain("org/file.pdf");
+    expect(stored).not.toContain("?signed");
+    await desktop.close();
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, outcome.runId));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 
   test("a chunk that is not a valid AG-UI event is refused unstored", async () => {

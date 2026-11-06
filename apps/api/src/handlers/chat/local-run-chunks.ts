@@ -40,6 +40,7 @@ import {
 import type {
   DesktopRunnerControl,
   DesktopRunnerControlError,
+  LocalRunAttachment,
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
@@ -126,6 +127,10 @@ type LocalRunStreamInput = {
 /** A chat turn bound to a computer: started on a new turn, continued on a resume. */
 export type LocalChatRun = {
   readonly harness: ChatLocalRunHarness;
+  /** The same run, copying these files into its folder before it starts. */
+  readonly withAttachments: (
+    attachments: readonly LocalRunAttachment[],
+  ) => LocalChatRun;
   readonly stream: (
     input: LocalRunStreamInput,
   ) => AsyncIterable<PublicStreamChunk>;
@@ -789,6 +794,7 @@ const unavailableHarnessFailure = (
 };
 
 type StartOptions = {
+  attachments: readonly LocalRunAttachment[];
   context: LocalRunContext;
   destination: LocalRunDestination;
   input: LocalRunStreamInput;
@@ -800,6 +806,7 @@ type StartOptions = {
  * @yields Chunks of the chat run, ending with its terminal one.
  */
 async function* startLocalRun({
+  attachments,
   context,
   destination,
   input,
@@ -839,6 +846,7 @@ async function* startLocalRun({
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
       messages: messages.map((message) => ({ ...message })),
+      attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
@@ -1110,17 +1118,24 @@ export type LocalRunPlan =
   | { type: "resume"; harness: ChatLocalRunHarness };
 
 /** A local chat run for one turn. */
-export const createLocalChatRun = (
+const localChatRun = (
   context: LocalRunContext,
   plan: LocalRunPlan,
+  attachments: readonly LocalRunAttachment[],
 ): LocalChatRun => ({
   harness: plan.type === "start" ? plan.destination.harness : plan.harness,
+  withAttachments: (next) => localChatRun(context, plan, next),
   stream: (input) => {
     const { resume } = input;
     switch (plan.type) {
       case "start":
         return resume === undefined || resume.length === 0
-          ? startLocalRun({ context, destination: plan.destination, input })
+          ? startLocalRun({
+              attachments,
+              context,
+              destination: plan.destination,
+              input,
+            })
           : panic("A new local turn was handed approvals to resume");
       case "resume":
         return resume !== undefined && resume.length > 0
@@ -1132,3 +1147,8 @@ export const createLocalChatRun = (
     }
   },
 });
+
+export const createLocalChatRun = (
+  context: LocalRunContext,
+  plan: LocalRunPlan,
+): LocalChatRun => localChatRun(context, plan, []);

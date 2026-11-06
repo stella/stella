@@ -998,6 +998,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/attachments.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Copies a chat's attached file into a local run's folder from the signed storage link the API issued for that run.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/holder-server.ts",
     class: "package-owned-client",
     reason:

@@ -29,6 +29,9 @@ import {
   DESKTOP_RUNNER_RUN_OUTCOMES,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   DESKTOP_RUNNER_TIMING,
+  desktopRunnerAttachmentPath,
+  desktopRunnerAttachmentPathSchema,
+  desktopRunnerAttachmentSchema,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
@@ -234,6 +237,58 @@ describe("desktop runner fixtures", () => {
     const parsed = v.safeParse(desktopRunnerHarnessReportSchema, report);
     expect(parsed.success).toBe(true);
     expect(parsed.output).toMatchObject({ approvalModes: ["ask"] });
+  });
+
+  test("an attached file's path stays in its own folder", () => {
+    const fileId = "019a0000-0000-7000-8000-000000000001";
+    const accepted = desktopRunnerAttachmentPath(fileId, "smlouva o dílo.pdf");
+    expect(v.is(desktopRunnerAttachmentPathSchema, accepted)).toBe(true);
+    for (const path of [
+      `attachments/${fileId}/../../secrets.txt`,
+      `attachments/${fileId}/..`,
+      `attachments/${fileId}/.`,
+      `attachments/${fileId}/a/b.pdf`,
+      `attachments/${fileId}/a\\b.pdf`,
+      `attachments/not-a-file-id/a.pdf`,
+      `/attachments/${fileId}/a.pdf`,
+      `other/${fileId}/a.pdf`,
+    ]) {
+      expect({
+        path,
+        ok: v.is(desktopRunnerAttachmentPathSchema, path),
+      }).toEqual({ path, ok: false });
+    }
+  });
+
+  test("a long name keeps its extension and fits every filesystem", () => {
+    const fileId = "019a0000-0000-7000-8000-000000000001";
+    const bounded = desktopRunnerAttachmentPath(
+      fileId,
+      `${"š".repeat(300)}.pdf`,
+    );
+    expect(v.is(desktopRunnerAttachmentPathSchema, bounded)).toBe(true);
+    const name = bounded.split("/").at(-1) ?? "";
+    expect(Array.from(name)).toHaveLength(120);
+    expect(name.endsWith(".pdf")).toBe(true);
+  });
+
+  test("an attached file is only copied over https", () => {
+    const path = desktopRunnerAttachmentPath(
+      "019a0000-0000-7000-8000-000000000001",
+      "a.pdf",
+    );
+    expect(
+      v.is(desktopRunnerAttachmentSchema, {
+        path,
+        url: "https://files.example/a",
+      }),
+    ).toBe(true);
+    expect(
+      v.is(desktopRunnerAttachmentSchema, {
+        path,
+        url: "http://files.example/a",
+      }),
+    ).toBe(false);
   });
 
   test("unknown fields are dropped, chunk fields are kept", () => {
