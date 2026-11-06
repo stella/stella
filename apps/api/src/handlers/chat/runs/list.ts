@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_ACTIVE_RUN_STATE } from "@stll/api-contract/chat";
@@ -11,7 +11,6 @@ import type {
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { chatThreads, chatTurns, workspaces } from "@/api/db/schema";
-import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
@@ -179,10 +178,12 @@ export const createListActiveChatRuns = ({
 
       const conditions: SQL[] = [
         // Served by the partial chat_turns_org_user_active_idx: the read
-        // never walks the member's settled history.
+        // never walks the member's settled history. The statuses stay literal
+        // and match the index predicate, because a generic plan cannot prove
+        // bound parameters imply it.
         eq(chatTurns.organizationId, session.activeOrganizationId),
         eq(chatTurns.userId, user.id),
-        inArray(chatTurns.status, ACTIVE_CHAT_TURN_STATUSES),
+        sql`${chatTurns.status} IN ('accepted', 'running', 'awaiting-user')`,
         eq(chatThreads.organizationId, session.activeOrganizationId),
         eq(chatThreads.userId, user.id),
         // A matter being deleted is sealed, as in the thread list.

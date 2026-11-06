@@ -34,6 +34,7 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
+import deleteThread from "@/api/handlers/chat/threads/delete";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
@@ -284,6 +285,30 @@ const readStatus = async (turnId: SafeId<"chatTurn">) =>
     })
   )?.status;
 
+const deleteThroughRoute = async (
+  member: Member,
+  threadId: SafeId<"chatThread">,
+) =>
+  await deleteThread.handler(
+    asTestRaw<Parameters<typeof deleteThread.handler>[0]>({
+      getWorkspaceAccess: async () => ({
+        id: member.workspaceId,
+        status: "active",
+      }),
+      memberRole: sessionMemberRole("owner"),
+      params: { threadId },
+      query: { workspaceId: member.workspaceId },
+      request: new Request(`http://localhost/v1/chat/threads/${threadId}`, {
+        method: "DELETE",
+      }),
+      route: "/v1/chat/threads/:threadId" satisfies ApiRoutePath,
+      safeDb: member.safeDb,
+      session: { activeOrganizationId: member.organizationId },
+      set: { headers: {}, status: 200 },
+      user: { id: member.userId },
+    }),
+  );
+
 const stopThroughRoute = async (
   member: Member,
   threadId: SafeId<"chatThread">,
@@ -427,6 +452,17 @@ describe("chat run status pings", () => {
 
     await settle(me, threadId, execution, USER_STOP_OUTCOME);
     expect(await readStatus(execution.id)).toBe("cancelled");
+    expect(takePings()).toEqual([pingFor(me)]);
+  });
+
+  test("deleting a thread pings its owner, because its open turns go with it", async () => {
+    const threadId = await seedThread(me);
+    const { acceptance } = await accept(me, threadId);
+    takePings();
+
+    await deleteThroughRoute(me, threadId);
+
+    expect(await readStatus(acceptance.id)).toBeUndefined();
     expect(takePings()).toEqual([pingFor(me)]);
   });
 

@@ -140,6 +140,18 @@ test("a chat run change refreshes the active runs only", async () => {
   expect(view.isStale(view.contactsList)).toBe(false);
 });
 
+test("the first open re-reads everything: events before it were never delivered", async () => {
+  const view = mount();
+  await act(async () => {
+    FakeEventSource.opened.at(0)?.open();
+  });
+
+  expect(view.isStale(view.activeRuns)).toBe(true);
+  expect(view.isStale(view.notifications)).toBe(true);
+  expect(view.isStale(view.contactsList)).toBe(true);
+  expect(view.isStale(view.otherFirmContacts)).toBe(false);
+});
+
 test("a reopen after a drop re-reads everything the stream keeps fresh", async () => {
   const view = mount();
   const stream = FakeEventSource.opened.at(0);
