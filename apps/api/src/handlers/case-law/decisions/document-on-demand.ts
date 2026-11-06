@@ -244,17 +244,14 @@ export const withDocumentFetchBudget = async <T>(
   budget: AbortSignal,
   run: () => Promise<T>,
 ): Promise<T> => {
-  const outcome = await Result.tryPromise({
-    try: run,
-    catch: (error: unknown) => error,
-  });
-  if (Result.isOk(outcome)) {
-    return outcome.value;
+  try {
+    return await run();
+  } catch (error: unknown) {
+    if (budget.aborted && typeof error === "object" && error !== null) {
+      classifyFailure(error, "upstream_unavailable");
+    }
+    throw error;
   }
-  const { error } = outcome;
-  throw budget.aborted && typeof error === "object" && error !== null
-    ? classifyFailure(error, "upstream_unavailable")
-    : error;
 };
 
 type FetchDeferredDocumentOptions = {
