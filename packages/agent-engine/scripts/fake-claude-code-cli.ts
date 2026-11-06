@@ -224,6 +224,8 @@ export const FAKE_ESCAPE_COMMAND = "touch ~/.config/example-tool/settings.json";
 export const FAKE_SANDBOX_REFUSAL =
   "Sandbox required but unavailable: sandbox-exec is missing. Set sandbox.failIfUnavailable=false to allow unsandboxed execution.";
 
+const FAKE_SKILL_PATH = process.env["FAKE_SKILL_PATH"] ?? "/skills/none";
+
 const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
@@ -378,6 +380,25 @@ const FAKE_SCENARIOS = {
     assistant("msg-3", [{ type: "text", text: "Found two leases." }]),
     stream({ type: "content_block_stop", index: 0 }),
     stream({ type: "message_stop" }),
+    result(),
+  ],
+  /** A read and a command on the skill folder `FAKE_SKILL_PATH` names. */
+  reads_skill: [
+    ...freshTurn(),
+    assistant("msg-1", [
+      toolUse("call-read", "Read", {
+        file_path: `${FAKE_SKILL_PATH}/SKILL.md`,
+      }),
+    ]),
+    toolResult("call-read", "Licensed commentary."),
+    assistant("msg-2", [
+      toolUse("call-cmd", "Bash", {
+        command: `bun ${FAKE_SKILL_PATH}/scripts/run.ts`,
+      }),
+    ]),
+    toolResult("call-cmd", "Licensed output."),
+    assistant("msg-3", [toolUse("call-ls", "Bash", { command: "ls" })]),
+    toolResult("call-ls", "notes.md\n"),
     result(),
   ],
   approvals: [

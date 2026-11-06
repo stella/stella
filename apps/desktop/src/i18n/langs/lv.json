@@ -763,5 +763,30 @@
         "storage": "Neizdevās saglabāt {name} šajā datorā. Pārbaudiet, vai diskā ir brīva vieta."
       }
     }
+  },
+  "localSkills": {
+    "title": "Lokālās prasmes",
+    "description": "Prasmju mapes šajā datorā. Šī datora lokālās izpildes var tās izmantot, un nekas no to satura netiek augšupielādēts.",
+    "add": "Pievienot mapi",
+    "remove": "Noņemt",
+    "removeFolder": "Noņemt {path}",
+    "unusable": "Nav izmantojama",
+    "notice": {
+      "action_failed": "Neizdevās. Mēģiniet vēlreiz.",
+      "too_many": "Šajā datorā jau ir tik daudz prasmju mapju, cik var izmantot. Vispirms noņemiet kādu.",
+      "already_listed": "Šī mape jau ir sarakstā.",
+      "missing": "Šīs mapes vairs nav.",
+      "not_a_folder": "Tā vairs nav mape.",
+      "no_skill_file": "Šajā mapē nav SKILL.md.",
+      "skill_file_not_regular": "SKILL.md jābūt parastam failam, nevis saitei.",
+      "skill_file_too_large": "SKILL.md ir pārāk liels, lai to nolasītu.",
+      "unreadable": "Šo mapi neizdevās nolasīt.",
+      "no_name": "SKILL.md galvenē nav nosaukuma.",
+      "invalid_name": "Nosaukumā SKILL.md drīkst būt tikai burti, cipari, punkti, defises un pasvītras, un tam jāsākas ar burtu vai ciparu.",
+      "duplicate_name": "Citā sarakstā esošā mapē ir prasme ar šādu nosaukumu.",
+      "runs_can_write": "Lokālās izpildes var rakstīt šajā mapē, tāpēc tajā nevar būt prasme.",
+      "network_folder": "Šī mape atrodas tīkla koplietojumā. Prasmēm jāatrodas šī datora diskā.",
+      "path_changed": "Mainījusies augstāka līmeņa mape. Noņemiet šo mapi un pievienojiet to vēlreiz."
+    }
   }
 }

@@ -65,6 +65,8 @@ mod http_client;
 mod i18n;
 mod idle_time;
 mod keychain;
+mod local_skill_folder_commands;
+mod local_skill_folders;
 mod local_store;
 mod local_window;
 mod logging;
@@ -186,6 +188,7 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_global_shortcut::Builder::new().build())
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_opener::init())

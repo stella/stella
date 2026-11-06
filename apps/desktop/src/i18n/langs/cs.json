@@ -763,5 +763,30 @@
         "storage": "{name} se nepodařilo uložit do tohoto počítače. Zkontrolujte, zda je na disku volné místo."
       }
     }
+  },
+  "localSkills": {
+    "title": "Místní dovednosti",
+    "description": "Složky s dovednostmi v tomto počítači. Místní běhy na tomto počítači je mohou používat a nic z nich se nenahrává.",
+    "add": "Přidat složku",
+    "remove": "Odebrat",
+    "removeFolder": "Odebrat {path}",
+    "unusable": "Nelze použít",
+    "notice": {
+      "action_failed": "Nepodařilo se to. Zkuste to znovu.",
+      "too_many": "Tento počítač už má tolik složek s dovednostmi, kolik může použít. Nejdřív některou odeberte.",
+      "already_listed": "Tato složka už je v seznamu.",
+      "missing": "Tato složka už neexistuje.",
+      "not_a_folder": "Toto už není složka.",
+      "no_skill_file": "V této složce není SKILL.md.",
+      "skill_file_not_regular": "SKILL.md musí být běžný soubor, ne odkaz.",
+      "skill_file_too_large": "SKILL.md je příliš velký na přečtení.",
+      "unreadable": "Tuto složku se nepodařilo přečíst.",
+      "no_name": "Hlavička SKILL.md neobsahuje název.",
+      "invalid_name": "Název v SKILL.md smí obsahovat jen písmena, číslice, tečky, pomlčky a podtržítka a musí začínat písmenem nebo číslicí.",
+      "duplicate_name": "Dovednost s tímto názvem už má jiná složka v seznamu.",
+      "runs_can_write": "Do této složky mohou místní běhy zapisovat, proto v ní dovednost být nemůže.",
+      "network_folder": "Tato složka je na síťovém úložišti. Dovednosti musí být na vlastním disku tohoto počítače.",
+      "path_changed": "Některá nadřazená složka se změnila. Odeberte ji a přidejte znovu."
+    }
   }
 }
