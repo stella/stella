@@ -115,7 +115,9 @@ export const flowRuns = p.pgTable(
       )})`,
     ),
     // A pending run's `started_at` is still written at enqueue by older
-    // writers, so only the states after it constrain the column.
+    // writers, so only the states after it constrain the column. Terminal
+    // states leave `error` open: settlement races fixed in #4596 left a
+    // completed or cancelled run holding the error of a failure it overwrote.
     stateFieldsCheck({
       name: "flow_runs_state_fields_check",
       state: table.status,
@@ -129,9 +131,9 @@ export const flowRuns = p.pgTable(
           required: [table.startedAt],
           absent: [table.error, table.finishedAt],
         },
-        completed: { required: [table.finishedAt], absent: [table.error] },
+        completed: { required: [table.finishedAt] },
         failed: { required: [table.error, table.finishedAt] },
-        cancelled: { required: [table.finishedAt], absent: [table.error] },
+        cancelled: { required: [table.finishedAt] },
       },
     }),
     p
@@ -191,7 +193,8 @@ export const flowRunSteps = p.pgTable(
         sql`, `,
       )})`,
     ),
-    // `review_task_entity_id` is left out: deleting the task nulls it.
+    // `review_task_entity_id` is left out: deleting the task nulls it. Terminal
+    // steps leave `error` open for the same settlement races as their runs.
     stateFieldsCheck({
       name: "flow_run_steps_state_fields_check",
       state: table.status,
@@ -212,9 +215,9 @@ export const flowRunSteps = p.pgTable(
           required: [table.startedAt],
           absent: [table.finishedAt, table.error],
         },
-        completed: { required: [table.finishedAt], absent: [table.error] },
+        completed: { required: [table.finishedAt] },
         failed: { required: [table.error, table.finishedAt] },
-        skipped: { required: [table.finishedAt], absent: [table.error] },
+        skipped: { required: [table.finishedAt] },
       },
     }),
     p

@@ -75,13 +75,13 @@ test("every flow run status accepts the shape the engine writes", async () => {
 test("a flow run cannot carry fields that belong to another state", async () => {
   const at = new Date(stateClock.now());
   const violations: { status: FlowRunStatus; fields: RunFields }[] = [
-    // Only a failed run explains itself with an error.
-    ...FLOW_RUN_STATUSES.filter((status) => status !== "failed").map(
-      (status) => ({
-        status,
-        fields: { ...flowRunStateFields(status), error: "Stray error" },
-      }),
-    ),
+    // An active run has not failed, so it carries no error.
+    ...FLOW_RUN_STATUSES.filter(
+      (status) => !isTerminalFlowRunStatus(status),
+    ).map((status) => ({
+      status,
+      fields: { ...flowRunStateFields(status), error: "Stray error" },
+    })),
     {
       status: "failed",
       fields: { ...flowRunStateFields("failed"), error: null },
@@ -106,6 +106,19 @@ test("a flow run cannot carry fields that belong to another state", async () => 
   for (const { status, fields } of violations) {
     const error = await rejectionOf(insertRun(status, fields));
     expect(isPgConstraintError(error, CHECK_VIOLATION, RUN_CHECK)).toBe(true);
+  }
+});
+
+test("a finished flow run may keep the error of a failure a settlement overwrote", async () => {
+  for (const status of ["completed", "cancelled"] as const) {
+    const id = await insertRun(status, {
+      ...flowRunStateFields(status),
+      error: "Step failed",
+    });
+    expect(
+      (await db.select().from(flowRuns).where(eq(flowRuns.id, id))).at(0)
+        ?.error,
+    ).toBe("Step failed");
   }
 });
 
