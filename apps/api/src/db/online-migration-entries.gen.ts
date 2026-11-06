@@ -41,6 +41,7 @@ export { default as indexes_case_law_decisions_citation_candidate_published_idx 
 export { default as indexes_case_law_decisions_country_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-date-published-idx";
 export { default as indexes_case_law_decisions_country_language_date_published_idx } from "./online-migration-entries/indexes-case-law-decisions-country-language-date-published-idx";
 export { default as indexes_case_law_decisions_docket_family_key_idx } from "./online-migration-entries/indexes-case-law-decisions-docket-family-key-idx";
+export { default as indexes_case_law_decisions_ecli_upper_idx } from "./online-migration-entries/indexes-case-law-decisions-ecli-upper-idx";
 export { default as indexes_case_law_decisions_language_group_published_idx } from "./online-migration-entries/indexes-case-law-decisions-language-group-published-idx";
 export { default as indexes_case_law_decisions_provision_scope_cursor_idx } from "./online-migration-entries/indexes-case-law-decisions-provision-scope-cursor-idx";
 export { default as indexes_case_law_decisions_republished_ruling_idx } from "./online-migration-entries/indexes-case-law-decisions-republished-ruling-idx";
