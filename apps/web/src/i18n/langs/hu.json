@@ -1719,6 +1719,10 @@
       "secretAnswer": "Rejtett válasz",
       "secretPlaceholder": "Az Ön válasza rejtve marad"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# csevegés vár Önre} other {# csevegés vár Önre}}",
+      "working": "{count, plural, one {# csevegés fut} other {# csevegés fut}}"
+    },
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# további} other {+# további}}",

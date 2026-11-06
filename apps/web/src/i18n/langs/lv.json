@@ -1719,6 +1719,10 @@
       "secretAnswer": "Atbilde ir paslēpta",
       "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, zero {# tērzēšanu gaida jūs} one {# tērzēšana gaida jūs} other {# tērzēšanas gaida jūs}}",
+      "working": "{count, plural, zero {# tērzēšanu darbojas} one {# tērzēšana darbojas} other {# tērzēšanas darbojas}}"
+    },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# citu} one {+# cits} other {+# citi}}",

@@ -882,6 +882,7 @@ describe("chat run admission follows owned settlement", () => {
                       id: "turn_checkpoint",
                       organizationId: "organization_checkpoint",
                       runId: null,
+                      userId: "user_checkpoint",
                     },
                   ]),
               };
