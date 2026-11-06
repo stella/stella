@@ -62,3 +62,22 @@ test("no tracked file reaches the compiler API through the typescript package", 
   });
   expect(matches.flat()).toEqual([]);
 });
+
+// Bun runs the tsrs npm launcher with a non-blocking stdout that the native
+// binary inherits, and the binary drops output a full pipe refuses. Scripts
+// run the binary from packages/scripts/src/tsc-native.ts instead.
+const NPM_LAUNCHER_PATH = /tsrs\/bin\/tsrs\b/u;
+
+test("no tracked script runs the tsrs npm launcher", async () => {
+  const matches = await mapWithConcurrency({
+    items: trackedFiles().filter(
+      (name) => /\.[cm]?[jt]sx?$/u.test(name) && name !== SELF,
+    ),
+    limit: IMPORT_CENSUS_CONCURRENCY,
+    operation: async (file) => {
+      const source = await Bun.file(path.join(REPO_ROOT, file)).text();
+      return NPM_LAUNCHER_PATH.test(source) ? [file] : [];
+    },
+  });
+  expect(matches.flat()).toEqual([]);
+});
