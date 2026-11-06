@@ -5,6 +5,10 @@ import {
   INVOICE_LANGUAGES,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import {
+  WORKSPACE_STATUS,
+  WORKSPACE_STATUSES,
+} from "@stll/api-contract/workspace-status";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -406,14 +410,23 @@ export const workspaces = p.pgTable(
     }),
     color: p.varchar({ length: 32 }),
     status: p
-      .text({ enum: ["active", "deleting", "archived"] })
+      .text({ enum: WORKSPACE_STATUSES })
       .notNull()
-      .default("active"),
+      .default(WORKSPACE_STATUS.active),
     lastActivityAt: timestamptz("last_activity_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    // Readable-workspace queries test `<> 'deleting'`, so a value outside the
+    // domain must be unwritable rather than silently readable.
+    p.check(
+      "workspaces_status_values_check",
+      sql`${table.status} IN (${sql.join(
+        WORKSPACE_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
     ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")

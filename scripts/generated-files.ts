@@ -382,6 +382,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/workspaces/authorized-workspace-ids.ts",
     "apps/api/src/lib/workspaces/create-workspace-row.ts",
     "apps/api/src/lib/workspaces/matter-name.ts",
+    "apps/api/src/lib/workspaces/visible-workspace-sql.ts",
     "apps/api/src/tests/setup-env.ts",
     "apps/api/src/tests/test-database-environment.ts",
     "packages/agent-input/src/*",
