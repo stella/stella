@@ -30,6 +30,14 @@ const enumValuesOf = (column: unknown): readonly unknown[] =>
     ? column.enumValues
     : [];
 
+const sqlNameOf = (column: unknown): string | undefined =>
+  typeof column === "object" &&
+  column !== null &&
+  "name" in column &&
+  typeof column.name === "string"
+    ? column.name
+    : undefined;
+
 /**
  * Inspect lifecycle columns on all relations and separately on writable
  * tables. A lifecycle column is named like one, or is an enum-valued column
@@ -83,7 +91,7 @@ export const statusColumnMaps = (
     // does not read them, so code scanners never mistake it for a use.
     const tableName = getTableName(relation);
     const sqlName = (column: string) =>
-      relationColumns[column]?.name ??
+      sqlNameOf(relationColumns[column]) ??
       panic(`Column ${name}.${column} has no SQL name`);
     const classified = unnamedEnums.filter((column) => {
       const role =
