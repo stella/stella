@@ -12,6 +12,7 @@
 mod client;
 mod harness;
 mod journal;
+mod run_folders;
 mod sidecar_host;
 #[cfg(all(test, unix))]
 #[allow(

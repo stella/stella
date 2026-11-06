@@ -438,6 +438,7 @@
       {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -483,6 +484,7 @@
       {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "claude-code",
         "harnessVersion": "2.0.30",
         "model": "model-large",
@@ -691,6 +693,7 @@
       "input": {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -738,6 +741,7 @@
       "parsed": {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -1025,6 +1029,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1073,6 +1078,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1121,6 +1127,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "cursor",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1169,6 +1176,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1234,6 +1242,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1282,6 +1291,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
