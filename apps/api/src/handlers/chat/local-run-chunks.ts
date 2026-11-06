@@ -390,10 +390,16 @@ const asChatChunk = (
     return LOCAL_RUN_CUSTOM_EVENTS.has(chunk.name) ? chunk : null;
   }
   // Metadata on these merges into the answer, where the server's own notices
-  // and files live. A harness reports none, so a desktop's is never carried.
+  // and files live. A harness reports only its adapter's own `tanstack` block,
+  // so nothing else a desktop sends is carried.
   if (MESSAGE_METADATA_EVENTS.has(chunk.type) && "metadata" in chunk) {
-    const { metadata: _desktopMetadata, ...carried } = chunk;
-    return carried;
+    const { metadata, ...carried } = chunk;
+    const kept = Object.entries(isRecord(metadata) ? metadata : {}).filter(
+      ([key]) => key === "tanstack",
+    );
+    return kept.length === 0
+      ? carried
+      : { ...carried, metadata: Object.fromEntries(kept) };
   }
   return chunk;
 };

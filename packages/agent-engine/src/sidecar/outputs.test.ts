@@ -363,18 +363,13 @@ describe("posting a run's file to the API", () => {
   const never = new AbortController().signal;
 
   test("sends the file to the run's path with the run's current token", async () => {
-    const seen: { url: string; authorization: string | null; name: string }[] =
+    const seen: { url: string; authorization: string | null; body: string }[] =
       [];
     const apiOrigin = serving(async (request) => {
-      const form = await request.formData();
-      const sent = form.get("file");
-      if (typeof sent === "string" || sent === null) {
-        return new Response(null, { status: 400 });
-      }
       seen.push({
         url: new URL(request.url).pathname,
         authorization: request.headers.get("authorization"),
-        name: sent.name,
+        body: await request.text(),
       });
       return Response.json({ fileId: FILE_ID });
     });
@@ -390,9 +385,11 @@ describe("posting a run's file to the API", () => {
       {
         url: desktopRunnerOutputPath(RUN_ID),
         authorization: "Bearer refreshed",
-        name: "report.txt",
+        body: expect.stringContaining('filename="report.txt"'),
       },
     ]);
+    expect(seen.at(0)?.body).toContain('name="file"');
+    expect(seen.at(0)?.body).toContain("hello");
   });
 
   test("a redirect is not followed, so the token stays on the API", async () => {

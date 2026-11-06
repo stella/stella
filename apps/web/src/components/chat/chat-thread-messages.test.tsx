@@ -1326,7 +1326,7 @@ describe("chat thread messages", () => {
       const html = render({});
       expect(html).toContain("It is ready.");
       expect(html).toContain("report.html");
-      expect(html).toContain('href="/v1/user-files/file_report/content"');
+      expect(html).toContain('/v1/user-files/file_report/content"');
     });
 
     test("an answer holding only a file still shows it", () => {

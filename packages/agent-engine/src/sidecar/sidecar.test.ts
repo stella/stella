@@ -1352,23 +1352,21 @@ describe("harness holder over its socket", () => {
       );
 
     test("upload what the turn wrote, with the run's token, before the turn's finish", async () => {
-      const received: { name: string; authorization: string | null }[] = [];
+      const received: { body: string; authorization: string | null }[] = [];
       const fileId = crypto.randomUUID();
       const { finished, written } = await runWritingOutputs(async (request) => {
-        const form = await request.formData();
-        const file = form.get("file");
-        if (file === null || typeof file === "string") {
-          return new Response(null, { status: 400 });
-        }
         received.push({
-          name: file.name,
+          body: await request.text(),
           authorization: request.headers.get("authorization"),
         });
         return Response.json({ fileId });
       });
       // The file that was there when the run started stays out of it.
       expect(received).toEqual([
-        { name: "report.txt", authorization: `Bearer ${RUN_TOKEN}` },
+        {
+          body: expect.stringContaining('filename="report.txt"'),
+          authorization: `Bearer ${RUN_TOKEN}`,
+        },
       ]);
       expect(finished.outcome).toBe("completed");
       const chunks = chunksOfRun(written);

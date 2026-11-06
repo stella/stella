@@ -2514,7 +2514,7 @@ describe("chat turns on a computer", () => {
     const storedFile = async (
       threadId: SafeId<"chatThread">,
       userId: string,
-      overrides: { fileName?: string; mimeType?: string } = {},
+      organizationId: SafeId<"organization"> = ids.orgA,
     ) => {
       const id = createSafeId<"userFile">();
       await db.insert(userFiles).values({
@@ -2526,11 +2526,10 @@ describe("chat turns on a computer", () => {
         sha256Hex: "a".repeat(64),
         s3Key: createUserFileKey({
           fileId: id,
-          mimeType: overrides.mimeType ?? "application/pdf",
-          organizationId: ids.orgA,
+          mimeType: "application/pdf",
+          organizationId,
         }),
         threadId,
-        ...overrides,
       });
       return id;
     };
@@ -2578,6 +2577,7 @@ describe("chat turns on a computer", () => {
       const othersFile = await storedFile(
         ids.chatThreadWorkspaceB1,
         ids.userB1,
+        ids.orgB,
       );
       const otherThreadFile = await storedFile(otherThread, ids.userA1);
       const chunks = await answer(chatThreadId, async (_runId, run) => {
@@ -2679,6 +2679,7 @@ describe("chat turns on a computer", () => {
           },
         ],
         contextNotice: { type: "history-trimmed" },
+        tanstack: { model: "gpt-test" },
       };
       const chunks = await answer(chatThreadId, async (_runId, run) => {
         await run.events([
@@ -2701,9 +2702,14 @@ describe("chat turns on a computer", () => {
           },
         ]);
       });
+      const carried = JSON.stringify(chunks);
+      expect(carried).not.toContain("forged.pdf");
+      expect(carried).not.toContain(CHAT_LOCAL_RUN_FILES_METADATA_KEY);
+      expect(carried).not.toContain("history-trimmed");
+      // The adapter's own block is all that stays.
       expect(
-        chunks.filter((chunk) => isRecord(chunk) && "metadata" in chunk),
-      ).toEqual([]);
+        chunks.find(({ type }) => type === EventType.TEXT_MESSAGE_START),
+      ).toMatchObject({ metadata: { tanstack: { model: "gpt-test" } } });
       expect(
         chunks.some(({ type }) => type === EventType.TEXT_MESSAGE_CONTENT),
       ).toBe(true);
