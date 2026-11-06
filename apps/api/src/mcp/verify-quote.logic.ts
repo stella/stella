@@ -82,6 +82,11 @@ const tokensOf = (text: string) =>
   }));
 
 export const quoteInputWithinBudget = (text: string) => {
+  // The schema runs this after its length check whatever that check found, so
+  // an oversized body must not reach the normalization below.
+  if (text.length > LIMITS.caseLawQuoteMaxChars) {
+    return false;
+  }
   const segments = quoteSegments(text);
   return (
     segments.length > 0 &&
@@ -249,13 +254,18 @@ export const verifyQuote = ({
     const paragraphs = [];
     for (let index = low; index < located.length; index += 1) {
       const block = located.at(index) ?? panic("Located block exists");
-      if (block.start >= originalEnd) {
+      if (
+        block.start >= originalEnd ||
+        paragraphs.length >= LIMITS.caseLawQuoteMaxPassageParagraphs
+      ) {
         break;
       }
       paragraphs.push({
         position: index + 1,
         label: block.label,
-        headingPath: block.headingPath,
+        headingPath: block.headingPath.slice(
+          -LIMITS.caseLawQuoteMaxHeadingDepth,
+        ),
         ...decisionBlockDeepLink({ url, ...block }),
       });
     }

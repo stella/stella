@@ -48,7 +48,6 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
 | `case-law.analysis.generate` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law analysis-generate` |
-| `case-law.decisions.quotes.check` | read | stella:read | FEATURE_PUBLIC_LAW | curated tool `verify_quote` |
 | `case-law.ingestion.get` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law ingestion-get` |
 | `case-law.matter-links.batch.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-batch-create` |
 | `case-law.matter-links.create` | write | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella capability case-law matter-links-create` |
@@ -781,7 +780,7 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 4 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 9 |
+| public_indexing | 10 |
 | realtime_stream | 9 |
 | search_ui | 20 |
 | session_token_exchange | 21 |

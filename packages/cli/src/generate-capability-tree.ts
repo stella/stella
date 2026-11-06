@@ -26,7 +26,6 @@ import {
   type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
-import type { CapabilityHandlerKind } from "./generated/mcp-contract.js";
 import { MCP_CLI_TOOL_SCOPES } from "./generated/mcp-contract.js";
 import {
   CAPABILITY_PARTS,
@@ -64,7 +63,7 @@ export type CapabilityCatalogEntry = {
   id: string;
   /** Authored prose from the handler config; the command's `--help` brief. */
   description?: string;
-  handlerKind: CapabilityHandlerKind;
+  handlerKind: "workspace" | "root" | "session";
   access: "read" | "write";
   destructive: boolean;
   confirmation?: "required";

@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
@@ -31,7 +32,6 @@ import type { DecisionTextFieldKey } from "@stll/api-contract/case-law-text-fiel
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { listRisDocumentContentTypes } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
-import { legacyExcludedSourceField } from "@/api/lib/legal-search/ingestion-types";
 import type {
   SourceFieldDisposition,
   SourceFieldInventory,
@@ -93,9 +93,16 @@ type AtRisCommonPublisherRecord = Readonly<Record<AtRisCommonField, unknown>>;
 
 const AT_RIS_COMMON_FIELDS = {
   "Technisch/ID": { disposition: "stored", target: { type: "identity" } },
-  "Technisch/Applikation": legacyExcludedSourceField(
-    "the application this adapter names in its own query, restated in the answer",
-  ),
+  "Technisch/Applikation": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.LISTING,
+      path: ["Data", "Metadaten", "Technisch", "Applikation"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   "Technisch/Organ": {
     disposition: "stored",
     target: { type: "metadata", key: "organ" },
@@ -104,9 +111,16 @@ const AT_RIS_COMMON_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "submitter" },
   },
-  "Technisch/ImportTimestamp": legacyExcludedSourceField(
-    "nil on every search answer; only the change feed carries a value in it",
-  ),
+  "Technisch/ImportTimestamp": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.LISTING,
+      path: ["Data", "Metadaten", "Technisch", "ImportTimestamp"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   "Allgemein/Veroeffentlicht": {
     disposition: "stored",
     target: { type: "metadata", key: "published" },
@@ -143,16 +157,30 @@ const AT_RIS_COMMON_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "Judikatur/GesamteEntscheidungUrl": legacyExcludedSourceField(
-    "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
-  ),
+  "Judikatur/GesamteEntscheidungUrl": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.LISTING,
+      path: ["Data", "Metadaten", "Judikatur", "GesamteEntscheidungUrl"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   "Judikatur/EntscheidungstextUrl": {
     disposition: "stored",
     target: { type: "metadata", key: "decisionTextDocument" },
   },
-  "Judikatur/RechtssaetzeUrl": legacyExcludedSourceField(
-    "the address of a page listing the headnotes the row stores as a part of its own",
-  ),
+  "Judikatur/RechtssaetzeUrl": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.LISTING,
+      path: ["Data", "Metadaten", "Judikatur", "RechtssaetzeUrl"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   "Dokumentliste/ContentReference/ContentType": DOCUMENT_PARTS_TARGET,
   "Dokumentliste/ContentReference/Name": DOCUMENT_PARTS_TARGET,
   "Dokumentliste/ContentReference/Urls/ContentUrl/DataType":
@@ -291,9 +319,16 @@ const AT_RIS_BRANCH_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalAreas" },
   },
-  Rechtssatzkette: legacyExcludedSourceField(
-    "the address of a chain page on the host that answers an automated client with a challenge; the parent headnote it chains is named by an identifier the branch already states",
-  ),
+  Rechtssatzkette: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.LISTING,
+      path: ["Data", "Metadaten", "Judikatur", "Vwgh", "RechtssatzketteUrl"],
+      reason:
+        "The stored source envelope retains this publisher listing field verbatim.",
+    },
+  },
   Rechtssatznummer: {
     disposition: "stored",
     target: { type: "metadata", key: "headnoteNumber" },
@@ -389,22 +424,50 @@ const AT_RIS_DOCUMENT_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  ecli: legacyExcludedSourceField(
-    "the listing states the identifier as a field of its own",
-  ),
-  entscheidungsdatum: legacyExcludedSourceField(
-    "the listing states the decision date as a date",
-  ),
+  ecli: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
+  entscheidungsdatum: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
   entscheidungstexte: {
     disposition: "stored",
     target: { type: "metadata", key: "adoptingDecisions" },
   },
-  gericht: legacyExcludedSourceField(
-    "the listing states the deciding body in a field of its own",
-  ),
-  gz: legacyExcludedSourceField(
-    "the listing states every docket of the decision",
-  ),
+  gericht: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
+  gz: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
   hinweisstrs: {
     disposition: "stored",
     target: { type: "metadata", key: "parentHeadnote" },
@@ -418,12 +481,26 @@ const AT_RIS_DOCUMENT_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "abstract" },
   },
-  norm: legacyExcludedSourceField(
-    "the listing states the same provisions as a list of its own",
-  ),
-  organ: legacyExcludedSourceField(
-    "the listing states the deciding body in a field of its own",
-  ),
+  norm: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
+  organ: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: AT_RIS_PART.DOCUMENT_XML,
+      path: [],
+      reason:
+        "The stored source envelope retains this publisher document section in its original XML structure.",
+    },
+  },
   rechtlichebeurteilung: IN_DOCUMENT,
   rechtssatz: {
     disposition: "stored",

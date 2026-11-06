@@ -33,6 +33,10 @@ import {
   PROFESSIONAL_USE_REQUIRED_CODE,
   PROFESSIONAL_USE_STATUS,
 } from "@stll/api-contract/professional-use";
+import {
+  WORKSPACE_STATUS,
+  workspaceIsVisible,
+} from "@stll/api-contract/workspace-status";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
@@ -3252,8 +3256,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
   };
 };
 
-const ACTIVE_WORKSPACE_STATUS = "active";
-
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
   db: MemberAuthorizationDb,
@@ -3494,7 +3496,7 @@ export const resolveWorkspaceRealtimeAudience = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        eq(workspaces.status, WORKSPACE_STATUS.active),
         memberReachesMatterSql(
           { organizationId: member.organizationId, userId: member.userId },
           workspaces.id,
@@ -4010,7 +4012,7 @@ const resolveValidateAuth = async ({
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
       const activeWorkspaceIds: SafeId<"workspace">[] = [];
       for (const item of items) {
-        if (item.status !== "deleting") {
+        if (workspaceIsVisible(item.status)) {
           activeWorkspaceIds.push(item.id);
         }
       }

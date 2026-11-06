@@ -8,6 +8,7 @@ import { verifyDecisionQuotation } from "@/api/handlers/case-law/decisions/quote
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 
 import { nullAsAbsent, uuidInputSchema } from "./input-schemas";
 import {
@@ -53,56 +54,85 @@ export const verifyQuoteArgsSchema = nullAsAbsent(
   }),
 );
 
+// A quote's text and its passage: the longest quote at three UTF-8 bytes per
+// UTF-16 unit, with room for the whitespace the comparison collapses. A longer
+// stored span is cut in its text field; its offsets still address all of it.
+const QUOTE_TEXT_MAX_BYTES = 16_384;
+// `boundedString` without its runtime check, which an MCP output schema cannot
+// publish. Both surfaces project this contract, which enforces the byte bound
+// and well-formed text, before the schema reads the answer.
+const boundedString = (maxBytes: number) =>
+  v.pipe(
+    v.string(),
+    v.maxLength(maxBytes),
+    v.metadata({ "x-maxUtf8Bytes": maxBytes }),
+  );
+const QUOTE_WORD_MAX_BYTES = 1024;
+const decisionIdSchema = boundedString(64);
+const textSourceSchema = v.picklist(["ast", "fulltext"]);
+const segmentsSchema = <T extends v.GenericSchema>(segment: T) =>
+  v.pipe(v.array(segment), v.maxLength(LIMITS.caseLawQuoteMaxSegments));
 const passageSchema = v.object({
   start: v.number(),
   end: v.number(),
-  text: v.string(),
-  paragraphs: v.array(
-    v.object({
-      position: v.number(),
-      label: v.nullable(v.string()),
-      headingPath: v.array(v.string()),
-      url: v.exactOptional(v.string()),
-    }),
+  text: boundedString(QUOTE_TEXT_MAX_BYTES),
+  paragraphs: v.pipe(
+    v.array(
+      v.object({
+        position: v.number(),
+        label: v.nullable(boundedString(256)),
+        headingPath: v.pipe(
+          v.array(boundedString(1024)),
+          v.maxLength(LIMITS.caseLawQuoteMaxHeadingDepth),
+        ),
+        url: v.exactOptional(boundedString(4096)),
+      }),
+    ),
+    v.maxLength(LIMITS.caseLawQuoteMaxPassageParagraphs),
   ),
 });
+// An alignment spends at most one edit per quote token, so a closest passage
+// holds at most twice the quote's tokens, and its differences list each passage
+// and quote token at most once.
+const QUOTE_DIFFERENCE_MAX_WORDS = 3 * LIMITS.caseLawQuoteMaxTokens;
 const closestSchema = v.object({
   ...passageSchema.entries,
   similarity: v.number(),
-  differences: v.array(
-    v.object({
-      type: v.picklist(["equal", "added", "dropped"]),
-      words: v.array(v.string()),
-    }),
+  differences: v.pipe(
+    v.array(
+      v.object({
+        type: v.picklist(["equal", "added", "dropped"]),
+        words: v.pipe(
+          v.array(boundedString(QUOTE_WORD_MAX_BYTES)),
+          v.maxLength(QUOTE_DIFFERENCE_MAX_WORDS),
+        ),
+      }),
+    ),
+    v.maxLength(QUOTE_DIFFERENCE_MAX_WORDS),
   ),
 });
 export const verifyQuoteOutputSchema = v.variant("status", [
   v.object({
     status: v.literal("exact"),
     verified: v.literal(true),
-    decisionId: v.string(),
-    textSource: v.picklist(["ast", "fulltext"]),
-    segments: v.array(
+    decisionId: decisionIdSchema,
+    textSource: textSourceSchema,
+    segments: segmentsSchema(
       v.object({
-        text: v.string(),
+        text: boundedString(QUOTE_TEXT_MAX_BYTES),
         occurrenceCount: v.number(),
-        occurrences: v.array(passageSchema),
+        occurrences: v.pipe(
+          v.array(passageSchema),
+          v.maxLength(LIMITS.caseLawQuoteMaxOccurrences),
+        ),
       }),
     ),
   }),
-  v.object({
-    status: v.picklist(["fuzzy", "not_found"]),
-    verified: v.literal(false),
-    decisionId: v.string(),
-    textSource: v.picklist(["ast", "fulltext"]),
-    segments: v.array(
-      v.object({ text: v.string(), closest: v.nullable(closestSchema) }),
-    ),
-  }),
+  // Before the picklist below: text projection picks a branch by its constants.
   v.object({
     status: v.literal("cannot_verify"),
     verified: v.literal(false),
-    decisionId: v.string(),
+    decisionId: decisionIdSchema,
     textState: v.picklist([
       "pending",
       "unavailable",
@@ -110,7 +140,19 @@ export const verifyQuoteOutputSchema = v.variant("status", [
       "failed",
       "empty",
     ]),
-    hint: v.string(),
+    hint: boundedString(512),
+  }),
+  v.object({
+    status: v.picklist(["fuzzy", "not_found"]),
+    verified: v.literal(false),
+    decisionId: decisionIdSchema,
+    textSource: textSourceSchema,
+    segments: segmentsSchema(
+      v.object({
+        text: boundedString(QUOTE_TEXT_MAX_BYTES),
+        closest: v.nullable(closestSchema),
+      }),
+    ),
   }),
 ]);
 
@@ -177,13 +219,16 @@ const handleVerifyQuote: TypedMcpToolHandler<
     });
   }
   return toolDataResult(
-    verifyDecisionQuotation({
-      read,
-      quote,
-      readSharedCorpus:
-        context.testDependencies?.readsSharedPublicLawCorpus ??
-        readsSharedPublicLawCorpus,
-    }),
+    projectResponseText(
+      verifyDecisionQuotation({
+        read,
+        quote,
+        readSharedCorpus:
+          context.testDependencies?.readsSharedPublicLawCorpus ??
+          readsSharedPublicLawCorpus,
+      }),
+      verifyQuoteOutputSchema,
+    ),
   );
 };
 

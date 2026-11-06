@@ -72,8 +72,8 @@ export const measureVerifyQuote = async (
       const data = await (async () => {
         if (transport === "api") {
           const endpoint = createVerifyQuotationHandler({
+            caseLawDb,
             readSharedCorpus: testDependencies.readsSharedPublicLawCorpus,
-            readDecision: testDependencies.readGatedDecisionWithDocument,
           });
           const response = await endpoint.handler(
             asTestRaw<Parameters<typeof endpoint.handler>[0]>({

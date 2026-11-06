@@ -2002,7 +2002,7 @@
       "type": "object",
       "properties": {
         "status": {
-          "enum": ["exact", "fuzzy", "not_found", "cannot_verify"],
+          "enum": ["exact", "cannot_verify", "fuzzy", "not_found"],
           "type": "string"
         },
         "verified": {
@@ -2010,7 +2010,8 @@
           "type": "boolean"
         },
         "decisionId": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
         },
         "textSource": {
           "enum": ["ast", "fulltext"],
@@ -2023,14 +2024,16 @@
               "items": {
                 "type": "object",
                 "additionalProperties": true
-              }
+              },
+              "maxItems": 16
             },
             {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": true
-              }
+              },
+              "maxItems": 16
             }
           ]
         },
@@ -2039,7 +2042,8 @@
           "type": "string"
         },
         "hint": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 512
         }
       },
       "required": ["status", "verified", "decisionId"]
@@ -3542,7 +3546,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "resolve_case_law_decision",
-    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "inputSchema": {
       "type": "object",
       "required": ["country", "identifier"],
@@ -3629,13 +3633,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],
@@ -3933,13 +3932,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],

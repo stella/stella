@@ -1531,7 +1531,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -8921,7 +8921,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -16737,7 +16737,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -18823,7 +18823,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: decision/text, continue with read_case_law_decision; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    "description": "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,

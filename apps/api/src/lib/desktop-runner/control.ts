@@ -222,6 +222,8 @@ const startRun = async (
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
     runId,
+    // A chat's turns share a folder; a run outside a chat keeps its own.
+    folderId: input.chat?.threadId ?? runId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,

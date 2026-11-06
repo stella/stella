@@ -222,6 +222,7 @@ fn run_start(run_id: &str, model: &str) -> Value {
   json!({
     "type": "run.start",
     "runId": run_id,
+    "folderId": run_id,
     "harness": "codex",
     "harnessVersion": VERSION,
     "model": model,
@@ -346,8 +347,8 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
       place.acks(&id).last() == Some(&3)
     })
     .await;
-    let workspace = place.workspaces().join(&id);
-    until("the run's folder was removed", || !workspace.exists()).await;
+    // The next turn of the chat works in the same folder.
+    assert!(place.workspaces().join(&id).is_dir());
     runner.stop().await;
   });
   stop_holders(&place);

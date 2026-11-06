@@ -46,6 +46,18 @@ token budget, plus at most 20 returned occurrences per segment. The tool reads
 one gated decision without fetching a publisher document. Chat's bounded reader
 projection does not expose this occurrence list.
 
+Answers are bounded too. A passage reports at most 32 paragraphs and the 8
+deepest heading levels of each; its text and a segment's text stop at 16,384
+UTF-8 bytes, and a difference word at 1,024. A passage cut this way keeps the
+offsets of the whole stored span.
+
+`POST /v1/case/decisions/quotes/verify` answers the same check without an
+account. It reads through the public decision gate, so a missing, redacted,
+listing-only or restricted decision, and one outside the public page countries,
+all answer `404`. It spends the public search budget of its address, its
+admission slots and the global search budget, and answers `429` or `503` when
+those run out.
+
 Run the deterministic calibration with
 `bun --preload ./src/tests/setup-env.ts evals/verify-quote-local.ts` from
 `apps/api`. It uses captured public court texts and reports scores and a large

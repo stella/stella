@@ -1,9 +1,8 @@
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
-
 import {
   decisionDocumentState,
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import type { LocatedDecisionBlock } from "@/api/mcp/case-law-decision-outline";
 import { locateDecisionBlocks } from "@/api/mcp/case-law-decision-outline";
 import { decisionParagraphs } from "@/api/mcp/case-law-decision-read";
@@ -49,8 +48,7 @@ export const verifyDecisionQuotation = ({
       hint: "Open the publisher document through read_case_law_decision; retry verify_quote after stored text becomes available.",
     };
   }
-  const parsedBlocks =
-    parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
+  const parsedBlocks = parseCachedDecisionAst(read.documentAst)?.blocks ?? null;
   const astText =
     parsedBlocks === null
       ? null

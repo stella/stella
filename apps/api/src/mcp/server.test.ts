@@ -1452,6 +1452,7 @@ describe("handleMcpHttpRequest", () => {
         "case_law_coverage",
         "read_case_law_decision",
         "read_case_law_citations",
+        "verify_quote",
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
@@ -1462,7 +1463,6 @@ describe("handleMcpHttpRequest", () => {
         "read_provision_history",
         "resolve_case_law_decision",
         "resolve_law_citation",
-        "verify_quote",
       ]);
       expect(
         listed.tools.find(({ name }) => name === "read_case_law_citations")

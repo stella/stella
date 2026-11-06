@@ -1,39 +1,47 @@
-import { Result } from "better-result";
-
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import {
+  hydrateDeferredDocument,
   readsSharedPublicLawCorpus,
   STORED_ONLY_DOCUMENT_HYDRATION,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import {
+  createSafePublicSubjectFollowUpHandler,
+  DECISION_NOT_FOUND,
+} from "@/api/handlers/case-law/decisions/public-subject";
 import { verifyDecisionQuotation } from "@/api/handlers/case-law/decisions/quotes/verification";
 import { status } from "@/api/http/status";
-import type { HttpStatusResponse } from "@/api/http/status";
 import {
   ACCOUNT_ACCESS,
-  createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
-import type {
-  PublicHandlerConfig,
-  SafeHandlerGenerator,
-} from "@/api/lib/api-handlers";
+import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
-import {
-  defaultReadGatedDecisionWithDocument,
-  isReadCaseLawDecisionSuccess,
-} from "@/api/mcp/public-law-handlers";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
+import { isReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
 import { handlerStatusOf } from "@/api/mcp/tool-utils";
 import {
   verifyQuoteArgsSchema,
   verifyQuoteOutputSchema,
 } from "@/api/mcp/verify-quote-tools";
 
+const QUOTE_DECISION_UNREADABLE = failureSink({
+  event: "case_law.quote_decision_unreadable",
+  expected: [],
+});
+
 const config = {
   description:
     "Check whether a quotation occurs word for word in one stored decision. Answers with its exact occurrences, the closest passage and differences for an altered quote, or that the text cannot be verified.",
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "tool", name: "verify_quote" },
+  // The route serves the public site; agents reach the same check through the
+  // curated `verify_quote` tool, as they reach citations through theirs.
+  mcp: { type: "internal", reason: "public_indexing" },
   cache: { kind: "none" },
   access: "read",
   body: verifyQuoteArgsSchema,
@@ -43,51 +51,59 @@ const config = {
 } satisfies PublicHandlerConfig;
 
 type VerifyQuotationDependencies = {
-  readDecision?: typeof defaultReadGatedDecisionWithDocument;
+  caseLawDb?: CaseLawPublicReadDb;
   readSharedCorpus?: typeof readsSharedPublicLawCorpus;
 };
 
-type VerifyQuotationResponse =
-  | ReturnType<typeof verifyDecisionQuotation>
-  | HttpStatusResponse<404, { message: string }>
-  | HttpStatusResponse<503, { message: string }>;
-
 export const createVerifyQuotationHandler = ({
-  readDecision = defaultReadGatedDecisionWithDocument,
+  caseLawDb = caseLawPublicReadDb,
   readSharedCorpus = readsSharedPublicLawCorpus,
 }: VerifyQuotationDependencies = {}) =>
-  createSafeBoundedPublicHandler(
+  createSafePublicSubjectFollowUpHandler({
     config,
-    async function* ({ body }): SafeHandlerGenerator<VerifyQuotationResponse> {
-      const read = yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await readDecision({
-              caseLawDb: caseLawPublicReadDb,
-              locator: {
-                kind: "id",
-                id: brandPersistedCaseLawDecisionId(body.decision_id),
-              },
-              citationsCursor: null,
-              caller: "anonymous",
-              documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
-              surface: "identity",
-            }),
-        ),
+    caseLawDb,
+    locate: ({ body }) => ({
+      kind: "id",
+      id: brandPersistedCaseLawDecisionId(body.decision_id),
+    }),
+    read: async (subject) =>
+      await readDecisionHandler({ subject, citationsCursor: null }),
+    // Anonymous and stored-only: no demand is recorded and no publisher is
+    // fetched, so this runs nothing beyond what the gated read returned.
+    followUp: async (gatedRead, { body }) => {
+      const read = await hydrateDeferredDocument(
+        gatedRead,
+        false,
+        STORED_ONLY_DOCUMENT_HYDRATION,
       );
-      if (read === null || handlerStatusOf(read)?.code === 404) {
-        return Result.ok(status(404, { message: "Decision not found" }));
+      const readStatus = handlerStatusOf(read);
+      // The subject existed moments ago; a redaction can race the read.
+      if (readStatus?.code === 404) {
+        return status(404, DECISION_NOT_FOUND);
       }
       if (!isReadCaseLawDecisionSuccess(read)) {
-        return Result.ok(
-          status(503, { message: "The stored decision could not be read." }),
+        return observedStatus(
+          {
+            sink: QUOTE_DECISION_UNREADABLE,
+            cause: new HandlerError({
+              status: 503,
+              message: `Decision read answered ${readStatus?.code ?? "without a status"}`,
+            }),
+          },
+          503,
+          { message: "The stored decision could not be read." },
         );
       }
-      return Result.ok(
-        verifyDecisionQuotation({ read, quote: body.text, readSharedCorpus }),
+      return projectResponseText(
+        verifyDecisionQuotation({
+          read,
+          quote: body.text,
+          readSharedCorpus,
+        }),
+        verifyQuoteOutputSchema,
       );
     },
-  );
+  });
 
 const verifyQuotation = createVerifyQuotationHandler();
 export default verifyQuotation;

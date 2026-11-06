@@ -4,16 +4,18 @@ import * as v from "valibot";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import { createHttpApp } from "@/api/http/app";
-import { routes } from "@/api/http/route";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
-import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { LIMITS } from "@/api/lib/limits";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 import type { ReadCaseLawDecisionSuccess } from "@/api/mcp/public-law-handlers";
-import { verifyQuoteOutputSchema } from "@/api/mcp/verify-quote-tools";
-import { serveForTest } from "@/api/tests/helpers/test-server";
+import {
+  verifyQuoteArgsSchema,
+  verifyQuoteOutputSchema,
+} from "@/api/mcp/verify-quote-tools";
+import { quoteInputWithinBudget } from "@/api/mcp/verify-quote.logic";
 
-import { createVerifyQuotationHandler } from "./check";
+import { verifyDecisionQuotation } from "./verification";
 
 const id = createSafeId<"caseLawDecision">();
 const readOf = () =>
@@ -69,94 +71,114 @@ const readOf = () =>
     sourceLanguages: [],
   }) satisfies ReadCaseLawDecisionSuccess;
 
-type QuoteRead = Awaited<
-  ReturnType<
-    NonNullable<
-      NonNullable<
-        Parameters<typeof createVerifyQuotationHandler>[0]
-      >["readDecision"]
-    >
-  >
->;
-const requestQuote = async (read: QuoteRead, quote: string) => {
-  let reads = 0;
-  const endpoint = createVerifyQuotationHandler({
-    readSharedCorpus: () => false,
-    readDecision: async (options) => {
-      reads += 1;
-      expect(options.locator).toEqual({ kind: "id", id });
-      expect(options.caller).toBe("anonymous");
-      expect(options.documentHydration).toEqual({ type: "stored-only" });
-      return read;
-    },
-  });
-  const server = serveForTest(
-    createHttpApp({
-      routes: routes({ "/case/decisions/quotes/verify": { POST: endpoint } }),
-      middleware: [errorBoundary],
-    }),
+const verify = (read: ReadCaseLawDecisionSuccess, quote: string) =>
+  v.parse(
+    verifyQuoteOutputSchema,
+    projectResponseText(
+      verifyDecisionQuotation({ read, quote, readSharedCorpus: () => false }),
+      verifyQuoteOutputSchema,
+    ),
   );
-  const response = await server.fetch(
-    new Request("http://localhost/case/decisions/quotes/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision_id: id, text: quote }),
-    }),
-  );
-  const body: unknown = await response.json();
-  await server.stop();
-  expect(reads).toBe(1);
-  return { status: response.status, body };
-};
 
-test("the quote endpoint verifies exact text and exposes fuzzy alterations", async () => {
-  expect(await requestQuote(readOf(), "Soud návrh zamítl")).toMatchObject({
-    status: 200,
-    body: {
-      status: "exact",
-      verified: true,
-      decisionId: id,
-      textSource: "fulltext",
-    },
+test("a quotation verifies exact text and exposes fuzzy alterations", () => {
+  expect(verify(readOf(), "Soud návrh zamítl")).toMatchObject({
+    status: "exact",
+    verified: true,
+    decisionId: id,
+    textSource: "fulltext",
   });
-  const fuzzy = await requestQuote(
-    readOf(),
-    "Soud návrh přijal pro opožděnost podání.",
-  );
-  expect(fuzzy).toMatchObject({
-    status: 200,
-    body: { status: "fuzzy", verified: false },
-  });
-  const parsed = v.parse(verifyQuoteOutputSchema, fuzzy.body);
-  if (parsed.status === "fuzzy") {
-    expect(parsed.segments.at(0)?.closest?.differences).toContainEqual({
+  const fuzzy = verify(readOf(), "Soud návrh přijal pro opožděnost podání.");
+  expect(fuzzy).toMatchObject({ status: "fuzzy", verified: false });
+  if (fuzzy.status === "fuzzy") {
+    expect(fuzzy.segments.at(0)?.closest?.differences).toContainEqual({
       type: "added",
       words: ["přijal"],
     });
   }
 });
 
-test("the quote endpoint distinguishes absent quotes from unknown decisions", async () => {
+test("an absent quote is not_found and unreadable text is cannot_verify", () => {
   expect(
-    await requestQuote(readOf(), "Zcela odlišná citace právního závěru."),
-  ).toMatchObject({
-    status: 200,
-    body: { status: "not_found", verified: false },
-  });
-  expect(await requestQuote(null, "Soud návrh zamítl")).toEqual({
-    status: 404,
-    body: { message: "Decision not found" },
-  });
-});
-
-test("the quote endpoint returns cannot_verify for unreadable decisions", async () => {
+    verify(readOf(), "Zcela odlišná citace právního závěru."),
+  ).toMatchObject({ status: "not_found", verified: false });
   expect(
-    await requestQuote(
+    verify(
       { ...readOf(), documentReadFailed: true, fulltext: null },
       "Soud návrh zamítl",
     ),
   ).toMatchObject({
-    status: 200,
-    body: { status: "cannot_verify", verified: false, textState: "failed" },
+    status: "cannot_verify",
+    verified: false,
+    textState: "failed",
   });
+});
+
+test("a stored span longer than its text bound is cut, and its offsets still address all of it", () => {
+  const gap = " ".repeat(40_000);
+  const fulltext = `Soud${gap}návrh zamítl.`;
+  const result = verify({ ...readOf(), fulltext }, "Soud návrh zamítl");
+  if (result.status !== "exact") {
+    throw new Error(`Expected an exact match, got ${result.status}`);
+  }
+  const passage = result.segments.at(0)?.occurrences.at(0);
+  expect(passage?.start).toBe(0);
+  expect(passage?.end).toBe(fulltext.indexOf("."));
+  expect(Buffer.byteLength(passage?.text ?? "", "utf-8")).toBeLessThanOrEqual(
+    16_384,
+  );
+});
+
+test("a long unbroken stored word is bounded in a closest passage", () => {
+  const word = "a".repeat(40_000);
+  const result = verify(
+    { ...readOf(), fulltext: `Soud ${word} podání.` },
+    "Soud návrh podání.",
+  );
+  if (result.status === "exact" || result.status === "cannot_verify") {
+    throw new Error(`Expected a closest passage, got ${result.status}`);
+  }
+  const closest = result.segments.at(0)?.closest;
+  expect(closest?.differences.flatMap(({ words }) => words)).toContain(
+    "a".repeat(1024),
+  );
+});
+
+test("a closest passage over the whole quote budget stays within its array bounds", () => {
+  const words = Array.from(
+    { length: LIMITS.caseLawQuoteMaxTokens },
+    (_, index) => `slovo${index}`,
+  );
+  const interleaved = words.flatMap((word) => [word, "vložené"]).join(" ");
+  const result = verify(
+    { ...readOf(), fulltext: interleaved },
+    words.join(" "),
+  );
+  expect(result.status === "fuzzy" || result.status === "not_found").toBe(true);
+});
+
+test("the paragraphs a passage reports stop at their bound", () => {
+  const paragraphs = Array.from(
+    { length: LIMITS.caseLawQuoteMaxPassageParagraphs + 8 },
+    (_, index) => `slovo${index}`,
+  );
+  const result = verify(
+    { ...readOf(), fulltext: paragraphs.join("\n\n") },
+    paragraphs.join(" "),
+  );
+  if (result.status !== "exact") {
+    throw new Error(`Expected an exact match, got ${result.status}`);
+  }
+  expect(result.segments.at(0)?.occurrences.at(0)?.paragraphs).toHaveLength(
+    LIMITS.caseLawQuoteMaxPassageParagraphs,
+  );
+});
+
+test("an oversized quote is out of budget before its tokens are counted", () => {
+  // One token and one segment: only the length can refuse it.
+  const oversized = "a".repeat(LIMITS.caseLawQuoteMaxChars + 1);
+  expect(quoteInputWithinBudget(oversized)).toBe(false);
+  expect(
+    v.safeParse(verifyQuoteArgsSchema, { decision_id: id, text: oversized })
+      .success,
+  ).toBe(false);
 });
