@@ -69,8 +69,17 @@ const ExceptionsSchema = v.array(
  * A disable directive in a line or block comment, in either spelling oxlint
  * honours: the rule list, then an optional `-- reason`.
  */
+/** A block directive's text, without its closing mark and any JSX brace. */
+const withoutCommentEnd = (body: string): string => {
+  const trimmed = body.trimEnd();
+  const unbraced = trimmed.endsWith("}")
+    ? trimmed.slice(0, -1).trimEnd()
+    : trimmed;
+  return unbraced.endsWith("*/") ? unbraced.slice(0, -2).trimEnd() : body;
+};
+
 const DIRECTIVE =
-  /(?:\/\/|\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<body>.*)$/u;
+  /(?:\/\/|\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<body>\S.*)$/u;
 
 const NO_NATIVE_UI_RULE = /^no-native-ui\/[a-z0-9-]+$/u;
 
@@ -84,7 +93,7 @@ export const exceptionsIn = (
     if (body === undefined) {
       return [];
     }
-    const text = body.replace(/\s*\*\/\s*\}?\s*$/u, "");
+    const text = withoutCommentEnd(body);
     const separator = text.search(/\s--(?:\s|$)/u);
     const rules = (separator === -1 ? text : text.slice(0, separator))
       .split(",")

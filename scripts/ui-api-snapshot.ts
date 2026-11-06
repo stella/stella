@@ -778,7 +778,7 @@ export const snapshotChanges = (
 
 // --- DESIGN.md -------------------------------------------------------------
 
-export const DESIGN_PATH = "DESIGN.md";
+const DESIGN_PATH = "DESIGN.md";
 const SECTION_HEADING = "### One Name per Concept";
 
 /** One line of the names list: the components sharing one prop and set. */

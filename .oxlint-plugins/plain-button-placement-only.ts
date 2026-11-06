@@ -21,7 +21,13 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { classBaseName, isAstNode, jsxName } from "./utils.ts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import {
+  classBaseName,
+  filenameForContext,
+  isAstNode,
+  jsxName,
+} from "./utils.ts";
 
 const RULE_NAME = "plain-button-placement-only";
 
@@ -68,6 +74,22 @@ const PLACEMENT_UTILITY = new RegExp(
   `^(?:${PLACEMENT_ALTERNATIVES.map((alternative) => `(?:${alternative})`).join("|")})$`,
   "u",
 );
+
+type LineContext = {
+  sourceCode: { getLocFromIndex: (index: number) => { line: number } };
+};
+
+/** The line `node` starts on, for the changed-lines rollout. */
+const lineOf = (
+  context: LineContext,
+  node: Record<string, unknown>,
+): number => {
+  const range = node["range"];
+  const start = Array.isArray(range) ? range[0] : undefined;
+  return typeof start === "number"
+    ? context.sourceCode.getLocFromIndex(start).line
+    : 1;
+};
 
 /** The utility a token applies, without variants, `!` or a negative sign. */
 const utilityOf = (token: string): string =>
@@ -194,7 +216,15 @@ export default eslintCompatPlugin({
               ),
             ];
             const target = className?.node;
-            if (tokens.length > 0 && isAstNode(target)) {
+            if (
+              tokens.length > 0 &&
+              isAstNode(target) &&
+              guardEnforcesLine({
+                guard: RULE_NAME,
+                file: filenameForContext(context),
+                line: lineOf(context, target),
+              })
+            ) {
               context.report({
                 node: target,
                 messageId: "appearance",

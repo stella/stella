@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
-  DESIGN_PATH,
   designMismatches,
   designNameRows,
   readCommittedUiApiSnapshot,
@@ -25,7 +24,7 @@ const HOW_TO_UPDATE =
   `section (one line per prop) and run \`${UI_API_SNAPSHOT_WRITE}\`, then ` +
   `commit DESIGN.md and ${UI_API_SNAPSHOT_PATH} with the change.`;
 
-const design = readFileSync(path.join(ROOT, DESIGN_PATH), "utf-8");
+const design = readFileSync(path.join(ROOT, "DESIGN.md"), "utf-8");
 
 describe("@stll/ui API snapshot", () => {
   test("a re-exported component keeps its closed props", () => {
