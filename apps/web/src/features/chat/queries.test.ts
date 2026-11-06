@@ -3459,6 +3459,61 @@ describe("acquireChatRuntime reconcile", () => {
     expect(runtime.getSnapshot().isLoading).toBe(false);
   });
 
+  test("keeps a classified run error of an approval continuation out of error tracking", async () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    let requests = 0;
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests += 1;
+      return createSseResponse(
+        requests === 1
+          ? createApprovalSseChunks(parseChatRequestRunId(init))
+          : [
+              {
+                type: "RUN_STARTED",
+                threadId,
+                runId: parseChatRequestRunId(init),
+              },
+              {
+                type: "RUN_ERROR",
+                code: "provider_unavailable",
+                message: "provider_unavailable",
+              },
+            ],
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222d2"),
+    );
+    await started.stream;
+
+    await Result.tryPromise(async () => {
+      await runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-A",
+      });
+    });
+
+    expect(requests).toBe(2);
+    expect(runtime.getSnapshot().error).toMatchObject({
+      code: "provider_unavailable",
+    });
+    expect(
+      capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      ),
+    ).toEqual([]);
+  });
+
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
     const queryClient = new QueryClient();
     const data = buildThreadData();
