@@ -736,7 +736,7 @@ if (!databaseUrl || !runPostgresTests) {
           try {
             await holder`SELECT pg_advisory_unlock(hashtextextended(${lockKey}, 0))`;
           } finally {
-            holder.release();
+            await holder.release();
           }
         }
       });

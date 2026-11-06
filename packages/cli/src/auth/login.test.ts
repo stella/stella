@@ -451,6 +451,7 @@ describe("login orchestration", () => {
             state: "unused",
           } as const;
         },
+        finish: async () => {},
         close: () => {
           listenerCloses += 1;
         },

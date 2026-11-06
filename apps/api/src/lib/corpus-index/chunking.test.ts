@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
@@ -10,6 +10,10 @@ import {
   formatHeadingPath,
   LEGISLATION_PASSAGE_TEXT_MAX_BYTES,
 } from "@/api/lib/corpus-index/chunking";
+
+afterEach(() => {
+  mock.restore();
+});
 
 /**
  * The chunker's contract is an equality, not a heuristic: whatever it does
