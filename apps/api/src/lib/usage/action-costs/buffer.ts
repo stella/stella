@@ -49,7 +49,8 @@ export const createObservationBuffer = <T>({
     switch (drain.type) {
       case "draining":
         await drain.done;
-        return await flush();
+        await flush();
+        return;
       case "scheduled":
         clearTimeout(drain.timer);
         break;
