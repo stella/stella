@@ -164,6 +164,7 @@ const ADAPTERS = {
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      platform: process.platform,
     });
   },
   opencode: null,
@@ -197,6 +198,7 @@ const START_FAILURE: Record<
     message,
     code: "start_rejected",
   }),
+  sandbox_unavailable: (message) => ({ type: "sandbox_unavailable", message }),
 };
 
 type ProbeOutcomeOptions = {
@@ -251,6 +253,7 @@ const probeOutcome = ({
     type: "ready",
     version: probe.version,
     capabilities: [...probe.capabilities],
+    approvalModes: [...probe.approvalModes],
     models: probe.models.slice(0, MAX_PROBED_MODELS).map((model) => ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
@@ -624,6 +627,7 @@ export class SidecarHost {
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
+      cacheDir: message.cacheDir,
       model: message.model,
       instructions: message.instructions,
       policy: message.policy,

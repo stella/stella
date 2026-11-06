@@ -19,6 +19,7 @@ import {
   corpusIndexScoredSearchRequest,
   type CorpusIndexSettlementSplit,
   getCorpusIndexClient,
+  isCorpusIndexUnavailable,
   parseCorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -44,6 +45,8 @@ import {
   findRequestBudgetExpiry,
   runWithinRequestLatencyBudget,
 } from "@/api/lib/load/request-latency-budget";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
@@ -831,10 +834,15 @@ test.each(["scan", "highlight"] as const)(
     const transportSignal = await entered.promise;
     controller.abort(new DOMException("Client cancelled page", "AbortError"));
     expect(transportSignal.aborted).toBe(true);
-    expect(await failure).toMatchObject({
-      message:
-        "The case-law and legislation search index is temporarily unavailable; retry shortly.",
-    });
+    const refusal = await failure;
+    expect(refusal).toMatchObject({ status: 400, message: "Request aborted" });
+    // The caller went away: not the index being down, and not captured.
+    expect(
+      gradeFailure(
+        readEvidence(refusal),
+        failureSink({ event: "test.caller_abort", expected: [] }),
+      ),
+    ).toMatchObject({ reason: "client_disconnected", grade: "anticipated" });
     expect(calls).toBe(phase === "scan" ? 1 : 2);
   },
 );
@@ -2254,6 +2262,8 @@ test.each(["search", "scoredSearch", "aggregate", "scopedAggregate"] as const)(
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.cause).toBe(reason);
+      expect(result.error.reach).toBe("caller_aborted");
+      expect(isCorpusIndexUnavailable(result.error)).toBe(false);
     }
   },
 );

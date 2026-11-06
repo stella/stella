@@ -79,6 +79,29 @@ test("an encrypted attachment's refusal tells the user why, not a generic failur
   ).toBeNull();
 });
 
+test.each([
+  ["chat_active_file_no_text", messages.chat.sendErrorActiveFileNoText],
+  ["chat_active_file_too_large", messages.chat.sendErrorActiveFileTooLarge],
+  ["chat_agent_runs_disabled", messages.chat.sendErrorAgentRunsDisabled],
+  ["chat_attachment_no_text", messages.chat.sendErrorAttachmentNoText],
+  ["chat_attachment_unsupported", messages.chat.sendErrorAttachmentUnsupported],
+  ["chat_document_unsupported", messages.chat.sendErrorDocumentUnsupported],
+  ["bedrock_image_invalid", messages.chat.sendErrorImageInvalid],
+  ["image_input_unsupported", messages.chat.sendErrorImageUnsupported],
+  ["chat_tools_unsupported", messages.chat.sendErrorToolsUnsupported],
+] as const)("the %s refusal says what to change", async (code, expected) => {
+  const error = await refusedChatRequest({
+    code,
+    message: "English text for agents and logs",
+  });
+
+  const view = renderError(error);
+
+  expect(view.getByText(expected)).toBeDefined();
+  expect(view.queryByText(messages.errors.api.validation)).toBeNull();
+  expect(view.queryByText(/English text for agents/u)).toBeNull();
+});
+
 test("an unknown validation refusal asks the user to check the request", async () => {
   const error = await refusedChatRequest({
     code: "some_other_refusal",

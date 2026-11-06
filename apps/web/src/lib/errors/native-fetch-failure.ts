@@ -14,3 +14,8 @@ const NATIVE_FETCH_FAILURE_MESSAGES: ReadonlySet<string> = new Set([
 export const isNativeFetchFailure = (error: unknown): error is TypeError =>
   error instanceof TypeError &&
   NATIVE_FETCH_FAILURE_MESSAGES.has(error.message);
+
+/** The reason a native `fetch` rejects with when its deadline signal fires
+ *  (`AbortSignal.timeout`, or `fetchWithTimeout`'s own deadline). */
+export const isNativeFetchTimeout = (error: unknown): error is DOMException =>
+  error instanceof DOMException && error.name === "TimeoutError";
