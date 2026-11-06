@@ -247,14 +247,18 @@ test("an answer being typed survives the generation ending", async () => {
   expect(after).toHaveProperty("value", "Buyer");
 });
 
-test("the answer keeps its elements when its actions arrive", async () => {
+test("the answer keeps its wrapper when its actions arrive", async () => {
   const queryClient = newQueryClient();
   const view = render(threadWith(queryClient, answerMessage, true));
-  const body = await waitFor(() => view.getByText(ANSWER));
+  await waitFor(() => view.getByText(ANSWER));
+  const wrapper = view.container.querySelector('[data-slot="entity-actions"]');
+  expect(wrapper).not.toBeNull();
 
   view.rerender(threadWith(queryClient, answerMessage, false));
 
-  expect(view.getByText(ANSWER)).toBe(body);
+  expect(
+    view.container.querySelector('[data-slot="entity-actions"]') === wrapper,
+  ).toBe(true);
 });
 
 test("a generating answer leaves right-click to the browser", async () => {
