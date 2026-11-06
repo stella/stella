@@ -14,6 +14,8 @@ import {
   test,
 } from "bun:test";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { organization } from "@/api/db/auth-schema";
 import { flowRuns, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,6 +30,8 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const stateClock = createTestClock();
 
 const testDb: TestDatabase = await getTestDb();
 
@@ -121,6 +125,8 @@ describe("reconcileOrphanedFlowRuns", () => {
       triggerSource,
       status: "completed",
       currentStepIndex: 0,
+      startedAt: new Date(stateClock.now()),
+      finishedAt: new Date(stateClock.now()),
     });
   });
 
