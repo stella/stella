@@ -1,4 +1,6 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar uses `style` as an appearance enum, not a React Native style object. */
+import "../../global.css";
+
 import { Suspense } from "react";
 
 import { StatusBar } from "expo-status-bar";

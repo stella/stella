@@ -18,20 +18,19 @@ import type { Logger } from "drizzle-orm";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { getCallSites } from "node:util";
 
+import {
+  currentRequestWork,
+  emptyReadWork,
+  withoutRequestWork,
+  withRequestWork,
+} from "@/api/lib/observability/request-work";
+import type { QueryCounter } from "@/api/lib/observability/request-work";
+
+export type { QueryCounter } from "@/api/lib/observability/request-work";
+
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
-
-export type QueryCounter = {
-  count: number;
-  transactions: number;
-  fingerprints: Map<string, number>;
-  detectRepeatedQueries: boolean;
-  countTransactions: boolean;
-  diagnostics: boolean;
-  parent: QueryCounter | undefined;
-  onQuery?: (phase: "work" | "cleanup") => void;
-};
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
 const queryOriginStore = new AsyncLocalStorage<string | undefined>();
@@ -63,6 +62,7 @@ export const runWithQueryCounter = <TResult>(
 ): TResult => {
   const counter: QueryCounter = {
     count: 0,
+    ...emptyReadWork(),
     transactions: 0,
     fingerprints: new Map(),
     detectRepeatedQueries,
@@ -70,10 +70,24 @@ export const runWithQueryCounter = <TResult>(
     diagnostics: false,
     parent: queryCounterStore.getStore(),
   };
-  return queryCounterStore.run(counter, () => fn(counter));
+  return queryCounterStore.run(counter, () =>
+    withRequestWork(counter, () => fn(counter)),
+  );
 };
 
 export const currentQueryCounter = () => queryCounterStore.getStore();
+
+/**
+ * Start `fn` outside every active counter store. Work a caller starts but does
+ * not await (post-commit search flushes, notifications, cleanup) finishes at a
+ * time the caller does not control, so charging its statements to the
+ * caller's request, task or job would make that measurement depend on timing.
+ * Every continuation `fn` schedules inherits the detachment; other async
+ * context (request identity, logging) is untouched. The sanctioned entry
+ * point is `detached(() => work, "feature.action")`.
+ */
+export const runOutsideQueryCounter = <TResult>(fn: () => TResult): TResult =>
+  queryCounterStore.exit(() => withoutRequestWork(fn));
 
 export class RepeatedQueryFingerprintError extends TaggedError(
   "RepeatedQueryFingerprintError",
@@ -109,10 +123,10 @@ export const runWithMeasuredQueryCounter = async <TResult>(
 
 /** Current active store's query count, or `undefined` when no store is active. */
 export const currentQueryCount = (): number | undefined =>
-  queryCounterStore.getStore()?.count;
+  currentRequestWork()?.count;
 
 export const currentTransactionCount = (): number | undefined =>
-  queryCounterStore.getStore()?.transactions;
+  currentRequestWork()?.transactions;
 
 const recordTransactionRoundTrip = (
   phase: "work" | "cleanup" = "work",

@@ -1,0 +1,5 @@
+{
+  "metric": "web-lib-top-level-entries",
+  "delta": 1,
+  "reason": "One idempotency slice owns submit-intent keys, scoped mutation retries, multipart step keys and mutation-state projection. Grouping the shared implementation under one namespace prevents separate replay implementations in create hooks."
+}

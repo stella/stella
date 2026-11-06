@@ -16,6 +16,7 @@ import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
+  ArchiveIcon,
   ArchiveRestoreIcon,
   ClipboardCopyIcon,
   ExternalLinkIcon,
@@ -29,25 +30,31 @@ import {
 import { resolveMatterColor } from "@stll/ui/matter-colors";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuSeparator,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
+import { contextMenuBelongsTo } from "@/components/context-menu-target";
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { deleteMatterQueries } from "@/lib/workspaces/delete-matter-queries";
 import {
+  useArchiveWorkspace,
   useDeleteWorkspace,
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
-import { workspacesKeys } from "@/lib/workspaces/queries";
+
+import { matterMenuLifecycle } from "./matter-context-menu.logic";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -59,10 +66,12 @@ type MatterMenuBaseCallbacks = {
   onCopyLink: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
+  onArchive: () => void;
   isPinned: boolean;
   // Personal matters are creator-only until promoted; the backend
   // rejects member adds with 400, so hide the affordance here.
   isPersonal: boolean;
+  canUpdate: boolean;
 };
 
 export type MatterMenuCallbacks =
@@ -82,6 +91,7 @@ export type MatterMenuCallbacks =
  */
 export const MatterMenuItems = (props: MatterMenuCallbacks) => {
   const t = useTranslations();
+  const lifecycle = matterMenuLifecycle(props.isArchived, props.canUpdate);
 
   return (
     <>
@@ -98,11 +108,14 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
         <ExternalLinkIcon />
         {t("common.openInNewTab")}
       </MenuItem>
-      <MenuItem onClick={props.onRename}>
+      <MenuItem
+        disabled={lifecycle.editing === "read-only"}
+        onClick={props.onRename}
+      >
         <PenLineIcon />
         {t("common.rename")}
       </MenuItem>
-      {!props.isPersonal && (
+      {!props.isPersonal && lifecycle.editing === "editable" && (
         <MenuItem onClick={props.onAddMember}>
           <UserPlusIcon />
           {t("workspaces.members.addMember")}
@@ -117,13 +130,28 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
         {props.isPinned ? t("common.unpin") : t("common.pin")}
       </MenuItem>
       <MenuSeparator />
-      {props.isArchived && (
+      {lifecycle.action === "unarchive" && (
         <MenuItem onClick={props.onUnarchive}>
           <ArchiveRestoreIcon />
           {t("workspaces.unarchiveMatter")}
         </MenuItem>
       )}
-      <MenuItem onClick={props.onDelete} variant="destructive">
+      {lifecycle.action === "archive" && (
+        <MenuItem onClick={props.onArchive}>
+          <ArchiveIcon />
+          {t("common.archive")}
+        </MenuItem>
+      )}
+      {lifecycle.deletion === "unarchive-first" && (
+        <div className="text-muted-foreground max-w-64 px-2 py-1 text-xs">
+          {t("workspaces.unarchiveBeforeDelete")}
+        </div>
+      )}
+      <MenuItem
+        disabled={lifecycle.deletion === "unarchive-first"}
+        onClick={props.onDelete}
+        variant="destructive"
+      >
         <Trash2Icon />
         {t("common.delete")}
       </MenuItem>
@@ -177,7 +205,7 @@ export type MatterTarget = {
   name: string;
   color: string | null;
   client: { displayName: string } | null;
-  isArchived?: boolean;
+  isArchived: boolean;
 };
 
 type UseMatterActionsOptions = {
@@ -206,10 +234,13 @@ export const useMatterActions = (
 ): MatterActions => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const user = useAuthenticatedUser();
   const togglePin = usePinnedStore((s) => s.togglePin);
   const isPinned = usePinnedStore((s) => s.pinnedIds.has(target.id));
   const unarchiveWorkspace = useUnarchiveWorkspace();
+  const archiveWorkspace = useArchiveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
+  const canUpdate = usePermissions({ workspace: ["update"] });
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -239,7 +270,6 @@ export const useMatterActions = (
     const toastId = stellaToast.add({
       title: t("workspaces.deletingWorkspace"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
 
     await deleteWorkspace.mutateAsync(
@@ -251,8 +281,13 @@ export const useMatterActions = (
             type: "success",
           });
           detached(
-            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "matter-context-menu.invalidate",
+            deleteMatterQueries({
+              activeOrganizationId: user.activeOrganizationId,
+              queryClient,
+              userId: user.id,
+              workspaceId: target.id,
+            }),
+            "matter-context-menu.delete-queries",
           );
           onDeleted?.();
         },
@@ -277,12 +312,22 @@ export const useMatterActions = (
   };
 
   const base = {
+    canUpdate,
     isPersonal: !target.client,
     isPinned,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
       detached(handleCopyLink(), "matter-context-menu.copy-link");
     },
+    onArchive: () =>
+      archiveWorkspace.mutate(
+        { workspaceId: target.id },
+        {
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
+          },
+        },
+      ),
     onDelete: () => setDeleteOpen(true),
     onOpenInNewTab: () => {
       openIsolatedWindow(`/workspaces/${target.id}`);
@@ -364,6 +409,7 @@ export const useMatterContextMenu = (
   const updateWorkspace = useUpdateWorkspace();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpener, setMenuOpener] = useState<HTMLElement | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -414,8 +460,12 @@ export const useMatterContextMenu = (
       }}
       open={menuOpen}
     >
-      <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
-      <MenuPopup anchor={menuAnchor ?? undefined} className="z-50">
+      <MenuAnchor />
+      <MenuPopup
+        anchor={menuAnchor ?? undefined}
+        className="z-50"
+        finalFocus={() => menuOpener}
+      >
         <MatterMenuHeader
           clientName={target.client?.displayName ?? null}
           color={target.color}
@@ -434,10 +484,23 @@ export const useMatterContextMenu = (
     menuOpen,
     rename: renameState,
     onContextMenu: (e) => {
+      if (!contextMenuBelongsTo(e)) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       const x = e.clientX;
       const y = e.clientY;
+      const eventTarget = e.target instanceof Element ? e.target : null;
+      const control = eventTarget?.closest("button,a[href],[tabindex]");
+      const opener =
+        control instanceof HTMLElement && e.currentTarget.contains(control)
+          ? control
+          : null;
+      setMenuOpener(
+        opener ??
+          (e.currentTarget instanceof HTMLElement ? e.currentTarget : null),
+      );
       setMenuAnchor({ getBoundingClientRect: () => new DOMRect(x, y, 0, 0) });
       setMenuOpen(true);
     },

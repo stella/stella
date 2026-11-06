@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 
@@ -62,6 +63,13 @@ export const queryView = <TData, TError>(
     case "pending":
       return { type: "pending" };
     case "error":
+      // Cancellation ends a flight, not the read: keep its data or wait for
+      // the next owner instead of promoting navigation to a failure.
+      if (query.error instanceof CancelledError) {
+        return query.data === undefined
+          ? { type: "pending" }
+          : { type: "items", items: query.data, retry: query.refetch };
+      }
       if (query.data === undefined) {
         return { type: "error", error: query.error, retry: query.refetch };
       }

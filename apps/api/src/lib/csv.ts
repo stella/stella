@@ -18,17 +18,21 @@ export const CSV_DELIMITERS = [",", ";", "\t"] as const;
 
 export type CSVDelimiter = (typeof CSV_DELIMITERS)[number];
 
-type CSVParseResult =
+type CSVParseResultWithMetadata =
   | {
       status: typeof CSV_PARSE_STATUS.INVALID;
     }
   | {
       status: typeof CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED;
       rows: string[][];
+      rowNumbers: number[];
+      skippedBlankRowCount: number;
     }
   | {
       status: typeof CSV_PARSE_STATUS.SUCCESS;
       rows: string[][];
+      rowNumbers: number[];
+      skippedBlankRowCount: number;
     };
 
 type CSVParseOptions = {
@@ -56,15 +60,19 @@ const restoreGuardedFormula = (value: string): string => {
  * Blank records are ignored. Quotes may only open at the start of a cell, and
  * after a closing quote only a delimiter, record boundary, or EOF is valid.
  */
-export const parseCSV = (
+export const parseCSVWithMetadata = (
   text: string,
   { delimiter = ",", maxRows }: CSVParseOptions = {},
-): CSVParseResult => {
+): CSVParseResultWithMetadata => {
   const rows: string[][] = [];
+  const rowNumbers: number[] = [];
   let row: string[] = [];
   let cell = "";
   let inQuotes = false;
   let closedQuote = false;
+  let lineNumber = 1;
+  let rowLineNumber = 1;
+  let skippedBlankRowCount = 0;
 
   const finishCell = () => {
     row.push(restoreGuardedFormula(cell));
@@ -74,11 +82,14 @@ export const parseCSV = (
 
   const finishRow = (): boolean => {
     finishCell();
-    if (row.length > 1 || row.at(0) !== "") {
+    if (row.some((value) => value.length > 0)) {
       if (maxRows !== undefined && rows.length >= maxRows) {
         return false;
       }
       rows.push(row);
+      rowNumbers.push(rowLineNumber);
+    } else {
+      skippedBlankRowCount += 1;
     }
     row = [];
     return true;
@@ -91,6 +102,11 @@ export const parseCSV = (
     if (inQuotes) {
       if (character !== '"') {
         cell += character;
+        if (character === "\n") {
+          lineNumber += 1;
+        } else if (character === "\r" && nextCharacter !== "\n") {
+          lineNumber += 1;
+        }
         continue;
       }
 
@@ -112,11 +128,18 @@ export const parseCSV = (
       }
       if (character === "\r" || character === "\n") {
         if (!finishRow()) {
-          return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+          return {
+            rowNumbers,
+            rows,
+            skippedBlankRowCount,
+            status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED,
+          };
         }
         if (character === "\r" && nextCharacter === "\n") {
           index += 1;
         }
+        lineNumber += 1;
+        rowLineNumber = lineNumber;
         continue;
       }
       return { status: CSV_PARSE_STATUS.INVALID };
@@ -135,11 +158,18 @@ export const parseCSV = (
     }
     if (character === "\r" || character === "\n") {
       if (!finishRow()) {
-        return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+        return {
+          rowNumbers,
+          rows,
+          skippedBlankRowCount,
+          status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED,
+        };
       }
       if (character === "\r" && nextCharacter === "\n") {
         index += 1;
       }
+      lineNumber += 1;
+      rowLineNumber = lineNumber;
       continue;
     }
     cell += character;
@@ -150,10 +180,27 @@ export const parseCSV = (
   }
 
   if ((row.length > 0 || cell.length > 0 || closedQuote) && !finishRow()) {
-    return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+    return {
+      rowNumbers,
+      rows,
+      skippedBlankRowCount,
+      status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED,
+    };
   }
 
-  return { rows, status: CSV_PARSE_STATUS.SUCCESS };
+  return {
+    rowNumbers,
+    rows,
+    skippedBlankRowCount,
+    status: CSV_PARSE_STATUS.SUCCESS,
+  };
+};
+
+export const parseCSV = (text: string, options: CSVParseOptions = {}) => {
+  const parsed = parseCSVWithMetadata(text, options);
+  return parsed.status === CSV_PARSE_STATUS.INVALID
+    ? parsed
+    : { rows: parsed.rows, status: parsed.status };
 };
 
 /**

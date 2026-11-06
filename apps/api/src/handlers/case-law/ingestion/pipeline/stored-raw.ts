@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 
 import { envBase } from "@/api/env-base";
-import { StoredRawReadError } from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawResultReader } from "@/api/handlers/case-law/ingestion/adapter";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
+  StoredRawReadError,
 } from "@/api/lib/legal-search/ingestion-types";
+import type { StoredRawResultReader } from "@/api/lib/legal-search/ingestion-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   isMissingS3ObjectError,

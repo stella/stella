@@ -2,8 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 
@@ -51,7 +50,9 @@ const browserCookie = (read: () => string) => {
   Object.defineProperty(document, "cookie", {
     configurable: true,
     get: read,
-    set: () => undefined,
+    set: () => {
+      // The fixture exposes the server cookie without persisting client writes.
+    },
   });
 };
 
@@ -60,7 +61,7 @@ const capabilities = {
   localPassword: true,
   reviewPasswordSignIn: false,
   bootstrap: false,
-  social: { google: false, microsoft: false },
+  social: { google: false, microsoft: false, apple: false },
 } satisfies AuthCapabilities;
 
 const mount = async () => {
@@ -105,7 +106,7 @@ const isFilled = (button: HTMLElement) =>
 const emailFieldOf = (submit: HTMLElement) => {
   const field = submit.closest("form")?.querySelector('input[type="email"]');
   if (!(field instanceof HTMLInputElement)) {
-    throw new Error("the submit button's form has no email field");
+    throw new TypeError("the submit button's form has no email field");
   }
   return field;
 };

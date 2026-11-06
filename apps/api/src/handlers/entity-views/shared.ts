@@ -10,7 +10,7 @@ import type { ConditionNode, Operand } from "@stll/conditions";
 
 import { entityViews } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -26,12 +26,7 @@ import {
 export const entityViewParams = v.object({
   viewId: resourceIdSchema("workspaceView"),
 });
-const viewName = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(256),
-  v.regex(/\S/u),
-);
+const viewName = v.pipe(displayNameSchema(), v.regex(/\S/u));
 export const entityViewBody = v.object({
   name: viewName,
   layout: tViewLayoutSchema,

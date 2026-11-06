@@ -45,10 +45,12 @@ const myTimeEntryColumns = {
   billedMinutes: timeEntries.billedMinutes,
   narrative: timeEntries.narrative,
   narrativeLanguage: timeEntries.narrativeLanguage,
+  activityCode: timeEntries.activityCode,
   billable: timeEntries.billable,
   status: timeEntries.status,
   source: timeEntries.source,
   timerStartedAt: timeEntries.timerStartedAt,
+  returnComment: timeEntries.returnComment,
 };
 
 type MyTimeEntrySourceRow = typeof timeEntries.$inferSelect & {
@@ -66,10 +68,12 @@ const toMyTimeEntryItem = (
     billedMinutes: row.billedMinutes,
     narrative: row.narrative,
     narrativeLanguage: row.narrativeLanguage,
+    activityCode: row.activityCode,
     billable: row.billable,
     status: row.status,
     source: row.source,
     timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+    returnComment: row.returnComment,
   };
   switch (row.activityGroup) {
     case TIME_ENTRY_ACTIVITY_GROUP.CLIENT:
@@ -102,6 +106,11 @@ const toMyTimeEntryItem = (
 };
 
 const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
+  // Import provenance is reserved for the time-entry import contract.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // The request is scoped to the active organization and signed-in user.
   "organizationId",
   "userId",
@@ -113,7 +122,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "invoiceNarrative",
   "noCharge",
   "taskCode",
-  "activityCode",
   // Invoice and split identifiers are internal billing links.
   "invoiceId",
   "invoiceAttachment",
@@ -128,7 +136,6 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "approvedAt",
   "returnedByUserId",
   "returnedAt",
-  "returnComment",
 ] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
 
 type MissingMyTimeEntryColumn = UnprojectedColumns<

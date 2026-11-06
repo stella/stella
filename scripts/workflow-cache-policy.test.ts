@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { API } from "tsrs/unstable/async";
+import { API } from "tsrs/async";
+import { toRootedFilePath } from "tsrs/path";
 import * as v from "valibot";
 
 import { CACHE_SAVE_REVISION } from "./ci-store-save";
@@ -332,8 +333,14 @@ test("every scoped install key has exactly one declared saver across all workflo
   }
   // Main can reuse the queued proof and skip generated-sources. The browser
   // store must still have a writer in the main-heavy partition itself.
+  // The suite axis is plan-generated, so the census names the job without a
+  // matrix row.
   const browserStore = groups.find((group) =>
-    group.callers.some((caller) => caller.startsWith("ci.yml/ci-browser ")),
+    group.callers.some(
+      (caller) =>
+        caller === "ci.yml/ci-browser" ||
+        caller.startsWith("ci.yml/ci-browser "),
+    ),
   );
   if (browserStore === undefined) {
     expect.unreachable("Missing browser store callers");
@@ -433,7 +440,7 @@ test("the census catches duplicate writers, missing writers and per-row mode dri
   );
 });
 
-test("scoped store saves are non-fatal post hooks, and containers cannot restore a gzip-only version", async () => {
+test("scoped store saves are non-fatal in-step saves, and containers cannot restore a gzip-only version", async () => {
   const action = v.parse(
     v.object({
       inputs: v.object({
@@ -475,13 +482,12 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
   expect(compression?.["run"]).toContain("zstd --version");
   expect(compression?.["continue-on-error"]).toBe(true);
   expect(restore?.["if"]).toBe("steps.compression.outcome == 'success'");
+  // One phase: the save runs inside the install step, never as a post hook.
   const cleanup = v.parse(
     v.object({
-      runs: v.object({
+      runs: v.strictObject({
         using: v.literal("node24"),
         main: v.string(),
-        post: v.string(),
-        "post-if": v.literal("always()"),
       }),
     }),
     Bun.YAML.parse(
@@ -492,7 +498,6 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
     ),
   );
   expect(cleanup.runs.main).toBe("index.mjs");
-  expect(cleanup.runs.post).toBe(cleanup.runs.main);
   const api = new API({ cwd: fileURLToPath(new URL("..", import.meta.url)) });
   const project = await (async () => {
     try {
@@ -506,14 +511,15 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
   expect(project.errors.map(({ text }) => text)).toEqual([]);
   expect(project.options.allowJs).toBe(true);
   expect(project.options.checkJs).toBe(true);
-  for (const entrypoint of [cleanup.runs.main, cleanup.runs.post]) {
-    expect(project.fileNames).toContain(
+  expect(project.fileNames).toContain(
+    toRootedFilePath(
       fileURLToPath(
         new URL(
-          `../.github/actions/ci-store-save/${entrypoint}`,
+          `../.github/actions/ci-store-save/${cleanup.runs.main}`,
           import.meta.url,
         ),
       ),
-    );
-  }
+      undefined,
+    ),
+  );
 });

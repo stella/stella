@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
-export STELLA_MIGRATE_ONLINE_WORK=build_finalized
 
 if [[ $# -ne 1 || "$1" != "--local-test-database" ]]; then
   echo "usage: $0 --local-test-database" >&2

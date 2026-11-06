@@ -12,16 +12,40 @@ import {
  * access, so nothing here is a secret and nothing may be read dynamically.
  */
 
-/** A build may name its server; otherwise the person types it at sign-in. */
-export const PREFILLED_SERVER_URL: string =
-  process.env.EXPO_PUBLIC_STELLA_SERVER_URL ?? "";
+/** stella's own service, which every build signs in to unless told otherwise. */
+const STELLA_SERVER_URL = "https://api.stll.app";
+
+/**
+ * The server sign-in uses: stella's own, or the one a build names (a local
+ * stack on a simulator). Another server is a sign-in option, never the ask.
+ */
+export const DEFAULT_SERVER_URL: string =
+  process.env.EXPO_PUBLIC_STELLA_SERVER_URL ?? STELLA_SERVER_URL;
 
 /**
  * Which build this is (`app.config.ts`), which decides its redirect. A build
  * without one is broken, so it stops at launch rather than signing in on
  * another build's redirect.
  */
-export const APP_VARIANT: MobileAppVariant = v.parse(
-  v.object({ variant: v.picklist(MOBILE_APP_VARIANTS) }),
+const extra = v.parse(
+  v.object({
+    liveActivities: v.optional(v.boolean(), false),
+    pushNotifications: v.optional(v.boolean(), false),
+    variant: v.picklist(MOBILE_APP_VARIANTS),
+  }),
   Constants.expoConfig?.extra,
-).variant;
+);
+
+export const APP_VARIANT: MobileAppVariant = extra.variant;
+
+/**
+ * Whether the build carries the widget extension that draws Live
+ * Activities (`app.config.ts`); a release leaves it out until it signs it.
+ */
+export const LIVE_ACTIVITIES: boolean = extra.liveActivities;
+
+/**
+ * Whether the build may take push notifications (`app.config.ts`); a
+ * release does once its profile carries the push capability.
+ */
+export const PUSH_NOTIFICATIONS: boolean = extra.pushNotifications;

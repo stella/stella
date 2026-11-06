@@ -63,17 +63,21 @@ import {
 } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
-import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
+import {
+  getEntityFileDownloadRenditions,
+  getPrimaryDownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
-  PdfSignDialogs,
+  PdfSignRequiredDialog,
   usePdfSignFlow,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
@@ -123,6 +127,7 @@ import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
@@ -145,6 +150,9 @@ const PDFPageOrganizer = lazy(async () => {
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/document",
 )({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "pdf" }),
+  },
   component: RouteComponent,
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.
@@ -591,7 +599,35 @@ function RouteComponent() {
   }
 
   return (
+    <DocumentRoute
+      entityId={entityId}
+      initialFieldId={initialFieldId}
+      viewId={viewId}
+      workspaceId={workspaceId}
+    />
+  );
+}
+
+function DocumentRoute({
+  entityId,
+  initialFieldId,
+  viewId,
+  workspaceId,
+}: {
+  entityId: string;
+  initialFieldId: string;
+  viewId: string;
+  workspaceId: string;
+}) {
+  const editorPdfSignFlow = usePdfSignFlow({
+    entityId,
+    fieldId: initialFieldId,
+    workspaceId,
+  });
+
+  return (
     <RouteComponentInner
+      editorPdfSignFlow={editorPdfSignFlow}
       entityId={entityId}
       initialFieldId={initialFieldId}
       key={initialFieldId}
@@ -602,11 +638,13 @@ function RouteComponent() {
 }
 
 function RouteComponentInner({
+  editorPdfSignFlow,
   workspaceId,
   viewId,
   entityId,
   initialFieldId,
 }: {
+  editorPdfSignFlow: ReturnType<typeof usePdfSignFlow>;
   workspaceId: string;
   viewId: string;
   entityId: string;
@@ -668,6 +706,8 @@ function RouteComponentInner({
   );
   currentFileFieldIdsByPropertyRef.current ??= new Map();
   const navigate = Route.useNavigate();
+
+  const documentTitle = entity.name || t("tasks.untitled");
 
   useExternalSyncEffect(() => {
     if (!(APIError.is(entityError) && entityError.status === 404)) {
@@ -858,8 +898,7 @@ function RouteComponentInner({
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
   // Signing from the page editor outlives it: saving first replaces the
-  // version, which remounts the editor, and the stamp dialog must stay.
-  const editorPdfSignFlow = usePdfSignFlow();
+  // version, which remounts the editor, and the signing must go on.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -885,7 +924,7 @@ function RouteComponentInner({
       downloadTabFile({
         fieldId,
         fileName: activeFileLabel,
-        variant: "original",
+        variant: getPrimaryDownloadVariant(downloadRenditions),
         workspaceId,
         onError: (message, error) => {
           notifyUserError(error, message);
@@ -947,6 +986,7 @@ function RouteComponentInner({
 
   useExternalSyncEffect(() => {
     if (
+      isPDFPageOrganizerOpen ||
       latestFileFieldForProperty === undefined ||
       latestFileFieldForProperty.id === fieldId
     ) {
@@ -986,15 +1026,14 @@ function RouteComponentInner({
       }),
       "document.navigate",
     );
-  }, [fieldId, latestFileFieldForProperty, navigate]);
-
-  const editorPdfSignTarget = editorPdfSignFlow.preparedTarget ?? pdfSignTarget;
+  }, [fieldId, isPDFPageOrganizerOpen, latestFileFieldForProperty, navigate]);
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
+      <RouteDocumentTitle routeId={Route.id} title={documentTitle} />
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
-      {editorPdfSignTarget !== null && (
-        <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
+      {pdfSignTarget !== null && (
+        <PdfSignRequiredDialog flow={editorPdfSignFlow} />
       )}
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
@@ -1341,7 +1380,7 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
         size="sm"
         variant="outline"
       >
-        {t("fileDetail.openInSidePanel")}
+        {t("common.openInSidePanel")}
       </Button>
     </div>
   );

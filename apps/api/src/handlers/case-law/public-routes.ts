@@ -7,6 +7,7 @@ import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import validateDecisionFilters from "@/api/handlers/case-law/decisions/filter-validation";
 import {
   readDecisionHandler,
   readDecisionQuerySchema,
@@ -82,7 +83,10 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  caseLawPublicReadDb,
+  tryCaseLawPublicRead,
+} from "@/api/lib/case-law-public-read-db";
 import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -246,8 +250,8 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
-  read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+  read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
@@ -288,8 +292,8 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
       ? countryRead
       : { kind: "slug", country: countryRead.country, slug, language };
   },
-  read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+  read: async (subject, { query: { citationsCursor, caseFileCursor } }) =>
+    await readDecisionHandler({ subject, citationsCursor, caseFileCursor }),
   followUp: async (read) => {
     const hydrated = await hydrateDeferredDocument(read, false, {
       type: "on-demand",
@@ -425,8 +429,9 @@ const listSitemapShardDecisions = createSafeBoundedPublicHandler(
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
+    // A shard read refused by the corpus schema lane answers 503.
     const response = yield* Result.await(
-      Result.tryPromise(
+      tryCaseLawPublicRead(
         async () =>
           await listSitemapShardDecisionsHandler(query, caseLawPublicReadDb),
       ),
@@ -487,6 +492,7 @@ export const publicCaseLawRoute = routes(
     "/coverage": { GET: readCaseLawCoverage },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
+    "/decisions/filter-validation": { GET: validateDecisionFilters },
     "/decisions/status": { GET: readCaseLawCorpusStatus },
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },

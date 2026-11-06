@@ -17,7 +17,7 @@ import {
   declaresOnlineBuild,
   validateOnlineConstraints,
 } from "./online-ddl";
-import type { OnlineIndexDeclaration, PolicyDefinition } from "./online-ddl";
+import type { PolicyDefinition } from "./online-ddl";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import type {
   OnlineMigrationConnection,
@@ -103,9 +103,7 @@ const declaredTables = (): Map<string, string[]> => {
       ...texts.filter((text) => text !== undefined),
     ]);
   };
-  const onlineIndexes: readonly OnlineIndexDeclaration[] =
-    ONLINE_MIGRATION_INDEXES;
-  for (const index of onlineIndexes) {
+  for (const index of ONLINE_MIGRATION_INDEXES) {
     declare(index.tableName, index.definitionBody, index.createSql);
   }
   for (const { final, staged } of ONLINE_MIGRATION_INDEX_CUTOVERS) {

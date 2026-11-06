@@ -39,7 +39,7 @@ const handlerWith = (overrides: Partial<HandlerDependencies> = {}) =>
     getMcpToolRequiredScopesHint: () => undefined,
     handleMcpToolCall: async () => ({ content: [] }),
     listMcpTools: async () => [],
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () =>

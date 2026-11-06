@@ -48,6 +48,7 @@ export const loadRateEntry = async ({
             id: true,
             userId: true,
             role: true,
+            activityCodeId: true,
             hourlyRate: true,
             effectiveFrom: true,
             effectiveTo: true,

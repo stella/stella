@@ -14,19 +14,16 @@ import { Temporal } from "@stll/time";
 import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { allFinalizedOnlineWork } from "../tests/helpers/online-work-lifecycle";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
-import type { OnlineBuildConnection } from "./online-migration-connection";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
-  assertOnlineMigrationsApplied,
-  FINALIZED_SCOPE,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   type OnlineRepairOptions,
+  reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runOnlineMigrations,
 } from "./online-migrations";
-import { FINALIZED } from "./online-work-lifecycle";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
   caseLawCitations,
@@ -35,6 +32,21 @@ import {
   corpusIndexProjectionIntents,
 } from "./schema";
 import { terminateReserved } from "./sql-close";
+
+const reportOnlineMigrations = async (
+  ...args: Parameters<typeof reportOnlineMigrationsWithOwnership>
+) => {
+  const outcome = await reportOnlineMigrationsWithOwnership(...args);
+  switch (outcome.type) {
+    case "validated":
+      return outcome.report;
+    case "migrator_active":
+      throw new TypeError("Expected startup validation ownership");
+    default:
+      outcome satisfies never;
+      throw new TypeError("Unknown validation ownership");
+  }
+};
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -45,11 +57,17 @@ const readyIndexes = [
 ];
 
 /** Index handling has its own suite; this adapter routes every repair query to real PG. */
-const repairConnection = (connection: ReservedSQL): OnlineBuildConnection => ({
+const repairConnection = (
+  connection: ReservedSQL,
+  newestAppliedMigration = "99999999999999_later_release",
+): OnlineMigrationConnection => ({
   execute: async (statement, parameters = []) => {
     await connection.unsafe(statement, [...parameters]);
   },
   query: async (statement, parameters = []) => {
+    if (statement.includes("FROM drizzle.__drizzle_migrations")) {
+      return [{ name: newestAppliedMigration }];
+    }
     if (statement.includes("pg_catalog.pg_index")) {
       if (statement.includes("starts_with")) {
         return [];
@@ -259,7 +277,7 @@ describe.skipIf(!enabled)(
             const statements: string[] = [];
             // Only unrelated catalog prerequisites are faked. The staged build,
             // cancellation, final index, and both sessions use real PostgreSQL.
-            const connection: OnlineBuildConnection = {
+            const connection: OnlineMigrationConnection = {
               execute: async (statement, parameters = []) => {
                 statements.push(statement);
                 await builder.unsafe(statement, [...parameters]);
@@ -299,11 +317,6 @@ describe.skipIf(!enabled)(
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
               {
-                scope: FINALIZED_SCOPE,
-                lifecycle: {
-                  ...allFinalizedOnlineWork(),
-                  "later-repair": FINALIZED,
-                },
                 indexGate: {
                   config,
                   clock: () => now,
@@ -359,6 +372,7 @@ describe.skipIf(!enabled)(
                 }),
                 repairs: [
                   {
+                    introducedBy: cutover.introducedBy,
                     name: "later-repair",
                     readCompletion: async () => {
                       repairs += 1;
@@ -445,10 +459,10 @@ describe.skipIf(!enabled)(
               ? createDecisionDateCeilingRepair(options)
               : createCorpusProjectionDeleteReceiptRepair(options);
           const pool = {
-            reserve: async () => repairConnection(await client.reserve()),
+            reserve: async () =>
+              repairConnection(await client.reserve(), repair.introducedBy),
           };
           const runnerOptions = {
-            scope: FINALIZED_SCOPE,
             repairs: [repair],
             // The adapter reports every index ready, so only the repair's
             // constraint validation opens the gate, on a session of its own.
@@ -503,8 +517,15 @@ describe.skipIf(!enabled)(
             ).at(0)?.count;
             expect(cursorCount).toBe(fixture.firstBatch);
           }
-          await assertOnlineMigrationsApplied(pool, runnerOptions);
-          expect(events).toHaveLength(2);
+          const startup = await reportOnlineMigrations(pool, runnerOptions);
+          expect(startup.pending).toEqual([
+            {
+              kind: "repair",
+              name: repair.name,
+              introducedBy: repair.introducedBy,
+            },
+          ]);
+          expect(events).toHaveLength(1);
           for (const event of events) {
             expect(structuredClone(event)).toMatchObject({
               event: "online_repair_pending",
@@ -518,7 +539,7 @@ describe.skipIf(!enabled)(
           resume = true;
           now = pending.holdUntil;
           await runOnlineMigrations(pool, runnerOptions);
-          await assertOnlineMigrationsApplied(pool, runnerOptions);
+          await reportOnlineMigrations(pool, runnerOptions);
           await runOnlineMigrations(pool, runnerOptions);
           const counts = (
             await client.unsafe<{ count: number; once: number }[]>(

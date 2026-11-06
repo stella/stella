@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId target",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 9,
     "requests": [
@@ -21,6 +21,7 @@
       "GET /v1/signals/count",
       "GET /v1/time-entries/:id",
       "GET /v1/time-entries/:id/summary",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/views/:id",
       "GET /v1/workspaces/:id",
@@ -61,7 +62,8 @@
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1,
       "POST /v1/workspaces/:id/active": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -90,7 +92,8 @@
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 7,
       "POST /v1/workspaces/:id/active": 6,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -117,7 +120,8 @@
       "GET /v1/workspaces/:id/workflow": 1024,
       "GET /v1/workspaces/navigation": 20480,
       "POST /v1/workspaces/:id/active": 1024,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

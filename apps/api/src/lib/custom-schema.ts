@@ -3,16 +3,11 @@ import * as v from "valibot";
 import { INVOICE_LANGUAGES } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { safeIdSchema } from "@stll/api-contract/safe-id";
-import { UUID_PATTERN } from "@stll/uuid-codec";
+import { uuidSchema } from "@stll/api-contract/uuid";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 
-/** UUID string (8-4-4-4-12 hex digits), as `Bun.randomUUIDv7()` issues them. */
-export const uuidSchema = v.pipe(
-  v.string(),
-  v.length(36),
-  v.regex(new RegExp(UUID_PATTERN, "u")),
-);
+export { uuidSchema };
 
 /**
  * A shared schema with per-use prose. The branded schemas below are module
@@ -71,11 +66,10 @@ export const fileSchema = ({ maxBytes }: { maxBytes: number }) =>
     v.maxSize(maxBytes, `The file is larger than ${String(maxBytes)} bytes`),
   );
 
-export const userIdSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(128),
-);
+export { userIdSchema } from "@stll/api-contract/safe-id";
+
+/** Every name a person gives something; see `display-name.ts` in api-contract. */
+export { displayNameSchema } from "@stll/api-contract/display-name";
 
 export const defaultVarcharSchema = v.pipe(
   v.string(),

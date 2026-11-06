@@ -8,6 +8,7 @@ import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
 import getExactIcon from "@/api/handlers/chat/link-icons/get-exact";
+import getLocalRunners from "@/api/handlers/chat/local-runners";
 import getMessage from "@/api/handlers/chat/messages/get";
 import getMessages from "@/api/handlers/chat/messages/list";
 import acceptMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
@@ -22,6 +23,7 @@ import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import savedSecret from "@/api/handlers/chat/saved-secret";
 import sendMessage from "@/api/handlers/chat/send-message";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitConnector from "@/api/handlers/chat/submit-connector";
 import submitSecret from "@/api/handlers/chat/submit-secret";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import tableChart from "@/api/handlers/chat/table-chart";
@@ -44,6 +46,7 @@ export const chatRoute = routes(
     "/link-icons/:hostname": { GET: getLinkIcon },
     "/": { POST: sendMessage },
     "/threads/:threadId/secrets/:toolCallId": { POST: submitSecret },
+    "/threads/:threadId/connectors/:toolCallId": { POST: submitConnector },
     "/threads/:threadId/saved-secret": { GET: savedSecret },
     "/tool-grants": { GET: listChatToolGrants, POST: createChatToolGrant },
     "/tool-grants/coverage": { GET: readChatToolGrantCoverage },
@@ -57,6 +60,7 @@ export const chatRoute = routes(
     "/threads": { GET: getThreads },
     "/decision-threads/:decisionId": { GET: getDecisionChatThread },
     "/model-options": { GET: getModelOptions },
+    "/local-runners": { GET: getLocalRunners },
     "/skill-availability": { GET: listUnavailableChatSkills },
     "/table-chart": { POST: tableChart },
     "/improve-prompt": { POST: improvePrompt },

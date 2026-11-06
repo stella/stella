@@ -13,6 +13,8 @@ import {
   plainTextOf,
   tableCellPieceId,
 } from "./document-ast.js";
+import { withDesignatorHeadingLevels } from "./heading-designator-levels.js";
+import { leadingSourceContentsBlockIds } from "./source-contents.js";
 
 /** Parse persisted case-law content and apply every read-time structural repair. */
 export const parseCaseLawDecisionAst = (raw: unknown): DocumentAst | null => {
@@ -67,6 +69,11 @@ export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
  * formula are part of the decision and remain visible as AST headings. The
  * case-number header is the reference line only for a docket primary; under
  * any other primary it is the docket, which nothing else shows, so it stays.
+ * A publisher's leading table of contents is navigation the reader draws from
+ * the headings itself, so its lines are left out of the view, and a heading
+ * stored at its parent's level is nested where its designator (`(a)`, `1.`,
+ * a leading dash) places it in the outline; storage keeps both as the source
+ * gave them.
  */
 export const visibleDecisionBlocks = (
   ast: DocumentAst | null,
@@ -75,9 +82,11 @@ export const visibleDecisionBlocks = (
 ): Block[] => {
   const docketIsReferenceLine =
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+  const sourceContents = leadingSourceContentsBlockIds(ast?.blocks ?? []);
   const visible: Block[] = [];
   for (const block of ast?.blocks ?? []) {
     if (
+      sourceContents.has(block.id) ||
       (docketIsReferenceLine &&
         block.type === "paragraph" &&
         block.role === "case-number") ||
@@ -88,9 +97,37 @@ export const visibleDecisionBlocks = (
     visible.push(block);
   }
   if (visible.length > 0 || !fulltext) {
-    return visible;
+    return withDesignatorHeadingLevels(visible);
   }
   return buildFulltextParagraphBlocks(fulltext);
+};
+
+/**
+ * The first paragraph of a decision's separate opinions: the one the court
+ * gave the `dissent` role. The AST marks where the opinions are, not whose
+ * each one is.
+ */
+export const firstDissentBlock = (
+  blocks: readonly Block[],
+): ParagraphBlock | null =>
+  blocks.find(
+    (block): block is ParagraphBlock =>
+      block.type === "paragraph" && block.role === "dissent",
+  ) ?? null;
+
+/**
+ * Where a reader lands to read the separate opinions: the heading that opens
+ * them when the court printed one right above, else their first paragraph.
+ */
+export const separateOpinionStartAnchorId = (
+  blocks: readonly Block[],
+): string | null => {
+  const first = firstDissentBlock(blocks);
+  if (first === null) {
+    return null;
+  }
+  const opener = blocks[blocks.indexOf(first) - 1];
+  return opener?.type === "heading" ? opener.anchorId : first.anchorId;
 };
 
 /**

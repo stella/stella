@@ -9,13 +9,17 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
+  isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -119,7 +123,7 @@ export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 // handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document" | "request_secret"
+  "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
@@ -144,13 +148,11 @@ type ToolNameWithPolicyKind<K extends string> = {
     Name in keyof BuiltInChatToolPolicyKindByName
   ]: BuiltInChatToolPolicyKindByName[Name] extends K ? Name : never;
 }[keyof BuiltInChatToolPolicyKindByName];
-type PublicOfficialToolName = Extract<
-  BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"public_official">
->;
+// Tools that send model-chosen arguments to a third party show them on the
+// approval card, official public registries included.
 type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"external">
+  ToolNameWithPolicyKind<"external" | "public_official">
 >;
 const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
@@ -164,11 +166,20 @@ const TOOL_CALL_STATE_IS_RUNNING = {
 const isChatToolCallState = (
   value: string,
 ): value is ChatToolCallPart["state"] =>
-  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
+  isOwnKey(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
+  [CONNECT_CONNECTOR_TOOL_NAME]: true,
+  // A blocking question a coding agent on the member's computer asks: its
+  // call stays open until the member answers it from the question card.
+  [CHAT_LOCAL_RUN_QUESTION_TOOL]: true,
 } as const satisfies Record<string, true>;
+export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
+
+export const isUserInputChatToolName = (
+  name: string,
+): name is UserInputChatToolName => Object.hasOwn(USER_INPUT_TOOL_NAMES, name);
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
 // approval click: the read tools, plus the queue-only registration of
@@ -228,6 +239,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   request_secret: "chat.tool.request_secret",
+  connect_connector: "chat.tool.connect_connector",
   use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
@@ -263,6 +275,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   get_document_outline: "chat.tool.get_document_outline",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
+  list_connectable_connectors: "catalogue.filter.mcps",
   list_stories: "chat.tool.list_stories",
   list_templates: "chat.tool.list_templates",
   add_matter_member: "chat.tool.add_matter_member",
@@ -335,28 +348,41 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 
+/**
+ * Actions a coding agent on the member's computer takes itself, persisted
+ * under the harness-native names the agent engine gives them
+ * (`HARNESS_TOOL_NAMES` in `@stll/agent-engine`). Its MCP calls to stella use
+ * the registry names above and need no entry here.
+ */
+const HARNESS_TOOL_TITLE_KEYS = {
+  command_execution: "chat.tool.command_execution",
+  file_change: "chat.tool.file_change",
+  harness_web_search: "chat.tool.harness_web_search",
+  request_user_input: "chat.tool.request_user_input",
+  request_permissions: "chat.tool.request_permissions",
+  harness_unsupported_item: "chat.tool.harness_unsupported_item",
+} as const satisfies Record<string, TranslationKey>;
+
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
+  ...HARNESS_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
-const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
+const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,
   boe_get_law: true,
   boe_get_law_block: true,
   boe_get_law_structure: true,
+  boe_search_legislation: true,
   borme_get_summary: true,
   business_registry_lookup: true,
   counterparty_check: true,
-  infosoud_lookup_case: true,
-} as const satisfies Record<PublicOfficialToolName, true>;
-
-const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
-  boe_search_legislation: true,
   fetch_url: true,
+  infosoud_lookup_case: true,
   use_connector_secret: true,
   "use-browser": true,
   web_search: true,
@@ -369,7 +395,7 @@ export const isExternalMcpToolName = (
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
 ): toolName is ExternalInputToolName =>
-  toolName in EXTERNAL_INPUT_CHAT_TOOL_NAMES;
+  isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
 export const getExternalMcpConnectorSlugFromToolName = (
   toolName: `mcp__${string}`,
@@ -403,11 +429,6 @@ export const isToolApprovedByGrant = (
   toolName: ApprovalToolName,
 ) => grants.has(toolName) || grants.has(getToolApprovalGrant(toolName));
 
-export const isPublicOfficialChatToolName = (
-  toolName: string,
-): toolName is PublicOfficialToolName =>
-  toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
-
 // The grant policy is shared with the API, which enforces it when storing a
 // grant and when deciding which calls skip the approval prompt.
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
@@ -427,7 +448,14 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   add_comment: false,
+  boe_find_related_laws: false,
+  boe_get_law: false,
+  boe_get_law_block: false,
+  boe_get_law_structure: false,
   boe_search_legislation: false,
+  borme_get_summary: false,
+  business_registry_lookup: false,
+  counterparty_check: false,
   "create-current-skill-resource": false,
   create_matter_document: false,
   create_reader_annotation: true,
@@ -440,6 +468,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_time_entry: true,
   fetch_url: false,
   fill_template: true,
+  infosoud_lookup_case: false,
   link_matter_contact: true,
   add_matter_member: true,
   remove_matter_member: true,
@@ -506,7 +535,7 @@ const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
 ): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
+  isOwnKey(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
@@ -519,7 +548,7 @@ export type ChatToolTitleKey =
 const isChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
-  toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
+  isOwnKey(CHAT_TOOL_DISPLAY_TITLE_KEYS, toolName);
 
 export const isApprovalToolName = (
   toolName: string,
@@ -532,7 +561,8 @@ export const isApprovalToolName = (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
     toolName !== "create-document" &&
-    toolName !== "request_secret"
+    toolName !== "request_secret" &&
+    toolName !== "connect_connector"
   );
 };
 
@@ -697,7 +727,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (typeof part.name !== "string" || part.name in USER_INPUT_TOOL_NAMES) {
+  if (
+    typeof part.name !== "string" ||
+    isOwnKey(USER_INPUT_TOOL_NAMES, part.name)
+  ) {
     return false;
   }
 
@@ -722,7 +755,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -817,7 +850,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -825,7 +858,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   return (
     "name" in part &&
     typeof part.name === "string" &&
-    part.name in FOLIO_AGENT_DOC_TOOL_NAMES
+    isOwnKey(FOLIO_AGENT_DOC_TOOL_NAMES, part.name)
   );
 };
 
@@ -907,7 +940,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );
@@ -1373,7 +1406,14 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ * Pasted-text parts are attachments of the message, not its text, so they
+ * stay out: joined in, they would mix plain text into the composer markup.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];
@@ -1386,7 +1426,11 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
+      if (
+        part.type === "text" &&
+        !isChatPastedTextPart(part) &&
+        part.content.trim()
+      ) {
         textParts.push(part.content);
       }
     }

@@ -26,6 +26,7 @@ import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import {
@@ -33,6 +34,7 @@ import {
   readerVersion,
 } from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
+import { cursorInput } from "@/api/mcp/input-schemas";
 import {
   isProvisionTextCursor,
   windowProvisionText,
@@ -41,7 +43,6 @@ import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
-import { cursorInput } from "@/api/mcp/tool-utils";
 
 const UUID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const TIMESTAMP = "9999-12-31T23:59:59.999999Z";
@@ -144,6 +145,7 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   "law.fetch.nextCursor": offsetCursor,
   "advanced.list_matters.nextCursor": idCursor,
   "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,
@@ -156,6 +158,10 @@ const cursorFixtures: Readonly<Record<string, string>> = {
   ),
   "advanced.read_content_across_matters.nextCursor": offsetCursor,
   "advanced.read_case_law_citations.nextCursor": idCursor,
+  // The longest stored court name, every character escaped by JSON.
+  "advanced.list_case_law_courts.nextCursor": encodeCourtCursor(
+    "\u0001".repeat(512),
+  ),
   "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
   "advanced.search_legislation.nextCursor": statuteCursor,
   "advanced.read_statute.nextCursor": offsetCursor,

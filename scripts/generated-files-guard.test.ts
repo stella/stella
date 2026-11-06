@@ -49,6 +49,25 @@ class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
 
+test("generator input declarations cover their transitive import closures", () => {
+  expect(generatorInputCensus(GENERATORS)).toEqual([]);
+});
+
+test("sharing an import graph preserves each family's input findings", () => {
+  const tailwind = generator("tailwind-class-cache");
+  const families = [
+    { ...tailwind, id: "declared" },
+    { ...tailwind, id: "undeclared", inputs: [], checkInputs: [] },
+  ];
+  const independent = families.flatMap((family) =>
+    generatorInputCensus([family]),
+  );
+  expect(independent.length).toBeGreaterThan(0);
+  expect(generatorInputCensus(families)).toEqual(
+    [...new Set(independent)].toSorted(),
+  );
+});
+
 test("a change to the guard's own sources selects every family", () => {
   const sources = guardSelectionSources();
   for (const file of [
@@ -139,6 +158,15 @@ test("selects direct, output, and transitive changes while unrelated files selec
   ).toBe(0);
   expect(affectedGeneratorIds(GENERATORS, null).size).toBe(GENERATORS.length);
 });
+
+test.each(["bun.lock", "package.json"])(
+  "shared dependency input %s selects every generator check",
+  (file) => {
+    expect(affectedGeneratorIds(GENERATORS, [file])).toEqual(
+      new Set(GENERATORS.map(({ id }) => id)),
+    );
+  },
+);
 
 test("a glob that matches nothing leaves every family unaffected", () => {
   const fixture = [

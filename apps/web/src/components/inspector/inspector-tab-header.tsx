@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -7,10 +8,16 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  type Availability,
+  filterAvailable,
+} from "@/lib/platform/requirements.logic";
+import { usePlatformCapabilities } from "@/lib/platform/use-platform-capabilities";
 
 /**
  * Shared header strip used at the top of every inspector tab —
@@ -27,6 +34,20 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
  * matters. The header doesn't dictate either — it just lays out
  * the slot consistently.
  */
+
+/**
+ * One tab-type-specific header button. `requires` is mandatory so every
+ * action states where it is worth offering; the header drops the ones the
+ * device or layout cannot use instead of letting them crowd the name.
+ */
+export type HeaderAction = {
+  /** Stable key, unique within one header. */
+  id: string;
+  requires: Availability;
+  render: () => ReactNode;
+};
+
+const NO_HEADER_ACTIONS: readonly HeaderAction[] = [];
 
 type RenameState = {
   /** Whether the label is currently being edited inline. */
@@ -74,10 +95,10 @@ type InspectorTabHeaderProps = {
    */
   rename?: RenameState;
   /**
-   * Matter slot rendered after the dot separator. Caller supplies
-   * the widget — a navigation link for files, a context picker for
-   * chats. Hidden while the label is being renamed to keep the
-   * row uncluttered.
+   * Matter slot rendered after the dot separator, or under the name
+   * on compact layouts. Caller supplies the widget — a navigation
+   * link for files, a context picker for chats. Hidden while the
+   * label is being renamed to keep the row uncluttered.
    */
   matter?: ReactNode;
   /**
@@ -86,7 +107,7 @@ type InspectorTabHeaderProps = {
    * Both are hidden while renaming: the inspector is narrow, and the
    * name needs the whole row to stay readable.
    */
-  actions?: ReactNode;
+  actions?: readonly HeaderAction[];
   onClose: () => void;
 };
 
@@ -96,15 +117,19 @@ export const InspectorTabHeader = ({
   onLabelContextMenu,
   rename,
   matter,
-  actions,
+  actions = NO_HEADER_ACTIONS,
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const renaming = rename?.active === true;
+  const visibleActions = filterAvailable(actions, usePlatformCapabilities());
 
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
+    <div
+      className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
+      data-slot="inspector-panel-header"
+    >
       {/* Only the label clips: the field's focus ring is drawn outside it. */}
       <div
         className={cn(
@@ -134,29 +159,42 @@ export const InspectorTabHeader = ({
             value={rename.value}
           />
         ) : (
-          <span
-            className={cn(
-              "overflow-hidden text-xs font-medium text-ellipsis whitespace-pre",
-              onStartRename !== undefined && "cursor-text",
+          // Compact layouts stack the matter under the name, the way a
+          // sidebar row puts its client under the matter, so the name gets
+          // the whole width instead of sharing one line with the chip.
+          <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
+            <TruncatedText
+              aria-label={label}
+              className={cn(
+                "max-w-full whitespace-pre",
+                onStartRename !== undefined && "cursor-text",
+              )}
+              onContextMenu={onLabelContextMenu}
+              onDoubleClick={onStartRename}
+              tabIndex={0}
+              tooltip={label}
+            >
+              <UserText>{label}</UserText>
+            </TruncatedText>
+            {matter !== undefined && (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="text-foreground-subtle hidden text-xs md:inline"
+                >
+                  ·
+                </span>
+                <span className="flex max-w-full min-w-0">{matter}</span>
+              </>
             )}
-            onContextMenu={onLabelContextMenu}
-            onDoubleClick={onStartRename}
-          >
-            <UserText>{label}</UserText>
-          </span>
-        )}
-        {matter !== undefined && !renaming && (
-          <>
-            <span aria-hidden="true" className="text-foreground-subtle text-xs">
-              ·
-            </span>
-            {matter}
-          </>
+          </div>
         )}
       </div>
       {renaming ? null : (
         <div className="flex shrink-0 items-center gap-1 ps-4">
-          {actions}
+          {visibleActions.map((action) => (
+            <Fragment key={action.id}>{action.render()}</Fragment>
+          ))}
           <Button
             aria-label={tCommon("close")}
             onClick={onClose}
@@ -192,12 +230,14 @@ export const MatterOriginLink = ({
   color,
   onClick,
 }: MatterOriginLinkProps) => (
-  <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5"
+  <Button
+    className="flex max-w-[220px] min-w-0 shrink"
     onClick={onClick}
-    type="button"
+    variant="plain"
   >
-    <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
-    <span className="truncate">{name}</span>
-  </button>
+    <span className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5">
+      <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
+      <span className="truncate">{name}</span>
+    </span>
+  </Button>
 );

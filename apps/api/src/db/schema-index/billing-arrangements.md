@@ -7,17 +7,20 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## billing_arrangements · `billingArrangements` · billing-arrangements.ts:25
 
 ```text
-billing_arrangements.workspace_id         safeWorkspaceId     pk,not null       billing-arrangements.ts:28
-billing_arrangements.organization_id      safeOrganizationId  fk,not null       billing-arrangements.ts:29
-billing_arrangements.mode                 text                not null          billing-arrangements.ts:32
-billing_arrangements.currency             varchar             not null          billing-arrangements.ts:33
-billing_arrangements.flat_fee_amount      centsColumn         null              billing-arrangements.ts:35  PostgreSQL bigint; centsColumn preserves the bounded CentsAmount JSON number boundary.
-billing_arrangements.cap_amount           centsColumn         null              billing-arrangements.ts:36
-billing_arrangements.alert_threshold_bps  integer             null              billing-arrangements.ts:37
-billing_arrangements.threshold_state      text                default,not null  billing-arrangements.ts:38
-billing_arrangements.cap_state            text                default,not null  billing-arrangements.ts:42
-billing_arrangements.currency_state       text                default,not null  billing-arrangements.ts:46
-billing_arrangements.crossing_sequence    integer             default,not null  billing-arrangements.ts:50
-billing_arrangements.revision             integer             default,not null  billing-arrangements.ts:51
-billing_arrangements.updated_at           timestamptz         default,not null  billing-arrangements.ts:52
+billing_arrangements.workspace_id            safeWorkspaceId     pk,fk,not null    billing-arrangements.ts:28
+billing_arrangements.organization_id         safeOrganizationId  fk,not null       billing-arrangements.ts:29
+billing_arrangements.mode                    text                not null          billing-arrangements.ts:32
+billing_arrangements.currency                varchar             not null          billing-arrangements.ts:33
+billing_arrangements.flat_fee_amount         centsColumn         null              billing-arrangements.ts:35  PostgreSQL bigint; centsColumn preserves the bounded CentsAmount JSON number boundary.
+billing_arrangements.cap_amount              centsColumn         null              billing-arrangements.ts:36
+billing_arrangements.cap_minutes             integer             null              billing-arrangements.ts:38  Maximum reserved billable time, independent of the monetary cap.
+billing_arrangements.minute_threshold_state  text                default,null      billing-arrangements.ts:39
+billing_arrangements.minute_cap_state        text                default,null      billing-arrangements.ts:42
+billing_arrangements.alert_threshold_bps     integer             null              billing-arrangements.ts:45
+billing_arrangements.threshold_state         text                default,not null  billing-arrangements.ts:46
+billing_arrangements.cap_state               text                default,not null  billing-arrangements.ts:50
+billing_arrangements.currency_state          text                default,not null  billing-arrangements.ts:54
+billing_arrangements.crossing_sequence       integer             default,not null  billing-arrangements.ts:58
+billing_arrangements.revision                integer             default,not null  billing-arrangements.ts:59
+billing_arrangements.updated_at              timestamptz         default,not null  billing-arrangements.ts:60
 ```

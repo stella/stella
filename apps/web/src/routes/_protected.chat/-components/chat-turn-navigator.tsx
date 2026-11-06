@@ -1,5 +1,7 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+
 import { userMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import Tooltip from "@/components/tooltip";
@@ -85,11 +87,11 @@ export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
             }
             key={item.id}
             render={
-              <button
+              <Button
                 aria-label={t("chat.jumpToMessage")}
-                className="focus-visible:ring-ring group relative flex size-11 shrink-0 cursor-pointer items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                className="group relative flex size-11 shrink-0 items-center justify-start"
                 onClick={() => scrollToTurn(item.id)}
-                type="button"
+                variant="plain"
               />
             }
             side={getLangDir(lang) === "rtl" ? "left" : "right"}

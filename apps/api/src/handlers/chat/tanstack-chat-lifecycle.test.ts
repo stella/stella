@@ -3,6 +3,7 @@ import type {
   ChatMiddlewareContext,
   ErrorInfo,
   FinishInfo,
+  StreamChunk,
 } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
 import { expect, test } from "bun:test";
@@ -23,7 +24,7 @@ test("TanStack terminal hook canary rejects a second terminal signal", async () 
   await hooks.onFinish(context, asTestRaw<FinishInfo>({}));
   const secondTerminal = hooks.onError(context, asTestRaw<ErrorInfo>({}));
   if (!(secondTerminal instanceof Promise)) {
-    throw new Error(
+    throw new TypeError(
       "Expected TanStack terminal hook adapter to be asynchronous",
     );
   }
@@ -95,4 +96,16 @@ test("a run finish with no outcome completes and a cancelled one is cut short", 
       outcome: { type: "cancelled" },
     }),
   ).toBe("cancelled");
+});
+
+test("an unknown or inherited event type neither starts nor ends a run", () => {
+  for (const type of [
+    ...Object.getOwnPropertyNames(Object.prototype),
+    "__proto__",
+    "FUTURE_EVENT",
+  ]) {
+    expect(tanStackStreamEventLifecycle(asTestRaw<StreamChunk>({ type }))).toBe(
+      "content",
+    );
+  }
 });

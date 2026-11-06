@@ -17,6 +17,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -115,6 +117,7 @@ const config = {
 const rewriteClause = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     session,
     body,
@@ -123,6 +126,10 @@ const rewriteClause = createSafeRootHandler(
     orgAIConfig,
     managedAIResidency,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and

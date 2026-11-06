@@ -9,9 +9,14 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 
 import committedWeights from "../../mcp-connect-tool-weights.json" with { type: "json" };
 
-// Starts at today's total so it only blocks growth; lower it as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 127_472;
-const PER_TOOL_CONNECT_CHAR_CAP = 7000;
+// Full contact writes expose their shared validation and nested input readers,
+// the template list takes a limit and cursor like every other list, and the
+// reader annotation list says how it reports passages it can no longer place,
+// and the audit log takes a performer filter. The case-law results app pages
+// a country's courts through list_case_law_courts (844 characters).
+// These measured limits include that shape; lower them as tools shrink.
+const TOTAL_CONNECT_CHAR_BUDGET = 133_915;
+const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {
   const current = connectToolWeights(DEFAULT_MCP_TOOL_DEFINITIONS);

@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
 // parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
@@ -18,18 +20,23 @@
  * Redaction. The court anonymizes by painting a run black on black:
  * `<span style="color: #000000; background-color: #000000; …">` over a run
  * of `&nbsp;`. The span carries no words, so nothing is being uncovered
- * here; what it carries is a bar as wide as what it replaced. Dropped
- * rather than kept, because those spaces are not text the decision states,
- * and marked anonymized, because a reader has to see that something stood
- * there.
+ * here; what it carries is a bar as wide as what it replaced. Replace it
+ * with a visible anonymization marker. Some conversions omit the paint
+ * and leave only the non-breaking
+ * space run; those gaps must become visible before whitespace is trimmed.
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
+import {
+  hasInlineChildren,
+  withUniqueBlockIdentities,
+} from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -56,6 +63,7 @@ import {
   skSectionHeading,
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   ANONYMIZED_CLASS,
@@ -63,9 +71,9 @@ import {
   isExcludedHtmlTag,
   walkInlines,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**
  * What a dropped anonymized run reads as.
@@ -75,6 +83,32 @@ import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
  * with two different words.
  */
 const SK_US_ANONYMIZED_PLACEHOLDER = "anonymizované";
+
+/** The shortest redaction run in the court's I. ÚS 442/2020 conversion. */
+const REDACTION_GAP = /(\u00a0{4,})/u;
+
+/** Retain unpainted redaction gaps, including lines containing only a gap. */
+const preserveRedactionGaps = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((inline): Inline[] => {
+    if (hasInlineChildren(inline)) {
+      return [{ ...inline, children: preserveRedactionGaps(inline.children) }];
+    }
+    if (inline.type !== "text") {
+      return [inline];
+    }
+    return inline.text
+      .split(REDACTION_GAP)
+      .filter((text) => text.length > 0)
+      .map((text) =>
+        REDACTION_GAP.test(text)
+          ? {
+              type: "text",
+              text: SK_US_ANONYMIZED_PLACEHOLDER,
+              anonymized: true,
+            }
+          : { ...inline, text },
+      );
+  });
 
 /** The declaration that paints a run the colour of its own background. */
 const HIDDEN_STYLE_PARTS = ["color: #000000", "background-color: #000000"];
@@ -220,7 +254,7 @@ const readMarkupLines = ($: cheerio.CheerioAPI): MarkupLine[] => {
   // lines reads the same through either: the reader's text, and the text
   // left once a court number is cut off the inlines.
   for (const line of lines) {
-    setInlines(line, line.inlines);
+    setInlines(line, preserveRedactionGaps(line.inlines));
   }
   return lines;
 };
@@ -269,7 +303,17 @@ type FooterCandidate = {
    * may hold only the closing lines.
    */
   readonly last: boolean;
+  /**
+   * The page opens a new part of the document with the court's docket on a
+   * line of its own (a separate opinion): the page before it may hold only
+   * the closing lines of the part it ends.
+   */
+  readonly opensPart: boolean;
 };
+
+/** The court's docket alone on a line: `III. ÚS 86/05`, `PL. ÚS 1/2021-45`. */
+const DOCKET_LINE =
+  /^(?:PL|[IVX]{1,4})\.\s?ÚS\s\d{1,4}\/\d{2,4}(?:-\d{1,4})?$/u;
 
 const PAGE_SEQUENCE = {
   /** No page of a decision holds less text than this. */
@@ -315,6 +359,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "alone",
         length: text.length,
         last: index === lastText,
+        opensPart: false,
       });
     } else if (leading !== null) {
       candidates.push({
@@ -326,6 +371,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "leading",
         length: leading[0].length,
         last: false,
+        opensPart: DOCKET_LINE.test(text.slice(leading[0].length).trim()),
       });
     } else if (trailing !== null) {
       candidates.push({
@@ -335,6 +381,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         form: "trailing",
         length: trailing.length,
         last: index === lastText,
+        opensPart: false,
       });
     }
     offset += text.length;
@@ -377,6 +424,7 @@ const pageRuns = (
         step.length === 0 ||
         previous.number !== candidate.number - 1 ||
         (!candidate.last &&
+          !candidate.opensPart &&
           candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
       ) {
         continue;
@@ -481,6 +529,7 @@ const pageSequence = (
     const gap = candidate.offset - last.offset;
     if (
       candidate.last ||
+      (candidate.opensPart && gap <= PAGE_SEQUENCE.maxPageChars) ||
       (gap >= PAGE_SEQUENCE.minPageChars && gap <= PAGE_SEQUENCE.maxPageChars)
     ) {
       run.push(candidate);
@@ -555,8 +604,191 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
   line.text = normalized.plainText;
 };
 
+/**
+ * How the court's file separates two words.
+ *
+ * Some of the court's files set every gap between two words as a no-break
+ * space. A plain space in such a file is not a gap the court set: it is a
+ * seam where the file's text layer joined two runs the page set apart,
+ * inside a word the court spaced for emphasis (`zru šuje`, `prizn áva`,
+ * `Pou čenie:`) or where a line break was lost (`… porušené boli. 2.
+ * Uznesenie …`). The court's other files set plain spaces throughout, so a
+ * plain space in them says nothing.
+ */
+type WordGap = "no-break" | "plain";
+
+/** A gap between two letters, and which space sets it. */
+const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
+
+/**
+ * No-break gaps between letters outnumber plain ones by at least this much
+ * in a file that sets its words apart with no-break spaces. The recorded
+ * files of that kind have one plain gap in 840 and one in 13,000, every
+ * one a seam; files of the other kind have no no-break gap between letters.
+ */
+const NO_BREAK_GAP_DOMINANCE = 50;
+
+const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
+  let noBreak = 0;
+  let plain = 0;
+  for (const { text } of lines) {
+    for (const match of text.matchAll(LETTER_GAP)) {
+      if (match.groups?.["gap"] === " ") {
+        plain += 1;
+      } else {
+        noBreak += 1;
+      }
+    }
+  }
+  return noBreak > 0 && plain * NO_BREAK_GAP_DOMINANCE <= noBreak
+    ? "no-break"
+    : "plain";
+};
+
+/**
+ * A seam where the file lost a line break: a finished sentence, then the
+ * next numbered paragraph or point (`… porušené boli. 2. Uznesenie …`).
+ */
+const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]{0,3}) (?=\d{1,3}\.[  ]{1,4}\p{Lu})/gu;
+
+/**
+ * A seam inside a word: a letter (with at most a few combining marks), then
+ * the lowercase rest of the word. Bounded repeats keep every match linear.
+ */
+const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}{0,4}) (?=\p{Ll})/gu;
+
+/** A word's letters, read the same however the file composed or cased them. */
+const wordKey = (word: string): string =>
+  normalizeUnicode(word, "NFC").toLowerCase();
+
+/** The word that ends a text, and the one that opens it, at most 64 letters. */
+const LAST_WORD = /\p{L}[\p{L}\p{M}]{0,63}$/u;
+const FIRST_WORD = /^\p{L}[\p{L}\p{M}]{0,63}/u;
+
+/**
+ * The words a file prints whole: letter runs in stretches no plain space
+ * touches. A seam's fragments (`zru`, `Pou`, `povinn`) are not among them.
+ */
+const wholeWordsOf = (lines: readonly MarkupLine[]): Set<string> => {
+  const words = new Set<string>();
+  for (const { text } of lines) {
+    for (const stretch of text.split(/[^\S ]+/u)) {
+      if (stretch.includes(" ")) {
+        continue;
+      }
+      for (const [word] of stretch.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
+        words.add(wordKey(word));
+      }
+    }
+  }
+  return words;
+};
+
+/**
+ * A text with each plain space inside a word removed. A plain space between
+ * two words the file prints whole is a gap the court set (`v súde`), and
+ * stays.
+ */
+const joinWordSeams = (text: string, words: ReadonlySet<string>): string =>
+  text.replaceAll(SPACED_WORD_SEAM, (seam: string, offset: number) => {
+    const before = LAST_WORD.exec(text.slice(Math.max(0, offset - 64), offset));
+    const after = FIRST_WORD.exec(text.slice(offset + 1, offset + 65));
+    return before !== null &&
+      after !== null &&
+      words.has(wordKey(before[0])) &&
+      words.has(wordKey(after[0]))
+      ? seam
+      : "";
+  });
+
+/** A line split before the given offsets of its text. */
+const splitLineAt = (
+  line: MarkupLine,
+  offsets: readonly number[],
+): MarkupLine[] => {
+  const bounds = [0, ...offsets, line.text.length];
+  return bounds.slice(1).map((end, index) => {
+    const start = bounds[index] ?? 0;
+    const part: MarkupLine = { ...line, inlines: [], text: "" };
+    setInlines(
+      part,
+      stripInlineSuffix(
+        stripInlinePrefix(line.inlines, start),
+        line.text.length - end,
+      ),
+    );
+    return part;
+  });
+};
+
+/**
+ * The court's lines and words where a file that sets its words apart with
+ * no-break spaces joined them at a seam (see {@link WordGap}): a lost line
+ * break opens a new line, and a word split inside is read whole. Read
+ * before the typography, whose rewrites set plain spaces of their own.
+ */
+const readTextLayerSeams = (lines: readonly MarkupLine[]): MarkupLine[] => {
+  if (wordGapOf(lines) === "plain") {
+    return [...lines];
+  }
+  const words = wholeWordsOf(lines);
+  return lines.flatMap((line) => {
+    const offsets = Array.from(
+      line.text.matchAll(LOST_LINE_BREAK),
+      (match) => match.index,
+    );
+    const parts = offsets.length === 0 ? [line] : splitLineAt(line, offsets);
+    for (const part of parts) {
+      setInlines(
+        part,
+        rewriteInlineWhitespace(part.inlines, (text) =>
+          joinWordSeams(text, words),
+        ),
+      );
+    }
+    return parts;
+  });
+};
+
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
+
+/** Intact document words and section markers recognized by the shared vocabulary. */
+const typographyWords = (lines: readonly MarkupLine[]) => {
+  const words = new Set<string>();
+  const spacedWords = new Set<string>();
+  for (const { text } of lines) {
+    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
+      words.add(normalizeUnicode(word, "NFC").toLowerCase());
+    }
+    const colon = text.indexOf(":");
+    if (colon === -1) {
+      continue;
+    }
+    const chunks = text
+      .slice(0, colon + 1)
+      .trim()
+      .split(/\s+/u);
+    let marker = "";
+    for (const chunk of chunks.toReversed()) {
+      marker = `${chunk} ${marker}`.trim();
+      if (
+        isSkHoldingMarker(marker) ||
+        isSkReasoningMarker(marker) ||
+        isSkStandaloneInstructionMarker(marker)
+      ) {
+        spacedWords.add(
+          normalizeUnicode(
+            marker.replaceAll(/[\s:]/gu, ""),
+            "NFC",
+          ).toLowerCase(),
+        );
+        break;
+      }
+    }
+  }
+  return { attestedWords: words, spacedWords };
+};
 
 /**
  * The court's typography read as the characters it prints.
@@ -572,11 +804,14 @@ const SOFT_HYPHEN = String.fromCodePoint(0xad);
  * is a visible hyphen, the ones at a line's end included (`obrazovo<U+00AD>`
  * / `zvukových`, `C<U+00AD>` / `293/12`).
  */
-const readTypography = (inlines: readonly Inline[]): Inline[] =>
+const readTypography = (
+  inlines: readonly Inline[],
+  evidence: ReturnType<typeof typographyWords>,
+): Inline[] =>
   rewriteInlineWhitespace(
     mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
     // Over the whole line: a wrapper's edge is not a gap between words.
-    (text) => collapseLetterSpacing(text, { setApart: true }),
+    (text) => collapseLetterSpacing(text, { setApart: true, ...evidence }),
   );
 
 type Section = SkDocumentSection;
@@ -751,6 +986,7 @@ const continuesOnNextPage = (open: string, next: string): boolean =>
 /** The blocks read so far, the paragraph still open, and where the reading is. */
 type BlockBuilder = {
   readonly blocks: Block[];
+  readonly makeAnchor: ReturnType<typeof createBlockAnchorAllocator>;
   section: Section;
   blockCount: number;
   paragraph: MarkupLine | null;
@@ -781,7 +1017,7 @@ const flushParagraph = (builder: BlockBuilder): void => {
   })();
   builder.blocks.push({
     id: nextBlockId(builder),
-    anchorId: `p${builder.blockCount}`,
+    anchorId: builder.makeAnchor(`p${builder.blockCount}`),
     type: "paragraph",
     ...(role === null ? {} : { role }),
     inlines: line.inlines,
@@ -803,7 +1039,12 @@ const pushHeading = (
   anchorId = `h${builder.blocks.length + 1}`,
 ): void => {
   builder.blocks.push(
-    headingBlock({ id: nextBlockId(builder), anchorId, level, line }),
+    headingBlock({
+      id: nextBlockId(builder),
+      anchorId: builder.makeAnchor(anchorId),
+      level,
+      line,
+    }),
   );
 };
 
@@ -858,6 +1099,20 @@ const readPartMarker = (builder: BlockBuilder, line: MarkupLine): boolean => {
     (line.fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(line.text))
   ) {
     flushParagraph(builder);
+    const previous = builder.blocks.at(-1);
+    if (previous?.type === "heading" && previous.role === "decision-title") {
+      const joined = joinLines(
+        {
+          inlines: previous.inlines,
+          text: previous.plainText,
+          fontSize: line.fontSize,
+        },
+        line,
+      );
+      previous.inlines = joined.inlines;
+      previous.plainText = joined.text;
+      return true;
+    }
     pushHeading(builder, line, 1, "h-title");
     return true;
   }
@@ -918,7 +1173,7 @@ const readClosingMarker = (
     builder.blockCount += 1;
     builder.blocks.push({
       id: nextBlockId(builder),
-      anchorId: `p${builder.blockCount}`,
+      anchorId: builder.makeAnchor(`p${builder.blockCount}`),
       type: "paragraph",
       role: "closing",
       inlines: line.inlines,
@@ -1063,6 +1318,78 @@ const readParagraphLine = (
   openParagraph(builder, line);
 };
 
+/** A finished sentence, then the gap before whatever the source ran on. */
+const SENTENCE_THEN_GAP = /[.!?][“”"»)]{0,3}(?<gap>\s+)/gu;
+
+/**
+ * The word a sentence-ending full stop follows, read from a bounded tail:
+ * an abbreviation is a few letters, and a longer word is no abbreviation.
+ */
+const LAST_WORD_LENGTH = 32;
+const LAST_WORD_BEFORE = /[\p{L}\d]{1,32}$/u;
+
+/**
+ * Abbreviations a number follows (`čl. 2.`, `ods. 3.`): their full stop
+ * ends no sentence, so a number after one is a citation, not a paragraph.
+ */
+const NUMBERED_ABBREVIATIONS: ReadonlySet<string> = new Set([
+  "bod",
+  "č",
+  "čl",
+  "nar",
+  "napr",
+  "ods",
+  "písm",
+  "porov",
+  "resp",
+  "s",
+  "sp",
+  "str",
+  "tzv",
+  "zák",
+  "zb",
+  "zn",
+]);
+
+/**
+ * Where the source lost a line break: it ran the court's next numbered point
+ * onto the sentence before it (`… porušené boli. 2. Zrušuje …`), or a part
+ * marker onto the sentence that ends the part (`… osobou. Odôvodnenie:`).
+ * Only the number that comes next counts, after a word an abbreviation's
+ * full stop does not end. Restoring the break leaves the paragraph decision
+ * to the reading of whole lines.
+ */
+const lostBreakOffsets = (
+  text: string,
+  builder: Pick<BlockBuilder, "section" | "nextCourtNumber">,
+): number[] => {
+  const offsets: number[] = [];
+  let markerAt: number | undefined;
+  for (const match of text.matchAll(SENTENCE_THEN_GAP)) {
+    const at = match.index + match[0].length;
+    const word =
+      LAST_WORD_BEFORE.exec(
+        text.slice(Math.max(0, match.index - LAST_WORD_LENGTH), match.index),
+      )?.[0] ?? "";
+    const opening = openingNumberOf(text.slice(at));
+    if (
+      (builder.section === "holding" || builder.section === "reasoning") &&
+      opening === builder.nextCourtNumber &&
+      word.length >= 2 &&
+      !NUMBERED_ABBREVIATIONS.has(word.toLowerCase())
+    ) {
+      offsets.push(at);
+    }
+    const tail = text.slice(at);
+    if (isSkReasoningMarker(tail) || isSkStandaloneInstructionMarker(tail)) {
+      markerAt = at;
+    }
+  }
+  return markerAt === undefined
+    ? offsets
+    : [...offsets.filter((offset) => offset < markerAt), markerAt];
+};
+
 /**
  * Group the lines into blocks.
  *
@@ -1074,20 +1401,32 @@ const readParagraphLine = (
 const classifyLines = (lines: readonly MarkupLine[]): Block[] => {
   const builder: BlockBuilder = {
     blocks: [],
+    makeAnchor: createBlockAnchorAllocator(),
     section: "preamble",
     blockCount: 0,
     paragraph: null,
     nextCourtNumber: 1,
   };
-  const reading: Reading = {
-    lines,
-    openings: lines.map(({ text }) => openingNumberOf(text)),
-  };
+  // A line split where the source lost a break is read as the lines it was.
+  const readLines = [...lines];
+  const openings = readLines.map(({ text }) => openingNumberOf(text));
+  const reading: Reading = { lines: readLines, openings };
   let index = 0;
-  while (index < lines.length) {
-    const line = lines[index];
+  while (index < readLines.length) {
+    const line = readLines[index];
     if (line === undefined || PAGE_NUMBER_PATTERN.test(line.text)) {
       index += 1;
+      continue;
+    }
+    const lostBreaks = lostBreakOffsets(line.text, builder);
+    if (lostBreaks.length > 0) {
+      const parts = splitLineAt(line, lostBreaks);
+      readLines.splice(index, 1, ...parts);
+      openings.splice(
+        index,
+        1,
+        ...parts.map(({ text }) => openingNumberOf(text)),
+      );
       continue;
     }
     if (line.text.length === 0) {
@@ -1219,26 +1558,19 @@ export const parseSkUsDocumentXhtml = ({
   decisionType,
   documentUrl,
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
-  const $ = cheerio.load(xhtml);
+  const $ = load(xhtml);
   markHiddenRuns($);
-  const lines = removePageFurniture(readMarkupLines($));
+  const lines = readTextLayerSeams(removePageFurniture(readMarkupLines($)));
+  const words = typographyWords(lines);
   for (const line of lines) {
-    setInlines(line, readTypography(line.inlines));
+    setInlines(line, readTypography(line.inlines, words));
   }
-  const blocks = courtParagraphNumbers(classifyLines(lines), {
-    parser: "sk-us",
-    caseNumber,
-    url: documentUrl,
-  });
-
-  validateAndLog(
-    {
+  const blocks = withUniqueBlockIdentities(
+    courtParagraphNumbers(classifyLines(lines), {
       parser: "sk-us",
       caseNumber,
       url: documentUrl,
-    },
-    xhtml,
-    blocks,
+    }),
   );
 
   const fulltext = blocks

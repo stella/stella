@@ -7,12 +7,15 @@ import type { RequestListener } from "node:http";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
+} from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
+import {
   OUTBOUND_IPV6_POLICY,
+  OUTBOUND_USER_AGENT,
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
@@ -41,6 +44,60 @@ describe("fetchWithResolvedAddress", () => {
 
         expect(new TextDecoder().decode(result.value.body)).toBe(
           `example.test:${port}`,
+        );
+      },
+    );
+  });
+
+  test("names stella as the User-Agent unless the caller names one", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const userAgentSent = async (headers?: Record<string, string>) => {
+          const result = await fetchWithResolvedAddress({
+            permit: grantThirdPartyOutboundPermit(),
+            addresses: [{ address: "127.0.0.1", family: 4 }],
+            maxBytes: 1024,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+            url: new URL(`http://example.test:${port}/probe`),
+            ...(headers === undefined ? {} : { headers }),
+          });
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          return new TextDecoder().decode(result.value.body);
+        };
+
+        expect(await userAgentSent()).toBe(OUTBOUND_USER_AGENT);
+        expect(OUTBOUND_USER_AGENT).toStartWith("stella-api/");
+        expect(await userAgentSent({ "User-Agent": "stella-ingestion" })).toBe(
+          "stella-ingestion",
+        );
+      },
+    );
+  });
+
+  test("streams name stella as the User-Agent too", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          url: new URL(`http://example.test:${port}/probe`),
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        expect(await new Response(result.value.body).text()).toBe(
+          OUTBOUND_USER_AGENT,
         );
       },
     );

@@ -1,0 +1,76 @@
+name: Refresh CLDR exemplar input
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/refresh-cldr-exemplars.yml
+      - packages/mojibake/**
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  refresh-exemplars:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install refresh dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts --filter '@stll/mojibake...' --filter '!stella'
+
+      - name: Check input validation
+        run: bun test ./packages/mojibake/src/exemplar-input.test.ts
+
+      - name: Convert and verify pinned CLDR source
+        timeout-minutes: 10
+        run: |
+          export CLDR_JAVA="${JAVA_HOME_21_X64:?Java 21 is required}/bin/java"
+          bash packages/mojibake/scripts/refresh-exemplar-input.sh "$RUNNER_TEMP/cldr49-input"
+
+      - name: Upload verified exemplar input
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cldr49-exemplar-input
+          path: ${{ runner.temp }}/cldr49-input/artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Verify committed input matches the official conversion
+        run: |
+          bun --eval '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            for (const name of ["exemplars-supplement.json", "provenance.json"]) {
+              const committed = JSON.parse(readFileSync("packages/mojibake/data/cldr49/" + name, "utf8"));
+              const converted = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/cldr49-input/artifact/" + name, "utf8"));
+              assert.equal(JSON.stringify(committed), JSON.stringify(converted), name + " must match the official conversion");
+            }
+          '

@@ -40,6 +40,7 @@ const FILES = {
   cs: `${LANGS}/cs.json`,
   types: `${LANGS}/messages.gen.ts`,
   terminology: "apps/web/src/i18n/TERMINOLOGY.md",
+  sourceLock: "apps/web/src/i18n/i18n-source-lock.json",
   prepaint: "apps/web/public/prepaint-init.js",
   unrelated: "apps/web/src/app.ts",
 } as const;
@@ -83,14 +84,26 @@ describe("pre-commit i18n sync", () => {
         writeFileSync(path.join(repo, FILES.cs), '{ "a": "A" }\n');
         writeFileSync(path.join(repo, FILES.types), "type Messages = {};\n");
         writeFileSync(path.join(repo, FILES.prepaint), "// locales\n");
+        writeFileSync(path.join(repo, FILES.sourceLock), "{}\n");
         return 0;
       });
       expect(result).toEqual({
         kind: "staged",
-        staged: [FILES.prepaint, FILES.cs, FILES.types].toSorted(),
+        staged: [
+          FILES.prepaint,
+          FILES.cs,
+          FILES.types,
+          FILES.sourceLock,
+        ].toSorted(),
       });
       expect(staged(repo).toSorted()).toEqual(
-        [FILES.prepaint, FILES.en, FILES.cs, FILES.types].toSorted(),
+        [
+          FILES.prepaint,
+          FILES.en,
+          FILES.cs,
+          FILES.types,
+          FILES.sourceLock,
+        ].toSorted(),
       );
       expect(unstaged(repo)).toEqual([]);
     });

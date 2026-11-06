@@ -5,6 +5,7 @@ import {
   currencyMinorUnitDigits,
   formatMoneyCents,
   toMajorUnits,
+  toMajorUnitsText,
   toMinorUnits,
   tryToMinorUnits,
 } from "./format";
@@ -121,6 +122,30 @@ describe("toMinorUnits", () => {
     expect(() =>
       toMinorUnits({ amount: "99999999999999999", currency: "USD" }),
     ).toThrow("not an amount USD can store");
+  });
+});
+
+describe("toMajorUnitsText", () => {
+  test("moves the digits by the currency's minor unit", () => {
+    expect(toMajorUnitsText({ amountCents: 123_456, currency: "EUR" })).toBe(
+      "1234.56",
+    );
+    expect(toMajorUnitsText({ amountCents: 5, currency: "USD" })).toBe("0.05");
+    expect(toMajorUnitsText({ amountCents: -5, currency: "USD" })).toBe(
+      "-0.05",
+    );
+    expect(toMajorUnitsText({ amountCents: 1500, currency: "JPY" })).toBe(
+      "1500",
+    );
+  });
+
+  test("keeps every minor unit at the safe-integer edge", () => {
+    expect(
+      toMajorUnitsText({
+        amountCents: Number.MAX_SAFE_INTEGER,
+        currency: "KWD",
+      }),
+    ).toBe("9007199254740.991");
   });
 });
 

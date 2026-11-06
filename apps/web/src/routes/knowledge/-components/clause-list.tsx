@@ -319,32 +319,30 @@ const ClauseRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <TextQuoteIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {clause.title}
-          </p>
-          <p className="text-muted-foreground text-xs">
-            {categoryName ?? t("common.uncategorized")}
-            {" \u00b7 "}
-            {format.dateTime(new Date(clause.createdAt), {
-              dateStyle: "medium",
+      <Button className="w-full" onClick={onSelect} variant="plain">
+        <span className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start">
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <TextQuoteIcon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium" dir="auto">
+              {clause.title}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              {categoryName ?? t("common.uncategorized")}
+              {" \u00b7 "}
+              {format.dateTime(new Date(clause.createdAt), {
+                dateStyle: "medium",
+              })}
+            </p>
+          </div>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {t("common.versionLabel", {
+              version: String(clause.currentVersion),
             })}
-          </p>
-        </div>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {t("common.versionLabel", {
-            version: String(clause.currentVersion),
-          })}
+          </span>
         </span>
-      </button>
+      </Button>
     </li>
   );
 };

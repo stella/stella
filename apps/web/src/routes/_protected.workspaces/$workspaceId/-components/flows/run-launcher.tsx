@@ -192,7 +192,9 @@ export const RunLauncher = ({
           )}
           {filteredEntities === undefined && entitiesFailed && (
             <div className="flex items-center gap-2 p-2 text-xs">
-              <span className="text-muted-foreground">{t("common.error")}</span>
+              <span className="text-muted-foreground">
+                {t("common.loadFailed")}
+              </span>
               <Button
                 onClick={() =>
                   detached(refetchEntities(), "flows.retry-run-entities")
@@ -210,15 +212,15 @@ export const RunLauncher = ({
             </p>
           )}
           {filteredEntities?.map((entity) => (
-            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+            <Label className="flex" key={entity.id}>
               <Checkbox
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate" dir="auto">
+              <span className="truncate text-sm font-normal" dir="auto">
                 {entity.name}
               </span>
-            </label>
+            </Label>
           ))}
         </div>
         {exceedsInputEntitiesLimit && (

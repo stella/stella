@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -27,11 +30,14 @@ export const useCreateViewTemplate = () => {
     select: (ctx) => ctx.user.id,
   });
 
-  return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: CreateViewTemplateVars) => {
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, ...body }: CreateViewTemplateVars,
+      request,
+    ) => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
-      }).put(body);
+      }).put(body, request);
       return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
@@ -47,6 +53,7 @@ export const useCreateViewTemplate = () => {
         fingerprintKey: "useCreateViewTemplate:failure",
         scope: { type: "handler", handlerId: "useCreateViewTemplate:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -90,6 +97,7 @@ export const useDeleteViewTemplate = () => {
         fingerprintKey: "useDeleteViewTemplate:failure",
         scope: { type: "handler", handlerId: "useDeleteViewTemplate:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

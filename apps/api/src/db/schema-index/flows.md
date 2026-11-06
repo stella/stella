@@ -48,8 +48,8 @@ One step in a run.
 flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:135
 flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:136
 flow_run_steps.id                                        pUuid            pk,not null       flows.ts:137
-flow_run_steps.workspace_id                              safeWorkspaceId  not null          flows.ts:138
-flow_run_steps.run_id                                    safeUuid         not null          flows.ts:139
+flow_run_steps.workspace_id                              safeWorkspaceId  fk,not null       flows.ts:138
+flow_run_steps.run_id                                    safeUuid         fk,not null       flows.ts:139
 flow_run_steps.index                                     integer          not null          flows.ts:140
 flow_run_steps.kind                                      text             not null          flows.ts:141
 flow_run_steps.status                                    text             default,not null  flows.ts:142

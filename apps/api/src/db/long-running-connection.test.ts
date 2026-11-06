@@ -15,6 +15,7 @@ import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry"
 
 import { createDedicatedConnectionOwner } from "./dedicated-connection-slots";
 import {
+  openCancellableReservedSession,
   withDedicatedReservedSession,
   withLongRunningConnection,
 } from "./long-running-connection";
@@ -83,6 +84,30 @@ test("abort waits for backend cancellation before closing the session", async ()
     "cancel settled",
     "close",
   ]);
+});
+
+test("a failed backend identity lookup releases the reserved session", async () => {
+  const failure = new Error("backend identity lookup failed");
+  let released = false;
+
+  const result = await rejectionOf(
+    openCancellableReservedSession({
+      reserve: async () => ({
+        unsafe: async () => {
+          throw failure;
+        },
+        release: async () => {
+          released = true;
+        },
+        close: async () => {},
+      }),
+      cancelBackend: async () => {},
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toBe(failure);
+  expect(released).toBe(true);
 });
 
 test("abort between statements refuses the next statement", async () => {

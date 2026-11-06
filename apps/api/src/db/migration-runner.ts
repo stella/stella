@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import type { ReservedSQL } from "bun";
+import type { MaybePromise, ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
@@ -29,31 +29,27 @@ import {
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
 import {
-  MIGRATE_ONLINE_WORK_MODE,
-  type MigrateOnlineWorkMode,
-} from "./migrate-online-work-mode";
-import {
   createMigrationLockTelemetry,
+  describeMigrationBlockers,
+  migrationLockKey,
   observeMigrationLockAttempt,
 } from "./migration-lock-observation";
-import type { MigrationLockTelemetry } from "./migration-lock-observation";
+import type {
+  MigrationBlocker,
+  MigrationLockTelemetry,
+} from "./migration-lock-observation";
 import { withMigrationLockTimeout } from "./migration-lock-timeout";
 import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
 import { openOnlineIndexObserver } from "./online-index-observer";
-import type {
-  OnlineBuildConnection,
-  OnlineMigrationConnection,
-  OnlineMigrationOutcome,
-} from "./online-migration-connection";
+import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
-  ALL_WORK_SCOPE,
-  assertOnlineMigrationsApplied,
-  FINALIZED_SCOPE,
+  ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import type { OnlineRepairOptions } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -142,6 +138,8 @@ type AdoptionOptions = {
   migrations: ReturnType<typeof readMigrationFiles>;
   migrationsSchema: string;
   migrationsTable: string;
+  /** This attempt's queue bound; the transaction commits or rolls back whole. */
+  lockTimeoutMs: number;
 };
 
 const preflightAndAdopt = async ({
@@ -149,10 +147,13 @@ const preflightAndAdopt = async ({
   migrations,
   migrationsSchema,
   migrationsTable,
+  lockTimeoutMs,
 }: AdoptionOptions) => {
   const constraintName = `${migrationsTable}_name_key`;
   return await database.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+    await tx.execute(
+      sql`SELECT set_config('lock_timeout', ${`${String(lockTimeoutMs)}ms`}, true)`,
+    );
     await tx.execute(
       sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(migrationsSchema)}`,
     );
@@ -340,6 +341,7 @@ export class MigrationLockWaitError extends TaggedError(
   reason: MigrationLockWaitFailure;
   attempts: number;
   lockTimeoutMs: number;
+  blockers: readonly MigrationBlocker[];
   cause: unknown;
 }> {
   static {
@@ -355,8 +357,13 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
 };
 
 type ApplyPendingOptions = {
+  /** Names the step in the final error; defaults to the migration apply. */
+  label?: string;
   apply: (lockTimeoutMs: number) => Promise<void>;
-  classifyLedger: () => Promise<MigrationLedgerProgress>;
+  classifyLedger: () =>
+    MigrationLedgerProgress | Promise<MigrationLedgerProgress>;
+  /** Sessions seen blocking the failed attempts, named in the final error. */
+  blockers: () => readonly MigrationBlocker[];
   retry: LockWaitRetry;
 };
 
@@ -439,8 +446,10 @@ const migrationLedgerClassifier =
  * predicted receipts. Refuse a retry only when another writer added a receipt.
  */
 export const applyPendingRetryingLockWaits = async ({
+  label = "Migrations",
   apply,
   classifyLedger,
+  blockers,
   retry,
 }: ApplyPendingOptions): Promise<void> => {
   const outcome = await runLockRetryLadder({
@@ -453,10 +462,11 @@ export const applyPendingRetryingLockWaits = async ({
       const ledgerProgress = await classifyLedger();
       if (ledgerProgress.status === "foreign") {
         throw new MigrationLockWaitError({
-          message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempts)}`,
+          message: `${label} lost a lock wait after committing receipts on attempt ${String(attempts)}; blocked by ${describeMigrationBlockers(blockers())}`,
           reason: MIGRATION_LOCK_WAIT_FAILURE.ledgerMoved,
           attempts,
           lockTimeoutMs,
+          blockers: blockers(),
           cause,
         });
       }
@@ -477,10 +487,11 @@ export const applyPendingRetryingLockWaits = async ({
     return;
   }
   throw new MigrationLockWaitError({
-    message: `Migrations lost a lock wait after ${String(outcome.attempts)} attempts (${outcome.reason})`,
+    message: `${label} lost a lock wait after ${String(outcome.attempts)} attempts (${outcome.reason}); blocked by ${describeMigrationBlockers(blockers())}`,
     reason: outcome.reason,
     attempts: outcome.attempts,
     lockTimeoutMs: outcome.lockTimeoutMs,
+    blockers: blockers(),
     cause: outcome.cause,
   });
 };
@@ -506,44 +517,185 @@ export const applySchemaMigrationsRetryingLockWaits = async ({
   }
 };
 
+const SCHEMA_PENDING_STEP = "schema.pending";
+
+const SCHEMA_LANE_STEP = "schema.lane";
+const SCHEMA_PREFLIGHT_STEP = "schema.preflight";
+
+const schemaStepBlockers = (telemetry: MigrationLockTelemetry, step: string) =>
+  telemetry.lastBlockers.get(migrationLockKey("schema", step)) ??
+  panic(`Missing migration lock observation for schema step ${step}`);
+
+type MigratePendingOptions = {
+  observeSchema: SchemaObserver;
+  migrations: ReturnType<typeof readMigrationFiles>;
+  database: ReturnType<typeof createDatabase>;
+  lockTimeoutMs: number;
+  paths: {
+    migrationsFolder: string;
+    migrationsSchema: string;
+    migrationsTable: string;
+  };
+};
+
+/** Every attempt reruns the whole pending set from the start of its transaction. */
+const migratePending = async ({
+  observeSchema,
+  migrations,
+  database,
+  lockTimeoutMs,
+  paths,
+}: MigratePendingOptions) =>
+  await observeSchema(
+    SCHEMA_PENDING_STEP,
+    async () =>
+      await pgCoreMigrate(
+        migrations.map((migration) => ({
+          ...migration,
+          sql: migration.sql.map((statement) =>
+            withMigrationLockTimeout(statement, lockTimeoutMs),
+          ),
+        })),
+        database,
+        paths,
+      ),
+  );
+
+type ReportSchemaStepOptions = {
+  timing: MigrationTiming;
+  step: "preflight" | "apply";
+  retriesSpent: () => number;
+  migrations: readonly string[];
+  work: () => Promise<void>;
+};
+
+/** One record per schema step, success or failure. */
+const reportSchemaStep = async ({
+  timing,
+  step,
+  retriesSpent: spent,
+  migrations,
+  work,
+}: ReportSchemaStepOptions) => {
+  const startedAt = timing.clock();
+  const emit = (outcome: "done" | "failed") => {
+    const retriesSpent = spent();
+    timing.emit({
+      event: "migrate.schema_step",
+      step,
+      migrations,
+      durationMs: Math.max(0, Math.round(timing.clock() - startedAt)),
+      attempts: retriesSpent + 1,
+      retriesSpent,
+      outcome,
+    });
+  };
+  try {
+    await work();
+  } catch (error: unknown) {
+    emit("failed");
+    throw error;
+  }
+  emit("done");
+};
+
 type PrepareSchemaPhaseOptions = {
+  readMigrations: typeof readMigrationFiles;
   connection: ReservedSQL;
   migrationsFolder: string;
   migrationsSchema: string;
   migrationsTable: string;
   onLaneAcquired: () => void;
+  observeSchema: SchemaObserver;
+  timing: MigrationTiming;
+  lockTelemetry: MigrationLockTelemetry;
+  lockWaitRetry: LockWaitRetry;
 };
 
 const prepareSchemaPhase = async ({
+  readMigrations,
   connection,
   migrationsFolder,
   migrationsSchema,
   migrationsTable,
   onLaneAcquired,
+  observeSchema,
+  timing,
+  lockTelemetry,
+  lockWaitRetry,
 }: PrepareSchemaPhaseOptions) => {
-  await connection.unsafe(bootstrapRoleSql);
-  const [liftTimeout, takeLane, restoreTimeout] =
-    CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-  await connection.unsafe(liftTimeout);
-  await connection.unsafe(takeLane);
-  onLaneAcquired();
-  await connection.unsafe(restoreTimeout);
+  await observeSchema(SCHEMA_LANE_STEP, async () => {
+    await connection.unsafe(bootstrapRoleSql);
+    const { lift, lock, restore } = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+    for (const statement of lift) {
+      await connection.unsafe(statement);
+    }
+    await connection.unsafe(lock);
+    onLaneAcquired();
+    for (const statement of restore) {
+      await connection.unsafe(statement);
+    }
+  });
 
-  const bundle = readMigrationFiles({ migrationsFolder });
+  const bundle = readMigrations({ migrationsFolder });
   const schemaDatabase = createDatabase({ client: connection });
-  const adoption = await preflightAndAdopt({
-    database: schemaDatabase,
-    migrations: bundle,
-    migrationsSchema,
-    migrationsTable,
+  const retriesAtStart = lockTelemetry.retriesSpent;
+  let adoption: Awaited<ReturnType<typeof preflightAndAdopt>> | undefined;
+  // The adoption is one transaction, so a refused lock rolls back all of it
+  // and each attempt starts a fresh one.
+  await reportSchemaStep({
+    timing,
+    step: "preflight",
+    retriesSpent: () => lockTelemetry.retriesSpent - retriesAtStart,
+    migrations: [],
+    work: async () =>
+      await applyPendingRetryingLockWaits({
+        label: "Migration preflight",
+        apply: async (lockTimeoutMs) => {
+          adoption = await observeSchema(
+            SCHEMA_PREFLIGHT_STEP,
+            async () =>
+              await preflightAndAdopt({
+                database: schemaDatabase,
+                migrations: bundle,
+                migrationsSchema,
+                migrationsTable,
+                lockTimeoutMs,
+              }),
+          );
+        },
+        classifyLedger: () => ({
+          status: "unchanged",
+          committedReceipts: 0,
+        }),
+        blockers: () =>
+          schemaStepBlockers(lockTelemetry, SCHEMA_PREFLIGHT_STEP),
+        retry: lockWaitRetry,
+      }),
   });
 
   return {
-    preflight: adoption,
+    preflight: adoption ?? panic("Migration preflight produced no decision"),
     migrations: bundle,
     database: schemaDatabase,
   };
 };
+
+type ReadLedgerRowsOptions = Pick<
+  AdoptionOptions,
+  "database" | "migrationsSchema" | "migrationsTable"
+>;
+
+const readLedgerRows = async ({
+  database,
+  migrationsSchema,
+  migrationsTable,
+}: ReadLedgerRowsOptions) =>
+  await database.execute<LedgerRow>(sql`
+    SELECT id, hash, created_at, name
+    FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
+    ORDER BY id
+  `);
 
 type VerifyMigrationReceiptsOptions = {
   database: ReturnType<typeof createDatabase>;
@@ -657,88 +809,38 @@ const emitFailedPhase = (
   }
 };
 
-/** What each building mode walks; `verify_finalized` builds nothing. */
-const BUILD_SCOPE = {
-  [MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED]: FINALIZED_SCOPE,
-  [MIGRATE_ONLINE_WORK_MODE.BUILD_ALL]: ALL_WORK_SCOPE,
-} as const;
-
-/**
- * The migrator's own session as the online phase's connection; terminating
- * it marks the session so the runner never unlocks a dead one.
- */
-const migratorOnlineConnection = (
-  connection: ReservedSQL,
-  session: { state: "open" | "terminated" },
-): OnlineBuildConnection => ({
-  terminate: async () => {
-    session.state = "terminated";
-    await terminateReserved(connection);
-  },
-  execute: async (query, params = []) => {
-    await connection.unsafe(query, [...params]);
-  },
-  query: async (query, params = []) =>
-    await connection.unsafe(query, [...params]),
-  release: (): void => undefined,
-});
-
-type OnlinePhaseOptions = {
-  mode: MigrateOnlineWorkMode;
-  pool: Parameters<typeof runOnlineMigrations>[0];
-  /** How a building mode walks; its scope comes from the mode. */
-  build: Omit<Parameters<typeof runOnlineMigrations>[1], "scope">;
-  runOnline: typeof runOnlineMigrations;
-  validateOnline: typeof assertOnlineMigrationsApplied;
-};
-
-/** The online phase of one mode: build its scope, or only verify. */
-const runOnlinePhase = async ({
-  mode,
-  pool,
-  build,
-  runOnline,
-  validateOnline,
-}: OnlinePhaseOptions): Promise<OnlineMigrationOutcome> => {
-  switch (mode) {
-    case MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED:
-    case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
-      return await runOnline(pool, { ...build, scope: BUILD_SCOPE[mode] });
-    case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED:
-      await validateOnline(pool);
-      return { type: "complete" };
-    default:
-      mode satisfies never;
-      return panic("Unknown migrate online-work mode");
-  }
-};
+type OnlineMigrationRunner = (
+  ...args: Parameters<typeof runOnlineMigrations>
+) => MaybePromise<Awaited<ReturnType<typeof runOnlineMigrations>>>;
 
 type RunMigrationsOptions = {
+  /** Local test templates replay existing cluster roles without changing source hashes. */
+  readMigrations?: typeof readMigrationFiles;
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
   databaseUrl: string;
   migrationsFolder: string;
   /** Resolved before the migrator connects; a missing one never gets here. */
   ebs: ConfiguredEbsConfiguration;
-  /** Release databases verify finalized work; disposable ones build it. */
-  onlineWorkMode: MigrateOnlineWorkMode;
   migrationsSchema?: string;
   migrationsTable?: string;
-  runOnline?: typeof runOnlineMigrations;
-  validateOnline?: typeof assertOnlineMigrationsApplied;
+  runOnline?: OnlineMigrationRunner;
+  observeRepair?: OnlineRepairOptions["observeRepair"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
   /** Where phase and online step durations go; JSON lines on stdout otherwise. */
   timing?: MigrationTiming;
   lockTelemetry?: MigrationLockTelemetry;
-  reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+  reserveSchemaObserver?: typeof openOnlineIndexObserver;
 };
 
 const migrationSessionCanUnlock = (
   laneHeld: boolean,
   sessionState: "open" | "terminated",
 ) => laneHeld && sessionState === "open";
+
+type SchemaObserver = <T>(step: string, work: () => Promise<T>) => Promise<T>;
 
 type SchemaObservationOptions = {
   observer: OnlineMigrationConnection;
@@ -773,22 +875,38 @@ const createSchemaObservation = async ({
     });
 };
 
+/** The migrator's own session, lent to the online phase without release. */
+const createOnlineSession = (
+  connection: ReservedSQL,
+  session: { state: "open" | "terminated" },
+): OnlineMigrationConnection => ({
+  terminate: async () => {
+    session.state = "terminated";
+    await terminateReserved(connection);
+  },
+  execute: async (query, params = []) => {
+    await connection.unsafe(query, [...params]);
+  },
+  query: async (query, params = []) =>
+    await connection.unsafe(query, [...params]),
+  release: (): void => undefined,
+});
+
 export const runMigrations = async ({
+  readMigrations = readMigrationFiles,
   connection,
   databaseUrl,
   migrationsFolder,
   ebs,
-  onlineWorkMode,
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
-  validateOnline = assertOnlineMigrationsApplied,
+  observeRepair,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
   lockTelemetry = createMigrationLockTelemetry(),
-  reserveSchemaObserver = async () =>
-    await openOnlineIndexObserver(databaseUrl),
+  reserveSchemaObserver = openOnlineIndexObserver,
 }: RunMigrationsOptions) => {
   let laneHeld = false;
   const clock: MigrationPhaseClock = {
@@ -804,7 +922,7 @@ export const runMigrations = async ({
   const schemaRetriesAtStart = lockTelemetry.retriesSpent;
   let onlineRetriesAtStart = 0;
   try {
-    schemaObserver = await reserveSchemaObserver();
+    schemaObserver = await reserveSchemaObserver(databaseUrl);
     const observeSchema = await createSchemaObservation({
       observer: schemaObserver,
       connection,
@@ -814,20 +932,21 @@ export const runMigrations = async ({
         await terminateReserved(connection);
       },
     });
-    const { preflight, migrations, database } = await observeSchema(
-      "schema.preflight",
-      async () =>
-        await prepareSchemaPhase({
-          connection,
-          migrationsFolder,
-          migrationsSchema,
-          migrationsTable,
-          onLaneAcquired: () => {
-            laneHeld = true;
-            clock.laneWaitMs = elapsedMs();
-          },
-        }),
-    );
+    const { preflight, migrations, database } = await prepareSchemaPhase({
+      readMigrations,
+      connection,
+      migrationsFolder,
+      migrationsSchema,
+      migrationsTable,
+      observeSchema,
+      timing,
+      lockTelemetry,
+      lockWaitRetry,
+      onLaneAcquired: () => {
+        laneHeld = true;
+        clock.laneWaitMs = elapsedMs();
+      },
+    });
 
     if (preflight.status !== "ready") {
       reportStalePreflight(preflight);
@@ -854,39 +973,38 @@ export const runMigrations = async ({
       })),
     });
     const readLedger = async () =>
-      await database.execute<LedgerRow>(sql`
-        SELECT id, hash, created_at, name
-        FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
-        ORDER BY id
-      `);
-    await applySchemaMigrationsRetryingLockWaits({
-      connection,
-      connectionState: () => session.state,
-      apply: async (lockTimeoutMs) => {
-        await connection.unsafe(
-          `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
-        );
-        await observeSchema(
-          "schema.pending",
-          async () =>
-            await pgCoreMigrate(
-              migrations.map((migration) => ({
-                ...migration,
-                sql: migration.sql.map((statement) =>
-                  withMigrationLockTimeout(statement, lockTimeoutMs),
-                ),
-              })),
+      await readLedgerRows({ database, migrationsSchema, migrationsTable });
+    const applyRetriesAtStart = lockTelemetry.retriesSpent;
+    await reportSchemaStep({
+      step: "apply",
+      timing,
+      retriesSpent: () => lockTelemetry.retriesSpent - applyRetriesAtStart,
+      migrations: predicted.map(({ name }) => name),
+      work: async () =>
+        await applySchemaMigrationsRetryingLockWaits({
+          connection,
+          connectionState: () => session.state,
+          apply: async (lockTimeoutMs) => {
+            await connection.unsafe(
+              `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
+            );
+            await migratePending({
+              observeSchema,
+              migrations,
               database,
-              { migrationsFolder, migrationsSchema, migrationsTable },
-            ),
-        );
-      },
-      classifyLedger: migrationLedgerClassifier({
-        preflightRows: preflight.rows,
-        predicted,
-        readLedger,
-      }),
-      retry: lockWaitRetry,
+              lockTimeoutMs,
+              paths: { migrationsFolder, migrationsSchema, migrationsTable },
+            });
+          },
+          classifyLedger: migrationLedgerClassifier({
+            preflightRows: preflight.rows,
+            predicted,
+            readLedger,
+          }),
+          blockers: () =>
+            schemaStepBlockers(lockTelemetry, SCHEMA_PENDING_STEP),
+          retry: lockWaitRetry,
+        }),
     });
     clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
     await schemaObserver.release();
@@ -918,18 +1036,17 @@ export const runMigrations = async ({
       retriesSpent: () => lockTelemetry.retriesSpent,
     };
     clock.startedAt = timing.clock();
-    const onlineConnection = migratorOnlineConnection(connection, session);
-    const online = await runOnlinePhase({
-      mode: onlineWorkMode,
-      pool: { reserve: async () => await Promise.resolve(onlineConnection) },
-      build: {
+    const onlineConnection = createOnlineSession(connection, session);
+    const online = await runOnline(
+      { reserve: async () => await Promise.resolve(onlineConnection) },
+      {
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        observeRepair,
+        repairs: ONLINE_MIGRATION_REPAIRS,
       },
-      runOnline,
-      validateOnline,
-    });
+    );
     clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
     clock.phase = "done";
     timing.emit({
@@ -952,11 +1069,9 @@ export const runMigrations = async ({
     }
     return { status: "applied" as const, predictedNames, insertedNames };
   } catch (error: unknown) {
-    if (clock.phase === "online") {
-      clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
-    } else {
-      clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
-    }
+    const retriesAtStart =
+      clock.phase === "online" ? onlineRetriesAtStart : schemaRetriesAtStart;
+    clock.retriesSpent = lockTelemetry.retriesSpent - retriesAtStart;
     emitFailedPhase(timing, clock, elapsedMs());
     throw error;
   } finally {

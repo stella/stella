@@ -36,6 +36,7 @@
   "devDependencies": {
     "@stll/concurrency": "workspace:*",
     "@stll/property-testing": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "cldr-misc-full": "catalog:",

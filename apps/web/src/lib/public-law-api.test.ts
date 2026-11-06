@@ -14,6 +14,7 @@ import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawMiss,
   isSearchUnavailableError,
+  publicLawFailureDisposition,
   PublicLawUnavailableError,
   unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
@@ -238,22 +239,33 @@ describe("isSearchUnavailableError", () => {
     expect(calls).toBe(2);
   });
 
-  test("classifies by status, not by the message the API happens to send", () => {
-    expect(
-      isSearchUnavailableError(
-        thrownBy(500, { message: "Search is temporarily unavailable" }),
-      ),
-    ).toBe(false);
+  test("treats every server failure as a retryable missing result", () => {
+    for (let status = 500; status <= 599; status += 1) {
+      const error = thrownBy(status, { message: "Internal failure" });
+      expect(publicLawFailureDisposition(error), `HTTP ${status}`).toBe(
+        "retryable",
+      );
+      expect(isSearchUnavailableError(error), `HTTP ${status}`).toBe(true);
+    }
   });
 
-  test("leaves a request the engine refused to the error boundary", () => {
-    expect(isSearchUnavailableError(thrownBy(502, null))).toBe(false);
+  test("keeps permanent client responses as deliberate rejections", () => {
+    for (let status = 400; status <= 499; status += 1) {
+      if (status === 429) {
+        continue;
+      }
+      const error = thrownBy(status, null);
+      expect(publicLawFailureDisposition(error), `HTTP ${status}`).toBe(
+        "rejected",
+      );
+      expect(isSearchUnavailableError(error), `HTTP ${status}`).toBe(false);
+    }
   });
 
   test("a disabled public-law surface is not a search outage", () => {
-    expect(
-      isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
-    ).toBe(false);
+    const error = thrownBy(404, { error: "Not Found" });
+    expect(publicLawFailureDisposition(error)).toBe("rejected");
+    expect(isSearchUnavailableError(error)).toBe(false);
   });
 
   test("a read the page stopped waiting for is a search outage", () => {
@@ -268,7 +280,29 @@ describe("isSearchUnavailableError", () => {
     ).toBe(true);
   });
 
-  test("anything that is not an API failure is not a search outage", () => {
-    expect(isSearchUnavailableError(new Error("boom"))).toBe(false);
+  test("classifies browser transport failures and timeout errors as retryable", () => {
+    expect(publicLawFailureDisposition(new TypeError("Failed to fetch"))).toBe(
+      "retryable",
+    );
+    expect(
+      publicLawFailureDisposition(
+        new Error("Request failed", {
+          cause: Object.assign(new Error("socket reset"), {
+            code: "ECONNRESET",
+          }),
+        }),
+      ),
+    ).toBe("retryable");
+    expect(
+      publicLawFailureDisposition(
+        new DOMException("Timed out", "TimeoutError"),
+      ),
+    ).toBe("retryable");
+  });
+
+  test("keeps unrelated programming failures in the render boundary", () => {
+    const error = new Error("boom");
+    expect(publicLawFailureDisposition(error)).toBe("render");
+    expect(isSearchUnavailableError(error)).toBe(false);
   });
 });

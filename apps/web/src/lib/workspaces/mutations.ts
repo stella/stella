@@ -6,22 +6,23 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
+
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import {
   shouldRetryAPIRequest,
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
-import { createUuid } from "@/lib/uuid";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
-
-// Hardcoded in English: these are persisted in the DB and shared
-// across all organization members regardless of their locale.
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
   // Omit `clientId` to create a personal matter (initially visible
@@ -36,9 +37,9 @@ export const useCreateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (vars: CreateWorkspaceVars) => {
-      const id = createUuid();
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateWorkspaceVars, request) => {
+      const id = request.headers["Idempotency-Key"];
       const response = await api.workspaces.put({
         id: toSafeId<"workspace">(id),
         ...(vars.clientId !== undefined && {
@@ -67,12 +68,12 @@ export const useCreateWorkspace = () => {
         fingerprintKey: "useCreateWorkspace:failure",
         scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
 
 type WorkspaceUpdateValueByType = {
-  clientId: string;
   color: string | null;
   leadUserId: string | null;
   name: string;
@@ -81,12 +82,14 @@ type WorkspaceUpdateValueByType = {
 
 type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
-export type WorkspaceUpdate = {
-  [Type in WorkspaceUpdateType]: {
-    type: Type;
-    value: WorkspaceUpdateValueByType[Type];
-  };
-}[WorkspaceUpdateType];
+export type WorkspaceUpdate =
+  | { type: "clientId"; value: string; expectedClientId: string | null }
+  | {
+      [Type in WorkspaceUpdateType]: {
+        type: Type;
+        value: WorkspaceUpdateValueByType[Type];
+      };
+    }[WorkspaceUpdateType];
 
 type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
 
@@ -112,7 +115,13 @@ export const workspaceUpdateRefreshScope = (update: WorkspaceUpdate) =>
 export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "clientId":
-      return { clientId: toSafeId<"contact">(update.value) };
+      return {
+        clientId: toSafeId<"contact">(update.value),
+        expectedClientId:
+          update.expectedClientId === null
+            ? null
+            : toSafeId<"contact">(update.expectedClientId),
+      };
     case "color":
       return { color: update.value };
     case "leadUserId":
@@ -182,12 +191,41 @@ export const useUpdateWorkspace = () => {
         fingerprintKey: "useUpdateWorkspace:failure",
         scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
 
 type ArchiveWorkspaceVars = {
   workspaceId: string;
+};
+
+export const useArchiveWorkspace = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
+      await invokeCapability("matters.archive", async (request) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .archive.post({}, request);
+
+        return unwrapApiResponse(response);
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useArchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useArchiveWorkspace:failure" },
+      });
+    },
+  });
 };
 
 export const useUnarchiveWorkspace = () => {
@@ -214,6 +252,7 @@ export const useUnarchiveWorkspace = () => {
         fingerprintKey: "useUnarchiveWorkspace:failure",
         scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -244,6 +283,7 @@ export const useDeleteWorkspace = () => {
         fingerprintKey: "useDeleteWorkspace:failure",
         scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -257,7 +297,7 @@ export const useDuplicateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({
       includeContent,
       workspaceId,
@@ -281,6 +321,7 @@ export const useDuplicateWorkspace = () => {
         fingerprintKey: "useDuplicateWorkspace:failure",
         scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

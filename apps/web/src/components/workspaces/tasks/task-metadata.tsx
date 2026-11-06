@@ -358,13 +358,13 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}
           <Button
             aria-label={tCommon("remove")}
-            className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
+            className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100 pointer-coarse:opacity-100"
             disabled={removeAssignee.isPending}
             onClick={() => removeAssignee.mutate({ taskId, userId: a.user.id })}
             size="icon-xs"
@@ -376,16 +376,11 @@ export const AssigneePicker = ({
       ))}
       {unassignedMembers.length > 0 && (
         <Popover onOpenChange={setAddOpen} open={addOpen}>
-          <PopoverTrigger
-            render={
-              <button
-                className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm"
-                type="button"
-              />
-            }
-          >
-            <PlusIcon className="size-3.5" />
-            <span>{t("addAssignee")}</span>
+          <PopoverTrigger render={<Button variant="plain" />}>
+            <span className="text-muted-foreground hover:bg-muted hover:text-foreground flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm">
+              <PlusIcon className="size-3.5" />
+              <span>{t("addAssignee")}</span>
+            </span>
           </PopoverTrigger>
           <PopoverPopup padding="sm" side="bottom">
             <div className="w-72">

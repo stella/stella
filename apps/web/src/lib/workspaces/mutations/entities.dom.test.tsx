@@ -3,9 +3,10 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceEntity } from "@/lib/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const originalFetch = globalThis.fetch;
@@ -238,6 +239,10 @@ const confirm = (index: number) => {
     }),
   );
 };
+const abort = (index: number) =>
+  requests
+    .at(index)
+    ?.answer.reject(new DOMException("Cancelled", "AbortError"));
 afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
@@ -352,6 +357,51 @@ test("tree row completions clear each pending rename independently of refetch", 
     refresh.resolve(undefined);
     invalidate.mockRestore();
   }
+});
+
+test("an aborted rename leaves the form's entered value in place", async () => {
+  const Row = () => {
+    const rename = useRenameEntity();
+    const node = entity("A");
+    return (
+      <FilesystemRow
+        node={{ ...node, children: [] }}
+        depth={0}
+        workspaceId="matter"
+        extraColumns={[]}
+        folderStatistics={undefined}
+        gridTemplate="1fr 2rem"
+        isFiltered={false}
+        ancestorIds={new Set()}
+        expandedIds={new Set()}
+        selectedIds={new Set()}
+        editingEntityId="A"
+        currentFolderId={undefined}
+        onToggleFolder={() => undefined}
+        onNavigateToFolder={() => undefined}
+        onStartEditing={() => undefined}
+        onRename={(entityId, name, completion) =>
+          rename.mutate({ workspaceId: "matter", entityId, name }, completion)
+        }
+        onClearSelection={() => undefined}
+        onSelect={() => undefined}
+        onSubfolderCreated={() => undefined}
+        getSelectedDragItems={() => []}
+        getSelectedEntities={() => []}
+        getAncestorIds={() => []}
+      />
+    );
+  };
+  const view = await mount(Row);
+  const input = view.getByRole("textbox");
+
+  fireEvent.change(input, { target: { value: "new-A" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await act(async () => abort(0));
+
+  await waitFor(() => expect(view.client.isMutating()).toBe(0));
+  expect(input).toHaveProperty("value", "new-A");
 });
 
 test("breadcrumb pending label settles before file metadata refetch and refusal restores its editor", async () => {

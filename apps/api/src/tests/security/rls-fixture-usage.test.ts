@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 type FixtureUsageViolation = {
   file: string;
@@ -49,6 +50,33 @@ const LEGACY_FIXTURE_USAGES: ReadonlyMap<string, number> = new Map([
   ["apps/api/src/tests/security/rls-scoped-db.test.ts", 1],
 ]);
 
+/** Lines of the `getRlsFixture()` calls outside a `beforeAll` callback. */
+const callsOutsideSetup = (file: string, source: string): number[] => {
+  const { locate, program } = parseSource(file, source);
+  const lines: number[] = [];
+  walk(program, (node, ancestors) => {
+    if (
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      node.callee.name !== "getRlsFixture"
+    ) {
+      return;
+    }
+    const chain = [...ancestors, node];
+    const insideBeforeAll = chain.some(
+      (ancestor, index) =>
+        ancestor.type === "CallExpression" &&
+        ancestor.callee.type === "Identifier" &&
+        ancestor.callee.name === "beforeAll" &&
+        ancestor.arguments.at(0) === chain[index + 1],
+    );
+    if (!insideBeforeAll) {
+      lines.push(locate(node.start).line);
+    }
+  });
+  return lines;
+};
+
 const findFixtureUsageViolations = async () => {
   const outsideSetup: FixtureUsageViolation[] = [];
   const testFiles = await Array.fromAsync(
@@ -63,41 +91,9 @@ const findFixtureUsageViolations = async () => {
     const source = await Bun.file(
       path.resolve(import.meta.dir, "../../..", relativeFile),
     ).text();
-    const sourceFile = ts.createSourceFile(
-      file,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
-
-    const visit = (node: ts.Node, insideBeforeAll: boolean) => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "getRlsFixture" &&
-        !insideBeforeAll
-      ) {
-        const line =
-          sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        outsideSetup.push({ file, line });
-      }
-
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "beforeAll"
-      ) {
-        node.forEachChild((child) =>
-          visit(child, child === node.arguments.at(0) || insideBeforeAll),
-        );
-        return;
-      }
-
-      node.forEachChild((child) => visit(child, insideBeforeAll));
-    };
-
-    visit(sourceFile, false);
+    for (const line of callsOutsideSetup(file, source)) {
+      outsideSetup.push({ file, line });
+    }
   }
 
   const countByFile = new Map<string, number>();

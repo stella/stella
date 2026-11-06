@@ -21,6 +21,7 @@ import {
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
@@ -53,7 +54,7 @@ export const createDesktopMatterCandidatesEndpoint = (
       >`(select max(${workspaceMembers.createdAt})::text from ${workspaceMembers} where ${workspaceMembers.workspaceId} = ${workspaces.id} and ${workspaceMembers.userId} = ${account.userId} and ${workspaceMembers.createdAt} >= now() - interval '7 days')`;
       const upcomingDeadlineSignal = sql<
         string | null
-      >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${entities.kind} = 'task' and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
+      >`(select min(${entities.dueDate})::text from ${entities} where ${entities.workspaceId} = ${workspaces.id} and ${workTask(entities)} and (${entities.status} is null or ${entities.status} not in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELLED})) and ${entities.dueDate} between current_date and current_date + 7)`;
       const page = yield* Result.await(
         account.safeDb(async (tx) =>
           readCursorPage(

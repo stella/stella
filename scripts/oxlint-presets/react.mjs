@@ -24,7 +24,15 @@ export default defineConfig({
     "jsx-a11y/iframe-has-title": "error",
     "jsx-a11y/img-redundant-alt": "error",
     "jsx-a11y/interactive-supports-focus": "error",
-    "jsx-a11y/label-has-associated-control": "error",
+    // From ultracite 8.0.2.
+    "jsx-a11y/label-has-associated-control": [
+      "error",
+      {
+        controlComponents: ["Input", "Select", "Textarea", "Checkbox", "Radio"],
+        depth: 3,
+        labelComponents: ["Label"],
+      },
+    ],
     "jsx-a11y/lang": "error",
     "jsx-a11y/media-has-caption": "error",
     "jsx-a11y/mouse-events-have-key-events": "error",
@@ -88,7 +96,8 @@ export default defineConfig({
     "react/jsx-no-duplicate-props": "error",
     "react/jsx-no-literals": "off",
     "react/jsx-no-script-url": "error",
-    "react/jsx-no-target-blank": "error",
+    // From ultracite 8.0.2.
+    "react/jsx-no-target-blank": ["error", { forms: true }],
     "react/jsx-no-undef": "error",
     "react/jsx-no-useless-fragment": "error",
     "react/jsx-pascal-case": "error",

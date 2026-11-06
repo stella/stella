@@ -51,6 +51,8 @@ export const VerifiedClientMark = ({
     case "codex":
       return <OpenAiMark className={cn("text-foreground", className)} />;
     case "stella":
+    case "stella_ios":
+    case "stella_cli":
       return <StellaMark className={className} />;
     default:
       brand satisfies never;

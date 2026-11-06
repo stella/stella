@@ -9,6 +9,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -21,7 +22,7 @@ export const useCreateTask = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async (workspaceId: string) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })

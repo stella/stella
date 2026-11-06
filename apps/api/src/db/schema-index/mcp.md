@@ -44,8 +44,8 @@ mcp_oauth_clients.updated_at                timestamptz         default,not null
 ## mcp_connector_authorization_reviews · `mcpConnectorAuthorizationReviews` · mcp.ts:125 · rls
 
 ```text
-mcp_connector_authorization_reviews.organization_id            safeOrganizationId  not null          mcp.ts:128
-mcp_connector_authorization_reviews.connector_id               safeUuid            not null          mcp.ts:129
+mcp_connector_authorization_reviews.organization_id            safeOrganizationId  fk,not null       mcp.ts:128
+mcp_connector_authorization_reviews.connector_id               safeUuid            fk,not null       mcp.ts:129
 mcp_connector_authorization_reviews.observed_issuer            text                null              mcp.ts:130
 mcp_connector_authorization_reviews.approved_issuer            text                null              mcp.ts:131
 mcp_connector_authorization_reviews.observed_endpoint_origins  jsonb               default,not null  mcp.ts:132

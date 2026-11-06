@@ -5,19 +5,31 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  type ApiValidationIssue,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  type ChatInputRefusalCode,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import {
+  CHAT_LOCAL_RUN_REFUSAL,
+  type ChatLocalRunRefusal,
+} from "@stll/api-contract/chat-run-target";
+import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspondence";
+import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
@@ -28,6 +40,7 @@ import {
   publicCountryUnavailableSchema,
   type PublicLawDomain,
 } from "@stll/api-contract/public-country-capability";
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import type { VerificationRunCapCode } from "@stll/api-contract/verification-run-caps";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
@@ -37,12 +50,14 @@ import type { TranslationKey } from "@/i18n/types";
 import { AI_FAILURE_ERROR_KEYS } from "@/lib/errors/ai-failure";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { ClientOperationError } from "@/lib/errors/client";
+import { INVOICE_ISSUE_ERROR_KEYS } from "@/lib/errors/invoice-issue";
 import {
   ACTION_ADMISSION_ERROR_KEYS,
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
   translateError,
 } from "@/lib/errors/localization";
+import { uploadFileTooLargeMessage } from "@/lib/files/upload-file-validation";
 
 export class APIError extends TaggedError(API_ERROR_TAG)<{
   code?: string | undefined;
@@ -51,7 +66,15 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  transportKind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 }> {}
+
+export const isCancellation = (error: unknown): boolean =>
+  (APIError.is(error) && error.transportKind === "aborted") ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError");
 
 const MAX_API_RETRY_COUNT = 3;
 const CLIENT_ERROR_STATUS = 400;
@@ -74,6 +97,11 @@ export const shouldRetryAPIRequest = (
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
   }
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT && error.transportKind !== "aborted"
+    );
+  }
   // Any other typed error is a deliberate outcome (a disabled surface, a
   // refused operation), never a transient one: asking again cannot change it.
   if (!APIError.is(error) && isTaggedError(error)) {
@@ -90,11 +118,12 @@ export const shouldRetryAPIRequest = (
 export type ToAPIErrorProps = {
   status: number;
   value: unknown;
+  kind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 };
 
 export type ApiResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: { status: number; value: unknown } };
+  { data: T; error: null } | { data: null; error: ToAPIErrorProps };
 
 /**
  * Unwraps an API client response: throws a localized {@link APIError} when the
@@ -111,7 +140,32 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+export const toAPIError = (error: ToAPIErrorProps): APIError => {
+  if (error.kind !== undefined) {
+    const t = getTranslator();
+    let message: string;
+    switch (error.kind) {
+      case "network":
+        message = t("common.networkError");
+        break;
+      case "timeout":
+        message = t("transportErrors.timeout");
+        break;
+      case "aborted":
+        message = "Request aborted";
+        break;
+      default:
+        error.kind satisfies never;
+        panic("Unknown API transport kind", error.kind);
+    }
+    return new APIError({
+      status: error.status,
+      transportKind: error.kind,
+      cause: error.cause,
+      message,
+    });
+  }
+  const { status, value } = error;
   const normalized = normalizeApiError({
     status,
     value: parseApiErrorValue(value),
@@ -188,15 +242,60 @@ const VERIFICATION_RUN_CAP_ERROR_KEYS = {
     "errors.apiCodes.verificationDailyLimitReached",
 } as const satisfies Record<VerificationRunCapCode, TranslationKey>;
 
+/** Why a chat turn bound for the member's computer was refused. */
+const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
+  [CHAT_LOCAL_RUN_REFUSAL.unavailable]: "chat.localRun.refusalUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.noComputer]: "chat.localRun.refusalNoComputer",
+  [CHAT_LOCAL_RUN_REFUSAL.harnessUnavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.modelUnavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable]:
+    "chat.localRun.refusalPermissionUnavailable",
+  [CHAT_LOCAL_RUN_REFUSAL.tooLarge]: "chat.localRun.refusalTooLarge",
+  [CHAT_LOCAL_RUN_REFUSAL.conflictingRunMode]:
+    "chat.localRun.refusalConflictingRunMode",
+} as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
+
+/** Why a chat turn was refused before it started, with what the person can do. */
+const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
+  [CHAT_INPUT_REFUSAL_CODE.activeFileNoText]: "chat.sendErrorActiveFileNoText",
+  [CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge]:
+    "chat.sendErrorActiveFileTooLarge",
+  [CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled]:
+    "chat.sendErrorAgentRunsDisabled",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentNoText]: "chat.sendErrorAttachmentNoText",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported]:
+    "chat.sendErrorAttachmentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.documentUnsupported]:
+    "chat.sendErrorDocumentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.imageInvalid]: "chat.sendErrorImageInvalid",
+  [CHAT_INPUT_REFUSAL_CODE.imageUnsupported]: "chat.sendErrorImageUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
+} as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
+  [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
+  [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
+  [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
+  ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
+  ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
+  ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",
   [MATTER_CONTACT_CAPACITY_CODE.reached]:
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
+    "errors.apiCodes.correspondenceSourceChanged",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:
+    "errors.apiCodes.organizationDataBoxLimitReached",
+  [ORGANIZATION_DATA_BOX_REFUSAL_CODE.changedConcurrently]:
+    "errors.apiCodes.organizationDataBoxesChanged",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",
@@ -218,6 +317,7 @@ const CODE_ERROR_KEYS = {
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   [ENCRYPTED_CONTENT_ERROR_CODE]: "errors.apiCodes.encryptedContent",
+  [PREVIEW_UNAVAILABLE_ERROR_CODE]: "search.previewUnavailable",
   [API_FILE_SECURITY_REJECTED_ERROR_CODE]:
     "errors.apiCodes.fileSecurityRejected",
   forbidden: "errors.apiCodes.forbidden",
@@ -266,6 +366,10 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
       return issue.limit === undefined
         ? t("errors.apiCodes.validationInvalid")
         : t("errors.apiCodes.validationTooShort", { limit: issue.limit });
+    case "maxBytes":
+      return issue.limit === undefined
+        ? t("errors.apiCodes.validationInvalid")
+        : uploadFileTooLargeMessage(issue.limit);
     case "required":
       return t("errors.apiCodes.validationRequired");
     case "invalid":
@@ -300,9 +404,56 @@ export const apiFieldIssueMessage = (
   return issue === undefined ? undefined : validationIssueMessage(issue);
 };
 
+/**
+ * Codes that only restate a 401 or 403. `permission_denied` is the API's
+ * refusal for both; the status tells them apart, so the status-keyed message
+ * is the right text. Any other code on those statuses refuses something else
+ * (a wrong password is a 401 too) and stays with the caller's own wording.
+ */
+const AUTH_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "permission_denied",
+  "SESSION_EXPIRED",
+  "UNAUTHORIZED",
+]);
+
+type AuthRefusalCandidate = { code?: string | undefined; status: number };
+
+/** Whether this is a plain refusal of who is asking, whatever the action. */
+const isAuthRefusal = ({ code, status }: AuthRefusalCandidate): boolean =>
+  (status === 401 || status === 403) &&
+  (code === undefined || AUTH_REFUSAL_CODES.has(code));
+
+/** The session behind this request is gone; signing in again answers it. */
+export const isSessionRefusal = (candidate: AuthRefusalCandidate): boolean =>
+  candidate.status === 401 && isAuthRefusal(candidate);
+
+/**
+ * Codes the auth server sets when it turns down a code the person typed. Each
+ * form that asks for one says so in place and lets them try again.
+ */
+const TYPED_CODE_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  "INVALID_BACKUP_CODE",
+  "INVALID_CODE",
+  "INVALID_OTP",
+  "OTP_EXPIRED",
+]);
+
+/** Whether the auth server turned down a code the person typed. */
+export const isTypedCodeRefusal = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  typeof error.code === "string" &&
+  TYPED_CODE_REFUSAL_CODES.has(error.code);
+
+/** The server has nothing to show for this file; retrying cannot help. */
+export const isPreviewUnavailableError = (error: unknown): boolean =>
+  APIError.is(error) && error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
+
 export const isDisplayableAPIError = (error: APIError): boolean =>
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
+  isAuthRefusal(error) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
     isUsageRejectionReason(error.details["reason"]));

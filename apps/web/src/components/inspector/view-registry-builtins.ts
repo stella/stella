@@ -1,3 +1,4 @@
+import type { InspectorTab } from "@/components/inspector/inspector-store-types";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 
 /**
@@ -21,14 +22,18 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 
 const acceptAnyPayload = (_value: unknown): _value is unknown => true;
 
-const BUILT_IN_KINDS = [
-  "pdf",
-  "task",
-  "chat",
-  "matter",
-  "external",
-  "skill-resource",
-] as const;
+const BUILT_IN_KIND_MAP = {
+  pdf: "pdf",
+  task: "task",
+  chat: "chat",
+  matter: "matter",
+  external: "external",
+  "skill-resource": "skill-resource",
+} as const satisfies {
+  [Kind in Exclude<InspectorTab["type"], "view">]: Kind;
+};
+
+export const BUILT_IN_KINDS = Object.values(BUILT_IN_KIND_MAP);
 
 for (const kind of BUILT_IN_KINDS) {
   registerInspectorView({

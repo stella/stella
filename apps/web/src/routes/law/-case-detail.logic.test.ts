@@ -34,6 +34,7 @@ type DecisionBySlug = Awaited<
 >;
 
 const UNPUBLISHED_DECISION = {
+  extractionWarnings: [],
   citationCount: 0,
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -68,6 +69,7 @@ const UNPUBLISHED_DECISION = {
   ],
   judges: [],
   language: "en",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   metadata: {},
@@ -81,6 +83,7 @@ const UNPUBLISHED_DECISION = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: ABSENT_TEXT_FIELD,
@@ -383,13 +386,16 @@ describe("pre-transliteration path redirect", () => {
   });
 
   test("serves the new path without a redirect", async () => {
+    const queryClient = bySlugClient();
     const decision = await loadPublicCaseLawDecisionRoute({
       hash: "",
       params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
-      queryClient: bySlugClient(),
+      queryClient,
       search: {},
     });
     expect(decision.id).toBe(DECISION_ID);
+    await queryClient.cancelQueries();
+    queryClient.clear();
   });
 });
 

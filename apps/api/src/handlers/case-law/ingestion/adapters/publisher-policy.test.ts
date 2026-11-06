@@ -17,10 +17,13 @@ import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const testFetchState = createTestFetch();
 
 describe("the shared publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
@@ -132,7 +135,11 @@ describe("the shared publisher gate", () => {
     const rejection = await rejectionOf(reserve());
     expect(rejection).toBeInstanceOf(Error);
     expect(rejection).toMatchObject({
-      message: expect.stringContaining("invalid wait"),
+      code: "limiter_store_unavailable",
+      cause: {
+        message: expect.stringContaining("invalid wait"),
+        _tag: "PublisherGateReplyError",
+      },
     });
   });
 
@@ -157,11 +164,10 @@ describe("the shared publisher gate", () => {
 });
 
 describe("a publisher's rate-limit refusal", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -169,11 +175,13 @@ describe("a publisher's rate-limit refusal", () => {
     "%s costs one request and stops with a typed refusal, never retried",
     async (httpStatus) => {
       let requests = 0;
-      globalThis.fetch = asFetchMock(
-        mock(async () => {
-          requests += 1;
-          return new Response("", { status: httpStatus });
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async () => {
+            requests += 1;
+            return new Response("", { status: httpStatus });
+          }),
+        ),
       );
 
       const error = await rejectionOf(
@@ -199,11 +207,13 @@ describe("a publisher's rate-limit refusal", () => {
     "an existing document workflow receives %s without retries",
     async (status) => {
       let requests = 0;
-      globalThis.fetch = asFetchMock(
-        mock(async () => {
-          requests++;
-          return new Response("refused document", { status });
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async () => {
+            requests++;
+            return new Response("refused document", { status });
+          }),
+        ),
       );
       const response = await fetchWithRetry(
         "https://ris.bka.gv.at/x",
@@ -228,11 +238,13 @@ describe("a publisher's rate-limit refusal", () => {
       `the real publisher-backoff path preserves status in mode ${refusalMode ?? "default"}`,
       async (status) => {
         let requests = 0;
-        globalThis.fetch = asFetchMock(
-          mock(async () => {
-            requests++;
-            return new Response("refused document", { status });
-          }),
+        testFetchState.set(
+          asFetchMock(
+            mock(async () => {
+              requests++;
+              return new Response("refused document", { status });
+            }),
+          ),
         );
         const pending = fetchPublisher("https://ris.bka.gv.at/x", {
           fetchStage: "listing",
@@ -258,10 +270,12 @@ describe("a publisher's rate-limit refusal", () => {
 
   test("legacy fetch timeouts keep their original identity", async () => {
     const failure = new DOMException("Request timed out", "TimeoutError");
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        throw failure;
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          throw failure;
+        }),
+      ),
     );
     const caught = await rejectionOf(
       fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
@@ -275,11 +289,13 @@ describe("a publisher's rate-limit refusal", () => {
 
   test("still retries a 5xx, which is the publisher failing to answer", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("", { status: 503 });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("", { status: 503 });
+        }),
+      ),
     );
     Bun.sleep = async () => {};
 
@@ -299,11 +315,10 @@ describe("a publisher's rate-limit refusal", () => {
 });
 
 describe("a run-scoped publisher rate limit", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -340,15 +355,17 @@ describe("a run-scoped publisher rate limit", () => {
     let formexAttempts = 0;
     const requests: { url: string; time: number }[] = [];
     const clock = createGateClock();
-    globalThis.fetch = asFetchMock(
-      mock(async (input) => {
-        const url = String(input);
-        requests.push({ url, time: clock.now() });
-        if (url.endsWith("/formex") && formexAttempts++ === 0) {
-          return new Response("", { status: 503 });
-        }
-        return new Response("", { status: 200 });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async (input) => {
+          const url = String(input);
+          requests.push({ url, time: clock.now() });
+          if (url.endsWith("/formex") && formexAttempts++ === 0) {
+            return new Response("", { status: 503 });
+          }
+          return new Response("", { status: 200 });
+        }),
+      ),
     );
     Bun.sleep = async () => {};
 
@@ -419,11 +436,13 @@ describe("a run-scoped publisher rate limit", () => {
     const clock = createGateClock();
     const { key, cooldownKey } = publisherGateKeys("cellar-eu");
     const requestTimes: number[] = [];
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requestTimes.push(clock.now());
-        return new Response("", { status: 200 });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requestTimes.push(clock.now());
+          return new Response("", { status: 200 });
+        }),
+      ),
     );
 
     const cooldownUntil = await withPublisherRequestRateLimit({

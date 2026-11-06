@@ -39,7 +39,12 @@ test("every skill binding constraint is added without validation and registered 
       },
     ];
   });
-  expect(declarations).toEqual([...AGENT_SKILL_BINDING_CONSTRAINTS]);
+  expect(declarations).toEqual(
+    AGENT_SKILL_BINDING_CONSTRAINTS.map(({ tableName, constraintName }) => ({
+      tableName,
+      constraintName,
+    })),
+  );
   expect(
     statements.some(({ text }) => /\bVALIDATE\s+CONSTRAINT\b/iu.test(text)),
   ).toBe(false);
@@ -67,15 +72,10 @@ test("the schema's binding indexes are built concurrently by the online owner", 
     const declaration = ONLINE_MIGRATION_INDEXES.find(
       ({ name }) => name === config.name,
     );
-    if (
-      declaration === undefined ||
-      !("createSql" in declaration) ||
-      typeof declaration.createSql !== "string" ||
-      config.where === undefined
-    ) {
+    if (declaration === undefined || config.where === undefined) {
       panic("A partial skill binding index has no online declaration");
     }
-    expect<string>(declaration.tableName).toBe(table.name);
+    expect(declaration.tableName).toBe(table.name);
     expect(declaration.isUnique).toBe(config.unique);
     expect(declaration.createSql).toContain("CREATE INDEX CONCURRENTLY");
     expect(declaration.definitionBody).toContain(

@@ -13,14 +13,23 @@ import { jest } from "bun:test";
  * A no-op while timers are real, so a shared teardown can call it after every
  * test.
  */
-export const restoreRealTimers = (): void => {
+type RestoreRealTimersOptions = {
+  /** Drain only this much fake time when a deliberately pending long timer exists. */
+  advanceMs: number;
+};
+
+export const restoreRealTimers = (options?: RestoreRealTimersOptions): void => {
   if (!jest.isFakeTimers()) {
     return;
   }
   // The real clock returns even when a pending callback throws, so the throw
   // fails this test without leaving the next one on a fake clock.
   try {
-    jest.runOnlyPendingTimers();
+    if (options) {
+      jest.advanceTimersByTime(options.advanceMs);
+    } else {
+      jest.runOnlyPendingTimers();
+    }
   } finally {
     jest.useRealTimers();
   }

@@ -20,12 +20,18 @@ describe("the legal document the main view is showing", () => {
     expect(
       mainLegalDocument({
         decision: undefined,
-        statute: { id: "statute-1", title: "Občanský zákoník" },
+        statute: {
+          id: "statute-1",
+          title: "Občanský zákoník",
+          eli: "/eli/cz/sb/2012/89",
+          country: "CZE",
+          documentType: "zákon",
+        },
       }),
     ).toEqual({
       type: "statute",
       documentId: "statute-1",
-      title: "Občanský zákoník",
+      title: "Zákon č. 89/2012 Sb., Občanský zákoník",
     });
   });
 

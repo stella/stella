@@ -11,7 +11,7 @@ export const otpSearchSchema = routeSearchSchema({
     v.picklist(Object.values(SIGN_IN_MODE)),
     SIGN_IN_MODE.signIn,
   ),
-  email: v.optional(emailSchema()),
+  email: v.optional(emailSchema("Invalid email address")),
   redirectTo: redirectToSchema,
 });
 

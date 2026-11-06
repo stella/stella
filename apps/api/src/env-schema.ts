@@ -9,7 +9,11 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { featureFlagSchema } from "@/api/env-base-schema";
+import {
+  type AppleSignInInput,
+  resolveAppleSignIn,
+} from "@/api/env-apple-sign-in";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -24,6 +28,7 @@ import {
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
 import { emailAddressSchema } from "@/api/lib/email/normalized-email";
+import { converterSettingsSchema } from "@/api/lib/files/converter-settings";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -101,6 +106,7 @@ const originVerifyValue = v.pipe(
 );
 
 export const envApiServerSchema = {
+  DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
@@ -141,6 +147,10 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
   OPENROUTER_WIF_POLICY_ID: v.optional(
     v.pipe(v.string(), v.trim(), v.minLength(1)),
   ),
@@ -263,8 +273,6 @@ export const envApiServerSchema = {
       v.maxLength(2),
     ),
   ),
-  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
-  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
@@ -285,6 +293,16 @@ export const envApiServerSchema = {
   STELLA_COLLAB_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /** Deployment-owned operator credential. Unset disables operator HTTP access. */
   OPERATOR_API_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /**
+   * Apple Push Notification service provider-token credentials: the key id
+   * and team id Apple shows beside the `.p8` signing key, and that key as PEM.
+   * All three or none; unset turns mobile push off.
+   */
+  APNS_KEY_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_TEAM_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_PRIVATE_KEY: v.optional(
+    v.pipe(v.string(), v.includes("-----BEGIN PRIVATE KEY-----")),
+  ),
   /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any
@@ -366,9 +384,7 @@ export const envApiServerSchema = {
   ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-  GOTENBERG_URL: v.pipe(v.string(), v.url()),
-  GOTENBERG_USERNAME: v.string(),
-  GOTENBERG_PASSWORD: v.string(),
+  ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
@@ -503,6 +519,12 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
+
+  // Social login — Apple. The client secret is minted from the key in process.
+  APPLE_AUTH_CLIENT_ID: v.optional(v.string()),
+  APPLE_AUTH_TEAM_ID: v.optional(v.string()),
+  APPLE_AUTH_KEY_ID: v.optional(v.string()),
+  APPLE_AUTH_PRIVATE_KEY: v.optional(v.string()),
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_USAGE: featureFlagSchema,
@@ -687,6 +709,17 @@ export const envApiServerSchema = {
   ),
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  // Concurrent public-law MCP reads admitted per authenticated caller.
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+    "4",
   ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
@@ -955,14 +988,20 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = InboundMailReceivingInput &
-  EmailEventsInput & {
+  EmailEventsInput &
+  AppleSignInInput & {
     APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
     APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    APNS_KEY_ID?: string | undefined;
+    APNS_TEAM_ID?: string | undefined;
+    APNS_PRIVATE_KEY?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
     FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
     OPENROUTER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID?: string | undefined;
     OPENROUTER_WIF_POLICY_ID?: string | undefined;
     OPENROUTER_WIF_AUDIENCE?: string | undefined;
     OPENROUTER_WIF_STS_REGION?: string | undefined;
@@ -1000,9 +1039,12 @@ type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
   | "AI_PROVIDER"
   | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "FEATURE_FREE_TIER"
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_FAST_TIER_API_KEY"
+  | "OPENROUTER_FAST_TIER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_AUDIENCE"
   | "OPENROUTER_WIF_STS_REGION"
@@ -1011,26 +1053,69 @@ type ManagedProviderCheckInvariantInput = Pick<
 const managedProviderCheckInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
+  FEATURE_FREE_TIER,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
-  const configuredWifFields = [
-    OPENROUTER_WIF_POLICY_ID,
+  const configuredSharedWifFields = [
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
   ].filter((value) => value !== undefined).length;
-  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
-    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  if (configuredSharedWifFields === 1) {
+    return "OPENROUTER_WIF_AUDIENCE and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    configuredSharedWifFields === 2 &&
+    OPENROUTER_WIF_POLICY_ID === undefined &&
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID === undefined
+  ) {
+    return "An OpenRouter WIF policy ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    (OPENROUTER_WIF_POLICY_ID !== undefined ||
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined) &&
+    configuredSharedWifFields !== 2
+  ) {
+    return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  const standardCredential =
+    !!OPENROUTER_API_KEY?.trim() ||
+    (OPENROUTER_WIF_POLICY_ID !== undefined && configuredSharedWifFields === 2);
+  const fastCredential =
+    !!OPENROUTER_FAST_TIER_API_KEY?.trim() ||
+    (OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined &&
+      configuredSharedWifFields === 2);
+  // Instance availability is answered once for the deployment, while each
+  // request dispatches on its own tier's credential. Requiring the standard
+  // credential beside the fast one (and the fast one under the free floor
+  // below) keeps the two answers equal for every organization's tier.
+  if (fastCredential && !standardCredential) {
+    return "OPENROUTER_FAST_TIER_API_KEY or OPENROUTER_FAST_TIER_WIF_POLICY_ID requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration for the standard tier.";
+  }
+  // The free floor runs on the fast tier's own credential and never on the
+  // standard one, so a managed free tier without it would refuse every
+  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
+  // deployment may still resolve to OpenRouter from its standard credential.
+  const openRouterMayServe =
+    AI_PROVIDER === "openrouter" ||
+    (AI_PROVIDER === undefined && standardCredential);
+  if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
+    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+    if (
+      !OPENROUTER_API_KEY?.trim() &&
+      !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+    ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
@@ -1076,6 +1161,24 @@ export const freeTierInvariantViolation = ({
   return null;
 };
 
+type ApnsInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APNS_KEY_ID" | "APNS_TEAM_ID" | "APNS_PRIVATE_KEY"
+>;
+
+const apnsInvariantViolation = ({
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
+}: ApnsInvariantInput): string | null => {
+  const set = [APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY].filter(
+    (value) => value !== undefined,
+  ).length;
+  return set === 0 || set === 3
+    ? null
+    : "APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY must be set together.";
+};
+
 type ReviewAccountInvariantInput = Pick<
   EnvApiInvariantInput,
   "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
@@ -1097,11 +1200,17 @@ const delegatedInvariantViolation = (
     EmailEventsInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
+    AppleSignInInput &
+    ApnsInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
+  }
+  const apnsViolation = apnsInvariantViolation(input);
+  if (apnsViolation !== null) {
+    return apnsViolation;
   }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
@@ -1116,17 +1225,26 @@ const delegatedInvariantViolation = (
     return inboundMail.error.message;
   }
   const emailEvents = resolveEmailEvents(input);
-  return emailEvents.isErr() ? emailEvents.error.message : null;
+  if (emailEvents.isErr()) {
+    return emailEvents.error.message;
+  }
+  const appleSignIn = resolveAppleSignIn(input);
+  return appleSignIn.isErr() ? appleSignIn.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
   APP_REVIEW_ACCOUNT_EMAIL,
   APP_REVIEW_ORGANIZATION_ID,
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
@@ -1166,6 +1284,10 @@ export const envApiInvariantViolation = ({
   EMAIL_EVENTS_QUEUE_URL,
   EMAIL_EVENTS_TOPIC_ARN,
   EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+  APPLE_AUTH_CLIENT_ID,
+  APPLE_AUTH_TEAM_ID,
+  APPLE_AUTH_KEY_ID,
+  APPLE_AUTH_PRIVATE_KEY,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1181,11 +1303,17 @@ export const envApiInvariantViolation = ({
   const delegatedViolation = delegatedInvariantViolation({
     APP_REVIEW_ACCOUNT_EMAIL,
     APP_REVIEW_ORGANIZATION_ID,
+    APNS_KEY_ID,
+    APNS_TEAM_ID,
+    APNS_PRIVATE_KEY,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
+    FEATURE_FREE_TIER,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_FAST_TIER_API_KEY,
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID,
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
@@ -1197,10 +1325,13 @@ export const envApiInvariantViolation = ({
     EMAIL_EVENTS_QUEUE_URL,
     EMAIL_EVENTS_TOPIC_ARN,
     EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
-    FEATURE_FREE_TIER,
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,
+    APPLE_AUTH_CLIENT_ID,
+    APPLE_AUTH_TEAM_ID,
+    APPLE_AUTH_KEY_ID,
+    APPLE_AUTH_PRIVATE_KEY,
     runtimeMode,
   });
   if (delegatedViolation !== null) {

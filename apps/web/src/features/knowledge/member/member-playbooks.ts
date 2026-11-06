@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   knowledgeKeys,
   playbooksOptions,
@@ -71,6 +72,7 @@ export const memberPlaybooksSource = {
  * before; each returns the API response so the caller keeps its own handling.
  */
 const usePlaybookActions = (organizationId: string) => {
+  const submit = useIdempotentSubmit();
   const queryClient = useQueryClient();
 
   return {
@@ -89,7 +91,12 @@ const usePlaybookActions = (organizationId: string) => {
       }),
     createFromStarter: async (starterId: StarterId) =>
       unwrapApiResponse(
-        await api.playbooks["from-starter"].post({ starterId }),
+        await submit.run({
+          operation: "playbook-from-starter",
+          body: { starterId },
+          send: async (creationPayload) =>
+            api.playbooks["from-starter"].post(creationPayload),
+        }),
       ),
   };
 };

@@ -23,7 +23,7 @@ import { parseProvisionKey, provisionRefOf } from "./provision-key";
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
 
 /** The jurisdictions with a provision grammar, named here so adding one is a decision. */
-const WITH_GRAMMAR = ["CZE", "EU", "USA"] as const;
+const WITH_GRAMMAR = ["CZE", "EU", "SVK", "USA"] as const;
 
 const hasGrammar = (
   jurisdiction: (typeof CASE_LAW_JURISDICTIONS)[number],

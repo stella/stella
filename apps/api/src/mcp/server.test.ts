@@ -16,6 +16,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import { RedisClient } from "bun";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
@@ -23,6 +24,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestClock, waitFor } from "@stll/test-kit";
 
 import { env } from "@/api/env";
 import {
@@ -33,6 +35,10 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  requestBoundedTimeoutMs,
+  runBoundedRequestStep,
+} from "@/api/lib/load/request-latency-budget";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -70,6 +76,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { getMcpWwwAuthenticateHeader } from "@/api/mcp/metadata";
+import { mcpRequestStartedAt } from "@/api/mcp/request-metrics";
 import {
   createMcpHttpRequestHandler,
   mcpOmittedToolNamesByReason,
@@ -79,6 +86,7 @@ import {
   LAW_MCP_TOOL_DEFINITIONS,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
+import { mcpToolLatencyBudgetMs } from "@/api/mcp/tool-latency-budgets";
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -103,7 +111,10 @@ const listMcpToolsMock = mock(
     _scopes?: unknown,
   ): Promise<McpTool[]> => [],
 );
-const listMcpResourcesMock = mock((): Resource[] => []);
+const listMcpResourcesFake: Parameters<
+  typeof createMcpHttpRequestHandler
+>[0]["listMcpResources"] = async () => [];
+const listMcpResourcesMock = mock(listMcpResourcesFake);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 beforeEach(() => {
@@ -121,7 +132,7 @@ beforeEach(() => {
   listMcpToolsMock.mockReset();
   listMcpToolsMock.mockImplementation(async () => []);
   listMcpResourcesMock.mockReset();
-  listMcpResourcesMock.mockImplementation(() => []);
+  listMcpResourcesMock.mockImplementation(async () => []);
   readMcpResourceMock.mockReset();
   readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
   resolveMcpSessionContextMock.mockReset();
@@ -262,7 +273,10 @@ describe("handleMcpHttpRequest", () => {
       lines.push(line);
     });
     authenticateMcpRequestMock.mockImplementation(async () => {
-      await Bun.sleep(5);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 2 ? true : undefined), {
+        description: "the authentication phase delay",
+      });
       return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
@@ -274,7 +288,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     listMcpToolsMock.mockImplementation(async () => {
-      await Bun.sleep(toolProjectionDelayMs);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 11 ? true : undefined), {
+        description: "the tool projection phase delay",
+      });
       return [];
     });
 
@@ -341,6 +358,57 @@ describe("handleMcpHttpRequest", () => {
     ).toMatchObject({ method: "tools/list", path: "modern" });
   });
 
+  test("a tool's budget counts from the request start, preparation included", async () => {
+    const preparationMs = 400;
+    const budgetMs = mcpToolLatencyBudgetMs("list_matters");
+    const staticDefinition = listStaticMcpToolDefinitions("default").find(
+      ({ name }) => name === "list_matters",
+    );
+    if (staticDefinition === undefined) {
+      panic("Canonical list_matters tool definition is missing");
+    }
+    authenticateMcpRequestMock.mockImplementation(async () => {
+      // real-time: preparation time is what the deadline must charge.
+      await Bun.sleep(preparationMs);
+      return Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      });
+    });
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolDefinitionMock.mockResolvedValue(staticDefinition);
+    let dependencyTimeoutMs = Number.POSITIVE_INFINITY;
+    let endedAfterRequestStartMs = Number.POSITIVE_INFINITY;
+    handleMcpToolCallMock.mockImplementation(async () => {
+      const requestStartedAt = mcpRequestStartedAt() ?? Number.NaN;
+      // A dependency that would wait a minute takes whatever is left.
+      dependencyTimeoutMs = requestBoundedTimeoutMs(60_000);
+      const step = await runBoundedRequestStep(
+        async () => await Promise.withResolvers<never>().promise,
+        { label: "slow-dependency", budgetMs: 60_000 },
+      );
+      endedAfterRequestStartMs = performance.now() - requestStartedAt;
+      return { content: [{ type: "text", text: step.status }] };
+    });
+
+    const response = await handleMcpHttpRequest(
+      createModernMcpRequest({
+        id: 1,
+        method: "tools/call",
+        params: { arguments: {}, name: "list_matters" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(dependencyTimeoutMs).toBeLessThanOrEqual(budgetMs - preparationMs);
+    // The dependency gives way at the request's deadline, counted from the
+    // request's start as the metric and the canary count it, not at
+    // preparation plus a fresh budget.
+    expect(endedAfterRequestStartMs).toBeGreaterThanOrEqual(budgetMs - 50);
+    expect(endedAfterRequestStartMs).toBeLessThan(budgetMs + 150);
+  });
+
   test.each([
     ["list_matters", "list_matters"],
     ["mcp__tenant_connector__lookup", "external_mcp"],
@@ -389,6 +457,10 @@ describe("handleMcpHttpRequest", () => {
       expect(phaseRecord).toMatchObject({
         method: "tools/call",
         toolName: metricToolName,
+        // The slow-tool alarm counts `overBudget`, judged by the same table
+        // the canary reads.
+        budget: mcpToolLatencyBudgetMs(metricToolName),
+        overBudget: false,
       });
       if (toolName !== metricToolName) {
         expect(JSON.stringify(phaseRecord)).not.toContain(toolName);
@@ -424,7 +496,7 @@ describe("handleMcpHttpRequest", () => {
     expect(clone).not.toHaveBeenCalled();
   });
 
-  test("native admission refusals keep their code and capture only infrastructure failure", async () => {
+  test("native admission refusals keep their canonical recovery contract", async () => {
     const previousEnabled = env.FEATURE_ACTION_ADMISSION;
     const previousContact = env.ACTION_LIMIT_CONTACT_URL;
     env.FEATURE_ACTION_ADMISSION = true;
@@ -434,13 +506,23 @@ describe("handleMcpHttpRequest", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
+        "configuration_incomplete",
+        "organization_state_unreadable",
+        "lease_lost",
       ] as const) {
         captureErrorMock.mockClear();
-        const refusalError = new ActionAdmissionError({
-          reason,
-          message: "Private internal detail",
-        });
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+                retryAfterMs: 1250,
+              })
+            : new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+              });
         authenticateMcpRequestMock.mockResolvedValue(
           Result.ok({
             organizationId: "org_1",
@@ -489,20 +571,86 @@ describe("handleMcpHttpRequest", () => {
           code: refusalError.code,
           message: refusal.message,
           retryable: refusal.retryable,
+          ...(reason === "busy" ? { retryAfterMs: 1250 } : {}),
           ...(contact ? { contactUrl: "https://example.invalid/contact" } : {}),
           hint: contact
             ? `${refusal.hint} Contact: https://example.invalid/contact`
             : refusal.hint,
           requestId: "req_admission",
         });
-        expect(captureErrorMock.mock.calls.length).toBe(
-          reason === "unavailable" ? 1 : 0,
-        );
+        expect(captureErrorMock).not.toHaveBeenCalled();
         expect(handleMcpToolCallMock).not.toHaveBeenCalled();
       }
     } finally {
       env.FEATURE_ACTION_ADMISSION = previousEnabled;
       env.ACTION_LIMIT_CONTACT_URL = previousContact;
+    }
+  });
+
+  test("an unreachable admission store returns a retryable MCP refusal", async () => {
+    const redis = new RedisClient("redis://127.0.0.1:1", {
+      connectionTimeout: 50,
+      enableOfflineQueue: false,
+      maxRetries: 0,
+    });
+    try {
+      authenticateMcpRequestMock.mockResolvedValue(
+        Result.ok({
+          organizationId: "org_1",
+          scopes: ["stella:read"],
+          userId: "user_1",
+        }),
+      );
+      resolveMcpSessionContextMock.mockResolvedValue({
+        organizationId: "org_1",
+        userId: "user_1",
+      });
+      getMcpToolDefinitionMock.mockResolvedValue({
+        name: "search_case_law",
+        scope: "stella:read",
+        access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
+        description: "Search case law",
+        inputSchema: { type: "object", properties: {} },
+      });
+      const handler = createMcpHttpRequestHandler({
+        ...mcpHandlerDependencies,
+        admitAction: async (options) =>
+          await withActionAdmission({
+            ...options,
+            enabled: true,
+            serviceBudgetsEnabled: false,
+            policy: {
+              organizationConcurrency: 2,
+              userConcurrency: 1,
+              leaseMs: 1000,
+            },
+            redis: {
+              send: async (command, args) => await redis.send(command, args),
+            },
+          }),
+      });
+      const response = await handler(
+        createMcpRequest({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "search_case_law", arguments: {} },
+        }),
+      );
+      const body =
+        await readTestJson<McpJsonResponse<CallToolResult>>(response);
+      const item = body.result.content.at(0);
+      const payload = item?.type === "text" ? JSON.parse(item.text) : undefined;
+      expect(body.result.isError).toBe(true);
+      expect(payload?.error).toMatchObject({
+        code: "limiter_store_unavailable",
+        message: ACTION_ADMISSION_REFUSALS.limiter_store_unavailable.message,
+        retryable: true,
+      });
+      expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    } finally {
+      redis.close();
     }
   });
 
@@ -1307,6 +1455,7 @@ describe("handleMcpHttpRequest", () => {
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
+        "list_case_law_courts",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -1393,7 +1542,11 @@ describe("handleMcpHttpRequest", () => {
       firstRead.then(({ done }) =>
         done ? ("ended" as const) : ("open" as const),
       ),
-      Bun.sleep(20).then(() => "open" as const),
+      // A clock advance drains an event-loop turn, so an immediate close
+      // reaches firstRead before the pending-stream observation wins.
+      createTestClock()
+        .advance(0)
+        .then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");
 
@@ -1450,7 +1603,22 @@ describe("handleMcpHttpRequest", () => {
       );
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
-      expect((await reader.read()).done).toBe(true);
+      // The only frame the stream may carry before it ends is the tool-list
+      // signal it sends once it opens.
+      const decoder = new TextDecoder();
+      const framesBeforeEnd = async (
+        frames: readonly string[],
+      ): Promise<readonly string[]> => {
+        const read = await reader.read();
+        return read.done
+          ? frames
+          : await framesBeforeEnd([...frames, decoder.decode(read.value)]);
+      };
+      const frames = await framesBeforeEnd([]);
+      expect(frames.length).toBeLessThanOrEqual(1);
+      for (const frame of frames) {
+        expect(frame).toContain("notifications/tools/list_changed");
+      }
     } finally {
       await reader.cancel();
     }
@@ -1499,7 +1667,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1568,7 +1740,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -2102,7 +2278,7 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    listMcpResourcesMock.mockReturnValue([
+    listMcpResourcesMock.mockResolvedValue([
       {
         uri: "stella://reference/template-markers",
         name: "template-markers",
@@ -2122,9 +2298,7 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
-      type: "mcp-context",
-    });
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", { context });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);

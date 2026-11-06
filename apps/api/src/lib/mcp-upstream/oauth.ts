@@ -9,6 +9,8 @@ import { Temporal } from "@stll/time";
 import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { FIRST_PARTY_OAUTH_CLIENTS } from "@/api/lib/auth/oauth-consent-info";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   FetchBoundaryError,
@@ -22,10 +24,7 @@ import {
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  safeOutboundFetchBytes,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundFetchBody,
   SafeOutboundHeaders,
@@ -445,7 +444,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: "upstream_unavailable",
         message: "MCP server did not expose protected resource metadata",
       }),
     );
@@ -501,7 +500,10 @@ export const createOAuthState = (): string => randomBase64Url(32);
 
 export const getMcpOAuthRedirectUri = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL("/v1/mcp/oauth/callback", publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.redirect.path,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
@@ -661,11 +663,12 @@ export const clientRegistrationMode = (
   return "unsupported";
 };
 
-const MCP_CLIENT_METADATA_DOCUMENT_PATH = "/v1/mcp/oauth/client-metadata.json";
-
 export const getMcpClientMetadataDocumentUrl = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL(MCP_CLIENT_METADATA_DOCUMENT_PATH, publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.documentPath,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientMetadataDocument = {
@@ -770,6 +773,18 @@ export const buildOAuthClientRegistrationRequest = ({
   ...(requestedScopes.length > 0 ? { scope: requestedScopes.join(" ") } : {}),
 });
 
+/**
+ * A third party's refusal or outage at its OAuth endpoint is its answer, not a
+ * fault here. A successful response that does not parse breaks the endpoint's
+ * contract, so it stays an internal failure that is reported.
+ */
+const oauthEndpointFailureCode = (
+  cause: unknown,
+): "internal_error" | "upstream_unavailable" =>
+  cause instanceof SyntaxError || v.isValiError(cause)
+    ? "internal_error"
+    : "upstream_unavailable";
+
 export const registerOAuthClient = async ({
   metadata,
   permit,
@@ -790,7 +805,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: "upstream_unavailable",
         message:
           "MCP authorization server does not support dynamic registration",
       }),
@@ -819,7 +834,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: oauthEndpointFailureCode(response.error.cause),
         message: "Failed to register stella with MCP authorization server",
         cause: response.error,
       }),
@@ -899,7 +914,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: oauthEndpointFailureCode(token.error.cause),
         message: "Failed to exchange MCP authorization code",
         cause: token.error,
       }),
@@ -1127,7 +1142,7 @@ const discoverAuthorizationServer = async (
   return Result.err(
     new HandlerError({
       status: 502,
-      code: "internal_error",
+      code: "upstream_unavailable",
       message: "MCP authorization server metadata could not be discovered",
     }),
   );

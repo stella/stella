@@ -17,7 +17,6 @@ type HasAutomaticApprovalOptions = {
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   canAlwaysAllow: boolean;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
-  isPublicOfficialApproval: boolean;
   name: ApprovalToolName;
 };
 
@@ -25,13 +24,11 @@ export const hasAutomaticApproval = ({
   alwaysApprovedTools,
   canAlwaysAllow,
   conversationApprovedTools,
-  isPublicOfficialApproval,
   name,
 }: HasAutomaticApprovalOptions) =>
   !requiresPerCallChatApproval(name) &&
   !isApprovalOnceChatToolName(name) &&
-  (isPublicOfficialApproval ||
-    isToolApprovedByGrant(conversationApprovedTools, name) ||
+  (isToolApprovedByGrant(conversationApprovedTools, name) ||
     (canAlwaysAllow && isToolApprovedByGrant(alwaysApprovedTools, name)));
 
 /**

@@ -8,6 +8,7 @@ import {
   countryCodeOf,
   czechVatBandOf,
   effectiveVatRateBps,
+  exportMattersOf,
   invoiceDescriptionOf,
   type InvoiceExportRecord,
   quantityText,
@@ -67,7 +68,10 @@ const invoice = (record: InvoiceExportRecord): string => {
   const amount = (value: number) => amountText(value, currency);
   const bands = bandsOf(record);
   const description = clip(
-    invoiceDescriptionOf(record) ?? `${record.matter.name} ${record.number}`,
+    invoiceDescriptionOf(record) ??
+      `${exportMattersOf(record)
+        .map((matter) => matter.name)
+        .join(", ")} ${record.number}`,
     50,
   );
   return el("FaktVyd", [

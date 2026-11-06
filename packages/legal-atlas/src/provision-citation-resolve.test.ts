@@ -98,7 +98,9 @@ describe("resolveProvisionCitation", () => {
   test("an explicit gazette number wins over a title window", () => {
     expect(
       resolved("§ 420 zákona č. 40/1964 Sb., občanský zákoník"),
-    ).toMatchObject({ workIdentifier: "40/1964 Sb." });
+    ).toMatchObject({
+      workIdentifier: "40/1964 Sb.",
+    });
   });
 
   test("a sentence designator is read and dropped: anchors stop at points", () => {
@@ -178,10 +180,14 @@ describe("resolveProvisionCitation", () => {
     // The old civil code by number keeps its recodified title.
     expect(
       resolved("§ 420 zákona č. 40/1964 Sb., občanský zákoník"),
-    ).toMatchObject({ workIdentifier: "40/1964 Sb." });
+    ).toMatchObject({
+      workIdentifier: "40/1964 Sb.",
+    });
     expect(
       resolved("§ 316 zákona č. 262/2006 Sb., zákoník práce"),
-    ).toMatchObject({ workIdentifier: "262/2006 Sb." });
+    ).toMatchObject({
+      workIdentifier: "262/2006 Sb.",
+    });
   });
 
   test("a dated title does not hide an undated name of another act beside it", () => {
@@ -205,7 +211,9 @@ describe("resolveProvisionCitation", () => {
     // The same number twice is one act.
     expect(
       resolved("§ 316 zákona č. 262/2006 Sb. (zákon č. 262/2006 Sb.)"),
-    ).toMatchObject({ workIdentifier: "262/2006 Sb." });
+    ).toMatchObject({
+      workIdentifier: "262/2006 Sb.",
+    });
   });
 
   test("two acts named side by side are ambiguous, never resolved to the longer name", () => {
@@ -540,10 +548,16 @@ describe("resolveActCitation", () => {
     // title its own official title states in parentheses.
     expect(
       readAct("Z § 2 odst. 4 písm. b) zákona o obětech trestných činů"),
-    ).toEqual({ status: "no_act", actName: "zákona o obětech trestných činů" });
+    ).toEqual({
+      status: "no_act",
+      actName: "zákona o obětech trestných činů",
+    });
     expect(
       readAct("[§ 2 odst. 4 písm. b) zákona o obětech trestných činů]"),
-    ).toEqual({ status: "no_act", actName: "zákona o obětech trestných činů" });
+    ).toEqual({
+      status: "no_act",
+      actName: "zákona o obětech trestných činů",
+    });
   });
 
   test.each([
@@ -615,3 +629,152 @@ describe("title heads", () => {
     }
   });
 });
+
+describe("Slovak named acts", () => {
+  test.each([
+    "zákona o ústavnom súde",
+    "zákon o ústavnom súde",
+    "zákonu o ústavnom súde",
+    "zákonom o ústavnom súde",
+    "zákone o ústavnom súde",
+    "zákona o Ústavnom súde Slovenskej republiky",
+  ])("%s names the constitutional court act", (title) => {
+    expect(
+      resolveProvisionCitation({
+        text: `§ 70 ods. 1 ${title}`,
+        profile: SK_PROFILE,
+        citedOn: TODAY,
+      }),
+    ).toMatchObject({
+      status: "resolved",
+      workIdentifier: "314/2018 Z. z.",
+      anchor: "paragraf-70.odsek-1",
+    });
+  });
+
+  test("the constitutional court short title follows its dated succession", () => {
+    for (const [citedOn, workIdentifier] of [
+      ["2019-02-28", "38/1993 Z. z."],
+      ["2019-03-01", "314/2018 Z. z."],
+    ] as const) {
+      expect(
+        resolveProvisionCitation({
+          text: "§ 70 zákona o ústavnom súde",
+          profile: SK_PROFILE,
+          citedOn,
+        }),
+      ).toMatchObject({ status: "resolved", workIdentifier });
+    }
+    expect(
+      resolveProvisionCitation({
+        text: "§ 70 zákona č. 38/1993 Z. z. o ústavnom súde",
+        profile: SK_PROFILE,
+        citedOn: TODAY,
+      }),
+    ).toMatchObject({ status: "resolved", workIdentifier: "38/1993 Z. z." });
+  });
+
+  test("two acts with the same subject remain typed ambiguous", () => {
+    const read = resolveProvisionCitation({
+      text: "§ 2 zákona o spoločnej veci",
+      profile: {
+        ...SK_PROFILE,
+        titles: [
+          {
+            spellings: ["zákona o spoločnej veci"],
+            identifier: { number: 10, year: 2000, collection: "Z. z." },
+          },
+          {
+            spellings: ["zákona o spoločnej veci"],
+            identifier: { number: 20, year: 2001, collection: "Z. z." },
+          },
+        ],
+      },
+      citedOn: TODAY,
+    });
+    expect(read).toMatchObject({ status: "ambiguous_act" });
+    if (read.status === "ambiguous_act") {
+      expect(
+        read.candidates.map(({ workIdentifier }) => workIdentifier).toSorted(),
+      ).toEqual(["10/2000 Z. z.", "20/2001 Z. z."]);
+    }
+  });
+
+  test("the Czech constitutional court title keeps its own identity", () => {
+    expect(resolve("§ 70 odst. 1 zákona o Ústavním soudu")).toMatchObject({
+      status: "resolved",
+      workIdentifier: "182/1993 Sb.",
+      anchor: "par_70-odst_1",
+    });
+  });
+});
+
+describe("Slovak registry spellings and provision spacing", () => {
+  const entries: readonly ActTitleSpec[] = [
+    ...SK_PROFILE.aliases,
+    ...SK_PROFILE.titles,
+  ];
+  const cases = entries.flatMap((entry) =>
+    entry.spellings.map((spelling) => ({ entry, spelling })),
+  );
+  test.each(cases)(
+    "$spelling identifies its registered act",
+    ({ entry, spelling }) => {
+      const citedOn =
+        entry.citedFrom ??
+        (entry.citedUntil === undefined
+          ? TODAY
+          : `${String(Number(entry.citedUntil.slice(0, 4)) - 1)}-06-30`);
+      const term = entry.unit === "article" ? "čl." : "§";
+      for (const gap of ["", " "]) {
+        const read = resolveProvisionCitation({
+          text: `${term}${gap}5 ods.${gap}1 písm.${gap}a) bod${gap}2 ${spelling}`,
+          profile: SK_PROFILE,
+          citedOn,
+        });
+        expect(read).toMatchObject({
+          status: "resolved",
+          workIdentifier: formatWorkIdentifier(entry.identifier),
+          section: 5,
+          subsection: "1",
+          letter: "a",
+          point: "2",
+        });
+      }
+    },
+  );
+});
+
+test.each([
+  "OSP",
+  "O. s. p.",
+  "Občiansky súdny poriadok",
+  "Občianskeho súdneho poriadku",
+  "Občianskom súdnom poriadku",
+])("%s identifies the Slovak civil procedure code", (name) => {
+  expect(
+    resolveProvisionCitation({
+      text: `§ 70 ods.1 ${name}`,
+      profile: SK_PROFILE,
+      citedOn: TODAY,
+    }),
+  ).toMatchObject({ status: "resolved", workIdentifier: "99/1963 Zb." });
+});
+
+test.each([
+  { citation: "§ 2 zákona č. 513/1991", collection: "Zb." },
+  { citation: "§ 2 zákona č. 460/1992", collection: "Zb." },
+  { citation: "§ 2 zákona č. 1/1993", collection: "Z. z." },
+  { citation: "§ 2 zákona č. 343/2015", collection: "Z. z." },
+])(
+  "a bare Slovak act number uses the collection for its publication year: $citation",
+  ({ citation, collection }) => {
+    expect(
+      resolveActCitation({
+        text: citation,
+        profile: SK_PROFILE,
+        citedOn: TODAY,
+      }),
+    ).toMatchObject({ status: "resolved", work: { collection } });
+  },
+);

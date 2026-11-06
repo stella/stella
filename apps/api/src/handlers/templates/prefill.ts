@@ -11,6 +11,8 @@ import type {
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -231,6 +233,10 @@ const prefillTemplate = createSafeRootHandler(config, async function* (ctx) {
     getActiveWorkspaceIds,
     user,
   } = ctx;
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+
   const organizationId = session.activeOrganizationId;
 
   yield* requireTanStackAIAvailableForTask({

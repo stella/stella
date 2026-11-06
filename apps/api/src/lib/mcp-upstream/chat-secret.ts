@@ -1,15 +1,13 @@
 import { Result } from "better-result";
 
+import { safeOutboundFetchStream } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createBearerMcpClient } from "@/api/lib/mcp-upstream/connections";
 import { decryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import type { EncryptedSecret } from "@/api/lib/mcp-upstream/crypto";
-import {
-  safeOutboundFetchStream,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 /** The outbound request owner; tests substitute an in-process upstream. */
 export type ChatSecretOutboundFetch = {

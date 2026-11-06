@@ -11,6 +11,7 @@ export const EMAIL_UNDELIVERABLE_CONSTRAINTS = [
 ] as const satisfies readonly OnlineConstraintValidation[];
 
 export const EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION = {
+  introducedBy: "20261026100000_account_email_undeliverable",
   name: CONSTRAINT_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
@@ -25,4 +26,4 @@ export const EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION = {
       tables,
       constraints: EMAIL_UNDELIVERABLE_CONSTRAINTS,
     }),
-} as const satisfies OnlineRepair;
+} satisfies OnlineRepair;

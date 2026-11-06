@@ -1,0 +1,4 @@
+{
+  "kind": "support",
+  "qualifier": "Reports every artifact the final release run has not produced; no publication."
+}

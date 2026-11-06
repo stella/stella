@@ -335,6 +335,14 @@ export const PROCESSED_FIELD_INVENTORY = {
       ),
     ),
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    "court-paragraph-numbers": providedField(
+      "LegalDocML num values populate paragraph numbers.",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
+      ),
+    ),
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     "court-paragraph-numbers": providedField(
       "parseHuBhgyDecision strips the leading [N] into ParagraphBlock.number",

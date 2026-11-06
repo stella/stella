@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BROWSER_CONTROL_LIMITS,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
 } from "@stll/api-contract/browser-control";
 
@@ -14,7 +15,13 @@ import {
 const click = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Next", ref: "e:0:1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Next",
+    ref: "e:0:1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const open = {
   action: "open",
@@ -44,6 +51,28 @@ const chargeRepeatedly = (
 };
 
 describe("browser command budget", () => {
+  test("a tab switch costs an action, a new tab a navigation", () => {
+    const charge = (command: BrowserControlCommand) => {
+      const outcome = chargeCommandBudget(null, {
+        command,
+        controllerId: "controller-1",
+        turnId: "turn-1",
+      });
+      return outcome.status === "charged" ? outcome.ledger.session : null;
+    };
+    expect(
+      charge({
+        action: "switch-tab",
+        tabId: 9,
+        url: "https://example.com/results",
+      }),
+    ).toEqual({ actions: 1, navigations: 0 });
+    expect(charge({ ...open, newTab: true })).toEqual({
+      actions: 1,
+      navigations: 1,
+    });
+  });
+
   test("refuses the action past the per-turn limit, then a new turn starts fresh", () => {
     const { index, ledger, outcome } = chargeRepeatedly(
       click,

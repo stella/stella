@@ -19,7 +19,12 @@ import {
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ChatSendRequest } from "@stll/api-contract";
+import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
+import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  chatLocalRunComputerEventSchema,
+} from "@stll/api-contract/chat-run-target";
+import type { ChatLocalRunQuestionReply } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -32,6 +37,7 @@ import {
 } from "@stll/chat/resume-contract";
 import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   ChatClientTools,
@@ -42,10 +48,15 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
+import {
+  isSameLocalRunQuestionPause,
+  type LocalRunQuestionPause,
+  localRunQuestionPauseOf,
+} from "@/components/chat/local-run-question.logic";
+import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
-  getBrowserClientCapability,
+  getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
@@ -84,7 +95,10 @@ import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatFetchClient, chatResponseError } from "./chat-fetch";
-import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
+import {
+  isClassifiedRunError,
+  observeChatProviderDiagnostic,
+} from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
   ActiveFileContext,
@@ -109,7 +123,7 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
+  turnIntent?: ChatTurnIntent | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
@@ -136,12 +150,18 @@ export type ChatStopState =
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
+  /** The question a run on the member's computer paused the turn on. */
+  localRunQuestion: LocalRunQuestionPause | null;
   reconnecting: boolean;
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
+  /** The turn runs on the member's computer, which went away mid-turn; the
+   *  turn goes on once it reconnects. A rejoin replays the run's events, so
+   *  a reload reads the same. */
+  waitingForComputer: boolean;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -171,9 +191,21 @@ export type ChatRuntime = ChatActivitySession & {
     result: ChatToolResultInput,
     options?: ChatSendMessageOptions,
   ) => Promise<void>;
+  /**
+   * Answer the question a local run paused on, or, with `null`, dismiss it:
+   * the server then stops the run's turn. A pause is answered once.
+   */
+  answerLocalRunQuestion: (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
+  ) => Promise<void>;
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Show the thread as the server stores it, after a request the server did
+   *  not accept: its messages replace the page's, and the request's error
+   *  leaves with the turn it described. */
+  showStoredMessages: (messages: PersistedChatMessage[]) => void;
   /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
@@ -208,6 +240,37 @@ export const sendThreadChatMessage = async (
   }
 
   await sendMessage(message, options);
+};
+
+/**
+ * What the server answered a sent message, as soon as it answered: it
+ * accepted the turn (whose answer then streams on), or the request failed
+ * before it did, with the failure it reported.
+ */
+type ChatSendAcceptance =
+  { status: "accepted" } | { status: "failed"; error: Error };
+
+type ChatThreadSendUntilAccepted = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => Promise<ChatSendAcceptance>;
+
+const threadSendUntilAcceptedByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadSendUntilAccepted
+>();
+
+/** Send `message` and resolve once the server accepted or refused its turn,
+ *  without waiting for the answer to stream. */
+export const sendThreadChatMessageUntilAccepted = async (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): Promise<ChatSendAcceptance> => {
+  const send =
+    threadSendUntilAcceptedByRuntime.get(chat) ??
+    panic("Missing thread send capability for chat runtime");
+  return await send(message, options);
 };
 
 const getChatApiPath = () => apiUrl("/chat");
@@ -289,7 +352,10 @@ const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
   (findChatRequestError(shown) !== undefined &&
     findChatRequestError(next) === undefined) ||
   (providerDiagnosticFromThrown(shown) !== undefined &&
-    providerDiagnosticFromThrown(next) === undefined);
+    providerDiagnosticFromThrown(next) === undefined) ||
+  (shown !== undefined &&
+    isClassifiedRunError(shown) &&
+    !isClassifiedRunError(next));
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
@@ -382,12 +448,14 @@ export const createChatRuntime = ({
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
+    localRunQuestion: null,
     reconnecting: activeTurnId !== null,
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
     stop: { status: "idle" },
     turnAbandoned: false,
+    waitingForComputer: false,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -403,6 +471,12 @@ export const createChatRuntime = ({
    *  a generic replay of the same failure stays quiet too; the next request
    *  clears it. */
   let settledTurnRefused = false;
+  /** A send that waits to hear whether the server accepted its turn; the
+   *  request the send posts answers it (see `turnObservingFetchClient`). */
+  let awaitedSendAcceptance:
+    PromiseWithResolvers<ChatSendAcceptance> | undefined;
+  /** TanStack's delivery of the page's latest send, until it has finished. */
+  let clientDelivery: Promise<void> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
@@ -535,7 +609,23 @@ export const createChatRuntime = ({
 
   const turnObservingFetchClient = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await chatFetchClient(input, init);
+      // A send waiting to hear whether its turn was accepted hears it from
+      // the next request the page posts; a rejoin replays with GET.
+      const acceptance =
+        init?.method === "GET" ? undefined : awaitedSendAcceptance;
+      if (acceptance !== undefined) {
+        awaitedSendAcceptance = undefined;
+      }
+      const received = await Result.tryPromise({
+        try: async () => await chatFetchClient(input, init),
+        catch: toError,
+      });
+      if (Result.isError(received)) {
+        acceptance?.resolve({ status: "failed", error: received.error });
+        return readQueryResult(received);
+      }
+      acceptance?.resolve({ status: "accepted" });
+      const response = received.value;
       const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
@@ -626,7 +716,7 @@ export const createChatRuntime = ({
         const response = await fetchWithTimeout(turnUrl("resume"), {
           credentials: "include",
           ...(signal === undefined || signal === null ? {} : { signal }),
-          timeout: { type: "idle", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
+          timeout: { type: "headers", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
         });
         if (!response.ok) {
           if (response.status === 404) {
@@ -647,7 +737,10 @@ export const createChatRuntime = ({
             }),
           );
         }
-        const data: unknown = await response.json();
+        const data = await readBodyJsonWithIdleDeadline(response, {
+          idleMs: CHAT_RESUME_PROBE_TIMEOUT_MS,
+          ...(signal === undefined || signal === null ? {} : { signal }),
+        });
         const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
         if (!parsed.success) {
           return await Promise.reject(
@@ -718,7 +811,13 @@ export const createChatRuntime = ({
             messages.slice(-1),
             requestBody,
             abortSignal,
-            runContext,
+            {
+              ...runContext,
+              // The API owns tool schemas and derives browser availability
+              // from browserExtension. Keep local executors registered without
+              // uploading their schemas on every send and continuation.
+              clientTools: [],
+            },
           ),
         ),
         {
@@ -737,7 +836,7 @@ export const createChatRuntime = ({
   // The extension budgets browser commands per chat turn, named by its
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
-  const browserTool = createBrowserClientTool({
+  const browserTool = createBrowserExtensionTool({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
@@ -879,10 +978,51 @@ export const createChatRuntime = ({
         settleMountRead();
       }
     },
-    onInterruptStateChange: observeInterruptSubmission,
+    onInterruptStateChange: (state) => {
+      observeInterruptSubmission(state);
+      // TanStack holds a local run's question as an interrupt it cannot
+      // resolve (it carries no resume binding): the server owns the pause,
+      // and the card answers it through `answerLocalRunQuestion`.
+      const localRunQuestion = localRunQuestionPauseOf(state.interrupts);
+      if (
+        !isSameLocalRunQuestionPause(
+          snapshot.localRunQuestion,
+          localRunQuestion,
+        )
+      ) {
+        setSnapshot({ localRunQuestion });
+      }
+    },
+    onCustomEvent: (name, value) => {
+      if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
+        return;
+      }
+      const parsed = v.safeParse(chatLocalRunComputerEventSchema, value);
+      if (!parsed.success) {
+        getAnalytics().captureError(
+          new ClientOperationError({
+            action: "chat.localRunComputerEvent",
+            message: "A local run sent a computer status the page cannot read",
+          }),
+          {
+            fingerprintKey: "chatRuntime:localRunComputerEvent",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:localRunComputerEvent",
+            },
+          },
+        );
+        return;
+      }
+      setSnapshot({
+        waitingForComputer: parsed.output.status === "waiting",
+      });
+    },
     onLoadingChange: (isLoading) => {
       setSnapshot({
         isLoading,
+        // A wait belongs to the request that reported it.
+        waitingForComputer: false,
         ...(!isLoading ? { reconnecting: false } : {}),
         ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
           ? { turnAbandoned: false }
@@ -1073,7 +1213,12 @@ export const createChatRuntime = ({
     supersedePendingInterrupts();
     const requestWasActive =
       snapshot.isLoading || isChatClientRequestActive(snapshot.status);
-    const stream = client.sendMessage(message, options?.body);
+    // TanStack would queue a send made while it is busy and post it later on
+    // its own; the session's queue retries a refused send itself, so a busy
+    // client refuses it instead of sending it twice.
+    const stream = client.sendMessage(message, options?.body, {
+      whenBusy: "drop",
+    });
     if (!hasUserMessage(snapshot.messages, message.id)) {
       return {
         messageId: message.id,
@@ -1095,10 +1240,34 @@ export const createChatRuntime = ({
     }
     startTurn();
     sendTiming.started(options?.timingSurface, message.id);
+    const delivered = stream.then(
+      () => undefined,
+      () => undefined,
+    );
+    clientDelivery = delivered;
+    detached(
+      (async () => {
+        await delivered;
+        if (clientDelivery === delivered) {
+          clientDelivery = undefined;
+        }
+      })(),
+      "chat-runtime.client-delivery",
+    );
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
+    // A turn reads ready a few ticks before TanStack has finished delivering
+    // it; a send in that window would be refused as busy, so it waits for
+    // the delivery to end. A request still running is refused as before.
+    if (
+      clientDelivery !== undefined &&
+      !snapshot.isLoading &&
+      !isChatClientRequestActive(snapshot.status)
+    ) {
+      await clientDelivery;
+    }
     const started = startClientSend(message, options);
     const outcome = await Result.tryPromise({
       try: async () => await started.stream,
@@ -1112,6 +1281,48 @@ export const createChatRuntime = ({
     }
   };
 
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const acceptance = Promise.withResolvers<ChatSendAcceptance>();
+    awaitedSendAcceptance = acceptance;
+    const errorBeforeSend = snapshot.error;
+    // A send that ends before its request was answered (it never started, or
+    // failed while it was prepared) answers from how it ended.
+    const delivered = Result.tryPromise({
+      try: async () => {
+        await sendThreadMessage(message, options);
+      },
+      catch: toError,
+    }).then((outcome): ChatSendAcceptance => {
+      if (Result.isError(outcome)) {
+        return { status: "failed", error: outcome.error };
+      }
+      return snapshot.error !== undefined && snapshot.error !== errorBeforeSend
+        ? { status: "failed", error: snapshot.error }
+        : { status: "accepted" };
+    });
+    const answer = await Promise.race([acceptance.promise, delivered]);
+    if (awaitedSendAcceptance === acceptance) {
+      awaitedSendAcceptance = undefined;
+    }
+    if (answer.status === "failed") {
+      // A refused request is over only once TanStack has handled it: it puts
+      // back the messages it showed before the send, so a caller that shows
+      // other messages afterwards must not race that rollback.
+      await delivered;
+    }
+    return answer;
+  };
+
+  const showStoredMessages = (messages: PersistedChatMessage[]): void => {
+    showMessages(messages);
+    if (snapshot.error !== undefined) {
+      setSnapshot({ error: undefined });
+    }
+  };
+
   /**
    * Each approval's answer, by approval id. An approval is answered once: a
    * second answer to it (a click racing its card's automatic answer) joins
@@ -1119,6 +1330,46 @@ export const createChatRuntime = ({
    * not kept, so it does not stand in for a later answer to the same id.
    */
   const approvalAnswers = new Map<string, Promise<void>>();
+
+  /** Local-run pauses already answered or dismissed, by interrupt id. */
+  const answeredLocalRunQuestions = new Set<string>();
+
+  /**
+   * Resume the turn a local run paused on its question. TanStack exposes the
+   * pause as an unbound interrupt it cannot resolve, so the resume goes out as
+   * the AG-UI resume item the server reads: the answers as the reply payload,
+   * or a cancellation the server turns into a stop of the run's turn.
+   */
+  const answerLocalRunQuestion = async (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
+  ): Promise<void> => {
+    if (isStoppedTurn() || answeredLocalRunQuestions.has(interruptId)) {
+      return;
+    }
+    answeredLocalRunQuestions.add(interruptId);
+    if (!(await awaitRequestEnd())) {
+      return;
+    }
+    const resumed = await Result.tryPromise(
+      async () =>
+        await client.resumeInterruptsUnsafe([
+          answers === null
+            ? { interruptId, status: "cancelled" }
+            : {
+                interruptId,
+                status: "resolved",
+                payload: {
+                  answers,
+                } satisfies ChatLocalRunQuestionReply,
+              },
+        ]),
+    );
+    if (Result.isError(resumed)) {
+      answeredLocalRunQuestions.delete(interruptId);
+      captureRuntimeError(resumed.error.cause);
+    }
+  };
 
   const answerToolApproval = async (
     response: { approved: boolean; id: string },
@@ -1221,6 +1472,9 @@ export const createChatRuntime = ({
   const closeRequest = (): void => {
     const turnWasActive = isTurnActive();
     client.detach();
+    // The detached delivery is over for this page; a later send never waits
+    // on it.
+    clientDelivery = undefined;
     if (turnWasActive) {
       setSnapshot({ turnAbandoned: true });
       reloadThread();
@@ -1255,6 +1509,7 @@ export const createChatRuntime = ({
         captureRuntimeError(outcome.error.cause);
       }
     },
+    answerLocalRunQuestion,
     addToolResult: async (result, options) => {
       if (isStoppedTurn()) {
         return;
@@ -1335,6 +1590,7 @@ export const createChatRuntime = ({
       );
     },
     setMessages: showMessages,
+    showStoredMessages,
     startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
       if (started.status === "not_started") {
@@ -1411,6 +1667,7 @@ export const createChatRuntime = ({
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
 };
@@ -1495,10 +1752,7 @@ export const buildSendRequestBody = ({
     threadId: key.threadId,
   };
 
-  const browserClient = getBrowserClientCapability();
-  if (browserClient) {
-    body.browserClient = browserClient;
-  }
+  body.browserExtension = getBrowserExtensionState();
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
@@ -1522,6 +1776,12 @@ export const buildSendRequestBody = ({
   }
 
   applyChatContext({ body, context });
+
+  // Cloud is the default and travels as an absent field.
+  const runTarget = context?.getRunTarget?.();
+  if (runTarget?.kind === "local") {
+    body.runTarget = runTarget;
+  }
 
   const { editApplyMode, docxEditRepresentation } =
     resolveChatRequestDocxEditPreferences({
@@ -1881,7 +2141,10 @@ const normalizeChatContinuationRequestBody = (
       data["truncateAfterMessageId"],
     );
   }
-  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+  if (
+    data["turnIntent"] === CHAT_TURN_INTENT.regenerate ||
+    data["turnIntent"] === CHAT_TURN_INTENT.edit
+  ) {
     body.turnIntent = data["turnIntent"];
   }
 

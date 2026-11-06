@@ -2,14 +2,11 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
-import type { OnlineIndexDeclaration } from "./online-ddl";
 import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 import { sanctionsContactMarks } from "./schema/sanctions-monitoring";
 
 const table = getTableConfig(sanctionsContactMarks);
-const onlineMigrationIndexes: readonly OnlineIndexDeclaration[] =
-  ONLINE_MIGRATION_INDEXES;
-const retryColumns: readonly string[] = [
+const retryColumns = [
   sanctionsContactMarks.nextAttemptAt.name,
   sanctionsContactMarks.scheduledAt.name,
 ];
@@ -47,7 +44,9 @@ test.each(retryIndexes)(
     if (name === undefined) {
       panic("Monitoring retry indexes declare their names");
     }
-    const online = onlineMigrationIndexes.find((index) => index.name === name);
+    const online = ONLINE_MIGRATION_INDEXES.find(
+      (index) => index.name === name,
+    );
     expect(online?.tableName).toBe(table.name);
     expect(online?.isUnique).toBe(unique);
     expect(online?.definitionBody).toBe(

@@ -7,6 +7,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -61,7 +62,6 @@ import {
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -113,7 +113,7 @@ test.each([
   const response = await endpoint.handler(ctx);
   expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
   if (!(response instanceof HttpStatusResponse)) {
-    throw new Error("Expected a status response");
+    throw new TypeError("Expected a status response");
   }
   expect(response.response.retryable).toBe(true);
   expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
@@ -522,6 +522,7 @@ const createContext = <TContext>(
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
 ): TContext =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   ({
     request: new Request("https://example.test/usage-preflight"),
     route: "/usage-preflight",
@@ -548,7 +549,6 @@ const createContext = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
@@ -831,10 +831,9 @@ test("safe handlers preserve request scope through shared helpers and detached r
         new Error("Shared failure"),
         handlerErrorContext("test.sharedCapture"),
       );
-      detached(
-        Promise.reject(new Error("Detached failure")),
-        "test.shared-detached",
-      );
+      detached(async () => {
+        throw new Error("Detached failure");
+      }, "test.shared-detached");
       return Result.ok({ ok: true });
     },
   );
@@ -926,7 +925,9 @@ describe("request.failed severity", () => {
       return {
         response,
         failures: recordingLogger.records.filter(
-          (record) => record.message === "request.failed",
+          (record) =>
+            record.message === "request.failed" ||
+            record.message === "limiter_admission.unavailable",
         ),
         exceptions: analytics.exceptions(),
       };
@@ -991,19 +992,19 @@ describe("request.failed severity", () => {
     expect(exceptions).toEqual([]);
   });
 
-  test("an unavailable admission service remains a captured server fault", async () => {
+  test("an unavailable admission store is observed as a transient warning", async () => {
     const refusal =
-      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.admissionUnavailable];
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.storeUnavailable];
     const { response, failures, exceptions } = await runFailingHandler(
       new HandlerError({
         status: refusal.status,
-        code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        code: ACTION_ADMISSION_CODES.storeUnavailable,
         message: refusal.message,
       }),
     );
     expect(response).toMatchObject({ code: 503 });
-    expect(failures.at(0)?.severityText).toBe("ERROR");
-    expect(exceptions).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toHaveLength(0);
   });
 
   test("grades a database failure as a server fault", async () => {
@@ -1056,7 +1057,7 @@ describe("a mapped status survives the transport wrapper", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,

@@ -9,6 +9,8 @@ import {
   missingPreparedApiTypecheckConfigs,
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
+import { childExitStatus } from "./child-exit-status";
+import { INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS } from "./generated-files";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -56,6 +58,21 @@ const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
   "@types/jest",
   "@types/vitest",
   "@types/mocha",
+]);
+// Packages the API replaced with its own small fetch clients. Each entry names
+// the replacement, so the failure says where the behaviour lives now.
+const POSTHOG_CLIENT = "apps/api/src/lib/analytics/posthog-client.ts";
+const OTLP_LOG_EXPORTER = "apps/api/src/lib/observability/otlp-log-exporter.ts";
+const REPLACED_NPM_DEPENDENCIES: ReadonlyMap<string, string> = new Map([
+  ["posthog-node", `replaced by the fetch client in ${POSTHOG_CLIENT}`],
+  ["@opentelemetry/api", `replaced by the log types in ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/api-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+  [
+    "@opentelemetry/exporter-logs-otlp-http",
+    `replaced by the fetch client in ${OTLP_LOG_EXPORTER}`,
+  ],
+  ["@opentelemetry/resources", `replaced by ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/sdk-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
 ]);
 const DENIED_CARGO_DEPENDENCIES = new Set([
   "strsim",
@@ -105,18 +122,13 @@ const BABEL_TOOLCHAINS = [
 // `typescript6` alias, and Astro's checker, which supports only TypeScript 5
 // and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
-  oxlint: "1.87.0",
+  oxlint: "1.89.0",
   oxlintConfig: "1.7.0",
-  tsgolint: "7.0.2003",
-  tsrs: "0.18.0-ts7.1.0-dev.20260929",
+  tsgolint: "7.0.2005",
+  tsrs: "0.20.1-ts7.1.0-beta",
   typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
 } as const;
-// Workspaces whose own scripts import the TypeScript 6 compiler API; each
-// declares it so a filtered install links it.
-const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
-  "apps/api/package.json",
-]);
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "typescript",
@@ -128,11 +140,13 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.9",
+    specifier: "^0.9.12",
   },
+  // Only root scripts still import the TypeScript 6 compiler API; every
+  // workspace reads syntax with oxc and programs with tsrs.
   compilerApi: {
     dependency: "typescript6",
-    packagePath: "apps/api/package.json",
+    packagePath: "package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -142,6 +156,34 @@ export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 export type WorkspaceIssue = {
   message: string;
   path: string;
+};
+
+export const regenerateInstallOwnedIgnoredGeneratedOutputs = (
+  rootDir: string,
+  runCommand: (command: readonly string[], cwd: string) => number = (
+    command,
+    cwd,
+  ) =>
+    childExitStatus(
+      Bun.spawnSync([...command], {
+        cwd,
+        // Output streams straight to the install log; the limit only binds piped output.
+        maxBuffer: 2 ** 30,
+        stderr: "inherit",
+        stdout: "inherit",
+      }),
+    ),
+) => {
+  for (const { command, outputs } of INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS) {
+    if (outputs.some((output) => !existsSync(path.join(rootDir, output)))) {
+      continue;
+    }
+    const status = runCommand(command, rootDir);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
 };
 
 type WorkspacePackageReadResult =
@@ -230,6 +272,14 @@ const validateDeniedNpmDependencies = (
         });
         continue;
       }
+      const replacement = REPLACED_NPM_DEPENDENCIES.get(actualName);
+      if (replacement !== undefined) {
+        issues.push({
+          message: `${actualName} is blocked; ${replacement}`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
       const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
         ? actualName
         : undefined;
@@ -300,9 +350,16 @@ const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
     });
   });
 
+/** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean =>
+  readDependencySpecifier(packageJsonPath, "typescript6") !== null ||
+  readDependencySpecifier(packageJsonPath, (specifier) =>
+    /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+  ) !== null;
+
 const readDependencySpecifier = (
   packageJsonPath: string,
-  dependencyName: string,
+  dependency: string | ((specifier: string) => boolean),
 ): string | null => {
   let packageJson: unknown;
   try {
@@ -321,7 +378,12 @@ const readDependencySpecifier = (
       continue;
     }
 
-    const specifier = dependencies[dependencyName];
+    const specifier =
+      typeof dependency === "string"
+        ? dependencies[dependency]
+        : Object.values(dependencies).find(
+            (value) => typeof value === "string" && dependency(value),
+          );
     if (typeof specifier === "string") {
       return specifier;
     }
@@ -624,13 +686,10 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
         });
       }
 
-      if (
-        readDependencySpecifier(packageJsonPath, "typescript6") !== null &&
-        !TYPESCRIPT6_API_PACKAGE_PATHS.has(relativePackagePath)
-      ) {
+      if (declaresTypescript6Compiler(packageJsonPath)) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: relativePackagePath,
         });
       }
@@ -1027,6 +1086,14 @@ if (import.meta.main) {
   // CI runs this as a verification step (STELLA_VERIFY=check) after it has
   // generated the API typecheck configs; the install-time postinstall has not.
   const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  if (!requirePreparedApiTypecheck) {
+    const regenerationStatus = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      process.cwd(),
+    );
+    if (regenerationStatus !== 0) {
+      process.exit(regenerationStatus);
+    }
+  }
   const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
   if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
     console.log(

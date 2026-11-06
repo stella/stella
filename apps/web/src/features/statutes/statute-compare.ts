@@ -13,6 +13,7 @@ import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
 import type { PreviewBlock } from "@stll/legal-ast/statute-list";
 
@@ -552,6 +553,8 @@ type ProvisionCompareSideOptions = {
   blocks: readonly Block[] | null;
   /** The provision heading's anchor. */
   provision: string;
+  /** The statute publisher's anchor grammar, which its subdivisions nest in. */
+  scheme: StatuteAnchorScheme;
 };
 
 /** A provision read's answer: its own heading and the blocks it owns. */
@@ -586,12 +589,17 @@ export const provisionWordingSide = ({
 export const provisionCompareSide = ({
   blocks,
   provision,
+  scheme,
 }: ProvisionCompareSideOptions): CompareSideState => {
   if (blocks === null) {
     return { type: "unstructured" };
   }
-  const heading = resolveDocumentHeadingAnchor(blocks, provision);
-  const owned = provisionPreviewBlocks(blocks, provision, undefined);
+  const statute = { blocks, scheme };
+  const heading = resolveDocumentHeadingAnchor(statute, provision);
+  const owned = provisionPreviewBlocks(statute, {
+    provisionAnchorId: provision,
+    citedAnchorId: undefined,
+  });
 
   if (heading === null || owned === null) {
     return { type: "absent" };
@@ -710,4 +718,45 @@ export const resolveCompareVersions = <V extends ComparableVersion>({
   return otherIndex > onScreenIndex
     ? { type: "ready", older: other, newer: onScreen, other }
     : { type: "ready", older: onScreen, newer: other, other };
+};
+
+/**
+ * Where a comparison goes when one column takes another version: the other
+ * column stays. The route names the text on screen and `compare` names the
+ * other, so a kept on-screen side only moves `compare`, and a kept other side
+ * puts the picked version on screen with the kept one as `compare`. `none`
+ * when the version that would be `compare` has no opening day to name it by.
+ */
+export type ComparisonAfterPick =
+  | { type: "compare"; compare: string }
+  | { type: "open"; versionId: string; compare: string }
+  | { type: "none" };
+
+export const comparisonAfterPick = <V extends ComparableVersion>({
+  newer,
+  older,
+  onScreenId,
+  picked,
+  replaced,
+}: {
+  older: V;
+  newer: V;
+  onScreenId: string;
+  /** The version the column showed. */
+  replaced: V;
+  /** The version the column takes. */
+  picked: V;
+}): ComparisonAfterPick => {
+  const kept = replaced.id === older.id ? newer : older;
+  if (picked.id === replaced.id || picked.id === kept.id) {
+    return { type: "none" };
+  }
+  if (kept.id === onScreenId) {
+    return picked.versionValidFrom === null
+      ? { type: "none" }
+      : { type: "compare", compare: picked.versionValidFrom };
+  }
+  return kept.versionValidFrom === null
+    ? { type: "none" }
+    : { type: "open", versionId: picked.id, compare: kept.versionValidFrom };
 };

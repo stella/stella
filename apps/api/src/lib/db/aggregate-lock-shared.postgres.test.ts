@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
@@ -12,8 +13,10 @@ import {
   ADVISORY_LOCK_MODES,
   AggregateLockBusy,
   AggregateLockUpgradeRefused,
+  createAggregateSavepointDatabase,
   withAggregateLock,
   withAggregateSavepoint,
+  withAggregateTransaction,
 } from "./aggregate-lock";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -25,6 +28,102 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("shared aggregate advisory locks (postgres)", () => {
+    test("owned savepoint databases preserve parent ordering and independent rollback", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient({ max: 1 });
+        await db.execute(
+          sql`CREATE TEMP TABLE aggregate_savepoint_values (value integer PRIMARY KEY)`,
+        );
+        const organizationId = mintAuthProviderId<"organization">();
+        const earlier = {
+          aggregate: "orgFeatureAdmission",
+          id: { organizationId, featureId: "flows" },
+        } as const;
+        const later = {
+          aggregate: "definitionCap",
+          id: { definitionId: createSafeId<"flowDefinition">() },
+        } as const;
+        await withAggregateTransaction(db, async (parent) => {
+          await parent.execute(
+            sql`INSERT INTO aggregate_savepoint_values VALUES (1)`,
+          );
+          const database = createAggregateSavepointDatabase(parent);
+          await withAggregateLock({ ...earlier, tx: parent });
+          expect(
+            await withAggregateTransaction(database, async (child) => {
+              await withAggregateLock({ ...later, tx: child });
+              await child.execute(
+                sql`INSERT INTO aggregate_savepoint_values VALUES (2)`,
+              );
+              return "complete";
+            }),
+          ).toBe("complete");
+          expect(
+            await rejectionOf(
+              withAggregateTransaction(database, async (child) => {
+                await child.execute(
+                  sql`INSERT INTO aggregate_savepoint_values VALUES (3)`,
+                );
+                child.rollback();
+              }),
+            ),
+          ).toBeInstanceOf(TransactionRollbackError);
+          expect(
+            await parent.execute(
+              sql`SELECT value FROM aggregate_savepoint_values ORDER BY value`,
+            ),
+          ).toEqual([{ value: 1 }, { value: 2 }]);
+          const nextEarlier = {
+            aggregate: "orgFeatureAdmission",
+            id: {
+              organizationId: mintAuthProviderId<"organization">(),
+              featureId: "flows",
+            },
+          } as const;
+          expect(
+            await rejectionOf(
+              withAggregateTransaction(
+                database,
+                async (child) =>
+                  await withAggregateLock({ ...nextEarlier, tx: child }),
+              ),
+            ),
+          ).toMatchObject({ message: "Aggregate lock rank inversion" });
+          expect(
+            await rejectionOf(
+              withAggregateTransaction(parent, async () => "unused"),
+            ),
+          ).toMatchObject({
+            message:
+              "Use the aggregate savepoint owner for nested transactions",
+          });
+        });
+        expect(
+          await rejectionOf(
+            withAggregateTransaction(db, async (parent) => {
+              await parent.execute(
+                sql`INSERT INTO aggregate_savepoint_values VALUES (4)`,
+              );
+              await withAggregateTransaction(
+                createAggregateSavepointDatabase(parent),
+                async (child) => {
+                  await child.execute(
+                    sql`INSERT INTO aggregate_savepoint_values VALUES (5)`,
+                  );
+                },
+              );
+              parent.rollback();
+            }),
+          ),
+        ).toBeInstanceOf(TransactionRollbackError);
+        expect(
+          await db.execute(
+            sql`SELECT value FROM aggregate_savepoint_values ORDER BY value`,
+          ),
+        ).toEqual([{ value: 1 }, { value: 2 }]);
+      });
+    });
+
     for (const mode of ADVISORY_LOCK_MODES) {
       test(`shared advisory holds ${mode === "shared" ? "coexist with shared" : "block exclusive"} requests across sessions`, async () => {
         const fence = {

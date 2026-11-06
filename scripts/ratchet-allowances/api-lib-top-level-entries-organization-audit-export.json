@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 2,
+  "reason": "The admin audit-log export and the organization audit archive share one CSV projection and one matter-visibility predicate with the activity log, so each lives beside the audit log module it serves."
+}

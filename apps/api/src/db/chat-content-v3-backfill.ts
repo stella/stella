@@ -1,8 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { queryOrganizationFencedRepairBatch } from "../lib/db/aggregate-lock";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
@@ -15,8 +16,8 @@ import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepair,
 } from "./online-migration-connection";
 import { CHAT_CONTENT_V3_BACKFILL_OUTCOMES } from "./schema/chat";
 import type { chatContentV3BackfillReceipts } from "./schema/chat";
@@ -267,7 +268,7 @@ export const backfillChatContentV3Batch = async ({
   return { cursor: last, done: rows.length === 0, value: receipts };
 };
 
-export const readChatContentV3Completion: OnlineRepair["readCompletion"] =
+export const readChatContentV3Completion: MigrationOwnedOnlineRepair["readCompletion"] =
   async (connection) => {
     for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
       const constraint = await readConstraintCompletion({
@@ -307,94 +308,91 @@ type RepairOptions = {
   sleep?: (milliseconds: number) => Promise<void>;
   log?: (record: unknown) => void;
 };
-export const createChatContentV3Repair = (options: RepairOptions = {}) =>
-  ({
-    name: "chat-content-v3",
-    readCompletion: readChatContentV3Completion,
-    repair: async (connection, tables) => {
-      for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
-        const source = chatContentV3Source(key);
-        // Fresh installations have no data work or metric source to wait for.
-        if (
-          (
-            await connection.query(
-              `SELECT id FROM ${CHAT_CONTENT_V3_SOURCES[source].table} LIMIT 1`,
-            )
-          ).length === 0
-        ) {
-          continue;
-        }
-        const runtime = createBackfillRuntime({
-          connection,
-          name: backfillName(source),
-          tableName: CHAT_CONTENT_V3_SOURCES[source].table,
-          initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
-          config: {
-            ...defaultConfig,
-            minSize: 1,
-            maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
-          },
-          readVerdict: options.readVerdict,
-          log: options.log,
-        });
-        try {
-          const pass = await runBackfillPass({
-            holdPolicy: "propagate",
-            sleep: options.sleep ?? Bun.sleep,
-            step: async () =>
-              await runtime.step(
-                async ({ tx, size, cursor }) =>
-                  await backfillChatContentV3Batch({
-                    tx,
-                    size,
-                    cursor,
-                    source,
-                  }),
-              ),
-          });
-          if (pass.isErr()) {
-            // v3-only readers cannot start with a pending legacy checkpoint.
-            throw new ChatContentV3UpgradeError({
-              message:
-                "Chat content v3 upgrade deferred; rerun db:migrate to resume",
-              cause: pass.error,
-            });
-          }
-        } finally {
-          await runtime.close();
-        }
+export const createChatContentV3Repair = (
+  options: RepairOptions = {},
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261015050000_agent_skill_invocation",
+  name: "chat-content-v3",
+  readCompletion: readChatContentV3Completion,
+  repair: async (connection, tables) => {
+    for (const key of Object.keys(CHAT_CONTENT_V3_SOURCES)) {
+      const source = chatContentV3Source(key);
+      // Fresh installations have no data work or metric source to wait for.
+      if (
+        (
+          await connection.query(
+            `SELECT id FROM ${CHAT_CONTENT_V3_SOURCES[source].table} LIMIT 1`,
+          )
+        ).length === 0
+      ) {
+        continue;
       }
-      for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
-        const rows = await connection.query(
-          `SELECT id FROM ${table} WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb LIMIT 1`,
-        );
-        if (rows.length > 0) {
+      const runtime = createBackfillRuntime({
+        connection,
+        name: backfillName(source),
+        tableName: CHAT_CONTENT_V3_SOURCES[source].table,
+        initialSize: CHAT_CONTENT_V3_BATCH_SIZE,
+        config: {
+          ...loadGateHealthConfig(),
+          minSize: 1,
+          maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
+        },
+        readVerdict: options.readVerdict,
+        log: options.log,
+      });
+      try {
+        const pass = await runBackfillPass({
+          holdPolicy: "propagate",
+          sleep: options.sleep ?? Bun.sleep,
+          step: async () =>
+            await runtime.step(
+              async ({ tx, size, cursor }) =>
+                await backfillChatContentV3Batch({ tx, size, cursor, source }),
+            ),
+        });
+        if (pass.isErr()) {
+          // v3-only readers cannot start with a pending legacy checkpoint.
           throw new ChatContentV3UpgradeError({
             message:
-              "Non-v3 chat content remains; inspect chat_content_v3_backfill_receipts, repair failed rows and retry",
+              "Chat content v3 upgrade deferred; rerun db:migrate to resume",
+            cause: pass.error,
           });
         }
+      } finally {
+        await runtime.close();
       }
-      // Validation proves existing rows; NOT VALID already fenced new writes.
-      // The gated scan runs with no statement budget: its SHARE UPDATE
-      // EXCLUSIVE lock blocks neither reads nor writes.
-      const validated = await Result.tryPromise(
-        async () =>
-          await validateOnlineConstraints({
-            connection,
-            tables,
-            constraints: CHAT_CONTENT_V3_CONSTRAINTS,
-          }),
+    }
+    for (const { table } of Object.values(CHAT_CONTENT_V3_SOURCES)) {
+      const rows = await connection.query(
+        `SELECT id FROM ${table} WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb LIMIT 1`,
       );
-      if (validated.isErr()) {
+      if (rows.length > 0) {
         throw new ChatContentV3UpgradeError({
-          message: "Chat v3 constraint validation failed; rerun db:migrate",
-          cause: validated.error,
+          message:
+            "Non-v3 chat content remains; inspect chat_content_v3_backfill_receipts, repair failed rows and retry",
         });
       }
-      return validated.value;
-    },
-  }) as const satisfies OnlineRepair;
+    }
+    // Validation proves existing rows; NOT VALID already fenced new writes.
+    // The gated scan runs with no statement budget: its SHARE UPDATE
+    // EXCLUSIVE lock blocks neither reads nor writes.
+    const validated = await Result.tryPromise(
+      async () =>
+        await validateOnlineConstraints({
+          connection,
+          tables,
+          constraints: CHAT_CONTENT_V3_CONSTRAINTS,
+        }),
+    );
+    if (validated.isErr()) {
+      throw new ChatContentV3UpgradeError({
+        message: "Chat v3 constraint validation failed; rerun db:migrate",
+        cause: validated.error,
+      });
+    }
+    return validated.value;
+  },
+});
 export const CHAT_CONTENT_V3_REPAIR = createChatContentV3Repair();
 
 export const countChatContentVersions = async (

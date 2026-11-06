@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { lookup } from "node:dns/promises";
+import { lookup, Resolver } from "node:dns/promises";
 import { request as requestHttp } from "node:http";
 import type { ClientRequest, IncomingMessage } from "node:http";
 import { request as requestHttps } from "node:https";
@@ -7,13 +7,13 @@ import { isIP } from "node:net";
 import type { LookupFunction, TcpSocketConnectOpts } from "node:net";
 import * as v from "valibot";
 
+import { createFetchWithTimeout, fetchWithTimeout } from "@stll/fetch";
+import type { Fetcher, FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
-import {
-  assertThirdPartyOutboundPermit,
-  type ThirdPartyOutboundPermit,
-} from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import type { PublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { APP_VERSION } from "@/api/lib/version";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export class SafeOutboundFetchError extends TaggedError(
@@ -29,10 +29,33 @@ export type SafeOutboundAddress = {
 };
 
 const MAX_OUTBOUND_URL_LENGTH = 2048;
+const DNS_RESOLVER_TIMEOUT_MS = 1000;
+
+/** Resolver acquisition stays at the outbound boundary; callers own total deadlines and cancellation. */
+export const createBoundedDnsResolver = () =>
+  new Resolver({ timeout: DNS_RESOLVER_TIMEOUT_MS, tries: 1 });
 
 export type SafeOutboundFetchBody =
   ArrayBuffer | string | Uint8Array | URLSearchParams;
 export type SafeOutboundHeaders = Headers | Record<string, string>;
+
+/**
+ * Who is asking, on every request that does not say so itself. Node's
+ * client sends no `User-Agent`, and firewalls in front of services, ours
+ * among them, refuse requests without one.
+ */
+export const OUTBOUND_USER_AGENT = `stella-api/${APP_VERSION}`;
+
+/** The headers a request goes out with: the caller's, and a `User-Agent`. */
+const outboundRequestHeaders = (
+  headers: SafeOutboundHeaders | undefined,
+): Headers => {
+  const requestHeaders = new Headers(headers);
+  if (!requestHeaders.has("User-Agent")) {
+    requestHeaders.set("User-Agent", OUTBOUND_USER_AGENT);
+  }
+  return requestHeaders;
+};
 
 export type SafeOutboundFetchResponse = {
   body: ArrayBuffer;
@@ -41,7 +64,7 @@ export type SafeOutboundFetchResponse = {
   status: number;
 };
 
-export type SafeOutboundFetchStreamResponse = {
+type SafeOutboundFetchStreamResponse = {
   body: ReadableStream<Uint8Array>;
   headers: Headers;
   ok: boolean;
@@ -124,12 +147,11 @@ const AUTO_SELECT_FAMILY_OPTIONS = {
   autoSelectFamily: true,
 } as const satisfies Pick<TcpSocketConnectOpts, "autoSelectFamily">;
 
-export const fetchWithResolvedAddress = async ({
+const executeResolvedAddressRequest = async ({
   addresses,
   body,
   headers,
   maxBytes,
-  permit,
   method = "GET",
   redirect = "error",
   signal,
@@ -141,7 +163,6 @@ export const fetchWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
-  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -149,7 +170,6 @@ export const fetchWithResolvedAddress = async ({
   timeoutPolicy?: "headers" | "total";
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -168,7 +188,7 @@ export const fetchWithResolvedAddress = async ({
   return await Result.tryPromise({
     try: async () =>
       await new Promise<SafeOutboundFetchResponse>((resolve, reject) => {
-        const requestHeaders = new Headers(headers);
+        const requestHeaders = outboundRequestHeaders(headers);
         const bodyBytes = bodyToBytes(body);
         let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {
@@ -257,12 +277,11 @@ export const fetchWithResolvedAddress = async ({
   });
 };
 
-export const fetchStreamWithResolvedAddress = async ({
+const executeResolvedAddressStreamRequest = async ({
   addresses,
   body,
   headers,
   maxBytes,
-  permit,
   method = "GET",
   redirect = "error",
   signal,
@@ -273,7 +292,6 @@ export const fetchStreamWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
-  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -282,7 +300,6 @@ export const fetchStreamWithResolvedAddress = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
-  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -301,7 +318,7 @@ export const fetchStreamWithResolvedAddress = async ({
   return await Result.tryPromise({
     try: async () =>
       await new Promise<SafeOutboundFetchStreamResponse>((resolve, reject) => {
-        const requestHeaders = new Headers(headers);
+        const requestHeaders = outboundRequestHeaders(headers);
         const bodyBytes = bodyToBytes(body);
         let guards: RequestGuards | null = null;
         if (bodyBytes && !requestHeaders.has("Content-Length")) {
@@ -621,7 +638,7 @@ type ResolveOutboundAddresses = (
  * and rejects targets whose resolved addresses fall in
  * any private, loopback, link-local, multicast, or reserved range.
  * The returned `addresses` are meant to be pinned into the actual
- * fetch (see `safeOutboundFetchBytes`) so DNS cannot be re-resolved
+ * fetch (see `executeOutboundBytesRequest`) so DNS cannot be re-resolved
  * to an internal address between validation and the TCP connect.
  */
 export const validateOutboundFetchTarget = async (
@@ -685,11 +702,10 @@ export const validateOutboundFetchTarget = async (
   return Result.ok({ addresses: addresses.value, url: parsed.value });
 };
 
-export const safeOutboundFetchBytes = async ({
+const executeOutboundBytesRequest = async ({
   body,
   headers,
   maxBytes,
-  permit,
   method,
   redirect,
   signal,
@@ -700,7 +716,6 @@ export const safeOutboundFetchBytes = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
-  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -709,7 +724,6 @@ export const safeOutboundFetchBytes = async ({
   | { timeoutMs: number; timeout?: never }
   | { timeout: { type: "headers"; ms: number }; timeoutMs?: never }
 )): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
-  assertThirdPartyOutboundPermit(permit);
   const durationMs = timeout === undefined ? timeoutMs : timeout.ms;
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, {
@@ -727,12 +741,11 @@ export const safeOutboundFetchBytes = async ({
     );
   }
 
-  return await fetchWithResolvedAddress({
+  return await executeResolvedAddressRequest({
     addresses: target.value.addresses,
     body,
     headers,
     maxBytes,
-    permit,
     method,
     redirect,
     signal,
@@ -742,11 +755,10 @@ export const safeOutboundFetchBytes = async ({
   });
 };
 
-export const safeOutboundFetchStream = async ({
+const executeOutboundStreamRequest = async ({
   body,
   headers,
   maxBytes,
-  permit,
   method,
   redirect,
   signal,
@@ -756,7 +768,6 @@ export const safeOutboundFetchStream = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
-  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -765,7 +776,6 @@ export const safeOutboundFetchStream = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
-  assertThirdPartyOutboundPermit(permit);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
@@ -779,12 +789,11 @@ export const safeOutboundFetchStream = async ({
     );
   }
 
-  return await fetchStreamWithResolvedAddress({
+  return await executeResolvedAddressStreamRequest({
     addresses: target.value.addresses,
     body,
     headers,
     maxBytes,
-    permit,
     method,
     redirect,
     signal,
@@ -1222,3 +1231,34 @@ const isPrivateResolvedAddress = (address: string): boolean => {
 
   return isBlockedIPv4(ipv4);
 };
+
+type PublicReadTransportRequestOptions = {
+  capability: PublicReadIo;
+  input: string | URL | Request;
+  init: FetchWithTimeoutInit;
+  fetcher?: Fetcher | undefined;
+};
+
+/** Registered public-read transports prove the origin before issuing this capability. */
+export const fetchPublicReadRequest = async ({
+  capability,
+  input,
+  init,
+  fetcher,
+}: PublicReadTransportRequestOptions): Promise<Response> => {
+  const signals = [capability.signal, init.signal].filter(
+    (candidate): candidate is AbortSignal => candidate !== undefined,
+  );
+  const signal = signals.length === 0 ? undefined : AbortSignal.any(signals);
+  const request =
+    fetcher === undefined ? fetchWithTimeout : createFetchWithTimeout(fetcher);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- only the scoped owner calls this forwarder; registered capability issuers prove their destinations, enforced by public-read transport ownership
+  return await request(input, { ...init, signal });
+};
+
+export const outboundRequests = {
+  bytes: executeOutboundBytesRequest,
+  stream: executeOutboundStreamRequest,
+  resolvedBytes: executeResolvedAddressRequest,
+  resolvedStream: executeResolvedAddressStreamRequest,
+} as const;

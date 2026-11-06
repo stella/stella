@@ -1,8 +1,8 @@
 {
-  "route": "/admin/ai",
-  "reason": "Load professional-use acceptance before protected route data is requested; preview the resolved default models for the configured providers.",
+  "route": "/settings/organization/ai",
+  "reason": "Load professional-use acceptance before protected route data is requested; preview the resolved default models for the configured providers. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1). The AI drafts card reads the organization's billing draft settings and the knowledge files it can bind as guidelines (one request each).",
   "budget": {
-    "depth": 4,
+    "depth": 5,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -15,10 +15,13 @@
       "GET /v1/organization-settings",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/ai-config",
+      "GET /v1/organization-settings/billing-drafts",
+      "GET /v1/organization-settings/billing-drafts/knowledge-files",
       "GET /v1/organization-settings/deepl-config",
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/organization-settings/web-search-config",
       "GET /v1/signals/count",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/workspaces/navigation",
       "POST /v1/organization-settings/ai-config/defaults-preview"
@@ -41,7 +44,10 @@
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
       "GET /v1/me/professional-use": 1,
-      "POST /v1/organization-settings/ai-config/defaults-preview": 1
+      "POST /v1/organization-settings/ai-config/defaults-preview": 1,
+      "GET /v1/time-entries/approval-queue": 1,
+      "GET /v1/organization-settings/billing-drafts": 1,
+      "GET /v1/organization-settings/billing-drafts/knowledge-files": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -49,7 +55,7 @@
       "GET /api/auth/organization/list": 6,
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
-      "GET /v1/notifications": 6,
+      "GET /v1/notifications": 7,
       "GET /v1/notifications/events": 4,
       "GET /v1/organization-settings": 7,
       "GET /v1/organization-settings/ai-availability": 4,
@@ -57,10 +63,12 @@
       "GET /v1/organization-settings/deepl-config": 6,
       "GET /v1/organization-settings/deployment-features": 5,
       "GET /v1/organization-settings/web-search-config": 6,
-      "GET /v1/signals/count": 4,
+      "GET /v1/signals/count": 5,
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 2,
+      "GET /v1/time-entries/approval-queue": 10,
+      "POST /v1/organization-settings/ai-config/defaults-preview": 3
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -78,7 +86,9 @@
       "GET /v1/signals/count": 1024,
       "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 20480,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/time-entries/approval-queue": 1024,
+      "POST /v1/organization-settings/ai-config/defaults-preview": 1024
     }
   }
 }

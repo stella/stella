@@ -11,14 +11,15 @@ import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
-  chatMessages,
-  chatThreads,
-  chatTurns,
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import {
+  lockChatInteractionThread,
+  readLockedChatInteractionTurn,
+} from "@/api/handlers/chat/chat-interaction-submission";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   chatSecretSubmissionConflict,
@@ -34,7 +35,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
-import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
@@ -92,30 +92,13 @@ const readPendingRequest = async ({
   threadId,
   toolCallId,
 }: PendingRequestOptions) => {
-  await withAggregateLock({
-    aggregate: "chatTurn",
-    mode: "update",
+  const turn = await readLockedChatInteractionTurn({
     tx,
-    id: { organizationId, userId, threadId, toolCallId },
+    organizationId,
+    userId,
+    threadId,
+    toolCallId,
   });
-  const turn = (
-    await tx
-      .select({ content: chatMessages.content, status: chatTurns.status })
-      .from(chatTurns)
-      .innerJoin(
-        chatMessages,
-        eq(chatMessages.id, chatTurns.assistantMessageId),
-      )
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          eq(chatTurns.organizationId, organizationId),
-          eq(chatTurns.userId, userId),
-          eq(chatTurns.interactionToolCallId, toolCallId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
   if (!turn) {
     return Result.err(
       new HandlerError({
@@ -297,30 +280,13 @@ const submitSecret = createSafeRootHandler(
     }
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx): Promise<SubmitOutcome> => {
-        await withAggregateLock({
-          aggregate: "chatThread",
-          mode: "update",
+        const threadExists = await lockChatInteractionThread({
           tx,
-          id: {
-            id: threadId,
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          },
+          threadId,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
         });
-        const thread = (
-          await tx
-            .select({ id: chatThreads.id })
-            .from(chatThreads)
-            .where(
-              and(
-                eq(chatThreads.id, threadId),
-                eq(chatThreads.organizationId, session.activeOrganizationId),
-                eq(chatThreads.userId, user.id),
-              ),
-            )
-            .limit(1)
-        ).at(0);
-        if (!thread) {
+        if (!threadExists) {
           return abortTransaction(
             new HandlerError({ status: 404, message: "Chat thread not found" }),
           );

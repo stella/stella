@@ -3,78 +3,36 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import toolchain from "../stll-toolchain.json" with { type: "json" };
+import { GITLEAKS_SHA256, GITLEAKS_VERSION } from "./gitleaks-pins";
+
 const root = path.resolve(import.meta.dir, "..");
 const script = path.join(root, "scripts/cloud-env-secret-scanner-setup.sh");
 
-const assignment = (source: string, name: string) => {
-  const match = new RegExp(`^${name}=(\\S+)$`, "mu").exec(source);
-  if (!match?.[1]) {
-    throw new Error(`${name} is not assigned in ${script}`);
-  }
-  return match[1];
-};
-
-const generatedSha = (source: string, version: string, arch: string) => {
-  const archive = `gitleaks_${version}_linux_${arch}.tar.gz`;
-  const match = new RegExp(
-    `${archive.replaceAll(".", "\\.")}'; artifact_sha='([0-9a-f]{64})'`,
-    "u",
-  ).exec(source);
-  if (!match?.[1]) {
-    throw new Error(`.agents/cloud-setup.sh pins no checksum for ${archive}`);
-  }
-  return match[1];
-};
-
-const pinnedGitleaks = (text: string) => {
-  const toolchain: unknown = JSON.parse(text);
-  if (
-    typeof toolchain === "object" &&
-    toolchain !== null &&
-    "cloud" in toolchain &&
-    typeof toolchain.cloud === "object" &&
-    toolchain.cloud !== null &&
-    "tools" in toolchain.cloud &&
-    typeof toolchain.cloud.tools === "object" &&
-    toolchain.cloud.tools !== null &&
-    "gitleaks" in toolchain.cloud.tools &&
-    typeof toolchain.cloud.tools.gitleaks === "string"
-  ) {
-    return toolchain.cloud.tools.gitleaks;
-  }
-  throw new Error("stll-toolchain.json pins no cloud.tools.gitleaks");
-};
-
-test("the setup script installs exactly the gitleaks the toolchain pins", async () => {
-  const source = await readFile(script, "utf-8");
-  const pinned = pinnedGitleaks(
-    await readFile(path.join(root, "stll-toolchain.json"), "utf-8"),
-  );
+test("cloud setup pins agree with the scanner provisioner", async () => {
+  expect(toolchain.cloud.tools.gitleaks).toBe(GITLEAKS_VERSION);
   const generated = await readFile(
     path.join(root, ".agents/cloud-setup.sh"),
     "utf-8",
   );
-
-  const version = assignment(source, "VERSION");
-  expect(version).toBe(pinned);
-  expect(assignment(source, "SHA256_X64")).toBe(
-    generatedSha(generated, version, "x64"),
-  );
-  expect(assignment(source, "SHA256_ARM64")).toBe(
-    generatedSha(generated, version, "arm64"),
-  );
+  for (const arch of ["x64", "arm64"] as const) {
+    expect(generated).toContain(
+      `gitleaks_${GITLEAKS_VERSION}_linux_${arch}.tar.gz'; artifact_sha='${GITLEAKS_SHA256[`linux-${arch}`]}'`,
+    );
+  }
 });
 
-// Stub commands come first on PATH: the script runs as "root" on x86_64, and
-// curl either fails or writes an archive whose checksum cannot match.
-const runWithStubs = async (curl: string) => {
+type StubOptions = { provision: string; install?: string };
+
+const runWithStubs = async ({ provision, install = "exit 0" }: StubOptions) => {
   const bin = await mkdtemp(path.join(tmpdir(), "secret-scanner-setup-"));
+  const log = path.join(bin, "install.log");
+  const scanner = path.join(bin, "verified-gitleaks");
   const stubs: Record<string, string> = {
-    curl,
+    bun: provision.replaceAll("SCANNER_PATH", () => scanner),
     id: "echo 0",
-    uname: "echo x86_64",
-    sha256sum:
-      'echo "0000000000000000000000000000000000000000000000000000000000000000  $1"',
+    install: `echo "$*" >> '${log}'\n${install}`,
+    "verified-gitleaks": "exit 0",
   };
   try {
     for (const [name, body] of Object.entries(stubs)) {
@@ -87,24 +45,53 @@ const runWithStubs = async (curl: string) => {
       stdout: "pipe",
       stderr: "pipe",
     });
-    return { exitCode: result.exitCode, stderr: result.stderr.toString() };
+    return {
+      exitCode: result.exitCode,
+      output: result.stdout.toString() + result.stderr.toString(),
+      installs: (await Bun.file(log).exists())
+        ? await readFile(log, "utf-8")
+        : "",
+      scanner,
+    };
   } finally {
     await rm(bin, { recursive: true, force: true });
   }
 };
 
-test("a failed download never fails the environment", async () => {
-  const result = await runWithStubs("exit 22");
+test("a provisioning failure installs nothing and keeps the environment usable", async () => {
+  const result = await runWithStubs({ provision: "exit 1" });
   expect(result.exitCode).toBe(0);
-  expect(result.stderr).toContain("gitleaks NOT installed: download failed");
+  expect(result.output).toContain(
+    "gitleaks NOT installed: provisioning failed",
+  );
+  expect(result.installs).toBe("");
 });
 
-test("a checksum mismatch installs nothing and never fails the environment", async () => {
-  const result = await runWithStubs(
-    'while [ "$1" != "-o" ]; do shift; done; echo tampered > "$2"',
-  );
+test("an invalid provisioner result installs nothing", async () => {
+  const result = await runWithStubs({ provision: "echo /missing/scanner" });
   expect(result.exitCode).toBe(0);
-  expect(result.stderr).toContain(
-    "gitleaks NOT installed: checksum mismatch for gitleaks_",
+  expect(result.output).toContain("provisioner returned no executable");
+  expect(result.installs).toBe("");
+});
+
+test("setup installs the executable returned by the shared provisioner", async () => {
+  const result = await runWithStubs({ provision: "echo SCANNER_PATH" });
+  expect(result.exitCode).toBe(0);
+  expect(result.output).toContain(
+    "gitleaks installed at /usr/local/bin/gitleaks",
+  );
+  expect(result.installs).toContain(
+    `-m 755 ${result.scanner} /usr/local/bin/gitleaks`,
+  );
+});
+
+test("an installation failure keeps the environment usable", async () => {
+  const result = await runWithStubs({
+    provision: "echo SCANNER_PATH",
+    install: "exit 1",
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.output).toContain(
+    "gitleaks NOT installed: cannot create /usr/local/bin",
   );
 });

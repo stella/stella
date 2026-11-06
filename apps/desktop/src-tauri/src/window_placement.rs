@@ -190,6 +190,73 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
   })
 }
 
+/// A window and its owning screen in the same logical coordinate space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenPlacement {
+  pub frame: WorkArea,
+  pub screen: WorkArea,
+}
+
+/// Use the native window's owning screen before converting either frame.
+/// Tray rectangles expressed in physical pixels have display-dependent
+/// scaling and cannot identify that screen on mixed-density desktops.
+#[cfg(target_os = "macos")]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
+)]
+pub fn native_window_placement(
+  window: &objc2_app_kit::NSWindow,
+  main_thread: objc2::MainThreadMarker,
+) -> Option<ScreenPlacement> {
+  use objc2_app_kit::NSScreen;
+
+  let screens = NSScreen::screens(main_thread);
+  let primary_height = screens.iter().next()?.frame().size.height;
+  Some(ScreenPlacement {
+    frame: logical_work_area(primary_height, window.frame()),
+    screen: logical_work_area(primary_height, window.screen()?.frame()),
+  })
+}
+
+/// A physical rectangle and its containing screen, converted together.
+#[cfg(not(target_os = "macos"))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
+)]
+pub fn physical_rect_placement(
+  app: &AppHandle,
+  rect: tauri::Rect,
+) -> Option<ScreenPlacement> {
+  let position = rect.position.to_physical::<f64>(1.0);
+  let size = rect.size.to_physical::<f64>(1.0);
+  let monitor = app
+    .monitor_from_point(
+      position.x + size.width / 2.0,
+      position.y + size.height / 2.0,
+    )
+    .ok()
+    .flatten()?;
+  let scale_factor = monitor.scale_factor();
+  let screen_position = monitor.position().to_logical::<f64>(scale_factor);
+  let screen_size = monitor.size().to_logical::<f64>(scale_factor);
+  Some(ScreenPlacement {
+    frame: WorkArea {
+      x: position.x / scale_factor,
+      y: position.y / scale_factor,
+      width: size.width / scale_factor,
+      height: size.height / scale_factor,
+    },
+    screen: WorkArea {
+      x: screen_position.x,
+      y: screen_position.y,
+      width: screen_size.width,
+      height: screen_size.height,
+    },
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

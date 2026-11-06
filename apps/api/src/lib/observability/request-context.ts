@@ -8,6 +8,7 @@ import type {
   HandlerExceptionScope,
   RequestExceptionScope,
 } from "@stll/errors";
+import type { UiLocale } from "@stll/locales";
 
 import type { ClientAddress, ClientAddressSource } from "@/api/lib/client-ip";
 
@@ -67,6 +68,7 @@ export const requireRequestExceptionScope = (
  */
 type AmbientRequestState = {
   context: RequestContext | undefined;
+  request?: Request | undefined;
   mountedRoute?: string;
   /**
    * Whether this request committed to synchronous AI inference. Read at
@@ -76,6 +78,7 @@ type AmbientRequestState = {
    * inside fill/suggest helpers, MCP tools) need no extra threading.
    */
   isAiRequest: boolean;
+  uiLocale: UiLocale;
   /**
    * The address the request arrived from, resolved once while its edge
    * headers were still present. A stage that hands inner stages a derived
@@ -91,8 +94,14 @@ const requestStore = new AsyncLocalStorage<AmbientRequestState>();
  * calls this around the whole pipeline; {@link openRequestContext} fills it
  * in once the request's id exists.
  */
-export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
-  requestStore.run({ context: undefined, isAiRequest: false }, fn);
+export const runWithRequestIdScope = <TResult>(
+  fn: () => TResult,
+  uiLocale: UiLocale = "en",
+): TResult =>
+  requestStore.run({ context: undefined, isAiRequest: false, uiLocale }, fn);
+
+export const getRequestUiLocale = (): UiLocale =>
+  requestStore.getStore()?.uiLocale ?? "en";
 
 /**
  * Tag the active request as AI-classed for the split latency SLO. Called
@@ -152,7 +161,10 @@ const generateRequestId = (): string =>
  * Start the active request's context with a fresh id. No-op outside a request
  * scope: programmatic callers that open none carry no context.
  */
-export const openRequestContext = (sessionId?: string): void => {
+export const openRequestContext = (
+  sessionId?: string,
+  request?: Request,
+): void => {
   const ambient = requestStore.getStore();
   if (!ambient) {
     return;
@@ -162,7 +174,12 @@ export const openRequestContext = (sessionId?: string): void => {
     requestId: generateRequestId(),
     ...(sessionId === undefined ? {} : { sessionId }),
   };
+  ambient.request = request;
 };
+
+/** The request handle for the active HTTP request, when one opened the scope. */
+export const getActiveRequest = (): Request | undefined =>
+  requestStore.getStore()?.request;
 
 export const enrichRequestContext = (
   update: Partial<
@@ -228,6 +245,7 @@ export const runWithRequestId = <TResult>(
     {
       context: { startTime: performance.now(), requestId },
       isAiRequest: false,
+      uiLocale: "en",
     },
     fn,
   );

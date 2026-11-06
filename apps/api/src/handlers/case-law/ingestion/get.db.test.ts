@@ -304,6 +304,10 @@ test("latest-event and reconciliation reads use their per-source indexes", async
   `);
   await db.execute(sql`ANALYZE case_law_ingestion_events`);
   await db.execute(sql`VACUUM case_law_ingestion_events`);
+  await db.execute(sql`ANALYZE case_law_reconciliation_items`);
+  await db.execute(sql`VACUUM case_law_reconciliation_items`);
+  await db.execute(sql`ANALYZE case_law_removal_reconciliation_items`);
+  await db.execute(sql`VACUUM case_law_removal_reconciliation_items`);
 
   const plans = await scopedDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
@@ -330,5 +334,8 @@ test("latest-event and reconciliation reads use their per-source indexes", async
   expect(latestPlan).not.toContain("Seq Scan on case_law_ingestion_events");
   expect(reconciliationPlan).toContain(
     "Index Only Scan using case_law_reconciliation_items_slice_idx",
+  );
+  expect(reconciliationPlan).toContain(
+    "Index Only Scan using case_law_removal_items_due_idx",
   );
 });

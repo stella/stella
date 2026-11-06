@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
@@ -94,6 +96,7 @@ const decisionAst = (texts = ["Text"], numbered = false) =>
 const readableDecision: typeof readDecisionReaderSource = async () => ({
   status: "read",
   decision: {
+    extractionWarnings: [],
     id: row().id,
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
@@ -622,6 +625,490 @@ describe("decision legal resolution", () => {
           { decisionId: "judgment-de", language: "de" },
         ],
       },
+    });
+  });
+});
+
+// Public dockets: KS České Budějovice 65 A 3/2025-226 (21 May 2025),
+// KS Ostrava – Olomouc 65 A 3/2025-63 (28 May 2025).
+// https://msp.gov.cz/documents/d/krajsky-soud-v-ceskych-budejovicich/65a_3_2025-150
+const regionalRow = (
+  court: string,
+  sheetNumber: string,
+): DecisionIdentityRow => ({
+  ...row("65 A 3/2025"),
+  court,
+  courtAbbreviation: "KS",
+  ecli: null,
+  sheetNumber,
+  decisionDate:
+    court === "Krajský soud v Českých Budějovicích"
+      ? "2025-05-21"
+      : "2025-05-28",
+  subjectSummary: "Stavební zákon",
+});
+const regionalHolders = () => [
+  regionalRow("Krajský soud v Českých Budějovicích", "226"),
+  regionalRow("Krajský soud v Ostravě – pobočka v Olomouci", "63"),
+];
+
+describe("a docket at other courts", () => {
+  test("a named court with no holder never resolves another court's decision", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS Praha 65 A 3/2025-133",
+      dependencies: {
+        lookup: lookupRows(regionalHolders()),
+        read: async () => panic("Wrong-court result must not fetch text"),
+      },
+    });
+    expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(true);
+    expect(result).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [
+        {
+          court: "Krajský soud v Českých Budějovicích",
+          decisionDate: "2025-05-21",
+          decisionType: "rozsudek",
+          subjectSummary: "Stavební zákon",
+        },
+        {
+          court: "Krajský soud v Ostravě – pobočka v Olomouci",
+          decisionDate: "2025-05-28",
+          decisionType: "rozsudek",
+          subjectSummary: "Stavební zákon",
+        },
+      ],
+    });
+  });
+  test.each([
+    "Krajský soud v Českých Budějovicích 65 A 3/2025",
+    "rozsudek Krajského soudu v Českých Budějovicích 65 A 3/2025",
+    "KS České Budějovice 65  A  3 / 2025 - 226",
+  ])(
+    "the named court resolves and exposes other docket holders: %s",
+    async (identifier) => {
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows(regionalHolders()),
+          read: readableDecision,
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: { court: "Krajský soud v Českých Budějovicích" },
+        otherCourtCandidates: [
+          { court: "Krajský soud v Ostravě – pobočka v Olomouci" },
+        ],
+      });
+      if (result.status !== "resolved") {
+        panic("Expected named-court decision");
+      }
+      expect(result.otherCourtCandidates).toHaveLength(1);
+    },
+  );
+  test("a named sheet discovers holders stored under other sheets through the docket family", async () => {
+    const [selected, other] = regionalHolders();
+    if (selected === undefined || other === undefined) {
+      panic("Missing regional fixture");
+    }
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS České Budějovice 65 A 3/2025-226",
+      dependencies: {
+        lookup: async ({ locator }) =>
+          locator.kind === "docket" && locator.selector.kind === "none"
+            ? [selected, other]
+            : [selected],
+        read: readableDecision,
+      },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { court: "Krajský soud v Českých Budějovicích" },
+      otherCourtCandidates: [
+        { court: "Krajský soud v Ostravě – pobočka v Olomouci" },
+      ],
+    });
+  });
+  test("lists other holders by court in the docket's language, then date, undated last", async () => {
+    const [budejovice, olomouc] = regionalHolders();
+    if (budejovice === undefined || olomouc === undefined) {
+      panic("Missing regional fixture");
+    }
+    const undated: DecisionIdentityRow = {
+      ...budejovice,
+      id: createSafeId<"caseLawDecision">(),
+      sheetNumber: "301",
+      decisionDate: null,
+    };
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS Praha 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([olomouc, undated, budejovice]),
+        read: async () => panic("Wrong-court result must not fetch text"),
+      },
+    });
+    if (result.status !== "not_found") {
+      panic("Expected a wrong-court answer");
+    }
+    expect(
+      result.otherCourtCandidates?.map(({ court, decisionDate }) => [
+        court,
+        decisionDate,
+      ]),
+    ).toEqual([
+      ["Krajský soud v Českých Budějovicích", "2025-05-21"],
+      ["Krajský soud v Českých Budějovicích", null],
+      ["Krajský soud v Ostravě – pobočka v Olomouci", "2025-05-28"],
+    ]);
+  });
+  test.each([
+    "Okresní soud v Kolíně 65 A 3/2025",
+    "rozsudek Okresního soudu v Kolíně 65 A 3/2025-12",
+    "OS Kolín 65 A 3/2025",
+    "os Kolín 65 A 3/2025",
+  ])(
+    "a court no decision of the docket is stored under is another court: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          { court: "Krajský soud v Českých Budějovicích" },
+        ],
+      });
+    },
+  );
+  test.each([
+    "Okresní soud v Neznámově 65 A 3/2025",
+    "rozsudek Okresního soudu v Neznámově 65 A 3/2025-12",
+    "OS Neznámov 65 A 3/2025",
+  ])(
+    "a named court the corpus does not know never resolves another court's holder: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: async () => panic("An unknown court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toMatchObject({
+        status: "not_found",
+        reason: "court_unrecognized",
+        otherCourtCandidates: [
+          { court: "Krajský soud v Českých Budějovicích" },
+        ],
+      });
+    },
+  );
+  test("words that name no court leave the docket unconstrained", async () => {
+    const [budejovice] = regionalHolders();
+    if (budejovice === undefined) {
+      panic("Missing regional fixture");
+    }
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "rozsudek 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([budejovice]),
+        read: readableDecision,
+      },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { court: "Krajský soud v Českých Budějovicích" },
+    });
+  });
+  test.each([
+    "soudní rozhodnutí 65 A 3/2025",
+    "rozhodnutí soudu 65 A 3/2025",
+    "súdne rozhodnutie 65 A 3/2025",
+  ])(
+    "a generic court word leaves a unique docket unconstrained: %s",
+    async (identifier) => {
+      const [budejovice] = regionalHolders();
+      if (budejovice === undefined) {
+        panic("Missing regional fixture");
+      }
+      const result = await resolveDecision({
+        admission,
+        country: "CZ",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([budejovice]),
+          read: readableDecision,
+        },
+      });
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: { court: "Krajský soud v Českých Budějovicích" },
+      });
+    },
+  );
+  test("a seat-only unknown court never resolves another court's holder", async () => {
+    const [budejovice] = regionalHolders();
+    if (budejovice === undefined) {
+      panic("Missing regional fixture");
+    }
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "soud v Neznámově 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([budejovice]),
+        read: async () => panic("An unknown court must not fetch text"),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "not_found",
+      reason: "court_unrecognized",
+    });
+  });
+  test("no court leaves a shared docket ambiguous", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "65 A 3/2025",
+      dependencies: { lookup: lookupRows(regionalHolders()) },
+    });
+    expect(result).toMatchObject({ status: "ambiguous" });
+    expect(result).not.toHaveProperty("otherCourtCandidates");
+  });
+  test("an exact hit with no other holders carries no candidates noise", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "NSS 3 Afs 41/2008-98",
+      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { court: "Nejvyšší správní soud" },
+    });
+    expect(result).not.toHaveProperty("otherCourtCandidates");
+  });
+  test("one regional holder at the named court carries no candidates noise", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS České Budějovice 65 A 3/2025-226",
+      dependencies: {
+        lookup: lookupRows(regionalHolders().slice(0, 1)),
+        read: readableDecision,
+      },
+    });
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { court: "Krajský soud v Českých Budějovicích" },
+    });
+    expect(result).not.toHaveProperty("otherCourtCandidates");
+  });
+  test("a Slovak court name constrains its own docket grammar", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "SK",
+      identifier: "Krajský súd v Bratislave 1S/1/2020",
+      dependencies: {
+        lookup: lookupRows([
+          {
+            ...regionalRow("Krajský súd v Košiciach", "133"),
+            caseNumber: "1S/1/2020",
+            country: "SVK",
+          },
+        ]),
+        read: async () => panic("Wrong-court result must not fetch text"),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [{ court: "Krajský súd v Košiciach" }],
+    });
+  });
+  test("As and A registers never become other-court equivalents", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS Praha 65 A 3/2025",
+      dependencies: {
+        lookup: lookupRows([{ ...row("65 As 3/2025"), ecli: null }]),
+      },
+    });
+    expect(result).toEqual({
+      status: "not_found",
+      reason: "no_exact_identity",
+    });
+  });
+  test("a single other-court holder is still a mismatch", async () => {
+    const result = await resolveDecision({
+      admission,
+      country: "CZ",
+      identifier: "KS Praha 52 A 6/2023",
+      dependencies: {
+        lookup: lookupRows([
+          {
+            ...regionalRow("Krajský soud v Hradci Králové", "133"),
+            caseNumber: "52 A 6/2023",
+            subjectSummary: null,
+          },
+        ]),
+        read: async () => panic("Wrong-court result must not fetch text"),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [
+        { court: "Krajský soud v Hradci Králové", subjectSummary: null },
+      ],
+    });
+  });
+});
+
+// A district-court docket held by one court only, cited with another
+// court's name, alias or ECLI code. Synthetic dockets; the court shapes are
+// the ones citations write.
+const districtRow = (
+  court: string,
+  ecliCode: string,
+  caseNumber: string,
+): DecisionIdentityRow => ({
+  ...row(caseNumber),
+  court,
+  courtAbbreviation: "OS",
+  ecli: `ECLI:CZ:${ecliCode}:2025:${caseNumber.replace(/[ /]/gu, ".")}.1`,
+  decisionDate: "2025-03-04",
+});
+
+describe("a district court named around the docket", () => {
+  const elsewhere = () =>
+    districtRow("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
+  test.each([
+    "8 C 123/2024 Obvodní soud pro Prahu 6",
+    "8 C 123/2024 OS Praha 6",
+    "8 C 123/2024 OS P6",
+    "8 C 123/2024 OS pro Prahu 6",
+    "8 C 123/2024 Obvodní soud Praha 6",
+    "8 C 123/2024 OSPH06",
+    "Obvodní soud pro Prahu 6 8 C 123/2024",
+    "OS Praha 6 8 C 123/2024",
+    "rozsudek Obvodního soudu pro Prahu 6 sp. zn. 8 C 123/2024",
+  ])(
+    "never resolves the docket's only holder at another court: %s",
+    async (identifier) => {
+      const holder = elsewhere();
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([holder]),
+          read: async () => panic("Another court must not fetch text"),
+        },
+      });
+      expect(v.safeParse(legalResolveResponseSchema, result).success).toBe(
+        true,
+      );
+      expect(result).toEqual({
+        status: "not_found",
+        reason: "not_at_this_court",
+        otherCourtCandidates: [
+          expect.objectContaining({
+            decisionId: holder.id,
+            court: "Okresní soud v Kladně",
+          }),
+        ],
+      });
+    },
+  );
+  test.each([
+    "20 C 45/2026 Obvodní soud pro Prahu 6",
+    "20 C 45/2026 OS Praha 6",
+    "20 C 45/2026 OS P6",
+    "20 C 45/2026 OSPH06",
+    "OS pro Prahu 6 20 C 45/2026",
+  ])(
+    "resolves the holder at the named court and lists the other: %s",
+    async (identifier) => {
+      const prague = districtRow(
+        "Obvodní soud pro Prahu 6",
+        "OSPH06",
+        "20 C 45/2026",
+      );
+      const olomouc = districtRow(
+        "Okresní soud v Olomouci",
+        "OSOL",
+        "20 C 45/2026",
+      );
+      const result = await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier,
+        dependencies: {
+          lookup: lookupRows([olomouc, prague]),
+          read: readableDecision,
+        },
+      });
+      expect(result).toMatchObject({
+        status: "resolved",
+        document: {
+          decisionId: prague.id,
+          court: "Obvodní soud pro Prahu 6",
+        },
+        otherCourtCandidates: [{ decisionId: olomouc.id }],
+      });
+    },
+  );
+  test("a court code the directory lacks is compared with the decision's ECLI", async () => {
+    const holder = elsewhere();
+    const named = await resolveDecision({
+      admission,
+      country: "CZE",
+      identifier: "OSXQ 8 C 123/2024",
+      dependencies: { lookup: lookupRows([holder]) },
+    });
+    expect(named).toMatchObject({
+      status: "not_found",
+      reason: "not_at_this_court",
     });
   });
 });

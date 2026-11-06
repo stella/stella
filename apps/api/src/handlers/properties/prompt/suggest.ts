@@ -1,7 +1,9 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { CaseLawResearchAnswerType } from "@stll/api-contract";
-
+import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
@@ -17,13 +19,15 @@ const suggestableContentType = v.picklist([
   "multi-select",
   "date",
   "int",
+  "money",
 ]);
 
-// Both directions of the mirror: the suggestion capability is written for one
-// set of value kinds, and a kind added to either side fails here.
+// Both directions of the mirror: a prompt can be drafted for exactly the kinds
+// a model fills, and a kind added to either side fails here.
 type MirroredContentType = v.InferOutput<typeof suggestableContentType>;
-true satisfies MirroredContentType extends CaseLawResearchAnswerType
-  ? CaseLawResearchAnswerType extends MirroredContentType
+type ExtractableContentType = AiExtractablePropertyContent["type"];
+true satisfies MirroredContentType extends ExtractableContentType
+  ? ExtractableContentType extends MirroredContentType
     ? true
     : never
   : never;
@@ -65,6 +69,7 @@ const suggestPrompt = createSafeHandler(
   config,
   // oxlint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     body,
     orgAIConfig,
@@ -76,6 +81,10 @@ const suggestPrompt = createSafeHandler(
     user,
     workspaceId,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     return await suggestColumnPrompt({
       admission: configuredModelAdmission({ modelAdmission }),
       draft: {

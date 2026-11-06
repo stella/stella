@@ -8,6 +8,7 @@ import {
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
 import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
+import { parsedInputStateBackfillServerSchema } from "../apps/api/src/env-parsed-input-state-backfill";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
@@ -62,6 +63,8 @@ type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
   ...Object.keys(rateLimitBudgetEnvSchema),
+  "APNS_KEY_ID",
+  "APNS_TEAM_ID",
   "EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL",
   "EMAIL_EVENTS_QUEUE_URL",
   "EMAIL_EVENTS_TOPIC_ARN",
@@ -73,6 +76,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
   "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
+  "MCP_PUBLIC_READ_CALLER_CONCURRENCY",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
   "ACTION_REQUEST_MAX_BYTES",
@@ -101,7 +105,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AI_MODEL_REASONING",
   "TYPESAFE_MODEL",
   "AI_PROVIDER_BASE_URL",
+  "APPLE_AUTH_CLIENT_ID",
+  "APPLE_AUTH_KEY_ID",
+  "APPLE_AUTH_TEAM_ID",
   "OPENROUTER_WIF_POLICY_ID",
+  "OPENROUTER_FAST_TIER_WIF_POLICY_ID",
   "OPENROUTER_WIF_AUDIENCE",
   "OPENROUTER_WIF_STS_REGION",
   "AZURE_API_VERSION",
@@ -110,6 +118,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_ENABLED",
   "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
   "CASE_LAW_EU_COMPLETION_MODE",
@@ -141,7 +150,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_ROOT_POOL_MAX",
   "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
   "DB_LOAD_GATE_EBS_SIGNAL",
-  "STELLA_MIGRATE_ONLINE_WORK",
   ...Object.keys(envOnlineIndexServerSchema),
   "DB_HOST",
   "DB_NAME",
@@ -207,8 +215,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
-  "SESSION_TOKEN_ROTATION_ENABLED",
-  "SESSION_LIFETIME_CAP_ENABLED",
   "MCP_WEB_HANDOFF_MINT_ENABLED",
   "MCP_WEB_HANDOFF_TEXT_ENABLED",
   "MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS",
@@ -237,6 +243,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
+  DEPLOY_ENVIRONMENT: "development",
   API_FEATURE_ACCESS_GRANTS: "{}",
   KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
@@ -301,6 +308,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_API_URL: "http://localhost:3001",
   VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
+  VITE_DOCUMENTS_BUCKET: "stella",
+  VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
@@ -346,6 +355,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum document verification starts per organization per Europe/Prague day (1–1000; default 20).",
   CASE_LAW_DERIVED_AI:
     'Model calls for case-law derived layers: "on" generates a missing decision analysis when a reader opens it and refreshes its significance from the citation graph; "off" (the default) serves stored analyses only, so local, seeded and CI stacks never reach a model by serving a decision.',
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    "Stop the parsed-input-state backfill before the next database effect.",
   CASE_LAW_EU_COMPLETION_ENABLED:
     "Enable bounded EU case-law completion. Defaults to false.",
   CASE_LAW_EU_COMPLETION_KILL_SWITCH:
@@ -389,6 +400,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Container-reachable MCP endpoint used by isolated agent runs.",
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
+  DEPLOY_ENVIRONMENT:
+    "Runtime deployment environment: production, staging, or development. Independent of NODE_ENV; unset events are excluded from production release health.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -506,6 +519,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
+  API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
+    "Parameter Store name holding API_FEATURE_ACCESS_GRANTS. When set, the API checks the parameter version every minute and reloads the grants only when it changed; unset keeps the grants read at startup.",
   API_FEATURE_ACCESS_GRANTS:
     "Operator-owned JSON object keyed by registered feature id. Member grants specify type, organizationId, and email; organization grants specify type and organizationId. Both require current membership and verified email. Unknown feature ids reject startup; empty grants hide invitation features.",
   FEATURE_ORG_ACCESS_STATE:
@@ -516,6 +531,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce organization file byte reservations at storage writes.",
   OPENROUTER_WIF_POLICY_ID:
     "Workload-identity federation policy. Configure with audience and regional STS endpoint; a static key takes precedence.",
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID:
+    "Workload-identity federation policy for fast-tier managed work. Shares the audience and regional STS endpoint; a fast-tier static key takes precedence.",
+  OPENROUTER_FAST_TIER_API_KEY:
+    "Managed OpenRouter key for fast-tier work. Never falls back to the standard key; required when the free tier runs on managed OpenRouter, unless the fast-tier federation policy is set.",
   OPENROUTER_WIF_AUDIENCE:
     "Audience for the workload-identity token. Required with the federation policy and STS region.",
   OPENROUTER_WIF_STS_REGION:
@@ -542,6 +561,13 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Token used to file feedback issues in FEEDBACK_GITHUB_REPO. Needs issue-write scope only; unset disables GitHub delivery.",
   FRONTEND_URL:
     "Web app origin used for absolute transactional-email links, document verification links, and trusted redirects.",
+  APPLE_AUTH_CLIENT_ID:
+    "Sign in with Apple Services ID used as the OAuth client ID; required when the matching web login flag is enabled.",
+  APPLE_AUTH_KEY_ID: "Key ID of the Sign in with Apple private key.",
+  APPLE_AUTH_PRIVATE_KEY:
+    "PEM text of the Sign in with Apple private key (.p8). The API mints the short-lived client secret from it.",
+  APPLE_AUTH_TEAM_ID:
+    "Apple Developer team ID that owns the Services ID and key.",
   GOOGLE_AUTH_CLIENT_ID:
     "Google OAuth client ID; required when the matching web login flag is enabled.",
   GOOGLE_AUTH_CLIENT_SECRET:
@@ -599,16 +625,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
-  SESSION_TOKEN_ROTATION_ENABLED:
-    "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
   MCP_WEB_HANDOFF_MINT_ENABLED:
     "Enable sign-in handoffs on connected-app links. Defaults off.",
   MCP_WEB_HANDOFF_TEXT_ENABLED:
     "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
     "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
-  SESSION_LIFETIME_CAP_ENABLED:
-    "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -631,6 +653,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Bearer credential used by the collaboration service for snapshot load and store requests.",
   OPERATOR_API_TOKEN:
     "Deployment-owned bearer credential for operator HTTP access. Unset disables access; use at least 32 characters.",
+  APNS_KEY_ID:
+    "Key ID of the APNs .p8 signing key for mobile push. Set with APNS_TEAM_ID and APNS_PRIVATE_KEY; unset turns mobile push off.",
+  APNS_TEAM_ID:
+    "Apple Developer team ID that owns the APNs signing key and the mobile app.",
+  APNS_PRIVATE_KEY:
+    "The APNs .p8 signing key as PEM (newlines may be escaped as \\n). Alerts carry no content, but the key can send them to any device of the team's apps.",
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE:
     'Client-IP source for signup limits. Use "direct" without a proxy and "trusted_proxy" behind configured proxies.',
   STELLA_CLIENT_ADDRESS_HEADER:
@@ -660,12 +688,17 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   USE_MOCK_AI:
     'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_DOCUMENTS_BUCKET: "S3 bucket used for browser document transfers.",
+  VITE_DOCUMENTS_ENDPOINT:
+    "S3 or S3-compatible endpoint used for browser document transfers.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
   VITE_AUTH_GOOGLE:
     "Show Google login only when the API has matching OAuth credentials.",
   VITE_AUTH_MICROSOFT:
     "Show Microsoft login only when the API has matching OAuth credentials.",
+  VITE_AUTH_APPLE:
+    "Show Sign in with Apple only when the API has a matching Apple configuration.",
   VITE_COLLAB_URL:
     "WebSocket URL for collaborative editing. Unset keeps the single-user editing path.",
   VITE_BETA_FEATURES_ENABLED:
@@ -708,6 +741,10 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   INBOUND_MAIL_TOPIC_ARN: "another INBOUND_MAIL_* transport key is set",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  APPLE_AUTH_CLIENT_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_KEY_ID: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_PRIVATE_KEY: "another APPLE_AUTH_* key is set",
+  APPLE_AUTH_TEAM_ID: "another APPLE_AUTH_* key is set",
   ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
@@ -731,6 +768,7 @@ type EnvCatalogName =
   | keyof typeof envApiServerSchema
   | keyof typeof envCollabServerSchema
   | keyof typeof replayTickServerSchema
+  | keyof typeof parsedInputStateBackfillServerSchema
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
@@ -749,6 +787,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY:
     ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_LEASE_MS: ENV_CREDENTIAL_KIND.notCredential,
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_ORG_CONCURRENCY: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_PERIOD_MS: ENV_CREDENTIAL_KIND.notCredential,
@@ -785,10 +824,13 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   AZURE_RESOURCE_NAME: ENV_CREDENTIAL_KIND.notCredential,
   BEDROCK_API_KEY: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_COOKIE_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DERIVED_AI: ENV_CREDENTIAL_KIND.notCredential,
+  CASE_LAW_PARSED_INPUT_STATE_BACKFILL_KILL_SWITCH:
+    ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_KILL_SWITCH: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_REPLAY_DISABLED_SOURCES: ENV_CREDENTIAL_KIND.notCredential,
@@ -846,6 +888,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   EXTENSION_ORIGIN: ENV_CREDENTIAL_KIND.notCredential,
   API_FEATURE_ACCESS_GRANTS: ENV_CREDENTIAL_KIND.notCredential,
   KILL_SWITCHES: ENV_CREDENTIAL_KIND.notCredential,
+  API_FEATURE_ACCESS_GRANTS_SSM_PARAMETER_NAME:
+    ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_ADMISSION: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
@@ -876,6 +920,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GITHUB_TOKEN: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_CH: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_AI_API_KEY_EU: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APPLE_AUTH_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
+  APPLE_AUTH_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_ID: ENV_CREDENTIAL_KIND.notCredential,
   GOOGLE_AUTH_CLIENT_SECRET: ENV_CREDENTIAL_KIND.credential,
   GOOGLE_GENERATIVE_AI_API_KEY: ENV_CREDENTIAL_KIND.credential,
@@ -931,6 +979,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   OPENAI_API_KEY: ENV_CREDENTIAL_KIND.credential,
   OPENAI_APPS_CHALLENGE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPENROUTER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_FAST_TIER_API_KEY: ENV_CREDENTIAL_KIND.credential,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_AUDIENCE: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_POLICY_ID: ENV_CREDENTIAL_KIND.notCredential,
   OPENROUTER_WIF_STS_REGION: ENV_CREDENTIAL_KIND.notCredential,
@@ -980,11 +1030,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SELFHOST_LOCAL_PASSWORD_AUTH: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
-  SESSION_LIFETIME_CAP_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_MINT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_TEXT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
-  SESSION_TOKEN_ROTATION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
   SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1008,8 +1056,10 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_REDIS_URL: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
+  APNS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_TEAM_ID: ENV_CREDENTIAL_KIND.notCredential,
+  APNS_PRIVATE_KEY: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
-  STELLA_MIGRATE_ONLINE_WORK: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
@@ -1031,10 +1081,13 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_GOOGLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_AUTH_MICROSOFT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_AUTH_APPLE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BETA_FEATURES_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1100,6 +1153,8 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
   "VITE_API_URL",
+  "VITE_DOCUMENTS_BUCKET",
+  "VITE_DOCUMENTS_ENDPOINT",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
 ]);
@@ -1141,7 +1196,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|APPLE_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -1259,6 +1314,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: parsedInputStateBackfillServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: euCompletionTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -1283,7 +1342,11 @@ export const ENV_CATALOG = [
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.apiServer,
-    schema: envApiServerSchema,
+    schema: Object.fromEntries(
+      Object.entries(envApiServerSchema).filter(
+        ([name]) => !Object.hasOwn(envBaseServerSchema, name),
+      ),
+    ),
   }),
   ...createCatalogEntries({ owner: ENV_OWNER.web, schema: envWebClientSchema }),
   ...createCatalogEntries({
@@ -1293,6 +1356,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...parsedInputStateBackfillServerSchema,
   ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
@@ -1343,10 +1407,15 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_GENERATED_STORE",
+  "STELLA_MARKETING_CAPTURE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
   "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
+  // Bun.build defines it in the compiled agent sidecar;
+  // packages/agent-engine/src/sidecar/env.ts reads it.
+  "STELLA_SIDECAR_VERSION",
+  "STELLA_TIMING",
   "STELLA_WEB_PORT",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
@@ -1361,6 +1430,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "POSTHOG_SOURCEMAP_PROJECT_ID",
   "POSTHOG_SOURCEMAP_PUBLISH",
   "PUBLIC_API_URL",
+  "PUBLIC_APPLE_LOGIN_ENABLED",
   "PUBLIC_APP_URL",
   "PUBLIC_BROWSER_API_URL",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
@@ -1384,6 +1454,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "STELLA_DOCUMENT_PROCESSING_WORKER_CPUS",
   "STELLA_DOCUMENT_PROCESSING_WORKER_MEM_LIMIT",
   "STELLA_DOCUMENT_PROCESSING_WORKER_PIDS_LIMIT",
+  "STELLA_FILE_DERIVATIVE_WORKER_CPUS",
+  "STELLA_FILE_DERIVATIVE_WORKER_MEM_LIMIT",
+  "STELLA_FILE_DERIVATIVE_WORKER_PIDS_LIMIT",
   "STELLA_GOTENBERG_CPUS",
   "STELLA_GOTENBERG_HOST_PORT",
   "STELLA_GOTENBERG_MEM_LIMIT",
@@ -1412,11 +1485,28 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  "STELLA_RUN_SHARED_POSTGRES_TESTS",
+
+  // Dated guard-rollout healing requests full scope before removing the temporary scope.
+  "STELLA_GUARD_SCOPE",
+  // Release-only secret: the short-lived federated Chrome Web Store access token.
+  "CHROME_WEB_STORE_ACCESS_TOKEN",
   // The mobile app's Expo config reads its variant and signing from the build.
   "APP_VARIANT",
   "APPLE_TEAM_ID",
   "MOBILE_BUILD_NUMBER",
   "MOBILE_PROFILE_UUID",
+  "MOBILE_WIDGETS_PROFILE_UUID",
+  "MOBILE_RUNTIME_VERSION",
+  // The fake harness CLIs log how they started and what they receive to the
+  // file their tests name; the fake Codex app server also logs its CODEX_HOME.
+  "FAKE_HARNESS_LOG",
+  "CODEX_HOME",
+  // The desktop's stand-in harness holder (a re-run of its own test binary)
+  // takes its folder, socket and log file from the test that starts it.
+  "STAND_IN_DIR",
+  "STAND_IN_ENDPOINT",
+  "FAKE_SIDECAR_LOG",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1433,9 +1523,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
   "CACHE_WRITE",
-  // Native cache action state is restored only for its own post hook.
-  "STATE_key",
-  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
@@ -1452,12 +1539,28 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_VERIFY",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
+  // CI migration planning hands the schema import check its changed-paths file.
+  "CHANGED_PATHS",
+  // CI playground planning passes the selected and complete spec sets to the
+  // shard planner, together with the desktop scope decision.
+  "UI_PLAYGROUND_CHANGED_PATHS",
+  "UI_PLAYGROUND_SELECTED_SPECS",
+  "UI_PLAYGROUND_ALL_SPECS",
+  "DESKTOP_REQUIRED",
+  // CI browser suite planning reads the changed paths, and each browser leg
+  // passes the specs it carries; the shard planner adds the suite legs.
+  "BROWSER_SUITE_CHANGED_PATHS",
+  "BROWSER_SUITE_LEGS",
+  "LEG",
+  "LEG_SPECS",
+  "SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
   // The merge group's base revision.
+  "BRIDGE_BASE_SHA",
   "MERGE_GROUP_BASE_SHA",
   // The scan engine drift check builds into a scratch directory and compares it.
   "SCAN_ENGINE_WASM_OUT_DIR",
@@ -1469,6 +1572,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHECK_SHA",
   "CHECK_START_FILE",
   "CHECK_TARGET",
+  // Hosted agent runtimes identify themselves before secret-scanner bootstrap.
+  "CLAUDE_CODE_REMOTE",
+  "CODEX_CI",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",
@@ -1482,9 +1588,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // gh-dispatch-workflow.sh reads gh-retry.sh's final HTTP status from here.
+  "GH_RETRY_STATUS_FILE",
+  // gh-dispatch-workflow.sh bounds for watching an unconfirmed dispatch.
+  "GH_DISPATCH_SETTLE_SECONDS",
+  "GH_DISPATCH_POLL_SECONDS",
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The release rehearsal workflow provides its deployment-repository target.
+  "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
   // the commit it deploys, the infrastructure repository and its App token,
   // the readiness endpoint and edge header, and the bounds tests shorten.
@@ -1500,10 +1613,22 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
-  // Dated-waiver healing: the private repository its fix tasks go to, and
-  // the merge hold that keeps it from arming removals.
+  // Run-artifact downloads: the bound of one attempt and the pause before the retry.
+  "ARTIFACT_DOWNLOAD_ATTEMPT_SECONDS",
+  "ARTIFACT_DOWNLOAD_RETRY_PAUSE_SECONDS",
+  // The staging proof gate shares its monitor state across workflow steps.
+  "STAGING_PROOF_STATE_PATH",
+  "STAGING_PROOF_PREFLIGHT",
+  // The same script requests a candidate's power lease without waiting for
+  // readiness, for the hours the promotion asks.
+  "STAGING_LEASE_ONLY",
+  "STAGING_LEASE_HOURS",
+  // A staging promotion waits for the other owner kind (scripts/staging-owner.sh).
+  "STAGING_OWNER_MODE",
+  "STAGING_OWNER_ATTEMPTS",
+  "STAGING_OWNER_INTERVAL_SECONDS",
+  // Dated-waiver healing: the private repository its fix tasks go to.
   "DATED_WAIVER_FIX_REPO",
-  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1526,6 +1651,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_ATTEMPTS",
   "API_DEPLOYMENT_DELAY_MS",
   "API_DEPLOYMENT_EXPECTED_COMMIT",
+  "API_DEPLOYMENT_EXPECTED_ENVIRONMENT",
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
@@ -1536,7 +1662,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
-  "API_TEST_FILES",
+  "API_TEST_FILES_ENCODED",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",
   "API_TEST_TIMINGS_DIR",
@@ -1585,6 +1711,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
+  // Served API journeys: the listening port and captured server log.
+  "SERVED_MCP_API_LOG",
+  "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1593,7 +1722,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_MCP_URL",
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
+  "JOURNEY_RELEASES_API_URL",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SEARCH_SLOT",
   "JOURNEY_SIGN_IN",
   "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
@@ -1616,11 +1747,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
+  "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",
   "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
+  // Read-only npm summary receives the publishing jobs' needs context.
+  "NPM_RELEASE_NEEDS",
   // The online index gate's child-process fixture receives its target here.
   "ONLINE_INDEX_TEST_NAME",
   "ONLINE_INDEX_TEST_NOW",
@@ -1636,7 +1770,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
+  // Historical package builds use current tooling against a separate source root.
+  "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
+  // pr-lint passes the pull request description to the log-line guard.
+  "PR_BODY",
   "PR_HEAD_SHA",
   "PR_TITLE",
   // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
@@ -1673,15 +1811,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_BASE_DATABASE_URL",
   "REHEARSAL_BASE_IMAGE_REPOSITORY",
   "REHEARSAL_BASE_REF",
+  "REHEARSAL_CI_TOOLING",
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Disposable subprocess state and failure selection in rehearsal tests.
+  "REHEARSAL_TEST_STATE",
+  "REHEARSAL_TEST_FAILURE",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
+  "PRODUCTION_WEB_IMAGE_DIGEST",
   "PROOF_MAIN_BASE",
   "RELEASE_CANDIDATE_CHECKER",
   "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
+  "RELEASE_HEALTH_TOKEN",
   // Release pull request refresh: open release numbers, the release to update,
   // its branch, whether main merges in, and the versioned staging tip.
   "RELEASE_NUMBERS",
@@ -1717,6 +1861,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // The source-fingerprint baseline generator reads the guard test's census.
   "SOURCE_FINGERPRINT_CENSUS_OUT",
   "STAGING_STATE",
+  "STAGING_STATUS_WRITER",
   // CI names the target-branch revision the statute recall floor compares to.
   "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",
@@ -1733,7 +1878,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
-  "STELLA_MERGE_HOLD",
+  // Prevents recursive spawning of native file-mode test subprocesses.
+  "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
@@ -1743,6 +1889,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
+  "STELLA_SEED_LOCALE",
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
@@ -1788,7 +1935,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODE_CHECK_MEMORY_BYTES",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
-  "CI_POSTGRES_TEST_SELECTION",
+  "CI_POSTGRES_TEST_SELECTION_ENCODED",
   "CI_POSTGRES_TEST_SHARD",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
@@ -1814,6 +1961,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
+  "TEST_RESOLVER_ERROR",
+  // Test-only: dependency remediation fixture states.
+  "TEST_QUARANTINED",
+  "TEST_RESOLVER_ERROR",
+  "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
 ]);
 
@@ -1831,6 +1983,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "AWS_REGION",
   "AWS_SECRET_ACCESS_KEY",
   "AWS_SESSION_TOKEN",
+  "CARGO_CFG_TARGET_ARCH",
+  "CARGO_CFG_TARGET_OS",
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
@@ -1854,6 +2008,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",
+  // Tauri sets it for a desktop build's beforeBuildCommand.
+  "TAURI_ENV_TARGET_TRIPLE",
   "TMPDIR",
   "TZ",
 ]);

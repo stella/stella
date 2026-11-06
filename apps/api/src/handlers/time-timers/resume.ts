@@ -8,7 +8,7 @@ import {
 const config = {
   contract: "patch",
   description:
-    "Resume your paused timer and automatically pause your other running timer. Resuming an already running timer leaves its elapsed time unchanged.",
+    "Resume your paused timer and automatically pause your other running timer. Resuming an already running timer leaves its elapsed time unchanged. A timer that runs on an existing time entry cannot resume once that entry is submitted or approved (timer_original_entry_changed); confirm or discard it instead.",
   permissions: { timeEntry: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },

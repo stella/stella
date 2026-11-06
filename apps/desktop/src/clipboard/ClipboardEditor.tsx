@@ -2,8 +2,10 @@ import {
   forwardRef,
   Fragment,
   memo,
+  useCallback,
   useEffect,
   useEffectEvent,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -23,6 +25,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -31,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -68,6 +72,7 @@ import {
 import type { ClipboardGroupDraft } from "./ClipboardGroupFields";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
+import { useClipsCopyFailed } from "./clips-copy-routing";
 
 type SaveState =
   { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
@@ -82,6 +87,9 @@ const NEW_GROUP_OPTION_VALUE = "new-group";
 const EDITOR_HEADER_PADDING_CLASS = navigator.userAgent.includes("Macintosh")
   ? "ps-24"
   : "ps-5";
+
+/** `clipboard_get_editor_context`'s rejection when the open clip no longer exists. */
+const CLIPBOARD_ITEM_GONE_ERROR = "clipboard item no longer exists";
 
 type EditorState =
   | { type: "loading" }
@@ -537,7 +545,6 @@ const RichTextArea = memo(
       return (
         <div
           aria-label={label}
-          autoFocus
           className="clipboard-rich-editor clipboard-html bg-card ring-border focus:ring-ring min-h-0 flex-1 overflow-y-auto rounded-[22px] p-5 text-sm leading-6 tab-4 ring-1 outline-none ring-inset focus:ring-2"
           contentEditable
           dir="auto"
@@ -561,9 +568,18 @@ type ClipboardEditorProps = {
 
 const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const t = useTranslations("clipboard");
+  const copyFailed = useClipsCopyFailed();
+  const nameFieldId = useId();
+  const groupFieldId = useId();
   const reportIdle = useEffectEvent(onIdle);
   const formatter = useFormatter();
   const editorRef = useRef<HTMLDivElement>(null);
+  // React applies `autoFocus` to form controls only, so the clip text, a
+  // contenteditable, takes focus when each open mounts it.
+  const attachEditor = useCallback((node: HTMLDivElement | null) => {
+    editorRef.current = node;
+    node?.focus({ preventScroll: true });
+  }, []);
   // Text and HTML are regenerated from the DOM on save and never round-trip
   // byte-for-byte, so an untouched editor submits the stored content instead:
   // a group-only save must not read as a content edit.
@@ -596,6 +612,15 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
 
   useEffect(() => {
     let disposed = false;
+    // A reload must never take away a draft that is already open: saving says
+    // so in place if the clip is gone by then.
+    const showLoadError = () => {
+      setState((current) =>
+        current.type === "ready"
+          ? current
+          : { message: loadError, type: "error" },
+      );
+    };
     const loadContext = () => {
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
@@ -612,7 +637,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
               window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
             });
-            setState({ message: loadError, type: "error" });
+            showLoadError();
             return undefined;
           }
           setState((current) => {
@@ -645,13 +670,16 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           if (disposed) {
             return;
           }
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-            detail: describeError(error),
-            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
-            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-          });
-          setState({ message: loadError, type: "error" });
+          // History pruned or replaced the open clip, which it may do at any time.
+          if (error !== CLIPBOARD_ITEM_GONE_ERROR) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+          }
+          showLoadError();
         });
     };
     loadContext();
@@ -932,28 +960,38 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             {t("editItem")}
           </h1>
           {sourceName ? (
-            <p
-              className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
-              data-tauri-drag-region
-              title={sourceTitle}
-            >
-              {sourceVisual?.iconDataUrl ? (
-                <ClipboardSourceIcon
-                  iconDataUrl={sourceVisual.iconDataUrl}
-                  kind={item.sourceApp?.page ? "favicon" : "app"}
-                  size="inline"
-                />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="bg-muted-foreground/55 size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: sourceVisual?.color ?? undefined }}
-                />
-              )}
-              <span className="truncate" dir="auto">
-                {sourceName}
-              </span>
-            </p>
+            // The source line truncates in the narrow header; the tooltip
+            // names the app and page in full.
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <p
+                    className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+                    data-tauri-drag-region
+                  />
+                }
+              >
+                {sourceVisual?.iconDataUrl ? (
+                  <ClipboardSourceIcon
+                    iconDataUrl={sourceVisual.iconDataUrl}
+                    kind={item.sourceApp?.page ? "favicon" : "app"}
+                    size="inline"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="bg-muted-foreground/55 size-2 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: sourceVisual?.color ?? undefined,
+                    }}
+                  />
+                )}
+                <span className="truncate" dir="auto">
+                  {sourceName}
+                </span>
+              </TooltipTrigger>
+              <TooltipPopup>{sourceTitle}</TooltipPopup>
+            </Tooltip>
           ) : null}
         </div>
         <Button
@@ -969,11 +1007,14 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
-        <label className="flex shrink-0 items-center gap-3">
-          <span className="text-muted-foreground shrink-0 text-xs">
-            {t("clipName")}
-          </span>
+        {/* The caption sits beside its field, in the muted small type of the
+            editor's other captions. */}
+        <div className="flex shrink-0 items-center gap-3">
+          <Label className="shrink-0 text-xs font-normal" htmlFor={nameFieldId}>
+            <span className="text-muted-foreground">{t("clipName")}</span>
+          </Label>
           <Input
+            id={nameFieldId}
             className="h-10 min-w-0 flex-1 rounded-xl"
             data-clipboard-editor-name=""
             disabled={state.save.type === "saving"}
@@ -1010,7 +1051,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
             })}
             value={state.name.value}
           />
-        </label>
+        </div>
         {item.type === "image" ? (
           <div className="bg-card ring-border flex min-h-0 flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[22px] p-5 ring-1 ring-inset">
             <div className="min-h-0 min-w-0 flex-1 self-stretch">
@@ -1067,16 +1108,19 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               onInput={() => {
                 editedRef.current = true;
               }}
-              ref={editorRef}
+              ref={attachEditor}
             />
           </>
         )}
 
         <div className="flex shrink-0 items-center gap-3">
-          <label className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {t("group")}
-            </span>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <Label
+              className="shrink-0 text-xs font-normal"
+              htmlFor={groupFieldId}
+            >
+              <span className="text-muted-foreground">{t("group")}</span>
+            </Label>
             <Select
               disabled={groupCreationPending}
               onValueChange={(value) => {
@@ -1099,7 +1143,10 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               }}
               value={state.groupId ?? ""}
             >
-              <SelectTrigger className="h-10 w-44 min-w-0 rounded-xl">
+              <SelectTrigger
+                className="h-10 w-44 min-w-0 rounded-xl"
+                id={groupFieldId}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectPopup
@@ -1132,7 +1179,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                 </SelectItem>
               </SelectPopup>
             </Select>
-          </label>
+          </div>
           <Button
             disabled={groupCreationPending}
             onClick={requestClose}
@@ -1185,6 +1232,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         {state.save.type === "error" ? (
           <p className="text-destructive text-xs" role="alert">
             {state.save.message}
+          </p>
+        ) : null}
+        {copyFailed ? (
+          <p className="text-destructive text-xs" role="alert">
+            {t("errorPaste")}
           </p>
         ) : null}
       </div>
