@@ -132,7 +132,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  query: v.object({
+  query: v.strictObject({
     cursor: v.optional(paginationCursorSchema()),
     limit: v.optional(
       numberFromString(
