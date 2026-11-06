@@ -1,5 +1,3 @@
-import { Temporal } from "@stll/time";
-
 type CollabLogEvent =
   | {
       event: "redis_store_policy";
@@ -65,16 +63,6 @@ export const logCollabEvent = (event: CollabLogEvent) => {
     const name = "AdmissionStoreEvictionPolicyRefused";
     process.stdout.write(
       `${JSON.stringify({
-        _aws: {
-          Timestamp: Temporal.Now.instant().epochMilliseconds,
-          CloudWatchMetrics: [
-            {
-              Namespace: "Stella/Api",
-              Dimensions: [[]],
-              Metrics: [{ Name: name, Unit: "Count" }],
-            },
-          ],
-        },
         [name]: event.status === "refused" ? 1 : 0,
       })}\n`,
     );

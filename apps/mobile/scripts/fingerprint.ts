@@ -23,7 +23,7 @@ import path from "node:path";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { APP_VERSION } from "../app.config";
+import { APP_VERSION, BAR_GLYPHS_FOLDER } from "../app.config";
 
 export const NATIVE_PLATFORMS = ["ios", "android"] as const;
 
@@ -95,6 +95,24 @@ const createNativeFingerprint = async (
         id: "releaseLine",
         contents: releaseLine(APP_VERSION),
         reasons: ["releaseLine"],
+      },
+      ...(platform === "ios"
+        ? [
+            "metro.config.cjs",
+            "widgets.metro.config.cjs",
+            "scripts/build-widget-bundle.mjs",
+            "scripts/xcode-widget-bundle.sh",
+          ].map((filePath) => ({
+            type: "file" as const,
+            filePath,
+            reasons: ["widgetBundle"],
+          }))
+        : []),
+      // Copied into the asset catalog at prebuild, out of the config's sight.
+      {
+        type: "dir",
+        filePath: BAR_GLYPHS_FOLDER,
+        reasons: ["barGlyphs"],
       },
     ],
   });

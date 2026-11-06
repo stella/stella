@@ -182,6 +182,7 @@ describe("a write that needs a matter in an organization without one", () => {
           accessibleWorkspaceIds: context.accessibleWorkspaceIds,
           pinnedIds: [],
         }),
+        workspaceStatusById: context.accessibleWorkspaceStatusById,
         userId: caller.userId,
         userEmail: "standard@example.test",
       }),

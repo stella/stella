@@ -13,7 +13,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           directUnregister:
-            "Use unregisterDomEnvironment from @/test-dom-environment so React scheduler work drains before DOM globals are removed.",
+            "Use unregisterDomEnvironment from @stll/property-testing/dom-environment so React scheduler work drains before DOM globals are removed.",
         },
       },
       createOnce(context) {

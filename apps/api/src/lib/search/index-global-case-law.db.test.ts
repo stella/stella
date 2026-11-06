@@ -128,6 +128,7 @@ const searchCaseLaw = async () =>
       accessibleWorkspaceIds: [],
       selectedWorkspaceIds: [],
       types: ["case-law"],
+      grantedScopes: undefined,
       editedByUserIds: [],
       mimeTypes: [],
       limit: 10,

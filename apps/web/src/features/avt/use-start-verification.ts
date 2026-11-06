@@ -14,6 +14,7 @@ import {
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 const RUN_ALREADY_ACTIVE_STATUS = 409;
@@ -43,6 +44,7 @@ export const useStartVerification = ({
   listId,
   onStarted,
 }: StartVerificationArgs) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [startingFor, setStartingFor] =
@@ -54,14 +56,19 @@ export const useStartVerification = ({
     setSizeConfirmation(null);
     setStartingFor(target);
     const sent = await Result.tryPromise(async () => {
-      const { data, error } = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .verifications.post({
+      const { data, error } = await submit.run({
+        operation: `verification-create:${workspaceId}`,
+        send: async (body) =>
+          api
+            .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .verifications.post(body),
+        body: {
           listId: toSafeId<"legalList">(listId),
           entityId: toSafeId<"entity">(target.entityId),
           fileFieldId: toSafeId<"field">(target.fileFieldId),
           ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
-        });
+        },
+      });
       return error ? { data: null, error } : { data, error: null };
     });
     setStartingFor(null);
@@ -134,6 +141,9 @@ export const useStartVerification = ({
     start,
     startingFor,
     sizeConfirmation,
-    dismissSizeConfirmation: () => setSizeConfirmation(null),
+    dismissSizeConfirmation: () => {
+      submit.reset();
+      setSizeConfirmation(null);
+    },
   };
 };

@@ -725,6 +725,12 @@ export const validateSchemaIntrospection = async ({
             specifier.startsWith(".") ||
             specifier.startsWith("@/");
           if (local) {
+            if (
+              module.endsWith(".json") &&
+              existsSync(path.join(repoRoot, module))
+            ) {
+              return;
+            }
             const target = [
               `${module}.ts`,
               `${module}.tsx`,
@@ -746,6 +752,11 @@ export const validateSchemaIntrospection = async ({
                 {},
               )
             ).resolvedModule;
+            // A published `@stll/` package installed from the registry is a
+            // dependency like any other, not workspace source to walk.
+            if (resolved?.isExternalLibraryImport === true) {
+              return;
+            }
             if (
               resolved === undefined ||
               resolved.resolvedFileName.endsWith(".d.ts")

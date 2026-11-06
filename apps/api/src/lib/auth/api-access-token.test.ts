@@ -5,6 +5,7 @@ import type { JWTPayload } from "jose";
 import { MOBILE_SCOPES } from "@stll/api-contract/mobile-client";
 import { assertProperty } from "@stll/property-testing";
 
+import type { rootDb } from "@/api/db/root";
 import {
   admitApiAccessTokenRoute,
   API_OAUTH_ROUTES,
@@ -12,10 +13,23 @@ import {
   readAccessTokenBearer,
 } from "@/api/lib/auth/api-access-token";
 import { getApiOAuthResourceIdentifier } from "@/api/lib/oauth-resource-policy";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const admissionQuery = {
+  from: () => admissionQuery,
+  leftJoin: () => admissionQuery,
+  limit: async () => [],
+};
+const admissionOptions = {
+  db: asTestRaw<Pick<typeof rootDb, "select">>({
+    select: () => admissionQuery,
+  }),
+};
 
 const NO_REVIEW_ACCOUNT = { organizationId: undefined };
 
 const USER_CLAIMS = {
+  iat: 1_700_000_000,
   sub: "user-1",
   org_id: "org-1",
   member_id: "member-1",
@@ -33,6 +47,7 @@ const verifierReturning =
 const authenticate = async (payload: JWTPayload) => {
   const result = await authenticateApiAccessToken("a.b.c", {
     reviewAccount: NO_REVIEW_ACCOUNT,
+    admissionOptions,
     verifyToken: verifierReturning(payload),
   });
   return result.isOk() ? result.value : { refused: result.error.reason };
@@ -53,7 +68,7 @@ describe("which bearer takes the access-token path", () => {
 
 describe("API access token claims", () => {
   test("a user grant for an app opens the session it was issued under", async () => {
-    expect(await authenticate(USER_CLAIMS)).toEqual({
+    expect(await authenticate(USER_CLAIMS)).toMatchObject({
       userId: "user-1",
       organizationId: "org-1",
       memberId: "member-1",
@@ -66,6 +81,7 @@ describe("API access token claims", () => {
     let audience: unknown;
     await authenticateApiAccessToken("a.b.c", {
       reviewAccount: NO_REVIEW_ACCOUNT,
+      admissionOptions,
       verifyToken: async (_token, options) => {
         audience = options.verifyOptions.audience;
         return await Promise.resolve(USER_CLAIMS);
@@ -75,7 +91,13 @@ describe("API access token claims", () => {
   });
 
   test("a token without its membership, app or user is refused", async () => {
-    for (const claim of ["member_id", "org_id", "sub", "client_id"] as const) {
+    for (const claim of [
+      "member_id",
+      "org_id",
+      "sub",
+      "client_id",
+      "iat",
+    ] as const) {
       const { [claim]: _dropped, ...claims } = USER_CLAIMS;
       expect(await authenticate(claims)).toEqual({ refused: "rejected" });
     }
@@ -93,6 +115,7 @@ describe("API access token claims", () => {
   test("a verifier outage is not reported as a bad token", async () => {
     const result = await authenticateApiAccessToken("a.b.c", {
       reviewAccount: NO_REVIEW_ACCOUNT,
+      admissionOptions,
       verifyToken: async () => {
         throw new TypeError("JWKS fetch failed");
       },
@@ -200,6 +223,118 @@ describe("which routes an API access token opens", () => {
           route,
           scopes: ["stella:matters_write", "stella:documents_write"],
         }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("the app registers and unregisters its push device with the read grant alone", () => {
+    for (const [method, route] of [
+      ["PUT", "/v1/me/push-devices"],
+      ["DELETE", "/v1/me/push-devices/:token"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: ["stella:read"] }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:chat", "stella:matters_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // Only the routes the app uses: listing devices stays closed.
+    expect(
+      admitApiAccessTokenRoute({
+        method: "GET",
+        route: "/v1/me/push-devices",
+        scopes: ["stella:read"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
+  });
+
+  test("a file attached to a chat message goes up with it, at the chat scope only", () => {
+    const send = { method: "POST", route: "/v1/chat" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...send, scopes: MOBILE_SCOPES }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...send,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Attaching opens no chat route beyond the conversation the app holds.
+    expect(
+      Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
+    ).toEqual([
+      "GET /v1/chat/threads",
+      "GET /v1/chat/threads/:threadId/messages",
+      "GET /v1/chat/threads/:threadId/messages/older",
+      "POST /v1/chat",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/join",
+      "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+    ]);
+  });
+
+  test("search results open at the read scope", () => {
+    const search = { method: "POST", route: "/v1/search" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...search, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...search,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("search filter values open at the read scope", () => {
+    const facets = { method: "POST", route: "/v1/search/facets" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...facets, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...facets,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the caller's recent searches open at the read scope", () => {
+    const history = { method: "GET", route: "/v1/search-history" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...history, scopes: ["stella:read"] }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...history,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:read"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+  });
+
+  test("the other search routes stay closed", () => {
+    for (const [method, route] of [
+      ["POST", "/v1/search/preview"],
+      ["POST", "/v1/search/refine"],
+      ["POST", "/v1/search/summary"],
+      ["POST", "/v1/search/summary/chat"],
+      ["GET", "/v1/saved-searches"],
+      ["POST", "/v1/saved-searches"],
+      ["PATCH", "/v1/saved-searches/:savedSearchId"],
+      ["DELETE", "/v1/saved-searches/:savedSearchId"],
+      ["POST", "/v1/search-history"],
+      ["DELETE", "/v1/search-history"],
+      ["DELETE", "/v1/search-history/:entryId"],
+      ["GET", "/v1/search-history/import-clock"],
+      ["POST", "/v1/search-history/import"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: MOBILE_SCOPES }),
       ).toEqual({ admitted: false, reason: "route" });
     }
   });

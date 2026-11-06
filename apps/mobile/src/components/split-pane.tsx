@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 
 import { View } from "react-native";
 
+import { Text } from "@stll/ui/text";
+
 import { useLayout, useSelection } from "@/components/selection";
-import { Text } from "@/components/ui/text";
 import { useAppColors } from "@/theme";
 
 /**

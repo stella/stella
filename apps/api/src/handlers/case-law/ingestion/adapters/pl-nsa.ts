@@ -1,4 +1,6 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: a parked page states it made no publisher request; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 /**
@@ -33,33 +35,12 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
+import {
+  encodePlNsaCursor,
+  type PlNsaCursor,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
 import {
   huggingFaceShardSource,
   PL_NSA_SNAPSHOT,
@@ -69,6 +50,7 @@ import {
   readPlNsaRows,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import type {
+  LocalShardBuffer,
   PlNsaDatasetRow,
   PlNsaShard,
   PlNsaShardSource,
@@ -97,12 +79,40 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
+
+export { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
 
 const PL_NSA_LANGUAGE = "pl";
 
@@ -1401,9 +1411,6 @@ const PL_NSA_SOURCE_SURFACES = {
 
 // ── Cursor ───────────────────────────────────────────────
 
-/** A position in the pinned revision; `shard === shards.length` is the end. */
-type PlNsaCursor = { shard: number; row: number };
-
 const CURSOR_PATTERN =
   /^(?<revision>[0-9a-f]{40}):(?<shard>\d{1,4}):(?<row>\d{1,9})$/u;
 
@@ -1421,11 +1428,6 @@ export const parsePlNsaCursor = (
   const shard = Math.min(Number(groups["shard"]), snapshot.shards.length);
   return { shard, row: Number(groups["row"]) };
 };
-
-export const encodePlNsaCursor = (
-  { row, shard }: PlNsaCursor,
-  snapshot: PlNsaSnapshot,
-): string => `${snapshot.revision}:${shard}:${row}`;
 
 /** The first row at or after `cursor` that exists, or the end. */
 const settle = (cursor: PlNsaCursor, snapshot: PlNsaSnapshot): PlNsaCursor => {
@@ -1493,7 +1495,12 @@ const sliceIndex = (slice: string): number | null => {
   return Number.isSafeInteger(index) ? index : null;
 };
 
-type Window = { shard: number; start: number; rows: PlNsaDatasetRow[] };
+type Window = {
+  shard: number;
+  start: number;
+  rows: PlNsaDatasetRow[];
+  publisherRequest: LocalShardBuffer["publisherRequest"];
+};
 
 export const createPlNsaCrawler = ({
   pageRows = DEFAULT_PAGE_ROWS,
@@ -1533,7 +1540,7 @@ export const createPlNsaCrawler = ({
   ): Promise<Result<Window, AdapterFetchError>> => {
     const start = row - (row % windowRows);
     if (cached?.shard === target.index && cached.start === start) {
-      return Result.ok(cached);
+      return Result.ok({ ...cached, publisherRequest: PUBLISHER_REQUEST.NONE });
     }
     cached = null;
     const file = await source.local(target, signal);
@@ -1549,7 +1556,12 @@ export const createPlNsaCrawler = ({
     if (Result.isError(rows)) {
       return rows;
     }
-    cached = { shard: target.index, start, rows: rows.value };
+    cached = {
+      shard: target.index,
+      start,
+      rows: rows.value,
+      publisherRequest: file.value.publisherRequest,
+    };
     return Result.ok(cached);
   };
 
@@ -1571,6 +1583,7 @@ export const createPlNsaCrawler = ({
       return Result.ok({
         decisions: [],
         nextCursor: encodePlNsaCursor(at, snapshot),
+        publisherRequest: PUBLISHER_REQUEST.NONE,
       });
     }
 
@@ -1618,15 +1631,15 @@ export const createPlNsaCrawler = ({
     );
     return Result.ok({
       decisions,
-      ...(itemBuildFailures === 0
-        ? {}
-        : {
-            itemBuildFailures: {
+      itemBuildFailures:
+        itemBuildFailures === 0
+          ? undefined
+          : {
               type: "item_build_failed" as const,
               count: itemBuildFailures,
             },
-          }),
       sourceUrl: plNsaShardUrl(snapshot, target),
+      publisherRequest: window.value.publisherRequest,
       nextCursor: encodePlNsaCursor(next, snapshot),
     });
   };

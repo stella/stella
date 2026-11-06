@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import {
   inspectorMinimizedEntry,
   inspectorRestorePendingEntry,
@@ -13,7 +15,6 @@ import {
   deviceStorage,
 } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   definePersistedState,

@@ -1,10 +1,11 @@
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@/components/ui/button";
-import { Text } from "@/components/ui/text";
+import { Button } from "@stll/ui/button";
+import { Text } from "@stll/ui/text";
+
 import { useSession } from "@/connection/session-provider";
 import { needsConsent } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
@@ -41,8 +42,10 @@ export const WriteFailureNotice = ({
   message: string;
 }) => {
   const t = useTranslations("writes");
+  const settings = useTranslations("settings");
   const { signOut } = useSession();
   const [leaving, startLeaving] = useTransition();
+  const [signOutFailed, setSignOutFailed] = useState(false);
 
   if (failure === null) {
     return null;
@@ -63,15 +66,20 @@ export const WriteFailureNotice = ({
       <Text variant="caption">{t("consentNeeded")}</Text>
       <Button
         disabled={leaving}
-        label={t("signInAgain")}
         loading={leaving}
         onPress={() => {
           startLeaving(async () => {
-            await signOut();
+            const outcome = await signOut();
+            setSignOutFailed(outcome.isErr());
           });
         }}
         variant="outline"
-      />
+      >
+        {t("signInAgain")}
+      </Button>
+      {signOutFailed ? (
+        <Text variant="caption">{settings("signOutFailed")}</Text>
+      ) : null}
     </View>
   );
 };

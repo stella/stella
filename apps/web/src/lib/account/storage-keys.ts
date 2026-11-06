@@ -7,3 +7,4 @@ export const LAW_HISTORY_STORAGE_KEY = "law_search_history";
 export const LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY =
   "case-law-guest-annotations:v1";
 export const READER_PROVISION_MODE_STORAGE_KEY = "reader_provision_mode";
+export const MCP_OAUTH_REQUEST_STORAGE_KEY = "stll.mcp-oauth.request";

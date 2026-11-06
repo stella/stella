@@ -4,11 +4,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import { posthog } from "posthog-js";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { stellaToast } from "@stll/ui/toast";
 
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 Object.defineProperty(globalThis, "__APP_VERSION__", {
@@ -42,7 +42,6 @@ const { IntlProvider } = await import("use-intl");
 const { AnalyticsContext } = await import("@/lib/analytics/provider");
 const { noopAnalytics } = await import("@/lib/analytics/noop");
 const { createPostHogAnalytics } = await import("@/lib/analytics/posthog");
-const { toSafeId } = await import("@/lib/safe-id");
 const { useCreateContact } = await import("./mutations");
 
 const createAnalytics = () => {
@@ -76,7 +75,6 @@ const createContact = async (
   await act(async () => {
     const error = await rejectionOf(
       hook.result.current.mutateAsync({
-        id: toSafeId<"contact">("contact-test"),
         type: "person",
         displayName: "Test contact",
       }),

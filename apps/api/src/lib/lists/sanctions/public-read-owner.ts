@@ -29,4 +29,5 @@ export const sanctionsStartupWarmup = createSanctionsStartupWarmup({
     );
   },
   terminalize: screenPublicSanctionsSubject.warmupTerminalize,
+  editionDurations: screenPublicSanctionsSubject.warmupDurations,
 });

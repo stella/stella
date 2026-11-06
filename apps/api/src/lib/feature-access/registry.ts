@@ -3,6 +3,8 @@
 // parser-output-unchanged: assigning the client invoice handlers to time billing leaves parsed records unchanged.
 // parser-output-unchanged: registering AI memory access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering desktop local agent access leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: requiring time billing for the desktop activity timeline leaves parsed records unchanged.
+// parser-output-unchanged: registering desktop dictation access leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -100,13 +102,21 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   },
 
   // The desktop client gates this feature from its desktop feature access
-  // decision; no API source belongs to it.
+  // decision; no API source belongs to it. The timeline records time for
+  // billing, so it is never enabled without time billing.
   "activity-timeline": {
+    prerequisites: ["time-billing"],
     enrolment: "invitation",
   },
   // Desktop-gated like the timeline: the desktop installs and runs agent
-  // CLIs only while this decision is enabled.
+  // CLIs only while this decision is enabled. The runner gateway refuses and
+  // closes the sockets of accounts it does not enable.
   "local-agents": {
+    enrolment: "invitation",
+  },
+  // Desktop-gated too: the desktop offers dictation only while this decision
+  // is enabled. Speech stays on the computer, so nothing here reaches the API.
+  "desktop-dictation": {
     enrolment: "invitation",
   },
   [GENERATED_VIEWS_FEATURE_ID]: {

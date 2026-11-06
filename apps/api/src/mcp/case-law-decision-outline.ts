@@ -186,9 +186,9 @@ const printedNumberedCandidates = (
     }
     candidates.push({
       anchorId: enclosingBlock?.anchorId ?? null,
-      ...(enclosingBlock?.number === undefined
-        ? {}
-        : { number: enclosingBlock.number }),
+      ...(enclosingBlock?.number !== undefined
+        ? { number: enclosingBlock.number }
+        : {}),
       start,
       title,
     });

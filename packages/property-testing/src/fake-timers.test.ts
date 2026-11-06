@@ -2,7 +2,7 @@ import { afterEach, expect, jest, test } from "bun:test";
 
 import { restoreRealTimers } from "./fake-timers";
 
-afterEach(restoreRealTimers);
+afterEach(() => restoreRealTimers());
 
 const realTurn = async (): Promise<void> => {
   // real-time: only real time can show a discarded fake timeout never fires.
@@ -52,6 +52,24 @@ test("restoring returns while an interval is still scheduled", () => {
 
   expect(jest.isFakeTimers()).toBe(false);
   expect(ticks).toBe(3);
+});
+
+test("bounded restoring flushes short cleanup without expiring a long deadline", async () => {
+  jest.useFakeTimers();
+  const fired: string[] = [];
+  setTimeout(() => {
+    fired.push("cleanup");
+  }, 100);
+  setTimeout(() => {
+    fired.push("deadline");
+  }, 30_000);
+
+  restoreRealTimers({ advanceMs: 1000 });
+
+  expect(jest.isFakeTimers()).toBe(false);
+  expect(fired).toEqual(["cleanup"]);
+  await realTurn();
+  expect(fired).toEqual(["cleanup"]);
 });
 
 test("restoring on real timers leaves them untouched", async () => {

@@ -32,6 +32,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   type InterleavingResult,
   withInterleaving,
@@ -146,7 +147,7 @@ const withFixture = async (
       });
     } finally {
       // Payments restrict their invoice; the organization cascade takes both.
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(eq(user.id, userId));
     }
   });

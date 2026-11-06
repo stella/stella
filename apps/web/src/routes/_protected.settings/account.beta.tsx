@@ -7,13 +7,13 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { SettingsPageHeader } from "@/components/settings-page-header";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { pageTitle } from "@/lib/page-title";
 import { useTimeBillingEnrolment } from "@/queries/feature-enrolments";
 import { routePresentation } from "@/routes/-route-presentation";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
   beforeLoad: () => {
@@ -34,8 +34,6 @@ export const Route = createFileRoute("/_protected/settings/account/beta")({
 
 function BetaFeaturesPage() {
   const t = useTranslations();
-  const publicLawPreview = useDevStore((s) => s.publicLawPreview);
-  const setPublicLawPreview = useDevStore((s) => s.setPublicLawPreview);
   const workflowsPreview = useDevStore((s) => s.workflowsPreview);
   const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
   const {
@@ -112,27 +110,6 @@ function BetaFeaturesPage() {
         title={t("settings.account.beta")}
       />
       <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">{t("common.caseLaw")}</h2>
-            <p className="text-muted-foreground text-xs">
-              {t("settings.account.betaCaseLawDescription")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={publicLawPreview}
-                onCheckedChange={(next) => {
-                  if (next === publicLawPreview) {
-                    return;
-                  }
-
-                  setPublicLawPreview(next);
-                }}
-              />
-              <FieldLabel>{t("common.caseLaw")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
         <FramePanel>
           <div className="flex flex-col gap-3 p-1">
             <h2 className="text-sm font-medium">{t("common.workflows")}</h2>

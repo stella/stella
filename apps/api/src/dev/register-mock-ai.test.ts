@@ -11,6 +11,7 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import {
   MOCK_AI_CANCELLATION_MARKER,
@@ -27,7 +28,6 @@ import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/prov
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { withTimeout } from "@/api/lib/with-timeout";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 const testState = createTestState({ file: import.meta.path, config: env });

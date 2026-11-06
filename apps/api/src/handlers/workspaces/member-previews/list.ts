@@ -45,6 +45,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "preferredName",
   // Editor shortcut preferences are unrelated to team previews.
   "wordEditShortcut",
+  // Answer language is a private reading preference.
+  "readerAnswerLanguage",
   // Keyboard rebindings belong to the user's settings.
   "userShortcuts",
   // Onboarding progress belongs to the signed-in user's session.

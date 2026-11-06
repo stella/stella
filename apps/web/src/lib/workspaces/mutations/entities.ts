@@ -21,6 +21,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
 import { replaceCachedFileName } from "@/lib/files/queries";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
@@ -41,7 +42,7 @@ type CreateEntitiesVars = {
 export const useCreateEntities = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateEntitiesVars) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -143,13 +144,11 @@ type CreateFolderFromSelectionVars = {
 export const useCreateFolderFromSelection = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      parentId,
-      entityIds,
-    }: CreateFolderFromSelectionVars) =>
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, name, parentId, entityIds }: CreateFolderFromSelectionVars,
+      intentRequest,
+    ) =>
       await invokeCapability(
         "entities.folder-from-selection.create",
         async (request) => {
@@ -164,7 +163,10 @@ export const useCreateFolderFromSelection = () => {
                 toSafeId<"entity">(entityId),
               ),
             },
-            request,
+            {
+              ...request,
+              fetch: { headers: intentRequest.headers },
+            },
           );
           return unwrapApiResponse(response);
         },
@@ -204,6 +206,21 @@ export const useRenameEntity = (
   inspectorStore?: StoreApi<InspectorTabsStore>,
 ) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  return useRenameEntityForUser({
+    activeOrganizationId,
+    inspectorStore,
+    userId,
+  });
+};
+
+type RenameEntityForUserOptions = {
+  activeOrganizationId: string;
+  inspectorStore: StoreApi<InspectorTabsStore> | undefined;
+  userId: string;
+};
+
+export const useRenameEntityForUser = (options: RenameEntityForUserOptions) => {
+  const { activeOrganizationId, inspectorStore, userId } = options;
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -346,20 +363,19 @@ export const useRenameEntity = (
     },
     onError: (error, { workspaceId, entityId, name }, context) => {
       const rolledBack = Result.try(() => {
-        if (context?.previousLabel === undefined) {
-          return;
-        }
-        const store = inspectorStore
-          ? inspectorStore.getState()
-          : useInspectorTabsStore.getState();
-        for (const tab of store.tabs) {
-          if (
-            tab.type === "pdf" &&
-            tab.workspaceId === workspaceId &&
-            tab.entityId === entityId &&
-            tab.label === name
-          ) {
-            store.updateLabel(tab.id, context.previousLabel);
+        if (context?.previousLabel !== undefined) {
+          const store = inspectorStore
+            ? inspectorStore.getState()
+            : useInspectorTabsStore.getState();
+          for (const tab of store.tabs) {
+            if (
+              tab.type === "pdf" &&
+              tab.workspaceId === workspaceId &&
+              tab.entityId === entityId &&
+              tab.label === name
+            ) {
+              store.updateLabel(tab.id, context.previousLabel);
+            }
           }
         }
       });

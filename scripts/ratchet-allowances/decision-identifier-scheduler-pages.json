@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/case-law-decision-identifier-reconciliation.ts",
+  "delta": 2,
+  "reason": "The scheduler reads one fresh load verdict before each sequential checkpoint page, at most four pages and 45 seconds per run. Checkpoint order and repair counts require serial pages; each page performs one bounded keyset transaction, not a per-row query."
+}

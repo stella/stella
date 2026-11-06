@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/scripts/verify-decision-identifiers.ts",
+  "delta": 1,
+  "reason": "The one-shot read-only verifier awaits its JSON receipt on stdout before exiting with the verification status. The direct-sink census conservatively counts Bun.stdout writes; failures remain handled by runScriptWithErrorOutput rather than this success receipt."
+}

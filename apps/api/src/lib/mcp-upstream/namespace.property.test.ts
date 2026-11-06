@@ -5,7 +5,7 @@ import {
   MCP_TOOL_NAME_MAX_LENGTH,
   MCP_TOOL_NAME_PATTERN,
 } from "@stll/api-contract/mcp-tool-name";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { listSkillMetadata } from "@stll/skills";
 
 import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
@@ -78,7 +78,8 @@ describe("exposed tool names", () => {
   });
 
   test("any skill slug yields a name the CLI accepts", () => {
-    fc.assert(
+    assertProperty(
+      "any skill slug yields a name the CLI accepts",
       fc.property(slugArbitrary, (slug) => {
         const name = namespaceSkillToolName(slug);
         expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
@@ -87,12 +88,13 @@ describe("exposed tool names", () => {
           ok: true,
         });
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("any upstream tool yields a name the CLI accepts", () => {
-    fc.assert(
+    assertProperty(
+      "any upstream tool yields a name the CLI accepts",
       fc.property(
         upstreamNameArbitrary,
         upstreamNameArbitrary,
@@ -105,12 +107,13 @@ describe("exposed tool names", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("names exposed together stay unique and inside the contract", () => {
-    fc.assert(
+    assertProperty(
+      "names exposed together stay unique and inside the contract",
       fc.property(
         fc.array(slugArbitrary, { minLength: 1, maxLength: 40 }),
         fc.boolean(),
@@ -130,7 +133,7 @@ describe("exposed tool names", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

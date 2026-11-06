@@ -56,7 +56,9 @@ const entityId = createSafeId<"entity">();
 const entityVersionId = createSafeId<"entityVersion">();
 const restPropertyId = createSafeId<"property">();
 const chatPropertyId = createSafeId<"property">();
-const propertyIds = [restPropertyId, chatPropertyId];
+const intPropertyId = createSafeId<"property">();
+const textPropertyIds = [restPropertyId, chatPropertyId];
+const propertyIds = [...textPropertyIds, intPropertyId];
 
 /** Who acts: a session that may edit documents, and narrower ones that may not. */
 const editor = sessionMemberRole("owner");
@@ -94,8 +96,8 @@ beforeAll(async () => {
     .update(entities)
     .set({ currentVersionId: entityVersionId })
     .where(eq(entities.id, entityId));
-  await db.insert(properties).values(
-    propertyIds.map((id) => ({
+  await db.insert(properties).values([
+    ...textPropertyIds.map((id) => ({
       id,
       workspaceId,
       name: `Counterparty ${id}`,
@@ -103,7 +105,15 @@ beforeAll(async () => {
       tool: { version: 1 as const, type: "manual-input" as const },
       status: "fresh" as const,
     })),
-  );
+    {
+      id: intPropertyId,
+      workspaceId,
+      name: "Claims",
+      content: { version: 1 as const, type: "int" as const },
+      tool: { version: 1 as const, type: "manual-input" as const },
+      status: "fresh" as const,
+    },
+  ]);
 });
 
 const cleanup = async () => {
@@ -147,7 +157,12 @@ const recorder = () =>
 const textContent = (value: string) =>
   ({ version: 1, type: "text", value }) as const;
 
-const writeOverRest = async (propertyId: SafeId<"property">, value: string) =>
+type RestContent = Parameters<typeof upsertField.handler>[0]["body"]["content"];
+
+const writeContentOverRest = async (
+  propertyId: SafeId<"property">,
+  content: RestContent,
+) =>
   await upsertField.handler(
     createTestHandlerContext<Parameters<typeof upsertField.handler>[0]>({
       scopedDb: NO_DB,
@@ -158,9 +173,12 @@ const writeOverRest = async (propertyId: SafeId<"property">, value: string) =>
       safeDb: safeDb(),
       audit: recorder(),
       createAuditRecorder: recorder,
-      body: { entityId, propertyId, content: textContent(value) },
+      body: { entityId, propertyId, content },
     }),
   );
+
+const writeOverRest = async (propertyId: SafeId<"property">, value: string) =>
+  await writeContentOverRest(propertyId, textContent(value));
 
 const writeOverChat = async ({
   authority,
@@ -422,6 +440,48 @@ describe("writing a field value", () => {
           content: { old: textContent("Acme"), new: textContent("Globex") },
         },
       },
+    ]);
+  });
+
+  test("refuses a null clear that names a type the property does not have", async () => {
+    await writeOverRest(restPropertyId, "Acme");
+    const refusal = await Result.gen(() =>
+      writeFieldValue({
+        safeDb: safeDb(),
+        authority: editor,
+        workspaceId,
+        userId: userId(),
+        recordAuditEvent: recorder(),
+        entityId,
+        propertyId: restPropertyId,
+        content: null,
+        expectedType: "int",
+        flushSearchRepairs: false,
+      }),
+    );
+    expect(Result.isError(refusal) && refusal.error).toMatchObject({
+      status: 400,
+    });
+    expect((await cellState(restPropertyId)).field).toEqual({
+      content: textContent("Acme"),
+    });
+  });
+
+  test("stores 0 in an empty int cell over REST, then clears it with null content", async () => {
+    const zero = { version: 1, type: "int", value: 0, currency: null } as const;
+    await writeContentOverRest(intPropertyId, zero);
+    expect((await cellState(intPropertyId)).field).toEqual({ content: zero });
+
+    await writeContentOverRest(intPropertyId, null);
+    const cleared = await cellState(intPropertyId);
+    expect(cleared.field).toBeUndefined();
+    expect(
+      cleared.audits
+        .map((row) => ({ action: row.action, changes: row.changes }))
+        .toSorted((left, right) => (left.action < right.action ? -1 : 1)),
+    ).toEqual([
+      { action: "create", changes: { content: { old: null, new: zero } } },
+      { action: "delete", changes: { content: { old: zero, new: null } } },
     ]);
   });
 });

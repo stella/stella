@@ -6,23 +6,17 @@ import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-
 import * as captureModule from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
+import { createDecisionRowAstCache } from "@/api/lib/case-law/decision-row-ast-cache";
 import { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 
-// Historical parser output can repeat a section anchor despite distinct block ids.
-const duplicateAnchors = {
-  version: 1,
-  blocks: ["first", "second"].map((id) => ({
-    id,
-    anchorId: "section-1",
-    type: "paragraph",
-    inlines: [{ type: "text", text: "Synthetic private decision text" }],
-  })),
-};
+// A text value is not the single-document wire shape the stored reader accepts.
+const invalidStoredAst = "Synthetic private decision text";
 
 const decisionId = createSafeId<"caseLawDecision">();
 
@@ -56,6 +50,16 @@ const recordReports = () => ({
   ),
 });
 
+const readInvalidRowAst = () => {
+  const read = createDecisionRowAstCache({ maxBytes: 4096 });
+  return async () =>
+    await read({
+      key: decisionId,
+      documentId: decisionId,
+      read: async () => invalidStoredAst,
+    });
+};
+
 const expectStoredValidationLog = (
   logged: ReturnType<typeof recordReports>["logged"],
 ): void => {
@@ -71,17 +75,36 @@ const expectStoredValidationLog = (
   );
 };
 
+const expectStoredValidationReports = ({
+  logged,
+  captured,
+}: ReturnType<typeof recordReports>): void => {
+  expectStoredValidationLog(logged);
+  expect(captured).toHaveBeenCalledTimes(1);
+  const error = captured.mock.calls[0]?.[0];
+  expect(error).toBeInstanceOf(StoredCorpusValidationError);
+  if (!StoredCorpusValidationError.is(error)) {
+    expect.unreachable(
+      "The reader must retain its classified validation failure",
+    );
+  }
+  expect(error.code).toBe("stored_corpus_invalid");
+  expect(error.paths).toEqual(["$"]);
+  expect(JSON.stringify(logged.mock.calls)).not.toContain("Synthetic private");
+  expect(JSON.stringify(captured.mock.calls)).not.toContain(
+    "Synthetic private",
+  );
+};
+
 afterEach(() => {
   mock.restore();
 });
 
 describe("invalid stored decision payloads", () => {
-  test("classifies historical duplicate anchors without retaining decision content", () => {
-    const error = validationFailureOf(duplicateAnchors);
-    expect(error).toMatchObject({
-      code: "stored_corpus_invalid",
-      paths: ["$"],
-    });
+  test("classifies an invalid document root without retaining decision content", () => {
+    const error = validationFailureOf(invalidStoredAst);
+    expect(error.code).toBe("stored_corpus_invalid");
+    expect(error.paths).toEqual(["$"]);
     expect(JSON.stringify(error)).not.toContain("Synthetic private");
   });
 
@@ -115,13 +138,50 @@ describe("invalid stored decision payloads", () => {
     expect(captured).not.toHaveBeenCalled();
   });
 
+  test("propagated validation reports once while distinct failures remain observable", async () => {
+    const reports = recordReports();
+    const first = validationFailureOf(invalidStoredAst, decisionId);
+    for (let boundary = 0; boundary < 2; boundary += 1) {
+      const recovered = await readCorpusForRecovery({
+        documentId: decisionId,
+        read: async () => {
+          throw first;
+        },
+      });
+      expect(recovered.isErr()).toBe(true);
+    }
+    expectStoredValidationReports(reports);
+    const second = validationFailureOf(invalidStoredAst, decisionId);
+    expect(second).not.toBe(first);
+    expect(reports.logged).toHaveBeenCalledTimes(2);
+    expect(reports.captured).toHaveBeenCalledTimes(2);
+    expect(reports.captured.mock.calls.map(([error]) => error)).toEqual([
+      first,
+      second,
+    ]);
+    const otherDecisionId = createSafeId<"caseLawDecision">();
+    const other = await readCorpusForRecovery({
+      documentId: otherDecisionId,
+      read: async () => {
+        throw first;
+      },
+    });
+    expect(other.isErr()).toBe(true);
+    expect(reports.logged).toHaveBeenCalledTimes(3);
+    expect(reports.captured).toHaveBeenCalledTimes(3);
+    expect(reports.logged.mock.calls.at(-1)).toEqual([
+      "case_law.decision.stored_payload_invalid",
+      expect.objectContaining({ decisionId: otherDecisionId }),
+    ]);
+  });
+
   test("an invalid stored object served from the row copy is reported once", async () => {
     const { logged, captured } = recordReports();
     const served = await readCorpusPayloadOrFallback({
       documentId: decisionId,
       key: "synthetic-ast-key",
       step: "test.storedValidation",
-      read: async () => parsePersistedCorpusAst(duplicateAnchors),
+      read: async () => parsePersistedCorpusAst(invalidStoredAst),
       fallback: () =>
         parsePersistedCorpusAst({ version: 1, blocks: [] }, decisionId),
     });
@@ -137,6 +197,20 @@ describe("invalid stored decision payloads", () => {
   // and MCP outlines share the served reader through readDecisionHandler.
   test.each([
     {
+      surface: "summary and citation passages through a cached row",
+      read: async () =>
+        await readDecisionAnalysisAst(
+          {
+            id: decisionId,
+            astS3Key: null,
+            contentHash: null,
+            documentAst: null,
+          },
+          async () => new Set<string>(),
+          readInvalidRowAst(),
+        ),
+    },
+    {
       surface: "summary and citation passages",
       read: async () =>
         await readDecisionAnalysisAst(
@@ -144,10 +218,33 @@ describe("invalid stored decision payloads", () => {
             id: decisionId,
             astS3Key: null,
             contentHash: null,
-            documentAst: duplicateAnchors,
+            documentAst: invalidStoredAst,
           },
           async () => new Set<string>(),
         ),
+    },
+  ])(
+    "recovers the $surface validation failure as null and reports it once",
+    async ({ read }) => {
+      const reports = recordReports();
+      expect(await read()).toBeNull();
+      expectStoredValidationReports(reports);
+    },
+  );
+
+  test.each([
+    {
+      surface: "web and MCP through a cached row",
+      read: async () =>
+        await readServedDecisionAst({
+          astS3Key: null,
+          contentHash: null,
+          pgAst: null,
+          readPgAst: readInvalidRowAst(),
+          decisionId,
+          corpusReadEnabled: false,
+          readStore: async () => null,
+        }),
     },
     {
       surface: "canonical object storage",
@@ -156,7 +253,7 @@ describe("invalid stored decision payloads", () => {
           documentId: decisionId,
           key: "synthetic-ast-key",
           step: "test.storedValidation",
-          read: async () => parsePersistedCorpusAst(duplicateAnchors),
+          read: async () => parsePersistedCorpusAst(invalidStoredAst),
           fallback: () => null,
         }),
     },
@@ -166,7 +263,7 @@ describe("invalid stored decision payloads", () => {
         await readServedDecisionAst({
           astS3Key: null,
           contentHash: null,
-          pgAst: duplicateAnchors,
+          pgAst: invalidStoredAst,
           decisionId,
           corpusReadEnabled: false,
           readStore: async () => null,
@@ -175,20 +272,13 @@ describe("invalid stored decision payloads", () => {
   ])(
     "contains the $surface reader failure and reports it once",
     async ({ read }) => {
-      const { logged, captured } = recordReports();
+      const reports = recordReports();
       const outcome = await containPayloadUnavailable(async () => {
         await read();
         return "read";
       }, decisionId);
       expect(outcome).toEqual({ payload: null, unavailable: true });
-      expectStoredValidationLog(logged);
-      expect(captured).toHaveBeenCalledTimes(1);
-      expect(captured.mock.calls[0]?.[0]).toBeInstanceOf(
-        StoredCorpusValidationError,
-      );
-      expect(JSON.stringify(logged.mock.calls)).not.toContain(
-        "Synthetic private",
-      );
+      expectStoredValidationReports(reports);
     },
   );
 });

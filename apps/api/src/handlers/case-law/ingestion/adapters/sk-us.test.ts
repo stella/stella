@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -11,6 +12,7 @@ import {
 
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import { sha256Hex } from "@stll/sha256/bun";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -19,7 +21,6 @@ import {
   skUsAdapter,
   skUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -38,6 +39,7 @@ import {
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   type IngestionResult,
   listingIdentityKey,
@@ -45,10 +47,50 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const testFetchState = createTestFetch();
+
 const reconciliation = requireReconciliation(skUsAdapter);
+
+const storedReplayInput = (decision: IngestionResult) => {
+  const objects = decision.sourceRawObjects ?? {};
+  const refs = Object.fromEntries(
+    Object.entries(objects).map(([part, object]) => [
+      part,
+      {
+        location: part,
+        sha256: sha256Hex(object.bytes),
+        byteLength: object.bytes.byteLength,
+        contentType: object.contentType,
+      },
+    ]),
+  );
+  return {
+    raw: new TextEncoder().encode(
+      encodeSourceRawEnvelope(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+          panic("Missing source envelope"),
+        refs,
+      ),
+    ),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    caseNumber: decision.caseNumber,
+    sourceDocumentId: decision.sourceDocumentId ?? null,
+    court: decision.court,
+    language: decision.language,
+    ecli: decision.ecli ?? null,
+    decisionDate: decision.decisionDate ?? null,
+    decisionType: decision.decisionType ?? null,
+    sourceUrl: decision.sourceUrl ?? null,
+    documentUrl: decision.documentUrl ?? null,
+    metadata: decision.metadata,
+    readObject: async (key: string) => Result.ok(objects[key]?.bytes ?? null),
+  };
+};
 
 /**
  * The stored refusal marker, typed as the stored shape: metadata values are
@@ -349,7 +391,9 @@ const searchResponse = (stub: SearchStub): Response => {
     case "page":
       return new Response(
         JSON.stringify({ documents: stub.documents, numFound: stub.numFound }),
-        { headers: JSON_HEADERS },
+        {
+          headers: JSON_HEADERS,
+        },
       );
     case "body":
       return new Response(stub.json, { headers: JSON_HEADERS });
@@ -383,8 +427,8 @@ const mockFetch = ({
   let searchCall = 0;
   let downloadCall = 0;
   let facetCall = 0;
-  globalThis.fetch = asFetchMock(
-    (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
@@ -443,7 +487,7 @@ const mockFetch = ({
       return Promise.resolve(
         new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
       );
-    },
+    }),
   );
   return {
     calls: () => searchCall,
@@ -561,7 +605,9 @@ describe("sk-us listing identity", () => {
   test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
     expect(
       skUsListingIdentity({ ...CHAMBER_RESOLUTION, mkRSAPNumberOfFile: "" }),
-    ).toEqual({ type: "unidentifiable" });
+    ).toEqual({
+      type: "unidentifiable",
+    });
     expect(skUsListingIdentity(WITHOUT_DOCUMENT_ID)).toEqual({
       type: "unidentifiable",
     });
@@ -572,10 +618,8 @@ describe("sk-us listing identity", () => {
 });
 
 describe("sk-us listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("asks the publisher for exactly the slice's month", async () => {
@@ -657,7 +701,10 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({
+      items: [],
+      totalPages: 0,
+    });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -865,8 +912,6 @@ describe("sk-us listSlicePage", () => {
 });
 
 describe("sk-us getTotalCount", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-09-25T09:30:00.000Z"));
   });
@@ -876,7 +921,7 @@ describe("sk-us getTotalCount", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("reads the court's own count over the crawl's whole date span", async () => {
@@ -931,10 +976,8 @@ describe("sk-us getTotalCount", () => {
 });
 
 describe("sk-us buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("builds the decision the crawl would have stored", async () => {
@@ -1014,26 +1057,19 @@ describe("sk-us buildDecision", () => {
     if (reparse === undefined) {
       throw new Error("sk-us must support stored replay");
     }
-    const replayed = await reparse({
-      raw: new TextEncoder().encode(decision.sourceRaw),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: decision.caseNumber,
-      sourceDocumentId: decision.sourceDocumentId ?? null,
-      court: decision.court,
-      language: decision.language,
-      ecli: decision.ecli ?? null,
-      decisionDate: decision.decisionDate ?? null,
-      decisionType: decision.decisionType ?? null,
-      sourceUrl: decision.sourceUrl ?? null,
-      documentUrl: decision.documentUrl ?? null,
-      metadata: decision.metadata,
-    });
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const replayed = await reparse(storedReplayInput(decision));
     expect(replayed.type).toBe("parsed");
     if (replayed.type !== "parsed") {
       throw new Error("the captured collection must be reparsable");
     }
     expect(replayed.result.textFields).toEqual(decision.textFields);
     expect(replayed.result.metadata).toEqual(decision.metadata);
+    expect(replayed.result).toEqual(decision);
+    const again = await reparse(storedReplayInput(replayed.result));
+    expect(again).toEqual(replayed);
   });
 
   test("every response the court served for the decision is in the envelope", async () => {
@@ -1329,11 +1365,13 @@ describe("sk-us buildDecision", () => {
         supplementary: { [surface]: { type: "status", status: 429 } },
       });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) => {
-          requests += 1;
-          return await served(input, init);
-        },
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            requests += 1;
+            return await served(input, init);
+          },
+        ),
       );
       const rejection = await rejectionOf(buildSkUsDecision(PLENARY_OPINION));
       expect(rejection).toBeInstanceOf(AdapterFetchError);
@@ -1486,7 +1524,9 @@ describe("sk-us buildDecision", () => {
     // A field whose type the DMS changed under us keys nothing either.
     expect(
       await reconciliation.buildDecision({ ...PLENARY_OPINION, documentId: 7 }),
-    ).toEqual({ type: "unkeyable" });
+    ).toEqual({
+      type: "unkeyable",
+    });
   });
 
   test("replays a payload that round-tripped through storage", async () => {
@@ -1507,7 +1547,6 @@ describe("sk-us buildDecision", () => {
 });
 
 describe("sk-us crawl and reconciliation dispose of a missing document differently", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -1515,7 +1554,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1559,8 +1598,8 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       ],
     });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -1572,7 +1611,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
           return new Response("", { status: 500 });
         }
         return await served(input, init);
-      },
+      }),
     );
 
     const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
@@ -1744,25 +1783,58 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     ]);
   });
 
-  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
-    const outcome = await skUsAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(
-        encodeSourceRawEnvelope({
-          listing: JSON.stringify(CHAMBER_RESOLUTION),
-        }),
-      ),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: CHAMBER_RESOLUTION.mkRSAPNumberOfFile,
-      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
-      language: "sk",
-      court: "Ústavný súd SR",
-      ecli: null,
-      decisionDate: null,
-      decisionType: null,
-      sourceUrl: null,
-      documentUrl: null,
-      metadata: {},
+  test("stored replay without the PDF object or XHTML replays from the stored listing without a publisher request", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    const input = storedReplayInput(built.decision);
+    const parts =
+      decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ??
+      panic("Missing fixture envelope");
+    const { document: _document, ...withoutDocument } = parts;
+    const refs = decodeSourceRawEnvelopeObjects(
+      new TextDecoder().decode(input.raw),
+    );
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    for (const raw of [
+      new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      new TextEncoder().encode(encodeSourceRawEnvelope(withoutDocument, refs)),
+    ]) {
+      const outcome = await skUsAdapter.reparseStoredRaw?.({ ...input, raw });
+      expect(outcome).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: built.decision.caseNumber },
+      });
+    }
+    const missingBody = await skUsAdapter.reparseStoredRaw?.({
+      ...input,
+      readObject: async () => Result.ok(null),
     });
+    expect(missingBody).toMatchObject({
+      type: "parsed",
+      result: {
+        caseNumber: built.decision.caseNumber,
+        isListingOnly: true,
+      },
+    });
+  });
+
+  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const outcome = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(built.decision),
+    );
     expect(outcome).toMatchObject({
       type: "parsed",
       result: {
@@ -1815,14 +1887,14 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     const abortError = new DOMException("Aborted", "AbortError");
     mockFetch({ search: [], download: { type: "fails", error: abortError } });
     const fetchDocument = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/docDownload/")) {
           controller.abort(abortError);
         }
         return await fetchDocument(input, init);
-      },
+      }),
     );
 
     const outcome = await buildSkUsDecision(CHAMBER_RESOLUTION, {
@@ -1845,11 +1917,10 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
  * so only a count of what it kept shows a build that fails on every row.
  */
 describe("sk-us rows as the court sends them", () => {
-  const originalFetch = globalThis.fetch;
   const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const recordedRows = async (): Promise<Record<string, unknown>[]> => {
@@ -2004,8 +2075,6 @@ describe("sk-us rows as the court sends them", () => {
  * collects documents leaves the cursor past them.
  */
 describe("the sk-us steady-state frontier", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
@@ -2015,7 +2084,7 @@ describe("the sk-us steady-state frontier", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   /** Where the crawl parked after listing the current year to its end. */

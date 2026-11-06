@@ -7,11 +7,11 @@ import {
   type DynamicToolNamespace,
   dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
-import { nullAsAbsent } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolInput,
   defineMcpToolOutput,

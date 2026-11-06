@@ -1,6 +1,33 @@
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
+// parser-output-unchanged: [pl-nsa] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Citation tuples state their existing one-item minimum for schema publication; accepted values are identical.
 // parser-output-unchanged: Legislation citations are a new inline variant that no decision parser writes; existing citations validate as before.
 import * as v from "valibot";
+
+import { normalizeNumericIndices } from "@stll/text-normalize";
 
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
@@ -323,29 +350,67 @@ export const isInlineArray = (val: unknown): val is Inline[] =>
 export const isInline = (val: unknown): val is Inline =>
   v.is(inlineSchema, val);
 
-export const flattenInlineText = (inlines: readonly Inline[]): string => {
+/** The rendered axis keeps offsets; search text marks numeric superscripts. */
+export const flattenInlineText = (
+  inlines: readonly Inline[],
+  projection: "search" | "rendered" | "validation" = "search",
+): string => {
   const parts: string[] = [];
-
-  for (const inline of inlines) {
-    if (inline.type === "text") {
-      parts.push(inline.text);
-      continue;
+  let precedingCharacter = "";
+  let adjacentNumericSuperscript = false;
+  const appendText = (text: string): void => {
+    parts.push(text);
+    if (projection !== "search") {
+      return;
     }
-
-    if (inline.type === "line-break") {
-      parts.push("\n");
-      continue;
+    if (text.length > 0) {
+      adjacentNumericSuperscript = false;
     }
-
-    if (inline.type === "page-anchor") {
-      // Typography, not content: zero characters on the text axis.
-      continue;
+    for (let index = text.length - 1; index >= 0; index--) {
+      const character = text.charAt(index);
+      if (/[ \t\r\f]/u.test(character)) {
+        continue;
+      }
+      precedingCharacter = character;
+      return;
     }
-
-    parts.push(flattenInlineText(inline.children));
-  }
-
-  return parts.join("");
+  };
+  const walk = (nodes: readonly Inline[]): void => {
+    for (const inline of nodes) {
+      if (inline.type === "text") {
+        appendText(inline.text);
+        continue;
+      }
+      if (inline.type === "line-break") {
+        appendText(projection === "validation" ? " " : "\n");
+        continue;
+      }
+      if (inline.type === "page-anchor") {
+        continue;
+      }
+      if (inline.type === "superscript" && projection === "search") {
+        const text = flattenInlineText(inline.children, "rendered");
+        const numeric = /^(\s*)(\d+)(\s*)$/u.exec(text);
+        // Numeric indices stay distinct from concatenated numbers across
+        // emphasis wrappers. Adjacent superscripts form one index even when
+        // formatting wrappers split its digits. A unit exponent after a
+        // letter is not an index.
+        const projected =
+          /\d/u.test(precedingCharacter) &&
+          numeric !== null &&
+          !adjacentNumericSuperscript
+            ? text.replace(/^(\s*)(\d+)(\s*)$/u, "$1^$2$3")
+            : text;
+        appendText(projected);
+        adjacentNumericSuperscript = numeric !== null;
+        continue;
+      }
+      walk(inline.children);
+    }
+  };
+  walk(inlines);
+  const text = parts.join("");
+  return projection === "search" ? normalizeNumericIndices(text) : text;
 };
 
 /**

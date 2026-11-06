@@ -9,14 +9,17 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
+  isChatPastedTextPart,
 } from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
@@ -163,11 +166,14 @@ const TOOL_CALL_STATE_IS_RUNNING = {
 const isChatToolCallState = (
   value: string,
 ): value is ChatToolCallPart["state"] =>
-  Object.hasOwn(TOOL_CALL_STATE_IS_RUNNING, value);
+  isOwnKey(TOOL_CALL_STATE_IS_RUNNING, value);
 const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
   [CONNECT_CONNECTOR_TOOL_NAME]: true,
+  // A blocking question a coding agent on the member's computer asks: its
+  // call stays open until the member answers it from the question card.
+  [CHAT_LOCAL_RUN_QUESTION_TOOL]: true,
 } as const satisfies Record<string, true>;
 export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
 
@@ -342,9 +348,25 @@ const RETIRED_CHAT_TOOL_TITLE_KEYS = {
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 
+/**
+ * Actions a coding agent on the member's computer takes itself, persisted
+ * under the harness-native names the agent engine gives them
+ * (`HARNESS_TOOL_NAMES` in `@stll/agent-engine`). Its MCP calls to stella use
+ * the registry names above and need no entry here.
+ */
+const HARNESS_TOOL_TITLE_KEYS = {
+  command_execution: "chat.tool.command_execution",
+  file_change: "chat.tool.file_change",
+  harness_web_search: "chat.tool.harness_web_search",
+  request_user_input: "chat.tool.request_user_input",
+  request_permissions: "chat.tool.request_permissions",
+  harness_unsupported_item: "chat.tool.harness_unsupported_item",
+} as const satisfies Record<string, TranslationKey>;
+
 const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
   ...CHAT_TOOL_TITLE_KEYS,
   ...RETIRED_CHAT_TOOL_TITLE_KEYS,
+  ...HARNESS_TOOL_TITLE_KEYS,
 } as const;
 
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
@@ -373,7 +395,7 @@ export const isExternalMcpToolName = (
 export const isExternalInputChatToolName = (
   toolName: ApprovalToolName,
 ): toolName is ExternalInputToolName =>
-  toolName in EXTERNAL_INPUT_CHAT_TOOL_NAMES;
+  isOwnKey(EXTERNAL_INPUT_CHAT_TOOL_NAMES, toolName);
 
 export const getExternalMcpConnectorSlugFromToolName = (
   toolName: `mcp__${string}`,
@@ -513,7 +535,7 @@ const REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES = {
 const isRegistryWriteSummaryEligibleToolName = (
   toolName: string,
 ): toolName is keyof typeof REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES =>
-  Object.hasOwn(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
+  isOwnKey(REGISTRY_WRITE_SUMMARY_DISPLAY_TOOL_NAMES, toolName);
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
   isRegistryWriteSummaryEligibleToolName(toolName) &&
@@ -526,7 +548,7 @@ export type ChatToolTitleKey =
 const isChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS =>
-  toolName in CHAT_TOOL_DISPLAY_TITLE_KEYS;
+  isOwnKey(CHAT_TOOL_DISPLAY_TITLE_KEYS, toolName);
 
 export const isApprovalToolName = (
   toolName: string,
@@ -705,7 +727,10 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
-  if (typeof part.name !== "string" || part.name in USER_INPUT_TOOL_NAMES) {
+  if (
+    typeof part.name !== "string" ||
+    isOwnKey(USER_INPUT_TOOL_NAMES, part.name)
+  ) {
     return false;
   }
 
@@ -730,7 +755,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
       !(
         part.type === "tool-call" &&
         part.state === "input-complete" &&
-        isServerChatToolCall(part)
+        !isBrowserResolvedChatToolCall(part)
       ),
   );
 };
@@ -825,7 +850,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   if (
     part.type !== "tool-call" ||
     part.state !== "input-complete" ||
-    isServerChatToolCall(part)
+    !isBrowserResolvedChatToolCall(part)
   ) {
     return false;
   }
@@ -833,7 +858,7 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   return (
     "name" in part &&
     typeof part.name === "string" &&
-    part.name in FOLIO_AGENT_DOC_TOOL_NAMES
+    isOwnKey(FOLIO_AGENT_DOC_TOOL_NAMES, part.name)
   );
 };
 
@@ -915,7 +940,7 @@ export const sanitizeRunningToolCalls = (
       message.metadata?.turnOutcome?.type === "awaiting-user" &&
       part.type === "tool-call" &&
       part.state === "input-complete" &&
-      isServerChatToolCall(part)
+      !isBrowserResolvedChatToolCall(part)
         ? part
         : toTerminalIfRunningToolPart(part),
     );
@@ -1381,7 +1406,14 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ * Pasted-text parts are attachments of the message, not its text, so they
+ * stay out: joined in, they would mix plain text into the composer markup.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];
@@ -1394,7 +1426,11 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.content.trim()) {
+      if (
+        part.type === "text" &&
+        !isChatPastedTextPart(part) &&
+        part.content.trim()
+      ) {
         textParts.push(part.content);
       }
     }

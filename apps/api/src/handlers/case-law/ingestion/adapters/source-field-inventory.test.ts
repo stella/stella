@@ -26,17 +26,9 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   getSourceRegistration,
   listSourceRegistrations,
@@ -50,8 +42,16 @@ import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestio
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -74,11 +74,13 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
@@ -218,7 +220,13 @@ describe("every adapter accounts for the fields its source states", () => {
       const observed = new Set<string>();
       for (const buildFixture of fixtures) {
         const evidence = buildFixture();
-        const decision = await evidence.buildDecision();
+        const decision = await guardParser(evidence.buildDecision)();
+        if ("blocks" in decision.documentAst) {
+          expect(
+            headMatterPrecedesBody(decision.documentAst.blocks),
+            `${key}: head matter follows the decision body`,
+          ).toBe(true);
+        }
         const schema = metadataUrlSchemaForAdapter(key);
         // The branded contract covers every registered source with no field debt.
         const normalized = plainTextIngestionResult(decision, schema);
@@ -389,7 +397,7 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       // Fixtures stub the global fetch, so they build one at a time.
       const decision =
         await CASE_LAW_CONFORMANCE_FIXTURES[key]().buildDecision();
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       for (const metadataKey of Object.keys(decision.metadata)) {
         emitted.add(metadataKey);
       }

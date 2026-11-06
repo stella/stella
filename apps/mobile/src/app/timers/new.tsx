@@ -5,10 +5,12 @@ import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
+
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -32,6 +34,7 @@ const NewTimerScreen = () => {
 const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("timers");
   const tabs = useTranslations("tabs");
+  const words = useTranslations("timerActivity");
   const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
@@ -96,12 +99,13 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         }}
       />
       <ScrollView
+        alwaysBounceVertical={false}
         className="bg-background flex-1"
         contentContainerStyle={screenStyles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <TextInput
+        <Input
           accessibilityLabel={t("description")}
           onChangeText={setDescription}
           placeholder={t("description")}
@@ -115,7 +119,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
           <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
             <MatterPicker
               matters={matters}
-              noneLabel={t("noMatter")}
+              noneLabel={words("noMatter")}
               onSelect={setMatterId}
               selected={matterId}
             />

@@ -9,6 +9,7 @@ import {
   unreadableOrgAIConfig,
 } from "@/api/lib/ai-config-crypto";
 import {
+  installDiscardedProviderErrorObserverForTest,
   loadOrgAIConfig,
   loadOrgAISettings,
   loadOrgSettingsForAuth,
@@ -17,14 +18,23 @@ import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
+import * as aiConfigLoaderCore from "@/api/lib/ai-config-loader-core";
 import * as captureModule from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { assertSettingsFailureConfidential } from "@/api/tests/helpers/settings-failure-confidentiality";
+import {
+  assertCanonicalStoredAIConfigError,
+  assertClassifiedSettingsFailure,
+  assertSettingsAnalyticsFrame,
+  assertSettingsErrorLocations,
+  assertSettingsFailureConfidential,
+} from "@/api/tests/helpers/settings-failure-confidentiality";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import { OWNERSHIP } from "../../../../scripts/ownership";
 
 beforeEach(() => {
   decryptAIConfigMock.mockClear();
@@ -120,9 +130,28 @@ describe("loadOrgAIConfig", () => {
         envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY =
           reason === "missing-key" ? undefined : key;
         for (const [name, load] of Object.entries(loaders)) {
+          const classified: unknown[] = [];
+          const discarded: unknown[] = [];
+          const restoreDiscardedObserver =
+            installDiscardedProviderErrorObserverForTest((error) => {
+              discarded.push(error);
+            });
+          const decryptRow = aiConfigLoaderCore.decryptOrgAIConfigRow;
+          const decrypt = spyOn(
+            aiConfigLoaderCore,
+            "decryptOrgAIConfigRow",
+          ).mockImplementation(
+            async (...args: Parameters<typeof decryptRow>) => {
+              const result = await decryptRow(...args);
+              if (result.status === "corrupt") {
+                classified.push(result.error);
+              }
+              return result;
+            },
+          );
           const analytics = installRecordingAnalytics();
           const logs = installRecordingLogger();
-          const capture = spyOn(captureModule, "captureError");
+          const capture = spyOn(captureModule, "captureObservedError");
           const devErrors = spyOn(console, "error").mockImplementation(
             () => undefined,
           );
@@ -152,7 +181,17 @@ describe("loadOrgAIConfig", () => {
                 returned,
               },
             });
+            expect(classified).toHaveLength(1);
+            assertClassifiedSettingsFailure(classified.at(0), reason);
+            if (name === "loadOrgSettingsForAuth") {
+              expect(discarded).toHaveLength(1);
+              assertCanonicalStoredAIConfigError(discarded.at(0));
+            } else {
+              expect(discarded).toEqual([]);
+            }
           } finally {
+            restoreDiscardedObserver();
+            decrypt.mockRestore();
             devErrors.mockRestore();
             capture.mockRestore();
             logs.restore();
@@ -233,7 +272,12 @@ describe("loadOrgAIConfig", () => {
     if (result.status !== "corrupt") {
       throw new Error("Expected decryption failure to be corrupt");
     }
-    expect(result.error.reason).toBe("decryption-failed");
+    expect(result.error).toMatchObject({
+      _tag: "OrgAIConfigReadError",
+      message: "Decrypted organization AI configuration is unreadable",
+      name: "OrgAIConfigReadError",
+      reason: "decryption-failed",
+    });
     expect(result.error).toBe(classified);
     expect(Object.hasOwn(result.error, "cause")).toBe(false);
     expect(Object.hasOwn(result.error, "metadata")).toBe(false);
@@ -256,46 +300,86 @@ describe("loadOrgAIConfig", () => {
       }
       const classifiedReason: OrgAIConfigReadFailure = reason;
       const logger = installRecordingLogger();
+      const analytics = installRecordingAnalytics();
+      const capture = spyOn(captureModule, "captureObservedError");
+      const devErrors = spyOn(console, "error").mockImplementation(
+        () => undefined,
+      );
       try {
         const error = unreadableOrgAIConfig(organizationId, classifiedReason);
         assertSettingsFailureConfidential({
           reason: classifiedReason,
           organizationId,
           outputs: {
-            analyticsEvents: [],
-            captureEntries: [],
-            developmentEntries: [],
-            groupIdentifies: [],
+            analyticsEvents: analytics.events,
+            captureEntries: capture.mock.calls,
+            developmentEntries: devErrors.mock.calls,
+            groupIdentifies: analytics.groupIdentifies,
             logRecords: logger.records,
             returned: error,
           },
         });
       } finally {
+        devErrors.mockRestore();
+        capture.mockRestore();
+        analytics.restore();
         logger.restore();
       }
     }
   });
 
-  test("the covered reader inventory owns every encrypted settings read", async () => {
-    const sourceFiles = [
-      "src/lib/ai-config-loader.ts",
-      "src/handlers/organization-settings/read-ai-config.ts",
-      "src/handlers/organization-settings/update-ai-config.ts",
-    ] as const;
-    const coveredReaders = [
-      "loadOrgAIConfig",
-      "loadOrgAISettings",
-      "loadOrgSettingsForAuth",
-      "readAIConfig",
-      "updateAIConfig",
-    ] as const;
-    const sources = await Promise.all(
-      sourceFiles.map(async (file) => await Bun.file(file).text()),
-    );
-    expect(sources.join("\n").match(/aiConfigEncrypted/gu)?.length).toBe(8);
-    for (const reader of coveredReaders) {
-      expect(sources.join("\n")).toContain(reader);
+  test("the confidentiality suite exercises every allowlisted settings reader", () => {
+    const boundary = OWNERSHIP.find(({ id }) => id === "ai-config-decrypt");
+    if (boundary?.enforcement.kind !== "import") {
+      throw new TypeError("AI config decryption must be import-confined");
     }
+    const readers = boundary.enforcement.allowed
+      .map(({ path }) => path)
+      .filter((path) => !path.includes(".test.") && !path.includes("/tests/"));
+
+    expect(readers.toSorted()).toEqual(
+      [
+        "apps/api/src/lib/ai-config-loader.ts",
+        "apps/api/src/lib/ai-config-loader-core.ts",
+        "apps/api/src/handlers/organization-settings/read-ai-config.ts",
+        "apps/api/src/handlers/organization-settings/update-ai-config.ts",
+      ].toSorted(),
+    );
+  });
+
+  test("rejects an analytics frame from another repository source", () => {
+    expect(() =>
+      assertSettingsAnalyticsFrame("apps/api/src/lib/ai-config.ts:12:3"),
+    ).toThrow("apps/api/src/lib/ai-config-response.ts:[line]:[column]");
+  });
+
+  test.each([
+    {
+      name: "an extra valid content-derived frame",
+      mutate: (stack: string) =>
+        `${stack}\n    at stored (${import.meta.dir}/ai-config-loader.ts:1:1)`,
+    },
+    {
+      name: "a content-derived function token in a valid frame",
+      mutate: (stack: string) => stack.replace("at trusted", "at stored"),
+    },
+    {
+      name: "a valid frame in another source file",
+      mutate: (stack: string) =>
+        stack.replace("ai-config-loader.ts", "ai-config.ts"),
+    },
+  ])("rejects $name", ({ mutate }) => {
+    const sourceURL = `${import.meta.dir}/ai-config-loader.ts`;
+    const trusted = new Error("canonical");
+    const hostile = new Error("canonical");
+    trusted.stack = `Error: canonical\n    at trusted (${sourceURL}:10:20)`;
+    hostile.stack = mutate(trusted.stack);
+    Object.defineProperty(trusted, "sourceURL", { value: sourceURL });
+    Object.defineProperty(hostile, "sourceURL", { value: sourceURL });
+
+    expect(() => assertSettingsErrorLocations(hostile, trusted)).toThrow(
+      "expect(received).toBe(expected)",
+    );
   });
 });
 

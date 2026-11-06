@@ -179,12 +179,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   },
 
   {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    class: "package-owned-client",
-    reason: "Stubs fetch with fixture responses for adapter checks.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
     class: "third-party",
     reason: "Reads roster data from public court sites.",
@@ -643,6 +637,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:jose"],
   },
   {
+    path: "apps/api/src/lib/push/apns-client.ts",
+    class: "third-party",
+    reason:
+      "Sends push alerts over HTTP/2 to the two fixed Apple Push Notification service gateways.",
+    transports: ["module:node:http2"],
+  },
+  {
     path: "apps/api/src/lib/redis-client.ts",
     class: "operator-configured-infrastructure",
     reason:
@@ -815,12 +816,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/web/src/components/workspaces/request-manual-ocr.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Submits manual OCR requests to the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/workspaces/row-actions.tsx",
     class: "operator-configured-infrastructure",
     reason:
@@ -875,6 +870,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "module:better-auth/client/plugins",
       "module:better-auth/react",
     ],
+  },
+  {
+    path: "apps/web/src/lib/api.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends typed client requests to the configured API.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/web/src/lib/desktop-bridge.ts",
@@ -952,12 +953,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/lib/workspaces/time-entries-api.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Sends time-entry requests to the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
     class: "operator-configured-infrastructure",
     reason: "Uploads extraction source documents to API-issued storage URLs.",
@@ -1000,6 +995,20 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/holder-server.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on, and probes for a live holder at, the private Unix socket or named pipe the desktop names; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
+    path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Forwards a local harness's MCP requests only to the run's MCP URL on the configured stella API origin, without following redirects.",
     transports: ["global:fetch"],
   },
   {
@@ -1062,7 +1071,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:
-      "Shared fetch owner resolves the runtime transport and applies caller-selected header or idle deadlines.",
+      "Shared fetch owner resolves the runtime transport and applies caller-selected header or total deadlines.",
     transports: ["global:fetch"],
   },
   {

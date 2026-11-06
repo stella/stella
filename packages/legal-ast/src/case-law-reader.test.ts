@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   readerSelectionMatches,
+  separateOpinionStartAnchorId,
   visibleReaderAnchorPiecesOf,
 } from "./case-law-reader.js";
 import { DECISION_IDENTIFIER_TYPES } from "./decision-identifier.js";
@@ -178,5 +179,54 @@ describe("readerSelectionMatches", () => {
         },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("where a separate opinion starts", () => {
+  const paragraph = (anchorId: string, role?: "dissent"): Block => ({
+    anchorId,
+    id: anchorId,
+    inlines: [],
+    plainText: anchorId,
+    role,
+    type: "paragraph",
+  });
+  const heading: Block = {
+    anchorId: "opinion-title",
+    id: "opinion-title",
+    inlines: [],
+    level: 2,
+    plainText: "Odlišné stanovisko",
+    type: "heading",
+  };
+
+  test("is the heading printed right above its first paragraph", () => {
+    expect(
+      separateOpinionStartAnchorId([
+        paragraph("reasoning"),
+        heading,
+        paragraph("first", "dissent"),
+        paragraph("second", "dissent"),
+      ]),
+    ).toBe("opinion-title");
+  });
+
+  test("is the paragraph when something else stands above it", () => {
+    expect(
+      separateOpinionStartAnchorId([
+        heading,
+        paragraph("reasoning"),
+        paragraph("first", "dissent"),
+      ]),
+    ).toBe("first");
+    expect(separateOpinionStartAnchorId([paragraph("first", "dissent")])).toBe(
+      "first",
+    );
+  });
+
+  test("does not exist in a decision without one", () => {
+    expect(
+      separateOpinionStartAnchorId([heading, paragraph("text")]),
+    ).toBeNull();
   });
 });

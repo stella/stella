@@ -202,7 +202,7 @@ const trackPage = async (context: BrowserContext): Promise<TrackedPage> => {
   const browserErrors = createBrowserErrorCollector();
   const detachErrors = browserErrors.trackPage(page);
   const network = createNetworkCollector({ apiOrigin: API_ORIGIN });
-  const detachNetwork = network.trackPage(page);
+  const detachNetwork = await network.trackPage(page);
   const failedRequests: string[] = [];
   const onResponse = (response: Response) => {
     const url = new URL(response.url());
@@ -233,7 +233,7 @@ const trackPage = async (context: BrowserContext): Promise<TrackedPage> => {
         );
       }
       page.off("response", onResponse);
-      detachNetwork();
+      await detachNetwork();
       detachErrors();
       return {
         // Aborted outside requests are this driver's own doing.

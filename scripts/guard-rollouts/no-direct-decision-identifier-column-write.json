@@ -1,0 +1,19 @@
+{
+  "id": "no-direct-decision-identifier-column-write",
+  "rules": [
+    "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write"
+  ],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write",
+    "."
+  ]
+}

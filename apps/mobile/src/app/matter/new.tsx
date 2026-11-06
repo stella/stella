@@ -6,9 +6,11 @@ import { Stack, useRouter } from "expo-router";
 import { ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Input } from "@stll/ui/input";
+import { Text } from "@stll/ui/text";
+
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
-import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -95,12 +97,13 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
         }}
       />
       <ScrollView
+        alwaysBounceVertical={false}
         className="bg-background flex-1"
         contentContainerStyle={screenStyles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
       >
-        <TextInput
+        <Input
           accessibilityLabel={t("name")}
           autoFocus
           onChangeText={setName}

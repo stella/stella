@@ -29,10 +29,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
@@ -42,9 +43,9 @@ import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "decision-date-ceiling";
@@ -112,7 +113,7 @@ const repairUntilEmpty = async (
     tableName: TABLE_NAME,
     initialSize: BATCH,
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 300_000,
     },
@@ -185,7 +186,8 @@ type RepairRuntimeOptions = {
 
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20260902100000_case_law_decision_date_ceiling",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

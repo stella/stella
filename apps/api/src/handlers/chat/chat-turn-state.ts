@@ -34,6 +34,7 @@ export const CHAT_TURN_INTERACTION_TYPES = [
   "ask-user",
   "approval",
   "client-tool",
+  "harness-question",
 ] as const;
 export type ChatTurnInteractionType =
   (typeof CHAT_TURN_INTERACTION_TYPES)[number];

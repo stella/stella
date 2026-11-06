@@ -161,3 +161,16 @@ export const parseDateTimePaginationCursorPart = (
   }
   return new Date(parsed.epochMilliseconds);
 };
+
+/** Preserve PostgreSQL timestamp precision in a self-contained keyset boundary. */
+export const parsePreciseDateTimePaginationCursorPart = (
+  value: unknown,
+): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = Result.try(() => Temporal.Instant.from(value)).unwrapOr(null);
+  return parsed?.toString({ fractionalSecondDigits: 6 }) === value
+    ? value
+    : null;
+};

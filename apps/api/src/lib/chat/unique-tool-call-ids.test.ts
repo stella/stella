@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -108,7 +108,8 @@ const callIdOf = (chunk: StreamChunk): string | undefined =>
 
 describe("tool call ids from a provider", () => {
   test("are unique within the thread, and each call keeps its chunks", async () => {
-    await fc.assert(
+    await assertProperty(
+      "are unique within the thread, and each call keeps its chunks",
       fc.asyncProperty(
         fc.uniqueArray(ID, { maxLength: 3 }),
         fc.array(fc.tuple(ID, fc.boolean()), { maxLength: 6 }),
@@ -144,12 +145,13 @@ describe("tool call ids from a provider", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   test("are unique within the thread when its earlier turns are outside the request", async () => {
-    await fc.assert(
+    await assertProperty(
+      "are unique within the thread when its earlier turns are outside the request",
       fc.asyncProperty(
         // Each thread id sits either in the request's history or only in the
         // thread (a turn the send window or compaction left out).
@@ -173,7 +175,7 @@ describe("tool call ids from a provider", () => {
           ).toBe(threadIds.length + started.length);
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
@@ -343,5 +345,18 @@ describe("tool call ids through the engine", () => {
       "call_0",
       "call_0_2",
     ]);
+  });
+});
+
+describe("chunk types the installed SDK does not name", () => {
+  test("an unknown or inherited event type passes through unchanged", async () => {
+    const chunks = [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+      "FUTURE_EVENT",
+    ].map((type) => asTestRaw<StreamChunk>({ type, toolCallId: "call_0" }));
+    expect(await collect(chunks, [], new ToolCallIdLedger(["call_0"]))).toEqual(
+      chunks,
+    );
   });
 });

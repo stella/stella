@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 
 import {
   budgetProblem,
@@ -9,6 +10,7 @@ import {
   metricsFromPlan,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
   summarize,
   sumMetrics,
 } from "./measurement";
@@ -42,6 +44,73 @@ test("a sequential scan on a large table fails while a declared small table pass
       statement: "select * from legislation_sources",
     }),
   ).toEqual([]);
+});
+
+test("only a verified zero-work coverage delta queue bypasses the large-scan guard", () => {
+  const emptyQueue = {
+    "Node Type": "Seq Scan",
+    "Relation Name": "case_law_population_deltas",
+    "Actual Rows": 0,
+    "Rows Removed by Filter": 0,
+    "Shared Hit Blocks": 0,
+    "Shared Read Blocks": 0,
+  };
+  const analyze = (node: Record<string, unknown>, owner: string) =>
+    analyzePlan({
+      document: plan(node),
+      owner,
+      ownerDeadlineMs: 30_000,
+      profileId: "corpus",
+      statement: "select maintained coverage",
+    }).map(({ kind }) => kind);
+  expect(analyze(emptyQueue, SCHEDULER_BACKFILL_IDS.coverage)).toEqual([]);
+  for (const field of [
+    "Actual Rows",
+    "Rows Removed by Filter",
+    "Shared Hit Blocks",
+    "Shared Read Blocks",
+  ]) {
+    expect(
+      analyze({ ...emptyQueue, [field]: 1 }, SCHEDULER_BACKFILL_IDS.coverage),
+    ).toEqual(["large-scan"]);
+  }
+  expect(analyze(emptyQueue, "statement.otherOwner")).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Relation Name": "unregistered_table" },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
+  expect(
+    analyze(
+      { ...emptyQueue, "Shared Hit Blocks": undefined },
+      SCHEDULER_BACKFILL_IDS.coverage,
+    ),
+  ).toEqual(["large-scan"]);
+});
+
+test("a health-signal scan of pg_database passes while another catalog still counts as large", () => {
+  expect(
+    analyzePlan({
+      document: plan({
+        "Node Type": "Seq Scan",
+        "Relation Name": "pg_database",
+      }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select datname from pg_database",
+    }),
+  ).toEqual([]);
+  expect(
+    analyzePlan({
+      document: plan({ "Node Type": "Seq Scan", "Relation Name": "pg_class" }),
+      owner: "statement.owner",
+      ownerDeadlineMs: 30_000,
+      profileId: "small",
+      statement: "select relname from pg_class",
+    }).map(({ kind }) => kind),
+  ).toEqual(["large-scan"]);
 });
 
 test("a lossy bitmap heap scan fails even without rows removed by recheck", () => {
@@ -314,6 +383,26 @@ test("median supports odd and even samples and rejects malformed measurements", 
   expect(() => metricsFromPlan({ Plan: {}, "Execution Time": 1 })).toThrow(
     "lacks finite execution time",
   );
+});
+
+test("shared-block sample failures name the owner and every sample", () => {
+  const samples = [
+    { sharedBlocks: 142, executionTimeMs: 1 },
+    { sharedBlocks: 158, executionTimeMs: 2 },
+    { sharedBlocks: 159, executionTimeMs: 3 },
+    { sharedBlocks: 173, executionTimeMs: 4 },
+  ];
+  expect(
+    sharedBlockSampleProblem("scheduled.caseLaw.refreshCoverage", samples),
+  ).toBe(
+    "scheduled.caseLaw.refreshCoverage produced non-deterministic shared-block samples: 142, 158, 159, 173",
+  );
+  expect(
+    sharedBlockSampleProblem(
+      "stable",
+      samples.map((sample) => ({ ...sample, sharedBlocks: 142 })),
+    ),
+  ).toBeUndefined();
 });
 
 test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {

@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   CheckIcon,
   FileTextIcon,
@@ -29,6 +30,14 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -51,6 +60,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   loadCallerFeature,
   useCallerFeatureEnabled,
@@ -59,6 +69,7 @@ import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   legalListActivityOptions,
   legalListCandidatesOptions,
@@ -126,6 +137,7 @@ function DisabledListsRedirect() {
 }
 
 function LegalListsPage() {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = Route.useNavigate();
@@ -145,9 +157,12 @@ function LegalListsPage() {
     }
     setCreatingList(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({ name });
+      const response = await submit.run({
+        operation: `lists.create:${workspaceId}`,
+        body: { name },
+        send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .put,
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -201,29 +216,32 @@ function LegalListsPage() {
             </Button>
           ))}
         </div>
-        <form
-          className="flex gap-2 border-t p-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            detached(createList(), "lists.create-list");
-          }}
-        >
-          <Input
-            aria-label={t("common.name")}
-            maxLength={256}
-            onChange={(event) => setNewListName(event.target.value)}
-            placeholder={t("common.name")}
-            value={newListName}
-          />
-          <Button
-            aria-label={t("common.add")}
-            disabled={creatingList || newListName.trim().length === 0}
-            size="icon"
-            type="submit"
+        <div className="border-t p-2">
+          <Form
+            density="compact"
+            layout="inline"
+            onSubmit={(event) => {
+              event.preventDefault();
+              detached(createList(), "lists.create-list");
+            }}
           >
-            <PlusIcon />
-          </Button>
-        </form>
+            <Input
+              aria-label={t("common.name")}
+              maxLength={256}
+              onChange={(event) => setNewListName(event.target.value)}
+              placeholder={t("common.name")}
+              value={newListName}
+            />
+            <Button
+              aria-label={t("common.add")}
+              disabled={creatingList || newListName.trim().length === 0}
+              size="icon"
+              type="submit"
+            >
+              <PlusIcon />
+            </Button>
+          </Form>
+        </div>
       </aside>
 
       <section className="bg-background min-w-0 flex-1 overflow-hidden">
@@ -266,6 +284,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const itemsView = queryView(items);
   const itemsData = itemsView.type === "items" ? itemsView.items : undefined;
   const properties = useQuery(propertiesOptions(workspaceId));
+  const propertyName = usePropertyDisplayName();
   const propertiesView = queryView(properties, { isEmpty: () => false });
   const propertiesData =
     propertiesView.type === "items" ? propertiesView.items : undefined;
@@ -284,6 +303,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const candidatesView = queryView(candidates);
   const candidatesData =
     candidatesView.type === "items" ? candidatesView.items : undefined;
+  const submit = useIdempotentSubmit();
   const [name, setName] = useState("");
   const [itemType, setItemType] = useState<ListItemType>("task");
   const [sectionName, setSectionName] = useState("");
@@ -302,16 +322,21 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     }
     setCreating(true);
     const result = await Result.tryPromise(async () => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
+      const response = await submit.run({
+        operation: `tasks.create:${workspaceId}`,
+        body: {
           name: itemName,
           listId: toSafeId<"legalList">(listId),
           listItemType: itemType,
           ...(selectedSectionId !== NO_SECTION_VALUE && {
             listSectionId: toSafeId<"legalListSection">(selectedSectionId),
           }),
-        });
+        },
+        send: async (body) =>
+          api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
+      });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -356,12 +381,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (nextSectionName.length === 0) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .sections.post({
+    const response = await submit.run({
+      operation: `lists.sections.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         name: nextSectionName,
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .sections.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -376,12 +404,15 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     if (selectedPropertyId === NO_COLUMN_VALUE) {
       return;
     }
-    const response = await api
-      .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .columns.post({
+    const response = await submit.run({
+      operation: `lists.columns.create:${workspaceId}`,
+      body: {
         listId: toSafeId<"legalList">(listId),
         propertyId: toSafeId<"property">(selectedPropertyId),
-      });
+      },
+      send: api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .columns.post,
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("errors.actionFailed"));
       return;
@@ -409,7 +440,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       workspaceId: toSafeId<"workspace">(workspaceId),
     })["generation-candidates"];
     const input = {
-      queryKey: legalListKeys.generations(workspaceId, listId),
       listId: toSafeId<"legalList">(listId),
       runId: toSafeId<"legalListGenerationRun">(reviewRun.id),
       candidateId: toSafeId<"legalListGenerationCandidate">(candidateId),
@@ -417,8 +447,16 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     const result = await Result.tryPromise(async () => {
       const response =
         decision === "accept"
-          ? await endpoint.accept.post(input)
-          : await endpoint.reject.post(input);
+          ? await submit.run({
+              operation: `lists.generation-candidates.accept:${workspaceId}`,
+              body: input,
+              send: endpoint.accept.post,
+            })
+          : await submit.run({
+              operation: `lists.generation-candidates.reject:${workspaceId}`,
+              body: input,
+              send: endpoint.reject.post,
+            });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -474,8 +512,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
             </p>
           )}
         </div>
-        <form
-          className="flex gap-2"
+        <Form
+          className="w-auto"
+          density="compact"
+          layout="inline"
           onSubmit={(event) => {
             event.preventDefault();
             detached(createSection(), "lists.create-section");
@@ -527,7 +567,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     )
                     .map((property) => (
                       <SelectItem key={property.id} value={property.id}>
-                        {property.name}
+                        {propertyName(property)}
                       </SelectItem>
                     ))}
                 </SelectPopup>
@@ -547,81 +587,84 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           <span className="text-muted-foreground rounded-md border px-2 py-1 text-xs">
             {formatter.number(listData.itemCount)}
           </span>
-        </form>
+        </Form>
       </header>
-      <form
-        className="flex gap-2 border-b px-6 py-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          detached(createItem(), "lists.create-item");
-        }}
-      >
-        <Input
-          aria-label={t("templates.addItem")}
-          maxLength={255}
-          onChange={(event) => setName(event.target.value)}
-          placeholder={t("templates.addItem")}
-          value={name}
-        />
-        <Select
-          onValueChange={(value) => {
-            if (isListItemType(value)) {
-              setItemType(value);
-            }
+      <div className="border-b px-6 py-3">
+        <Form
+          density="compact"
+          layout="inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            detached(createItem(), "lists.create-item");
           }}
-          value={itemType}
         >
-          <SelectTrigger className="w-40">
-            <SelectValue>
-              {(value) =>
-                typeof value === "string" && isListItemType(value) ? (
-                  <ListItemTypeLabel value={value} />
-                ) : (
-                  t("common.kind")
-                )
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup>
-            {LIST_ITEM_TYPES.map((type) => (
-              <SelectItem key={type} value={type}>
-                {t(ITEM_TYPE_TRANSLATION_KEYS[type])}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-        {listData.sections.length > 0 && (
+          <Input
+            aria-label={t("templates.addItem")}
+            maxLength={255}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t("templates.addItem")}
+            value={name}
+          />
           <Select
-            onValueChange={(value) =>
-              setSelectedSectionId(value ?? NO_SECTION_VALUE)
-            }
-            value={selectedSectionId}
+            onValueChange={(value) => {
+              if (isListItemType(value)) {
+                setItemType(value);
+              }
+            }}
+            value={itemType}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-40">
               <SelectValue>
                 {(value) =>
-                  listData.sections.find((section) => section.id === value)
-                    ?.name ?? t("common.category")
+                  typeof value === "string" && isListItemType(value) ? (
+                    <ListItemTypeLabel value={value} />
+                  ) : (
+                    t("common.kind")
+                  )
                 }
               </SelectValue>
             </SelectTrigger>
             <SelectPopup>
-              <SelectItem value={NO_SECTION_VALUE}>
-                {t("common.empty")}
-              </SelectItem>
-              {listData.sections.map((section) => (
-                <SelectItem key={section.id} value={section.id}>
-                  {section.name}
+              {LIST_ITEM_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {t(ITEM_TYPE_TRANSLATION_KEYS[type])}
                 </SelectItem>
               ))}
             </SelectPopup>
           </Select>
-        )}
-        <Button disabled={creating || name.trim().length === 0} type="submit">
-          <PlusIcon />
-          {t("common.add")}
-        </Button>
-      </form>
+          {listData.sections.length > 0 && (
+            <Select
+              onValueChange={(value) =>
+                setSelectedSectionId(value ?? NO_SECTION_VALUE)
+              }
+              value={selectedSectionId}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue>
+                  {(value) =>
+                    listData.sections.find((section) => section.id === value)
+                      ?.name ?? t("common.category")
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={NO_SECTION_VALUE}>
+                  {t("common.empty")}
+                </SelectItem>
+                {listData.sections.map((section) => (
+                  <SelectItem key={section.id} value={section.id}>
+                    {section.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          )}
+          <Button disabled={creating || name.trim().length === 0} type="submit">
+            <PlusIcon />
+            {t("common.add")}
+          </Button>
+        </Form>
+      </div>
       {candidatesData &&
         candidatesData.items.some(
           (candidate) =>
@@ -690,44 +733,25 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           </section>
         )}
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead className="bg-muted/80 sticky top-0 z-10 text-start backdrop-blur">
-            <tr className="border-b">
-              <th className="px-4 py-2 text-start font-medium">
-                {t("common.name")}
-              </th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("common.description")}
-              </th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("common.category")}
-              </th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("tasks.status")}
-              </th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("tasks.priority")}
-              </th>
-              <th className="px-4 py-2 text-start font-medium">
-                {t("tasks.dueDate")}
-              </th>
+        <Table inset="card" scroll="parent">
+          <TableHeader sticky>
+            <TableRow>
+              <TableHead>{t("common.name")}</TableHead>
+              <TableHead>{t("common.description")}</TableHead>
+              <TableHead>{t("common.category")}</TableHead>
+              <TableHead>{t("tasks.status")}</TableHead>
+              <TableHead>{t("tasks.priority")}</TableHead>
+              <TableHead>{t("tasks.dueDate")}</TableHead>
               {listData.columns.map((column) => (
-                <th
-                  className="px-4 py-2 text-start font-medium"
-                  key={column.id}
-                >
-                  {column.name}
-                </th>
+                <TableHead key={column.id}>{column.name}</TableHead>
               ))}
-              <th className="px-4 py-2 text-end font-medium">
-                {t("common.actions")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+              <TableHead align="end">{t("common.actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {listItems.map((item) => (
-              <tr className="border-b last:border-0" key={item.id}>
-                <td className="max-w-80 px-4 py-3 font-medium">
+              <TableRow key={item.id}>
+                <TableCell className="max-w-80 whitespace-normal">
                   <div className="flex items-center gap-2">
                     {isListItemType(item.itemType) && (
                       <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs font-normal">
@@ -748,26 +772,28 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                       <span className="truncate">{item.name}</span>
                     </Button>
                   </div>
-                </td>
-                <td className="text-muted-foreground max-w-96 truncate px-4 py-3">
+                </TableCell>
+                <TableCell className="max-w-96" tone="muted" truncate>
                   {item.description ?? ""}
-                </td>
-                <td className="text-muted-foreground px-4 py-3">
-                  {listData.sections.find(
-                    (section) => section.id === item.sectionId,
-                  )?.name ?? ""}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell className="whitespace-normal" tone="muted">
+                  <span className="leading-5">
+                    {listData.sections.find(
+                      (section) => section.id === item.sectionId,
+                    )?.name ?? ""}
+                  </span>
+                </TableCell>
+                <TableCell>
                   {isTaskStatus(item.status)
                     ? t(`tasks.statusValues.${item.status}`)
                     : ""}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   {isTaskPriority(item.priority)
                     ? t(`tasks.priorityValues.${item.priority}`)
                     : ""}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell>
                   {item.dueDate
                     ? formatter.dateTime(
                         new Date(`${item.dueDate}T00:00:00Z`),
@@ -779,7 +805,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                         },
                       )
                     : ""}
-                </td>
+                </TableCell>
                 {listData.columns.map((column) => {
                   const property = propertiesData?.find(
                     (candidate) => candidate.id === column.propertyId,
@@ -788,7 +814,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     (candidate) => candidate.propertyId === column.propertyId,
                   );
                   return (
-                    <td className="px-4 py-3" key={column.id}>
+                    <TableCell className="whitespace-normal" key={column.id}>
                       {property && (
                         <FieldValue
                           content={field?.content}
@@ -796,10 +822,10 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                           variant="table"
                         />
                       )}
-                    </td>
+                    </TableCell>
                   );
                 })}
-                <td className="px-4 py-2 text-end">
+                <TableCell align="end">
                   <Button
                     aria-label={t("common.document")}
                     onClick={() =>
@@ -823,11 +849,11 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   >
                     <CheckIcon />
                   </Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
         {listItems.length === 0 && (
           <div className="text-muted-foreground grid h-48 place-items-center text-sm">
             {t("common.empty")}

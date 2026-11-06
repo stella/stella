@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "UK_FCL",
+  "key": "uk-fcl",
+  "parserVersion": 5,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Date a tribunal decision by its decision date, so a document named a decision is read rather than refused."
+  }
+}

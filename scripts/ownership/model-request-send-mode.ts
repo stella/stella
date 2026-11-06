@@ -1,3 +1,4 @@
+import { MODEL_OPERATION_NAMES } from "../../apps/api/src/lib/ai-generation/model-operation-registry.ts";
 import type { OwnershipEntry } from "../ownership-types.ts";
 // Model requests whose content never comes from a chat thread: documents,
 // matters, templates, playbooks and public corpora, requested outside chat.
@@ -34,19 +35,6 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/lib/workflow/ai-generate-batch.ts",
   "apps/api/src/lib/workflow/verdict-engine.ts",
 ] as const;
-// Recognises a model request that stayed off the table below.
-const MODEL_REQUEST_NAMES = [
-  "collectTanStackTextRun",
-  "generateChatObject",
-  "generateTanStackChatObject",
-  "generateTanStackObjectForTask",
-  "generateTanStackTextForTask",
-  "streamChatChunks",
-  "streamChatObject",
-  "streamTanStackChatRun",
-  "streamTanStackObjectForTask",
-  "streamTanStackTextForTask",
-] as const;
 
 export default {
   id: "model-request-send-mode",
@@ -71,8 +59,15 @@ export default {
       "@/api/lib/tanstack-ai-generate",
       "@/api/lib/chat/tanstack-chat-runtime",
     ],
-    names: MODEL_REQUEST_NAMES,
+    names: MODEL_OPERATION_NAMES,
     allowed: [
+      {
+        // The one model caller under desktop-time-entries: billing drafts
+        // and the narrative route reach the model only through it.
+        path: "apps/api/src/handlers/desktop-time-entries/drafting-model.ts",
+        reason:
+          "Sends selected activity evidence, window titles, own bounded time history and, once the organization binds them, authorized guideline files; carries no chat transcript. Takes only a DraftingAdmission and reads the organization's switch and the member's consent again before every provider request.",
+      },
       {
         path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
         reason:

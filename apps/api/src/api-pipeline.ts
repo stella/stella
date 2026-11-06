@@ -114,6 +114,7 @@ const requestIdentity: Middleware = async ({ request, server }, inner) => {
       SESSION_ID_PATTERN.test(rawSessionId)
       ? rawSessionId
       : undefined,
+    request,
   );
   // Both addresses start from the socket peer, read from the socket once.
   const socket = socketPeerOnce(request, server ?? null);
@@ -184,6 +185,7 @@ export const apiPipeline: readonly Middleware[] = [
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
+      "Idempotency-Key",
       "Authorization",
       "MCP-Protocol-Version",
       LOCAL_CLIENT_IDENTITY_HEADER,

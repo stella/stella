@@ -6,6 +6,7 @@ type WorkspaceListQueryOptions = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
   query?: string;
+  status?: "active" | "archived";
   limit: number;
 };
 
@@ -13,6 +14,7 @@ export const readWorkspaceListRows = ({
   tx,
   organizationId,
   query,
+  status = "active",
   limit,
 }: WorkspaceListQueryOptions) =>
   tx.query.workspaces.findMany({
@@ -26,7 +28,7 @@ export const readWorkspaceListRows = ({
             ],
           }
         : {}),
-      status: { eq: "active" },
+      status: { eq: status },
     },
     columns: {
       id: true,

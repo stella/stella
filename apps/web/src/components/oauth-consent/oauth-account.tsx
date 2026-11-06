@@ -5,6 +5,8 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { signOutAndRelease } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -50,9 +52,7 @@ export const useOAuthAccountSwitch = () => {
 
 /** The term list the OAuth steps use to say who is signed in. */
 export const OAuthAccountList = ({ children }: { children: ReactNode }) => (
-  <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-sm">
-    {children}
-  </dl>
+  <DetailsGrid variant="list">{children}</DetailsGrid>
 );
 
 type OAuthAccountRowProps = {
@@ -70,22 +70,28 @@ export const OAuthAccountRow = ({
   const t = useTranslations("consent");
   const tAccount = useTranslations("settings.account");
   return (
-    <>
-      <dt className="text-muted-foreground self-start sm:self-center">
-        {tAccount("title")}
-      </dt>
-      <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
-        <bdi className="min-w-0 break-all">{email}</bdi>
+    <DetailsItem
+      className="items-start sm:items-center"
+      label={tAccount("title")}
+    >
+      <div className="flex min-w-0 flex-col items-start gap-x-3">
+        <TruncatedText
+          className="max-w-full"
+          render={<bdi />}
+          tooltip={<bdi>{email}</bdi>}
+        >
+          {email}
+        </TruncatedText>
         <Button
           variant="link"
           size="xs"
-          className="-ms-2 min-h-11 self-start sm:ms-0 sm:self-auto"
+          className="-ms-2 min-h-11 self-start"
           disabled={disabled}
           onClick={onAccountSwitch}
         >
           {t("useAnotherAccount")}
         </Button>
-      </dd>
-    </>
+      </div>
+    </DetailsItem>
   );
 };

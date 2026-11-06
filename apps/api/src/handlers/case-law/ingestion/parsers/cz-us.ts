@@ -1,12 +1,15 @@
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -62,6 +65,10 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  CZ_TAKTO_TAIL_RE,
+  isCzechOpeningFormula,
+  isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
 // parser-output-unchanged: cached DocContent and direct paragraph validation preserve extracted content; the output retains its decision-specific AST type.
 import {
@@ -69,6 +76,7 @@ import {
   type DecisionDocumentAst,
   hasInlineChildren,
   type Inline,
+  type ParagraphRole,
   plainTextOf,
 } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
@@ -92,11 +100,19 @@ import {
   printedLine,
   readHardWrap,
 } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
-import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  collapseLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@/api/lib/legal-search/parsers/letter-spacing";
 import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
-import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  type OpinionHeadingKind,
+  separateOpinionAuthorLine,
+  type SeparateOpinionHeading,
+  separateOpinionHeading,
+  separateOpinionHeadingNamesAuthor,
+} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
@@ -129,7 +145,7 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
@@ -139,10 +155,13 @@ export const parseUsDecisionHtml = (
   const crossReferences = extractCrossReferences($, docContent);
 
   const lines = extractLines($, docContent);
-  const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
-    parser: "cz-us",
-    caseNumber: input.caseNumber,
-  });
+  const blocks = courtParagraphNumbers(
+    withAttestedLetterSpacing(classifyUsDocumentLines(lines)),
+    {
+      parser: "cz-us",
+      caseNumber: input.caseNumber,
+    },
+  );
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -161,20 +180,6 @@ export const parseUsDecisionHtml = (
       plainText: hiddenMeta.decisionForm,
     });
   }
-
-  // Build validation HTML from extracted lines instead of
-  // passing the raw page HTML. The page HTML concatenates
-  // all text without whitespace between sections, creating
-  // phantom words like "tarifu.ii.skutkové" that aren't in
-  // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationParagraphs = lines.map((line) =>
-    line.kind === "body" ? line.value.plainText : line.note.value.plainText,
-  );
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    { type: "paragraphs", paragraphs: validationParagraphs },
-    blocks,
-  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
@@ -647,21 +652,30 @@ const DECORATIVE_LINE_RE = /^(?:Česká republika|ČESKÁ REPUBLIKA)$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
-  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
+  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu)$/iu;
 
 /** Normalize spaced text like "t a k t o" -> "takto". */
 const collapseSpaces = (text: string): string =>
   text.replace(/(?<keep>\S)\s+(?=\S)/gu, "$<keep>");
 
-/** "takto:" separator (with spaced variants). */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+/**
+ * The plenary's bench sentence (`pléna Ústavního soudu složeného z …`). The
+ * plenary prints no "takto:" after it: the ruling follows, under a `Výrok`
+ * label or directly.
+ */
+const PLENARY_BENCH_RE = /^pléna Ústavního soudu(?=\s)/u;
+
+/** The label a plenary nález prints above its ruling. */
+const RULING_LABEL_RE = /^V\s*ý\s*r\s*o\s*k\s*:?$/iu;
 
 /**
- * The opening sentence of a decision ending in "takto:". Since the court
- * stopped setting the word on a line of its own, the ruling follows the
- * sentence that names the parties directly.
+ * The caption an SbNU-format nález prints in place of "takto:": the ruling
+ * follows it directly.
  */
-const TAKTO_TAIL_RE = /(?:^|[\s,])takto\s*:$/u;
+const NALEZ_CAPTION_RE = /^Nález Ústavního soudu(?=\s).*\sve věci(?=\s)/u;
+
+/** The instruction block that follows the signatures; the ruling is over. */
+const INSTRUCTION_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í(?=\s*:|\s|$)/iu;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
@@ -693,16 +707,29 @@ const readsAsSentence = (text: string): boolean =>
   UNFINISHED_TITLE_RE.test(text) ||
   (text.endsWith(".") && text.split(/\s+/u).length > TITLE_SENTENCE_MAX_WORDS);
 
-/** A heading line that names its author. */
-const NAMES_AUTHOR_RE = /(?:^|\s)(?:soudc|soudky|soudkyň|JUDr)/iu;
-/** The judges named on the lines after a bare heading. */
-const AUTHOR_CONTINUATION_RE = /^(?:soudc|soudky|soudkyň)/iu;
 const DISSENT_HEADING_MAX_CHARS = 120;
 /**
  * A closing names the place and the date and nothing else. A paragraph that
  * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
  */
 const CLOSING_MAX_CHARS = 80;
+/**
+ * A personal name and nothing else: two to four capitalised words, each
+ * possibly double-barrelled ("Jan Novák", "Petra Svobodová-Dvořáková").
+ * Read as a signature only directly under a closing or another signature.
+ */
+const BARE_SIGNATORY_NAME_RE =
+  /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?(?:\s+\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)?){1,3}$/u;
+
+/**
+ * A bare name under the closing, or under the signature lines that follow
+ * it, signs the decision or a separate opinion: the Court's judges often sign
+ * with no academic title and no "v. r.".
+ */
+const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
+  BARE_SIGNATORY_NAME_RE.test(plainText) &&
+  previous?.type === "paragraph" &&
+  (previous.role === "closing" || previous.role === "signature");
 /** Longest heading an author continuation can make. */
 const DISSENT_TITLE_MAX_CHARS = 500;
 
@@ -727,7 +754,8 @@ type UsClassificationState = {
   blockIndex: number;
   inRuling: boolean;
   inOduvodneni: boolean;
-  inDissent: boolean;
+  /** The separate opinion the lines belong to, if any. */
+  separateOpinion: OpinionHeadingKind | null;
   /** Whether the ruling zone has produced a holding yet. */
   sawHolding: boolean;
   consumedLines: Set<ParsedLine>;
@@ -785,8 +813,41 @@ const classifyUsBodyLine = ({
     return;
   }
 
+  // The formula is the court's wording under its title, not a second title.
+  if (isCzechOpeningFormula(plainText)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "intro",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
   // "takto:" separator
-  if (TAKTO_RE.test(plainText) || TAKTO_RE.test(collapsed)) {
+  if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
+    state.inRuling = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "intro",
+      inlines: textInline(CZ_TAKTO),
+      plainText: CZ_TAKTO,
+    });
+    return;
+  }
+
+  // The plenary's own label above its ruling
+  if (
+    RULING_LABEL_RE.test(plainText) &&
+    !state.inOduvodneni &&
+    state.separateOpinion === null
+  ) {
     state.inRuling = true;
     state.blockIndex += 1;
     blocks.push({
@@ -795,8 +856,8 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      inlines: textInline("takto:"),
-      plainText: "takto:",
+      inlines,
+      plainText,
     });
     return;
   }
@@ -820,9 +881,9 @@ const classifyUsBodyLine = ({
 
   // A separate opinion runs to the end of the document, so the heading
   // opens a zone rather than a section.
-  const dissentTail = opinionHeadingTail(normalized);
-  if (dissentTail !== undefined) {
-    state.inDissent = true;
+  const opinion = opinionHeading(normalized);
+  if (opinion !== undefined) {
+    state.separateOpinion = opinion.kind;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -830,7 +891,7 @@ const classifyUsBodyLine = ({
       type: "heading",
       level: 2,
       role: "section-heading",
-      ...(NAMES_AUTHOR_RE.test(dissentTail)
+      ...(separateOpinionHeadingNamesAuthor(opinion.tail)
         ? { inlines, plainText }
         : withAuthorContinuation({ heading: normalized, i, lines, state })),
     });
@@ -848,6 +909,7 @@ const classifyUsBodyLine = ({
     plainText.length <= CLOSING_MAX_CHARS &&
     CLOSING_RE.test(plainText)
   ) {
+    state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -862,6 +924,21 @@ const classifyUsBodyLine = ({
 
   // Signature: judge title line
   if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  if (!courtNumbered && signsUnderClosing(plainText, blocks.at(-1))) {
+    state.inRuling = false;
     state.blockIndex += 1;
     blocks.push({
       id: makeUsBlockId(state),
@@ -901,6 +978,10 @@ const classifyUsBodyLine = ({
       });
       return;
     }
+  }
+
+  if (INSTRUCTION_RE.test(plainText)) {
+    state.inRuling = false;
   }
 
   if (closesRuling(state, plainText)) {
@@ -993,7 +1074,7 @@ const classifyUsBodyLine = ({
     id: makeUsBlockId(state),
     anchorId: makeAnchorId("p", state.blockIndex),
     type: "paragraph",
-    role: state.inDissent ? "dissent" : undefined,
+    role: paragraphRole(state, plainText),
     inlines,
     plainText,
   });
@@ -1012,21 +1093,51 @@ const closesRuling = (
   state.sawHolding &&
   FIRST_REASONING_PARAGRAPH_RE.test(plainText);
 
-/** The opening sentence ends in "takto:", and the ruling follows it. */
+/**
+ * The sentence naming the bench and the parties opens the ruling: it ends
+ * in "takto:", or it is the plenary's or the SbNU caption, which print the
+ * ruling after it.
+ */
 const opensRuling = (
   state: UsClassificationState,
   plainText: string,
 ): boolean =>
-  !state.inOduvodneni && !state.inDissent && TAKTO_TAIL_RE.test(plainText);
+  !state.inOduvodneni &&
+  state.separateOpinion === null &&
+  (CZ_TAKTO_TAIL_RE.test(plainText) ||
+    PLENARY_BENCH_RE.test(plainText) ||
+    NALEZ_CAPTION_RE.test(plainText));
+
+/** A paragraph's role: its separate opinion's, or the ruling's opener. */
+const paragraphRole = (
+  state: UsClassificationState,
+  plainText: string,
+): ParagraphRole | undefined => {
+  if (state.separateOpinion !== null) {
+    return OPINION_PARAGRAPH_ROLE[state.separateOpinion];
+  }
+  return opensRuling(state, plainText) ? "intro" : undefined;
+};
 
 /**
- * What follows the title of a separate opinion's heading on its line, or
- * `undefined` for a line that is no such heading. The court numbers some of
- * these headings; the number is stripped for the match alone, because the
- * heading block carries the line the court printed.
+ * The role of a separate opinion's paragraphs. A concurring judge agrees with
+ * the outcome; the opinion is that judge's reasoning, not a dissent.
  */
-const opinionHeadingTail = (line: ParsedLineData): string | undefined =>
-  separateOpinionHeadingTail(
+const OPINION_PARAGRAPH_ROLE = {
+  dissent: "dissent",
+  concurring: "argumentation",
+} as const satisfies Record<OpinionHeadingKind, ParagraphRole>;
+
+/**
+ * A separate opinion's heading on this line, or `undefined` for a line that
+ * is no such heading. The court numbers some of these headings; the number is
+ * stripped for the match alone, because the heading block carries the line
+ * the court printed.
+ */
+const opinionHeading = (
+  line: ParsedLineData,
+): SeparateOpinionHeading | undefined =>
+  separateOpinionHeading(
     stripInlineLinePrefix(line, NUMBERED_PARA_RE).line.plainText,
     DISSENT_HEADING_MAX_CHARS,
   );
@@ -1067,10 +1178,7 @@ const withAuthorContinuation = ({
   const inlines = [...heading.inlines];
   let { plainText } = heading;
   let next = findNextNonEmpty(lines, i + 1);
-  if (
-    next === undefined ||
-    !AUTHOR_CONTINUATION_RE.test(next.value.plainText)
-  ) {
+  if (next === undefined || !separateOpinionAuthorLine(next.value.plainText)) {
     return { inlines, plainText };
   }
   while (
@@ -1096,7 +1204,7 @@ export const classifyUsDocumentLines = (
     blockIndex: 0,
     inRuling: false,
     inOduvodneni: false,
-    inDissent: false,
+    separateOpinion: null,
     sawHolding: false,
     consumedLines: new Set(),
   };

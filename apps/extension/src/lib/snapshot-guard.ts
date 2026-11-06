@@ -93,7 +93,8 @@ const navigationMatchesSeenPage = (
  * the document the last command ended on, so a page the user opened or
  * reloaded in between is not navigated away; a web client that saw no tab
  * may only navigate a tab chat opened itself, never one the user handed
- * over. Going back also needs the snapshot the web client saw, since where
+ * over. `open` in a new tab and `switch-tab` leave that tab as it is, so
+ * they need neither. Going back also needs the snapshot the web client saw, since where
  * it leads depends on the page. An element command needs the snapshot its
  * refs came from, in the same tab, at the same URL, with the frame's
  * document still the one that was read.
@@ -106,10 +107,17 @@ export const checkCommandIdentity = ({
   snapshot,
 }: CommandIdentity): IdentityVerdict => {
   switch (command.action) {
+    // Switching moves control on purpose; its target is held to chat's
+    // tabs instead.
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.snapshot:
       return { documentId: null, status: "ok" };
     case BROWSER_CONTROL_ACTION.open:
     case BROWSER_CONTROL_ACTION.goBack:
+      // A new tab leaves the controlled one as it is.
+      if (command.action === BROWSER_CONTROL_ACTION.open && command.newTab) {
+        return { documentId: null, status: "ok" };
+      }
       if (controlledTab === null) {
         return { documentId: null, status: "ok" };
       }

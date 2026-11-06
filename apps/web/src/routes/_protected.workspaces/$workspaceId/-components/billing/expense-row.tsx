@@ -52,7 +52,7 @@ export const ExpenseRow = ({
           <BidiText as="span" className="truncate text-sm font-medium">
             {matterName}
           </BidiText>
-          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
             {
               {
                 filing_fee: t("billing.expenses.categories.filing_fee"),
@@ -65,13 +65,13 @@ export const ExpenseRow = ({
             }
           </span>
           {!expense.billable && (
-            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
               {t("billing.nonBillable")}
             </span>
           )}
           <span
             className={cn(
-              "text-3xs shrink-0 rounded px-1.5 py-0.5",
+              "text-3xs shrink-0 rounded-sm px-1.5 py-0.5",
               STATUS_STYLES[expense.status] ?? STATUS_STYLES["draft"],
             )}
           >
@@ -96,7 +96,7 @@ export const ExpenseRow = ({
         {formatCurrencyAmount(expense.amount, expense.currency)}
       </span>
 
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
         {expense.status === "draft" && canUpdateExpense && (
           <Button
             aria-label={t("common.edit")}

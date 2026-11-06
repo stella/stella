@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import type { PropertyContentType } from "@/lib/api-contract";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -19,9 +20,12 @@ type CreatePropertyDependency = {
   condition: PropertyDependency["condition"];
 };
 
+/** A record column is configured through its source, not a bare type. */
+type CreatablePropertyContentType = Exclude<PropertyContentType, "record">;
+
 type CreatePropertyVars = {
   name: string;
-  contentType: PropertyContentType;
+  contentType: CreatablePropertyContentType;
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
@@ -33,7 +37,8 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async ({
       name,
       contentType,
@@ -86,7 +91,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
 export type CreatePropertySpec = {
   name: string;
-  contentType: PropertyContentType;
+  contentType: CreatablePropertyContentType;
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
@@ -102,32 +107,38 @@ export const useCreatePropertiesBatch = ({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async ({ items }: { items: CreatePropertySpec[] }) => {
+  return useIdempotentMutation({
+    idempotencyScope: workspaceId,
+    mutationFn: async ({ items }: { items: CreatePropertySpec[] }, request) => {
       const response = await api
         .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .batch.put({
-          items: items.map((item) => ({
-            name: item.name,
-            contentType: item.contentType,
-            ...(item.toolType ? { toolType: item.toolType } : {}),
-            ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
-            ...(item.dependencies && item.dependencies.length > 0
-              ? {
-                  dependencies: item.dependencies.map((dep) => ({
-                    dependsOnPropertyId: toSafeId<"property">(
-                      dep.dependsOnPropertyId,
-                    ),
-                    condition: dep.condition,
-                  })),
-                }
-              : {}),
-            ...(item.options && item.options.length > 0
-              ? { options: item.options }
-              : {}),
-            ...(item.fallback !== undefined ? { fallback: item.fallback } : {}),
-          })),
-        });
+        .batch.put(
+          {
+            items: items.map((item) => ({
+              name: item.name,
+              contentType: item.contentType,
+              ...(item.toolType ? { toolType: item.toolType } : {}),
+              ...(item.prompt === undefined ? {} : { prompt: item.prompt }),
+              ...(item.dependencies && item.dependencies.length > 0
+                ? {
+                    dependencies: item.dependencies.map((dep) => ({
+                      dependsOnPropertyId: toSafeId<"property">(
+                        dep.dependsOnPropertyId,
+                      ),
+                      condition: dep.condition,
+                    })),
+                  }
+                : {}),
+              ...(item.options && item.options.length > 0
+                ? { options: item.options }
+                : {}),
+              ...(item.fallback !== undefined
+                ? { fallback: item.fallback }
+                : {}),
+            })),
+          },
+          request,
+        );
 
       return unwrapApiResponse(response);
     },
@@ -153,7 +164,9 @@ type UpdatePropertyVars = {
   workspaceId: string;
   propertyId: string;
   name: string;
-  content: WorkspaceProperty["content"];
+  // A record column's shape is set through its source; the update endpoint
+  // takes scalar content only.
+  content: Exclude<WorkspaceProperty["content"], { type: "record" }>;
   // Verdict columns are system-computed and read-only; the update endpoint only
   // accepts manual/AI tools, so excluding it here makes editing one a compile
   // error rather than a runtime rejection.
