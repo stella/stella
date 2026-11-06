@@ -187,19 +187,52 @@ const loadModule = (file: string): UiModule => {
   return loaded;
 };
 
-/** The local name a module exports under `name`, re-exports followed. */
-const exportedLocalName = (module: UiModule, name: string): string | null => {
-  for (const entry of module.parsed.module.staticExports.flatMap(
-    ({ entries }) => entries,
-  )) {
+/** The module and local name behind the export `name`, re-exports followed. */
+const exportedDeclaration = (
+  module: UiModule,
+  name: string,
+  depth = 0,
+): { module: UiModule; local: string } | null => {
+  if (depth > 8) {
+    return null;
+  }
+  const entries = module.parsed.module.staticExports.flatMap(
+    ({ entries: exportEntries }) => exportEntries,
+  );
+  for (const entry of entries) {
     if (entry.exportName.name !== name) {
       continue;
     }
     if (entry.moduleRequest === null) {
-      return entry.localName.name ?? name;
+      return { module, local: entry.localName.name ?? name };
+    }
+    const target = resolveRelative(module.file, entry.moduleRequest.value);
+    return target === null
+      ? null
+      : exportedDeclaration(
+          loadModule(target),
+          entry.importName.name ?? name,
+          depth + 1,
+        );
+  }
+  if (module.declarations.has(name)) {
+    return { module, local: name };
+  }
+  // `export * from`: a star entry has no export name of its own.
+  for (const entry of entries) {
+    const target =
+      entry.exportName.name === null && entry.moduleRequest !== null
+        ? resolveRelative(module.file, entry.moduleRequest.value)
+        : null;
+    const found =
+      target === null
+        ? null
+        : exportedDeclaration(loadModule(target), name, depth + 1);
+    if (found !== null) {
+      return found;
     }
   }
-  return module.declarations.has(name) ? name : null;
+  return null;
 };
 
 /** The declaration `name` refers to in `module`, following imports. */
@@ -216,9 +249,13 @@ const lookup = (
   if (binding === undefined || depth > 8) {
     return null;
   }
-  const target = loadModule(binding.file);
-  const exported = exportedLocalName(target, binding.imported);
-  return exported === null ? null : lookup(target, exported, depth + 1);
+  const exported = exportedDeclaration(
+    loadModule(binding.file),
+    binding.imported,
+  );
+  return exported === null
+    ? null
+    : lookup(exported.module, exported.local, depth + 1);
 };
 
 const unwrapExpression = (node: AnyNode | null): AnyNode | null => {
@@ -268,7 +305,14 @@ const cvaGroups = (
   const groups = new Map<string, string[]>();
   for (const group of nodesAt(nodeAt(variants, "value"), "properties")) {
     const name = keyName(group["key"]);
-    const keys = objectKeys(nodeAt(group, "value"));
+    const value = nodeAt(group, "value");
+    // A group may name its class map instead of writing it inline.
+    const referenced = identifierName(value);
+    const keys = objectKeys(
+      referenced === null || found === null
+        ? value
+        : nodeAt(lookup(found.module, referenced)?.node, "init"),
+    );
     if (name !== null && keys !== null) {
       groups.set(name, keys);
     }
@@ -296,6 +340,39 @@ const NULLISH_TYPES = new Set([
   "TSNullKeyword",
   "TSNeverKeyword",
 ]);
+
+/** `typeof NAME` of a string constant. */
+const stringConstantSet = (
+  module: UiModule,
+  type: AnyNode,
+): string[] | null => {
+  const queried = identifierName(type["exprName"]);
+  const found = queried === null ? null : lookup(module, queried);
+  const init = unwrapExpression(nodeAt(found?.node, "init"));
+  const value = init?.type === "Literal" ? stringField(init, "value") : null;
+  return value === null ? null : [value];
+};
+
+/** `(typeof NAMES)[number]` of a constant tuple of strings. */
+const tupleElementSet = (
+  module: UiModule,
+  object: AnyNode | null,
+): string[] | null => {
+  const tuple =
+    object?.type === "TSParenthesizedType"
+      ? nodeAt(object, "typeAnnotation")
+      : object;
+  const queried = typeQueryName(tuple);
+  const found = queried === null ? null : lookup(module, queried);
+  const init = unwrapExpression(nodeAt(found?.node, "init"));
+  if (init === null || init.type !== "ArrayExpression") {
+    return null;
+  }
+  const values = nodesAt(init, "elements").map((element) =>
+    element.type === "Literal" ? stringField(element, "value") : null,
+  );
+  return values.every((value) => value !== null) ? values : null;
+};
 
 /**
  * The string literals a type admits when it is a closed set of them, or null
@@ -335,9 +412,14 @@ const literalSet = (
       const found = queried === null ? null : lookup(module, queried);
       return found === null ? null : objectKeys(nodeAt(found.node, "init"));
     }
+    case "TSTypeQuery":
+      return stringConstantSet(module, type);
     case "TSIndexedAccessType": {
-      // VariantProps<typeof x>["group"]
       const object = nodeAt(type, "objectType");
+      if (nodeAt(type, "indexType")?.type === "TSNumberKeyword") {
+        return tupleElementSet(module, object);
+      }
+      // VariantProps<typeof x>["group"]
       const index = literalIndex(nodeAt(type, "indexType"));
       if (
         object?.type !== "TSTypeReference" ||
@@ -609,8 +691,9 @@ export const readUiApiSnapshot = (): UiApiSnapshot => {
       if (!isComponentName(name)) {
         continue;
       }
-      const local = exportedLocalName(module, name) ?? name;
-      const found = lookup(module, local);
+      const exported = exportedDeclaration(module, name);
+      const found =
+        exported === null ? null : lookup(exported.module, exported.local);
       const component = found === null ? null : componentFunction(found.node);
       if (found === null || component === null) {
         continue;

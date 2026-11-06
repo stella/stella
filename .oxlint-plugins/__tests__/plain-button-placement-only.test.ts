@@ -53,3 +53,11 @@ describe("appearanceTokens", () => {
     ).toEqual(["hover:bg-muted", "text-xs", "p-2", "border"]);
   });
 });
+
+test("an arbitrary placement utility stays one token", () => {
+  expect(
+    appearanceTokens(
+      "w-[calc(100%-2rem)] w-[var(--button-width)] sm:h-[calc(100%-1px)]",
+    ),
+  ).toEqual([]);
+});

@@ -28,6 +28,12 @@ const HOW_TO_UPDATE =
 const design = readFileSync(path.join(ROOT, DESIGN_PATH), "utf-8");
 
 describe("@stll/ui API snapshot", () => {
+  test("a re-exported component keeps its closed props", () => {
+    expect(
+      readUiApiSnapshot().props["KanbanCardShell.appearance"]?.length,
+    ).toBeGreaterThan(0);
+  });
+
   test("matches the exports and closed prop sets in packages/ui", () => {
     const changes = snapshotChanges(
       readCommittedUiApiSnapshot(),

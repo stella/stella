@@ -332,6 +332,8 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `Button` `focusRing`: `inside`, `outside`
 - `Button`, `ButtonTextRun` `layout`: `wrap`
 - `Button` `shape`: `box`, `round`
+- `Button`, `Toggle`, `ToggleGroup`, `ToggleGroupItem` `size`: `chip`, `default`, `icon`, `icon-2xs`, `icon-lg`, `icon-sm`, `icon-xl`, `icon-xs`, `inline`, `lg`, `row`, `sm`, `touch`, `xl`, `xs`
+- `Button` `variant`: `default`, `destructive`, `destructive-ghost`, `destructive-outline`, `ghost`, `link`, `muted`, `muted-destructive`, `outline`, `plain`, `secondary`
 - `ColorPicker`, `EntityActionsButton`, `SortableHead`, `TableCell`, `TableHead` `align`: `center`, `end`, `start`
 - `ColorPicker`, `EntityActionsButton` `side`: `bottom`, `left`, `right`, `top`
 - `ColorPickerContent` `presentation`: `inline`, `popover`
@@ -355,6 +357,11 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `InlineDropIndicator` `position`: `after`, `before`
 - `InputGroupAddon` `align`: `block-end`, `block-start`, `inline-end`, `inline-start`
 - `InputGroupTextarea`, `Textarea` `fieldSizing`: `content`, `fixed`
+- `InspectorDock` `mount`: `content`, `shell-end`
+- `InspectorEntityTab` `inactiveIcon`: `dim`, `legible`
+- `KanbanCardShell` `actionsVisibility`: `always`, `hover`
+- `KanbanCardShell` `appearance`: `proposal`, `standard`
+- `KanbanVirtualCell` `footerPlacement`: `end`, `sticky-start`
 - `Kbd` `variant`: `cap`, `plain`
 - `Label` `variant`: `choice`, `choice-card`, `default`, `muted`
 - `LandingItemText` `iconTone`: `matter`, `muted`
@@ -363,6 +370,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `ListItemMedia` `variant`: `icon`, `initial`
 - `ListItemStatus` `tone`: `destructive`, `neutral`, `success`, `warning`
 - `Loader` `animation`: `none`, `spin`
+- `Loader` `size`: `lg`, `md`, `sm`
 - `Loader` `variant`: `decorative`, `status`
 - `MatterIcon` `variant`: `all`, `none`
 - `OutlineRail` `presentation`: `panel`, `popover`, `rail`

@@ -21,7 +21,7 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { classBaseName, classTokens, isAstNode, jsxName } from "./utils.ts";
+import { classBaseName, isAstNode, jsxName } from "./utils.ts";
 
 const RULE_NAME = "plain-button-placement-only";
 
@@ -73,13 +73,16 @@ const PLACEMENT_UTILITY = new RegExp(
 const utilityOf = (token: string): string =>
   classBaseName(token).replace(/^!|!$/gu, "").replace(/^-/u, "");
 
-// The shared tokenizer splits on quotes, so `before:content-['']` arrives as
-// `before:content-[` and `]`; a fragment with no letter or digit is no class.
+// Whitespace alone separates classes: an arbitrary value may hold parentheses
+// or quotes (`w-[calc(100%-2rem)]`), which the shared tokenizer splits on. A
+// token with no letter or digit is no class.
 export const appearanceTokens = (classes: string): string[] =>
-  classTokens(classes).filter(
-    (token) =>
-      /[a-z0-9]/iu.test(token) && !PLACEMENT_UTILITY.test(utilityOf(token)),
-  );
+  classes
+    .split(/\s+/u)
+    .filter(
+      (token) =>
+        /[a-z0-9]/iu.test(token) && !PLACEMENT_UTILITY.test(utilityOf(token)),
+    );
 
 /** Every string a className expression can contribute, read statically. */
 const classStrings = (node: unknown): string[] => {
