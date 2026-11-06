@@ -206,6 +206,8 @@ pub(crate) struct SidecarRunStart {
   pub(crate) attachments: Vec<RunAttachment>,
   /// The skill folders listed on this computer; never known to the API.
   pub(crate) skill_folders: Vec<SkillFolderRef>,
+  /// Directories of managed tools; the adapter puts them first on `PATH`.
+  pub(crate) tool_path: Vec<String>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
 }

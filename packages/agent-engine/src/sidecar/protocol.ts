@@ -123,6 +123,7 @@ const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
 const MAX_RUN_SKILL_FOLDERS = 32;
+const MAX_RUN_TOOL_DIRECTORIES = 8;
 const MAX_LAUNCH_ENTRIES = 32;
 /** Process ids are unsigned 32-bit on every platform the desktop runs on. */
 const MAX_PID = 4_294_967_295;
@@ -307,6 +308,11 @@ export const sidecarHostMessageSchema = v.variant("type", [
         }),
       ),
       v.maxLength(MAX_RUN_SKILL_FOLDERS),
+    ),
+    /** Directories of managed tools, put first on the harness's `PATH`. */
+    toolPath: v.pipe(
+      v.array(absolutePathSchema),
+      v.maxLength(MAX_RUN_TOOL_DIRECTORIES),
     ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(

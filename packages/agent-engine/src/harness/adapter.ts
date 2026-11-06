@@ -63,6 +63,11 @@ export type HarnessTurnInput = {
   cacheDir: string;
   /** Skills the harness loads for the turn, through its own mechanism. */
   skillFolders: readonly HarnessSkillFolder[];
+  /**
+   * Absolute directories of tools the desktop manages, such as Bun, which the
+   * turn's commands find ahead of what the computer has.
+   */
+  toolPath: readonly string[];
   /** A model id the harness itself reported through `probe`. */
   model: string;
   /** Developer instructions for the harness. */
