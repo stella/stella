@@ -66,7 +66,7 @@ const SubtaskRow = ({
   const isDone = status === "done";
   return (
     <Button className="block w-full" onClick={onToggle} variant="plain">
-      <span className="hover:bg-muted/50 flex w-full items-center gap-2 rounded px-1 py-0.5 text-sm">
+      <span className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-sm px-1 py-0.5 text-sm">
         {isDone ? (
           <CheckCircle2Icon className="text-success size-3.5" />
         ) : (

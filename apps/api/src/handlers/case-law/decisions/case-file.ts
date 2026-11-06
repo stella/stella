@@ -278,6 +278,17 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentFetchAttemptedAt",
   // Document-fetch retry state is internal bookkeeping.
   "documentFetchAttempts",
+  // These materialized publisher fields are already represented in metadata.
+  "nssReporterNumber",
+  "nssReporterYear",
+  "nssReporterIssue",
+  "nssKeywordSearchCode",
+  "nssRegistryCaseNumber",
+  "nssRegistryReferral",
+  "nssRegistryReferralDate",
+  "nssRegistryAgainstCases",
+  "nssRegistryStatus",
+  "nssRegistryAnnotation",
   // Open publisher metadata is deliberately absent from compact document links.
   "metadata",
   // Source change detection is internal bookkeeping.
@@ -288,6 +299,7 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "parsedSourceHash",
   "parsedSourceHashVersion",
   "parsedSourceRawS3Key",
+  "parsedInputState",
   // Source observation timing is internal bookkeeping.
   "sourceObservedAt",
   // Source observation ordering is internal bookkeeping.

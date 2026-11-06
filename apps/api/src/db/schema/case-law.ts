@@ -26,6 +26,10 @@ import {
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 import { EU_PRIMARY_WORKS } from "@stll/legal-atlas/eu-provision-citations";
 
+import {
+  SITEMAP_LANGUAGE_GROUP_INDEX,
+  SITEMAP_MONTH_INDEX,
+} from "@/api/db/case-law-sitemap-indexes";
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
@@ -533,6 +537,39 @@ const parsedSourceComplete = (t: ParsedSourceSchemaColumns) =>
     "case_law_decisions_parsed_source_complete",
     sql`(${t.parsedSourceHash} IS NULL AND ${t.parsedSourceHashVersion} IS NULL AND ${t.parsedSourceRawS3Key} IS NULL) OR (${t.parsedSourceHash} IS NOT NULL AND ${t.parsedSourceHashVersion} IS NOT NULL AND ${t.parsedSourceHashVersion} >= 0 AND ${t.parsedSourceRawS3Key} IS NOT NULL)`,
   );
+/** `parsed_input_state`: the parse stored for a decision is of its current input, or not. */
+export const PARSED_INPUT_STATES = ["parsed", "unparsed"] as const;
+export const PARSED_INPUT_STATE = {
+  PARSED: "parsed",
+  UNPARSED: "unparsed",
+} as const satisfies Record<string, (typeof PARSED_INPUT_STATES)[number]>;
+const PARSED_INPUT_STATE_SQL_VALUES = PARSED_INPUT_STATES.map((state) =>
+  sql.raw(`'${state}'`),
+);
+// Added NOT VALID; validated once every row is derived.
+const parsedInputStateCheck = (t: { parsedInputState: SQLWrapper }) =>
+  p.check(
+    "case_law_decisions_parsed_input_state_check",
+    sql`${t.parsedInputState} IN (${sql.join(PARSED_INPUT_STATE_SQL_VALUES, sql`, `)})`,
+  );
+type ReplayPendingIndexColumns = {
+  id: PgColumn;
+  sourceId: PgColumn;
+  parserVersion: PgColumn;
+  parsedInputState: PgColumn;
+  sourceRawS3Key: SQLWrapper;
+  redactedAt: SQLWrapper;
+};
+// Built online (`CASE_LAW_REPLAY_PENDING_INDEX`): the background replay's lag
+// probe answers from it, whatever the source's size.
+const replayPendingIndex = (t: ReplayPendingIndexColumns) =>
+  p
+    .index("case_law_decisions_replay_pending_idx")
+    .on(t.sourceId, t.parserVersion, t.parsedInputState, t.id)
+    .where(sql`${t.sourceRawS3Key} IS NOT NULL AND ${t.redactedAt} IS NULL`);
+const parsedInputStateTableItems = (
+  t: ReplayPendingIndexColumns & { parsedInputState: SQLWrapper },
+) => [parsedInputStateCheck(t), replayPendingIndex(t)] as const;
 const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
   p
     .index("case_law_decisions_parse_pending_idx")
@@ -572,6 +609,47 @@ const provisionSearchIndex = (t: ProvisionSearchIndexColumns) =>
     .index(CASE_LAW_PROVISION_SEARCH_INDEX.name)
     .on(t.country, sql`${t.citationAuthority} DESC`, sql`${t.id} DESC`)
     .where(publishedCaseLawDecisionFor(t));
+
+const sitemapPublishedIndexes = (
+  t: PublishedCourtDateColumns & {
+    id: PgColumn;
+    language: PgColumn;
+    languageGroupKey: PgColumn;
+    sourceId: PgColumn;
+    updatedAt: PgColumn;
+  },
+) => [
+  // What the sitemap read before it carried the language group. Kept until the
+  // promoted release no longer requires it, then retired for the one below.
+  p
+    .index("case_law_decisions_sitemap_shard_published_idx")
+    .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
+    .where(publishedCaseLawDecisionFor(t)),
+  // Partial on the publication gate so the gate costs nothing per row, and
+  // carrying the source (for the redistribution join), `updated_at` and `id`
+  // (for the bucket), and the language group and language (for its two
+  // probes) so a month is read off the index rather than the heap. Trailing
+  // keys rather than INCLUDE for the reason given at
+  // `case_law_decisions_citation_candidate_published_idx`.
+  p
+    .index(SITEMAP_MONTH_INDEX.name)
+    .on(
+      t.country,
+      t.decisionDate,
+      t.sourceId,
+      t.updatedAt,
+      t.id,
+      t.languageGroupKey,
+      t.language,
+    )
+    .where(publishedCaseLawDecisionFor(t)),
+  // The sitemap's probes of one decision's language group, per decision of a
+  // month: read off the index, the group's rows cost no heap page each.
+  p
+    .index(SITEMAP_LANGUAGE_GROUP_INDEX.name)
+    .on(t.country, t.languageGroupKey, t.id, t.language, t.sourceId)
+    .where(publishedCaseLawDecisionFor(t)),
+];
 
 const publishedCoverageIndexes = (
   t: PublishedCourtDateColumns & { sourceId: PgColumn; caseNumber: PgColumn },
@@ -779,6 +857,14 @@ export const caseLawDecisions = p.pgTable(
     parsedSourceRawS3Key: p.varchar("parsed_source_raw_s3_key", {
       length: 512,
     }),
+    /**
+     * Whether the stored parse was made from the decision's current input:
+     * derived from the columns above by a database trigger on every write,
+     * NULL only for rows written before it existed and not yet derived.
+     */
+    parsedInputState: p.text("parsed_input_state", {
+      enum: PARSED_INPUT_STATES,
+    }),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",
@@ -847,6 +933,26 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /** NSS reporter entry number as published. */
+    nssReporterNumber: p.text("nss_reporter_number"),
+    /** NSS reporter year as published. */
+    nssReporterYear: p.text("nss_reporter_year"),
+    /** NSS reporter issue as published. */
+    nssReporterIssue: p.text("nss_reporter_issue"),
+    /** NSS keyword-search taxonomy code as published. */
+    nssKeywordSearchCode: p.text("nss_keyword_search_code"),
+    /** Extended-chamber registry reference for the matched original. */
+    nssRegistryCaseNumber: p.text("nss_registry_case_number"),
+    /** Full published reference of the referring order. */
+    nssRegistryReferral: p.text("nss_registry_referral"),
+    /** Referral date in the publisher’s original notation. */
+    nssRegistryReferralDate: p.text("nss_registry_referral_date"),
+    /** Cases opposed in the extended-chamber proceeding, as published. */
+    nssRegistryAgainstCases: p.text("nss_registry_against_cases"),
+    /** Publisher status of the extended-chamber proceeding. */
+    nssRegistryStatus: p.text("nss_registry_status"),
+    /** Publisher annotation of the extended-chamber proceeding. */
+    nssRegistryAnnotation: p.text("nss_registry_annotation"),
   },
   (t) => [
     parsedSourceComplete(t),
@@ -936,6 +1042,7 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
     parsedSourcePendingIndex(t),
+    ...parsedInputStateTableItems(t),
     // The generation rebuild walks its snapshot in decision-date order, so the
     // documents one split receives cover a contiguous span of dates and a
     // timestamp-filtered query can skip the splits outside its window. The
@@ -1017,15 +1124,7 @@ export const caseLawDecisions = p.pgTable(
     ...publishedCoverageIndexes(t),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
-    // Partial on the publication gate so the gate costs nothing per row, and
-    // carrying the source (for the redistribution join), `updated_at` and `id`
-    // (for the bucket) so the count is read off the index rather than the
-    // heap. Trailing keys rather than INCLUDE for the reason given at
-    // `case_law_decisions_citation_candidate_published_idx`.
-    p
-      .index("case_law_decisions_sitemap_shard_published_idx")
-      .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
-      .where(publishedCaseLawDecisionFor(t)),
+    ...sitemapPublishedIndexes(t),
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
@@ -2954,6 +3053,12 @@ export const caseLawPopulationProjections = p.pgTable(
     p
       .index("case_law_population_projection_activity_idx")
       .on(t.country, t.court, t.updatedAt.desc(), t.sourceId, t.createdAt)
+      .where(sql`${t.publication} = 'published'`),
+    // A court's arrivals as a `created_at` range: a reparse rewrites
+    // `updated_at` across the court, so the activity index cannot bound them.
+    p
+      .index("case_law_population_projection_arrivals_idx")
+      .on(t.country, t.court, t.createdAt, t.sourceId)
       .where(sql`${t.publication} = 'published'`),
     p.pgPolicy("public_law_reader_access", {
       for: "select",

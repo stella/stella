@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -190,6 +193,96 @@ describe("parseRegionalDecision", () => {
 
       const texts = collectPlainTexts(documentAst.blocks);
       expect(texts).toContain("Poučení:");
+    });
+
+    const instructionTexts = (
+      information: ParseRegionalInput["information"],
+    ) => {
+      const { documentAst, fulltext } = parseRegionalDecision(
+        baseInput({ information }),
+      );
+      const texts = collectPlainTexts(documentAst.blocks);
+      return {
+        fulltext,
+        texts: texts.slice(texts.indexOf("Poučení:")),
+      };
+    };
+
+    test.each([
+      ["inline", "Poučení: Proti tomuto rozsudku lze podat odvolání."],
+      [
+        "letter-spaced",
+        "P o u č e n í : Proti tomuto rozsudku lze podat odvolání.",
+      ],
+      ["without a space", "Poučení:Proti tomuto rozsudku lze podat odvolání."],
+    ])("prints the court's %s Poučení label once", (_label, paragraph) => {
+      const { fulltext, texts } = instructionTexts([
+        makePara(paragraph),
+        makePara("Odvolání se podává u podepsaného soudu."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+        "Odvolání se podává u podepsaného soudu.",
+      ]);
+      expect(fulltext.match(/P\s*o\s*u\s*č\s*e\s*n\s*í/gu)).toHaveLength(1);
+    });
+
+    test("drops the court's label printed alone in its paragraph", () => {
+      const { texts } = instructionTexts([
+        makePara("Poučení:"),
+        makePara("Proti tomuto rozsudku lze podat odvolání."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+      ]);
+    });
+
+    test("keeps the instruction's own styling after the label", () => {
+      const { documentAst } = parseRegionalDecision(
+        baseInput({
+          information: [
+            {
+              texts: [
+                { text: "Poučení: ", anonStyle: "NORMAL" },
+                { text: "Proti tomuto rozsudku", anonStyle: "NORMAL" },
+                { text: " lze podat odvolání.", anonStyle: "NORMAL" },
+              ],
+              styleLocalId: 1,
+              tableCellInfo: null,
+            },
+          ],
+        }),
+      );
+
+      const instruction = documentAst.blocks.at(-1);
+      expect(instruction?.plainText).toBe(
+        "Proti tomuto rozsudku lze podat odvolání.",
+      );
+    });
+
+    test("keeps a first instruction that only starts with the word", () => {
+      const { texts } = instructionTexts([
+        makePara("Poučení o odvolání se nepoužije."),
+      ]);
+
+      expect(texts).toEqual(["Poučení:", "Poučení o odvolání se nepoužije."]);
+    });
+
+    test("keeps a later paragraph that opens with the label", () => {
+      const { texts } = instructionTexts([
+        makePara("Proti tomuto rozsudku lze podat odvolání."),
+        makePara("Poučení: lhůta běží od doručení."),
+      ]);
+
+      expect(texts).toEqual([
+        "Poučení:",
+        "Proti tomuto rozsudku lze podat odvolání.",
+        "Poučení: lhůta běží od doručení.",
+      ]);
     });
   });
 

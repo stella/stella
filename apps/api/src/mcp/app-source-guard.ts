@@ -1,15 +1,18 @@
-import { load } from "cheerio";
-import { isText } from "domhandler";
 import path from "node:path";
 
+import { load } from "@stll/html";
+import { isText } from "@stll/html/nodes";
 import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
-// Runtime SDK imports and the call primitive stay at these explicit boundaries.
+// Runtime SDK imports stay at these explicit boundaries.
 const SDK_OWNERS: ReadonlySet<string> = new Set([
   "shared/bridge.ts",
   "document-upload/runtime.ts",
   "file-comparison/runtime.ts",
 ]);
+// Every server tool call goes through one owner, which reads a host's
+// rejection that carries the server's tool error as that error.
+const TOOL_CALL_OWNER = "shared/server-tool-call.ts";
 
 const VISIBLE_ATTRIBUTES = ["title", "aria-label", "placeholder", "alt"];
 
@@ -216,6 +219,17 @@ export const inspectAppSources = (
         issues.push(`Server modules must stay outside browser apps: ${file}`);
       }
       issues.push(...inspectAppSizing({ node, ancestors, file }));
+      if (
+        file !== TOOL_CALL_OWNER &&
+        ((node.type === "MemberExpression" &&
+          (node.computed
+            ? stringLiteralText(node.property) === "callServerTool"
+            : node.property.type === "Identifier" &&
+              node.property.name === "callServerTool")) ||
+          bindsCallServerTool(node, ancestors))
+      ) {
+        issues.push(`App calls require the shared tool-call owner: ${file}`);
+      }
       if (SDK_OWNERS.has(file)) {
         return;
       }
@@ -231,16 +245,6 @@ export const inspectAppSources = (
             node.exportKind !== "type"))
       ) {
         issues.push(`App SDK import requires the shared bridge: ${file}`);
-      }
-      if (
-        (node.type === "MemberExpression" &&
-          (node.computed
-            ? stringLiteralText(node.property) === "callServerTool"
-            : node.property.type === "Identifier" &&
-              node.property.name === "callServerTool")) ||
-        bindsCallServerTool(node, ancestors)
-      ) {
-        issues.push(`App calls require the shared bridge: ${file}`);
       }
     });
   }

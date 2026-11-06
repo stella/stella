@@ -19,7 +19,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
-  parsePlUokikDocument,
+  parsePlUokikDocument as uncheckedParsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
@@ -39,6 +39,9 @@ import {
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { logger } from "@/api/lib/observability/logger";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUokikDocument = guardParser(uncheckedParsePlUokikDocument);
 
 /** A 2011 decision whose embedded fonts name no weight. */
 const DOK_9_2011 = new URL(
@@ -764,6 +767,17 @@ describe("a court ruling's header", () => {
         divisionAsPrinted: undefined,
       },
     });
+  });
+
+  test("a ruling's text reads through its font's letter substitution too", async () => {
+    const supreme = await parsedOf(RULING_FIXTURES.supreme);
+    const appeal = await parsedOf(RULING_FIXTURES.appeal);
+    expect(supreme.fulltext).toContain("Sąd Najwyższy");
+    expect(appeal.fulltext).toContain("Wielobranżowego");
+    for (const { fulltext, blocks } of [supreme, appeal]) {
+      expect(fulltext).not.toContain("Ŝ");
+      expect(JSON.stringify(blocks)).not.toContain("Ŝ");
+    }
   });
 
   test("a scan states nothing, and says so", async () => {

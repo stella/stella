@@ -38,7 +38,7 @@
     "reconnectAccount": "Reconnect to stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Changes stay local and will retry automatically",
+    "checkpointDelayedBody": "{fileName}: Changes stay local and will retry automatically",
     "checkpointDelayedTitle": "Checkpoint sync delayed",
     "diagnosticsCopiedBody": "Paste it into your support request when needed.",
     "diagnosticsCopiedTitle": "Diagnostics copied",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Local recovery data was reset",
     "revisionCreatedBody": "{fileName} saved as version {versionNumber}. Desktop editing finished",
     "revisionCreatedTitle": "stella revision created",
-    "sessionClosedUnsaved": "{fileName} — You have unsaved local edits. Find your copy in Temporary working copies.",
-    "sessionClosedSaved": "{fileName} — Local copy stays preserved in Temporary working copies",
-    "takenOverBody": "{fileName} — Reopen from stella here to take editing back",
+    "sessionClosedUnsaved": "{fileName}: You have unsaved local edits. Find your copy in Temporary working copies.",
+    "sessionClosedSaved": "{fileName}: Local copy stays preserved in Temporary working copies",
+    "takenOverBody": "{fileName}: Reopen from stella here to take editing back",
     "takenOverTitle": "Editing moved to another device",
-    "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved."
+    "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved.",
+    "editsSetAsideTitle": "Edits set aside",
+    "editsSetAsideBody": "Unsaved edits were set aside. Reconnect the same account to open the recovery folder in Settings."
   },
   "dialog": {
     "accountWindowTitle": "Connect account",
@@ -232,7 +234,16 @@
     "permissionDenied": "Turned off in system settings.",
     "permissionManaged": "Managed by your organization",
     "errorUpdateAutostart": "stella desktop could not update start-on-login.",
-    "errorPermissions": "stella desktop could not read or change this permission."
+    "errorPermissions": "stella desktop could not read or change this permission.",
+    "recoveryTitle": "Set-aside edits",
+    "recoveryBody": "Unsaved edits are kept here for your account. Open the folder to recover them.",
+    "recoverySignIn": "Edits were set aside for their account. Reconnect that account to open its folder.",
+    "recoveryUnassigned": "Some edits have no recorded account. Open their folder to recover them manually.",
+    "recoveryPending": "Some edits are still being set aside. Try again to finish.",
+    "recoveryOpenFolder": "Open recovery folder",
+    "recoveryOpenUnassigned": "Open unassigned edits",
+    "recoveryFilePending": "Waiting to be set aside",
+    "recoveryError": "The recovery folder did not open. Try again."
   },
   "clipboard": {
     "registryUnavailable": "No registries are enabled for your practice jurisdictions.",
@@ -321,6 +332,12 @@
     "save": "Save",
     "search": "Search clipboard history",
     "searchPlaceholder": "Search clipboard history",
+    "searchOptions": "Search options",
+    "searchOptionExactPhrase": "Exact phrase",
+    "searchOptionWholeWords": "Whole words only",
+    "searchOptionMatchCase": "Match case",
+    "searchOptionMatchDiacritics": "Match diacritics",
+    "searchOptionsReset": "Reset search options",
     "registrySearch": "Search commercial registry",
     "registrySearchPlaceholder": "Company name or registration number",
     "registryPreview": "Registry preview",
@@ -484,6 +501,10 @@
     "evidenceTitles": "Titles",
     "evidenceApps": "Apps",
     "rangeEmpty": "Nothing was recorded in this range.",
+    "entryStart": "Start",
+    "entryEnd": "End",
+    "rangeEndBeforeStart": "Set an end time after the start.",
+    "rangeDraftedLeftOut": "{duration}, not counting time already drafted",
     "calendarHint": "Open a dashed suggestion to review it, or drag across Time entries to draft an entry for any range.",
     "aiDraftWrite": "Draft with stella AI",
     "aiDraftAgain": "Draft again",
@@ -509,7 +530,27 @@
     "billingDraftsUnavailable": "stella AI draft settings cannot be loaded right now.",
     "aiDraftCodes": "Task {task} · Activity {activity}",
     "aiDraftFlags": "Billing guideline notes",
-    "aiDraftFlagSource": "{file}, {section}"
+    "aiDraftFlagSource": "{file}, {section}",
+    "aiRefine": "Refine",
+    "aiRefinePlaceholder": "Tell stella how to adjust this draft…",
+    "aiRefining": "stella AI is adjusting the description…",
+    "aiProposal": "stella AI suggests",
+    "aiAccept": "Accept",
+    "aiDismiss": "Dismiss",
+    "aiUndo": "Undo",
+    "aiUseOriginal": "Use original",
+    "aiSteerShorter": "Shorter",
+    "aiSteerMoreDetail": "More detail",
+    "aiSteerClientFriendly": "Client-friendly wording",
+    "aiSteerWriteIn": "Write in {language}",
+    "aiSteerRemember": "Remember for next time",
+    "billingDraftsPreference": "Your drafting preference",
+    "billingDraftsForgetPreference": "Forget preference",
+    "aiStructureSplit": "{count, plural, one {stella AI suggests splitting this into # entry} other {stella AI suggests splitting this into # entries}}",
+    "aiStructureMove": "stella AI suggests moving {duration} to {matter}",
+    "aiStructureCreate": "{count, plural, one {Create # entry} other {Create # entries}}",
+    "aiStructureMoveAccept": "Move",
+    "aiFlagSplit": "Split entry"
   },
   "dictation": {
     "title": "Dictation",
@@ -691,6 +732,36 @@
     "callbackConnectedTitle": "ChatGPT is connected",
     "callbackConnectedBody": "You can close this tab and go back to stella.",
     "callbackNotConnectedTitle": "ChatGPT was not connected",
-    "callbackNotConnectedBody": "Go back to stella to see what happened and try again."
+    "callbackNotConnectedBody": "Go back to stella to see what happened and try again.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Use your Claude subscription for local agents in stella. Usage counts toward your Claude plan, separately from your stella subscription.",
+      "notInstalled": "Claude Code is not installed on this computer yet.",
+      "signIn": "Sign in with Claude",
+      "openSignInPage": "Open sign-in page",
+      "signedIn": "Signed in to Claude",
+      "signedInAs": "Signed in to Claude · {email}",
+      "signOut": "Sign out",
+      "apiKey": "Claude Code is signed in with an API key, which stella does not use. Sign out, then sign in with your Claude subscription.",
+      "failure": {
+        "notCompleted": "The sign-in did not finish. Try again.",
+        "timedOut": "The sign-in took too long. Try again.",
+        "unavailable": "Claude Code could not be started on this computer. Try again."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} is not installed on this computer yet.",
+      "install": "Install",
+      "downloading": "Downloading {name} {version}: {percent}%",
+      "verifying": "Checking {name} {version}",
+      "ready": "{name} {version} is installed.",
+      "retry": "Try again",
+      "activeStays": "Version {version} stays in use.",
+      "failure": {
+        "download": "{name} could not be downloaded. Check your internet connection and try again.",
+        "verification": "{name} could not be verified, so it was not installed.",
+        "storage": "{name} could not be saved on this computer. Check that the disk has free space."
+      }
+    }
   }
 }

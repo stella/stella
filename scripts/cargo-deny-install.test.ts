@@ -19,7 +19,18 @@ const script = path.join(
   "../.github/actions/cargo-deny/install.sh",
 );
 const version = "9.9.9";
-const name = `cargo-deny-${version}-aarch64-apple-darwin`;
+/** Release target and SHA-256 variable of each runner the action serves. */
+const RUNNERS: Readonly<Record<string, { shaEnv: string; target: string }>> = {
+  "Linux/X64": {
+    shaEnv: "CARGO_DENY_SHA256_LINUX_X64",
+    target: "x86_64-unknown-linux-musl",
+  },
+  "macOS/ARM64": {
+    shaEnv: "CARGO_DENY_SHA256_MACOS_ARM64",
+    target: "aarch64-apple-darwin",
+  },
+};
+const UNUSED_SHA256 = "0".repeat(64);
 const binary = (reported: string) =>
   `#!/usr/bin/env bash\n[[ "$1" == "--version" ]] && echo "${reported}"\n`;
 
@@ -37,7 +48,7 @@ while [[ $# -gt 0 ]]; do
 done
 printf '%s\\n' "$url" >> "$DENY_TEST_REQUESTS"
 [[ "$DENY_TEST_RELEASE" == "ok" ]] || exit 22
-[[ "$url" == "https://release.invalid/${name}.tar.gz" ]] || exit 99
+[[ "$url" == "$DENY_TEST_URL" ]] || exit 99
 cp "$DENY_TEST_ARCHIVE" "$output"
 `;
 
@@ -70,6 +81,8 @@ const runInstall = ({
   reported = `cargo-deny ${version}`,
   runner = { os: "macOS", arch: "ARM64" },
 }: InstallOptions) => {
+  const served = RUNNERS[`${runner.os}/${runner.arch}`];
+  const name = `cargo-deny-${version}-${served?.target ?? "unserved"}`;
   const directory = mkdtempSync(path.join(tmpdir(), "cargo-deny-install-"));
   const home = path.join(directory, "home");
   const commands = path.join(directory, "commands");
@@ -111,8 +124,14 @@ const runInstall = ({
         RUNNER_ARCH: runner.arch,
         GITHUB_PATH: githubPath,
         CARGO_DENY_VERSION: version,
-        CARGO_DENY_SHA256: sha256,
+        ...Object.fromEntries(
+          Object.values(RUNNERS).map(({ shaEnv }) => [
+            shaEnv,
+            shaEnv === served?.shaEnv ? sha256 : UNUSED_SHA256,
+          ]),
+        ),
         CARGO_DENY_RELEASE_URL: "https://release.invalid",
+        DENY_TEST_URL: `https://release.invalid/${name}.tar.gz`,
         DENY_TEST_RELEASE: release,
         DENY_TEST_ARCHIVE: archive,
         DENY_TEST_REQUESTS: requests,
@@ -174,10 +193,22 @@ describe("cargo-deny binary trust boundary", () => {
     expect(result.githubPath).toBe("");
   });
 
-  test("refuses a runner it has no pinned binary for", () => {
+  test("installs the Linux x64 release binary on a Linux runner", () => {
     const result = runInstall({
       release: "ok",
       runner: { os: "Linux", arch: "X64" },
+    });
+    expect(result.status).toBe(0);
+    expect(result.requests).toBe(
+      `https://release.invalid/cargo-deny-${version}-x86_64-unknown-linux-musl.tar.gz\n`,
+    );
+    expect(result.githubPath).toContain("/.cargo-deny/bin");
+  });
+
+  test("refuses a runner it has no pinned binary for", () => {
+    const result = runInstall({
+      release: "ok",
+      runner: { os: "Windows", arch: "X64" },
     });
     expect(result.status).not.toBe(0);
     expect(result.requests).toBe("");

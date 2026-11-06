@@ -271,6 +271,7 @@ export const LIMITS = {
   oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
+  mcpListPageSizeMin: 1,
   mcpListPageSizeMax: 100,
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,
@@ -839,6 +840,22 @@ export const LIMITS = {
   corpusIndexSearchMaxRounds: 3,
   /** Bound per-document passage searches and their per-split fan-out. */
   corpusIndexHighlightConcurrency: 8,
+  /**
+   * Corpus search reads one API process sends the engine at once
+   * (`corpus-index-admission.ts`). Sized to the search node's cores across
+   * the API replicas: past that, reads only slow each other down.
+   */
+  corpusIndexSearchConcurrency: 3,
+  /**
+   * Reads one process holds queued behind those; a read past this is
+   * refused at once as the index being unavailable, retryable, rather than
+   * left to wait out a queue it would not reach the front of in time. Ten
+   * agent searches' worth of first rounds (five phrasings, a scan and an
+   * aggregation each).
+   */
+  corpusIndexSearchQueueMax: 100,
+  /** Longest any queued read waits; its own timeout normally ends it first. */
+  corpusIndexSearchQueueMaxWaitMs: 30_000,
   /**
    * Folded groups (the acts of a legislation search) a cursor may carry past
    * capped scan windows, so none is shown again from a deeper member. A

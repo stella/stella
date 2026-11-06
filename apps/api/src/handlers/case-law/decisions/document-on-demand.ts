@@ -38,6 +38,12 @@
 
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 
+import {
+  classifyFailure,
+  declareFailureClass,
+  type FailureReason,
+} from "@stll/errors";
+
 import type {
   ImmediatePublisherSlotResult,
   PublisherPacingOutcome,
@@ -72,13 +78,29 @@ const READ_BUDGET_LABEL = "caseLaw.deferredDocumentRead";
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
 
+export type DocumentReadDeferral =
+  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+
+/**
+ * Every deferral is a designed outcome: the reader gets the metadata-only
+ * decision and the queue keeps the work. None of them is a defect, so each
+ * is graded by its cause rather than by the tag's baseline.
+ */
+const DEFERRAL_REASON = {
+  "pacing-deferred": "work_capacity_unavailable",
+  "pacing-unavailable": "limiter_store_unavailable",
+  "ownership-busy": "deferred_document_owned_elsewhere",
+  "ownership-lost": "deferred_document_owned_elsewhere",
+} as const satisfies Record<DocumentReadDeferral, FailureReason>;
+
 class DocumentPacingOutcome extends TaggedError("DocumentPacingOutcome")<{
   message: string;
   outcome: DocumentReadDeferral;
-}> {}
-
-export type DocumentReadDeferral =
-  PublisherPacingOutcome | "ownership-busy" | "ownership-lost";
+}> {
+  static {
+    declareFailureClass(this, ({ outcome }) => DEFERRAL_REASON[outcome]);
+  }
+}
 
 const CAPTURE_SOURCE = "case-law-document-on-demand";
 
@@ -91,6 +113,15 @@ const inFlight = new Map<
   SafeId<"caseLawDecision">,
   Promise<BackfilledDocument | null>
 >();
+
+/**
+ * Frees every concurrency slot. A test whose fetch never settles keeps its
+ * slot for the life of the process, so each test starts from empty slots
+ * rather than from whatever the tests before it left running.
+ */
+export const resetDocumentFetchesForTesting = (): void => {
+  inFlight.clear();
+};
 
 export type DeferredDocumentState = {
   adapterKey: string;
@@ -200,6 +231,27 @@ export const recordDocumentPacingOutcome = (
 const isReadBudgetExpiry = (error: unknown): boolean => {
   const raised = error instanceof UnhandledException ? error.cause : error;
   return TimeoutError.is(raised) && raised.label === READ_BUDGET_LABEL;
+};
+
+/**
+ * Grades the expiry of a fetch's wall-clock budget. A publisher too slow for
+ * the budget is the source's state rather than a fault here: the reader was
+ * already answered and the queue keeps the work. The fetch rejects with the
+ * budget's own abort reason, so that reason carries the grade, and a failure
+ * the budget did not cause keeps its own.
+ */
+export const gradedDocumentFetchBudget = (budget: AbortSignal): AbortSignal => {
+  budget.addEventListener(
+    "abort",
+    () => {
+      const reason: unknown = budget.reason;
+      if (typeof reason === "object" && reason !== null) {
+        classifyFailure(reason, "upstream_unavailable");
+      }
+    },
+    { once: true },
+  );
+  return budget;
 };
 
 type FetchDeferredDocumentOptions = {

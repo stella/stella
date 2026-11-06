@@ -155,6 +155,10 @@ enum SettingsUpdate<'a> {
   GrantConsent {
     revision: Option<&'a str>,
   },
+  SetPreference {
+    revision: Option<&'a str>,
+    preference: Option<&'a str>,
+  },
 }
 
 fn client(timeout: Duration) -> Result<DesktopHttpClient, String> {
@@ -236,6 +240,27 @@ pub async fn grant_consent(
   revision: Option<&str>,
 ) -> Result<serde_json::Value, String> {
   update_settings(account, &SettingsUpdate::GrantConsent { revision }).await
+}
+
+/// The instruction future drafts follow, or `None` to forget it.
+pub async fn set_preference(
+  account: &AccountRequest,
+  preference: Option<&str>,
+  revision: Option<&str>,
+) -> Result<serde_json::Value, String> {
+  if preference
+    .is_some_and(|text| text.is_empty() || text.chars().count() > MAX_STEER_CHARS)
+  {
+    return Err(FAILURE.to_string());
+  }
+  update_settings(
+    account,
+    &SettingsUpdate::SetPreference {
+      revision,
+      preference,
+    },
+  )
+  .await
 }
 
 async fn update_settings(
@@ -430,6 +455,26 @@ mod tests {
 
   #[test]
   fn settings_updates_send_the_servers_request_union() {
+    assert_eq!(
+      serde_json::to_value(SettingsUpdate::SetPreference {
+        revision: Some("revision"),
+        preference: Some("Shorter"),
+      })
+      .unwrap(),
+      serde_json::json!({
+        "type": "set_preference",
+        "revision": "revision",
+        "preference": "Shorter",
+      })
+    );
+    assert_eq!(
+      serde_json::to_value(SettingsUpdate::SetPreference {
+        revision: None,
+        preference: None,
+      })
+      .unwrap(),
+      serde_json::json!({ "type": "set_preference", "revision": null, "preference": null })
+    );
     assert_eq!(
       serde_json::to_value(SettingsUpdate::WithdrawConsent).unwrap(),
       serde_json::json!({ "type": "withdraw_consent" })

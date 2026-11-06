@@ -63,7 +63,7 @@ const seed = async () => {
   process.exit(0);
 };
 
-seed().catch((error: unknown) => {
+await seed().catch((error: unknown) => {
   printError("Seed failed:", error);
   process.exit(1);
 });

@@ -7,7 +7,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import { assertProperty } from "@stll/property-testing";
 
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -22,6 +22,7 @@ import {
   visibleRunDocument,
 } from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
 import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 
 import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
 import {
@@ -34,6 +35,8 @@ import {
 } from "./document-note-paths.fixtures";
 import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
 import { inlinesToPlainText } from "./shared-inlines";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
 
 test("CZ field results keep visible hyphens and omit instructions", () => {
   const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);
@@ -668,6 +671,70 @@ describe("parseUsDecisionHtml", () => {
 
       const sigs = findAllByRole(documentAst.blocks, "signature");
       expect(sigs.some((s) => s.plainText.includes("JUDr."))).toBe(true);
+    });
+
+    const MAJORITY_TEXT = "Ústavní soud shledal ústavní stížnost důvodnou.";
+    const DISSENT_TEXT = "Se závěrem senátní většiny nesouhlasím.";
+
+    const classifiedRoles = (texts: readonly string[]) =>
+      classifyUsDocumentLines(
+        texts.map((text) => ({
+          kind: "body" as const,
+          value: normalizeInlineLine([{ type: "text", text }]),
+        })),
+      ).map((block) => ({
+        text: block.plainText,
+        role: block.type === "paragraph" ? block.role : block.type,
+      }));
+
+    // The Court's judges sign a separate opinion with their name alone: no
+    // academic title and no "v. r." under the opinion's own closing.
+    test("reads a bare name under a separate opinion's closing as its signature", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Jan Novák v. r.",
+        "předseda senátu",
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "V Brně dne 24. září 2026",
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-2)).toEqual({
+        text: "V Brně dne 24. září 2026",
+        role: "closing",
+      });
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "signature" });
+      expect(roles).toContainEqual({ text: DISSENT_TEXT, role: "dissent" });
+    });
+
+    test("reads every bare name of a signature block under the closing", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Petra Svobodová-Dvořáková",
+        "Jan Novák",
+      ]);
+
+      expect(roles.slice(-2)).toEqual([
+        { text: "Petra Svobodová-Dvořáková", role: "signature" },
+        { text: "Jan Novák", role: "signature" },
+      ]);
+    });
+
+    test("leaves a name-shaped line that no closing precedes as opinion text", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "dissent" });
     });
   });
 

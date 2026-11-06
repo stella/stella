@@ -169,18 +169,13 @@ const SessionsCardContent = () => {
                     ) : (
                       <Tooltip
                         content={formatFullTimestamp(session.updatedAt)}
-                        render={
-                          <button
-                            className="rounded-sm text-start focus-visible:outline-2"
-                            type="button"
-                          />
-                        }
+                        render={<Button variant="plain" />}
                       >
                         {formatRelativeTime(session.updatedAt)}
                       </Tooltip>
                     )}
                   </TableCell>
-                  <TableCell className="text-end">
+                  <TableCell align="end">
                     {isCurrent ? (
                       <span className="bg-muted inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium">
                         {t("account.sessions.currentSession")}

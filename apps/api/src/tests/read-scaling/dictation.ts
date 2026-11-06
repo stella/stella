@@ -27,6 +27,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const MODEL_ID = "mistralai/voxtral-mini-transcribe";
 const DURATION_MS = 20_000;
@@ -130,7 +131,7 @@ export const seedDictationScaling = async (db: GatedTestDb, size: number) => {
       request,
     },
     cleanup: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(usagePolicies).where(eq(usagePolicies.id, usagePolicyId));
       await db.delete(user).where(eq(user.id, userId));
     },

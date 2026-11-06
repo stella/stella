@@ -757,6 +757,7 @@ mod tests {
 
   fn make_snapshot(sessions: Vec<SessionSnapshot>) -> AppSnapshot {
     AppSnapshot {
+      document_recovery: crate::types::DocumentRecoverySnapshot::default(),
       bridge_port: 45_901,
       bridge_version: crate::types::BRIDGE_VERSION,
       capabilities: crate::types::BRIDGE_CAPABILITIES

@@ -11,6 +11,7 @@ import {
   AI_ERROR_KINDS,
   AI_FAILURE_CODES,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
@@ -373,7 +374,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -397,7 +397,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -999,7 +998,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("3 steps");
     expect(disclosureExpanded(html, "1 analysis")).toBe("false");
     expect(disclosureExpanded(html, "Show details")).toBe("false");
-    expect(html).toContain("This step failed — stella will work around it.");
+    expect(html).toContain("This step failed; stella will work around it.");
     expect(html).toContain(">Show details<");
     expect(html).toContain("Here is the answer.");
   });
@@ -1084,8 +1083,9 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain('data-slot="loader"');
-      expect(output).not.toContain("Working with context");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
     }
   });
 
@@ -1817,7 +1817,7 @@ describe("buildMessageTurns", () => {
 });
 
 test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
-  "runtime chat error %s renders full provider reason and guidance after reload",
+  "runtime chat error %s renders its typed message and setup fix, never the provider's wording",
   (code) => {
     const provider =
       code === null
@@ -1826,7 +1826,7 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     const diagnostic = {
       provider,
       code,
-      message: `The exact upstream reason\n${"full detail ".repeat(30)}`,
+      message: "messages.0: user messages must have non-empty content",
     };
     const stored = {
       id: "failed-diagnostic",
@@ -1849,13 +1849,19 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
     const restored = error;
     const html = renderWithProviders(
-      <ChatErrorMessage error={restored} isGenerating={false} />,
+      <ChatErrorMessage
+        error={restored}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
     );
-    expect(renderedText(html)).toContain(`${provider}: ${diagnostic.message}`);
-    expect(html).toContain(messages.common.copy);
-    expect(html).not.toContain(
-      messages.chat.sendErrorProviderCredentialsRejected,
-    );
+    const text = renderedText(html);
+    expect(text).toContain(messages.chat.sendErrorProviderCredentialsRejected);
+    expect(text).not.toContain(diagnostic.message);
+    expect(text).not.toContain(`${provider}:`);
+    expect(html).not.toContain(messages.common.copy);
+    // A provider failure is worth sending again.
+    expect(text).toContain(messages.chat.resend);
     if (code !== null) {
       expect(html).toContain(
         PROVIDER_SETUP_ERROR_CATALOGUE[code].url.replaceAll("&", "&amp;"),
@@ -1863,6 +1869,27 @@ test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
     }
   },
 );
+
+test("a message refused as empty says what to do and offers no resend", () => {
+  const refusal = toAPIError({
+    status: 422,
+    value: {
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      message: "Chat message has no text or attachment",
+    },
+  });
+  const html = renderWithProviders(
+    <ChatErrorMessage
+      error={new Error("Chat request failed", { cause: refusal })}
+      isGenerating={false}
+      onResend={() => {}}
+    />,
+  );
+  const text = renderedText(html);
+  expect(text).toContain(messages.chat.sendErrorMessageEmpty);
+  expect(text).not.toContain("Chat message has no text or attachment");
+  expect(text).not.toContain(messages.chat.resend);
+});
 test("sent pasted text renders once as a collapsed attachment", () => {
   const text = "First line\n  <literal> & whitespace\n";
   const html = renderWithProviders(

@@ -182,6 +182,20 @@
       "system": "Išvaizda: automatinė",
       "light": "Išvaizda: šviesi",
       "dark": "Išvaizda: tamsi"
+    },
+    "edit": {
+      "saved": "Išsaugota",
+      "saving": "Saugoma…",
+      "notSaved": "Dar neišsaugota",
+      "done": "Atlikta",
+      "openFailed": "Šio dokumento dabar negalima redaguoti",
+      "resumed": "Šio dokumento redagavimas nebaigtas, todėl tęsiamas nuo ten. Tai, ką ką tik įvedėte, nebuvo išsaugota.",
+      "newerVersion": "Tuo metu buvo išsaugota naujesnė šio dokumento versija, todėl redagavimas tęsiamas nuo jos. Tai, ką ką tik įvedėte, nebuvo išsaugota.",
+      "takenOver": "Šį dokumentą dabar redaguoja kažkas kitas. Jūsų pakeitimai po paskutinio išsaugojimo nebuvo išlaikyti.",
+      "finishFailed": "Jūsų pakeitimai išsaugoti, bet iš jų dar nesukurta nauja versija. Dar kartą bakstelėkite Atlikta arba išeikite: kitas redagavimas tęsis nuo jų.",
+      "notStored": "Paskutinių pakeitimų išsaugoti nepavyko. Likite ir bandykite dar kartą arba išeikite be jų.",
+      "stay": "Likti",
+      "leave": "Išeiti"
     }
   },
   "signIn": {
@@ -211,7 +225,10 @@
     "signOut": "Atsijungti",
     "deleteAccount": "Ištrinti paskyrą",
     "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
-    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą."
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą.",
+    "lockScreenTitle": "Užrakinimo ekranas",
+    "timerDetails": "Laikmačio informacija",
+    "timerDetailsHint": "Kai laikmatis pasikeičia kitame įrenginyje, „Apple“ pranešimų paslauga perduoda jo aprašymą ir bylą į užrakinimo ekraną. Išjungus rodomas tik laikas, kol atidarysite programėlę."
   },
   "header": {
     "search": "Ieškoti"
@@ -251,10 +268,6 @@
     "newTimer": "Naujas laikmatis",
     "description": "Prie ko dirbate?",
     "matterTitle": "Byla",
-    "noMatter": "Be bylos",
-    "noDescription": "Be aprašymo",
-    "running": "Veikia",
-    "paused": "Pristabdytas",
     "pause": "Pristabdyti",
     "resume": "Tęsti",
     "save": "Išsaugoti",
@@ -265,8 +278,7 @@
     "retry": "Bandyti dar kartą",
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
-    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą.",
-    "more": "{count, plural, one {dar # laikmatis} few {dar # laikmačiai} other {dar # laikmačių}}"
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
   },
   "scan": {
     "title": "Nuskenuoti dokumentą",

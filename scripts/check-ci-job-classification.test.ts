@@ -16,13 +16,69 @@ import {
   writeDecision,
 } from "./ci-job-classification/decisions";
 import {
+  generateClassification,
+  readClassificationInputs,
+  readClassificationInputsAtRevision,
+} from "./ci-job-classification/generate";
+import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  CLASSIFICATION_INPUT_PATHS,
   decisionPathForKey,
+  isClassificationInput,
 } from "./ci-job-classification/inputs";
 import { ReviewRequiredError } from "./ci-job-classification/review";
+import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
+
+const repositoryRoot = path.resolve(import.meta.dir, "..");
+
+const classificationReads = () => {
+  const reads = new Set<string>();
+  const inputs = readClassificationInputs(repositoryRoot, {
+    observeRead: (file) => {
+      reads.add(file);
+    },
+  });
+  generateClassification(inputs);
+  return reads;
+};
+
+const covers = (input: string, file: string) =>
+  file === input || file.startsWith(`${input}/`);
+
+test("every repository file read by classification is an input", () => {
+  const uncovered = [...classificationReads()].filter(
+    (file) => !isClassificationInput(file),
+  );
+  expect(uncovered).toEqual([]);
+});
+
+test("every classification input is read by the real program", async () => {
+  const runtimeReads = classificationReads();
+  const build = await Bun.build({
+    entrypoints: [path.join(import.meta.dir, "check-ci-job-classification.ts")],
+    target: "bun",
+    metafile: true,
+  });
+  expect(
+    build.success,
+    build.logs.map(({ message }) => message).join("\n"),
+  ).toBe(true);
+  const executableReads = new Set(
+    Object.values(build.metafile?.outputs ?? {}).flatMap((output) =>
+      Object.keys(output.inputs),
+    ),
+  );
+  const unread = CLASSIFICATION_INPUT_PATHS.filter(
+    (input) =>
+      ![...runtimeReads, ...executableReads].some((file) =>
+        covers(input, file),
+      ),
+  );
+  expect(unread).toEqual([]);
+});
 
 test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
@@ -69,6 +125,49 @@ test("the classification input paths load alone, without packages or siblings", 
   }
 });
 
+test("a revision from before the global rule manifest still classifies, and records it", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "classification-revision-"));
+  try {
+    writeClassificationFixtureInputs(root);
+    // The base a branch forked from before the manifest existed.
+    rmSync(path.join(root, ".github/global-rule-inputs.json"));
+    const workflow = "jobs: {check: {steps: []}}";
+    writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
+    for (const [key, decision] of Object.entries(reviewed(workflow, "check"))) {
+      writeDecision(root, key, decision);
+    }
+    const git = (...args: string[]) =>
+      Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=Classification Test",
+          "-c",
+          "user.email=classification-test@example.invalid",
+          "-c",
+          "commit.gpgsign=false",
+          "-C",
+          root,
+          ...args,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+    expect(git("init", "--quiet").exitCode).toBe(0);
+    expect(git("add", ".").exitCode).toBe(0);
+    expect(git("commit", "--quiet", "-m", "base").exitCode).toBe(0);
+    const reads = new Set<string>();
+    const inputs = readClassificationInputsAtRevision(root, "HEAD", {
+      observeRead: (file) => {
+        reads.add(file);
+      },
+    });
+    expect(generateClassification(inputs).isOk()).toBe(true);
+    expect(reads.has(".github/global-rule-inputs.json")).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 const SCRIPT = path.join(import.meta.dir, "check-ci-job-classification.ts");
 const decoder = new TextDecoder();
 const roots: string[] = [];
@@ -105,6 +204,7 @@ const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
 const repository = (base: Fixture, head: Fixture, commit = false) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-refresh-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
@@ -151,10 +251,6 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       message,
     );
   };
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
   write(base);
   git("init", "--quiet");
   commitAll("base");
@@ -614,6 +710,7 @@ const compositionRepository = ({
   );
   const root = mkdtempSync(path.join(tmpdir(), "classification-compose-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   mkdirSync(path.join(root, ".github/actions", actionDirectory), {
     recursive: true,
@@ -621,10 +718,6 @@ const compositionRepository = ({
   mkdirSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
     recursive: true,
   });
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
   writeFileSync(
     path.join(root, ".github/ci-job-classification-decisions.json"),
     "{}",
@@ -947,4 +1040,65 @@ test("conflicting modes are rejected", () => {
   const result = run(root, "--write", "--check");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("usage:");
+});
+
+const jsonRun = (root: string, ...args: string[]) => {
+  const result = run(root, "--check", ...args, "--json");
+  return { exitCode: result.exitCode, report: JSON.parse(result.stdout) };
+};
+
+test("--group checks a composed tree like its merge group, before it is queued", () => {
+  const { root, base, first, second } = compositionRepository();
+  const exact = jsonRun(root, "--base", base);
+  expect(exact.exitCode).toBe(1);
+  expect(exact.report.status).toBe("stale");
+  expect(exact.report.stale.length).toBeGreaterThan(0);
+  expect(
+    jsonRun(root, "--base", base, "--group", `41:${first},42:${second}`),
+  ).toEqual({ exitCode: 0, report: { status: "ok", privileged: [] } });
+});
+
+test("--group refuses to run when a member head is missing", () => {
+  const { root, base, first } = compositionRepository();
+  const missing = "f".repeat(40);
+  const result = jsonRun(
+    root,
+    "--base",
+    base,
+    "--group",
+    `41:${first},42:${missing}`,
+  );
+  expect(result.exitCode).toBe(2);
+  expect(result.report.status).toBe("error");
+  expect(result.report.message).toContain(`#42 ${missing}`);
+});
+
+test("--group and --json reject malformed input and other modes", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: BEFORE, decisions },
+  );
+  for (const args of [
+    ["--check", "--group", "41:abc", "--json"],
+    ["--check", "--group", "41", "--json"],
+    ["--write", "--json"],
+  ]) {
+    const result = run(root, ...args);
+    expect(result.exitCode, args.join(" ")).toBe(2);
+    expect(JSON.parse(result.stdout).status).toBe("error");
+  }
+});
+
+test("--json lists the stale candidates a refresh records without review", () => {
+  const decisions = reviewed(BEFORE, "check");
+  const { root } = repository(
+    { workflow: BEFORE, decisions },
+    { workflow: AFTER, decisions },
+    true,
+  );
+  const result = jsonRun(root);
+  expect(result.exitCode).toBe(1);
+  expect(result.report.stale).toEqual(result.report.mechanical);
+  expect(result.report.mechanical).toHaveLength(1);
 });

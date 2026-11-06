@@ -9,12 +9,12 @@ import {
 } from "@stll/api-contract/organization-ai-availability";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   aiAvailableResponse,
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 
@@ -397,7 +397,7 @@ test("a provider under another provider reuses the outer gate", async () => {
 });
 
 const { AIProviderSettingsBoundary } =
-  await import("@/routes/_protected.admin/-components/organization/ai-provider-settings-boundary");
+  await import("@/routes/_protected.settings/organization/-components/organization/ai-provider-settings-boundary");
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (

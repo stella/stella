@@ -332,9 +332,15 @@ const withHeartbeatFrames = (
           }
           closeHeartbeat();
           closeControllerQuietly(controller);
-          reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
-            observeFailure(error, { sink: BOUND_STREAM_CANCEL_FAILURE_SINK });
-          });
+          detached(
+            async () =>
+              reader.cancel(CREDENTIAL_ENDED).catch((error: unknown) => {
+                observeFailure(error, {
+                  sink: BOUND_STREAM_CANCEL_FAILURE_SINK,
+                });
+              }),
+            "sse.cancel-bound-stream",
+          );
         },
       };
       boundStreams.add(bound);
@@ -776,18 +782,22 @@ const queueWorkspaceDelivery = (
     return undefined;
   });
   workspaceDeliveryTails.set(workspaceId, current);
-  current
-    .then(() => {
-      if (workspaceDeliveryTails.get(workspaceId) === current) {
-        workspaceDeliveryTails.delete(workspaceId);
-      }
-      return undefined;
-    })
-    .catch((error: unknown) => {
-      logger.error("sse.workspace_queue_cleanup_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      current
+        .then(() => {
+          if (workspaceDeliveryTails.get(workspaceId) === current) {
+            workspaceDeliveryTails.delete(workspaceId);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.error("sse.workspace_queue_cleanup_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.release-workspace-delivery-tail",
+  );
 };
 
 /** Serialize one user's deliveries without blocking unrelated users. */
@@ -809,21 +819,31 @@ const queueUserDelivery = (
     return undefined;
   });
   userDeliveryTails.set(userId, current);
-  current
-    .then(() => {
-      if (userDeliveryTails.get(userId) === current) {
-        userDeliveryTails.delete(userId);
-      }
-      return undefined;
-    })
-    .catch((error: unknown) => {
-      logger.error("sse.user_queue_cleanup_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      current
+        .then(() => {
+          if (userDeliveryTails.get(userId) === current) {
+            userDeliveryTails.delete(userId);
+          }
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          logger.error("sse.user_queue_cleanup_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.release-user-delivery-tail",
+  );
 };
 
-/** Push an SSE event to local connections for an entire organization. */
+/**
+ * Push an SSE event to local connections for an entire organization: every
+ * matter stream, which refreshes that matter's views, and every user stream,
+ * which each signed-in tab holds wherever it is, so organization-wide lists
+ * (contacts, for one) refresh on pages that have no matter open. The event is
+ * content-free — a resource type, never an id — like the rest of this fan-out.
+ */
 const broadcastLocalToOrganization = (
   organizationId: SafeId<"organization">,
   event: OrganizationRealtimeEvent,
@@ -839,6 +859,18 @@ const broadcastLocalToOrganization = (
     }
     if (set.size === 0 && connections.get(workspaceId) === set) {
       connections.delete(workspaceId);
+    }
+  }
+
+  for (const [userId, set] of userConnections) {
+    for (const conn of set) {
+      if (conn.organizationId !== organizationId) {
+        continue;
+      }
+      enqueueOrDrop({ chunk, connection: conn, set });
+    }
+    if (set.size === 0 && userConnections.get(userId) === set) {
+      userConnections.delete(userId);
     }
   }
 };
@@ -1012,21 +1044,25 @@ export const broadcastToUser = (
     );
   }
 
-  activePublisher()
-    .publishUserEvent(userId, organizationId, event, {
-      originInstanceId: INSTANCE_ID,
-      deliveredInline: deliveredLocally,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      if (!deliveredLocally) {
-        queueUserDelivery(userId, async () =>
-          broadcastLocalToUser(userId, organizationId, event),
-        );
-      }
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishUserEvent(userId, organizationId, event, {
+          originInstanceId: INSTANCE_ID,
+          deliveredInline: deliveredLocally,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+          if (!deliveredLocally) {
+            queueUserDelivery(userId, async () =>
+              broadcastLocalToUser(userId, organizationId, event),
+            );
+          }
+        }),
+    "sse.publish-user-event",
+  );
 };
 
 /**
@@ -1065,22 +1101,26 @@ export const broadcast = (
 
   const publishWorkspace =
     publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
-  publishWorkspace(workspaceId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
-    });
-    // Fallback: deliver locally when Redis is unavailable so
-    // single-instance deployments still get SSE invalidation. Skip it
-    // when we already delivered inline above to avoid double delivery.
-    if (!deliveredLocally) {
-      queueWorkspaceDelivery(workspaceId, async () =>
-        broadcastLocal(workspaceId, event),
-      );
-    }
-  });
+  detached(
+    async () =>
+      publishWorkspace(workspaceId, event, {
+        originInstanceId: INSTANCE_ID,
+        deliveredInline: deliveredLocally,
+      }).catch((error: unknown) => {
+        logger.warn("sse.redis_publish_failed", {
+          "error.type": errorTag(error),
+        });
+        // Fallback: deliver locally when Redis is unavailable so
+        // single-instance deployments still get SSE invalidation. Skip it
+        // when we already delivered inline above to avoid double delivery.
+        if (!deliveredLocally) {
+          queueWorkspaceDelivery(workspaceId, async () =>
+            broadcastLocal(workspaceId, event),
+          );
+        }
+      }),
+    "sse.publish-workspace",
+  );
 };
 
 export const broadcastToOrganization = (
@@ -1092,19 +1132,23 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  activePublisher()
-    .publishOrganizationEvent(organizationId, event, {
-      originInstanceId: INSTANCE_ID,
-      deliveredInline: deliveredLocally,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-      if (!deliveredLocally) {
-        broadcastLocalToOrganization(organizationId, event);
-      }
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishOrganizationEvent(organizationId, event, {
+          originInstanceId: INSTANCE_ID,
+          deliveredInline: deliveredLocally,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+          if (!deliveredLocally) {
+            broadcastLocalToOrganization(organizationId, event);
+          }
+        }),
+    "sse.publish-organization-event",
+  );
 };
 
 // ── MCP tool projections ────────────────────────────────
@@ -1218,15 +1262,19 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  activePublisher()
-    .publishSessionEvent(sessionId, event, {
-      originInstanceId: INSTANCE_ID,
-    })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+  detached(
+    async () =>
+      activePublisher()
+        .publishSessionEvent(sessionId, event, {
+          originInstanceId: INSTANCE_ID,
+        })
+        .catch((error: unknown) => {
+          logger.warn("sse.redis_publish_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+    "sse.publish-session-event",
+  );
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
@@ -1553,9 +1601,16 @@ const launchAttachAttempt = (
   lifecycle: SseLifecycle,
   attempt: number,
 ): void => {
-  runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
-    logger.error("sse.redis_connection_failed", connectionErrorFields(error));
-  });
+  detached(
+    async () =>
+      runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
+        logger.error(
+          "sse.redis_connection_failed",
+          connectionErrorFields(error),
+        );
+      }),
+    "sse.run-attach-attempt",
+  );
 };
 
 /**
@@ -1613,9 +1668,10 @@ export const startSse = (
     }
     sweeping = true;
     detached(
-      sweepBoundStreams(authorizers.sessions).finally(() => {
-        sweeping = false;
-      }),
+      async () =>
+        sweepBoundStreams(authorizers.sessions).finally(() => {
+          sweeping = false;
+        }),
       "sse.credential-sweep",
     );
   };

@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 // Constants only: safe to load before the fixture's environment is read.
 import { SETTING_USER_ID } from "@/api/db/rls";
@@ -17,7 +18,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
   const { getAuth } = await import("@/api/lib/auth");
   const { env } = await import("@/api/env");
   const { rootDb } = await import("@/api/db/root");
-  const { user, organization, verification, oauthResource } =
+  const { user, verification, oauthResource } =
     await import("@/api/db/auth-schema");
   const { accountAuditLogs, userProfessionalUseAcceptances } =
     await import("@/api/db/schema");
@@ -353,9 +354,7 @@ test("provisions one verified owner, rotates credentials, and refuses HTTP creat
     expect(rotatedAccounts).toHaveLength(1);
     expect(rotatedAccounts.at(0)?.id).toBe(credential.id);
   } finally {
-    await rootDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(rootDb, [organizationId]);
     // Account history is append-only and keeps the review account's row;
     // each run provisions its own random account.
     await rootDb.delete(user).where(eq(user.email, ordinaryEmail));

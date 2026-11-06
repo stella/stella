@@ -14,7 +14,6 @@ import type { DispatchCheck } from "@/api/lib/tanstack-ai-generate";
 import {
   DispatchRefusedError,
   generateTanStackObjectForTask,
-  generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
 
 import {
@@ -135,7 +134,6 @@ export type GatedGenerationFailure =
 
 /** The model calls a test may stand in for. */
 export type ObjectGeneration = typeof generateTanStackObjectForTask;
-export type TextGeneration = typeof generateTanStackTextForTask;
 
 const isGateFailure = (value: unknown): value is GateFailure =>
   HandlerError.is(value) ||
@@ -145,7 +143,7 @@ const isGateFailure = (value: unknown): value is GateFailure =>
 
 const generateGated = async <T>(
   admission: DraftingAdmission,
-  expectedMode: DesktopBillingDraftMode | undefined,
+  expectedMode: DesktopBillingDraftMode,
   run: (beforeEachDispatch: DispatchCheck) => Promise<T>,
 ): Promise<Result<T, GatedGenerationFailure>> => {
   const generated = await Result.tryPromise({
@@ -189,26 +187,6 @@ export const generateAdmittedObject = async <TSchema extends v.GenericSchema>({
   await generateGated(
     admission,
     expectedMode,
-    async (beforeEachDispatch) =>
-      await generate({ ...request, beforeEachDispatch }),
-  );
-
-type GenerateAdmittedTextOptions = {
-  admission: DraftingAdmission;
-  /** The generation; its own `beforeEachDispatch` is replaced by the gate. */
-  request: Parameters<typeof generateTanStackTextForTask>[0];
-  generate?: TextGeneration | undefined;
-};
-
-/** A text generation that re-reads the gate before every request. */
-export const generateAdmittedText = async ({
-  admission,
-  request,
-  generate = generateTanStackTextForTask,
-}: GenerateAdmittedTextOptions) =>
-  await generateGated(
-    admission,
-    undefined,
     async (beforeEachDispatch) =>
       await generate({ ...request, beforeEachDispatch }),
   );

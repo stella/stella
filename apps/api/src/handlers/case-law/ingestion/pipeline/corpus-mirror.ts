@@ -165,6 +165,16 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   normalizedS3Key: "text",
   astS3Key: "text",
   contentHash: "text",
+  nssReporterNumber: "text",
+  nssReporterYear: "text",
+  nssReporterIssue: "text",
+  nssKeywordSearchCode: "text",
+  nssRegistryCaseNumber: "text",
+  nssRegistryReferral: "text",
+  nssRegistryReferralDate: "text",
+  nssRegistryAgainstCases: "text",
+  nssRegistryStatus: "text",
+  nssRegistryAnnotation: "text",
 } as const;
 
 type RefreshComparedColumn = keyof typeof REFRESH_COMPARED_COLUMN_TYPES;

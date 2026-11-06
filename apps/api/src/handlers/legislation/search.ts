@@ -585,7 +585,7 @@ export const legislationCandidateRowsStatement = (
       and(
         inArray(legislationDocuments.id, ids),
         ...legislationRequestFilters(body),
-        currentLegislationCorpusProjection(generation),
+        currentLegislationCorpusProjection(generation, ids),
       ),
     )
     // Bounds the content branch and keeps its subplans behind eligibility.

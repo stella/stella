@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: footnoteIds is supplied only by the PL-SN and UOKIK PDF readers; other callers retain sanitizeUrl and their existing link output.
 // parser-output-unchanged: [cz-nss] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
 // parser-output-unchanged: [cz-uohs] Printed-line joining changes only the common-court recital and EUREKA <br> runs; committed output of this source is unchanged (replay fingerprint identical).
@@ -8,6 +9,8 @@
 // parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
+// parser-output-unchanged: [cz-nss] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
+// parser-output-unchanged: [cz-uohs] the clerk-mark role is set only by parsePlDecisionContent, which this source never calls.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 // parser-output-unchanged: the `superscripts` input is opt-in; callers that do not opt in retain their previous `<sup>` reading.
 // parser-output-unchanged: [pl-sn] the reader's HTML is generated from single-spaced PDF lines and holds no ordered list, so collapsing markup whitespace and numbering list items leave it as it was; every captured Supreme Court PDF parses to an identical AST.
@@ -27,18 +30,20 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
   cloneNode,
-  Element,
+  createElement,
+  type Element,
   hasChildren,
   isComment,
   isTag,
   isText,
-} from "domhandler";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+} from "@stll/html/nodes";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -1017,7 +1022,7 @@ const parseListItemContent = ({
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = new Element(
+      const segment = createElement(
         item.name,
         item.attribs,
         children.slice(start, end),
@@ -1561,7 +1566,7 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState({
     footnoteIds: input.footnoteIds,
     superscripts: input.superscripts === true,
@@ -1634,7 +1639,9 @@ export const parsePlDecisionContent = (
       CLERK_MARK_RE.test(block.plainText) ||
       (sawTerminalSignature && CLERK_INITIALS_RE.test(block.plainText))
     ) {
-      block.role = "apparatus";
+      // The clerk's mark is printed after the decision: a publisher note,
+      // never head matter, which only precedes the body.
+      block.role = "publisher-note";
       continue;
     }
     break;

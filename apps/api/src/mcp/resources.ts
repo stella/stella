@@ -367,17 +367,17 @@ const listedToolNames = (
   mode: McpMode,
   context: ResourceContext | undefined,
 ): ReadonlySet<string> => {
-  if (context?.grantedScopes === undefined) {
-    return surfaceToolVocabulary(mode, context).listed;
+  if (context?.grantedScopes !== undefined) {
+    return usableStaticMcpToolNames(
+      listOfferedStaticMcpToolDefinitions({
+        context,
+        mode,
+        scopes: context.grantedScopes,
+      }),
+      context.grantedScopes,
+    );
   }
-  return usableStaticMcpToolNames(
-    listOfferedStaticMcpToolDefinitions({
-      context,
-      mode,
-      scopes: context.grantedScopes,
-    }),
-    context.grantedScopes,
-  );
+  return surfaceToolVocabulary(mode, context).listed;
 };
 
 type ResourceServingOptions = {
@@ -473,17 +473,22 @@ const shippedSkillResources = (
 const offeredShippedSkills = async (
   context: ResourceContext | undefined,
 ): Promise<ModelOfferedSkills<{ name: string }>> => {
+  const offerShippedOnly = () =>
+    offerSkillsToModel({
+      invokedSkillNames: new Set(),
+      skills: (
+        context?.testDependencies?.listShippedSkillMetadata ?? listSkillMetadata
+      )(),
+    });
+  if (context === undefined) {
+    return offerShippedOnly();
+  }
   if (
-    context?.safeDb === undefined ||
+    context.safeDb === undefined ||
     context.organizationId === undefined ||
     context.userId === undefined
   ) {
-    const listShipped =
-      context?.testDependencies?.listShippedSkillMetadata ?? listSkillMetadata;
-    return offerSkillsToModel({
-      invokedSkillNames: new Set(),
-      skills: listShipped(),
-    });
+    return offerShippedOnly();
   }
   const catalog = await listAvailableChatSkillMetadata({
     bindingScope: NO_SKILL_BINDING_SCOPE,
