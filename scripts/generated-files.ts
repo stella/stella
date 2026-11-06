@@ -1354,6 +1354,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/db/auth-schema.ts",
       "apps/api/src/db/agent-auth-schema.ts",
       "apps/api/scripts/generate-status-tables.ts",
+      "apps/api/src/lib/db/enum-column-roles.ts",
     ],
     checkInputs: [
       "bunfig.toml",
