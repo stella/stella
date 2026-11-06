@@ -13,6 +13,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -47,7 +48,7 @@ beforeEach(async () => {
     id: JOB_ID,
     task: BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
     description: "Parsed input state backfill fixture",
-    lockedBy: "test-lease",
+    ...heldSchedulerLease("test-lease"),
     nextRunAt: new Date("2026-10-30T12:00:00Z"),
     schedule: { type: "interval", everyMs: 300_000 },
   });
