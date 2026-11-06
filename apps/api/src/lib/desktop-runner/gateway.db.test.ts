@@ -55,6 +55,7 @@ import {
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
+  featureEnrolments,
 } from "@/api/db/schema";
 import {
   chatMessageContentFromMessage,
@@ -130,7 +131,6 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -169,30 +169,19 @@ const TIMING = {
 
 const clock = { now: Date.now() };
 
-/** Both fixture organizations hold the runner feature unless a test takes it away. */
-const RUNNER_GRANTS: FeatureAccessGrants = {
-  [DESKTOP_RUNNER_FEATURE_ID]: [
-    { type: "organization", organizationId: ids.orgA },
-    { type: "organization", organizationId: ids.orgB },
-  ],
-};
-const runnerGrants: { current: FeatureAccessGrants } = {
-  current: RUNNER_GRANTS,
-};
 /** The real credential check over the test database. */
 const isKeyLive: DesktopKeyLiveness = async (key) =>
   // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
   await desktopKeyLiveness(
     asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
   )(key);
-/** The real feature decision over the test database and the grants above. */
+/** The real feature decision over the test database. */
 const isRunnerEnabled: RunnerFeatureAccess = async (account) =>
   await runnerFeatureAccess({
     // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
     db: asTestRaw<
       NonNullable<NonNullable<Parameters<typeof runnerFeatureAccess>[0]>["db"]>
     >(db),
-    grants: () => runnerGrants.current,
   })(account);
 const now = () => new Date(clock.now);
 
@@ -205,6 +194,27 @@ const mintRunToken: MintRunToken = async () => {
     token: `run-token-${String(mintedTokens)}`,
     expiresAt: new Date(clock.now + 15 * 60_000),
   });
+};
+
+/** Every account the fixtures connect turns the runner feature on. */
+const enrolRunnerFeature = async () => {
+  await db
+    .insert(featureEnrolments)
+    .values(
+      [
+        { userId: ids.userA1, organizationId: ids.orgA },
+        { userId: ids.userA1, organizationId: ids.orgB },
+      ].map((account) => ({
+        ...account,
+        featureId: DESKTOP_RUNNER_FEATURE_ID,
+      })),
+    )
+    .onConflictDoNothing();
+};
+const leaveRunnerFeature = async () => {
+  await db
+    .delete(featureEnrolments)
+    .where(eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID));
 };
 
 /** A transaction held open after its work, before it commits. */
@@ -289,6 +299,7 @@ beforeAll(async () => {
     .update(user)
     .set({ emailVerified: true })
     .where(eq(user.id, ids.userA1));
+  await enrolRunnerFeature();
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
   const updateRows = db.update.bind(db);
@@ -1375,7 +1386,7 @@ describe("runner feature", () => {
   test("an account without the runner feature is refused before the upgrade and keeps no runner", async () => {
     const desktopId = Bun.randomUUIDv7();
     const openBefore = first.gateway.openSessions();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       const refused = await first.gateway.upgrade(
         await upgradeRequest(first, desktopId),
@@ -1386,7 +1397,7 @@ describe("runner feature", () => {
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
     expect(first.gateway.openSessions()).toBe(openBefore);
     expect(
@@ -1412,14 +1423,14 @@ describe("runner feature", () => {
     );
     const desktop = await openDesktop(beating, Bun.randomUUIDv7());
     await desktop.hello();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       expect(await desktop.closed).toEqual({
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.code,
         reason: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
   });
 });

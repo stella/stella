@@ -5274,6 +5274,8 @@
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "betaInbox": "Postkast ja teavitused",
       "betaInboxDescription": "Kuva postkast ja teavituste kell",
+      "betaLocalAgents": "Agendid sinu arvutis",
+      "betaLocalAgentsDescription": "Käivita vestlused Codexi või Claude Code'iga oma arvutis rakenduse stella desktop kaudu",
       "betaTimeBillingDescription": "Kuva ajajälgimine, arved ja kulud",
       "chatNotifications": "Vestluse teavitused",
       "chatNotificationsBlocked": "stella teavitused on selles brauseris blokeeritud. Lubage need brauseri saidiseadetes.",

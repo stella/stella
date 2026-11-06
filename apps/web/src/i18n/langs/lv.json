@@ -5274,6 +5274,8 @@
       "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "betaInbox": "Iesūtne un paziņojumi",
       "betaInboxDescription": "Rādīt iesūtni un paziņojumu zvaniņu",
+      "betaLocalAgents": "Aģenti jūsu datorā",
+      "betaLocalAgentsDescription": "Palaist tērzēšanas ar Codex vai Claude Code jūsu datorā, izmantojot stella desktop",
       "betaTimeBillingDescription": "Rādīt laika uzskaiti, rēķinus un izdevumus",
       "chatNotifications": "Tērzēšanas paziņojumi",
       "chatNotificationsBlocked": "stellas paziņojumi šajā pārlūkprogrammā ir bloķēti. Atļaujiet tos pārlūkprogrammas vietnes iestatījumos.",

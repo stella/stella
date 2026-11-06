@@ -5274,6 +5274,8 @@
       "betaDescription": "جرّب ميزات لا تزال قيد التطوير",
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
+      "betaLocalAgents": "الوكلاء على حاسوبك",
+      "betaLocalAgentsDescription": "تشغيل الدردشات باستخدام Codex أو Claude Code على حاسوبك عبر stella desktop",
       "betaTimeBillingDescription": "إظهار تتبع الوقت والفواتير والمصروفات",
       "chatNotifications": "إشعارات الدردشة",
       "chatNotificationsBlocked": "الإشعارات محظورة لـ stella في هذا المتصفح. اسمح بها من إعدادات الموقع في المتصفح.",

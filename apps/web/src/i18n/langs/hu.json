@@ -5274,6 +5274,8 @@
       "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "betaInbox": "Beérkezett üzenetek és értesítések",
       "betaInboxDescription": "A Beérkezett üzenetek és az értesítési harang megjelenítése",
+      "betaLocalAgents": "Ügynökök a számítógépén",
+      "betaLocalAgentsDescription": "Csevegések futtatása Codexszel vagy Claude Code-dal a számítógépén a stella desktop segítségével",
       "betaTimeBillingDescription": "Időkövetés, számlák és költségek megjelenítése",
       "chatNotifications": "Csevegési értesítések",
       "chatNotificationsBlocked": "A stella értesítései le vannak tiltva ebben a böngészőben. Engedélyezze őket a böngésző webhely-beállításaiban.",

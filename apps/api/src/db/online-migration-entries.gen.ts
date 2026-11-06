@@ -13,6 +13,7 @@ export { default as constraints_data_box_constraints } from "./online-migration-
 export { default as constraints_decision_date_ceiling_constraints } from "./online-migration-entries/constraints-decision-date-ceiling-constraints";
 export { default as constraints_desktop_runner_question_answers_constraints } from "./online-migration-entries/constraints-desktop-runner-question-answers-constraints";
 export { default as constraints_email_undeliverable_constraints } from "./online-migration-entries/constraints-email-undeliverable-constraints";
+export { default as constraints_feature_enrolment_local_agents_constraints } from "./online-migration-entries/constraints-feature-enrolment-local-agents-constraints";
 export { default as constraints_import_provenance_constraints } from "./online-migration-entries/constraints-import-provenance-constraints";
 export { default as constraints_invoice_language_constraints } from "./online-migration-entries/constraints-invoice-language-constraints";
 export { default as constraints_legislation_matter_link_constraints } from "./online-migration-entries/constraints-legislation-matter-link-constraints";
@@ -138,6 +139,7 @@ export { default as repairs_desktop_runner_question_answers_constraint_validatio
 export { default as repairs_document_review_finding_decision_backfill } from "./online-migration-entries/repairs-document-review-finding-decision-backfill";
 export { default as repairs_email_undeliverable_constraint_validation } from "./online-migration-entries/repairs-email-undeliverable-constraint-validation";
 export { default as repairs_entity_feature_gate_repair } from "./online-migration-entries/repairs-entity-feature-gate-repair";
+export { default as repairs_feature_enrolment_local_agents_constraint_validations } from "./online-migration-entries/repairs-feature-enrolment-local-agents-constraint-validations";
 export { default as repairs_function_dependent_index_reindexes } from "./online-migration-entries/repairs-function-dependent-index-reindexes";
 export { default as repairs_import_provenance_constraint_validations } from "./online-migration-entries/repairs-import-provenance-constraint-validations";
 export { default as repairs_invoice_language_constraint_validations } from "./online-migration-entries/repairs-invoice-language-constraint-validations";

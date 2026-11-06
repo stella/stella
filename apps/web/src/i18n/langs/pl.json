@@ -5274,6 +5274,8 @@
       "betaDescription": "Wypróbuj funkcje, które są wciąż w fazie rozwoju",
       "betaInbox": "Skrzynka i powiadomienia",
       "betaInboxDescription": "Pokaż skrzynkę i dzwonek powiadomień",
+      "betaLocalAgents": "Agenci na Twoim komputerze",
+      "betaLocalAgentsDescription": "Uruchamiaj czaty z Codexem lub Claude Code na swoim komputerze przez stella desktop",
       "betaTimeBillingDescription": "Pokaż śledzenie czasu, faktury i wydatki",
       "chatNotifications": "Powiadomienia z czatu",
       "chatNotificationsBlocked": "Powiadomienia stelli są zablokowane w tej przeglądarce. Zezwól na nie w ustawieniach witryny w przeglądarce.",
