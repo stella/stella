@@ -25,6 +25,7 @@ import {
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -418,7 +419,7 @@ const usableWorkspaceIds = (
 ): AccessibleWorkspace["id"][] => {
   const ids: AccessibleWorkspace["id"][] = [];
   for (const workspace of workspaces) {
-    if (workspace.status !== "deleting") {
+    if (workspaceIsVisible(workspace.status)) {
       ids.push(workspace.id);
     }
   }
