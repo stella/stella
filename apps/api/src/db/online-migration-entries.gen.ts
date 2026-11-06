@@ -45,6 +45,7 @@ export { default as indexes_case_law_decisions_provision_scope_cursor_idx } from
 export { default as indexes_case_law_decisions_republished_ruling_idx } from "./online-migration-entries/indexes-case-law-decisions-republished-ruling-idx";
 export { default as indexes_case_law_decisions_search_candidate_published_idx } from "./online-migration-entries/indexes-case-law-decisions-search-candidate-published-idx";
 export { default as indexes_case_law_decisions_sitemap_month_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-month-published-idx";
+export { default as indexes_case_law_decisions_sitemap_shard_published_idx } from "./online-migration-entries/indexes-case-law-decisions-sitemap-shard-published-idx";
 export { default as indexes_case_law_decisions_source_arrivals_published_idx } from "./online-migration-entries/indexes-case-law-decisions-source-arrivals-published-idx";
 export { default as indexes_case_law_ingestion_failures_source_record_uidx } from "./online-migration-entries/indexes-case-law-ingestion-failures-source-record-uidx";
 export { default as indexes_case_law_parse_pending_index } from "./online-migration-entries/indexes-case-law-parse-pending-index";
@@ -158,7 +159,6 @@ export { default as replacements_case_law_decisions_country_date_idx } from "./o
 export { default as replacements_case_law_decisions_document_pending_date_idx } from "./online-migration-entries/replacements-case-law-decisions-document-pending-date-idx";
 export { default as replacements_case_law_decisions_search_candidate_idx } from "./online-migration-entries/replacements-case-law-decisions-search-candidate-idx";
 export { default as replacements_case_law_decisions_sitemap_shard_idx } from "./online-migration-entries/replacements-case-law-decisions-sitemap-shard-idx";
-export { default as replacements_case_law_decisions_sitemap_shard_published_idx } from "./online-migration-entries/replacements-case-law-decisions-sitemap-shard-published-idx";
 export { default as replacements_case_law_decisions_source_arrivals_idx } from "./online-migration-entries/replacements-case-law-decisions-source-arrivals-idx";
 export { default as replacements_case_law_decisions_source_case_lang_idx } from "./online-migration-entries/replacements-case-law-decisions-source-case-lang-idx";
 export { default as replacements_case_law_provision_citations_eli_anchor_idx } from "./online-migration-entries/replacements-case-law-provision-citations-eli-anchor-idx";

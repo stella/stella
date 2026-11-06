@@ -617,6 +617,12 @@ const sitemapPublishedIndexes = (
     updatedAt: PgColumn;
   },
 ) => [
+  // What the sitemap read before it carried the language group. Kept until the
+  // promoted release no longer requires it, then retired for the one below.
+  p
+    .index("case_law_decisions_sitemap_shard_published_idx")
+    .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
+    .where(publishedCaseLawDecisionFor(t)),
   // Partial on the publication gate so the gate costs nothing per row, and
   // carrying the source (for the redistribution join), `updated_at` and `id`
   // (for the bucket), and the language group and language (for its two
