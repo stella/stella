@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { parseVerifyWorkflow, readVerifyWorkflow } from "./verify-workflow";
+import {
+  parseHarnessRunnerTempEntries,
+  parseVerifyWorkflow,
+  readVerifyWorkflow,
+} from "./verify-workflow";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -71,6 +75,72 @@ for (const { mode, file, marker } of [
     }
   });
 }
+
+describe("harness RUNNER_TEMP entries", () => {
+  const workflow = (steps: Record<string, unknown>[]) =>
+    Bun.YAML.stringify({ jobs: { first: { steps } } });
+  const marked = (name: string, run: string) => ({
+    name,
+    run,
+    env: { STELLA_VERIFY: "prepare" },
+  });
+
+  test("an entry an unmarked step creates first is a harness obligation", () => {
+    const source = workflow([
+      {
+        name: "Preserve tooling",
+        run: 'cp -R .tooling "$RUNNER_TEMP/tooling"',
+      },
+      marked("Use tooling", 'bun "$RUNNER_TEMP/tooling/script.ts"'),
+      marked("Use again", `bun "\${RUNNER_TEMP}/tooling/other.ts"`),
+    ]);
+    expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([
+      "tooling",
+    ]);
+    expect(parseHarnessRunnerTempEntries(source, "autofix")).toEqual([]);
+  });
+
+  test("entries marked steps create themselves and entries only unmarked steps use are not obligations", () => {
+    const source = workflow([
+      { name: "Unmarked only", run: 'echo x > "$RUNNER_TEMP/ci-only"' },
+      marked("Write", 'echo y > "$RUNNER_TEMP/own"'),
+      marked("Read", 'cat "$RUNNER_TEMP/own"'),
+      { name: "Unmarked reader", run: 'cat "$RUNNER_TEMP/own"' },
+    ]);
+    expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([]);
+  });
+
+  test("a marked step that branches on STELLA_VERIFY_LOCAL owns its local path", () => {
+    const source = workflow([
+      { name: "Restore", run: 'ls "$RUNNER_TEMP/cache"' },
+      marked(
+        "Produce",
+        [
+          `if [[ "\${STELLA_VERIFY_LOCAL:-false}" == true ]]; then`,
+          "  bun prepare",
+          "else",
+          '  bun produce "$RUNNER_TEMP/cache"',
+          "fi",
+        ].join("\n"),
+      ),
+    ]);
+    expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([]);
+  });
+
+  test("obligations are scoped to the job that creates the entry", () => {
+    const source = Bun.YAML.stringify({
+      jobs: {
+        first: {
+          steps: [{ name: "Create", run: 'touch "$RUNNER_TEMP/shared"' }],
+        },
+        second: {
+          steps: [marked("Create own", 'touch "$RUNNER_TEMP/shared"')],
+        },
+      },
+    });
+    expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([]);
+  });
+});
 
 describe("workflow marker selection", () => {
   test("nested parallel leaves retain marker selection and phase order", () => {
