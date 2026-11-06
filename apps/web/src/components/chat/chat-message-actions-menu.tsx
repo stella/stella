@@ -184,16 +184,17 @@ const ChatMessageActions = ({
         };
       })
     : [];
-  const actions: EntityAction[] = canExport
+  const exportActions: EntityAction[] = canExport
     ? [
-        ...forkActions,
         {
           icon: <DownloadIcon aria-hidden="true" />,
           label: t("common.export.title"),
           onClick: () => setExportOpen(true),
         },
       ]
-    : forkActions;
+    : [];
+  // A message still generating offers nothing, and right-click stays native.
+  const actions = canFork ? [...forkActions, ...exportActions] : [];
 
   // The "…" button sits in the message's action row; the row's status note
   // and the export menu anchored to the button go with it.
@@ -242,22 +243,25 @@ type ChatMessageActionsScopeProps = Omit<
 /**
  * Wraps a whole message (its content and its action row) in its actions
  * when the surface offers them, so right-clicking the message opens what its
- * "…" button opens. Without actions the message renders as it is.
+ * "…" button opens. On a surface without actions the message renders as it is.
+ *
+ * The wrapper stays for the message's whole life, whatever `canFork` says.
+ * `canFork` turns true when generation ends, and a wrapper arriving then would
+ * remount everything inside: a question card would lose the answer being typed.
  */
 export const ChatMessageActionsScope = ({
-  canFork,
   children,
   threadRef,
   ...props
 }: ChatMessageActionsScopeProps): ReactNode =>
   // Explicit ReactNode: returning bare `children` would infer React 19's
   // Promise member, which promise-function-async flags on a sync component.
-  threadRef !== undefined && canFork ? (
-    <ChatMessageActions canFork={canFork} threadRef={threadRef} {...props}>
+  threadRef === undefined ? (
+    children
+  ) : (
+    <ChatMessageActions threadRef={threadRef} {...props}>
       {children}
     </ChatMessageActions>
-  ) : (
-    children
   );
 
 /** The message's "…" button, inside the `ChatMessageActionsScope` around it. */

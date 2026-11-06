@@ -189,6 +189,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     config_dir: "/data/harness-home/codex".to_owned(),
     launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
+    cache_dir: "/data/agent-package-cache".to_owned(),
     model: model.to_owned(),
     instructions: String::new(),
     messages: vec![
@@ -201,6 +202,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
+      approvals: ApprovalMode::FullAuto,
     },
     mcp: McpBinding {
       server_name: "stella".to_owned(),
@@ -979,6 +981,7 @@ fn probe_outcomes_become_runner_reports() {
   let ready = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: vec![HarnessCapability::Approvals, HarnessCapability::Approvals],
+    approval_modes: vec![ApprovalMode::FullAuto, ApprovalMode::FullAuto],
     models: vec![
       ProbedModel {
         id: "gpt-test".to_owned(),
@@ -998,6 +1001,7 @@ fn probe_outcomes_become_runner_reports() {
       id: Harness::Codex,
       version: "0.165.0".to_owned(),
       capabilities: vec![HarnessCapability::Approvals],
+      approval_modes: vec![ApprovalMode::Ask, ApprovalMode::FullAuto],
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
@@ -1007,6 +1011,7 @@ fn probe_outcomes_become_runner_reports() {
   let no_models = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: Vec::new(),
+    approval_modes: Vec::new(),
     models: Vec::new(),
   };
   assert_eq!(

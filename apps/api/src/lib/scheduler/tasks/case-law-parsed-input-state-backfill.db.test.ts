@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { SQL } from "bun";
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -200,6 +201,42 @@ test("derives only NULL states in cursor pages and retires durably after the ful
   expect(await rows()).toEqual(completedRows);
   expect(await checkpoint()).toEqual(completedCheckpoint);
   expect(later.events).toEqual([]);
+});
+
+test("a batch a writer's lock refused is taken again instead of failing the run", async () => {
+  await insertDecisions();
+  let refusals = 0;
+  const { run, continuations } = fixture({
+    createRuntime: (runtimeOptions) => {
+      const runtime = createScriptBackfillRuntime({
+        ...runtimeOptions,
+        slot: { tryAcquire: async () => true, release: () => {} },
+      });
+      return {
+        ...runtime,
+        step: async (work) => {
+          if (refusals === 0) {
+            refusals += 1;
+            throw new SQL.PostgresError(
+              "canceling statement due to lock timeout",
+              {
+                code: "ERR_POSTGRES_SERVER_ERROR",
+                errno: "55P03",
+                detail: "",
+                hint: "",
+                severity: "ERROR",
+              },
+            );
+          }
+          return await runtime.step(work);
+        },
+      };
+    },
+  });
+  await run();
+  expect(refusals).toBe(1);
+  expect(continuations).toHaveLength(1);
+  expect((await checkpoint())?.cursor).not.toBeNull();
 });
 
 test("kill switch logs once without touching the database", async () => {

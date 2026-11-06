@@ -651,6 +651,9 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
         if matches!(event, tauri::WindowEvent::Destroyed) {
           clipboard_shortcut::resume_after_window_closed(&resume_handle);
         }
+        if matches!(event, tauri::WindowEvent::Focused(true)) {
+          feature_access::refresh_now();
+        }
       });
       // Emit tab activation after a short delay to let the webview load
       let handle = handle.clone();

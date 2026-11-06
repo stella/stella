@@ -1196,6 +1196,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "ResolveCards (always-allow), AnswerOnStaleTab",
     ResolveCards.allows,
   ),
+  "answer-local-question": notModelled(
+    "Only a run on the member's computer asks it, and the harness runs cloud turns only; local-run-question-card.dom.test.tsx drives it through the page.",
+  ),
   "answer-question": byCommands(
     "ResolveCards, AnswerOnStaleTab",
     ResolveCards.allows,

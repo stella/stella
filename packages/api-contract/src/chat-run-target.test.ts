@@ -147,4 +147,13 @@ describe("local run question answers", () => {
       expect(v.is(chatLocalRunQuestionsSchema, asking(ids))).toBe(false);
     }
   });
+
+  test("a question with no options must take free text", () => {
+    expect(v.is(chatLocalRunQuestionsSchema, [passphrase])).toBe(true);
+    expect(
+      v.is(chatLocalRunQuestionsSchema, [
+        { ...passphrase, allowsFreeText: false },
+      ]),
+    ).toBe(false);
+  });
 });

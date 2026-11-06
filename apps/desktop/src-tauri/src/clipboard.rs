@@ -35,8 +35,8 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
-    DesktopTimingReport,
+    DesktopTelemetryOperation, DesktopTelemetryReason, DesktopTelemetrySpan,
+    DesktopTelemetryWindow, DesktopTimingReport,
   },
   foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
   foreground_app_visual::{
@@ -3297,11 +3297,14 @@ impl ClipboardHandler for HistoryClipboardHandler {
     #[cfg(target_os = "macos")]
     if let Err(error) = manager.reconcile_image_exports() {
       tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
-      self.telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-        code: DesktopTelemetryErrorCode::PersistenceFailed,
-      });
+      self.telemetry.capture_with_reason(
+        DesktopErrorReport {
+          window: DesktopTelemetryWindow::Clipboard,
+          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+          code: DesktopTelemetryErrorCode::PersistenceFailed,
+        },
+        DesktopTelemetryReason::ImageExportCleanup,
+      );
     }
     if is_internal_clipboard_write(&formats) {
       manager.clear_suppression();
@@ -3462,11 +3465,14 @@ impl HistoryClipboardHandler {
           }
           Err(error) => {
             tracing::error!(error = %error, "clipboard capture could not be persisted");
-            self.telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            self.telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::HistoryCapture,
+            );
             return ClipboardCaptureOutcome::Rejected;
           }
         }
@@ -3891,11 +3897,14 @@ pub fn initialize_and_watch(
           Ok(changed) => changed,
           Err(error) => {
             tracing::error!(error = %error, "expired clipboard history could not be removed");
-            retention_telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            retention_telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::RetentionSweep,
+            );
             false
           }
         },

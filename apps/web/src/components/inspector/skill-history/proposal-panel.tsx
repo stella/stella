@@ -20,6 +20,7 @@ import type {
 } from "./skill-history.logic";
 import {
   isOpenProposalStatus,
+  isReviewableProposalStatus,
   PROPOSAL_STATUS_LABEL_KEY,
 } from "./skill-history.logic";
 
@@ -199,7 +200,7 @@ export const ProposalActionBar = ({
           {t("skillHistory.submitForReview")}
         </Button>
       ) : null}
-      {canManage && isOpen ? (
+      {canManage && isReviewableProposalStatus(status) ? (
         <ReviewDecisionActions
           acceptLabel={
             isStale ? t("skillHistory.acceptStale") : t("common.accept")

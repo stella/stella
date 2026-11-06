@@ -34,6 +34,8 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "public-read-io-provenance.ts",
   "restricted-import.ts",
   "utils.ts",
+  "test-determinism-rule.ts",
+  "test-time-resolver.ts",
 ]);
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)

@@ -351,10 +351,11 @@ const startRun = (
     configDir,
     launch: PLAIN_LAUNCH,
     workspaceDir,
+    cacheDir: path.join(at.root, "agent-package-cache"),
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
-    policy: { network: "open", fs: "workspace" },
+    policy: { network: "open", fs: "workspace", approvals: "ask" },
     mcp: {
       serverName: "stella",
       url: `${API_ORIGIN}/mcp`,
@@ -569,6 +570,7 @@ describe("harness holder over its socket", () => {
         type: "ready",
         version: "0.166.0",
         capabilities: ["approvals", "interrupt", "resume"],
+        approvalModes: ["ask"],
         models: [{ id: "gpt-test", label: "GPT Test", isDefault: true }],
       },
     });
@@ -798,6 +800,42 @@ describe("harness holder over its socket", () => {
     expect(await holder.exited).toBe(0);
     expect(holder.log()).not.toContain(RUN_TOKEN);
     expect(holder.log()).not.toContain(secret);
+  });
+
+  test("hands the harness the run's approval mode and the computer's package cache", async () => {
+    const holder = await spawnHolder();
+    const { client } = await desktop(holder);
+    const runId = runStart(client, holder, "stella_tools");
+    await client.waitFor(is("run.finished", runId));
+    const threadStart = v.parse(
+      v.looseObject({
+        approvalPolicy: v.string(),
+        sandbox: v.string(),
+        config: v.record(v.string(), v.unknown()),
+      }),
+      holder.received().find(({ method }) => method === "thread/start")?.params,
+    );
+    expect(threadStart).toMatchObject({
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+    });
+    expect(
+      threadStart.config["sandbox_workspace_write.writable_roots"],
+    ).toEqual([path.join(holder.root, "agent-package-cache")]);
+    const claudeRunId = startRun(
+      client,
+      holder,
+      {
+        harness: "claude-code",
+        executable: fakeClaude(holder.root, "stella_tools"),
+        model: "sonnet",
+      },
+      { policy: { network: "open", fs: "workspace", approvals: "auto" } },
+    );
+    await client.waitFor(is("run.finished", claudeRunId));
+    expect(JSON.stringify(holder.startups())).toContain(
+      '"--permission-mode","auto"',
+    );
   });
 
   test("relays an approval with one request id and returns the decision", async () => {
@@ -1197,11 +1235,12 @@ describe("harness holder over its socket", () => {
       configDir,
       launch: PLAIN_LAUNCH,
       workspaceDir,
+      cacheDir: path.join(root, "agent-package-cache"),
       model: "gpt-test",
       instructions: "Use the stella MCP server.",
       messages: [{ role: "user", content: "Find the lease decision." }],
       harnessSessionId: null,
-      policy: { network: "open", fs: "workspace" },
+      policy: { network: "open", fs: "workspace", approvals: "ask" },
       mcp: {
         serverName: "stella",
         url: `${API_ORIGIN}/mcp`,

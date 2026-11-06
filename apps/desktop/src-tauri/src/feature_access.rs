@@ -19,7 +19,7 @@ use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 use crate::logging::{json_cause_logged, request_cause_logged};
 
-const REFRESH_INTERVAL: Duration = Duration::from_secs(15 * 60);
+const REFRESH_INTERVAL: Duration = Duration::from_secs(2 * 60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_RESPONSE_BYTES: usize = 16 * 1024;
 const ENABLED_STATUS: &str = "enabled";
@@ -173,6 +173,12 @@ pub fn account_changed(app: &AppHandle, unload: impl FnOnce(&AppHandle)) {
   if let Some(gates) = app.try_state::<FeatureGates>() {
     gates.finish_account_change();
   }
+  refresh_signal().notify_one();
+}
+
+/// Asks the refresh loop to fetch now: a member who turned a feature on in the
+/// browser sees it as soon as they come back to the app.
+pub fn refresh_now() {
   refresh_signal().notify_one();
 }
 

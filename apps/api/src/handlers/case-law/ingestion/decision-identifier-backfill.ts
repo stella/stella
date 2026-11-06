@@ -576,11 +576,27 @@ const projectDecisionPage = async (
       ON CONFLICT ON CONSTRAINT case_law_decision_identifiers_pk DO UPDATE
       SET value = EXCLUDED.value
       WHERE case_law_decision_identifiers.value IS DISTINCT FROM EXCLUDED.value
-      RETURNING decision_id, type, normalized_value
+      RETURNING decision_id, type, normalized_value, (xmax = 0) AS added
     ), changed_identifiers AS (
       SELECT decision_id, type, normalized_value FROM deleted
       UNION
       SELECT decision_id, type, normalized_value FROM inserted
+    ), moved_identities AS (
+      -- Who answers a citation changes only with an identity. A new spelling
+      -- of a stored identity changes nobody's answer, and neither does
+      -- recording the docket the decision already answers under through its
+      -- citation key. Reopening for those would discard links that still hold.
+      SELECT moved.type, moved.normalized_value
+      FROM (
+        SELECT decision_id, type, normalized_value FROM deleted
+        UNION
+        SELECT decision_id, type, normalized_value FROM inserted WHERE added
+      ) moved
+      JOIN case_law_decisions holder ON holder.id = moved.decision_id
+      WHERE NOT (
+        moved.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
+        AND holder.citation_key IS NOT DISTINCT FROM moved.normalized_value
+      )
     ), reopened AS (
       UPDATE case_law_citations citation
       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
@@ -588,7 +604,7 @@ const projectDecisionPage = async (
           resolution_attempted_at = NULL
       WHERE ${settledCitationSql(sql.raw("citation.resolution_status"))}
         AND EXISTS (
-          SELECT 1 FROM changed_identifiers changed
+          SELECT 1 FROM moved_identities changed
           WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
             sql.raw("citation.identifier_type"),
           )}

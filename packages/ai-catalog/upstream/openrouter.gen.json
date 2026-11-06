@@ -361,6 +361,18 @@
       }
     },
     {
+      "id": "google/gemini-omni-1.1-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
+      "id": "google/gemini-omni-1.2-flash",
+      "reasoning": {
+        "default_effort": "low"
+      }
+    },
+    {
       "id": "ibm-granite/granite-4.2-8b",
       "reasoning": {
         "default_effort": "high"
@@ -1040,18 +1052,6 @@
     },
     {
       "id": "thinkingmachines/inkling-small",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling-small:free",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
-      "id": "thinkingmachines/inkling:free",
       "reasoning": {
         "default_effort": "high"
       }

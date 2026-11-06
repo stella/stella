@@ -307,6 +307,28 @@ export const DESKTOP_RUNNER_RUN_OUTCOMES = [
 export const DESKTOP_RUNNER_NETWORK_POLICIES = ["open"] as const;
 export const DESKTOP_RUNNER_FS_POLICIES = ["workspace"] as const;
 
+/**
+ * How much a local run asks before it acts, chosen per thread.
+ * - `ask`: edits inside the run workspace go ahead; commands and anything
+ *   else are asked about.
+ * - `auto`: the harness decides what is safe to do on its own and asks
+ *   about the rest.
+ * - `full_auto`: everything inside the harness's OS sandbox (writes confined
+ *   to the run workspace and its caches) runs without asking; leaving the
+ *   sandbox is always asked about. A desktop that cannot sandbox the
+ *   harness does not offer it.
+ */
+export const DESKTOP_RUNNER_APPROVAL_MODES = [
+  "ask",
+  "auto",
+  "full_auto",
+] as const;
+export type DesktopRunnerApprovalMode =
+  (typeof DESKTOP_RUNNER_APPROVAL_MODES)[number];
+/** The mode every harness supports, and a thread's mode until one is chosen. */
+export const DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE =
+  "ask" satisfies DesktopRunnerApprovalMode;
+
 const MAX_SEQ = 4_294_967_295;
 const MAX_ACTIVE_RUNS = 64;
 const MAX_MODELS = 100;
@@ -430,6 +452,21 @@ const harnessReportSchema = v.variant("state", [
         (capabilities) => listsOnce(capabilities),
         "Capabilities are listed once",
       ),
+    ),
+    /**
+     * The approval modes this desktop can run the harness in. A desktop or a
+     * stored report from before modes existed offers the default alone.
+     */
+    approvalModes: v.optional(
+      v.pipe(
+        v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
+        v.check((modes) => listsOnce(modes), "Approval modes are listed once"),
+        v.check(
+          (modes) => modes.includes(DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE),
+          "Every harness supports the default approval mode",
+        ),
+      ),
+      [DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE],
     ),
     models: v.pipe(
       v.array(harnessModelSchema),
@@ -593,6 +630,8 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runStart),
     runId: runIdSchema,
+    /** The folder the run works in; a chat's runs share one, so files stay between turns. */
+    folderId: v.pipe(v.string(), v.uuid()),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,
@@ -607,6 +646,7 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),

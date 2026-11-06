@@ -162,7 +162,9 @@
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
       "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
-      "title": "Einladung zur Organisation"
+      "title": "Einladung zur Organisation",
+      "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
+      "wrongAccountHint": "Sie sind als {email} angemeldet. Melden Sie sich ab und mit der Adresse an, an die die Einladung gesendet wurde."
     },
     "lastUsed": "Zuletzt verwendet",
     "oneTimeCodeExpired": "Ihr Einmalcode ist abgelaufen. Fordern Sie einen neuen Code an.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "onThisComputer": "{harness} auf diesem Computer",
+      "permissionAskDescription": "Bearbeitet Dateien im Ordner des Chats selbst; fragt vor allem anderen nach.",
+      "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
+      "permissionFullAuto": "Vollautomatisch",
+      "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Chats nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
+      "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
+      "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
+      "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
       "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Alles Zutreffende auswählen",
+      "dismiss": "Verwerfen und anhalten",
+      "secretAnswer": "Antwort verborgen",
+      "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
@@ -1844,10 +1860,18 @@
       "toolbarLabel": "Markierter Text"
     },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
+    "sendErrorActiveFileNoText": "Die geöffnete Datei enthält keinen Text, den stella lesen kann. Schließen Sie sie oder öffnen Sie eine andere Datei.",
+    "sendErrorActiveFileTooLarge": "Die geöffnete Datei ist für den Chat zu groß. Schließen Sie sie oder öffnen Sie eine kleinere Datei.",
+    "sendErrorAgentRunsDisabled": "Agent-Läufe sind hier nicht verfügbar. Wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
+    "sendErrorAttachmentNoText": "Eine angehängte Datei enthält keinen Text, den stella lesen kann. Entfernen Sie sie oder hängen Sie eine andere Datei an.",
+    "sendErrorAttachmentUnsupported": "Dieser Dateityp kann nicht an einen Chat angehängt werden. Hängen Sie eine andere Datei an.",
     "sendErrorConnectionFailed": "Die Verbindung zum Chat ist fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
+    "sendErrorDocumentUnsupported": "Dieses Modell kann eines der angehängten Dokumente nicht lesen. Entfernen Sie den Anhang oder wechseln Sie zu einem Modell, das ihn unterstützt.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
+    "sendErrorImageInvalid": "Dieses Bild konnte nicht für das Modell vorbereitet werden. Laden Sie ein kleineres Bild hoch oder wechseln Sie das Modell.",
+    "sendErrorImageUnsupported": "Dieses Modell kann angehängte Bilder nicht lesen. Entfernen Sie das Bild oder wechseln Sie zu einem Modell, das Bilder unterstützt.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
     "sendErrorMessageEmpty": "Diese Nachricht enthält keinen Text zum Senden. Geben Sie Ihre Frage ein oder hängen Sie eine Datei an und senden Sie die Nachricht dann.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
@@ -1859,6 +1883,7 @@
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendErrorTimedOut": "Der Chat hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+    "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
@@ -5249,6 +5274,8 @@
       "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
       "betaInbox": "Posteingang und Benachrichtigungen",
       "betaInboxDescription": "Posteingang und Benachrichtigungsglocke anzeigen",
+      "betaLocalAgents": "Agenten auf Ihrem Computer",
+      "betaLocalAgentsDescription": "Chats mit Codex oder Claude Code über stella desktop auf Ihrem Computer ausführen",
       "betaTimeBillingDescription": "Zeiterfassung, Rechnungen und Ausgaben anzeigen",
       "chatNotifications": "Chat-Benachrichtigungen",
       "chatNotificationsBlocked": "Benachrichtigungen für stella sind in diesem Browser blockiert. Erlauben Sie sie in den Website-Einstellungen des Browsers.",
@@ -6477,6 +6504,10 @@
       },
       "noProperties": "Keine Eigenschaft zum Berechnen",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Ursprünglicher KI-Wert",
+      "reasonPlaceholder": "Grund der Änderung (optional)"
     },
     "copyToMatter": {
       "copied": "In Akte kopiert",

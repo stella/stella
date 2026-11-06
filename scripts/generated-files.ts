@@ -319,6 +319,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/extraction-runs/request-run-store.ts",
     "apps/api/src/lib/extraction-runs/store.ts",
     "apps/api/src/lib/feature-access/*",
+    "apps/api/src/lib/fields/cell-override.ts",
     "apps/api/src/lib/fields/write-field.ts",
     "apps/api/src/lib/file-scan/*",
     "apps/api/src/lib/files/*",
@@ -1332,6 +1333,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/portable-path/src/index.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
     ],
     checkInputs: ["bunfig.toml", ".prettierrc.yml"],
     write: [
