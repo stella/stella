@@ -364,6 +364,7 @@ export {
   IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
@@ -377,6 +378,7 @@ export {
   parseApiValidationIssues,
 } from "./error";
 export type {
+  ChatInputRefusalCode,
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,

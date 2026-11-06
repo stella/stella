@@ -106,7 +106,7 @@ export const OPAQUE_ORGANIZATION_SLUG_PATTERN = /^org-[a-z2-7]{10}$/u;
  * the identifier's length; organization names never enter the identifier.
  */
 export const createOpaqueOrganizationSlug = (
-  fillRandom: (bytes: Uint8Array) => void = (bytes) => {
+  fillRandom: (bytes: Uint8Array<ArrayBuffer>) => void = (bytes) => {
     crypto.getRandomValues(bytes);
   },
 ): string => {

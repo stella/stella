@@ -998,10 +998,10 @@ for (const target of [
     async () => {
       const plan = await monthCountPlan(target);
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_decisions_sitemap_shard_published_idx on case_law_decisions/u,
+        /Index (?:Only )?Scan using case_law_decisions_sitemap_month_published_idx on case_law_decisions/u,
       );
       expect(plan).not.toMatch(/Seq Scan on case_law_decisions/u);
-      const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_shard"));
+      const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_month"));
       expect(scan).toMatch(
         target.year === "undated"
           ? /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date IS NULL\)(?: AND \(source_id = case_law_sources.id\))?\)/u

@@ -19,6 +19,7 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
@@ -45,11 +46,13 @@ import {
   transitionLifecycle,
   transitionLifecycleBatch,
 } from "@/api/lib/db/transitions";
+import { questionPauseOf } from "@/api/lib/desktop-runner/chunk";
 import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
   DESKTOP_RUNNER_OPEN_RUN_STATES,
   type DesktopRunnerCommandKind,
+  type DesktopRunnerEventType,
   type DesktopRunnerRunState,
 } from "@/api/lib/desktop-runner/states";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -766,6 +769,29 @@ const advanceRun = async ({
   }
 };
 
+/**
+ * The request a stored message asks the member to answer: an approval
+ * request, or an event whose chunk pauses the run for a blocking question.
+ * An answer is matched to the run by it.
+ */
+const requestIdOf = (message: SequencedRunMessage): string | null => {
+  switch (message.type) {
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
+      return message.requestId;
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent: {
+      const pause = questionPauseOf(message.chunk);
+      // The socket refuses a malformed pause before it is stored.
+      return pause.type === "question" ? pause.requestId : null;
+    }
+    case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
+      return null;
+    default: {
+      message satisfies never;
+      return panic("Unknown sequenced desktop runner message");
+    }
+  }
+};
+
 type PersistRunMessageOptions = {
   binding: RunnerBinding;
   message: SequencedRunMessage;
@@ -803,10 +829,7 @@ export const persistRunMessage = async (
         runId: message.runId,
         seq: message.seq,
         type: message.type,
-        requestId:
-          message.type === DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest
-            ? message.requestId
-            : null,
+        requestId: requestIdOf(message),
         message,
       });
       return { type: "persisted", seq: message.seq };
@@ -1277,6 +1300,7 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
@@ -1299,12 +1323,13 @@ export type InsertedRun =
       type: "harness_unavailable";
       report: DesktopRunnerHarnessReport | null;
     }
-  | { type: "model_unavailable" };
+  | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
- * with the requested model. The caller mints the run id, so nothing here
+ * with the requested model and approval mode. The caller mints the run id, so nothing here
  * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
@@ -1345,6 +1370,9 @@ export const insertAssignedRun = async (
     if (!report.models.some(({ id }) => id === options.model)) {
       return { type: "model_unavailable" };
     }
+    if (!report.approvalModes.includes(options.approvals)) {
+      return { type: "approvals_unavailable" };
+    }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({
       runId,
@@ -1380,9 +1408,18 @@ type InsertCommandOptions = {
   kind: Exclude<DesktopRunnerCommandKind, "run.start">;
   commandKey: string;
   payload: object;
-  /** An approval answer names a request the run made. */
-  answersRequestId: string | null;
+  /**
+   * The request an answer names, and the stored message that asked it: an
+   * approval answers a `run.approval_request`, question answers the
+   * `run.event` that paused for the question.
+   */
+  answers: AnsweredRequest | null;
   limits: Pick<DesktopRunnerLimits, "maxCommandsPerRun">;
+};
+
+export type AnsweredRequest = {
+  requestId: string;
+  askedBy: Exclude<DesktopRunnerEventType, "run.finished">;
 };
 
 export type InsertedCommand =
@@ -1390,7 +1427,8 @@ export type InsertedCommand =
   | { type: "duplicate" }
   | { type: "run_not_found" }
   | { type: "run_ended"; state: DesktopRunnerRunState }
-  | { type: "approval_not_requested" }
+  /** The run asked no request of that kind under that id. */
+  | { type: "not_requested" }
   /** The run holds as many commands as one run may. */
   | { type: "command_limit" };
 
@@ -1469,19 +1507,20 @@ export const insertRunCommand = async (
     if (!stops && (queued?.count ?? 0) >= options.limits.maxCommandsPerRun) {
       return { type: "command_limit" };
     }
-    if (options.answersRequestId !== null) {
+    if (options.answers !== null) {
       const [request] = await tx
         .select({ seq: desktopRunnerEvents.seq })
         .from(desktopRunnerEvents)
         .where(
           and(
             eq(desktopRunnerEvents.runId, runId),
-            eq(desktopRunnerEvents.requestId, options.answersRequestId),
+            eq(desktopRunnerEvents.requestId, options.answers.requestId),
+            eq(desktopRunnerEvents.type, options.answers.askedBy),
           ),
         )
         .limit(1);
       if (request === undefined) {
-        return { type: "approval_not_requested" };
+        return { type: "not_requested" };
       }
     }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
@@ -1683,13 +1722,16 @@ export type ChatRunForRequest = {
   readonly state: DesktopRunnerRunState;
   /** Where the chat turn stopped reading the run. */
   readonly chatReadSeq: number;
-  /** The approval request as the desktop sent it. */
+  /** The stored message that asked: an approval request or a question's pause. */
+  readonly askedBy: DesktopRunnerEventType;
+  /** That message as the desktop sent it. */
   readonly request: unknown;
 };
 
 /**
- * The run of the chat turn that asked for approval `requestId`, or `null`
- * when no run of this turn, thread and member did.
+ * The run of the chat turn that asked request `requestId` (an approval or a
+ * blocking question), or `null` when no run of this turn, thread and member
+ * did.
  */
 export const readChatRunForRequest = async (
   db: Pick<DesktopRunnerDb, "select">,
@@ -1702,6 +1744,7 @@ export const readChatRunForRequest = async (
         harness: runs.harness,
         state: runs.state,
         chatReadSeq: runs.chatReadSeq,
+        askedBy: desktopRunnerEvents.type,
         request: desktopRunnerEvents.message,
       })
       .from(runs)

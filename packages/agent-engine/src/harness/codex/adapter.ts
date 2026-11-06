@@ -16,7 +16,9 @@ import {
   type HarnessTurn,
   type HarnessTurnInput,
 } from "../adapter";
+import { packageCacheEnvironment } from "../package-cache";
 import { buildTurnPrompt } from "../transcript-handoff";
+import { settlesWithin } from "../turn-lifecycle";
 import {
   type AppServerClient,
   type AppServerHandlers,
@@ -31,7 +33,7 @@ import {
   ModelListResponseSchema,
   TurnStartResponseSchema,
 } from "./protocol";
-import { openThread } from "./thread";
+import { CODEX_APPROVAL_MODE, openThread } from "./thread";
 import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
 
 /**
@@ -44,9 +46,16 @@ import { type CodexCapacityRetry, CodexTurnSession } from "./turn";
  * process, account read before any session, resume by native thread id.
  */
 
-export const codexAppServerLaunch = (executable: string): AppServerLaunch => ({
+/** `codex app-server`, with each configuration override as `-c <override>`. */
+export const codexAppServerLaunch = (
+  executable: string,
+  configOverrides: readonly string[] = [],
+): AppServerLaunch => ({
   executable,
-  args: ["app-server"],
+  args: [
+    "app-server",
+    ...configOverrides.flatMap((override) => ["-c", override]),
+  ],
 });
 
 export type CodexHarnessAdapterOptions = {
@@ -67,6 +76,13 @@ export type CodexHarnessAdapterOptions = {
   requestTimeoutMs: number;
   /** Receives failures of background work, such as a process shutdown. */
   onBackgroundError: DetachedRejectionSink;
+  /**
+   * Called with each new process's id before it is asked anything; a
+   * process it does not answer `true` for is ended unused.
+   */
+  onProcess?: (pid: number) => Promise<boolean>;
+  /** `initialize`'s client name, when a credential was registered under one. */
+  clientName?: string;
   /** How a turn ended by the model's capacity continues; defaults below. */
   capacityRetry?: CodexCapacityRetry;
 };
@@ -102,9 +118,6 @@ const capabilities = (): HarnessCapability[] =>
 const isCapability = (value: string): value is HarnessCapability =>
   Object.hasOwn(CODEX_CAPABILITIES, value);
 
-const settlesWithin = async (promise: Promise<unknown>, ms: number) =>
-  Promise.race([promise.then(() => true), Bun.sleep(ms).then(() => false)]);
-
 const validateOptions = (options: CodexHarnessAdapterOptions) => {
   if (!path.isAbsolute(options.launch.executable)) {
     panic("Codex adapter: the harness executable must be an absolute path");
@@ -132,6 +145,8 @@ type ConnectOptions = {
   options: CodexHarnessAdapterOptions;
   cwd: string;
   handlers: AppServerHandlers;
+  /** Set over the base environment for this process. */
+  environment: Readonly<Record<string, string>>;
 };
 
 /** Spawn the server and complete the handshake; `initialize` is once only. */
@@ -139,6 +154,7 @@ const connect = async ({
   options,
   cwd,
   handlers,
+  environment,
 }: ConnectOptions): Promise<Result<Connection, ConnectFailure>> => {
   const started = Result.try(() =>
     startAppServer({
@@ -149,7 +165,11 @@ const connect = async ({
         terminateMs: options.gracePeriodMs,
       },
       cwd,
-      env: { ...options.environment, CODEX_HOME: options.codexHome },
+      env: {
+        ...options.environment,
+        ...environment,
+        CODEX_HOME: options.codexHome,
+      },
       handlers,
     }),
   );
@@ -160,9 +180,19 @@ const connect = async ({
     });
   }
   const client = started.value;
+  if (
+    options.onProcess !== undefined &&
+    !(await options.onProcess(client.pid))
+  ) {
+    await client.kill();
+    return Result.err({
+      reason: "harness_unavailable",
+      message: "The desktop did not authorize the harness process.",
+    });
+  }
   const initialized = await client.request("initialize", {
     clientInfo: {
-      name: CLIENT_NAME,
+      name: options.clientName ?? CLIENT_NAME,
       title: "stella",
       version: options.clientVersion,
     },
@@ -270,6 +300,7 @@ const probe = async (
   const connected = await connect({
     options,
     cwd: options.codexHome,
+    environment: {},
     handlers: {
       notification: () => undefined,
       request: (id, method) => {
@@ -309,7 +340,15 @@ const probe = async (
         }),
       );
     }
-    return Result.ok({ version, auth, models, capabilities: capabilities() });
+    return Result.ok({
+      version,
+      auth,
+      models,
+      capabilities: capabilities(),
+      approvalModes: [CODEX_APPROVAL_MODE],
+      // The probe does not read rate limits; a limited turn reports them.
+      usageLimit: null,
+    });
   })();
   await close(client, options.gracePeriodMs);
   return result;
@@ -329,6 +368,14 @@ const startTurn = async (
   if (!path.isAbsolute(input.workspaceDir)) {
     panic("Codex adapter: the workspace directory must be an absolute path");
   }
+  if (input.policy.approvals !== CODEX_APPROVAL_MODE) {
+    return Result.err(
+      new HarnessStartError({
+        reason: "start_rejected",
+        message: "The harness runs in one approval mode only.",
+      }),
+    );
+  }
   const session = new CodexTurnSession({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
@@ -338,6 +385,7 @@ const startTurn = async (
   const connected = await connect({
     options,
     cwd: input.workspaceDir,
+    environment: packageCacheEnvironment(input.cacheDir),
     handlers: session.handlers,
   });
   if (Result.isError(connected)) {

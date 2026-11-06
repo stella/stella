@@ -56,6 +56,8 @@ test("case-law ids are per index group from the grouping generation on", () => {
   // the shared name.
   expect(corpusIndexId("case_law_v9", "CZE")).toBe("case_law_v9_cze");
   expect(corpusIndexId("case_law_v9", "SVK")).toBe("case_law_v9_cs_sk");
+  expect(corpusIndexId("case_law_v10", "CZE")).toBe("case_law_v10_cze");
+  expect(corpusIndexId("case_law_v10", "SVK")).toBe("case_law_v10_cs_sk");
   expect(corpusIndexId("case_law_v2", "CZE")).toBe("case_law_v2_cze");
   // A country outside every group is its own group.
   expect(corpusIndexId("case_law_v3", "ROU")).toBe("case_law_v3_rou");

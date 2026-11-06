@@ -5,6 +5,10 @@
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
+    "runLimits": {
+      "maxMessagesPerRun": 20000,
+      "maxMessageBytesPerRun": 67108864
+    },
     "path": "/v1/desktop/runner",
     "desktopIdHeader": "stella-desktop-id",
     "close": {
@@ -50,18 +54,26 @@
       "needs_login",
       "limit_until",
       "not_installed",
-      "unsupported"
+      "unsupported",
+      "unavailable"
     ],
     "harnessCapabilities": ["approvals", "interrupt", "resume", "image_input"],
+    "harnessUnavailableReasons": [
+      "harness_failed",
+      "unexpected_answer",
+      "probe_failed"
+    ],
     "runRejectReasons": [
       "harness_not_installed",
       "harness_needs_login",
       "harness_limited",
       "harness_unsupported",
+      "harness_unavailable",
       "harness_version_unavailable",
       "model_unavailable",
       "policy_unsupported",
       "at_capacity",
+      "run_too_large",
       "unknown_run"
     ],
     "approvalKinds": ["command", "file_change", "mcp_tool", "tool"],
@@ -76,6 +88,7 @@
     ],
     "networkPolicies": ["open"],
     "fsPolicies": ["workspace"],
+    "approvalModes": ["ask", "auto", "full_auto"],
     "desktopMessageTypes": [
       "hello",
       "harness.status",
@@ -92,11 +105,18 @@
       "run.start",
       "run.input",
       "run.approval",
+      "run.answer",
       "run.interrupt",
       "run.cancel",
       "run.token",
       "ack"
-    ]
+    ],
+    "answerLimits": {
+      "maxQuestions": 32,
+      "maxAnswersPerQuestion": 64,
+      "maxAnswerLength": 16384,
+      "maxQuestionIdLength": 256
+    }
   },
   "valid": {
     "desktop": [
@@ -111,6 +131,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -183,12 +204,37 @@
           "state": "ready",
           "version": "2.0.30",
           "capabilities": ["approvals"],
+          "approvalModes": ["ask", "auto"],
           "models": [
             {
               "id": "model-large",
               "label": "Large model"
             }
           ]
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "harness_failed"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "claude-code",
+          "state": "unavailable",
+          "reason": "unexpected_answer"
+        }
+      },
+      {
+        "type": "harness.status",
+        "harness": {
+          "id": "codex",
+          "state": "unavailable",
+          "reason": "probe_failed"
         }
       },
       {
@@ -218,6 +264,11 @@
       {
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "harness_unavailable"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "harness_version_unavailable"
       },
       {
@@ -234,6 +285,11 @@
         "type": "run.rejected",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
         "reason": "at_capacity"
+      },
+      {
+        "type": "run.rejected",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "reason": "run_too_large"
       },
       {
         "type": "run.rejected",
@@ -382,6 +438,7 @@
       {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -414,7 +471,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "ask"
         },
         "mcp": {
           "serverName": "stella",
@@ -426,6 +484,7 @@
       {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000002",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "claude-code",
         "harnessVersion": "2.0.30",
         "model": "model-large",
@@ -444,7 +503,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -479,6 +539,16 @@
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
         "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000a1",
         "decision": "deny"
+      },
+      {
+        "type": "run.answer",
+        "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+        "answers": {
+          "tone": ["Formal"],
+          "recipients": ["Court", "Opposing counsel"],
+          "deadline": ["Friday before noon"]
+        }
       },
       {
         "type": "run.interrupt",
@@ -516,6 +586,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -552,6 +623,7 @@
             "state": "ready",
             "version": "0.48.0",
             "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "auto", "full_auto"],
             "models": [
               {
                 "id": "model-large",
@@ -621,6 +693,7 @@
       "input": {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -654,6 +727,7 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
+          "approvals": "full_auto",
           "clipboard": "blocked"
         },
         "mcp": {
@@ -667,6 +741,7 @@
       "parsed": {
         "type": "run.start",
         "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+        "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
         "harness": "codex",
         "harnessVersion": "0.48.0",
         "model": "model-large",
@@ -699,7 +774,8 @@
         ],
         "policy": {
           "network": "open",
-          "fs": "workspace"
+          "fs": "workspace",
+          "approvals": "full_auto"
         },
         "mcp": {
           "serverName": "stella",
@@ -755,6 +831,29 @@
             "id": "codex",
             "state": "limit_until",
             "version": "0.48.0"
+          }
+        }
+      },
+      {
+        "name": "unavailable harness without a reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable"
+          }
+        }
+      },
+      {
+        "name": "unavailable harness with an unknown reason",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "unavailable",
+            "reason": "the harness exited"
           }
         }
       },
@@ -823,6 +922,54 @@
           ],
           "activeRuns": []
         }
+      },
+      {
+        "name": "ready harness without the default approval mode",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["auto", "full_auto"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "ready harness listing an approval mode twice",
+        "reason": "invalid",
+        "message": {
+          "type": "harness.status",
+          "harness": {
+            "id": "codex",
+            "state": "ready",
+            "version": "0.48.0",
+            "capabilities": ["approvals", "interrupt", "resume", "image_input"],
+            "approvalModes": ["ask", "ask"],
+            "models": [
+              {
+                "id": "model-large",
+                "label": "Large model"
+              },
+              {
+                "id": "model-small",
+                "label": "Small model"
+              }
+            ]
+          }
+        }
       }
     ],
     "server": [
@@ -843,10 +990,46 @@
         }
       },
       {
+        "name": "run.answer with an empty question id",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "": ["Formal"] }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not a list",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "tone": "Formal" }
+        }
+      },
+      {
+        "name": "run.answer with an answer that is not text",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+          "answers": { "tone": [true] }
+        }
+      },
+      {
+        "name": "run.answer without answers",
+        "message": {
+          "type": "run.answer",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "requestId": "0192f3a0-6b1c-7d2e-8f30-0000000000b1"
+        }
+      },
+      {
         "name": "restricted network policy",
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -879,7 +1062,8 @@
           ],
           "policy": {
             "network": "restricted",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -894,6 +1078,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -926,7 +1111,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "home"
+            "fs": "home",
+            "approvals": "ask"
           },
           "mcp": {
             "serverName": "stella",
@@ -941,6 +1127,7 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "cursor",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -973,7 +1160,8 @@
           ],
           "policy": {
             "network": "open",
-            "fs": "workspace"
+            "fs": "workspace",
+            "approvals": "auto"
           },
           "mcp": {
             "serverName": "stella",
@@ -988,6 +1176,122 @@
         "message": {
           "type": "run.start",
           "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "auto"
+          }
+        }
+      },
+      {
+        "name": "welcome without resume positions",
+        "message": {
+          "type": "welcome",
+          "protocol": 1
+        }
+      },
+      {
+        "name": "ack position zero",
+        "message": {
+          "type": "ack",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": 0
+        }
+      },
+      {
+        "name": "ack position as text",
+        "message": {
+          "type": "ack",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "seq": "12"
+        }
+      },
+      {
+        "name": "unknown approval mode",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
+          "harness": "codex",
+          "harnessVersion": "0.48.0",
+          "model": "model-large",
+          "harnessSessionId": null,
+          "instructions": "Use the stella MCP server for workspace actions.",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Summarise the lease."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "toolCalls": [
+                {
+                  "id": "call-1",
+                  "type": "function",
+                  "function": {
+                    "name": "read_document",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "Lease text",
+              "toolCallId": "call-1"
+            }
+          ],
+          "policy": {
+            "network": "open",
+            "fs": "workspace",
+            "approvals": "bypass"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
+          }
+        }
+      },
+      {
+        "name": "run.start without an approval mode",
+        "message": {
+          "type": "run.start",
+          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
+          "folderId": "0192f3a0-6b1c-7d2e-8f30-0000000000f0",
           "harness": "codex",
           "harnessVersion": "0.48.0",
           "model": "model-large",
@@ -1021,30 +1325,13 @@
           "policy": {
             "network": "open",
             "fs": "workspace"
+          },
+          "mcp": {
+            "serverName": "stella",
+            "url": "https://api.example.test/mcp",
+            "token": "run-token-1",
+            "expiresAt": "2026-10-28T09:15:00.000Z"
           }
-        }
-      },
-      {
-        "name": "welcome without resume positions",
-        "message": {
-          "type": "welcome",
-          "protocol": 1
-        }
-      },
-      {
-        "name": "ack position zero",
-        "message": {
-          "type": "ack",
-          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
-          "seq": 0
-        }
-      },
-      {
-        "name": "ack position as text",
-        "message": {
-          "type": "ack",
-          "runId": "0192f3a0-6b1c-7d2e-8f30-000000000001",
-          "seq": "12"
         }
       }
     ]

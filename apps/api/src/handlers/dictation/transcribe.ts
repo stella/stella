@@ -13,6 +13,7 @@ import {
   TRANSCRIPTION_AUDIO_MEDIA_TYPES,
   TRANSCRIPTION_DURATION_TOLERANCE_MS,
 } from "@stll/api-contract/transcription";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
 import type { SafeDbError } from "@/api/db/safe-db";
@@ -230,7 +231,7 @@ export const executeDictation = async (
             ),
         }),
       );
-      if (access === null || access.status === "deleting") {
+      if (access === null || !workspaceIsVisible(access.status)) {
         return Result.err(
           new HandlerError({
             status: 404,

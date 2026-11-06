@@ -19,6 +19,7 @@ import type {
   EntityGlobalSearchHit,
   GlobalSearchHit,
 } from "@/api/lib/search/types";
+import { VISIBLE_WORKSPACE_FILTER } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const isoDateTime = apiDateTimeSchema;
 
@@ -116,7 +117,7 @@ export const resolveSelectedWorkspaceIds = async ({
       where: {
         id: { in: accessible },
         organizationId: { eq: organizationId },
-        status: { ne: "deleting" },
+        status: VISIBLE_WORKSPACE_FILTER,
       },
       columns: { id: true },
       limit: accessible.length,

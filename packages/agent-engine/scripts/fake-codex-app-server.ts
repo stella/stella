@@ -1,6 +1,7 @@
-import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { PACKAGE_CACHE_FOLDERS } from "../src/harness/package-cache";
+import { fakeHarnessLog, openFakeHarnessPeer } from "./fake-harness-peer";
 import {
   FAKE_STELLA_ANSWER,
   FAKE_STELLA_SERVER,
@@ -12,7 +13,7 @@ import {
  * A stand-in for `codex app-server` that replays a handwritten transcript
  * over real stdio, so the adapter's process, framing and protocol handling
  * run unmodified in tests without a model provider. Every message it
- * receives is appended to `$FAKE_CODEX_LOG` for the test to inspect.
+ * receives is appended to `$FAKE_HARNESS_LOG` for the test to inspect.
  *
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
@@ -609,6 +610,29 @@ const FAKE_SCENARIOS = {
     ).flat(),
   ],
   malformed: [...freshTurn(), { raw: "{this is not json" }, { sleep: 5000 }],
+  /** One blocking question asking two questions under one id. */
+  question_twice_named: [
+    ...freshTurn(),
+    {
+      request: "item/tool/requestUserInput",
+      params: {
+        threadId: FAKE_THREAD_ID,
+        turnId: FAKE_TURN_ID,
+        itemId: "ask-twice",
+        isBlocking: true,
+        autoResolutionMs: null,
+        questions: ["Czech", "Slovak"].map((law) => ({
+          id: "law",
+          header: "Governing law",
+          question: `Does ${law} law govern the lease?`,
+          isOther: true,
+          isSecret: false,
+          options: null,
+        })),
+      },
+    },
+    { sleep: 5000 },
+  ],
   crash: [
     ...freshTurn(),
     item("started", command("call-x", "inProgress")),
@@ -698,72 +722,27 @@ const IncomingSchema = v.looseObject({
   id: v.optional(v.union([v.string(), v.number()])),
   method: v.optional(v.string()),
 });
-type Incoming = v.InferOutput<typeof IncomingSchema>;
 
 const run = async (
   steps: readonly FakeStep[],
   log: (entry: object) => void,
 ) => {
-  const requests: Incoming[] = [];
-  const responses: Incoming[] = [];
-  const state: { wake: (() => void) | null; closed: boolean } = {
-    wake: null,
-    closed: false,
-  };
-  const write = (message: object) => {
-    process.stdout.write(`${JSON.stringify(message)}\n`);
-  };
-  const wakeReader = () => {
-    const wake = state.wake;
-    state.wake = null;
-    if (wake !== null) {
-      wake();
-    }
-  };
-
-  const reading = (async () => {
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for await (const bytes of Bun.stdin.stream()) {
-      buffer += decoder.decode(bytes, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        const raw: unknown = JSON.parse(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-        log({ received: raw });
-        const message = v.parse(IncomingSchema, raw);
-        if (message.method !== undefined && message.id !== undefined) {
-          requests.push(message);
-        } else if (message.method === undefined) {
-          responses.push(message);
-        }
-        wakeReader();
+  const { reading, take, write } = openFakeHarnessPeer({
+    schema: IncomingSchema,
+    queueOf: (message) => {
+      if (message.method === undefined) {
+        return "responses";
       }
-    }
-    state.closed = true;
-    wakeReader();
-  })();
-
-  const take = async (queue: Incoming[]): Promise<Incoming | null> => {
-    for (;;) {
-      const message = queue.shift();
-      if (message !== undefined) {
-        return message;
-      }
-      if (state.closed) {
-        return null;
-      }
-      const { promise, resolve } = Promise.withResolvers<undefined>();
-      state.wake = () => resolve(undefined);
-      await promise;
-    }
-  };
+      // A notification from the client needs no answer.
+      return message.id === undefined ? null : "requests";
+    },
+    log,
+  });
 
   let serverRequestId = 1000;
   for (const step of steps) {
     if ("expect" in step) {
-      const message = await take(requests);
+      const message = await take("requests");
       if (message === null) {
         return;
       }
@@ -785,11 +764,11 @@ const run = async (
         method: step.request,
         params: step.params,
       });
-      if (step.wait !== false && (await take(responses)) === null) {
+      if (step.wait !== false && (await take("responses")) === null) {
         return;
       }
     } else if ("awaitResponse" in step) {
-      if ((await take(responses)) === null) {
+      if ((await take("responses")) === null) {
         return;
       }
     } else if ("ignoreTerm" in step) {
@@ -810,12 +789,27 @@ const run = async (
 
 if (import.meta.main) {
   const scenario = process.argv[2] ?? "";
-  const logPath = process.env["FAKE_CODEX_LOG"] ?? "";
-  const log = (entry: object) => {
-    appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
-  };
+  const log = fakeHarnessLog();
   log({
-    startup: { codexHome: process.env["CODEX_HOME"], cwd: process.cwd() },
+    startup: {
+      codexHome: process.env["CODEX_HOME"],
+      cwd: process.cwd(),
+      pid: process.pid,
+      /** What follows the scenario: the launch's own arguments. */
+      args: process.argv.slice(3),
+      /** Where the turn points package managers' caches. */
+      packageCache: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) =>
+          Object.hasOwn(PACKAGE_CACHE_FOLDERS, name),
+        ),
+      ),
+      /** The variables a launch may set or remove. */
+      launchEnvironment: Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([name]) => name.startsWith("STELLA_") || name === "OPENAI_API_KEY",
+        ),
+      ),
+    },
   });
   if (!isScenario(scenario)) {
     log({ unknownScenario: scenario });

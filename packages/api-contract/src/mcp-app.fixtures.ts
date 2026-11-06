@@ -87,8 +87,7 @@ export const APP_RESOLVE_FIXTURE = {
     readerUrl: "https://stll.app/case-law/fixture-decision",
     text: {
       status: "readable",
-      blocks: [],
-      extent: { type: "complete" },
+      charCount: 1200,
     },
   },
 } satisfies LegalResolveResponse;

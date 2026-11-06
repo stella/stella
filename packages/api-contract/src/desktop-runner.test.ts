@@ -5,8 +5,10 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import {
+  DESKTOP_RUNNER_ANSWER_LIMITS,
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
@@ -14,6 +16,8 @@ import {
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
+  DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   type DESKTOP_RUNNER_MESSAGE_ROLES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
@@ -28,6 +32,7 @@ import {
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
+  desktopRunnerHarnessReportSchema,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   parseDesktopRunnerFrame,
@@ -101,6 +106,10 @@ describe("desktop runner fixtures", () => {
     expect(fixtures.vocabulary).toEqual({
       protocol: DESKTOP_RUNNER_PROTOCOL,
       maxFrameBytes: DESKTOP_RUNNER_MAX_FRAME_BYTES,
+      runLimits: {
+        maxMessagesPerRun: DESKTOP_RUNNER_LIMITS.maxMessagesPerRun,
+        maxMessageBytesPerRun: DESKTOP_RUNNER_LIMITS.maxMessageBytesPerRun,
+      },
       path: DESKTOP_RUNNER_PATH,
       desktopIdHeader: DESKTOP_RUNNER_DESKTOP_ID_HEADER,
       close: DESKTOP_RUNNER_CLOSE,
@@ -110,14 +119,19 @@ describe("desktop runner fixtures", () => {
       harnesses: [...AGENT_HARNESSES],
       harnessStates: Object.values(DESKTOP_RUNNER_HARNESS_STATE),
       harnessCapabilities: [...DESKTOP_RUNNER_HARNESS_CAPABILITIES],
+      harnessUnavailableReasons: [
+        ...DESKTOP_RUNNER_HARNESS_UNAVAILABLE_REASONS,
+      ],
       runRejectReasons: [...DESKTOP_RUNNER_REJECT_REASONS],
       approvalKinds: [...DESKTOP_RUNNER_APPROVAL_KINDS],
       approvalDecisions: [...DESKTOP_RUNNER_APPROVAL_DECISIONS],
       runOutcomes: [...DESKTOP_RUNNER_RUN_OUTCOMES],
       networkPolicies: [...DESKTOP_RUNNER_NETWORK_POLICIES],
       fsPolicies: [...DESKTOP_RUNNER_FS_POLICIES],
+      approvalModes: [...DESKTOP_RUNNER_APPROVAL_MODES],
       desktopMessageTypes: Object.values(DESKTOP_RUNNER_DESKTOP_MESSAGE),
       serverMessageTypes: Object.values(DESKTOP_RUNNER_SERVER_MESSAGE),
+      answerLimits: DESKTOP_RUNNER_ANSWER_LIMITS,
     });
   });
 
@@ -156,12 +170,14 @@ describe("desktop runner fixtures", () => {
     const {
       protocol,
       maxFrameBytes,
+      runLimits: _runLimits,
       path: _path,
       desktopIdHeader: _desktopIdHeader,
       close: _close,
       policyViolationCode: _policyViolationCode,
       policyReasons: _policyReasons,
       timing: _timing,
+      answerLimits: _answerLimits,
       ...vocabularies
     } = fixtures.vocabulary;
     expect({ protocol, maxFrameBytes }).toEqual({
@@ -180,6 +196,9 @@ describe("desktop runner fixtures", () => {
         harnessCapabilities: reports.flatMap((report) =>
           report.state === "ready" ? report.capabilities : [],
         ),
+        harnessUnavailableReasons: reports.flatMap((report) =>
+          report.state === "unavailable" ? [report.reason] : [],
+        ),
         runRejectReasons: desktop.flatMap((message) =>
           message.type === "run.rejected" ? [message.reason] : [],
         ),
@@ -194,8 +213,27 @@ describe("desktop runner fixtures", () => {
         ),
         networkPolicies: starts.map(({ policy }) => policy.network),
         fsPolicies: starts.map(({ policy }) => policy.fs),
+        approvalModes: [
+          ...starts.map(({ policy }) => policy.approvals),
+          ...reports.flatMap((report) =>
+            report.state === "ready" ? report.approvalModes : [],
+          ),
+        ],
       }),
     ).toEqual(normalized(vocabularies));
+  });
+
+  test("a ready report from before approval modes offers the default alone", () => {
+    const report = {
+      state: "ready",
+      id: "codex",
+      version: "0.48.0",
+      capabilities: ["approvals"],
+      models: [{ id: "model-large", label: "Large model" }],
+    };
+    const parsed = v.safeParse(desktopRunnerHarnessReportSchema, report);
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toMatchObject({ approvalModes: ["ask"] });
   });
 
   test("unknown fields are dropped, chunk fields are kept", () => {
@@ -221,6 +259,60 @@ describe("desktop runner fixtures", () => {
         success: v.safeParse(desktopRunnerServerMessageSchema, message).success,
       }).toEqual({ name, success: false });
     }
+  });
+});
+
+describe("question answers", () => {
+  const answer = (answers: unknown) => ({
+    type: DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer,
+    runId: "0192f3a0-6b1c-7d2e-8f30-000000000001",
+    requestId: "0192f3a0-6b1c-7d2e-8f30-0000000000b1",
+    answers,
+  });
+  const parses = (answers: unknown) =>
+    v.safeParse(desktopRunnerServerMessageSchema, answer(answers)).success;
+  const {
+    maxQuestions,
+    maxAnswersPerQuestion,
+    maxAnswerLength,
+    maxQuestionIdLength,
+  } = DESKTOP_RUNNER_ANSWER_LIMITS;
+  const questions = (count: number) =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [`q${String(index)}`, ["a"]]),
+    );
+
+  test("take each bound and refuse one past it", () => {
+    const cases: [string, unknown, unknown][] = [
+      ["questions", questions(maxQuestions), questions(maxQuestions + 1)],
+      [
+        "answers per question",
+        { tone: Array.from({ length: maxAnswersPerQuestion }, () => "a") },
+        { tone: Array.from({ length: maxAnswersPerQuestion + 1 }, () => "a") },
+      ],
+      [
+        "answer length",
+        { tone: ["a".repeat(maxAnswerLength)] },
+        { tone: ["a".repeat(maxAnswerLength + 1)] },
+      ],
+      [
+        "question id length",
+        { ["q".repeat(maxQuestionIdLength)]: ["a"] },
+        { ["q".repeat(maxQuestionIdLength + 1)]: ["a"] },
+      ],
+    ];
+    for (const [name, atBound, pastBound] of cases) {
+      expect({
+        name,
+        atBound: parses(atBound),
+        past: parses(pastBound),
+      }).toEqual({ name, atBound: true, past: false });
+    }
+  });
+
+  test("count lengths in UTF-16 code units", () => {
+    // Two UTF-8 bytes each, one code unit: the bound is on code units.
+    expect(parses({ tone: ["é".repeat(maxAnswerLength)] })).toBe(true);
   });
 });
 

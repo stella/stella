@@ -29,6 +29,7 @@ import {
   PROVIDER_CALL_FAILURE_REASON,
   ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
+import { isProviderAccountOutOfCredit } from "@/api/lib/errors/provider-error-catalogue";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -49,6 +50,7 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { providerErrorBodyOf } from "@/api/lib/observability/provider-error-reason";
 
 export type { AIErrorKind };
 
@@ -79,6 +81,7 @@ const LOCAL_RUNNER_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
   [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
   [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
   [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+  [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
 ]);
 
 /**
@@ -423,6 +426,15 @@ const classifyAIErrorInternal = (
   if (providerKind !== null) {
     return providerKind;
   }
+  // An adapter can forward the provider's error body without its status. The
+  // body still names an account out of credit, which only its owner can fix.
+  const providerBody = providerErrorBodyOf(error);
+  if (
+    providerBody !== undefined &&
+    isProviderAccountOutOfCredit(providerBody)
+  ) {
+    return "provider_billing";
+  }
   // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
   // recognised provider cause so a permanent provider response does not look
   // like a transient transport outage.
@@ -720,6 +732,7 @@ const aiKindHandlerError = (
     case "local_runner_needs_login":
     case "local_runner_limit_reached":
     case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
     case "unknown":
       return new HandlerError({ ...fallback, code, cause: error });
     default: {

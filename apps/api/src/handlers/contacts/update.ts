@@ -25,6 +25,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { pickDefined } from "@/api/lib/pick-defined";
+import { announceContactSetChanged } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -354,6 +355,7 @@ export const updateContactHandler = async function* ({
     "contacts-update.flush-contact-search-repairs",
   );
 
+  announceContactSetChanged(organizationId);
   return Result.ok(outcome.row);
 };
 

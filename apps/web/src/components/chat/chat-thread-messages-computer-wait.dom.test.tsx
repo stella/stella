@@ -80,7 +80,6 @@ const renderTurn = async ({
                     onAskUserSubmit={() => {}}
                     onCreateDocumentResolve={() => {}}
                     onOpenCreatedDocument={() => {}}
-                    showThinkingIndicator
                     streamdownComponents={{
                       a: ({ children, ...props }) => (
                         <a {...props}>{children}</a>
@@ -107,11 +106,14 @@ test("a running turn whose computer is away says so under its answer", async () 
   expect(status).not.toBeNull();
   // The partial answer stays as it was; the wait follows it.
   expect(screen.getByText("Lease")).toBeTruthy();
+  // One status line per turn: the wait takes the place of the live one.
+  expect(document.querySelector("[data-turn-live-status]")).toBeNull();
 });
 
 test("a running turn whose computer is there shows no wait", async () => {
   await renderTurn({ isGenerating: true, waitingForComputer: false });
   expect(screen.queryByText(WAITING)).toBeNull();
+  expect(document.querySelector("[data-turn-live-status]")).not.toBeNull();
 });
 
 test("a settled turn never shows a wait left from its stream", async () => {

@@ -60,9 +60,6 @@ mod harness_auto_install;
 mod harness_commands;
 mod harness_installation;
 mod harness_release;
-// Runs once the desktop runner's harness host lands; the runner protocol it
-// shares types with is test-only until then too.
-#[cfg(test)]
 mod harness_sidecar;
 mod http_client;
 mod i18n;
@@ -653,6 +650,9 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: PreferencesTab)
       window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           clipboard_shortcut::resume_after_window_closed(&resume_handle);
+        }
+        if matches!(event, tauri::WindowEvent::Focused(true)) {
+          feature_access::refresh_now();
         }
       });
       // Emit tab activation after a short delay to let the webview load

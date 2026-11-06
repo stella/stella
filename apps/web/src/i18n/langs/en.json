@@ -40,7 +40,6 @@
     "organizationId": "Organization ID",
     "organizationLeft": "You have left the organization.",
     "planAndUsage": "Plan and usage",
-    "title": "Organization admin",
     "toolsDescription": "Enable or disable native tools for everyone in this organization."
   },
   "agentClaim": {
@@ -163,7 +162,9 @@
       "declinedDescription": "You have declined this invitation. You can safely close this page.",
       "description": "You've been invited to join {organizationName} by {inviterEmail} as {role}.",
       "goToWorkspaces": "Go to matters",
-      "title": "Organization invitation"
+      "title": "Organization invitation",
+      "verifyEmailHint": "To verify {email}, sign out, then sign in with a one-time code sent to that address.",
+      "wrongAccountHint": "You are signed in as {email}. Sign out, then sign in with the address the invitation was sent to."
     },
     "lastUsed": "Last used",
     "oneTimeCodeExpired": "Your one-time code has expired. Request a new code.",
@@ -1461,6 +1462,8 @@
     },
     "answerQuote": {
       "showInDecision": "Show in decision",
+      "unverified": "Citation not verified",
+      "unverifiedHint": "The cited decisions do not contain this text word for word",
       "verified": "Verified citation",
       "verifiedHint": "Word for word in {source}"
     },
@@ -1686,10 +1689,18 @@
       "errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
       "errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
       "onThisComputer": "{harness} on this computer",
+      "permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
+      "permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
+      "permissionFullAuto": "Full auto",
+      "permissionFullAutoDescription": "Never asks for anything inside the chat's folder; always asks before changing your computer.",
+      "permissionSandboxed": "Runs in a sandbox; asks before changing your computer.",
+      "permissionUnavailable": "Not available on this computer",
+      "permissions": "Permissions",
       "refusalConflictingRunMode": "This request asks to run both with the cloud agent and on your computer. Choose one under Run on.",
       "refusalHarnessUnavailable": "The coding agent on your computer cannot take this request right now. Check it in stella desktop.",
       "refusalModelUnavailable": "The coding agent on your computer no longer offers this model. Choose another one under Run on.",
       "refusalNoComputer": "None of your computers is connected. Open stella desktop, then send again.",
+      "refusalPermissionUnavailable": "The coding agent on your computer cannot run with these permissions. Choose another option under Permissions.",
       "refusalTooLarge": "This conversation is too long to hand to your computer. Start a new chat to run it there.",
       "refusalUnavailable": "Running chats on your computer is not available for your account.",
       "runOn": "Run on",
@@ -1698,8 +1709,15 @@
       "stateNeedsLogin": "Sign-in needed",
       "stateNotInstalled": "Not installed",
       "stateOffline": "Computer offline",
+      "stateUnavailable": "Not available right now",
       "stateUnsupported": "This version is not supported",
       "waitingForComputer": "Waiting for your computer to reconnect…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Choose any that apply",
+      "dismiss": "Dismiss and stop",
+      "secretAnswer": "Answer hidden",
+      "secretPlaceholder": "Your answer stays hidden"
     },
     "maxAttachmentsReached": "Maximum {count} files per message",
     "mcpReconnect": {
@@ -1842,10 +1860,18 @@
       "toolbarLabel": "Selected text"
     },
     "sendError": "There was an issue sending your message. Contact support if the error persists.",
+    "sendErrorActiveFileNoText": "The open file has no text stella can read. Close it or open a different file.",
+    "sendErrorActiveFileTooLarge": "The open file is too large for chat. Close it or open a smaller file.",
+    "sendErrorAgentRunsDisabled": "Agent runs are not available here. Contact your workspace admin.",
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.",
+    "sendErrorAttachmentNoText": "An attached file has no text stella can read. Remove it or attach a different file.",
+    "sendErrorAttachmentUnsupported": "This file type cannot be attached to a chat. Attach a different file.",
     "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.",
     "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
+    "sendErrorDocumentUnsupported": "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
+    "sendErrorImageInvalid": "This image could not be prepared for the model. Upload a smaller image or switch models.",
+    "sendErrorImageUnsupported": "This model cannot read attached images. Remove the image or switch to a model that supports images.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
     "sendErrorMessageEmpty": "This message has no text to send. Type your question or attach a file, then send it.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
@@ -1857,6 +1883,7 @@
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.",
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.",
     "sendErrorTimedOut": "The chat service did not respond in time. Try again.",
+    "sendErrorToolsUnsupported": "This model cannot use tools, so it cannot answer questions about your matter. Switch to a model that supports tools.",
     "sendPrompt": "Send message",
     "sendQueuedMessageNow": "Send now",
     "sendWithoutAnonymization": "Send without anonymization",
@@ -1903,7 +1930,7 @@
       "unavailable": "A chart could not be selected. The table is shown.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Working with context",
+    "thinking": "Thinking",
     "threadFiles": {
       "title": "Files in this chat"
     },
@@ -2031,6 +2058,11 @@
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
     },
+    "turnStatus": {
+      "waitingForApproval": "Waiting for approval",
+      "waitingForInput": "Waiting for input",
+      "writing": "Writing"
+    },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
     "usageFallbackNotice": "Daily AI allowance used; replies continue on the standard model.",
@@ -2039,7 +2071,6 @@
       "answer": "Web search summary",
       "answerDisclaimer": "Synthesized from public web results below. Verify against the linked sources.",
       "fetchedFrom": "from {source}",
-      "openSource": "Open {source} in a new tab",
       "sources": "Sources",
       "toggleDescription": "Let the model search the public web and read pages for this conversation.",
       "toggleLabel": "Web search",
@@ -2393,6 +2424,7 @@
     "notes": "Notes",
     "open": "Open",
     "openInNewTab": "Open in new tab",
+    "openInSidePanel": "Open in side panel",
     "openInStella": "Open in stella",
     "openOriginalSource": "Open original source",
     "options": "Options",
@@ -2786,6 +2818,11 @@
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
       "undoImport": "Undo import ({count})",
+      "undoImportConfirm": "Permanently delete the {count, plural, one {contact} other {# contacts}} this import created? This action cannot be undone.",
+      "undoImportTitle": "Undo this import?",
+      "undoneRow": "Removed by undo",
+      "undoneSummary": "Undo removed {count, plural, one {# contact} other {# contacts}} created by this import.",
+      "undoneToast": "Import undone: {count, plural, one {# contact} other {# contacts}} deleted",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
         "ignored_populated_column": "Column “{column}” contains data but is ignored.",
@@ -3227,7 +3264,6 @@
     "noFileInVersion": "No file in this version",
     "noFullScreenPreview": "This file type has no full-screen preview.",
     "noLabel": "No label",
-    "openInSidePanel": "Open in side panel",
     "redlinePreview": "Tracked changes",
     "removeLabel": "Remove label",
     "saveComparison": "Save comparison",
@@ -5238,6 +5274,8 @@
       "betaDescription": "Try features that are still in development",
       "betaInbox": "Inbox & notifications",
       "betaInboxDescription": "Show the Inbox and the notification bell",
+      "betaLocalAgents": "Agents on your computer",
+      "betaLocalAgentsDescription": "Run chats with Codex or Claude Code on your computer through stella desktop",
       "betaTimeBillingDescription": "Show time tracking, invoices, and expenses",
       "chatNotifications": "Chat notifications",
       "chatNotificationsBlocked": "Notifications are blocked for stella in this browser. Allow them in the browser’s site settings.",
@@ -5755,7 +5793,6 @@
     "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
-    "openProvision": "Open provision",
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
@@ -6467,6 +6504,10 @@
       },
       "noProperties": "No property to calculate",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Original AI value",
+      "reasonPlaceholder": "Reason for the change (optional)"
     },
     "copyToMatter": {
       "copied": "Copied to Matter",

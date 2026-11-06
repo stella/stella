@@ -50,7 +50,10 @@ import type {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
-import { resolveAuditResourceNames } from "./resource-resolvers";
+import {
+  deletedSnapshotName,
+  resolveAuditResourceNames,
+} from "./resource-resolvers";
 
 const auditLogCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,
@@ -298,16 +301,24 @@ const toAuditResource = ({
   row,
   resourceKind,
   resourceNames,
+  visibleChanges,
 }: {
-  row: Pick<AuditLogRow, "resourceId">;
+  row: Pick<AuditLogRow, "action" | "resourceId">;
   resourceKind: ClassifiedAuditResourceKind;
   resourceNames: AuditResourceNames;
+  visibleChanges: Record<string, unknown> | null;
 }) =>
   resourceKind.type === "known"
     ? {
         kind: resourceKind.kind,
         id: row.resourceId,
-        name: resourceNames.get(resourceKind.kind)?.get(row.resourceId) ?? null,
+        // A deleted resource has no row left to name it; its delete event
+        // recorded the name it had.
+        name:
+          resourceNames.get(resourceKind.kind)?.get(row.resourceId) ??
+          (row.action === AUDIT_ACTION.DELETE
+            ? deletedSnapshotName(resourceKind.kind, visibleChanges)
+            : null),
         available:
           resourceNames.get(resourceKind.kind)?.has(row.resourceId) ?? false,
       }
@@ -333,32 +344,41 @@ const toAuditLogPageItem = ({
   members: ReadonlyMap<string, string>;
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   principal: FeatureAccessPrincipal;
-}) => ({
-  id: row.id,
-  createdAt: row.createdAt,
-  action: row.action,
-  resourceType: row.resourceType,
-  resourceId: row.resourceId,
-  resource: toAuditResource({ row, resourceKind, resourceNames }),
-  ...(resourceKind.type === "known"
-    ? projectAuditReadChanges({
-        resourceType: resourceKind.kind,
-        changes: row.changes,
-        metadata: row.metadata,
-        featureAccessSnapshot,
-        principal,
-      })
-    : {
-        changes: null,
-        changesStatus: row.hasStoredChanges
-          ? AUDIT_CHANGES_STATUS.unrecognizedResource
-          : AUDIT_CHANGES_STATUS.visible,
-      }),
-  createdAtCursor: row.createdAtCursor,
-  userId: row.userId,
-  performerType: row.performerType,
-  actor: auditActorName(row, members),
-});
+}) => {
+  const projected =
+    resourceKind.type === "known"
+      ? projectAuditReadChanges({
+          resourceType: resourceKind.kind,
+          changes: row.changes,
+          metadata: row.metadata,
+          featureAccessSnapshot,
+          principal,
+        })
+      : {
+          changes: null,
+          changesStatus: row.hasStoredChanges
+            ? AUDIT_CHANGES_STATUS.unrecognizedResource
+            : AUDIT_CHANGES_STATUS.visible,
+        };
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    action: row.action,
+    resourceType: row.resourceType,
+    resourceId: row.resourceId,
+    resource: toAuditResource({
+      row,
+      resourceKind,
+      resourceNames,
+      visibleChanges: projected.changes,
+    }),
+    ...projected,
+    createdAtCursor: row.createdAtCursor,
+    userId: row.userId,
+    performerType: row.performerType,
+    actor: auditActorName(row, members),
+  };
+};
 
 // Columns the compliance read does not send to the client.
 const UNPROJECTED_AUDIT_LOG_COLUMNS = [

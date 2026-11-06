@@ -80,8 +80,7 @@ export type ChatFieldWriter = {
   recordAuditEvent: AuditRecorder | undefined;
   userId: SafeId<"user">;
   /** Writes are refused unless the matter's status here is "active". */
-  workspaceStatusById:
-    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
+  workspaceStatusById: ReadonlyMap<string, AccessibleWorkspace["status"]>;
 };
 
 type WorkspaceToolsContext = {
@@ -413,7 +412,7 @@ export const createWorkspaceTools = ({
       // An archived matter stays read-only here as it is over REST and MCP; a
       // matter without a known status is not assumed to be active.
       if (
-        fieldWriter.workspaceStatusById?.get(allowedWorkspaceId) !== "active"
+        fieldWriter.workspaceStatusById.get(allowedWorkspaceId) !== "active"
       ) {
         throw new ChatToolError({
           kind: "unavailable",

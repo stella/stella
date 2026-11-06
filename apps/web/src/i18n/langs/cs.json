@@ -40,7 +40,6 @@
     "organizationId": "ID organizace",
     "organizationLeft": "Opustili jste organizaci.",
     "planAndUsage": "Tarif a využití",
-    "title": "Správa organizace",
     "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
   },
   "agentClaim": {
@@ -163,7 +162,9 @@
       "declinedDescription": "Odmítli jste tuto pozvánku. Můžete tuto stránku zavřít.",
       "description": "{inviterEmail} vás pozval/a do organizace {organizationName} jako {role}.",
       "goToWorkspaces": "Přejít na spisy",
-      "title": "Pozvánka do organizace"
+      "title": "Pozvánka do organizace",
+      "verifyEmailHint": "Chcete-li ověřit adresu {email}, odhlaste se a přihlaste se jednorázovým kódem, který na ni odešleme.",
+      "wrongAccountHint": "Jste přihlášeni jako {email}. Odhlaste se a přihlaste se adresou, na kterou byla pozvánka odeslána."
     },
     "lastUsed": "Naposledy použito",
     "oneTimeCodeExpired": "Platnost jednorázového kódu vypršela. Požádejte o nový kód.",
@@ -1461,6 +1462,8 @@
     },
     "answerQuote": {
       "showInDecision": "Zobrazit v rozhodnutí",
+      "unverified": "Citaci se nepodařilo ověřit",
+      "unverifiedHint": "Citovaná rozhodnutí tento text doslovně neobsahují",
       "verified": "Ověřená citace",
       "verifiedHint": "Doslovně v {source}"
     },
@@ -1686,10 +1689,18 @@
       "errorNeedsLogin": "Programovací agent ve vašem počítači vyžaduje nové přihlášení. Přihlaste se přes stella desktop a zkuste to znovu.",
       "errorUnavailable": "Váš počítač přestal tuto odpověď zpracovávat. Ověřte, že je stella desktop spuštěný a připojený, a zkuste to znovu.",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAskDescription": "Soubory ve složce chatu upravuje sám; na vše ostatní se zeptá.",
+      "permissionAutoDescription": "Co považuje za bezpečné, udělá sám; na zbytek se zeptá.",
+      "permissionFullAuto": "Plně automaticky",
+      "permissionFullAutoDescription": "Na nic uvnitř složky chatu se neptá; než změní něco ve vašem počítači, vždy se zeptá.",
+      "permissionSandboxed": "Běží v izolovaném prostředí; než změní něco ve vašem počítači, zeptá se.",
+      "permissionUnavailable": "V tomto počítači není k dispozici",
+      "permissions": "Oprávnění",
       "refusalConflictingRunMode": "Tento požadavek se má spustit zároveň v cloudovém agentovi i ve vašem počítači. Vyberte jedno v nabídce Spustit na.",
       "refusalHarnessUnavailable": "Programovací agent ve vašem počítači teď tento požadavek nemůže převzít. Zkontrolujte ho ve stella desktop.",
       "refusalModelUnavailable": "Programovací agent ve vašem počítači už tento model nenabízí. Vyberte jiný v nabídce Spustit na.",
       "refusalNoComputer": "Žádný z vašich počítačů není připojen. Otevřete stella desktop a odešlete zprávu znovu.",
+      "refusalPermissionUnavailable": "Programovací agent ve vašem počítači s těmito oprávněními běžet nemůže. Vyberte jinou možnost v nabídce Oprávnění.",
       "refusalTooLarge": "Tato konverzace je příliš dlouhá na předání do vašeho počítače. Pro spuštění tam začněte nový chat.",
       "refusalUnavailable": "Spouštění chatů ve vašem počítači není pro váš účet dostupné.",
       "runOn": "Spustit na",
@@ -1698,8 +1709,15 @@
       "stateNeedsLogin": "Vyžaduje přihlášení",
       "stateNotInstalled": "Není nainstalováno",
       "stateOffline": "Počítač je offline",
+      "stateUnavailable": "Momentálně nedostupné",
       "stateUnsupported": "Tato verze není podporována",
       "waitingForComputer": "Čeká se, až se váš počítač znovu připojí…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte vše, co platí",
+      "dismiss": "Zamítnout a zastavit",
+      "secretAnswer": "Odpověď je skrytá",
+      "secretPlaceholder": "Vaše odpověď zůstane skrytá"
     },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
@@ -1842,10 +1860,18 @@
       "toolbarLabel": "Vybraný text"
     },
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
+    "sendErrorActiveFileNoText": "V otevřeném souboru není text, který by stella dokázala přečíst. Zavřete ho, nebo otevřete jiný soubor.",
+    "sendErrorActiveFileTooLarge": "Otevřený soubor je pro chat příliš velký. Zavřete ho, nebo otevřete menší soubor.",
+    "sendErrorAgentRunsDisabled": "Běhy agenta tu nejsou k dispozici. Obraťte se na správce pracovního prostoru.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
+    "sendErrorAttachmentNoText": "V přiloženém souboru není text, který by stella dokázala přečíst. Odeberte ho, nebo přiložte jiný soubor.",
+    "sendErrorAttachmentUnsupported": "Tento typ souboru nelze přiložit k chatu. Přiložte jiný soubor.",
     "sendErrorConnectionFailed": "Připojení k chatu selhalo. Zkontrolujte připojení a zkuste to znovu.",
     "sendErrorContinuationRejected": "V chatu se nepodařilo pokračovat. Začněte znovu odesláním nové zprávy.",
+    "sendErrorDocumentUnsupported": "Tento model nedokáže přečíst jeden z přiložených dokumentů. Odeberte přílohu, nebo přepněte na model, který ji podporuje.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
+    "sendErrorImageInvalid": "Tento obrázek se pro model nepodařilo připravit. Nahrajte menší obrázek, nebo přepněte model.",
+    "sendErrorImageUnsupported": "Tento model nedokáže přečíst přiložené obrázky. Odeberte obrázek, nebo přepněte na model, který obrázky podporuje.",
     "sendErrorLoopDetected": "Odpověď AI se příliš opakovala. Zkuste to znovu s užším požadavkem.",
     "sendErrorMessageEmpty": "Zpráva neobsahuje žádný text k odeslání. Napište dotaz nebo přiložte soubor a pak ji odešlete.",
     "sendErrorModelUnavailable": "Nastavený AI model už není dostupný. Požádejte správce pracovního prostoru, aby model aktualizoval v nastavení organizace.",
@@ -1857,6 +1883,7 @@
     "sendErrorQuotaExhausted": "Kvóta poskytovatele AI je vyčerpaná. Zkuste to za minutu znovu nebo se obraťte na správce pracovního prostoru.",
     "sendErrorStreamIncomplete": "Odpověď AI se přerušila dřív, než byla dokončena. Zkuste to znovu.",
     "sendErrorTimedOut": "Chat neodpověděl včas. Zkuste to znovu.",
+    "sendErrorToolsUnsupported": "Tento model neumí používat nástroje, takže nemůže odpovídat na otázky k vašemu spisu. Přepněte na model, který nástroje podporuje.",
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
@@ -1903,7 +1930,7 @@
       "unavailable": "Graf se nepodařilo vybrat. Zobrazuje se tabulka.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuji s kontextem",
+    "thinking": "Přemýšlení",
     "threadFiles": {
       "title": "Soubory v tomto chatu"
     },
@@ -2031,6 +2058,11 @@
       "replyReadyBody": "stella dokončila odpověď ve vašem chatu.",
       "replyReadyTitle": "Odpověď je hotová"
     },
+    "turnStatus": {
+      "waitingForApproval": "Čekání na schválení",
+      "waitingForInput": "Čekání na zadání",
+      "writing": "Psaní"
+    },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
     "usageFallbackNotice": "Denní příděl AI je vyčerpán; odpovědi pokračují na standardním modelu.",
@@ -2039,7 +2071,6 @@
       "answer": "Shrnutí webového vyhledávání",
       "answerDisclaimer": "Sestaveno z výsledků veřejného webu níže. Ověřte si je proti uvedeným zdrojům.",
       "fetchedFrom": "z {source}",
-      "openSource": "Otevřít {source} na nové kartě",
       "sources": "Zdroje",
       "toggleDescription": "Umožnit modelu v této konverzaci vyhledávat na veřejném webu a číst stránky.",
       "toggleLabel": "Vyhledávání na webu",
@@ -2393,6 +2424,7 @@
     "notes": "Poznámky",
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
+    "openInSidePanel": "Otevřít v bočním panelu",
     "openInStella": "Otevřít ve stelle",
     "openOriginalSource": "Otevřít originál",
     "options": "Možnosti",
@@ -2786,6 +2818,11 @@
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
       "undoImport": "Vrátit import ({count})",
+      "undoImportConfirm": "Trvale smazat {count, plural, one {kontakt vytvořený} few {# kontakty vytvořené} many {# kontaktu vytvořeného} other {# kontaktů vytvořených}} tímto importem? Tuto akci nelze vrátit zpět.",
+      "undoImportTitle": "Vrátit tento import?",
+      "undoneRow": "Odstraněno vrácením importu",
+      "undoneSummary": "Vrácení importu odstranilo {count, plural, one {# vytvořený kontakt} few {# vytvořené kontakty} many {# vytvořeného kontaktu} other {# vytvořených kontaktů}}.",
+      "undoneToast": "Import vrácen: {count, plural, one {smazán # kontakt} few {smazány # kontakty} many {smazáno # kontaktu} other {smazáno # kontaktů}}",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
       "warning": {
         "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
@@ -3227,7 +3264,6 @@
     "noFileInVersion": "V této verzi není žádný soubor",
     "noFullScreenPreview": "Tento typ souboru nemá náhled na celou obrazovku.",
     "noLabel": "Bez označení",
-    "openInSidePanel": "Otevřít v bočním panelu",
     "redlinePreview": "Sledované změny",
     "removeLabel": "Odebrat označení",
     "saveComparison": "Uložit porovnání",
@@ -5238,6 +5274,8 @@
       "betaDescription": "Vyzkoušejte funkce, které jsou stále ve vývoji",
       "betaInbox": "Doručené a oznámení",
       "betaInboxDescription": "Zobrazit Doručené a zvonek oznámení",
+      "betaLocalAgents": "Agenti na vašem počítači",
+      "betaLocalAgentsDescription": "Spouštět chaty s Codexem nebo Claude Code na vašem počítači přes stella desktop",
       "betaTimeBillingDescription": "Zobrazit sledování času, faktury a výdaje",
       "chatNotifications": "Oznámení z chatu",
       "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",
@@ -5755,7 +5793,6 @@
     "leadingDecisionsExplanation": "První zmínka v každém rozhodnutí, seřazená podle váhy citace: vážené příchozí citace zohledňující úroveň soudu, povahu citace a její stáří.",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
-    "openProvision": "Otevřít ustanovení",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
@@ -6467,6 +6504,10 @@
       },
       "noProperties": "Žádná vlastnost k výpočtu",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Původní hodnota z AI",
+      "reasonPlaceholder": "Důvod změny (nepovinné)"
     },
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",

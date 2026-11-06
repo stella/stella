@@ -3,7 +3,6 @@ import { KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
-import { useRevision } from "@/components/changes";
 import { ChatThreadView } from "@/components/chat-thread-view";
 import { screenStyles } from "@/components/empty-state-screen";
 import { EntityDetailSheet } from "@/components/entity-detail-sheet";
@@ -48,13 +47,13 @@ export const ThreadPane = ({ thread }: { thread: ThreadSelection }) => {
 /** The matter selected in the matters' list, beside it: its documents and tasks. */
 export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
   const { state } = useSession();
-  const revision = useRevision("documents", "tasks");
 
   return (
     <Pane title={matter.name}>
       {state.status === "signed-in" ? (
         <MatterEntities
-          key={revision}
+          // Another matter is another list.
+          key={matter.workspaceId}
           source={state.source}
           workspaceId={matter.workspaceId}
         />

@@ -20,6 +20,7 @@ import {
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
 } from "@/api/lib/db/aggregate-lock";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -35,6 +36,7 @@ import {
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
@@ -117,6 +119,7 @@ export type CaseLawProjectionCanonicalInput = {
   ecli: string | null;
   metadata: Record<string, unknown> | null;
   provisionKeys: readonly string[];
+  rankingSignals: CaseLawRankingSignals;
   vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
@@ -137,6 +140,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
@@ -160,6 +164,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
+  rankingSignals,
   vacatedFrom,
 });
 
@@ -454,6 +459,9 @@ const lockCaseLawProjectionInput = async (
     (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
       row.jurisdiction,
     ) ?? null;
+  const rankingSignals = (
+    await readCaseLawRankingSignals(tx, [row.documentId])
+  ).get(String(row.documentId));
   return {
     epoch: row.projectionEpoch,
     input: caseLawProjectionInputFromCanonical({
@@ -462,6 +470,10 @@ const lockCaseLawProjectionInput = async (
       provisionKeys:
         provisionKeys ??
         panic(`Provision keys were not loaded for ${row.documentId}`),
+      // The row is locked, so it cannot have disappeared since.
+      rankingSignals:
+        rankingSignals ??
+        panic(`Ranking signals were not loaded for ${row.documentId}`),
       vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
@@ -1339,6 +1351,7 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     tx,
     rows.map(({ jurisdiction }) => jurisdiction),
   );
+  const rankingSignals = await readCaseLawRankingSignals(tx, ids);
   const manifests = await projectionManifests(tx, "case_law");
   const states = await lockCaseLawProjectionRepairStates(tx, {
     decisionIds: ids,
@@ -1358,6 +1371,9 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
       provisionKeys:
         provisionKeys.get(row.documentId) ??
         panic("Projection repair provision keys missing"),
+      rankingSignals:
+        rankingSignals.get(row.documentId) ??
+        panic("Projection repair ranking signals missing"),
       vacatedFrom: vacated.get(row.jurisdiction) ?? null,
       sourceDescriptor: source.descriptor,
     });

@@ -203,9 +203,11 @@ const monthRangeSql = ({ year, month }: SitemapMonth): SQL => {
  * An empty month answers one row with no bucket.
  *
  * The country and the month's date range are the leading keys of
- * `case_law_decisions_sitemap_shard_published_idx` and the publication gate is
+ * `case_law_decisions_sitemap_month_published_idx` and the publication gate is
  * its partial predicate, so the count reads that month's index range and
- * nothing else. Exported for the plan contract.
+ * nothing else. The language group probes read
+ * `case_law_decisions_language_group_published_idx`, so neither touches the
+ * heap of an all-visible page. Exported for the plan contract.
  */
 export const sitemapMonthCountSql = (target: SitemapMonth): SQL => sql`
   WITH counts AS (

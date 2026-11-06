@@ -30,12 +30,12 @@ const REQUEST_ID: &str = "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f";
 const VERSION: &str = "1.4.0";
 const STAND_IN_TEST: &str = "harness_sidecar::tests::stand_in_holder";
 
-struct Fixture {
-  root: PathBuf,
+pub(crate) struct Fixture {
+  pub(crate) root: PathBuf,
 }
 
 impl Fixture {
-  fn new() -> Self {
+  pub(crate) fn new() -> Self {
     // The fixture's root is also its socket folder: short and private.
     let id = uuid::Uuid::new_v4().simple().to_string();
     let root = std::env::temp_dir().join(format!("sh-{}", &id[..8]));
@@ -59,7 +59,7 @@ impl Fixture {
     self.root.join("holders")
   }
 
-  fn log(&self) -> PathBuf {
+  pub(crate) fn log(&self) -> PathBuf {
     self.root.join("stand-in.log")
   }
 
@@ -92,7 +92,11 @@ impl Fixture {
     HarnessSidecar::spawn(settings)
   }
 
-  fn settings_for(&self, version: &str, launch: SidecarLaunch) -> SidecarSettings {
+  pub(crate) fn settings_for(
+    &self,
+    version: &str,
+    launch: SidecarLaunch,
+  ) -> SidecarSettings {
     SidecarSettings {
       launch: launch.env("FAKE_SIDECAR_LOG", self.log()),
       holder_root: self.holders(),
@@ -110,7 +114,7 @@ impl Fixture {
     }
   }
 
-  fn stand_in(&self) -> SidecarLaunch {
+  pub(crate) fn stand_in(&self) -> SidecarLaunch {
     SidecarLaunch::program(self.root.join("stand-in"), Vec::new())
   }
 
@@ -123,7 +127,7 @@ impl Fixture {
   }
 
   /// Every line a stand-in read, parsed.
-  fn received(&self) -> Vec<Value> {
+  pub(crate) fn received(&self) -> Vec<Value> {
     fs::read_to_string(self.log())
       .unwrap_or_default()
       .lines()
@@ -131,7 +135,7 @@ impl Fixture {
       .collect()
   }
 
-  fn starts(&self) -> usize {
+  pub(crate) fn starts(&self) -> usize {
     fs::read_to_string(self.log())
       .unwrap_or_default()
       .lines()
@@ -183,7 +187,9 @@ fn run_start(model: &str) -> SidecarRunStart {
     harness: Harness::Codex,
     executable: "/data/harness/codex/0.165.0/codex".to_owned(),
     config_dir: "/data/harness-home/codex".to_owned(),
+    launch: HarnessLaunchSettings::default(),
     workspace_dir: "/data/runs/1".to_owned(),
+    cache_dir: "/data/agent-package-cache".to_owned(),
     model: model.to_owned(),
     instructions: String::new(),
     messages: vec![
@@ -196,6 +202,7 @@ fn run_start(model: &str) -> SidecarRunStart {
     policy: RunPolicy {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
+      approvals: ApprovalMode::FullAuto,
     },
     mcp: McpBinding {
       server_name: "stella".to_owned(),
@@ -206,25 +213,51 @@ fn run_start(model: &str) -> SidecarRunStart {
   }
 }
 
-async fn next(outputs: &mut mpsc::Receiver<SidecarRunOutput>) -> SidecarRunOutput {
+async fn delivery(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> SidecarDelivery {
   tokio::time::timeout(WAIT, outputs.recv())
     .await
     .expect("the run reported in time")
     .expect("the run channel stays open until it finishes")
 }
 
-async fn finish(
-  outputs: &mut mpsc::Receiver<SidecarRunOutput>,
-) -> Vec<SidecarRunOutput> {
+async fn next(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> SidecarRunOutput {
+  delivery(outputs).await.output
+}
+
+/// Every delivery up to the run's end.
+async fn deliveries(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> Vec<SidecarDelivery> {
   let mut all = Vec::new();
   loop {
-    let output = next(outputs).await;
-    let finished = matches!(output, SidecarRunOutput::Finished { .. });
-    all.push(output);
+    let delivered = delivery(outputs).await;
+    let finished = matches!(delivered.output, SidecarRunOutput::Finished { .. });
+    all.push(delivered);
     if finished {
       return all;
     }
   }
+}
+
+async fn finish(
+  outputs: &mut mpsc::UnboundedReceiver<SidecarDelivery>,
+) -> Vec<SidecarRunOutput> {
+  deliveries(outputs)
+    .await
+    .into_iter()
+    .map(|delivered| delivered.output)
+    .collect()
+}
+
+fn holder_seqs(delivered: &[SidecarDelivery]) -> Vec<Option<u32>> {
+  delivered
+    .iter()
+    .map(|delivered| delivered.holder_seq.map(NonZeroU32::get))
+    .collect()
 }
 
 fn started(run_id: &str) -> SidecarRunOutput {
@@ -304,6 +337,7 @@ fn probes_answer_with_the_holder_report() {
         harness: Harness::Codex,
         executable: "/data/harness/codex/0.165.0/codex".to_owned(),
         config_dir: "/data/harness-home/codex".to_owned(),
+        launch: HarnessLaunchSettings::default(),
       })
       .await;
     assert_eq!(
@@ -343,7 +377,13 @@ fn commands_for_a_run_reach_the_holder() {
       .answer(RunAnswer {
         run_id: run_id.clone(),
         request_id: REQUEST_ID.to_owned(),
-        answers: [("law".to_owned(), vec!["Czech".to_owned()])].into(),
+        answers: crate::runner_protocol::QuestionAnswers::try_from(
+          std::collections::BTreeMap::from([(
+            "law".to_owned(),
+            vec!["Czech".to_owned()],
+          )]),
+        )
+        .unwrap(),
       })
       .unwrap();
     sidecar.interrupt(&run_id).unwrap();
@@ -386,12 +426,19 @@ fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
     let run_id = start.run_id.clone();
     let mut outputs = sidecar.start_run(start).unwrap();
     assert_eq!(next(&mut outputs).await, started(&run_id));
-    let answers = (0..32)
-      .map(|question| {
-        let answer = "x".repeat(16_384);
-        (format!("q{question}"), vec![answer; 64])
-      })
-      .collect();
+    // The most a valid answer may hold is still far over one line.
+    let answers = crate::runner_protocol::QuestionAnswers::try_from(
+      (0..crate::runner_protocol::MAX_ANSWERED_QUESTIONS)
+        .map(|question| {
+          let answer = "x".repeat(crate::runner_protocol::MAX_ANSWER_LENGTH);
+          (
+            format!("q{question}"),
+            vec![answer; crate::runner_protocol::MAX_ANSWERS_PER_QUESTION],
+          )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>(),
+    )
+    .unwrap();
     assert_eq!(
       sidecar.answer(RunAnswer {
         run_id: run_id.clone(),
@@ -423,13 +470,12 @@ fn a_command_over_the_line_limit_is_refused_and_the_session_stays_up() {
 }
 
 #[test]
-fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor() {
+fn a_burst_nobody_has_read_yet_ends_nothing_and_stalls_nothing() {
   let fixture = Fixture::new();
   let start = run_start("flood");
-  let run_id = start.run_id.clone();
   with_children(async {
     let sidecar = fixture.sidecar();
-    // Nothing reads this run while the holder sends more than it can queue.
+    // Nothing reads this run while the holder sends its burst.
     let mut flooded = sidecar.start_run(start).unwrap();
     let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
     assert_eq!(finish(&mut after).await.len(), 3);
@@ -440,53 +486,25 @@ fn a_run_nobody_drains_ends_failed_and_cancelled_without_stalling_the_supervisor
         harness: Harness::Codex,
         executable: "/data/harness/codex/0.165.0/codex".to_owned(),
         config_dir: "/data/harness-home/codex".to_owned(),
+        launch: HarnessLaunchSettings::default(),
       }),
     )
     .await
     .expect("a probe is answered while a run's outputs wait");
     assert!(probed.is_ok());
-    let outputs = finish(&mut flooded).await;
-    assert_eq!(outputs.len(), RUN_OUTPUT_QUEUE);
-    assert_eq!(outputs.last(), Some(&ended(RunOutcome::Failed)));
-    // The cancelled run ends in the holder and is never taken over.
-    until("the holder forgot the cancelled run", || {
-      fixture
-        .received()
-        .iter()
-        .any(|message| message["type"] == "ack" && message["runId"] == run_id)
-    })
-    .await;
-    assert_eq!(
-      sidecar.resume_run(&run_id, 0).await.err(),
-      Some(ResumeError::UnknownRun)
-    );
-    assert!(
-      sidecar
-        .held_runs()
-        .await
-        .unwrap()
-        .iter()
-        .all(|held| held.run_id != run_id)
-    );
+    // All of it waits for the reader, in order.
+    for seq in 1..=300_u32 {
+      let delivered = delivery(&mut flooded).await;
+      assert_eq!(delivered.holder_seq.map(NonZeroU32::get), Some(seq));
+      assert!(matches!(delivered.output, SidecarRunOutput::Event(_)));
+    }
     sidecar.shutdown().await;
   });
-  let received = fixture.received();
-  let cancels: Vec<&Value> = received
-    .iter()
-    .filter(|message| message["type"] == "run.cancel")
-    .collect();
-  assert_eq!(
-    cancels,
-    vec![&json!({ "type": "run.cancel", "runId": run_id })]
-  );
-  let acks: Vec<&Value> = received
-    .iter()
-    .filter(|message| message["type"] == "ack" && message["runId"] == run_id)
-    .collect();
-  // 300 events and the end the cancel produced.
-  assert_eq!(
-    acks,
-    vec![&json!({ "type": "ack", "runId": run_id, "seq": 301 })]
+  assert!(
+    fixture
+      .received()
+      .iter()
+      .all(|message| message["type"] != "run.cancel")
   );
 }
 
@@ -650,8 +668,13 @@ fn a_holder_that_dies_fails_its_runs_and_the_next_run_starts_a_new_one() {
   with_children(async {
     let sidecar = fixture.sidecar();
     let mut crashed = sidecar.start_run(run_start("crash")).unwrap();
-    let outputs = finish(&mut crashed).await;
-    assert_eq!(outputs.last(), Some(&ended(RunOutcome::Failed)));
+    let delivered = deliveries(&mut crashed).await;
+    assert_eq!(
+      delivered.last().map(|delivered| &delivered.output),
+      Some(&ended(RunOutcome::Failed))
+    );
+    // The holder numbered what it sent; the made-up end has no number.
+    assert_eq!(holder_seqs(&delivered), vec![Some(1), None]);
     let mut after = sidecar.start_run(run_start("gpt-test")).unwrap();
     assert!(matches!(
       finish(&mut after).await.last(),
@@ -713,6 +736,7 @@ fn a_holder_that_cannot_start_fails_runs_and_probes() {
         harness: Harness::Codex,
         executable: "/x".to_owned(),
         config_dir: "/y".to_owned(),
+        launch: HarnessLaunchSettings::default(),
       })
       .await;
     assert_eq!(probe, Err(ProbeError::SidecarDown));
@@ -957,6 +981,7 @@ fn probe_outcomes_become_runner_reports() {
   let ready = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: vec![HarnessCapability::Approvals, HarnessCapability::Approvals],
+    approval_modes: vec![ApprovalMode::FullAuto, ApprovalMode::FullAuto],
     models: vec![
       ProbedModel {
         id: "gpt-test".to_owned(),
@@ -976,6 +1001,7 @@ fn probe_outcomes_become_runner_reports() {
       id: Harness::Codex,
       version: "0.165.0".to_owned(),
       capabilities: vec![HarnessCapability::Approvals],
+      approval_modes: vec![ApprovalMode::Ask, ApprovalMode::FullAuto],
       models: vec![HarnessModel {
         id: "gpt-test".to_owned(),
         label: "GPT Test".to_owned(),
@@ -985,6 +1011,7 @@ fn probe_outcomes_become_runner_reports() {
   let no_models = ProbeOutcome::Ready {
     version: "0.165.0".to_owned(),
     capabilities: Vec::new(),
+    approval_modes: Vec::new(),
     models: Vec::new(),
   };
   assert_eq!(
@@ -1022,6 +1049,20 @@ fn probe_outcomes_become_runner_reports() {
   assert_eq!(
     harness_report(
       Harness::ClaudeCode,
+      &ProbeOutcome::LimitUntil {
+        version: "2.1.309".to_owned(),
+        resets_at: "2026-10-28T14:00:00Z".to_owned(),
+      }
+    ),
+    HarnessReport::LimitUntil(LimitedHarness {
+      id: Harness::ClaudeCode,
+      version: "2.1.309".to_owned(),
+      resets_at: "2026-10-28T14:00:00Z".to_owned(),
+    })
+  );
+  assert_eq!(
+    harness_report(
+      Harness::ClaudeCode,
       &ProbeOutcome::Failed {
         reason: ProbeFailure::Unsupported,
         message: "no adapter".to_owned(),
@@ -1032,6 +1073,42 @@ fn probe_outcomes_become_runner_reports() {
       version: None,
     })
   );
+  // A harness that failed is not called unsupported: it may run next time.
+  for (reason, unavailable) in [
+    (
+      ProbeFailure::HarnessUnavailable,
+      HarnessUnavailableReason::HarnessFailed,
+    ),
+    (
+      ProbeFailure::ProtocolViolation,
+      HarnessUnavailableReason::UnexpectedAnswer,
+    ),
+  ] {
+    assert_eq!(
+      harness_report(
+        Harness::Codex,
+        &ProbeOutcome::Failed {
+          reason,
+          message: "the harness exited".to_owned(),
+        }
+      ),
+      HarnessReport::Unavailable(UnavailableHarness {
+        id: Harness::Codex,
+        reason: unavailable,
+      })
+    );
+  }
+}
+
+#[test]
+fn a_run_the_holder_cannot_take_is_refused_for_its_own_reason() {
+  assert_eq!(
+    SidecarUnavailable::TooLarge.reject_reason(),
+    RejectReason::RunTooLarge
+  );
+  for capacity in [SidecarUnavailable::Busy, SidecarUnavailable::Stopped] {
+    assert_eq!(capacity.reject_reason(), RejectReason::AtCapacity);
+  }
 }
 
 /// The stand-in holder process. The other tests start it through the
@@ -1061,16 +1138,32 @@ fn stand_in_holder() {
 /// What the stand-in does, by the started run's model:
 /// - `gpt-test`: an event, an approval request, then `completed`;
 /// - `wait`: an event, then nothing until it is cancelled;
+/// - `interruptible`: `wait`, and an interrupt ends it `interrupted`;
+/// - `approve`: an event and an approval request; the decision comes back
+///   as a text event, then `completed`;
+/// - `needs-login`: an event, then `needs_login`;
+/// - `flood`: 300 events at once;
+/// - `flood-later`: an event, then 300 more on the first approval;
 /// - `crash`: an event, then the process exits without cleaning up;
 /// - `garbage`: a line that is not JSON.
+///
+/// A launch with `processGrant` first reports the stand-in's own process id
+/// and starts only once it is granted; a probe with one answers only then.
+/// A probe answers with `probe-<harness>.json` beside the log when there is
+/// one, else `needs_login`.
 mod stand_in {
   use super::*;
 
   struct StandInRun {
     harness: Value,
+    model: String,
     last: u32,
     finished: bool,
     kept: Vec<(u32, String)>,
+    /// The model of a run that waits for its process grant.
+    waiting: Option<String>,
+    /// The process reported for a grant, until the run finishes.
+    process: Option<u32>,
   }
 
   struct Connection {
@@ -1086,6 +1179,8 @@ mod stand_in {
     secret: String,
     draining: bool,
     runs: HashMap<String, StandInRun>,
+    /// Probes that wait for their process grant.
+    probes: HashMap<String, Value>,
     current: Option<Connection>,
   }
 
@@ -1121,6 +1216,7 @@ mod stand_in {
       secret,
       draining: false,
       runs: HashMap::new(),
+      probes: HashMap::new(),
       current: None,
     }));
     let mut next_id = 0;
@@ -1235,6 +1331,13 @@ mod stand_in {
         let _written = connection.writer.write_all(line.as_bytes()).await;
       }
     }
+    if let Some(pid) = run.process {
+      let process = json!({ "type": "harness.process", "id": run_id, "pid": pid });
+      let _written = connection
+        .writer
+        .write_all(format!("{process}\n").as_bytes())
+        .await;
+    }
     connection.attached.insert(run_id);
   }
 
@@ -1245,6 +1348,9 @@ mod stand_in {
     message["seq"] = json!(run.last);
     if message["type"] == "run.finished" {
       run.finished = true;
+    }
+    if message["type"] == "run.finished" {
+      run.process = None;
     }
     let line = format!("{message}\n");
     run.kept.push((run.last, line.clone()));
@@ -1272,56 +1378,176 @@ mod stand_in {
     std::process::exit(0);
   }
 
+  /// Run the scenario the run's model names.
+  async fn begin(held: &mut State, run_id: &str, model: &str) {
+    let event = json!({
+      "type": "run.event",
+      "runId": run_id,
+      "chunk": { "type": "RUN_STARTED", "runId": run_id },
+    });
+    let request = json!({
+      "type": "run.approval_request",
+      "runId": run_id,
+      "requestId": REQUEST_ID,
+      "kind": "command",
+      "summary": "Deletes a file",
+    });
+    match model {
+      "garbage" => write(held, "not json").await,
+      "wait" | "interruptible" | "flood-later" | "ask" => {
+        emit(held, run_id, event).await
+      }
+      "flood" => {
+        for _ in 0..300 {
+          emit(held, run_id, event.clone()).await;
+        }
+      }
+      "approve" => {
+        emit(held, run_id, event).await;
+        emit(held, run_id, request).await;
+      }
+      "needs-login" => {
+        emit(held, run_id, event).await;
+        emit(held, run_id, finished(run_id, "needs_login", None)).await;
+      }
+      "crash" => {
+        emit(held, run_id, event).await;
+        std::process::exit(3);
+      }
+      _ => {
+        emit(held, run_id, event).await;
+        emit(held, run_id, request).await;
+        emit(
+          held,
+          run_id,
+          finished(run_id, "completed", Some("thread-a")),
+        )
+        .await;
+      }
+    }
+  }
+
+  async fn probed(held: &mut State, message: &Value) {
+    let harness = message["harness"].as_str().unwrap_or_default();
+    let configured = held.log.with_file_name(format!("probe-{harness}.json"));
+    let outcome = fs::read_to_string(configured)
+      .ok()
+      .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+      .unwrap_or_else(|| json!({ "type": "needs_login", "version": "0.165.0" }));
+    let probed = json!({
+      "type": "harness.probed",
+      "requestId": message["requestId"],
+      "harness": harness,
+      "outcome": outcome,
+    });
+    write(held, &probed.to_string()).await;
+  }
+
+  async fn report_process(held: &mut State, id: &str) {
+    let process =
+      json!({ "type": "harness.process", "id": id, "pid": std::process::id() });
+    write(held, &process.to_string()).await;
+  }
+
   async fn command(held: &mut State, message: &Value) {
     let run_id = message["runId"].as_str().unwrap_or_default().to_owned();
+    let grant = message["launch"]["processGrant"] == true;
     match message["type"].as_str().unwrap_or_default() {
       "run.start" => {
+        let model = message["model"].as_str().unwrap_or_default().to_owned();
         held.runs.insert(
           run_id.clone(),
           StandInRun {
             harness: message["harness"].clone(),
+            model: model.clone(),
             last: 0,
             finished: false,
             kept: Vec::new(),
+            waiting: grant.then(|| model.clone()),
+            process: grant.then(std::process::id),
           },
         );
         if let Some(current) = held.current.as_mut() {
           current.attached.insert(run_id.clone());
         }
-        let event = json!({
-          "type": "run.event",
-          "runId": run_id,
-          "chunk": { "type": "RUN_STARTED", "runId": run_id },
-        });
-        match message["model"].as_str().unwrap_or_default() {
-          "garbage" => write(held, "not json").await,
-          "wait" => emit(held, &run_id, event).await,
-          "flood" => {
-            for _ in 0..300 {
-              emit(held, &run_id, event.clone()).await;
-            }
+        if grant {
+          report_process(held, &run_id).await;
+        } else {
+          begin(held, &run_id, &model).await;
+        }
+      }
+      "harness.process_granted" => {
+        let id = message["id"].as_str().unwrap_or_default().to_owned();
+        if let Some(probe) = held.probes.remove(&id) {
+          probed(held, &probe).await;
+        }
+        let waiting = held.runs.get_mut(&id).and_then(|run| run.waiting.take());
+        if let Some(model) = waiting {
+          begin(held, &id, &model).await;
+        }
+      }
+      "run.approval" => {
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "approve")
+        {
+          let decided = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": { "type": "TEXT_MESSAGE_CONTENT", "delta": message["decision"] },
+          });
+          emit(held, &run_id, decided).await;
+          emit(
+            held,
+            &run_id,
+            finished(&run_id, "completed", Some("thread-a")),
+          )
+          .await;
+        }
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "flood-later")
+        {
+          let event = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": { "type": "TEXT_MESSAGE_CONTENT", "delta": "more" },
+          });
+          for _ in 0..300 {
+            emit(held, &run_id, event.clone()).await;
           }
-          "crash" => {
-            emit(held, &run_id, event).await;
-            std::process::exit(3);
-          }
-          _ => {
-            emit(held, &run_id, event).await;
-            let request = json!({
-              "type": "run.approval_request",
-              "runId": run_id,
-              "requestId": REQUEST_ID,
-              "kind": "command",
-              "summary": "Deletes a file",
-            });
-            emit(held, &run_id, request).await;
-            emit(
-              held,
-              &run_id,
-              finished(&run_id, "completed", Some("thread-a")),
-            )
-            .await;
-          }
+        }
+      }
+      "run.answer" => {
+        // A run that asked a question goes on with the request it answers.
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "ask")
+        {
+          let answered = json!({
+            "type": "run.event",
+            "runId": run_id,
+            "chunk": { "type": "TEXT_MESSAGE_CONTENT", "delta": message["requestId"] },
+          });
+          emit(held, &run_id, answered).await;
+          emit(
+            held,
+            &run_id,
+            finished(&run_id, "completed", Some("thread-a")),
+          )
+          .await;
+        }
+      }
+      "run.interrupt" => {
+        if held
+          .runs
+          .get(&run_id)
+          .is_some_and(|run| !run.finished && run.model == "interruptible")
+        {
+          emit(held, &run_id, finished(&run_id, "interrupted", None)).await;
         }
       }
       "run.cancel" => {
@@ -1330,13 +1556,13 @@ mod stand_in {
         }
       }
       "harness.probe" => {
-        let probed = json!({
-          "type": "harness.probed",
-          "requestId": message["requestId"],
-          "harness": "codex",
-          "outcome": { "type": "needs_login", "version": "0.165.0" },
-        });
-        write(held, &probed.to_string()).await;
+        if grant {
+          let request_id = message["requestId"].as_str().unwrap_or_default().to_owned();
+          held.probes.insert(request_id.clone(), message.clone());
+          report_process(held, &request_id).await;
+        } else {
+          probed(held, message).await;
+        }
       }
       "ack" => {
         let through = message["seq"].as_u64().unwrap_or_default();

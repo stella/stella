@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -387,28 +388,18 @@ const TOOL_CALL_SETTLED_STATUS = {
   error: "failed",
   "input-complete": "pending",
   "input-streaming": "pending",
-} as const satisfies Record<ToolPart["state"], StatusMarkStatus>;
-
-const toolCallStatus = ({
-  hasError,
-  isRunning,
-  state,
-}: {
-  hasError: boolean;
-  isRunning: boolean;
-  state: ToolPart["state"];
-}): StatusMarkStatus => {
-  if (hasError) {
-    return "failed";
-  }
-  return isRunning ? "running" : TOOL_CALL_SETTLED_STATUS[state];
-};
+} as const satisfies Record<
+  ToolPart["state"],
+  Exclude<StatusMarkStatus, "running">
+>;
 
 const TOOL_CALL_STATUS_LABEL_KEYS = {
   done: "common.done",
   pending: "chat.toolCall.statusWaiting",
-  running: "common.running",
-} as const satisfies Record<Exclude<StatusMarkStatus, "failed">, string>;
+} as const satisfies Record<
+  Exclude<StatusMarkStatus, "failed" | "running">,
+  string
+>;
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
@@ -424,10 +415,33 @@ export const toolFailureLabelKey = (
   return state === "error" ? "chat.toolCall.interrupted" : undefined;
 };
 
+// Static marks make a running glyph impossible outside the turn owner.
+const SettledToolStatusMark = ({
+  label,
+  status,
+}: {
+  label: string | undefined;
+  status: Exclude<StatusMarkStatus, "running">;
+}) => {
+  switch (status) {
+    case "done":
+      return <StatusMark label={label} status="done" />;
+    case "failed":
+      return <StatusMark label={label} status="failed" />;
+    case "pending":
+      return <StatusMark label={label} status="pending" />;
+    default:
+      return panic("Unhandled settled tool status", {
+        status: status satisfies never,
+      });
+  }
+};
+
 const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
+  turnStatus = "finished",
   part,
   showDetails,
 }: {
@@ -435,6 +449,7 @@ const ToolCallCardComponent = ({
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
+  turnStatus?: "running" | "finished";
   part: ToolPart;
   /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
@@ -494,7 +509,9 @@ const ToolCallCardComponent = ({
     );
   }, [durationMs, isLoading]);
   const elapsed =
-    timing.status === "finished" && timing.durationMs !== undefined
+    turnStatus === "finished" &&
+    timing.status === "finished" &&
+    timing.durationMs !== undefined
       ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
           style: "unit",
           unit: "second",
@@ -513,13 +530,11 @@ const ToolCallCardComponent = ({
   const errorMessage =
     failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
-  const status = toolCallStatus({
-    hasError,
-    isRunning: isLoading,
-    state: part.state,
-  });
-  const statusLabel =
+  const status = hasError ? "failed" : TOOL_CALL_SETTLED_STATUS[part.state];
+  // A running call waits on nothing; the turn's live status names the work.
+  const settledStatusLabel =
     status === "failed" ? errorMessage : t(TOOL_CALL_STATUS_LABEL_KEYS[status]);
+  const statusLabel = isLoading ? undefined : settledStatusLabel;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = isCodeToolName(name) && hasOutput;
@@ -725,7 +740,7 @@ const ToolCallHeaderLabel = ({
   hasError: boolean;
   isLoading: boolean;
   label: ReactNode;
-  status: StatusMarkStatus;
+  status: Exclude<StatusMarkStatus, "running">;
   statusLabel: string | undefined;
   subtitle: ReturnType<typeof getToolSubtitle>;
 }) => (
@@ -737,7 +752,7 @@ const ToolCallHeaderLabel = ({
         : "text-muted-foreground group-hover/tool-step:text-foreground-muted",
     )}
   >
-    <StatusMark label={statusLabel} status={status} />
+    <SettledToolStatusMark label={statusLabel} status={status} />
     <span
       className={cn("min-w-0 truncate", isLoading && CHAT_PENDING_TEXT_CLASS)}
     >
@@ -749,7 +764,10 @@ const ToolCallHeaderLabel = ({
       )}
     </span>
     {elapsed && (
-      <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
+      <span
+        data-tool-duration
+        className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums"
+      >
         {elapsed}
       </span>
     )}

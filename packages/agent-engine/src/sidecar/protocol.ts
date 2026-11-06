@@ -7,10 +7,12 @@ import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
   DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_APPROVAL_KINDS,
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_FS_POLICIES,
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  desktopRunnerQuestionAnswersSchema,
 } from "@stll/api-contract/desktop-runner";
 
 /**
@@ -32,8 +34,13 @@ import {
  *   holder. The holder keeps each until the host acknowledges it (`ack`,
  *   cumulative) and sends the ones after the host's resume point again, in
  *   order, when the host resumes the run (`hello.resume` or `resume`). Only
- *   runs the connection started or resumed stream to it. The desktop relays
- *   `seq` unchanged as the runner protocol's sequence.
+ *   runs the connection started or resumed stream to it. `seq` is the
+ *   holder's own position: the desktop numbers what it relays upstream
+ *   itself and acks a holder position once its own journal holds it.
+ * - A harness process the desktop must authorize (`launch.processGrant`)
+ *   is reported in `harness.process` before it is asked anything, and is
+ *   used only after `harness.process_granted`. The report is sent again
+ *   whenever a connection resumes a run whose process still runs.
  * - Unknown fields are ignored (objects strip them). Unknown message types and
  *   closed values are rejected; the sidecar answers each rejected line with a
  *   `rejected` message naming why.
@@ -43,7 +50,7 @@ import {
  * `protocol.fixtures.json` holds valid and rejected examples of every message;
  * the desktop's serde types round-trip the same file.
  */
-export const SIDECAR_PROTOCOL = 2;
+export const SIDECAR_PROTOCOL = 3;
 
 /**
  * Largest line either side writes or accepts, in UTF-8 bytes. A `run.start`
@@ -62,6 +69,7 @@ export const SIDECAR_HOST_MESSAGE = {
   runToken: "run.token",
   ack: "ack",
   resume: "resume",
+  harnessProcessGranted: "harness.process_granted",
   drain: "drain",
   shutdown: "shutdown",
 } as const;
@@ -69,6 +77,7 @@ export const SIDECAR_HOST_MESSAGE = {
 export const SIDECAR_MESSAGE = {
   hello: "hello",
   harnessProbed: "harness.probed",
+  harnessProcess: "harness.process",
   runEvent: "run.event",
   runApprovalRequest: "run.approval_request",
   runFinished: "run.finished",
@@ -111,9 +120,9 @@ const SIDECAR_SECRET_HEX_LENGTH = 64;
 const MAX_MESSAGE_TYPE_LENGTH = 64;
 const MAX_MODELS = 100;
 const MAX_RUN_MESSAGES = 1000;
-const MAX_ANSWERED_QUESTIONS = 32;
-const MAX_ANSWERS_PER_QUESTION = 64;
-const MAX_ANSWER_LENGTH = 16_384;
+const MAX_LAUNCH_ENTRIES = 32;
+/** Process ids are unsigned 32-bit on every platform the desktop runs on. */
+const MAX_PID = 4_294_967_295;
 
 const runIdSchema = v.pipe(v.string(), v.uuid());
 const requestIdSchema = v.pipe(v.string(), v.uuid());
@@ -166,12 +175,66 @@ const chunkSchema = v.looseObject({
   ),
 });
 
+const environmentNameSchema = v.pipe(
+  v.string(),
+  v.regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/u),
+);
+
+/**
+ * What the desktop adds to a harness process's launch beyond its managed
+ * home, such as Codex on the user's ChatGPT plan. Values may name a private
+ * channel and are never logged.
+ */
+const harnessLaunchSettingsSchema = v.pipe(
+  v.object({
+    /** Passed to Codex as `-c <override>`, in order; no other harness takes any. */
+    configOverrides: v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(8192))),
+      v.maxLength(MAX_LAUNCH_ENTRIES),
+    ),
+    /** Set in the harness's environment, over what the holder inherited. */
+    environment: v.pipe(
+      v.record(environmentNameSchema, v.pipe(v.string(), v.maxLength(8192))),
+      v.check(
+        (environment) => Object.keys(environment).length <= MAX_LAUNCH_ENTRIES,
+        "At most 32 variables",
+      ),
+    ),
+    /** Removed from the environment the harness inherits. */
+    removedEnvironment: v.pipe(
+      v.array(environmentNameSchema),
+      v.maxLength(MAX_LAUNCH_ENTRIES),
+    ),
+    /**
+     * The client name the harness introduces itself with, when a credential
+     * was registered under one; `null` keeps the adapter's own.
+     */
+    clientName: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+    /**
+     * The desktop authorizes the harness process before it is asked
+     * anything: see `harness.process`.
+     */
+    processGrant: v.boolean(),
+  }),
+  v.check(
+    (settings) =>
+      !settings.removedEnvironment.some((name) =>
+        Object.hasOwn(settings.environment, name),
+      ),
+    "A variable is either set or removed",
+  ),
+);
+export type SidecarHarnessLaunchSettings = v.InferOutput<
+  typeof harnessLaunchSettingsSchema
+>;
+
 const harnessLaunchEntries = {
   harness: harnessSchema,
   /** The managed CLI the installer leased; never resolved from `PATH`. */
   executable: absolutePathSchema,
   /** The stella-owned home the CLI runs with (`CODEX_HOME`, ...). */
   configDir: absolutePathSchema,
+  launch: harnessLaunchSettingsSchema,
 };
 
 const resumePointEntries = {
@@ -215,6 +278,8 @@ export const sidecarHostMessageSchema = v.variant("type", [
     ...harnessLaunchEntries,
     /** The directory the harness runs in and may write to. */
     workspaceDir: absolutePathSchema,
+    /** The computer's package-manager cache, writable in every sandbox. */
+    cacheDir: absolutePathSchema,
     model: modelIdSchema,
     instructions: v.pipe(v.string(), v.maxLength(65_536)),
     messages: v.pipe(
@@ -229,6 +294,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     policy: v.object({
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
+      approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),
@@ -252,19 +318,7 @@ export const sidecarHostMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_HOST_MESSAGE.runAnswer),
     runId: runIdSchema,
     requestId: requestIdSchema,
-    answers: v.pipe(
-      v.record(
-        v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-        v.pipe(
-          v.array(v.pipe(v.string(), v.maxLength(MAX_ANSWER_LENGTH))),
-          v.maxLength(MAX_ANSWERS_PER_QUESTION),
-        ),
-      ),
-      v.check(
-        (answers) => Object.keys(answers).length <= MAX_ANSWERED_QUESTIONS,
-        "At most 32 questions are answered at once",
-      ),
-    ),
+    answers: desktopRunnerQuestionAnswersSchema,
   }),
   v.object({
     type: v.literal(SIDECAR_HOST_MESSAGE.runInterrupt),
@@ -292,6 +346,14 @@ export const sidecarHostMessageSchema = v.variant("type", [
     type: v.literal(SIDECAR_HOST_MESSAGE.resume),
     ...resumePointEntries,
   }),
+  /**
+   * The desktop authorized the process `harness.process` reported for this
+   * run id or probe request id; the harness may go on.
+   */
+  v.object({
+    type: v.literal(SIDECAR_HOST_MESSAGE.harnessProcessGranted),
+    id: requestIdSchema,
+  }),
   /** Take no new runs; exit once every held run is finished and acked. */
   v.object({ type: v.literal(SIDECAR_HOST_MESSAGE.drain) }),
   /** Stop every run and exit. */
@@ -309,6 +371,8 @@ const probeOutcomeSchema = v.variant("type", [
     type: v.literal("ready"),
     version: desktopVersionSchema,
     capabilities: v.array(v.picklist(DESKTOP_RUNNER_HARNESS_CAPABILITIES)),
+    /** The approval modes this computer can run the harness in. */
+    approvalModes: v.array(v.picklist(DESKTOP_RUNNER_APPROVAL_MODES)),
     models: v.pipe(
       v.array(
         v.object({
@@ -321,6 +385,12 @@ const probeOutcomeSchema = v.variant("type", [
     ),
   }),
   v.object({ type: v.literal("needs_login"), version: desktopVersionSchema }),
+  /** Signed in, with the plan's usage limit exhausted until `resetsAt`. */
+  v.object({
+    type: v.literal("limit_until"),
+    version: desktopVersionSchema,
+    resetsAt: instantSchema,
+  }),
   /** A version the compatibility policy refuses for this desktop release. */
   v.object({
     type: v.literal("unsupported"),
@@ -360,6 +430,16 @@ export const sidecarMessageSchema = v.variant("type", [
     requestId: requestIdSchema,
     harness: harnessSchema,
     outcome: probeOutcomeSchema,
+  }),
+  /**
+   * A harness process started for a run (`id` is its run id) or a probe
+   * (its request id) whose launch asked for a process grant. Not numbered:
+   * the holder sends it again when a connection resumes the run.
+   */
+  v.object({
+    type: v.literal(SIDECAR_MESSAGE.harnessProcess),
+    id: requestIdSchema,
+    pid: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(MAX_PID)),
   }),
   v.object({
     type: v.literal(SIDECAR_MESSAGE.runEvent),

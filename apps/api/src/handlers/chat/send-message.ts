@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -24,6 +25,7 @@ import {
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -39,6 +41,7 @@ import {
   type ActiveChatSkillContext,
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
+import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -293,7 +296,11 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
-import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
+import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
@@ -412,7 +419,7 @@ const usableWorkspaceIds = (
 ): AccessibleWorkspace["id"][] => {
   const ids: AccessibleWorkspace["id"][] = [];
   for (const workspace of workspaces) {
-    if (workspace.status !== "deleting") {
+    if (workspaceIsVisible(workspace.status)) {
       ids.push(workspace.id);
     }
   }
@@ -1335,15 +1342,15 @@ const keepThreadRunTarget = async ({
   if (!routedLocally || runTarget === undefined) {
     return Result.ok();
   }
-  const runsOn = encodeChatRunTarget(runTarget);
-  const stored = thread.data.chatRunTarget;
-  if (stored === runsOn) {
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatRunTarget: runsOn })
+      .set({ chatLocalRunTarget: runsOn })
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1356,7 +1363,7 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatRunTarget: { old: stored, new: runsOn } },
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
     });
   });
 };
@@ -1793,7 +1800,7 @@ type PrepareValidatedIncomingMessageOptions = {
     memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
-    workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
+    workspaceStatusById: ChatToolsInput["workspaceStatusById"];
   };
   lifecycle: ChatSendLifecycle;
   persistence: {
@@ -2486,6 +2493,7 @@ export const createSendMessage = (
         ]),
       );
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
@@ -2800,7 +2808,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            routedLocally: localRun !== undefined,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,
@@ -3580,6 +3590,9 @@ export const createSendMessage = (
                     caseLawDb: dependencies.caseLawDb,
                     known: chatContext.decisionPassageNumbers,
                   }),
+                  answerQuoteChecker: createTurnAnswerQuoteChecker({
+                    caseLawDb: dependencies.caseLawDb,
+                  }),
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,
                   resolveAssistantToolInputRefs: ({ input, toolName }) =>
@@ -4186,6 +4199,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4243,6 +4257,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),

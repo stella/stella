@@ -15,6 +15,10 @@ import type {
   HarnessTurn,
 } from "../harness/adapter";
 import {
+  claudeCodeLaunch,
+  createClaudeCodeHarnessAdapter,
+} from "../harness/claude-code/adapter";
+import {
   codexAppServerLaunch,
   createCodexHarnessAdapter,
 } from "../harness/codex/adapter";
@@ -35,6 +39,7 @@ import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import type {
+  SidecarHarnessLaunchSettings,
   SidecarHostMessage,
   SidecarHostOutput,
   SidecarProbeOutcome,
@@ -73,6 +78,7 @@ export type HarnessLaunch = {
   harness: AgentHarness;
   executable: string;
   configDir: string;
+  launch: SidecarHarnessLaunchSettings;
   clientVersion: string;
 };
 
@@ -87,13 +93,43 @@ export type SidecarHostOptions = {
   log: (line: string) => void;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
+  /**
+   * How long a harness process whose launch asked for a grant waits for the
+   * desktop's `harness.process_granted` before the run or probe fails.
+   */
+  processGrantTimeoutMs: number;
 };
+
+/** The inherited environment with the launch's removals and settings applied. */
+const launchEnvironment = (
+  base: Readonly<Record<string, string>>,
+  settings: SidecarHarnessLaunchSettings,
+): Record<string, string> => {
+  const removed = new Set(settings.removedEnvironment);
+  return {
+    ...Object.fromEntries(
+      Object.entries(base).filter(([name]) => !removed.has(name)),
+    ),
+    ...settings.environment,
+  };
+};
+
+/**
+ * Why a run was asked to stop, if it was. A cancel outranks an interrupt, so
+ * its `run.finished` reports `cancelled`; the host stopping cancels its runs.
+ */
+const RUN_STOP = {
+  none: "none",
+  interrupt: "interrupt",
+  cancel: "cancel",
+} as const;
+
+type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
 
 type HeldRun = {
   turn: HarnessTurn | null;
-  cancelled: boolean;
-  /** Set by `run.interrupt` or `run.cancel` before the turn started. */
-  stopRequested: boolean;
+  /** Set before the turn starts too: a turn that opens later stops at once. */
+  stop: RunStop;
   /**
    * Runner request id (a UUID) to the harness's own request id, for both
    * approvals and blocking questions.
@@ -107,15 +143,41 @@ type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
 const ADAPTERS = {
   codex: (launch: HarnessLaunch, options: AdapterOptions) =>
     createCodexHarnessAdapter({
-      launch: codexAppServerLaunch(launch.executable),
+      launch: codexAppServerLaunch(
+        launch.executable,
+        launch.launch.configOverrides,
+      ),
       codexHome: launch.configDir,
-      environment: options.environment,
+      environment: launchEnvironment(options.environment, launch.launch),
       clientVersion: launch.clientVersion,
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
+      ...(launch.launch.clientName === null
+        ? {}
+        : { clientName: launch.launch.clientName }),
     }),
-  "claude-code": null,
+  "claude-code": (launch: HarnessLaunch, options: AdapterOptions) => {
+    // Claude Code takes no configuration overrides or client name, and
+    // nothing on the desktop authorizes its processes.
+    if (
+      launch.launch.configOverrides.length > 0 ||
+      launch.launch.clientName !== null ||
+      launch.launch.processGrant
+    ) {
+      panic("Claude Code adapter: launch settings it cannot apply");
+    }
+    return createClaudeCodeHarnessAdapter({
+      launch: claudeCodeLaunch(launch.executable),
+      claudeConfigDir: launch.configDir,
+      environment: launchEnvironment(options.environment, launch.launch),
+      gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      onBackgroundError: options.onBackgroundError,
+      platform: process.platform,
+    });
+  },
   opencode: null,
 } as const satisfies Record<
   AgentHarness,
@@ -125,6 +187,8 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  /** Waits for the desktop's grant of a new harness process; `null` without one. */
+  onProcess: ((pid: number) => Promise<boolean>) | null;
 };
 
 const START_FAILURE: Record<
@@ -145,6 +209,7 @@ const START_FAILURE: Record<
     message,
     code: "start_rejected",
   }),
+  sandbox_unavailable: (message) => ({ type: "sandbox_unavailable", message }),
 };
 
 type ProbeOutcomeOptions = {
@@ -188,10 +253,18 @@ const probeOutcome = ({
   if (probe.auth.type === "signed_out") {
     return { type: "needs_login", version: probe.version };
   }
+  if (probe.usageLimit !== null) {
+    return {
+      type: "limit_until",
+      version: probe.version,
+      resetsAt: probe.usageLimit.resetsAt,
+    };
+  }
   return {
     type: "ready",
     version: probe.version,
     capabilities: [...probe.capabilities],
+    approvalModes: [...probe.approvalModes],
     models: probe.models.slice(0, MAX_PROBED_MODELS).map((model) => ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
@@ -215,6 +288,8 @@ export class SidecarHost {
   private config: Config | null = null;
   private readonly runs = new Map<string, HeldRun>();
   private readonly finished = new Set<Promise<void>>();
+  /** Harness processes waiting for the desktop's grant, by run or probe id. */
+  private readonly grants = new Map<string, (granted: boolean) => void>();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -291,11 +366,15 @@ export class SidecarHost {
         return;
       case "run.interrupt":
         this.withRun(message, (run) => {
-          this.stop(run);
+          this.stop(run, RUN_STOP.interrupt);
         });
         return;
       case "run.cancel":
         this.cancel(message.runId);
+        return;
+      case "harness.process_granted":
+        // A grant nobody waits for answers a report sent again on resume.
+        this.grants.get(message.id)?.(true);
         return;
       case "run.token":
         this.withRun(message, () => {
@@ -319,8 +398,7 @@ export class SidecarHost {
   /** Cancel a run; its `run.finished` reports `cancelled`. */
   cancel(runId: string) {
     this.withRun({ type: "run.cancel", runId }, (run) => {
-      run.cancelled = true;
-      this.stop(run);
+      this.stop(run, RUN_STOP.cancel);
     });
   }
 
@@ -337,9 +415,11 @@ export class SidecarHost {
   /** Stop every run, wait for each to finish, and close the proxy. */
   async shutdown() {
     this.stopping = true;
+    for (const refuse of [...this.grants.values()]) {
+      refuse(false);
+    }
     for (const run of this.runs.values()) {
-      run.cancelled = true;
-      this.stop(run);
+      this.stop(run, RUN_STOP.cancel);
     }
     await Promise.allSettled([...this.finished]);
     await this.config?.proxy.stop();
@@ -364,8 +444,33 @@ export class SidecarHost {
     act(run);
   }
 
+  /**
+   * Report a harness process to the desktop and wait for its grant; `false`
+   * once the wait times out or the holder stops.
+   */
+  private async awaitGrant(id: string, pid: number): Promise<boolean> {
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const timer = setTimeout(() => {
+      this.options.log("the desktop did not authorize a harness process");
+      settle(false);
+    }, this.options.processGrantTimeoutMs);
+    const settle = (granted: boolean) => {
+      clearTimeout(timer);
+      this.grants.delete(id);
+      resolve(granted);
+    };
+    this.grants.set(id, settle);
+    // A report the contract cannot carry is never granted: fail at once.
+    if (!this.options.send({ type: "harness.process", id, pid })) {
+      settle(false);
+    }
+    return promise;
+  }
+
+  /** The adapter for a run or probe; `id` names it in a process grant. */
   private adapter(
     launch: HarnessLaunch,
+    id: string,
   ): Result<HarnessAdapter, { message: string }> {
     const create = ADAPTERS[launch.harness];
     if (create === null) {
@@ -379,6 +484,9 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          onProcess: launch.launch.processGrant
+            ? async (pid) => this.awaitGrant(id, pid)
+            : null,
         }),
       catch: () => ({ message: "The harness launch options were refused." }),
     });
@@ -388,10 +496,10 @@ export class SidecarHost {
     message: Extract<SidecarHostMessage, { type: "harness.probe" }>,
     config: Config,
   ) {
-    const adapter = this.adapter({
-      ...message,
-      clientVersion: config.appVersion,
-    });
+    const adapter = this.adapter(
+      { ...message, clientVersion: config.appVersion },
+      message.requestId,
+    );
     const outcome: SidecarProbeOutcome = await (async () => {
       if (Result.isError(adapter)) {
         return {
@@ -437,8 +545,8 @@ export class SidecarHost {
     }
     const run: HeldRun = {
       turn: null,
-      cancelled: false,
-      stopRequested: this.stopping,
+      // A run that starts while the host stops is cancelled like the held ones.
+      stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
       requests: new Map(),
     };
     this.runs.set(message.runId, run);
@@ -450,8 +558,11 @@ export class SidecarHost {
     );
   }
 
-  private stop(run: HeldRun) {
-    run.stopRequested = true;
+  private stop(run: HeldRun, reason: RunStop) {
+    run.stop =
+      run.stop === RUN_STOP.cancel || reason === RUN_STOP.cancel
+        ? RUN_STOP.cancel
+        : RUN_STOP.interrupt;
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -512,10 +623,10 @@ export class SidecarHost {
         message: binding.error.message,
       });
     }
-    const adapter = this.adapter({
-      ...message,
-      clientVersion: config.appVersion,
-    });
+    const adapter = this.adapter(
+      { ...message, clientVersion: config.appVersion },
+      message.runId,
+    );
     if (Result.isError(adapter)) {
       return Result.err({
         type: "harness_exited",
@@ -528,6 +639,7 @@ export class SidecarHost {
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
+      cacheDir: message.cacheDir,
       model: message.model,
       instructions: message.instructions,
       policy: message.policy,
@@ -571,7 +683,7 @@ export class SidecarHost {
       this.options.log(
         `a run's ${runMessage.type} message could not be written; stopping the run`,
       );
-      this.stop(run);
+      this.stop(run, RUN_STOP.interrupt);
     };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
@@ -631,7 +743,8 @@ export class SidecarHost {
             yield event;
             break;
           case "turn.interrupted":
-            outcome.value = run.cancelled ? "cancelled" : "interrupted";
+            outcome.value =
+              run.stop === RUN_STOP.cancel ? "cancelled" : "interrupted";
             yield event;
             break;
           case "turn.failed":
@@ -656,7 +769,7 @@ export class SidecarHost {
     let events: AsyncIterable<HarnessEvent>;
     if (Result.isOk(opened)) {
       run.turn = opened.value;
-      if (run.stopRequested) {
+      if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
       events = opened.value.events;
