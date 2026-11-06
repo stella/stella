@@ -6,6 +6,7 @@
  * that cannot be hydrated is still a decision a reader can see.
  */
 
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -490,11 +491,13 @@ describe("deferral reporting", () => {
           recordRequest: async () => {},
           fetchDocument: async () => {
             const budget = gradedDocumentFetchBudget(AbortSignal.timeout(1));
-            return await new Promise<never>((_resolve, reject) => {
+            await new Promise<void>((resolve) => {
               budget.addEventListener("abort", () => {
-                reject(budget.reason);
+                resolve();
               });
             });
+            budget.throwIfAborted();
+            return panic("The budget has expired");
           },
         },
         recordDemand: false,
