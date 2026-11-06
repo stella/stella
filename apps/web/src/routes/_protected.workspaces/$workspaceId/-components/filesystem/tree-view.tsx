@@ -1134,7 +1134,7 @@ const ColumnHeaderCell = ({
       <Button
         className={cn(
           "flex min-w-0 shrink",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
         variant="plain"
@@ -1142,7 +1142,9 @@ const ColumnHeaderCell = ({
         <span
           className={cn(
             "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-            align === "end" ? "justify-end" : "justify-start",
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
             isActive && "text-foreground",
           )}
         >
