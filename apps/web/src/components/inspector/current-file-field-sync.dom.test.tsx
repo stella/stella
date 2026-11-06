@@ -107,7 +107,10 @@ const mountSync = async ({
     }
     throw new APIError({ message: "File not found", status: 404 });
   };
-  await client.prefetchQuery({ queryFn: readFile, queryKey: fileKey });
+  await client
+    .query({ queryFn: readFile, queryKey: fileKey })
+    // swallow-ok: the settled read, a 404 included, is the state under test
+    .catch(() => undefined);
   useInspectorTabsStore.setState({ activeId: FIELD_ID, tabs: [tab] });
   render(
     <QueryClientProvider client={client}>
