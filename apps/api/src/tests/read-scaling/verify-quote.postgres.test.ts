@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createVerifyQuotationHandler } from "@/api/handlers/case-law/decisions/quotes/check";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import {
@@ -22,8 +23,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const small = await seedEntityReadScaling(db, 10);
         const large = await seedEntityReadScaling(db, 200);
         try {
-          const at10 = await verifyQuoteApiScalingScenario.measure(small);
-          const at200 = await verifyQuoteApiScalingScenario.measure(large);
+          const at10 = await verifyQuoteApiScalingScenario.measure(
+            small,
+            createVerifyQuotationHandler,
+          );
+          const at200 = await verifyQuoteApiScalingScenario.measure(
+            large,
+            createVerifyQuotationHandler,
+          );
           console.info(
             "handler-scaling",
             JSON.stringify({

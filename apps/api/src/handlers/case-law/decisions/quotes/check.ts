@@ -1,3 +1,5 @@
+import { classifyFailure } from "@stll/errors";
+
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import {
   hydrateDeferredDocument,
@@ -85,11 +87,14 @@ export const createVerifyQuotationHandler = ({
         return observedStatus(
           {
             sink: QUOTE_DECISION_UNREADABLE,
-            cause: new HandlerError({
-              status: 503,
-              code: "QUOTE_DECISION_UNREADABLE",
-              message: `Decision read answered ${readStatus?.code ?? "without a status"}`,
-            }),
+            cause: classifyFailure(
+              new HandlerError({
+                status: 503,
+                code: "QUOTE_DECISION_UNREADABLE",
+                message: `Decision read answered ${readStatus?.code ?? "without a status"}`,
+              }),
+              "response_invalid",
+            ),
           },
           503,
           { message: "The stored decision could not be read." },

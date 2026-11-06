@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import verifyQuotation, {
-  createVerifyQuotationHandler,
+  type createVerifyQuotationHandler,
 } from "@/api/handlers/case-law/decisions/quotes/check";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -28,7 +28,8 @@ import type { seedEntityReadScaling } from "./entity-fixture";
 /** Real gated point read with N stored decisions; no corpus search or publisher fetch. */
 export const measureVerifyQuote = async (
   { db, size }: Awaited<ReturnType<typeof seedEntityReadScaling>>,
-  transport: "mcp" | "api" = "mcp",
+  /** The endpoint to measure; without one, the MCP tool is measured. */
+  createHandler?: typeof createVerifyQuotationHandler,
 ) => {
   const sourceId = createSafeId<"caseLawSource">();
   const ids = Array.from({ length: size }, () =>
@@ -70,8 +71,8 @@ export const measureVerifyQuote = async (
           await readGatedDecisionWithDocument({ ...options, caseLawDb }),
       } satisfies NonNullable<ToolContext["testDependencies"]>;
       const data = await (async () => {
-        if (transport === "api") {
-          const endpoint = createVerifyQuotationHandler({
+        if (createHandler !== undefined) {
+          const endpoint = createHandler({
             caseLawDb,
             readSharedCorpus: testDependencies.readsSharedPublicLawCorpus,
           });
@@ -122,6 +123,8 @@ export const measureVerifyQuote = async (
 export const verifyQuoteApiScalingScenario = {
   name: "public decision quotation verification",
   definition: verifyQuotation,
-  measure: async (fixture: Awaited<ReturnType<typeof seedEntityReadScaling>>) =>
-    await measureVerifyQuote(fixture, "api"),
+  measure: async (
+    fixture: Awaited<ReturnType<typeof seedEntityReadScaling>>,
+    createHandler: typeof createVerifyQuotationHandler,
+  ) => await measureVerifyQuote(fixture, createHandler),
 };
