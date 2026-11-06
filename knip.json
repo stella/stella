@@ -42,11 +42,18 @@
       // Compile-time provider capability assertions consume the adapter types.
       "entry": ["src/**/*.type-test.ts"]
     },
+    "packages/agent-engine": {
+      // The desktop compiles the harness sidecar from this entry.
+      "entry": ["src/sidecar/main.ts"]
+    },
     "packages/agent-input": {
       "entry": ["src/**/*.test.ts"]
     },
     "packages/analytics-config": {
       "entry": ["src/**/*.test.ts"]
+    },
+    "packages/brand": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
@@ -69,6 +76,8 @@
         "src/handlers/invoices/pdf/typst/worker.ts",
         "src/handlers/invoices/pdf/typst/watchdog.ts",
         "scripts/*.ts",
+        // Locale content is consumed only by development seed entrypoints.
+        "scripts/seed-content/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
         "src/**/*.type-test.ts",
@@ -143,6 +152,9 @@
     },
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
+    },
+    "packages/html": {
+      "entry": ["src/load.ts", "src/**/*.test.ts"]
     },
     "packages/legal-atlas": {
       "entry": ["src/**/*.test.ts"]

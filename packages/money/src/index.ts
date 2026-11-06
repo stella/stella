@@ -239,6 +239,7 @@ export {
   type FormatMoneyCentsParams,
   toMajorUnits,
   type ToMajorUnitsParams,
+  toMajorUnitsText,
   toMinorUnits,
   type ToMinorUnitsParams,
   tryToMinorUnits,

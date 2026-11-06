@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { pickVersionAt } from "@stll/api-contract/statute-version";
 import type { AISuggestionPreset } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
@@ -32,7 +33,6 @@ import { ProvisionCitingDecisions } from "@/features/statutes/components/provisi
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
-import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
@@ -254,15 +254,10 @@ export const ProvisionInspectorView = ({
             ),
           },
         ]}
-        label={tab.label}
-        labelOverflow="wrap"
-        labelContent={
-          statute === undefined ? undefined : (
-            <>
-              <span className="block">{payload.provisionLabel}</span>
-              <StatuteDisplayLabel statute={statute} />
-            </>
-          )
+        label={
+          statute === undefined
+            ? tab.label
+            : `${payload.provisionLabel} ${statuteDisplayLabel(statute).text}`
         }
         onClose={onClose}
       />

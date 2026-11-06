@@ -44,16 +44,17 @@ export const TARGET_LABEL_KEYS = {
   TranslationKey
 >;
 
+/** Each label reads inside a sentence ("Updated status, due date"). */
 export const CHANGED_FIELD_LABEL_KEYS = {
   dueDate: "workspaces.overview.activity.fields.dueDate",
-  name: "common.name",
+  name: "workspaces.overview.activity.fields.name",
   parentFolder: "workspaces.overview.activity.fields.parentFolder",
   priority: "workspaces.overview.activity.fields.priority",
   property: "workspaces.overview.activity.fields.property",
   schedule: "workspaces.overview.activity.fields.schedule",
   sortOrder: "workspaces.overview.activity.fields.sortOrder",
-  status: "common.status",
-  type: "common.type",
+  status: "workspaces.overview.activity.fields.status",
+  type: "workspaces.overview.activity.fields.type",
 } as const satisfies Record<
   MatterActivityItem["changedFields"][number],
   TranslationKey
@@ -182,6 +183,7 @@ export type ActivityGroup =
 
 const isBatchableDocumentCreate = (item: MatterActivityItem) =>
   item.runId === null &&
+  item.detail.type === "none" &&
   item.action === "create" &&
   item.target.kind === "document" &&
   item.performer.type === "user";
@@ -249,6 +251,9 @@ const foldsIntoUpdate = (
   item.runId === null &&
   candidate.items[0].action === "update" &&
   item.action === "update" &&
+  // A row with its own sentence would vanish into "Updated".
+  candidate.items[0].detail.type === "none" &&
+  item.detail.type === "none" &&
   candidate.items[0].target.id === item.target.id &&
   hasSameActor(candidate.items[0], item) &&
   isWithinActivityFoldWindow(

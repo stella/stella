@@ -9,8 +9,15 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { BPS_PER_PERCENTAGE_POINT } from "@stll/api-contract/billing";
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { ChevronDownIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
@@ -61,27 +68,42 @@ export const BillingArrangementEditor = ({
     useQuery({ ...arrangementOptions(workspaceId), enabled: open }),
   );
   return (
-    <details
-      className="rounded-md border p-3"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer text-sm font-medium">
-        {t("billing.arrangement.title")}
-      </summary>
-      {open && <QueryViewFeedback view={view} />}
-      {view.type === "items" &&
-        (view.items.arrangement?.mode === "flat_fee" ? (
-          <p className="text-muted-foreground mt-3 text-sm">
-            {t("billing.arrangement.flatFee")}
-          </p>
-        ) : (
-          <HourlyArrangementForm
-            key={view.items.arrangement?.revision ?? "initial"}
-            arrangement={view.items.arrangement}
-            workspaceId={workspaceId}
-          />
-        ))}
-    </details>
+    <div className="rounded-md border p-3">
+      <Collapsible onOpenChange={setOpen} open={open}>
+        <CollapsibleTrigger
+          render={<Button className="w-full" variant="plain" />}
+        >
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            {open ? (
+              <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <DirectionalIcon
+                className="text-muted-foreground size-3.5 shrink-0"
+                icon={ChevronRightIcon}
+              />
+            )}
+            {t("billing.arrangement.title")}
+          </span>
+        </CollapsibleTrigger>
+        {/* Kept mounted so collapsing the section never drops a draft the user
+          has not saved yet. */}
+        <CollapsiblePanel keepMounted>
+          {open && <QueryViewFeedback view={view} />}
+          {view.type === "items" &&
+            (view.items.arrangement?.mode === "flat_fee" ? (
+              <p className="text-muted-foreground mt-3 text-sm">
+                {t("billing.arrangement.flatFee")}
+              </p>
+            ) : (
+              <HourlyArrangementForm
+                key={view.items.arrangement?.revision ?? "initial"}
+                arrangement={view.items.arrangement}
+                workspaceId={workspaceId}
+              />
+            ))}
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 };
 

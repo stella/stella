@@ -1,3 +1,4 @@
+// parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion PDF parser and assembly without changing their output.
@@ -59,6 +60,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
+  SourceFieldDisposition,
   StoredRawReparseInput,
   StoredRawReparseValue,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -88,21 +90,28 @@ const collectionFromUrl = (url: string): CzUohsCollection | undefined =>
     (collection) => url === `https://uohs.gov.cz/cs/${collection}.html`,
   );
 
+/**
+ * The publisher writes `null` for a list it has nothing to put in. One such
+ * record must not fail the whole listing, so it reads as an empty list.
+ */
+const statedList = <TItem extends v.GenericSchema>(item: TItem) =>
+  v.nullable(v.array(item), () => []);
+
 const recordSchema = v.looseObject({
   typ: v.unknown(),
   iri: v.string(),
   věc: v.looseObject({ cs: v.string() }),
   číslo_jednací: v.string(),
   spisová_značka: v.string(),
-  instance: v.array(v.string()),
-  odbor: v.array(v.string()),
+  instance: statedList(v.string()),
+  odbor: statedList(v.string()),
   datum_právní_moci: v.optional(
     v.looseObject({ typ: v.string(), datum: v.string() }),
   ),
-  účastník: v.array(v.unknown()),
-  typ_řízení: v.array(v.string()),
-  typ_rozhodnutí: v.array(v.string()),
-  dokument: v.array(v.looseObject({ typ: v.string(), url: v.string() })),
+  účastník: statedList(v.unknown()),
+  typ_řízení: statedList(v.string()),
+  typ_rozhodnutí: statedList(v.string()),
+  dokument: statedList(v.looseObject({ typ: v.string(), url: v.string() })),
 });
 type CzUohsRecord = v.InferOutput<typeof recordSchema>;
 type CzUohsPublisherRecord = {
@@ -265,7 +274,7 @@ export const czUohsDocumentAst = ({
         ? { type: "text", text }
         : {
             type: "link",
-            href: `#footnote-${footnoteReference}`,
+            href: `#${encodeURIComponent(footnoteReference.noteId)}`,
             children: [
               {
                 type: "superscript" as const,

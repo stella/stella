@@ -39,6 +39,7 @@ import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
+import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
@@ -79,6 +80,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryViewError } from "@/lib/use-query-view";
+import { useUserEventRefreshes } from "@/lib/user-events-sse";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -200,6 +202,10 @@ export const ProtectedAppFrame = ({
   const analyticsUser = user;
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
+  useUserEventRefreshes({
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
   const activeWorkspaceId = useRouteWorkspaceId();
   const workspaceNavigationView = queryView(
     useChromeQuery(
@@ -221,19 +227,18 @@ export const ProtectedAppFrame = ({
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
   const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
+  // Restore the authenticated tab scope before any previous scope can paint.
+  const reserveInspectorPane = useInspectorTabPersistence({
+    organizationId: inspectorBroadcastOrganizationId,
+    userId: inspectorBroadcastUserId,
+  });
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
   const viewportWidth = useViewportWidth();
   const forceSidebarCollapsed = shouldForceSidebarCollapsed({
-    inspectorPaneOpen,
+    inspectorPaneOpen: inspectorPaneOpen || reserveInspectorPane,
     viewportWidth,
-  });
-
-  // Restore the authenticated tab scope before any previous scope can paint.
-  useInspectorTabPersistence({
-    organizationId: inspectorBroadcastOrganizationId,
-    userId: inspectorBroadcastUserId,
   });
 
   // Mod+J — toggles the inspector pane. With tabs already open it
@@ -277,6 +282,7 @@ export const ProtectedAppFrame = ({
                   composition="host-responsive"
                   endDock={
                     <WorkspaceInspectorSidePanel
+                      reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
@@ -578,8 +584,10 @@ const getInspectorTabWorkspaceId = (
  * inspector chrome.
  */
 function WorkspaceInspectorSidePanel({
+  reservePane,
   routeMatterChromeStyle,
 }: {
+  reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
 }) {
   const t = useTranslations();
@@ -595,9 +603,12 @@ function WorkspaceInspectorSidePanel({
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   // Desktop keeps a rail-mounted inspector shell; mobile uses a
   // sheet and relies on the topbar restore button after Back.
-  // Pane content is shown only when a tab exists and the inspector
-  // is not minimized.
-  const showPaneContent = tabs.length > 0 && !minimized;
+  const { dockOpen: showPaneContent, sheetOpen } =
+    resolveInspectorDockVisibility({
+      reservePane,
+      tabCount: tabs.length,
+      minimized,
+    });
   const activeWorkspaceId = resolveInspectorWorkspaceId({
     activeId,
     routeWorkspaceId,
@@ -674,7 +685,7 @@ function WorkspaceInspectorSidePanel({
         onOpenChange={(open) => {
           setMinimized(!open);
         }}
-        open={showPaneContent}
+        open={sheetOpen}
       >
         {/* The sheet's default edge width leaves the page peeking past the
             backdrop, as the sidebar sheet does, so a tap outside dismisses

@@ -1,14 +1,27 @@
 import { useTranslations } from "use-intl";
 
-import type { CorrespondenceProvenance as Provenance } from "@stll/api-contract/correspondence";
+import type {
+  CorrespondenceChannelContent,
+  CorrespondenceProvenance as Provenance,
+} from "@stll/api-contract/correspondence";
+
+import type { TranslationKey } from "@/i18n/types";
 
 import { correspondenceProvenancePresentation } from "./correspondence-provenance.logic";
 import { OriginalSignature } from "./original-signature";
 
+const UPLOADED_LABEL_KEYS = {
+  email: "correspondence.uploadedFile",
+  data_box: "correspondence.dataBox.uploaded",
+} as const satisfies Record<
+  CorrespondenceChannelContent["channel"],
+  TranslationKey
+>;
+
 export const CorrespondenceProvenance = ({
   record,
 }: {
-  record: Provenance;
+  record: Provenance & CorrespondenceChannelContent;
 }) => {
   const t = useTranslations();
   const presentation = correspondenceProvenancePresentation(record);
@@ -21,7 +34,7 @@ export const CorrespondenceProvenance = ({
               sender: origin.sender,
               address: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
             })
-          : t("correspondence.uploadedFile")}
+          : t(UPLOADED_LABEL_KEYS[record.channel])}
       </span>
       <OriginalSignature domain={presentation.signatureDomain} />
     </span>

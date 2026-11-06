@@ -25,6 +25,28 @@ type ToFileTabArgs = {
   workspaceId: string;
 };
 
+type FileTabOfArgs = Omit<ToFileTabArgs, "fields"> & {
+  content: Extract<FileTabSourceField["content"], { type: "file" }>;
+  field: FileTabSourceField;
+};
+
+const fileTabOf = ({
+  content,
+  entityId,
+  field,
+  label,
+  workspaceId,
+}: FileTabOfArgs): Omit<FileTab, "type"> => ({
+  id: field.id,
+  entityId,
+  label,
+  fileName: content.fileName,
+  mimeType: content.mimeType,
+  pdfFileId: content.pdfFileId,
+  propertyId: field.propertyId,
+  workspaceId,
+});
+
 /** The file tab for an entity's first displayable file field, or null when
  *  it has none. The single owner of the entity-to-file-tab projection: a
  *  non-displayable file ahead of a displayable one does not hide the latter. */
@@ -38,22 +60,54 @@ export const toFileTab = ({
     if (field.content.type !== "file" || !isFileDisplayable(field.content)) {
       continue;
     }
-    return {
-      id: field.id,
+    return fileTabOf({
+      content: field.content,
       entityId,
+      field,
       label,
-      fileName: field.content.fileName,
-      mimeType: field.content.mimeType,
-      pdfFileId: field.content.pdfFileId,
-      propertyId: field.propertyId,
       workspaceId,
-    };
+    });
+  }
+  return null;
+};
+
+/**
+ * The tab for an open the user asked for by name: the displayable file when
+ * there is one, else the entity's first file, which the tab shows as having no
+ * preview. Null only for an entity that holds no file.
+ */
+export const toRequestedFileTab = ({
+  entityId,
+  fields,
+  label,
+  workspaceId,
+}: ToFileTabArgs): Omit<FileTab, "type"> | null => {
+  const candidates = [...fields];
+  const displayable = toFileTab({
+    entityId,
+    fields: candidates,
+    label,
+    workspaceId,
+  });
+  if (displayable !== null) {
+    return displayable;
+  }
+  for (const field of candidates) {
+    if (field.content.type === "file") {
+      return fileTabOf({
+        content: field.content,
+        entityId,
+        field,
+        label,
+        workspaceId,
+      });
+    }
   }
   return null;
 };
 
 export const definedFields = (
-  entity: WorkspaceEntity,
+  entity: Pick<WorkspaceEntity, "fields">,
 ): FileTabSourceField[] => {
   const fields: FileTabSourceField[] = [];
   for (const field of Object.values(entity.fields)) {

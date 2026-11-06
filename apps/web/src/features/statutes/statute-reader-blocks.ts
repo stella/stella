@@ -14,6 +14,7 @@ import type {
   Inline,
   ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
+import type { StatuteBlocks } from "@stll/legal-ast/statute-anchor-scheme";
 import type { PreviewBlock } from "@stll/legal-ast/statute-list";
 
 export type StatuteMasthead = {
@@ -41,12 +42,12 @@ type ProvisionCitationCount = {
  * AST rule as deep links, then key the UI by the block it actually renders.
  */
 export const provisionCitationCountByBlockAnchor = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   counts: readonly ProvisionCitationCount[],
 ): ReadonlyMap<string, number> => {
   const byAnchor = new Map<string, number>();
   for (const count of counts) {
-    const resolved = resolveDocumentAnchor(blocks, count.anchor);
+    const resolved = resolveDocumentAnchor(statute, count.anchor);
     if (resolved !== null) {
       byAnchor.set(resolved.anchorId, count.decisionCount);
     }
@@ -61,12 +62,12 @@ export const provisionCitationCountByBlockAnchor = (
  * not hold, or holds ambiguously, lands nowhere and the act opens at its top.
  */
 export const statuteLandingAnchorId = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   requestedAnchorId: string | undefined,
 ): string | undefined =>
   requestedAnchorId === undefined
     ? undefined
-    : resolveDocumentAnchor(blocks, requestedAnchorId)?.anchorId;
+    : resolveDocumentAnchor(statute, requestedAnchorId)?.anchorId;
 
 /**
  * The provision each block sits in, by the block's own anchor: the

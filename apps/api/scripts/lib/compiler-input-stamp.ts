@@ -18,8 +18,8 @@ import type {
   FileSystemCallbacks,
   FileSystemEntries,
   FileSystemStat,
-} from "tsrs/unstable/fs";
-import { serverFS } from "tsrs/unstable/fs";
+} from "tsrs/fs";
+import { serverFS } from "tsrs/fs";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";

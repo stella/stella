@@ -169,12 +169,24 @@ export const QUEUE_AUTHORITY = {
       "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts",
     reason: "A verification the requesting member started.",
   },
+  "push-notifications": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/push/push-delivery-worker.ts",
+    reason:
+      "Alerts a notification's recipient on their own registered devices; the job names only the notification, and the recipient's current membership decides whether it is still theirs to see before anything is sent.",
+  },
   "report-exports": {
     authority: "member-run",
     worker: "apps/api/src/handlers/reports/report-export-queue.ts",
     revocationTest:
       "apps/api/src/handlers/reports/report-export-queue.integration.test.ts",
     reason: "An export the requesting member started.",
+  },
+  "timer-activity-updates": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/push/timer-activity-worker.ts",
+    reason:
+      "Brings a person's own registered phones in step with their own timers; the job names only the person and organization whose timers changed, and matter names are read under the person's current membership before anything is sent.",
   },
   "style-set-package-cleanup": {
     authority: "org-automation",

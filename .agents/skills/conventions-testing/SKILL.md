@@ -42,63 +42,48 @@ enforcement, branded types) live in
 
 ## Rules
 
+Describe tests by behaviour, not by function name; prefer plain fakes over
+mocking libraries for simple cases; and skip shallow examples that only raise
+coverage when a stronger invariant test covers the same surface. Run tests
+through the owning package script so preloads and setup survive:
+`bun run test -- --bail -t "<name>"`.
+
 - Use `bun:test` for unit, invariant, and integration tests;
   use Playwright for browser behavior. Do not add another test
-  runner without a clear gap Bun and Playwright cannot cover.
-- Describe by behaviour, not by function name
+  runner without a clear gap Bun and Playwright cannot cover. [review]
 - Avoid hidden shared mutable state. Prefer per-test setup; use
   `beforeEach` only for deterministic reset, and use expensive
-  shared fixtures only when explicit and isolated
-- Prefer plain fakes over mocking libraries for simple cases;
-  use mocks when simulating failure modes, testing varied
-  edge-case inputs, or isolating external services
-- Do not `mock.module` a workspace module (`@/...`, `@stll/...`, a
-  relative path), and always name the target with a string literal. The
-  fabricated module never drifts with the real one, so the test keeps passing
-  after the contract it depends on changes, and Bun's mock registry is
-  process-wide. Inject the collaborator instead (handler context, an options
-  parameter) and pass a plain fake; if the module wraps an external boundary,
-  mock the npm package it calls or expose a test seam.
-  `no-internal-module-mock` enforces this; existing pairs are grandfathered
-  in `scripts/internal-module-mock-ledger.json`, which only shrinks: delete a
-  line when you remove its mock, never add one.
+  shared fixtures only when explicit and isolated [review]
 - Assert observable behavior or an invariant, not the implementation sequence.
   A test that only proves "does not throw" or re-encodes the production algorithm
-  needs a stronger assertion.
+  needs a stronger assertion. [review]
 - Use snapshots only when the serialized output is itself a stable, reviewable
   contract. Do not use snapshots as a substitute for behavioral assertions.
+  [review]
 - Test tenant isolation and ownership-source rules at the
-  highest meaningful layer, not only as pure helper tests
+  highest meaningful layer, not only as pure helper tests [review]
 - Every bug fix needs a durable guard, but not necessarily an example test:
   prefer types, derivation, schemas, lint rules, or broader invariants when they
-  eliminate the bug class
+  eliminate the bug class [review]
 - Guard the invariant, not the accident. Do not memorialize a one-off typo,
   stale literal, or incidental implementation detail in a dedicated test when
-  structural coupling makes that failure impossible
-- Avoid "tests for tests' sake": don't add shallow examples
-  just to increase coverage if a stronger invariant test would
-  cover the same surface with more signal
-- Run tests through the owning package script so preloads and setup survive:
-  `bun run test -- --bail -t "<name>"`. Do not call a raw runner from the
-  worktree root when the package script supplies configuration.
+  structural coupling makes that failure impossible [review]
 - Verify a new regression test fails against the known-bad behavior before
   trusting it. A test that never reaches the fault, or matches zero tests, is
-  not a guard.
+  not a guard. [review]
 - Detector and backstop tests use production-shaped inputs the detector can
   actually match. Assert the fixture reaches or differs on the fault boundary
-  before asserting the protected outcome.
+  before asserting the protected outcome. [review]
 - Where a map declares paths or cases, assert the declared and exercised sets
   are equal in both directions. Pin fixture literals that stand in for producer
-  output with `satisfies` against the producer's return type.
+  output with `satisfies` against the producer's return type. [review]
 - For systemic bugs, test the class: fixed points for replay, matrices for
   tenant isolation, properties for parsers/normalizers, state-machine
   transitions for lifecycle code, and round trips for serialization.
+  [review]
 - Keep time, randomness, network, filesystem, and database ownership explicit
   in tests. Pin or inject them rather than relying on ambient machine state.
-- Name the error a throw assertion expects. `expect(...).toThrow()` with no
-  argument passes for every error, so it keeps passing once the code fails for
-  an unrelated reason; pass a message substring, a regex, or the error class.
-  `no-vacuous-throw-assertion` enforces this.
+  [review]
 
 ## Mutation check
 

@@ -1,0 +1,17 @@
+{
+  "id": "parser-fixture-reader-guard",
+  "rules": ["parser-fixture-reader-guard/parser-fixture-reader-guard"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "parser-fixture-reader-guard/parser-fixture-reader-guard",
+    "apps/api"
+  ]
+}

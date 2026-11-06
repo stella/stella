@@ -13,6 +13,7 @@ import {
 test("unregistered authorities cannot enter the sync contract", () => {
   expectTypeOf<"eu-edps">().not.toExtend<RegisteredSoftLawAuthority>();
   expectTypeOf<"de-bfdi">().toExtend<RegisteredSoftLawAuthority>();
+  expectTypeOf<"sk-uoou">().toExtend<RegisteredSoftLawAuthority>();
 });
 
 test("every registered adapter belongs to its authority; pending kinds are refused", () => {
@@ -25,7 +26,11 @@ test("every registered adapter belongs to its authority; pending kinds are refus
     }
     expect(disposition).not.toHaveProperty("adapter");
   }
-  for (const authority of ["eu-edps", "de-bfdi"] as const) {
+  for (const [authority, admittedKind] of [
+    ["eu-edps", null],
+    ["de-bfdi", "recommendation"],
+    ["sk-uoou", "annual_report"],
+  ] as const) {
     for (const kind of GUIDANCE_KINDS) {
       const metadata = {
         title: "Guidance",
@@ -45,7 +50,7 @@ test("every registered adapter belongs to its authority; pending kinds are refus
       } as const satisfies SoftLawMetadata;
       expect(
         validateSoftLawAuthorityMetadata(authority, metadata).isErr(),
-      ).toBe(authority !== "de-bfdi" || kind !== "recommendation");
+      ).toBe(kind !== admittedKind);
     }
   }
 });

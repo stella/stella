@@ -31,6 +31,14 @@
     "subject": "Jūsų stella patvirtinimo kodas",
     "twoFactorManage": "Naudokite šį kodą dviejų veiksnių autentifikavimo nustatymų pakeitimams patvirtinti."
   },
+  "pushAlert": {
+    "announcement": "Jūsų organizacija paskelbė pranešimą",
+    "flowRunAwaitingApproval": "Darbo eiga laukia jūsų patvirtinimo",
+    "flowRunCompleted": "Darbo eiga baigta",
+    "flowRunFailed": "Darbo eiga nepavyko",
+    "mention": "Jus paminėjo komentare",
+    "taskAssigned": "Jums priskirta užduotis"
+  },
   "reportExportStatus": {
     "action": "Atidaryti stella",
     "completedBody": "Jūsų ataskaitos eksportas paruoštas. Atidarykite stella, kad jį peržiūrėtumėte arba atsisiųstumėte.",

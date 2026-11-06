@@ -1,0 +1,107 @@
+[
+  {
+    "name": "no icon",
+    "html": "<title>Site</title>",
+    "expected": null
+  },
+  {
+    "name": "relative icon",
+    "html": "<link rel=\"icon\" href=\"/favicon.svg\">",
+    "expected": "https://example.com/favicon.svg"
+  },
+  {
+    "name": "priority overrides source order",
+    "html": "<link rel=\"shortcut icon\" href=\"/shortcut.ico\"><link rel=\"icon\" href=\"/icon.svg\"><link rel=\"apple-touch-icon\" href=\"/apple.png\">",
+    "expected": "https://example.com/apple.png"
+  },
+  {
+    "name": "first duplicate wins",
+    "html": "<link rel=\"icon\" href=\"/first.svg\"><link rel=\"icon\" href=\"/second.svg\">",
+    "expected": "https://example.com/first.svg"
+  },
+  {
+    "name": "missing first href hides duplicate",
+    "html": "<link rel=\"icon\"><link rel=\"icon\" href=\"/second.svg\">",
+    "expected": null
+  },
+  {
+    "name": "empty first href falls through priority",
+    "html": "<link rel=\"apple-touch-icon\" href=\"\"><link rel=\"apple-touch-icon\" href=\"/second.png\"><link rel=\"icon\" href=\"/icon.svg\">",
+    "expected": "https://example.com/icon.svg"
+  },
+  {
+    "name": "entities in href",
+    "html": "<link rel=\"icon\" href=\"/icon.svg?one=1&amp;two=&#50;&name=caf&eacute;\">",
+    "expected": "https://example.com/icon.svg?one=1&two=2&name=caf%C3%A9"
+  },
+  {
+    "name": "entities in rel",
+    "html": "<link rel=\"i&#99;on\" href=\"/entity.svg\">",
+    "expected": "https://example.com/entity.svg"
+  },
+  {
+    "name": "uppercase relation",
+    "html": "<LINK REL=\"ICON\" HREF=\"/upper.svg\">",
+    "expected": "https://example.com/upper.svg"
+  },
+  {
+    "name": "mixed case shortcut relation",
+    "html": "<link rel=\"ShortCut ICON\" href=\"/shortcut.ico\">",
+    "expected": "https://example.com/shortcut.ico"
+  },
+  {
+    "name": "whitespace in href",
+    "html": "<link rel=\"icon\" href=\" \n /spaced.svg\t \">",
+    "expected": "https://example.com/spaced.svg"
+  },
+  {
+    "name": "whitespace in relation does not match",
+    "html": "<link rel=\" icon \" href=\"/spaced.svg\">",
+    "expected": null
+  },
+  {
+    "name": "relation token lists do not match",
+    "html": "<link rel=\"icon alternate\" href=\"/alternate.svg\">",
+    "expected": null
+  },
+  {
+    "name": "unsafe priority falls through",
+    "html": "<link rel=\"apple-touch-icon\" href=\"http://example.com/apple.png\"><link rel=\"icon\" href=\"/safe.svg\">",
+    "expected": "https://example.com/safe.svg"
+  },
+  {
+    "name": "unsafe duplicate still hides later match",
+    "html": "<link rel=\"icon\" href=\"javascript:alert(1)\"><link rel=\"icon\" href=\"/safe.svg\">",
+    "expected": null
+  },
+  {
+    "name": "fragment URL rejected",
+    "html": "<link rel=\"icon\" href=\"/icon.svg#fragment\">",
+    "expected": null
+  },
+  {
+    "name": "credential URL rejected",
+    "html": "<link rel=\"icon\" href=\"https://user:pass@example.com/icon.svg\">",
+    "expected": null
+  },
+  {
+    "name": "private host rejected",
+    "html": "<link rel=\"icon\" href=\"https://127.0.0.1/icon.svg\">",
+    "expected": null
+  },
+  {
+    "name": "attribute entity decoded once",
+    "html": "<link rel=\"icon\" href=\"/icon.svg?one=1&amp;amp;two=2\">",
+    "expected": "https://example.com/icon.svg?one=1&amp;two=2"
+  },
+  {
+    "name": "template contents included",
+    "html": "<template><link rel=\"icon\" href=\"/template.svg\"></template>",
+    "expected": "https://example.com/template.svg"
+  },
+  {
+    "name": "noscript contents ignored",
+    "html": "<noscript><link rel=\"icon\" href=\"/noscript.svg\"></noscript>",
+    "expected": null
+  }
+]

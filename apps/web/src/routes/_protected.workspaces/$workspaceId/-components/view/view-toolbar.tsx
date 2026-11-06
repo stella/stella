@@ -89,6 +89,7 @@ import type {
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -396,7 +397,7 @@ const SelectionActions = ({
         className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute -inset-x-1.5 -inset-y-1 rounded-md opacity-0 motion-reduce:animate-none"
       />
       <span className="text-muted-foreground relative text-xs">
-        {t("workspaces.views.fieldsSelected", {
+        {t("common.selectedCount", {
           count: selectedEntities.length,
         })}
       </span>
@@ -1050,12 +1051,13 @@ const useMatterColumnToggleGroups = (
   properties: WorkspaceProperty[],
 ): ColumnToggleGroup[] => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const propertyColumns = (tool: WorkspaceProperty["tool"]["type"]) =>
     properties
       .filter((property) => property.tool.type === tool)
       .map((property) => ({
         id: property.id,
-        name: property.name,
+        name: displayName(property),
         icon: <PropertyIcon type={property.content.type} />,
       }));
 

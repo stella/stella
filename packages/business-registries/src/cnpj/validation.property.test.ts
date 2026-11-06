@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -47,7 +47,8 @@ describe("Brazilian company identifiers", () => {
   test(
     "numeric and punctuated values agree with independent check digits",
     () => {
-      fc.assert(
+      assertProperty(
+        "numeric and punctuated values agree with independent check digits",
         fc.property(numericCnpj, (value) => {
           const valid =
             /^\d{14}$/u.test(value) &&
@@ -60,7 +61,7 @@ describe("Brazilian company identifiers", () => {
             expect(normalizeCnpj(formatted)).toBe(value);
           }
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),
@@ -69,13 +70,14 @@ describe("Brazilian company identifiers", () => {
   test(
     "normalization reaches a fixed point for hostile strings",
     () => {
-      fc.assert(
+      assertProperty(
+        "normalization reaches a fixed point for hostile strings",
         fc.property(registryString, (value) => {
           const normalized = normalizeCnpj(value);
           expect(normalizeCnpj(normalized)).toBe(normalized);
           expect(validateCnpj(normalized)).toBe(validateCnpj(value));
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(5000),

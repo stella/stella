@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "A cut from Clips deletes the selection with the deprecated editing command because no standard API deletes a selection through the undo stack and fires input; a Range deletion would bypass both."
+}

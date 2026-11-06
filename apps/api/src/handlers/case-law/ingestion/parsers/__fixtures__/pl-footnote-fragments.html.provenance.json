@@ -1,0 +1,5 @@
+{
+  "capture": "synthetic",
+  "sha256": "a958e16086f0af45f26e955c64b3e32dac91a2ebfe69087b74739bf4b4b97ed5",
+  "note": "Hand-authored HTML exercising exact same-document footnote fragments and rejected link targets."
+}

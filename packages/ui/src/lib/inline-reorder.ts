@@ -43,9 +43,9 @@ export const reorderInlineIds = ({
     return null;
   }
 
-  const withoutDragged = ids.filter((id) => id !== draggedId);
-  const targetIndex = withoutDragged.indexOf(targetId);
-  const reordered = withoutDragged.toSpliced(
+  const reordered = ids.filter((id) => id !== draggedId);
+  const targetIndex = reordered.indexOf(targetId);
+  reordered.splice(
     position === "after" ? targetIndex + 1 : targetIndex,
     0,
     draggedId,
