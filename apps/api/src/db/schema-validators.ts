@@ -193,21 +193,34 @@ const recordPropertyContentSchema = v.object({
 });
 
 /**
- * Property content an AI tool can produce a value for. A file is uploaded, a
- * money amount needs a currency the model has no way to choose, and a person
- * has to resolve to a workspace member; all three are entered by hand, so the
- * execution plan never schedules them and the prompt/validator switches below
- * have no branch for them. A record is produced by a data-source tool call,
- * never by the scalar extraction these switches describe.
- *
- * The same subset a case-law question column offers, which is why it is a
- * schema rather than a type-level `Exclude`: both boundaries parse against it.
+ * What a case-law question column may ask of a decision: the extractable kinds
+ * except money. The research answers table pins its kinds with a CHECK
+ * constraint, so widening it is a migration of its own rather than a side
+ * effect of the workspace extractor learning a kind.
  */
-export const aiExtractablePropertyContentSchema = v.union([
+export const caseLawQuestionContentSchema = v.union([
   textPropertyContentSchema,
   selectPropertyContentSchema,
   datePropertyContentSchema,
   intPropertyContentSchema,
+]);
+
+export type CaseLawQuestionContent = v.InferOutput<
+  typeof caseLawQuestionContentSchema
+>;
+
+/**
+ * Property content an AI tool can produce a value for. A file is uploaded and
+ * a person has to resolve to a workspace member, so both are entered by hand:
+ * the execution plan never schedules them and the prompt/validator switches
+ * below have no branch for them. A money answer carries the currency the
+ * source states, falling back to the column's default currency. A record is
+ * produced by a data-source tool call, never by the scalar extraction these
+ * switches describe.
+ */
+const aiExtractablePropertyContentSchema = v.union([
+  ...caseLawQuestionContentSchema.options,
+  moneyPropertyContentSchema,
 ]);
 
 export type AiExtractablePropertyContent = v.InferOutput<
@@ -244,7 +257,6 @@ export const isAiExtractablePropertyContent = (
   content: PropertyContent,
 ): content is AiExtractablePropertyContent =>
   content.type !== "file" &&
-  content.type !== "money" &&
   content.type !== "person" &&
   content.type !== "record";
 
