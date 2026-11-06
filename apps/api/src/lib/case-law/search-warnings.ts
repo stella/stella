@@ -151,6 +151,75 @@ export type AgentCaseLawSearchWarning = {
 };
 
 /**
+ * Why a `query` inside one decision found no paragraph. The answer stays empty:
+ * a paragraph holding only some of the words must not read as a match, so the
+ * words are reported and the caller chooses the narrower call.
+ *
+ * - `query_words_apart`: at least one word occurs, but no paragraph holds them
+ *   all; the hint carries the largest set one paragraph does hold.
+ * - `query_words_absent`: no word of the query occurs in this decision.
+ */
+export const DECISION_QUERY_WARNING_CODES = [
+  "query_words_apart",
+  "query_words_absent",
+] as const;
+
+type DecisionQueryWarningCode = (typeof DECISION_QUERY_WARNING_CODES)[number];
+
+export type DecisionQueryWarning = {
+  readonly code: DecisionQueryWarningCode;
+  readonly message: string;
+  readonly hint: string;
+};
+
+export const queryWordsApartWarning = ({
+  absentWords,
+  presentWords,
+  retry,
+}: {
+  absentWords: readonly string[];
+  presentWords: readonly string[];
+  retry: { query: string; hitCount: number };
+}): DecisionQueryWarning => ({
+  code: "query_words_apart",
+  message: [
+    "No paragraph of this decision holds every word of this query.",
+    ...(absentWords.length === 0
+      ? []
+      : [`Nowhere in the decision: ${absentWords.join(", ")}.`]),
+    `In the decision, but without the rest: ${presentWords.join(", ")}.`,
+  ].join(" "),
+  hint: `Call read_case_law_decision for this decision with query ${JSON.stringify(retry.query)}: ${String(retry.hitCount)} ${retry.hitCount === 1 ? "paragraph holds" : "paragraphs hold"} those words, which is not the whole query.`,
+});
+
+export const queryWordsAbsentWarning = ({
+  language,
+  words,
+}: {
+  language: string;
+  words: readonly string[];
+}): DecisionQueryWarning => ({
+  code: "query_words_absent",
+  message: `None of these words occurs in this decision: ${words.join(", ")}.`,
+  hint: `Query in the decision's language (${language}), read it by page, or call search_case_law to find decisions that use these words.`,
+});
+
+/** Each decision-query code's producer, total over its set like the others. */
+export const DECISION_QUERY_WARNING_PRODUCERS = {
+  query_words_apart: () =>
+    queryWordsApartWarning({
+      absentWords: ["zzvz"],
+      presentWords: ["změna", "nabídky"],
+      retry: { query: "změna nabídky", hitCount: 2 },
+    }),
+  query_words_absent: () =>
+    queryWordsAbsentWarning({ language: "cs", words: ["innocence"] }),
+} as const satisfies Record<
+  DecisionQueryWarningCode,
+  () => DecisionQueryWarning
+>;
+
+/**
  * A court the corpus stores under several spellings (with and without the
  * country, say) is one court, so a value naming it reads as every spelling,
  * and the note lists them: the caller sees the filter that ran.
