@@ -358,7 +358,7 @@ const boundedPayloadProblems = (members: readonly Writer[]): string[] =>
       expected = /\$\{checked\.value\}/u;
     } else {
       expected =
-        /WITH projected\(id, type, normalized_value\) AS \(VALUES \$\{projected\}\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
+        /WITH projected AS \(\s*SELECT \* FROM jsonb_to_recordset\(\$\{projected\}::text::jsonb\)[\s\S]*normalized_identifier_value = projected\.normalized_value/u;
     }
     const subject = writer.id.includes(":sql:")
       ? writer.expression
@@ -538,7 +538,7 @@ const producerProblems = (input: ReadonlyMap<string, string>): string[] => {
     [
       /const checked = assertCitationStorageField\(\s*"normalizedIdentifier",\s*normalizedValue\s*,?\s*\)/u,
       /if \(checked\.isErr\(\)\) \{\s*abortTransaction\(checked\.error\)/u,
-      /\$\{checked\.value\}/u,
+      /normalized_value:\s*checked\.value/u,
     ],
   );
   return problems;
