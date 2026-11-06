@@ -20,8 +20,6 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const REVISIONS_TABLE = "corpus_index_projection_intents";
 const BATCH = 1000;
-const BATCH_LOCK_TIMEOUT = "30s";
-const BATCH_STATEMENT_TIMEOUT = "1min";
 
 /** Primary-key floor: every UUID sorts after it, so the walk starts here. */
 const ID_FLOOR = "00000000-0000-0000-0000-000000000000";
@@ -106,10 +104,6 @@ export const walkCorpusProjectionRevisions = async (
       sleep,
       step: async () =>
         await runtime.step(async ({ tx, cursor, size }) => {
-          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-          await tx.execute(
-            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-          );
           const floor = cursor ?? ID_FLOOR;
           const boundary = await readBatchBoundary(tx, name, floor, size);
           if (boundary === null) {

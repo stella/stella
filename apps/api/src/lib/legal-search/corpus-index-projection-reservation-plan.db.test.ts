@@ -5,12 +5,12 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { corpusProjectionReservationQueue } from "@/api/lib/db/aggregate-lock";
 import { enrolledCorpusIndexGroupContracts } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { corpusProjectionReservationQueue } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
