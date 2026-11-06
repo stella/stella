@@ -84,7 +84,7 @@ const lineOf = (
   context: LineContext,
   node: Record<string, unknown>,
 ): number => {
-  const range = node["range"];
+  const range = node.range;
   const start = Array.isArray(range) ? range[0] : undefined;
   return typeof start === "number"
     ? context.sourceCode.getLocFromIndex(start).line

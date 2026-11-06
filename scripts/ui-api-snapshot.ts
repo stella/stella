@@ -273,7 +273,7 @@ const unwrapExpression = (node: AnyNode | null): AnyNode | null => {
 
 const objectKeys = (node: AnyNode | null): string[] | null => {
   const object = unwrapExpression(node);
-  if (object === null || object.type !== "ObjectExpression") {
+  if (object?.type !== "ObjectExpression") {
     return null;
   }
   const keys = nodesAt(object, "properties").map((property) =>
@@ -292,8 +292,7 @@ const cvaGroups = (
   const found = lookup(module, binding);
   const call = unwrapExpression(nodeAt(found?.node, "init"));
   if (
-    call === null ||
-    call.type !== "CallExpression" ||
+    call?.type !== "CallExpression" ||
     identifierName(call["callee"]) !== "cva"
   ) {
     return null;
@@ -321,9 +320,7 @@ const cvaGroups = (
 };
 
 const typeQueryName = (node: AnyNode | null): string | null =>
-  node !== null && node.type === "TSTypeQuery"
-    ? identifierName(node["exprName"])
-    : null;
+  node?.type === "TSTypeQuery" ? identifierName(node["exprName"]) : null;
 
 const typeArguments = (node: AnyNode): AnyNode[] =>
   nodesAt(nodeAt(node, "typeArguments"), "params");
@@ -365,7 +362,7 @@ const tupleElementSet = (
   const queried = typeQueryName(tuple);
   const found = queried === null ? null : lookup(module, queried);
   const init = unwrapExpression(nodeAt(found?.node, "init"));
-  if (init === null || init.type !== "ArrayExpression") {
+  if (init?.type !== "ArrayExpression") {
     return null;
   }
   const values = nodesAt(init, "elements").map((element) =>
@@ -447,7 +444,7 @@ const literalSet = (
         return set.filter((value) => !drop.has(value));
       }
       const found = lookup(module, name);
-      if (found === null || found.node.type !== "TSTypeAliasDeclaration") {
+      if (found?.node.type !== "TSTypeAliasDeclaration") {
         return null;
       }
       return literalSet(
@@ -598,7 +595,7 @@ const componentFunction = (node: AnyNode): AnyNode | null => {
   }
   let init = unwrapExpression(nodeAt(node, "init"));
   // memo(...), forwardRef(...), React.memo(...)
-  while (init !== null && init.type === "CallExpression") {
+  while (init?.type === "CallExpression") {
     init = unwrapExpression(nodesAt(init, "arguments")[0] ?? null);
   }
   return init !== null && FUNCTION_TYPES.has(init.type) ? init : null;
@@ -622,10 +619,11 @@ const valueExports = (file: string, seen = new Set<string>()): string[] => {
       if (entry.isType) {
         return [];
       }
-      if (entry.exportName.kind === "Default") {
+      const exportKind: string = entry.exportName.kind;
+      if (exportKind === "Default") {
         return ["default"];
       }
-      if (entry.exportName.kind === "Name" && entry.exportName.name !== null) {
+      if (exportKind === "Name" && entry.exportName.name !== null) {
         const local = entry.localName.name;
         const declaration =
           local === null ? undefined : module.declarations.get(local);
