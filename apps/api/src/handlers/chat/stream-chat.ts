@@ -34,6 +34,10 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import {
+  desktopRunnerAttachmentPath,
+  MAX_RUN_ATTACHMENTS,
+} from "@stll/api-contract/desktop-runner";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -54,6 +58,7 @@ import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
   classifyChatPartForPersistence,
+  createChatTextPart,
   getAwaitingUserInteraction,
   getAwaitingUserInteractions,
   getChatAttachmentMimeType,
@@ -161,7 +166,10 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+} from "@/api/handlers/chat/upload-files";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -226,6 +234,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import {
@@ -256,6 +265,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -5153,11 +5163,52 @@ const toChatParts = (
 };
 
 type HydrateMessagesProps = {
+  /**
+   * The turn runs on the member's computer, whose agent gets each file in its
+   * folder. Never with anonymized text, which a raw copy would defeat.
+   */
+  copiesFilesToComputer: boolean;
   messages: ChatMessage[];
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
 };
+
+const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
+  desktopRunnerAttachmentPath(file.id, sanitizeFilename(file.fileName));
+
+/**
+ * The attached files of the turn's messages, newest first. Beyond the cap,
+ * older files were copied on the turn that attached them.
+ */
+export const localRunAttachmentsOf = async ({
+  messages,
+  safeDb,
+  userId,
+}: Pick<HydrateMessagesProps, "messages" | "safeDb" | "userId">) =>
+  await Result.gen(async function* () {
+    const files = yield* Result.await(
+      readUserFilesByIds({ messages, safeDb, userId }),
+    );
+    const attachments = new Map<string, LocalRunAttachment>();
+    for (const message of messages.toReversed()) {
+      for (const part of message.parts) {
+        const fileId = isChatAttachmentPart(part)
+          ? getUserFileIdFromAttachmentPart(part)
+          : null;
+        const file = fileId === null ? undefined : files.get(fileId);
+        if (file !== undefined && attachments.size < MAX_RUN_ATTACHMENTS) {
+          attachments.set(file.id, {
+            path: localRunFilePath(file),
+            fileId: file.id,
+            fileName: sanitizeFilename(file.fileName),
+            s3Key: file.s3Key,
+          });
+        }
+      }
+    }
+    return Result.ok([...attachments.values()]);
+  });
 
 type XlsxCacheWrite = {
   file: StoredUserFile;
@@ -5206,6 +5257,7 @@ const persistXlsxCacheWrites = async ({
 };
 
 export const hydrateMessages = async ({
+  copiesFilesToComputer,
   messages,
   safeDb,
   sendMode,
@@ -5240,6 +5292,19 @@ export const hydrateMessages = async ({
         const userFile = userFilesById.get(fileId);
         if (!userFile) {
           panic("Persisted chat file reference missing user_files row");
+        }
+
+        if (copiesFilesToComputer) {
+          parts.push(
+            createChatTextPart(
+              `Attached file "${userFile.fileName}" is in your folder at ${localRunFilePath(userFile)}.`,
+            ),
+          );
+          // An image or PDF stays out of the run's stored messages: the agent
+          // reads the copy. Text it could not extract without tools stays too.
+          if (!canHydrateFilePartAsPlainText(userFile.mimeType)) {
+            continue;
+          }
         }
 
         const hydratedPart = yield* Result.await(

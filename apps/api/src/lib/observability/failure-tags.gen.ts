@@ -21,6 +21,7 @@ export const FAILURE_TAGS = [
   "AppServerRequestError",
   "AppleSignInConfigError",
   "ArtefactSourceLimitError",
+  "AttachmentCopyFailed",
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",
   "BackfillHeldError",

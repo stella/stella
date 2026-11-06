@@ -15,6 +15,7 @@ import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
+import { signAttachmentLink } from "@/api/lib/desktop-runner/attachment-links";
 import type {
   DesktopRunnerDoorbell,
   DesktopRunnerRunBell,
@@ -25,6 +26,7 @@ import {
   type MintRunToken,
   type RunnerSession,
   type RunnerTimers,
+  type SignAttachmentLink,
   SYSTEM_TIMERS,
 } from "@/api/lib/desktop-runner/session";
 import {
@@ -115,6 +117,7 @@ export type DesktopRunnerGatewayOptions = {
   instanceId: string;
   authorize: AuthorizeDesktopRunner;
   mintRunToken: MintRunToken;
+  signAttachmentLink?: SignAttachmentLink;
   now?: () => Date;
   random?: () => number;
   timing?: Partial<DesktopRunnerTiming>;
@@ -293,6 +296,7 @@ export const createDesktopRunnerGateway = (
     now,
     random,
     mintRunToken: options.mintRunToken,
+    signAttachmentLink: options.signAttachmentLink ?? signAttachmentLink,
     isKeyLive: options.isKeyLive,
     isRunnerEnabled: options.isRunnerEnabled,
     ringPrevious: options.doorbell.ring,

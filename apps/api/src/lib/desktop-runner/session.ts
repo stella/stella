@@ -77,6 +77,12 @@ export const SYSTEM_TIMERS: RunnerTimers = {
 };
 
 /** What every socket of one gateway shares. */
+export type SignAttachmentLink = (file: {
+  s3Key: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+}) => Promise<string>;
+
 type RunnerSessionContext = {
   readonly db: DesktopRunnerDb;
   readonly instanceId: string;
@@ -86,6 +92,8 @@ type RunnerSessionContext = {
   readonly now: () => Date;
   readonly random: () => number;
   readonly mintRunToken: MintRunToken;
+  /** A short-lived link for one file a `run.start` copies. */
+  readonly signAttachmentLink: SignAttachmentLink;
   /** Whether the credential that opened a socket still authorizes it. */
   readonly isKeyLive: DesktopKeyLiveness;
   /** Whether the socket's account still has the runner feature. */
@@ -203,6 +211,10 @@ type SessionState = {
 
 const runStartPayloadSchema = v.looseObject({
   mcp: v.looseObject({}),
+  attachments: v.optional(
+    v.array(v.object({ path: v.string(), s3Key: v.string() })),
+    [],
+  ),
 });
 
 const close = (state: SessionState, reason: DesktopRunnerClose) => {
@@ -334,7 +346,21 @@ const compose = async (
       return { type: "unreadable", reason: "its MCP server does not read" };
     }
     const token = await mint(state, command.runId, command.workspaceIds);
-    candidate = { ...stored.output, mcp: { ...stored.output.mcp, ...token } };
+    const attachments = await Promise.all(
+      stored.output.attachments.map(async ({ path, s3Key }) => ({
+        path,
+        url: await state.context.signAttachmentLink({
+          s3Key,
+          userId: state.binding.userId,
+          organizationId: state.binding.organizationId,
+        }),
+      })),
+    );
+    candidate = {
+      ...stored.output,
+      attachments,
+      mcp: { ...stored.output.mcp, ...token },
+    };
   }
   if (command.kind === DESKTOP_RUNNER_SERVER_MESSAGE.runAnswer) {
     const stored = v.safeParse(storedRunAnswerSchema, command.payload);

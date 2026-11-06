@@ -12,7 +12,9 @@ import {
   DESKTOP_RUNNER_HARNESS_CAPABILITIES,
   DESKTOP_RUNNER_NETWORK_POLICIES,
   DESKTOP_RUNNER_RUN_OUTCOMES,
+  desktopRunnerAttachmentSchema,
   desktopRunnerQuestionAnswersSchema,
+  MAX_RUN_ATTACHMENTS,
 } from "@stll/api-contract/desktop-runner";
 
 /**
@@ -286,6 +288,11 @@ export const sidecarHostMessageSchema = v.variant("type", [
       v.array(modelMessageSchema),
       v.minLength(1),
       v.maxLength(MAX_RUN_MESSAGES),
+    ),
+    /** Files to copy into `workspaceDir` before the harness starts. */
+    attachments: v.pipe(
+      v.array(desktopRunnerAttachmentSchema),
+      v.maxLength(MAX_RUN_ATTACHMENTS),
     ),
     /** The native session to resume; `null` starts fresh. */
     harnessSessionId: v.nullable(
