@@ -1940,9 +1940,6 @@ export const SEARCH_LEGISLATION_PROJECTION = v.union([
           resourceName: passthroughId(),
           score: v.number(),
           snippet: v.nullable(contentText()),
-          // The publisher's own document URL, which may embed the publisher's
-          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-          sourceUrl: v.nullable(publicUrl()),
           status: v.string(),
           title: v.string(),
         }),
@@ -1988,9 +1985,6 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ),
     outlineTruncated: v.optional(v.boolean()),
     resourceName: passthroughId(),
-    // The publisher's own document URL, which may embed the publisher's own
-    // UUID — never a Stella tenant id, so it is forwarded unchanged.
-    sourceUrl: v.nullable(publicUrl()),
     status: v.string(),
     text: v.nullable(contentText()),
     // Present only where the source permits displaying wording but bars

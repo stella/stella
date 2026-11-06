@@ -30,12 +30,12 @@ export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
 
 /**
  * The one casing convention of this surface, stated identically everywhere so a
- * client reads it once at connect: snake_case in, camelCase out. Asserted
+ * client reads it once at connect: snake_case in, mostly camelCase out. Asserted
  * present on every surface by `registry-quality.test.ts`, next to the
  * snake_case input-name ratchet that enforces the input half structurally.
  */
 export const MCP_CASING_RULE =
-  "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`matterId`, `entityId`, `nextCursor`).";
+  "Casing: tool inputs are snake_case (`matter_id`); response payloads are mostly camelCase (`matterId`, `entityId`, `nextCursor`); the publisher link is `source_url`.";
 
 const defaultInstructions = (
   mode: "advanced" | "default",
