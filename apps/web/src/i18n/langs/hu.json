@@ -4053,6 +4053,7 @@
       "history": {
         "backToLatest": "Vissza a legutóbbihoz",
         "decided": "{decided, number}/{total, number} eldöntve",
+        "fromTable": "A táblázatból",
         "references": "{count, plural, one {# referencia} other {# referencia}}"
       },
       "impact": {

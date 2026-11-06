@@ -272,6 +272,9 @@ export const buildRunSummarySentence = ({
 };
 
 type RunHistoryBasisArgs = RunBasisLabels & {
+  /** Where the run was started from when that changes what its findings
+   *  hold, already in the caller's locale; `null` for a panel review. */
+  originLabel: string | null;
   /** The pinned playbook's name, as the list endpoint read it out of the
    *  basis; `null` for a run that pinned no snapshot name. */
   playbookName: string | null;
@@ -287,6 +290,7 @@ type RunHistoryBasisArgs = RunBasisLabels & {
  * belongs to the same document.
  */
 export const buildRunHistoryBasisSentence = ({
+  originLabel,
   playbookName,
   playbookProposed,
   references,
@@ -294,6 +298,9 @@ export const buildRunHistoryBasisSentence = ({
   sideLabel,
 }: RunHistoryBasisArgs): string => {
   const parts: string[] = [];
+  if (originLabel !== null) {
+    parts.push(originLabel);
+  }
   if (references !== null) {
     parts.push(references);
   }

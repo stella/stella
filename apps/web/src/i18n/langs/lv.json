@@ -4053,6 +4053,7 @@
       "history": {
         "backToLatest": "Atpakaļ pie jaunākās",
         "decided": "{decided, number} no {total, number} izlemts",
+        "fromTable": "No tabulas",
         "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
       },
       "impact": {

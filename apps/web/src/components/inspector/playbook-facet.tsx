@@ -3189,6 +3189,17 @@ const ReviewHistorySection = ({
   );
 };
 
+/** What the History row says about where a run came from. A panel review is
+ *  the default kind and says nothing; a table run says so, because its
+ *  findings carry no citations or proposed changes. */
+const RUN_ORIGIN_LABEL_KEY = {
+  worker: null,
+  table: "inspector.review.history.fromTable",
+} as const satisfies Record<
+  DocumentReviewRunSummary["executor"],
+  TranslationKey | null
+>;
+
 const ReviewHistoryRow = ({
   run,
   shown,
@@ -3202,7 +3213,9 @@ const ReviewHistoryRow = ({
   const format = useFormatter();
   const runBasisLabels = useRunBasisLabels();
   const decisions = reviewDecisionProgress(run.decisionCounts);
+  const originKey = RUN_ORIGIN_LABEL_KEY[run.executor];
   const basis = buildRunHistoryBasisSentence({
+    originLabel: originKey === null ? null : t(originKey),
     playbookName: run.basis.playbookName,
     playbookProposed: run.basis.playbookProvenance === "ephemeral",
     references:

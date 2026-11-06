@@ -4053,6 +4053,7 @@
       "history": {
         "backToLatest": "Wróć do najnowszej",
         "decided": "rozstrzygnięto {decided, number} z {total, number}",
+        "fromTable": "Z tabeli",
         "references": "{count, plural, one {# referencja} few {# referencje} many {# referencji} other {# referencji}}"
       },
       "impact": {

@@ -4053,6 +4053,7 @@
       "history": {
         "backToLatest": "العودة إلى الأحدث",
         "decided": "{decided, number} من {total, number} مقرَّر",
+        "fromTable": "من الجدول",
         "references": "{count, plural, zero {لا مراجع} one {مرجع واحد} two {مرجعان} few {# مراجع} many {# مرجعًا} other {# مرجع}}"
       },
       "impact": {

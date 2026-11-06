@@ -296,6 +296,7 @@ describe("what a history row says a run was measured against", () => {
   test("names the playbook a run was executed against", () => {
     expect(
       buildRunHistoryBasisSentence({
+        originLabel: null,
         playbookName: "Buy-side SPA",
         playbookProposed: false,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
@@ -309,6 +310,7 @@ describe("what a history row says a run was measured against", () => {
   test("names the references a run with no saved playbook compared against", () => {
     expect(
       buildRunHistoryBasisSentence({
+        originLabel: null,
         playbookName: "Positions confirmed for this review",
         playbookProposed: true,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
@@ -324,6 +326,7 @@ describe("what a history row says a run was measured against", () => {
   test("falls back to where the positions came from", () => {
     expect(
       buildRunHistoryBasisSentence({
+        originLabel: null,
         playbookName: null,
         playbookProposed: true,
         proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
@@ -332,6 +335,22 @@ describe("what a history row says a run was measured against", () => {
         sideLabel: NO_SIDE,
       }),
     ).toBe("positions proposed from the references · no side");
+  });
+
+  // A table run's findings carry no citations or proposed changes, so the
+  // row says where it came from before anything else.
+  test("leads with the origin of a table run", () => {
+    expect(
+      buildRunHistoryBasisSentence({
+        originLabel: "From the table",
+        playbookName: "Buy-side SPA",
+        playbookProposed: false,
+        proposedFromReferencesLabel: PROPOSED_FROM_REFERENCES,
+        unnamedReferencesLabel: unnamedReferences,
+        references: null,
+        sideLabel: "for the Purchaser",
+      }),
+    ).toBe("From the table · Buy-side SPA · for the Purchaser");
   });
 });
 

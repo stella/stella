@@ -3366,6 +3366,7 @@
   "inspector.review.fromThisMatter": "From this matter",
   "inspector.review.history.backToLatest": "Back to latest",
   "inspector.review.history.decided": "{decided, number} of {total, number} decided",
+  "inspector.review.history.fromTable": "From the table",
   "inspector.review.history.references": "{count, plural, one {# reference} other {# references}}",
   "inspector.review.impact.favourable": "Favourable",
   "inspector.review.impact.neutral": "No effect",
