@@ -1719,6 +1719,10 @@
       "secretAnswer": "Antwort verborgen",
       "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
+      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
+    },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# weitere} other {+# weitere}}",

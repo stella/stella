@@ -1719,6 +1719,10 @@
       "secretAnswer": "Atsakymas paslėptas",
       "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# pokalbis laukia jūsų} few {# pokalbiai laukia jūsų} many {# pokalbio laukia jūsų} other {# pokalbių laukia jūsų}}",
+      "working": "{count, plural, one {# pokalbis vykdomas} few {# pokalbiai vykdomi} many {# pokalbio vykdoma} other {# pokalbių vykdoma}}"
+    },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# kitas} few {+# kiti} many {+# kito} other {+# kitų}}",

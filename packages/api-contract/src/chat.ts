@@ -184,6 +184,27 @@ export const CHAT_THREAD_ORIGIN = {
 export type ChatThreadOrigin =
   (typeof CHAT_THREAD_ORIGIN)[keyof typeof CHAT_THREAD_ORIGIN];
 
+/**
+ * Where one of the caller's unfinished chat runs stands: the assistant is
+ * `working` on it, or it `needs-you` to answer before it can go on.
+ */
+export const CHAT_ACTIVE_RUN_STATE = {
+  needsYou: "needs-you",
+  working: "working",
+} as const;
+export type ChatActiveRunState =
+  (typeof CHAT_ACTIVE_RUN_STATE)[keyof typeof CHAT_ACTIVE_RUN_STATE];
+
+/** One unfinished chat run of the caller, as the active-runs read lists it. */
+export type ChatActiveRun = {
+  threadId: string;
+  threadTitle: string;
+  workspaceId: string | null;
+  state: ChatActiveRunState;
+  /** ISO instant the run entered its current state. */
+  since: string;
+};
+
 export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;

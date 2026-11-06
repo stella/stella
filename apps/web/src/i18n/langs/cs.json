@@ -1719,6 +1719,10 @@
       "secretAnswer": "Odpověď je skrytá",
       "secretPlaceholder": "Vaše odpověď zůstane skrytá"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",

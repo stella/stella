@@ -89,6 +89,7 @@ import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
 import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -2080,6 +2081,17 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
+    name: "active chat run list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listActiveChatRuns, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listActiveChatRuns, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(activeChatRunThreadIds(result)).not.toContain(chatTurnThreadB),
+    expectPositive: (result) =>
+      expect(activeChatRunThreadIds(result)).toContain(chatTurnThreadB),
+  },
+  {
     name: "chat thread list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listChatThreads, workspaceA, { query: {} }),
@@ -3884,6 +3896,15 @@ function chatToolGrantIds(result: unknown): unknown[] {
     throw new TypeError("Expected a chat tool grant list response");
   }
   return grants.map((grant) => recordField(grant, "id"));
+}
+
+function activeChatRunThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const runs = recordField(result, "items");
+  if (!Array.isArray(runs)) {
+    throw new TypeError("Expected an active chat run list response");
+  }
+  return runs.map((run) => recordField(run, "threadId"));
 }
 
 function globalChatThreadIds(result: unknown): unknown[] {
