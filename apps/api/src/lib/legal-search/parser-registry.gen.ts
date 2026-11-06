@@ -96,7 +96,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_NSS]: 31,
 
-  [ADAPTER_KEYS.CZ_REGIONAL]: 18,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 19,
 
   [ADAPTER_KEYS.CZ_UOHS]: 9,
 
@@ -224,7 +224,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Read inline style declarations with CSS cascade semantics. Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl."} },
 
-  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, soft hyphens, misplaced opening quotes, letter-spaced words, title and formula lines, the takto lead-in, the court's own Poučení label and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage."} },
 
   [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage."} },
 

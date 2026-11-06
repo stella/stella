@@ -21,6 +21,7 @@ import {
   EU_VAT_ID_SQL_COMPACT,
   EU_VAT_ID_SQL_PATTERN,
 } from "../eu-vat-id-format";
+import { fieldsSetTogetherCheck } from "../field-groups";
 import {
   importProvenanceColumns,
   importProvenanceConstraints,
@@ -874,6 +875,11 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    // A lease is its token, claim time and expiry; a row never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "scheduler_jobs_lease_fields_check",
+      columns: [table.lockedBy, table.lockedAt, table.lockedUntil],
+    }),
     p
       .index("scheduler_jobs_paused_until_idx")
       .on(table.pausedUntil)

@@ -316,6 +316,16 @@ const answerCanFork = ({
     messages,
   });
 
+/** Only an answer offers actions. A role never changes, so neither does the
+ *  shape of the tree around a message's content. */
+const messageActionsThreadRef = (
+  message: ChatUIMessage,
+  threadRef: ChatThreadRef | undefined,
+) =>
+  CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant"
+    ? threadRef
+    : undefined;
+
 /** The live status line of the turn that is running now. Memoized: the
  *  thread re-renders on every streamed chunk, while the line only changes
  *  with the running assistant message. */
@@ -445,7 +455,7 @@ export const ChatThreadMessages = ({
                 : null
             }
             message={message}
-            threadRef={threadRef}
+            threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
               className={cn(
