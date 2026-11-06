@@ -630,6 +630,8 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
   v.object({
     type: v.literal(DESKTOP_RUNNER_SERVER_MESSAGE.runStart),
     runId: runIdSchema,
+    /** The folder the run works in; a chat's runs share one, so files stay between turns. */
+    folderId: v.pipe(v.string(), v.uuid()),
     harness: harnessSchema,
     harnessVersion: desktopVersionSchema,
     model: modelIdSchema,

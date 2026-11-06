@@ -42,7 +42,7 @@ export const REMEMBER_TOOL_NAME = "remember";
 
 export const LEGAL_LISTS_FEATURE_ID = "legal-lists";
 
-export const SELF_SERVE_FEATURE_IDS = ["time-billing"] as const;
+export const SELF_SERVE_FEATURE_IDS = ["time-billing", "local-agents"] as const;
 export const LIST_VERIFICATION_FEATURE_ID = "list-verification";
 export const GENERATED_VIEWS_FEATURE_ID = "generated-views";
 export const TABLE_ANALYSIS_FEATURE_ID = "table-analysis";
@@ -109,11 +109,11 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     prerequisites: ["time-billing"],
     enrolment: "invitation",
   },
-  // Desktop-gated like the timeline: the desktop installs and runs agent
-  // CLIs only while this decision is enabled. The runner gateway refuses and
-  // closes the sockets of accounts it does not enable.
+  // A member turns this on under Beta Features. The desktop installs and runs
+  // agent CLIs only while this decision is enabled; the chat offers a computer
+  // and the runner gateway keeps sockets open only for those it enables.
   "local-agents": {
-    enrolment: "invitation",
+    enrolment: "self-serve",
   },
   // Desktop-gated too: the desktop offers dictation only while this decision
   // is enabled. Speech stays on the computer, so nothing here reaches the API.

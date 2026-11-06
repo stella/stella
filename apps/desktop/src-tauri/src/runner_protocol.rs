@@ -435,6 +435,8 @@ pub(crate) struct McpBinding {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RunStart {
   pub(crate) run_id: String,
+  /// The folder the run works in; a chat's runs share one.
+  pub(crate) folder_id: String,
   pub(crate) harness: Harness,
   pub(crate) harness_version: String,
   pub(crate) model: String,
