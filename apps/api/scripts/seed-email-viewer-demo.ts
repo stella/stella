@@ -8,6 +8,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
@@ -99,7 +100,7 @@ const resolveTarget = async () => {
         )
         .where(
           and(
-            ne(workspaces.status, "deleting"),
+            ne(workspaces.status, WORKSPACE_STATUS.deleting),
             explicitWorkspaceId
               ? and(
                   eq(workspaces.id, toSafeId<"workspace">(explicitWorkspaceId)),

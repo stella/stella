@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { askForFix, askSentence } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { declareFailureClass } from "@stll/errors";
 import {
   closestNames,
@@ -914,7 +915,7 @@ export const ensureActiveWorkspace = ({
   if (!resolved) {
     return notFoundResult("Matter not found or not accessible");
   }
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     return errorResult("Matter is archived; unarchive it first");
   }
   if (context.pinServerValidatedWorkspaceId?.(resolved) === false) {

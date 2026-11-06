@@ -5,6 +5,10 @@ import {
   INVOICE_LANGUAGES,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import {
+  WORKSPACE_STATUS,
+  WORKSPACE_STATUSES,
+} from "@stll/api-contract/workspace-status";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
@@ -405,9 +409,9 @@ export const workspaces = p.pgTable(
     }),
     color: p.varchar({ length: 32 }),
     status: p
-      .text({ enum: ["active", "deleting", "archived"] })
+      .text({ enum: WORKSPACE_STATUSES })
       .notNull()
-      .default("active"),
+      .default(WORKSPACE_STATUS.active),
     lastActivityAt: timestamptz("last_activity_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },

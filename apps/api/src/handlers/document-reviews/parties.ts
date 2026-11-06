@@ -10,7 +10,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -43,6 +43,7 @@ import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-re
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cloneOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const TIMEOUT_MS = 60_000;
 
@@ -146,7 +147,7 @@ const persistDetectedParties = async ({
         and(
           eq(workspaces.id, workspaceId),
           eq(workspaces.organizationId, organizationId),
-          ne(workspaces.status, "deleting"),
+          visibleWorkspaceSql(),
         ),
       )
       .for("share");
