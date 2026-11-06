@@ -3297,6 +3297,29 @@ type CaseLawProjectionRepairStatesOptions = {
   generations: readonly string[];
 };
 
+/**
+ * State rows precede their revisions in the projection lock order. Settling a
+ * revision writes its state row through a trigger, so settlement takes these
+ * first and cannot wait on replacement preparation over one revision.
+ */
+export const lockCorpusProjectionStatesByAppliedRevision = async (
+  tx: Transaction,
+  revisionIds: readonly SafeId<"corpusIndexProjectionIntent">[],
+) =>
+  await tx
+    .select({ entityId: corpusIndexProjectionStates.entityId })
+    .from(corpusIndexProjectionStates)
+    .where(
+      inArray(corpusIndexProjectionStates.appliedRevision, [...revisionIds]),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionStates.family),
+      asc(corpusIndexProjectionStates.generation),
+      asc(corpusIndexProjectionStates.entityId),
+    )
+    .limit(revisionIds.length)
+    .for("update");
+
 /** Canonical rows precede desired-state rows in the projection lock order. */
 export const lockCaseLawProjectionRepairStates = async (
   tx: Transaction,

@@ -4,76 +4,77 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## corpus_index_projection_intents · `corpusIndexProjectionIntents` · corpus-index-projections.ts:45 · rls
+## corpus_index_projection_intents · `corpusIndexProjectionIntents` · corpus-index-projections.ts:46 · rls
 
 One immutable Quickwit append attempt.
 
 ```text
-corpus_index_projection_intents.id                             pUuid        pk,not null       corpus-index-projections.ts:48
-corpus_index_projection_intents.family                         text         fk,not null       corpus-index-projections.ts:49
-corpus_index_projection_intents.generation                     varchar      fk,not null       corpus-index-projections.ts:50
-corpus_index_projection_intents.entity_id                      uuid         not null          corpus-index-projections.ts:53
-corpus_index_projection_intents.epoch                          bigint       not null          corpus-index-projections.ts:54
-corpus_index_projection_intents.fingerprint                    varchar      not null          corpus-index-projections.ts:55
-corpus_index_projection_intents.index_id                       varchar      not null          corpus-index-projections.ts:56
-corpus_index_projection_intents.status                         text         not null          corpus-index-projections.ts:57
-corpus_index_projection_intents.lease_token                    uuid         null              corpus-index-projections.ts:58
-corpus_index_projection_intents.lease_expires_at               timestamptz  null              corpus-index-projections.ts:59
-corpus_index_projection_intents.append_started_at              timestamptz  null              corpus-index-projections.ts:60
-corpus_index_projection_intents.append_request_revision_count  integer      null              corpus-index-projections.ts:61
-corpus_index_projection_intents.append_committed_at            timestamptz  null              corpus-index-projections.ts:62
-corpus_index_projection_intents.expected_document_count        integer      null              corpus-index-projections.ts:63
-corpus_index_projection_intents.applied_at                     timestamptz  null              corpus-index-projections.ts:64
-corpus_index_projection_intents.append_publish_barrier_at      timestamptz  null              corpus-index-projections.ts:65
-corpus_index_projection_intents.cleanup_not_before             timestamptz  null              corpus-index-projections.ts:66
-corpus_index_projection_intents.cleanup_started_at             timestamptz  null              corpus-index-projections.ts:67
-corpus_index_projection_intents.delete_opstamp                 bigint       null              corpus-index-projections.ts:68
-corpus_index_projection_intents.delete_task_created_at         timestamptz  null              corpus-index-projections.ts:75  The metastore's creation instant for the delete task the opstamp identifies.
-corpus_index_projection_intents.settled_at                     timestamptz  null              corpus-index-projections.ts:76
-corpus_index_projection_intents.cancelled_at                   timestamptz  null              corpus-index-projections.ts:77
-corpus_index_projection_intents.cleanup_attempts               integer      default,not null  corpus-index-projections.ts:78
-corpus_index_projection_intents.delete_reissues                integer      default,not null  corpus-index-projections.ts:83  Deletes issued again because revisions they targeted were written after them.
-corpus_index_projection_intents.last_error                     varchar      null              corpus-index-projections.ts:84
-corpus_index_projection_intents.created_at                     timestamptz  default,not null  corpus-index-projections.ts:85
-corpus_index_projection_intents.updated_at                     timestamptz  default,not null  corpus-index-projections.ts:86
+corpus_index_projection_intents.id                             pUuid        pk,not null       corpus-index-projections.ts:49
+corpus_index_projection_intents.family                         text         fk,not null       corpus-index-projections.ts:50
+corpus_index_projection_intents.generation                     varchar      fk,not null       corpus-index-projections.ts:51
+corpus_index_projection_intents.entity_id                      uuid         not null          corpus-index-projections.ts:54
+corpus_index_projection_intents.epoch                          bigint       not null          corpus-index-projections.ts:55
+corpus_index_projection_intents.fingerprint                    varchar      not null          corpus-index-projections.ts:56
+corpus_index_projection_intents.index_id                       varchar      not null          corpus-index-projections.ts:57
+corpus_index_projection_intents.status                         text         not null          corpus-index-projections.ts:58
+corpus_index_projection_intents.lease_token                    uuid         null              corpus-index-projections.ts:59
+corpus_index_projection_intents.lease_expires_at               timestamptz  null              corpus-index-projections.ts:60
+corpus_index_projection_intents.append_started_at              timestamptz  null              corpus-index-projections.ts:61
+corpus_index_projection_intents.append_request_revision_count  integer      null              corpus-index-projections.ts:62
+corpus_index_projection_intents.append_committed_at            timestamptz  null              corpus-index-projections.ts:63
+corpus_index_projection_intents.expected_document_count        integer      null              corpus-index-projections.ts:64
+corpus_index_projection_intents.applied_at                     timestamptz  null              corpus-index-projections.ts:65
+corpus_index_projection_intents.append_publish_barrier_at      timestamptz  null              corpus-index-projections.ts:66
+corpus_index_projection_intents.cleanup_not_before             timestamptz  null              corpus-index-projections.ts:67
+corpus_index_projection_intents.cleanup_started_at             timestamptz  null              corpus-index-projections.ts:68
+corpus_index_projection_intents.delete_opstamp                 bigint       null              corpus-index-projections.ts:69
+corpus_index_projection_intents.delete_task_created_at         timestamptz  null              corpus-index-projections.ts:76  The metastore's creation instant for the delete task the opstamp identifies.
+corpus_index_projection_intents.settled_at                     timestamptz  null              corpus-index-projections.ts:77
+corpus_index_projection_intents.cancelled_at                   timestamptz  null              corpus-index-projections.ts:78
+corpus_index_projection_intents.cleanup_attempts               integer      default,not null  corpus-index-projections.ts:79
+corpus_index_projection_intents.delete_reissues                integer      default,not null  corpus-index-projections.ts:84  Deletes issued again because revisions they targeted were written after them.
+corpus_index_projection_intents.last_error                     varchar      null              corpus-index-projections.ts:85
+corpus_index_projection_intents.created_at                     timestamptz  default,not null  corpus-index-projections.ts:86
+corpus_index_projection_intents.updated_at                     timestamptz  default,not null  corpus-index-projections.ts:87
 ```
 
-## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:362 · rls
+## corpus_index_projection_states · `corpusIndexProjectionStates` · corpus-index-projections.ts:363 · rls
 
 PostgreSQL-authoritative desired and applied state for one generation.
 
 ```text
-corpus_index_projection_states.family                text         fk,not null       corpus-index-projections.ts:365
-corpus_index_projection_states.generation            varchar      fk,not null       corpus-index-projections.ts:366
-corpus_index_projection_states.entity_id             uuid         fk,not null       corpus-index-projections.ts:369
-corpus_index_projection_states.desired_action        text         not null          corpus-index-projections.ts:370
-corpus_index_projection_states.desired_epoch         bigint       not null          corpus-index-projections.ts:373
-corpus_index_projection_states.desired_at            timestamptz  default,null      corpus-index-projections.ts:375  When the current desired projection state was established.
-corpus_index_projection_states.desired_fingerprint   varchar      null              corpus-index-projections.ts:376
-corpus_index_projection_states.desired_index_id      varchar      null              corpus-index-projections.ts:377
-corpus_index_projection_states.work_status           text         default,not null  corpus-index-projections.ts:378
-corpus_index_projection_states.append_mode           text         default,not null  corpus-index-projections.ts:382
-corpus_index_projection_states.retry_not_before      timestamptz  null              corpus-index-projections.ts:386
-corpus_index_projection_states.failure_attempts      integer      default,not null  corpus-index-projections.ts:387
-corpus_index_projection_states.last_failure_kind     text         null              corpus-index-projections.ts:388
-corpus_index_projection_states.last_failure_message  varchar      null              corpus-index-projections.ts:391
-corpus_index_projection_states.applied_action        text         null              corpus-index-projections.ts:392
-corpus_index_projection_states.applied_epoch         bigint       fk,null           corpus-index-projections.ts:395
-corpus_index_projection_states.applied_revision      uuid         fk,null           corpus-index-projections.ts:398  Exact successfully applied revision.
-corpus_index_projection_states.applied_fingerprint   varchar      fk,null           corpus-index-projections.ts:401
-corpus_index_projection_states.applied_index_id      varchar      fk,null           corpus-index-projections.ts:402
-corpus_index_projection_states.applied_at            timestamptz  null              corpus-index-projections.ts:403
-corpus_index_projection_states.created_at            timestamptz  default,not null  corpus-index-projections.ts:404
-corpus_index_projection_states.updated_at            timestamptz  default,not null  corpus-index-projections.ts:405
+corpus_index_projection_states.family                    text         fk,not null       corpus-index-projections.ts:366
+corpus_index_projection_states.generation                varchar      fk,not null       corpus-index-projections.ts:367
+corpus_index_projection_states.entity_id                 uuid         fk,not null       corpus-index-projections.ts:370
+corpus_index_projection_states.desired_action            text         not null          corpus-index-projections.ts:371
+corpus_index_projection_states.desired_epoch             bigint       not null          corpus-index-projections.ts:374
+corpus_index_projection_states.desired_at                timestamptz  default,null      corpus-index-projections.ts:376  When the current desired projection state was established.
+corpus_index_projection_states.desired_fingerprint       varchar      null              corpus-index-projections.ts:377
+corpus_index_projection_states.desired_index_id          varchar      null              corpus-index-projections.ts:378
+corpus_index_projection_states.work_status               text         default,not null  corpus-index-projections.ts:379
+corpus_index_projection_states.append_mode               text         default,not null  corpus-index-projections.ts:383
+corpus_index_projection_states.retry_not_before          timestamptz  null              corpus-index-projections.ts:387
+corpus_index_projection_states.failure_attempts          integer      default,not null  corpus-index-projections.ts:388
+corpus_index_projection_states.last_failure_kind         text         null              corpus-index-projections.ts:389
+corpus_index_projection_states.last_failure_message      varchar      null              corpus-index-projections.ts:392
+corpus_index_projection_states.applied_action            text         null              corpus-index-projections.ts:393
+corpus_index_projection_states.applied_epoch             bigint       fk,null           corpus-index-projections.ts:396
+corpus_index_projection_states.applied_revision          uuid         fk,null           corpus-index-projections.ts:399  Exact successfully applied revision.
+corpus_index_projection_states.applied_revision_settled  boolean      default,not null  corpus-index-projections.ts:407  Whether the applied revision has settled, so the index no longer holds it and a replacement may be appended.
+corpus_index_projection_states.applied_fingerprint       varchar      fk,null           corpus-index-projections.ts:411
+corpus_index_projection_states.applied_index_id          varchar      fk,null           corpus-index-projections.ts:412
+corpus_index_projection_states.applied_at                timestamptz  null              corpus-index-projections.ts:413
+corpus_index_projection_states.created_at                timestamptz  default,not null  corpus-index-projections.ts:414
+corpus_index_projection_states.updated_at                timestamptz  default,not null  corpus-index-projections.ts:415
 ```
 
-## case_law_ranking_signal_changes · `caseLawRankingSignalChanges` · corpus-index-projections.ts:627 · rls
+## case_law_ranking_signal_changes · `caseLawRankingSignalChanges` · corpus-index-projections.ts:651 · rls
 
 Case-law decisions whose ranking signals may have moved since their projection was derived: an authority write that moved the decision's bucket, or a publicati…
 
 ```text
-case_law_ranking_signal_changes.decision_id    uuid         pk,not null       corpus-index-projections.ts:630
-case_law_ranking_signal_changes.change_count   bigint       default,not null  corpus-index-projections.ts:631
-case_law_ranking_signal_changes.enqueued_at    timestamptz  default,not null  corpus-index-projections.ts:635
-case_law_ranking_signal_changes.claimed_until  timestamptz  null              corpus-index-projections.ts:637  A drain's lease on the row; null while no drain holds it.
+case_law_ranking_signal_changes.decision_id    uuid         pk,not null       corpus-index-projections.ts:654
+case_law_ranking_signal_changes.change_count   bigint       default,not null  corpus-index-projections.ts:655
+case_law_ranking_signal_changes.enqueued_at    timestamptz  default,not null  corpus-index-projections.ts:659
+case_law_ranking_signal_changes.claimed_until  timestamptz  null              corpus-index-projections.ts:661  A drain's lease on the row; null while no drain holds it.
 ```

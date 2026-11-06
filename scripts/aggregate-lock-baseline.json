@@ -3043,7 +3043,7 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts",
-    "fingerprint": "fbd2020fb00b20becf01e77fef64b85ee4930ebb5abc396b301986886a29bb08",
+    "fingerprint": "494367abfb68cb51928d4b7983cea0cb21e459d365cc32855d8f13fed50fd827",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-store.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },

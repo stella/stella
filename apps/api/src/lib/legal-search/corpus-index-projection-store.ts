@@ -50,6 +50,7 @@ import {
   indexIdForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
+  corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionNeedsWork,
   corpusIndexProjectionProducesAppend,
@@ -134,6 +135,10 @@ const readPostgresClock = async (tx: Transaction): Promise<Date> => {
 };
 
 const pendingDesiredState = corpusIndexProjectionNeedsWork(
+  corpusIndexProjectionStates,
+);
+
+const appendIsUnblocked = corpusIndexProjectionAppendIsUnblocked(
   corpusIndexProjectionStates,
 );
 
@@ -224,6 +229,7 @@ export const corpusProjectionReservationQueue = (
         lte(runnableAt, eligibilityAt),
         inArray(corpusIndexGenerations.status, ["building", "serving"]),
         pendingDesiredState,
+        appendIsUnblocked,
         noOutstandingIntent,
       ),
     )

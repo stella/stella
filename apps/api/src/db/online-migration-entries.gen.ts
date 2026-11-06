@@ -73,6 +73,7 @@ export { default as indexes_chat_turns_org_run_id_uidx } from "./online-migratio
 export { default as indexes_client_invoice_unique_indexes } from "./online-migration-entries/indexes-client-invoice-unique-indexes";
 export { default as indexes_contacts_data_box_ids_idx } from "./online-migration-entries/indexes-contacts-data-box-ids-idx";
 export { default as indexes_contacts_org_id_unique } from "./online-migration-entries/indexes-contacts-org-id-unique";
+export { default as indexes_corpus_index_projection_states_append_route_idx } from "./online-migration-entries/indexes-corpus-index-projection-states-append-route-idx";
 export { default as indexes_correspondence_attachments_ws_entity_idx } from "./online-migration-entries/indexes-correspondence-attachments-ws-entity-idx";
 export { default as indexes_correspondence_ws_source_entity_uidx } from "./online-migration-entries/indexes-correspondence-ws-source-entity-uidx";
 export { default as indexes_document_outstanding_date_index } from "./online-migration-entries/indexes-document-outstanding-date-index";
@@ -131,6 +132,7 @@ export { default as repairs_client_invoice_backfill } from "./online-migration-e
 export { default as repairs_client_invoice_constraint_validations } from "./online-migration-entries/repairs-client-invoice-constraint-validations";
 export { default as repairs_client_invoice_tenant_key } from "./online-migration-entries/repairs-client-invoice-tenant-key";
 export { default as repairs_contact_vat_id_repair } from "./online-migration-entries/repairs-contact-vat-id-repair";
+export { default as repairs_corpus_projection_applied_revision_settled } from "./online-migration-entries/repairs-corpus-projection-applied-revision-settled";
 export { default as repairs_corpus_projection_cleanup_stall_repair } from "./online-migration-entries/repairs-corpus-projection-cleanup-stall-repair";
 export { default as repairs_corpus_projection_delete_receipt_repair } from "./online-migration-entries/repairs-corpus-projection-delete-receipt-repair";
 export { default as repairs_data_box_constraint_validations } from "./online-migration-entries/repairs-data-box-constraint-validations";

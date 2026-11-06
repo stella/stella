@@ -12,6 +12,7 @@ import {
   CORPUS_INDEX_PROJECTION_WORK_STATUSES,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  corpusIndexProjectionAppendIsUnblocked,
   corpusIndexProjectionErasureIsPending,
   corpusIndexProjectionIntentIsOutstanding,
   corpusIndexProjectionIsBlocked,
@@ -398,6 +399,15 @@ export const corpusIndexProjectionStates = p.pgTable(
     appliedRevision: p
       .uuid("applied_revision")
       .$type<SafeId<"corpusIndexProjectionIntent">>(),
+    /**
+     * Whether the applied revision has settled, so the index no longer holds
+     * it and a replacement may be appended. Database triggers keep this equal
+     * to the revision's status, so no writer can leave it behind.
+     */
+    appliedRevisionSettled: p
+      .boolean("applied_revision_settled")
+      .default(false)
+      .notNull(),
     appliedFingerprint: p.varchar("applied_fingerprint", { length: 64 }),
     appliedIndexId: p.varchar("applied_index_id", { length: 64 }),
     appliedAt: timestamptz("applied_at"),
@@ -468,6 +478,20 @@ export const corpusIndexProjectionStates = p.pgTable(
         t.entityId,
       )
       .where(corpusIndexProjectionNeedsWork(t)),
+    // The append claim's walk. A replacement waiting on its old revision is
+    // left out, so the walk never crosses that backlog however long it grows.
+    p
+      .index("corpus_index_projection_states_append_route_idx")
+      .on(
+        t.family,
+        t.generation,
+        t.desiredIndexId,
+        sql`coalesce(${t.retryNotBefore}, ${t.updatedAt})`,
+        t.entityId,
+      )
+      .where(
+        sql`${corpusIndexProjectionNeedsWork(t)} AND ${corpusIndexProjectionAppendIsUnblocked(t)}`,
+      ),
     p
       .index("corpus_index_projection_states_replacement_route_idx")
       .on(t.family, t.generation, t.desiredIndexId, t.updatedAt, t.entityId)
