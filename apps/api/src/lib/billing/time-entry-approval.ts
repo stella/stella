@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, getColumns, inArray, or } from "drizzle-orm";
+import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type {
@@ -26,7 +26,6 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
-import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type ApprovalEntry = typeof timeEntries.$inferSelect & { running: boolean };
 
@@ -248,7 +247,7 @@ const lockReviewedEntries = async (
           eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
           and(
             eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-            visibleWorkspaceSql(),
+            ne(workspaces.status, "deleting"),
           ),
         ),
       ),

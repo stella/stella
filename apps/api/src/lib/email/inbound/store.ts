@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { CorrespondenceDropReason } from "@stll/api-contract/correspondence";
-import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
 import {
   SETTING_ORGANIZATION_ID,
@@ -163,7 +162,7 @@ export const createInboundMailStore =
                 .onConflictDoNothing({ target: correspondenceDropLogs.id });
               return { status: "dropped", reason };
             };
-            if (address.revokedAt || !workspaceAcceptsWrites(matter.status)) {
+            if (address.revokedAt || matter.status !== "active") {
               return await drop("revoked_address");
             }
             if (delivery.status === "drop") {

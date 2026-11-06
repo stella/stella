@@ -349,7 +349,7 @@
   },
   {
     "file": "apps/api/scripts/seed-email-viewer-demo.ts",
-    "fingerprint": "518a634efc460aa03f6395d925eb745d920dd70a5130307e83b9a8f2be1d714c",
+    "fingerprint": "b0a5fe65cd91c20321a85126aea08ef5a6dd38b3d6ff6bd4000c0ec9afa269cb",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-email-viewer-demo.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -1033,7 +1033,7 @@
   },
   {
     "file": "apps/api/src/handlers/document-reviews/parties.ts",
-    "fingerprint": "e6505ae430538eb6f721087390863a96adeb84c01590f472d133d1e0e9e98a35",
+    "fingerprint": "7e0726a87847c02b9da3759030fd48908856ab9d2c38bdc000844911f4aaff60",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/document-reviews/parties.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -2053,7 +2053,7 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-approval.ts",
-    "fingerprint": "075506a0ff2180af54ed3951d6c04242edf95c8ec5f5451c36c783b1aa205aac",
+    "fingerprint": "1062846dc1709bc585d5006f940b566082038d494103626fc7a6bd1f5a8a12db",
     "count": 1,
     "reason": "Approval and return share one locked read of the reviewed entries; the single-entry return's own acquisition is removed."
   },
@@ -2449,7 +2449,7 @@
   },
   {
     "file": "apps/api/src/lib/email/inbound/store.ts",
-    "fingerprint": "6dba6673232d64c0d28500a84ac37c31151f7ad26ba102a0e90146b100d563c3",
+    "fingerprint": "32d59fa77eb4289c0c0bc1a117ca5b11458371d387b3bc9deda20e43a4a18628",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/email/inbound/store.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
