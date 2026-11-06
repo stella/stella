@@ -31,6 +31,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedChatThreadId } from "@/api/lib/safe-id-boundaries";
 
@@ -234,13 +235,16 @@ export const createListActiveChatRuns = ({
 
       return Result.ok({
         ...page,
-        items: page.items.map((run): ChatActiveRun => ({
-          threadId: brandPersistedChatThreadId(run.threadId),
-          threadTitle: withdrawal.thread(run).title,
-          workspaceId: run.workspaceId,
-          state: run.state,
-          since: run.since.toISOString(),
-        })),
+        items: page.items.map((run): ChatActiveRun => {
+          const item = {
+            threadId: brandPersistedChatThreadId(run.threadId),
+            threadTitle: withdrawal.thread(run).title,
+            workspaceId: run.workspaceId,
+            state: run.state,
+            since: run.since.toISOString(),
+          };
+          return item satisfies AssertNoExtraFields<typeof item, ChatActiveRun>;
+        }),
       } satisfies Page<ChatActiveRun>);
     },
   );

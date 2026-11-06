@@ -54,7 +54,8 @@ describe("matterRunStatusByWorkspace", () => {
             working: own.filter(({ state }) => state === "working").length,
           });
         }
-        expect([...status.keys()].every((key) => key !== null)).toBe(true);
+        const matters = new Set<string>(MATTERS);
+        expect([...status.keys()].every((key) => matters.has(key))).toBe(true);
       }),
     );
   });
