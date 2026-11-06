@@ -239,15 +239,20 @@ jobs:
             };
             // A commit status belongs to the commit. A check run posted through the API joins
             // a suite GitHub picks on that commit, which can be another workflow's run.
-            const postStatus = ({ sha, name }, state, description) => request("POST /repos/{owner}/{repo}/statuses/{sha}", {
-              sha, context: name, state, target_url: RUN_URL,
+            // Replaying a status is safe: the newest one for a context wins. A verdict
+            // lost to one server error would leave a required check pending until the
+            // merge queue's timeout, holding every entry behind it.
+            const postStatus = ({ sha, name }, state, description) => retryApi(() => api.request("POST /repos/{owner}/{repo}/statuses/{sha}", {
+              owner, repo, sha, context: name, state, target_url: RUN_URL,
               description: description.length > MAX_STATUS_DESCRIPTION ? `${description.slice(0, MAX_STATUS_DESCRIPTION - 1)}…` : description,
-            });
+            }));
             const startCheck = async (sha, name = "cla") => {
               if (!validSha(sha)) fail("CLA_INVALID_HEAD");
               const check = { sha, name };
-              await postStatus(check, "pending", "CLA_CHECKING: Verifying contributor signatures.");
+              // Registered first: a post that failed may still have landed, so a failed
+              // run must report on this check too rather than leave it pending.
               checks.add(check);
+              await postStatus(check, "pending", "CLA_CHECKING: Verifying contributor signatures.");
               return check;
             };
             const completeCheck = async (check, state, title, summary) => {

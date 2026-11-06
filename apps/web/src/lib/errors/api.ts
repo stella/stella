@@ -5,7 +5,10 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  type ApiValidationIssue,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  type ChatInputRefusalCode,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -17,7 +20,6 @@ import {
   parseApiValidationIssues,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -255,12 +257,30 @@ const CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS = {
     "chat.localRun.refusalConflictingRunMode",
 } as const satisfies Record<ChatLocalRunRefusal, TranslationKey>;
 
+/** Why a chat turn was refused before it started, with what the person can do. */
+const CHAT_INPUT_REFUSAL_ERROR_KEYS = {
+  [CHAT_INPUT_REFUSAL_CODE.activeFileNoText]: "chat.sendErrorActiveFileNoText",
+  [CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge]:
+    "chat.sendErrorActiveFileTooLarge",
+  [CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled]:
+    "chat.sendErrorAgentRunsDisabled",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentNoText]: "chat.sendErrorAttachmentNoText",
+  [CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported]:
+    "chat.sendErrorAttachmentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.documentUnsupported]:
+    "chat.sendErrorDocumentUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.imageInvalid]: "chat.sendErrorImageInvalid",
+  [CHAT_INPUT_REFUSAL_CODE.imageUnsupported]: "chat.sendErrorImageUnsupported",
+  [CHAT_INPUT_REFUSAL_CODE.toolsUnsupported]: "chat.sendErrorToolsUnsupported",
+} as const satisfies Record<ChatInputRefusalCode, TranslationKey>;
+
 const CODE_ERROR_KEYS = {
   [TIME_ENTRY_RATE_REQUIRED_CODE]: "billing.rates.effectiveRateRequired",
   [IDEMPOTENCY_IN_PROGRESS_CODE]: "errors.apiCodes.idempotencyInProgress",
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   ...AI_FAILURE_ERROR_KEYS,
   ...CHAT_LOCAL_RUN_REFUSAL_ERROR_KEYS,
+  ...CHAT_INPUT_REFUSAL_ERROR_KEYS,
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   ...INVOICE_ISSUE_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:

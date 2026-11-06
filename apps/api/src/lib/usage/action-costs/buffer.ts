@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { detached } from "@/api/lib/analytics/capture";
 
@@ -10,6 +10,11 @@ type ObservationBufferOptions<T> = {
   onOverflow: () => void;
 };
 
+type DrainState =
+  | { type: "idle" }
+  | { type: "scheduled"; timer: ReturnType<typeof setTimeout> }
+  | { type: "draining"; done: Promise<void> };
+
 // Observations are best effort: the queue bounds memory even during a DB outage.
 export const createObservationBuffer = <T>({
   capacity,
@@ -19,21 +24,11 @@ export const createObservationBuffer = <T>({
   onOverflow,
 }: ObservationBufferOptions<T>) => {
   const pending: T[] = [];
-  let active: Promise<void> | undefined;
-  let scheduled: ReturnType<typeof setTimeout> | undefined;
+  let drain: DrainState = { type: "idle" };
   let inFlight = 0;
   const FLUSH_DELAY_MS = 25;
-  const flush = async (): Promise<void> => {
-    if (scheduled !== undefined) {
-      clearTimeout(scheduled);
-      scheduled = undefined;
-    }
-    if (active !== undefined) {
-      await active;
-      await flush();
-      return;
-    }
-    active = (async () => {
+  const writeAll = async () => {
+    try {
       while (pending.length > 0) {
         const batch = pending.splice(0, batchSize);
         inFlight = batch.length;
@@ -46,9 +41,33 @@ export const createObservationBuffer = <T>({
           onFailure(outcome.error, batch.length);
         }
       }
-    })();
-    await active;
-    active = undefined;
+    } finally {
+      inFlight = 0;
+    }
+  };
+  const flush = async (): Promise<void> => {
+    switch (drain.type) {
+      case "draining":
+        await drain.done;
+        await flush();
+        return;
+      case "scheduled":
+        clearTimeout(drain.timer);
+        break;
+      case "idle":
+        break;
+      default:
+        drain satisfies never;
+        return panic("Unhandled observation buffer drain state");
+    }
+    const done = writeAll();
+    drain = { type: "draining", done };
+    try {
+      await done;
+    } finally {
+      // A throwing callback must not leave the buffer draining forever.
+      drain = { type: "idle" };
+    }
     if (pending.length > 0) {
       await flush();
     }
@@ -59,15 +78,17 @@ export const createObservationBuffer = <T>({
       return;
     }
     pending.push(observation);
-    if (scheduled !== undefined || active !== undefined) {
+    if (drain.type !== "idle") {
       return;
     }
-    scheduled = setTimeout(() => {
-      scheduled = undefined;
-      detached(flush, "action-cost.flush", (error) => {
-        onFailure(error, pending.length + inFlight);
-      });
-    }, FLUSH_DELAY_MS);
+    drain = {
+      type: "scheduled",
+      timer: setTimeout(() => {
+        detached(flush, "action-cost.flush", (error) => {
+          onFailure(error, pending.length + inFlight);
+        });
+      }, FLUSH_DELAY_MS),
+    };
   };
   return { enqueue, flush };
 };

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -167,26 +168,19 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
       )}
     >
       {chips.map((chip) => (
-        <button
-          className={cn(
-            "bg-muted/72 hover:bg-muted text-muted-foreground hover:text-foreground",
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-          )}
+        <Button
           key={chip.key}
           onClick={chip.clear}
-          type="button"
+          size="chip"
+          variant="secondary"
         >
           <span>{chip.label}</span>
           <XIcon className="size-3" />
-        </button>
+        </Button>
       ))}
-      <button
-        className="text-muted-foreground hover:text-foreground ms-1 underline-offset-2 hover:underline"
-        onClick={clearAll}
-        type="button"
-      >
+      <Button className="ms-1" onClick={clearAll} size="inline" variant="muted">
         {t("workspaces.filters.clearAll")}
-      </button>
+      </Button>
     </div>
   );
 };

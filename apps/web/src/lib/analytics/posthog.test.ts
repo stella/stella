@@ -1157,6 +1157,57 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
+  test("captureError records a native fetch deadline as one transient signal", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+    analytics.captureError(
+      new DOMException("signal timed out", "TimeoutError"),
+      {
+        fingerprintKey: "auth.role:query",
+        scope: { type: "handler", handlerId: "auth.role" },
+      },
+    );
+
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+      query_owner: "auth.role:query",
+      transport_kind: "timeout",
+    });
+  });
+
+  test.each([
+    { error: new TypeError("Load failed"), transportKind: "network" },
+    {
+      error: new DOMException("signal timed out", "TimeoutError"),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError keeps a user-visible $transportKind failure a transient signal",
+    ({ error, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(error, {
+        fingerprintKey: "reportUserVisibleError:failure",
+        scope: { type: "request", method: "GET", routeTemplate: "/law" },
+        context: {
+          type: "user-visible",
+          routeTemplate: "/law",
+          feature: "law",
+        },
+      });
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "reportUserVisibleError:failure",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
   test.each([
     "INVALID_BACKUP_CODE",
     "INVALID_CODE",

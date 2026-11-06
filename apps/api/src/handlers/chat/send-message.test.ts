@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_TURN_INTENT,
 } from "@stll/api-contract";
@@ -550,6 +551,7 @@ describe("agent sandbox preflight", () => {
     expect(result).toEqual({
       code: 422,
       response: {
+        code: CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled,
         message: "Agent sandbox runs are not enabled for this deployment.",
       },
     });

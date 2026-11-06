@@ -192,3 +192,97 @@ describe("validateAIOutput — select answers", () => {
     });
   });
 });
+
+const moneyProperty = (currency: string | null): BatchProperty => ({
+  id: toSafeId<"property">("prop-money"),
+  status: "stale",
+  content: { version: 1, type: "money", currency },
+  dependencies: [],
+  tool: aiModelTool,
+});
+
+const validateMoney = (
+  answer: { amount: number; currency: string | null } | null,
+  currency: string | null,
+) =>
+  validateAIOutput({
+    aiResult: { answer, justification },
+    property: moneyProperty(currency),
+  });
+
+describe("validateAIOutput — money answers", () => {
+  test("a stated amount becomes minor units of the stated currency", () => {
+    const result = validateMoney(
+      { amount: 1_250_000.5, currency: "czk" },
+      "EUR",
+    );
+    expect(Result.isOk(result) && result.value).toMatchObject({
+      type: "money",
+      value: { amountCents: 125_000_050, currency: "CZK" },
+    });
+  });
+
+  test("the scale follows the currency's minor unit, rounding half up", () => {
+    const yen = validateMoney({ amount: 1500, currency: "JPY" }, null);
+    expect(Result.isOk(yen) && yen.value).toMatchObject({
+      value: { amountCents: 1500, currency: "JPY" },
+    });
+    const dinar = validateMoney({ amount: 12.5, currency: "KWD" }, null);
+    expect(Result.isOk(dinar) && dinar.value).toMatchObject({
+      value: { amountCents: 12_500, currency: "KWD" },
+    });
+    const halfUp = validateMoney({ amount: 1.005, currency: "USD" }, null);
+    expect(Result.isOk(halfUp) && halfUp.value).toMatchObject({
+      value: { amountCents: 101, currency: "USD" },
+    });
+  });
+
+  test("an amount with no stated currency takes the column's default", () => {
+    const result = validateMoney({ amount: -40, currency: null }, "EUR");
+    expect(Result.isOk(result) && result.value).toMatchObject({
+      value: { amountCents: -4000, currency: "EUR" },
+    });
+  });
+
+  test("an amount with no currency anywhere is a column-scoped failure", () => {
+    const result = validateMoney({ amount: 40, currency: null }, null);
+    expect(Result.isError(result) && result.error).toBeInstanceOf(
+      WorkflowValidationError,
+    );
+  });
+
+  test("a currency that is not an ISO code is refused, not replaced by the default", () => {
+    const result = validateMoney({ amount: 40, currency: "Kč" }, "CZK");
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("an amount outside the safe integer range is refused", () => {
+    const result = validateMoney({ amount: 1e20, currency: "EUR" }, null);
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("an absent answer leaves the cell unwritten", () => {
+    const result = validateMoney(null, "EUR");
+    expect(Result.isOk(result) && result.value).toMatchObject({
+      type: "money",
+      value: null,
+    });
+    expect(
+      fieldContentFromValidated({ type: "money", value: null }),
+    ).toBeNull();
+  });
+
+  test("a validated amount is stored as money field content", () => {
+    expect(
+      fieldContentFromValidated({
+        type: "money",
+        value: { amountCents: 4000, currency: "EUR" },
+      }),
+    ).toEqual({
+      version: 1,
+      type: "money",
+      amountCents: 4000,
+      currency: "EUR",
+    });
+  });
+});

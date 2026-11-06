@@ -1178,6 +1178,45 @@ test("search options narrow clip matches and hand focus back to the field", asyn
   ).toHaveText("item");
 });
 
+test("pressing a search option leaves focus out of the field", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  await page
+    .getByRole("button", {
+      name: enMessages.clipboard.searchOptions,
+      exact: true,
+    })
+    .click();
+  const option = page.getByRole("menuitemcheckbox", {
+    name: enMessages.clipboard.searchOptionWholeWords,
+  });
+  const search = page.getByRole("searchbox");
+  await expect(option).toBeVisible();
+
+  // The field hides its placeholder while focused, so holding the press is
+  // what would show focus visiting it between the press and the release.
+  await option.hover();
+  await page.mouse.down();
+  await expect(search).not.toBeFocused();
+  await page.mouse.up();
+
+  await expect(option).toHaveAttribute("aria-checked", "true");
+  await expect(search).not.toBeFocused();
+});
+
+test("pressing the search field's shortcut hint focuses the field", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  const search = page.getByRole("searchbox");
+  await expect(search).not.toBeFocused();
+
+  await page.locator(".clipboard-search kbd").click();
+
+  await expect(search).toBeFocused();
+});
+
 test("inline clip naming uses the full footer width", async ({ page }) => {
   await openClipboard(page, { language: "en" });
   const card = page.locator('[data-clipboard-id="clip-1"]');

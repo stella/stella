@@ -33,6 +33,7 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
 import { providerDiagnosticSchema } from "@stll/api-contract/provider-setup";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -794,6 +795,7 @@ export const streamChat = async ({
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.documentUnsupported,
           message:
             "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
         },
@@ -808,6 +810,7 @@ export const streamChat = async ({
       response: new ChatTurnFailureResponse({
         failureCode: "unsupported-input",
         payload: {
+          code: CHAT_INPUT_REFUSAL_CODE.toolsUnsupported,
           message:
             "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
         },

@@ -94,9 +94,9 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_NS]: 24,
 
-  [ADAPTER_KEYS.CZ_NSS]: 30,
+  [ADAPTER_KEYS.CZ_NSS]: 31,
 
-  [ADAPTER_KEYS.CZ_REGIONAL]: 18,
+  [ADAPTER_KEYS.CZ_REGIONAL]: 19,
 
   [ADAPTER_KEYS.CZ_UOHS]: 9,
 
@@ -104,7 +104,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.EU_ECJ]: 22,
 
-  [ADAPTER_KEYS.HU_BHGY]: 25,
+  [ADAPTER_KEYS.HU_BHGY]: 26,
 
   [ADAPTER_KEYS.PL_COURTS]: 21,
 
@@ -222,9 +222,9 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Recompute the signing judge's name from the stored print page: a letter-spaced surname is now joined, and the name has no feature storage of its own."} },
 
-  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Read inline style declarations with CSS cascade semantics."} },
+  [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Rebuild decision text, structure and paragraph identities from archived pages or registry originals; read current scalar metadata separately from related-record evidence and retain conflicting scalar values. Section headings, the formula lines, the takto lead-in and letter-spaced words are recomputed with them. Rebuild inline emphasis from retained PDF originals with the shared style mapper. Discovering an uncaptured original requires a normal re-crawl. Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own. Read inline style declarations with CSS cascade semantics. Re-read reporter and matched registry fields from captured publisher responses; missing historical captures require a re-crawl."} },
 
-  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. running headers, soft hyphens, misplaced opening quotes, letter-spaced words, title and formula lines, the takto lead-in, the court's own Poučení label and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own Signature roles are recomputed from the stored decision, matching judge titles as whole words; they have no feature storage of their own."} },
+  [ADAPTER_KEYS.CZ_REGIONAL]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_REGIONAL], scope: {"type":"all","reason":"Recompute the instructions from stored raw so the court's own Poučení label, alone or opening the first instruction, is printed once under the synthesized heading; AST blocks have no separate feature storage."} },
 
   [ADAPTER_KEYS.CZ_UOHS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS], scope: {"type":"all","reason":"Revalidate publisher head-matter ordering and recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes. AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage."} },
 
@@ -232,7 +232,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.EU_ECJ]: { version: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ], scope: {"type":"all","reason":"The sentence introducing the ruling (On those grounds, THE COURT hereby rules:) loses the holding role where the Court sets it on several lines: the General Court's unmarked opening row and the oldest layout's bare paragraphs. Derive the case number from every case-law CELEX document form by its court letter, so a Civil Service Tribunal order (62013FO0060) reads F-60/13 instead of the raw CELEX; the case number has no separate feature storage. A bare number after a dash in the keyword chain closes a range inside the keyword before it instead of standing as a keyword of its own; keywords have no separate feature storage."} },
 
-  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."} },
+  [ADAPTER_KEYS.HU_BHGY]: { version: PARSER_VERSIONS[ADAPTER_KEYS.HU_BHGY], scope: {"type":"all","reason":"Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent."} },
 
   [ADAPTER_KEYS.PL_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS], scope: {"type":"all","reason":"Re-read common-court opening recitals as whole sentences when the editor lays them out across adjacent lines. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
