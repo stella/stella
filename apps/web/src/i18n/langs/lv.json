@@ -162,7 +162,9 @@
       "declinedDescription": "Jūs esat noraidījis šo uzaicinājumu. Varat droši aizvērt šo lapu.",
       "description": "{inviterEmail} ir uzaicinājis jūs pievienoties organizācijai {organizationName} kā {role}.",
       "goToWorkspaces": "Doties uz lietām",
-      "title": "Uzaicinājums organizācijā"
+      "title": "Uzaicinājums organizācijā",
+      "verifyEmailHint": "Lai apstiprinātu adresi {email}, atslēdzieties un pieslēdzieties ar vienreizējo kodu, ko nosūtīsim uz šo adresi.",
+      "wrongAccountHint": "Pašlaik izmantojat kontu {email}. Atslēdzieties un pieslēdzieties ar adresi, uz kuru tika nosūtīts uzaicinājums."
     },
     "lastUsed": "Pēdējoreiz izmantots",
     "oneTimeCodeExpired": "Jūsu vienreizējā koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
       "onThisComputer": "{harness} šajā datorā",
+      "permissionAskDescription": "Palaišanas mapes failus rediģē pats; par visu citu jautā.",
+      "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",
+      "permissionFullAuto": "Pilnībā automātiski",
+      "permissionFullAutoDescription": "Par neko palaišanas mapē nejautā; pirms kaut ko maina jūsu datorā, vienmēr pajautā.",
+      "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
+      "permissionUnavailable": "Šajā datorā nav pieejams",
+      "permissions": "Atļaujas",
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
       "refusalHarnessUnavailable": "Programmēšanas aģents jūsu datorā šobrīd nevar pieņemt šo pieprasījumu. Pārbaudiet to lietotnē stella desktop.",
       "refusalModelUnavailable": "Programmēšanas aģents jūsu datorā vairs nepiedāvā šo modeli. Izvēlieties citu izvēlnē Palaist.",
       "refusalNoComputer": "Neviens no jūsu datoriem nav savienots. Atveriet stella desktop un nosūtiet vēlreiz.",
+      "refusalPermissionUnavailable": "Programmēšanas aģents jūsu datorā nevar darboties ar šīm atļaujām. Izvēlieties citu iespēju izvēlnē Atļaujas.",
       "refusalTooLarge": "Šī saruna ir pārāk gara, lai to nodotu jūsu datoram. Sāciet jaunu tērzēšanu, lai to palaistu tur.",
       "refusalUnavailable": "Tērzēšanu palaišana jūsu datorā jūsu kontam nav pieejama.",
       "runOn": "Palaist",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Pašlaik nav pieejams",
       "stateUnsupported": "Šī versija netiek atbalstīta",
       "waitingForComputer": "Gaida, līdz jūsu dators atkal izveidos savienojumu…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Izvēlieties visus atbilstošos",
+      "dismiss": "Noraidīt un apturēt",
+      "secretAnswer": "Atbilde ir paslēpta",
+      "secretPlaceholder": "Jūsu atbilde paliks paslēpta"
     },
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mcpReconnect": {
@@ -1844,10 +1860,18 @@
       "toolbarLabel": "Atlasītais teksts"
     },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
+    "sendErrorActiveFileNoText": "Atvērtajā failā nav teksta, ko stella varētu izlasīt. Aizveriet to vai atveriet citu failu.",
+    "sendErrorActiveFileTooLarge": "Atvērtais fails ir pārāk liels tērzēšanai. Aizveriet to vai atveriet mazāku failu.",
+    "sendErrorAgentRunsDisabled": "Aģenta izpildes šeit nav pieejamas. Sazinieties ar darba telpas administratoru.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
+    "sendErrorAttachmentNoText": "Pievienotajā failā nav teksta, ko stella varētu izlasīt. Noņemiet to vai pievienojiet citu failu.",
+    "sendErrorAttachmentUnsupported": "Šāda veida failu nevar pievienot tērzēšanai. Pievienojiet citu failu.",
     "sendErrorConnectionFailed": "Neizdevās izveidot savienojumu ar tērzēšanu. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
     "sendErrorContinuationRejected": "Tērzēšanu neizdevās turpināt. Nosūtiet jaunu ziņojumu, lai sāktu no jauna.",
+    "sendErrorDocumentUnsupported": "Šis modelis nevar izlasīt vienu no pievienotajiem dokumentiem. Noņemiet pielikumu vai pārslēdzieties uz modeli, kas to atbalsta.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
+    "sendErrorImageInvalid": "Šo attēlu neizdevās sagatavot modelim. Augšupielādējiet mazāku attēlu vai nomainiet modeli.",
+    "sendErrorImageUnsupported": "Šis modelis nevar izlasīt pievienotos attēlus. Noņemiet attēlu vai pārslēdzieties uz modeli, kas atbalsta attēlus.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
     "sendErrorMessageEmpty": "Šajā ziņā nav teksta, ko nosūtīt. Ierakstiet savu jautājumu vai pievienojiet failu un pēc tam nosūtiet ziņu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
@@ -1859,6 +1883,7 @@
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
     "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
+    "sendErrorToolsUnsupported": "Šis modelis nevar izmantot rīkus, tāpēc nevar atbildēt uz jautājumiem par jūsu lietu. Pārslēdzieties uz modeli, kas atbalsta rīkus.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
@@ -6477,6 +6502,10 @@
       },
       "noProperties": "Nav rekvizīta, ko aprēķināt",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Sākotnējā AI vērtība",
+      "reasonPlaceholder": "Izmaiņu iemesls (neobligāti)"
     },
     "copyToMatter": {
       "copied": "Nokopēts lietā",

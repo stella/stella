@@ -49,6 +49,11 @@ export const CHAT_USER_ACTIONS = {
   },
   "allow-once": { handler: "handleApprove", via: "session" },
   "always-allow": { handler: "handleAlwaysAllow", via: "session" },
+  /** Answers, or dismisses, a question a run on the member's computer asks. */
+  "answer-local-question": {
+    handler: "answerLocalRunQuestion",
+    via: "session",
+  },
   "answer-question": { handler: "handleAskUserSubmit", via: "session" },
   "attach-files": { via: "page" },
   /** Reads whether a saved credential can answer a private input card. */

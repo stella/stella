@@ -275,11 +275,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/chat/chat-sandbox-plan.ts::resolveChatSandboxPlan::status 422",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/chat/chat-schema.ts::catch::status 400",
     "count": 2,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -515,11 +510,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/chat/send-message.ts::activeFileSizeLimitError::status 422",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/chat/send-message.ts::assertDevModelOverride::status 400",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -551,11 +541,6 @@
   },
   {
     "id": "require-refusal-code::apps/api/src/handlers/chat/send-message.ts::prepareValidatedIncomingMessage::status 409",
-    "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/chat/send-message.ts::readActiveFileFallbackForModel::status 422",
     "count": 1,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
@@ -690,11 +675,6 @@
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {
-    "id": "require-refusal-code::apps/api/src/handlers/chat/upload-files.ts::hydrateFilePart::status 422",
-    "count": 2,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
     "id": "require-refusal-code::apps/api/src/handlers/chat/upload-files.ts::parseMessageFileDataUrl::status 400",
     "count": 2,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
@@ -702,11 +682,6 @@
   {
     "id": "require-refusal-code::apps/api/src/handlers/chat/upload-files.ts::reserveChatObjectCleanupIntent::status 400",
     "count": 1,
-    "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
-  },
-  {
-    "id": "require-refusal-code::apps/api/src/handlers/chat/upload-files.ts::uploadUserFile::status 422",
-    "count": 3,
     "reason": "Predates the rule: a client refusal without a code; give it a stable code and, when a person acts on it, a web message."
   },
   {

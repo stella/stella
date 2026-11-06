@@ -13,7 +13,7 @@ import { isTag } from "@stll/html/nodes";
 const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
 export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
 
-class VisualMarkupError extends TaggedError("VisualMarkupError")<{
+export class VisualMarkupError extends TaggedError("VisualMarkupError")<{
   message: string;
   reason: "size" | "depth" | "nodes" | "input";
 }> {

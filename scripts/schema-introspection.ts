@@ -1,15 +1,15 @@
 import { panic, Result } from "better-result";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import * as ts from "tsrs/unstable/ast";
+import * as ts from "tsrs/ast";
 import {
   API,
   type Checker,
   ModuleKind,
   ModuleResolutionKind,
   type Symbol as CompilerSymbol,
-} from "tsrs/unstable/async";
-import { serverFS } from "tsrs/unstable/fs";
+} from "tsrs/async";
+import { serverFS } from "tsrs/fs";
 
 import { repoRelativePath } from "@stll/portable-path";
 

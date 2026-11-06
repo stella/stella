@@ -56,8 +56,10 @@ const InputGroupAddon = ({
     data-align={align}
     data-slot="input-group-addon"
     onMouseDown={(e) => {
-      const { target } = e;
-      if (!(target instanceof Element)) {
+      const { currentTarget, target } = e;
+      // React bubbles through portals, so a press inside a menu opened from
+      // this addon lands here too, without being on the addon's padding.
+      if (!(target instanceof Element) || !currentTarget.contains(target)) {
         return;
       }
       const isInteractive = target.closest(

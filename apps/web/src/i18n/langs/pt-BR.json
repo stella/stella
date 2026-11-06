@@ -162,7 +162,9 @@
       "declinedDescription": "Você recusou este convite. Você pode fechar esta página com segurança.",
       "description": "Você foi convidado para participar do {organizationName} por {inviterEmail} como {role}.",
       "goToWorkspaces": "Ir para casos",
-      "title": "Convite da organização"
+      "title": "Convite da organização",
+      "verifyEmailHint": "Para verificar {email}, saia e faça login com um código único enviado para esse endereço.",
+      "wrongAccountHint": "Você entrou como {email}. Saia e faça login com o endereço para o qual o convite foi enviado."
     },
     "lastUsed": "Usado pela última vez",
     "oneTimeCodeExpired": "Seu código único expirou. Solicite um novo código.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "O agente de programação do seu computador precisa que você entre novamente. Entre pelo stella desktop e tente de novo.",
       "errorUnavailable": "Seu computador parou de processar esta resposta. Verifique se o stella desktop está aberto e conectado e tente de novo.",
       "onThisComputer": "{harness} neste computador",
+      "permissionAskDescription": "Edita sozinho os arquivos da pasta da execução; pergunta antes de qualquer outra coisa.",
+      "permissionAutoDescription": "Faz sozinho o que julga seguro; pergunta sobre o resto.",
+      "permissionFullAuto": "Totalmente automático",
+      "permissionFullAutoDescription": "Nunca pergunta nada dentro da pasta da execução; sempre pergunta antes de alterar seu computador.",
+      "permissionSandboxed": "É executado em um ambiente isolado; pergunta antes de alterar seu computador.",
+      "permissionUnavailable": "Indisponível neste computador",
+      "permissions": "Permissões",
       "refusalConflictingRunMode": "Esta solicitação pede para rodar com o agente na nuvem e no seu computador ao mesmo tempo. Escolha um em Executar em.",
       "refusalHarnessUnavailable": "O agente de programação do seu computador não pode atender a esta solicitação agora. Verifique-o no stella desktop.",
       "refusalModelUnavailable": "O agente de programação do seu computador não oferece mais este modelo. Escolha outro em Executar em.",
       "refusalNoComputer": "Nenhum dos seus computadores está conectado. Abra o stella desktop e envie de novo.",
+      "refusalPermissionUnavailable": "O agente de programação do seu computador não pode ser executado com essas permissões. Escolha outra opção em Permissões.",
       "refusalTooLarge": "Esta conversa é longa demais para ser enviada ao seu computador. Comece um novo chat para executá-la lá.",
       "refusalUnavailable": "Executar chats no seu computador não está disponível para sua conta.",
       "runOn": "Executar em",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Indisponível no momento",
       "stateUnsupported": "Esta versão não é compatível",
       "waitingForComputer": "Aguardando seu computador se reconectar…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Escolha todas as que se aplicam",
+      "dismiss": "Descartar e parar",
+      "secretAnswer": "Resposta oculta",
+      "secretPlaceholder": "Sua resposta fica oculta"
     },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {
@@ -1844,10 +1860,18 @@
       "toolbarLabel": "Texto selecionado"
     },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
+    "sendErrorActiveFileNoText": "O arquivo aberto não tem texto que a stella consiga ler. Feche-o ou abra outro arquivo.",
+    "sendErrorActiveFileTooLarge": "O arquivo aberto é grande demais para o chat. Feche-o ou abra um arquivo menor.",
+    "sendErrorAgentRunsDisabled": "As execuções do agente não estão disponíveis aqui. Fale com o administrador do espaço de trabalho.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
+    "sendErrorAttachmentNoText": "Um arquivo anexado não tem texto que a stella consiga ler. Remova-o ou anexe outro arquivo.",
+    "sendErrorAttachmentUnsupported": "Este tipo de arquivo não pode ser anexado a um chat. Anexe outro arquivo.",
     "sendErrorConnectionFailed": "A conexão com o chat falhou. Verifique sua conexão e tente novamente.",
     "sendErrorContinuationRejected": "Não foi possível continuar o chat. Envie uma nova mensagem para começar de novo.",
+    "sendErrorDocumentUnsupported": "Este modelo não consegue ler um dos documentos anexados. Remova o anexo ou mude para um modelo que o aceite.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
+    "sendErrorImageInvalid": "Não foi possível preparar esta imagem para o modelo. Envie uma imagem menor ou troque de modelo.",
+    "sendErrorImageUnsupported": "Este modelo não consegue ler imagens anexadas. Remova a imagem ou mude para um modelo que aceite imagens.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
     "sendErrorMessageEmpty": "Esta mensagem não tem texto para enviar. Digite sua pergunta ou anexe um arquivo e depois envie a mensagem.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
@@ -1859,6 +1883,7 @@
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
     "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
     "sendErrorTimedOut": "O chat não respondeu a tempo. Tente novamente.",
+    "sendErrorToolsUnsupported": "Este modelo não pode usar ferramentas, então não consegue responder a perguntas sobre o seu caso. Mude para um modelo que aceite ferramentas.",
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
@@ -6477,6 +6502,10 @@
       },
       "noProperties": "Nenhuma propriedade para calcular",
       "unavailable": "—"
+    },
+    "cellOverride": {
+      "machineValue": "Valor original da IA",
+      "reasonPlaceholder": "Motivo da alteração (opcional)"
     },
     "copyToMatter": {
       "copied": "Copiado para o caso",

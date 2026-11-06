@@ -4,6 +4,7 @@ import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   AtSignIcon,
+  BanknoteIcon,
   FileTextIcon,
   PlusIcon,
   XIcon,
@@ -32,6 +33,13 @@ const CREATABLE_CONTENT_TYPES = [
 export type CreatableContentType = (typeof CREATABLE_CONTENT_TYPES)[number];
 
 /**
+ * What the single-column composer offers: the shared kinds plus money. Money
+ * stays out of `CREATABLE_CONTENT_TYPES` because the bulk composer shares that
+ * list with case-law question columns, which do not answer in money.
+ */
+export type PropertyComposerContentType = CreatableContentType | "money";
+
+/**
  * One chip: the value it stands for, and how it reads. Parameterised because
  * the same row names matter-property content types and, on the case-law
  * results table, the kind of answer a question column takes — one chip row so
@@ -51,6 +59,23 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
     const meta = VALUE_TYPE_META[contentTypeValueKind(type)];
     return { type, icon: meta.icon, label: t(meta.labelKey) };
   });
+};
+
+export const usePropertyComposerChipDefinitions = (
+  offerMoney: boolean,
+): readonly ChipDefinition<PropertyComposerContentType>[] => {
+  const t = useTranslations();
+  const shared = useChipDefinitions();
+  return offerMoney
+    ? [
+        ...shared,
+        {
+          type: "money",
+          icon: BanknoteIcon,
+          label: t("workspaces.properties.money"),
+        },
+      ]
+    : shared;
 };
 
 export const COMPOSER_CARD_CLASS =

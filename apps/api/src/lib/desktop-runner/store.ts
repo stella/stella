@@ -19,6 +19,7 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
@@ -1299,6 +1300,7 @@ type InsertRunOptions = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
   workspaceIds: readonly SafeId<"workspace">[];
   /** The chat turn that starts and reads the run, when one does. */
   chat?: ChatRunBinding | null;
@@ -1321,12 +1323,13 @@ export type InsertedRun =
       type: "harness_unavailable";
       report: DesktopRunnerHarnessReport | null;
     }
-  | { type: "model_unavailable" };
+  | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" };
 
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
- * with the requested model. The caller mints the run id, so nothing here
+ * with the requested model and approval mode. The caller mints the run id, so nothing here
  * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
@@ -1366,6 +1369,9 @@ export const insertAssignedRun = async (
     }
     if (!report.models.some(({ id }) => id === options.model)) {
       return { type: "model_unavailable" };
+    }
+    if (!report.approvalModes.includes(options.approvals)) {
+      return { type: "approvals_unavailable" };
     }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     await tx.insert(runs).values({

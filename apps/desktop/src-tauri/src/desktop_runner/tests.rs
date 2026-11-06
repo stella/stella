@@ -208,7 +208,7 @@ fn run_start(run_id: &str, expires_at: &str) -> Value {
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
-    "policy": {"network": "open", "fs": "workspace"},
+    "policy": {"network": "open", "fs": "workspace", "approvals": "ask"},
     "mcp": {
       "serverName": "stella",
       "url": "https://api.example.test/mcp",
