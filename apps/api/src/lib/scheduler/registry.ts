@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
@@ -34,9 +36,17 @@ import {
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import {
+  BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+  createCaseLawParsedInputStateBackfill,
+} from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
+import {
   FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
   foldCaseLawPopulationCountsTask,
 } from "@/api/lib/scheduler/tasks/case-law-population-fold";
+import {
+  SEED_CASE_LAW_POPULATION_COUNTS_TASK,
+  seedCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
@@ -281,6 +291,7 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
+  [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
   [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
     reconcileCaseLawDecisionIdentifiersTask,
@@ -298,6 +309,10 @@ const SCHEDULER_TASKS = {
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK]:
+    createCaseLawParsedInputStateBackfill({
+      clock: () => Temporal.Now.instant().epochMilliseconds,
+    }),
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,

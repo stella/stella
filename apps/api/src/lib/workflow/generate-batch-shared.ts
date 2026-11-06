@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { toMajorUnitsText } from "@stll/money";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
@@ -14,6 +16,7 @@ import {
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type {
   BatchProperty,
@@ -93,6 +96,8 @@ const isFieldContentEmpty = (content: FieldContentForAI): boolean => {
       return false;
     case "person":
       return content.name.trim().length === 0;
+    case "record":
+      return recordText(content.state).length === 0;
     default:
       throw new Unreachable({
         message: "Field type not matched",
@@ -236,6 +241,8 @@ export const prepareBatchInput = (
       pushTextInput(field.propertyId, content.value.join(", "));
     } else if (content.type === "date" && content.value) {
       pushTextInput(field.propertyId, content.value);
+    } else if (content.type === "record") {
+      pushTextInput(field.propertyId, recordText(content.state));
     } else if (content.type === "int") {
       pushTextInput(
         field.propertyId,
@@ -243,6 +250,13 @@ export const prepareBatchInput = (
           ? `${content.value} ${content.currency}`
           : String(content.value),
       );
+    } else if (content.type === "money") {
+      pushTextInput(
+        field.propertyId,
+        `${toMajorUnitsText({ amountCents: content.amountCents, currency: content.currency })} ${content.currency}`,
+      );
+    } else if (content.type === "person") {
+      pushTextInput(field.propertyId, content.name);
     }
   }
 

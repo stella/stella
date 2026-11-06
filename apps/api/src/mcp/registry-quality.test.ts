@@ -209,6 +209,11 @@ test("every read tool permission declaration stays visible in review", () => {
         "reason": "reads the static capability catalog metadata",
       },
       {
+        "kind": "open-read",
+        "name": "list_case_law_courts",
+        "reason": "public case-law corpus",
+      },
+      {
         "kind": "all",
         "name": "list_clauses",
       },

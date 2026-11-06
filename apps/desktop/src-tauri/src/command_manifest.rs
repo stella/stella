@@ -5,6 +5,7 @@ macro_rules! with_stella_commands {
       account::account_record_use => "account_record_use",
       account::account_disconnect => "account_disconnect",
       commands::get_state => "get_state",
+      commands::open_recovery_folder => "open_recovery_folder",
       registry::registry_copy => "registry_copy",
       registry::registry_get_state => "registry_get_state",
       registry::registry_search => "registry_search",
@@ -76,6 +77,7 @@ macro_rules! with_stella_commands {
       clipboard_commands::clipboard_close_editor => "clipboard_close_editor",
       clipboard_commands::clipboard_copy_item => "clipboard_copy_item",
       clipboard_commands::clipboard_copy_items => "clipboard_copy_items",
+      clipboard_commands::clipboard_copy_selection => "clipboard_copy_selection",
       clipboard_commands::clipboard_hide => "clipboard_hide",
       clipboard_commands::clipboard_open_stella => "clipboard_open_stella",
       time_entry_commands::time_entry_search_matters => "time_entry_search_matters",
@@ -117,6 +119,12 @@ macro_rules! with_stella_commands {
       chatgpt_auth_commands::chatgpt_auth_complete => "chatgpt_auth_complete",
       chatgpt_auth_commands::chatgpt_auth_disconnect => "chatgpt_auth_disconnect",
       chatgpt_auth_commands::chatgpt_auth_open_usage => "chatgpt_auth_open_usage",
+      desktop_runner::desktop_runner_get_state => "desktop_runner_get_state",
+      claude_code_auth_commands::claude_code_auth_get_status => "claude_code_auth_get_status",
+      claude_code_auth_commands::claude_code_auth_start => "claude_code_auth_start",
+      claude_code_auth_commands::claude_code_auth_cancel => "claude_code_auth_cancel",
+      claude_code_auth_commands::claude_code_auth_open_sign_in_page => "claude_code_auth_open_sign_in_page",
+      claude_code_auth_commands::claude_code_auth_sign_out => "claude_code_auth_sign_out",
     }
   };
 }

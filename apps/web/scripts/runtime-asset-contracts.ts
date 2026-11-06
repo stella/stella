@@ -26,6 +26,33 @@ const URL_SCHEME_PATTERN = /^[a-z][a-z\d+.-]*:/iu;
 export const SOURCE_WORKER_FILE_GLOB =
   "src/**/*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}";
 
+export const DEPENDENCY_WASI_WORKERS = {
+  ahoCorasick: {
+    sourceEntry: "/@stll/aho-corasick-wasm/dist/wasi-worker-browser.mjs",
+    assetStem: "aho-corasick-wasi-worker-browser",
+    label: "Aho-Corasick WASI thread worker",
+  },
+  regexSet: {
+    sourceEntry: "/@stll/regex-set-wasm/dist/wasi-worker-browser.mjs",
+    assetStem: "regex-set-wasi-worker-browser",
+    label: "RegexSet WASI thread worker",
+  },
+} as const;
+
+export const workerEntryFileName = ({
+  facadeModuleId,
+}: {
+  facadeModuleId: string | null;
+}): string => {
+  const sourcePath = facadeModuleId?.replaceAll("\\", "/").split(/[?#]/u).at(0);
+  const worker = Object.values(DEPENDENCY_WASI_WORKERS).find(
+    ({ sourceEntry }) => sourcePath?.endsWith(sourceEntry),
+  );
+  return worker === undefined
+    ? "assets/[name]-[hash].js"
+    : `assets/${worker.assetStem}-[hash].js`;
+};
+
 const toWebRelativePath = (url: URL): string =>
   repoRelativePath(WEB_ROOT_PATH, fileURLToPath(url));
 

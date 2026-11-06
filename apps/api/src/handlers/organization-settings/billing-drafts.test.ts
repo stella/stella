@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { announceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { executeRowsSafeDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -172,9 +173,7 @@ test("billing configuration refuses missing and foreign clients while retaining 
     await db
       .delete(contacts)
       .where(inArray(contacts.id, [ownClientId, foreignClientId]));
-    await db
-      .delete(organization)
-      .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+    await deleteOrganizationsForTest(db, [organizationId, otherOrganizationId]);
     await db.delete(user).where(eq(user.id, userId));
     await releaseTestDb();
   }

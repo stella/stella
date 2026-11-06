@@ -1091,6 +1091,68 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search",
     "access": "read",
@@ -1430,7 +1492,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -3140,7 +3202,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3168,7 +3230,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3193,7 +3255,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3222,7 +3284,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -3242,8 +3304,15 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -5614,7 +5683,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -6475,7 +6544,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -6490,7 +6559,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -6511,6 +6580,14 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -6536,7 +6613,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -8365,6 +8442,68 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search",
     "access": "read",
@@ -8704,7 +8843,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -10414,7 +10553,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10442,7 +10581,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10467,7 +10606,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10496,7 +10635,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -10516,8 +10655,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -12888,7 +13034,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -13749,7 +13895,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -13764,7 +13910,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -13785,6 +13931,14 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": [
+            "people",
+            "automations"
+          ],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -13810,7 +13964,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     }
@@ -15080,7 +15234,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15108,7 +15262,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15133,7 +15287,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15162,7 +15316,7 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": [
@@ -15182,8 +15336,15 @@ exports[`MCP registry quality (documents surface) tool surface snapshot (name, s
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -16058,6 +16219,68 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read_anonymized",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search_anonymized",
     "access": "read",
@@ -16397,7 +16620,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,
@@ -17056,7 +17279,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -18043,6 +18266,68 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     }
   },
   {
+    "name": "list_case_law_courts",
+    "scope": "stella:read",
+    "access": "read",
+    "annotationReasons": {
+      "readOnlyHint": "List case-law courts only retrieves or computes data.",
+      "destructiveHint": "List case-law courts does not change state.",
+      "openWorldHint": "List case-law courts is confined to the private workspace or a bounded computation."
+    },
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "country"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": [
+                "CZE",
+                "EU",
+                "HUN",
+                "POL",
+                "SVK"
+              ],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    }
+  },
+  {
     "name": "search_legislation",
     "scope": "stella:search",
     "access": "read",
@@ -18382,7 +18667,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a case-law citation is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "annotations": {
       "title": "Resolve a case-law citation",
       "destructiveHint": false,

@@ -59,9 +59,11 @@
  * highlights. Deletions recede as neutral source text; insertions keep the
  * document's normal text colour with a quiet success underline. The authored
  * highlight still shows, but no longer combines with a saturated purple glyph
- * colour into a low-contrast block. */
+ * colour into a low-contrast block. Folio renders these marks only inside its
+ * `.folio-root`, whose stylesheet defines every `--doc-*` token used here, so
+ * they need no fallback. */
 [data-file-viewer-ai] .docx-deletion--suggested {
-  color: var(--doc-text-muted, #6b7280);
+  color: var(--doc-text-muted);
   opacity: 0.48;
   background-image: none;
   text-decoration-color: currentcolor;
@@ -69,14 +71,14 @@
 }
 
 [data-file-viewer-ai] .docx-insertion--suggested {
-  color: var(--doc-text, #111827);
+  color: var(--doc-text);
   background-image: linear-gradient(
-    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent),
-    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent)
+    color-mix(in oklch, var(--doc-success) 12%, transparent),
+    color-mix(in oklch, var(--doc-success) 12%, transparent)
   );
   text-decoration-color: color-mix(
     in oklch,
-    var(--doc-success, #166534) 70%,
+    var(--doc-success) 70%,
     currentcolor
   );
   text-decoration-style: solid;

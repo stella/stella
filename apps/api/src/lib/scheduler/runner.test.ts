@@ -77,15 +77,14 @@ type SeedJobOptions = {
   task?: string;
   nextRunAt?: Date;
   enabled?: boolean;
-  lockedBy?: string | null;
-  lockedUntil?: Date | null;
+  // A held lease is a token and its expiry; the claim time is the fixture's past.
+  lease?: { lockedBy: string; lockedUntil: Date };
 };
 
 const seedJob = async ({
   enabled = true,
   id = "test.job",
-  lockedBy = null,
-  lockedUntil = null,
+  lease,
   nextRunAt = PAST,
   task = "test.noop",
 }: SeedJobOptions = {}): Promise<string> => {
@@ -93,8 +92,7 @@ const seedJob = async ({
     description: "test job",
     enabled,
     id,
-    lockedBy,
-    lockedUntil,
+    ...(lease === undefined ? {} : { ...lease, lockedAt: PAST }),
     nextRunAt,
     schedule: INTERVAL_SCHEDULE,
     task,
@@ -605,7 +603,7 @@ describe("bounded scheduler sweeps", () => {
 
 describe("lease expiry", () => {
   test("a job whose lease has expired is reclaimable by another runner", async () => {
-    await seedJob({ lockedBy: "dead-runner", lockedUntil: PAST });
+    await seedJob({ lease: { lockedBy: "dead-runner", lockedUntil: PAST } });
 
     const result = await runSchedulerOnce({
       db,
@@ -623,7 +621,7 @@ describe("lease expiry", () => {
 
   test("a job with a live lease is not reclaimed", async () => {
     const future = new Date(Date.now() + LEASE_MS);
-    await seedJob({ lockedBy: "live-runner", lockedUntil: future });
+    await seedJob({ lease: { lockedBy: "live-runner", lockedUntil: future } });
 
     const result = await runSchedulerOnce({
       db,
@@ -966,8 +964,7 @@ describe("zombie completion guard holds on every write path", () => {
     const freshLease = new Date(Date.now() + LEASE_MS);
     await seedJob({
       id: "zombie.job",
-      lockedBy: "runner-a",
-      lockedUntil: freshLease,
+      lease: { lockedBy: "runner-a", lockedUntil: freshLease },
     });
     const [terminalRun] = await testDb
       .insert(schedulerJobRuns)
@@ -1060,8 +1057,7 @@ describe("stale-token completion preserves a same-runner re-acquired lease", () 
     const freshLease = new Date(Date.now() + LEASE_MS);
     await seedJob({
       id: "reacquired.job",
-      lockedBy: FRESH_TOKEN,
-      lockedUntil: freshLease,
+      lease: { lockedBy: FRESH_TOKEN, lockedUntil: freshLease },
     });
     const [staleRun] = await testDb
       .insert(schedulerJobRuns)

@@ -582,11 +582,33 @@ const extractKeywords = ($document: cheerio.Cheerio<AnyNode>): string[] => {
     ? KEYWORD_SEPARATOR
     : LOOSE_KEYWORD_SEPARATOR;
 
-  return inner
-    .split(separator)
+  const keywords: string[] = [];
+  let previousSeparator = "";
+  // Capture each separator, so a dash that closes a range keeps its spacing.
+  for (const [index, piece] of inner
+    .split(new RegExp(`(${separator.source})`, "u"))
+    .entries()) {
+    if (index % 2 === 1) {
+      previousSeparator = piece;
+      continue;
+    }
+    const last = keywords.at(-1);
+    // A bare number after a dash closes a range inside the keyword before
+    // it (`Artikli 1 lõiked 1 – 3`, paragraphs 1 to 3): a number alone is
+    // never a keyword of its own.
+    if (last !== undefined && BARE_NUMBER.test(piece.trim())) {
+      keywords[keywords.length - 1] = `${last}${previousSeparator}${piece}`;
+    } else {
+      keywords.push(piece);
+    }
+  }
+  return keywords
     .map((part) => part.replace(/\s+/gu, " ").trim())
     .filter((part) => part.length > 0);
 };
+
+/** A number with nothing else: the end of a range, not a keyword. */
+const BARE_NUMBER = /^\d{1,4}$/u;
 
 /**
  * Whether a normalized historical payload lost spacing that determines ECJ
@@ -1281,7 +1303,8 @@ const visitLegacyParagraph = (
     printedNumbers.candidates.push({
       index,
       number: printed.value,
-      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
+      marker: match?.groups?.["dot"] !== undefined ? "dotted" : "bare",
       dated:
         printed.value <= DAYS_IN_MONTH_MAX &&
         MONTH_AND_YEAR.test(body.plainText),

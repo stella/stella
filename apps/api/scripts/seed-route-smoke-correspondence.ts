@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import {
   ROUTE_SMOKE_SCALE_SIZES,
@@ -72,7 +73,7 @@ await runScriptWithErrorOutput(async () => {
             eq(workspaces.id, workspaceId),
             eq(workspaces.organizationId, organizationId),
             eq(workspaces.name, `route-smoke-${workspaceId.slice(0, 8)}`),
-            eq(workspaces.status, "active"),
+            eq(workspaces.status, WORKSPACE_STATUS.active),
             eq(user.email, filerEmail),
           ),
         )

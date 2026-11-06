@@ -294,14 +294,16 @@ const GenericExternalReferencePanel = ({
   const storedSource = useExternalSourceStore((state) =>
     safeHref === undefined ? undefined : state.sourcesByUrl[safeHref],
   );
+  // No stored source counts as no stored text.
   const shouldFetchPreview =
-    canPreview &&
-    tab.text === undefined &&
-    storedSource?.text === undefined &&
-    (tab.connectorSlug !== undefined ||
-      tab.sourceToolName !== undefined ||
-      storedSource?.connectorSlug !== undefined ||
-      storedSource?.sourceToolName !== undefined);
+    storedSource?.text !== undefined
+      ? false
+      : canPreview &&
+        tab.text === undefined &&
+        (tab.connectorSlug !== undefined ||
+          tab.sourceToolName !== undefined ||
+          storedSource?.connectorSlug !== undefined ||
+          storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
   const fetchedPreviewQuery = useQuery({
     ...externalReferencePreviewOptions({
@@ -487,12 +489,12 @@ const GenericExternalReferencePanel = ({
                   </p>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded px-1.5 py-0.5 font-mono">
+                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded-sm px-1.5 py-0.5 font-mono">
                     {connectorSlug}
                   </span>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded px-1.5 py-0.5 font-mono">
+                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded-sm px-1.5 py-0.5 font-mono">
                     {sourceToolName}
                   </span>
                 )}

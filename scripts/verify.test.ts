@@ -798,6 +798,7 @@ exit 0
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-select-paths.ts",
             "scripts/autofix-push-scope.ts",
             "scripts/autofix-baseline-prune.ts",
             "scripts/baseline-shrink.ts",

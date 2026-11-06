@@ -320,12 +320,40 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("provider_unavailable");
   });
 
+  test.each([
+    { code: "credit_balance_exhausted", type: "insufficient_quota" },
+    { code: "insufficient_quota" },
+    { type: "insufficient_quota" },
+    { error: { code: "credit_balance_exhausted" } },
+  ])(
+    "a statusless body naming an account out of credit (%j) is its billing",
+    (body) => {
+      expect(classifyAIError(body)).toBe("provider_billing");
+      expect(
+        classifyAIError(
+          new HandlerError({
+            status: 502,
+            code: "upstream_unavailable",
+            message: "Provider run failed",
+            cause: body,
+          }),
+        ),
+      ).toBe("provider_billing");
+    },
+  );
+
+  test("a provider status still owns a body naming the account's credit", () => {
+    expect(classifyAIError({ status: 429, code: "insufficient_quota" })).toBe(
+      "quota_exhausted",
+    );
+  });
+
   test("ignores a nested code that is not an HTTP status", () => {
     // OpenAI-shaped bodies put a symbolic code where Google puts the status,
     // and gRPC-shaped ones put a small application code there.
     expect(
       classifyAIError({
-        error: { code: "insufficient_quota", message: "out of credits" },
+        error: { code: "invalid_value", message: "unsupported value" },
       }),
     ).toBe("unknown");
     expect(

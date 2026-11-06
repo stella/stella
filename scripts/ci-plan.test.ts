@@ -2078,7 +2078,7 @@ test("the required-jobs record names every workflow job once and carries the ver
       },
     },
     {
-      // Arming a pull request reruns CI only to hand validation to the queue.
+      // A queue entry retains the evaluated run's identity for this head.
       label: "pull-request-enqueued",
       options: {
         event: EVENT.pullRequest,
@@ -2218,6 +2218,7 @@ test("the required-jobs record names every workflow job once and carries the ver
     verdict: "success",
     basis: "pass_through",
     pass_through_reason: "enqueued",
+    reused_from_run_id: 100,
   });
 });
 
@@ -7041,7 +7042,7 @@ test("documentation guards run independently of package checks", () => {
   for (const name of [
     "Install dependencies",
     "Documentation source policy rule",
-    "Instruction references",
+    "Instruction policy",
   ]) {
     const step = steps.find((entry) => entry.name === name);
     expect(step?.if).not.toContain("package_checks_required");

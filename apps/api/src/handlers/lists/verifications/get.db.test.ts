@@ -34,6 +34,7 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { resolveEffectiveGrants } from "../../../../../../packages/cli/src/auth/command-scopes";
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
@@ -447,9 +448,7 @@ const withFixture = async (
       await exercise(fixture);
     } finally {
       env.API_FEATURE_ACCESS_GRANTS = previous;
-      await db
-        .delete(organization)
-        .where(eq(organization.id, fixture.organizationId));
+      await deleteOrganizationsForTest(db, [fixture.organizationId]);
       await db.delete(user).where(eq(user.id, fixture.actor));
       await db.delete(user).where(eq(user.id, fixture.otherActor));
     }

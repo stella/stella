@@ -62,7 +62,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -729,7 +729,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -2584,6 +2584,92 @@
   },
   {
     "cli": {
+      "command": ["case-law", "courts"],
+      "excluded": true,
+      "scope": "read",
+      "feature": "FEATURE_PUBLIC_LAW"
+    },
+    "name": "list_case_law_courts",
+    "description": "Widget-only: one page of a country's courts, by name, for the search court filter.",
+    "inputSchema": {
+      "type": "object",
+      "required": ["country"],
+      "additionalProperties": false,
+      "properties": {
+        "country": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Corpus country whose courts to list. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+          "x-stella-agent-input": {
+            "kind": "country",
+            "country": {
+              "spelling": "alpha-3",
+              "admitted": ["CZE", "EU", "HUN", "POL", "SVK"],
+              "tool": "list_case_law_courts"
+            }
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Courts per page; defaults to and at most 100. Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4102,
+          "description": "nextCursor from the previous page."
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "courts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tierLabel": {
+                "enum": ["constitutional", "supreme", "regional", "other"],
+                "type": "string"
+              },
+              "courts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": ["tierLabel", "courts"],
+            "additionalProperties": false
+          }
+        },
+        "nextCursor": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["country", "courts", "nextCursor"],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "List case-law courts",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["legislation", "search"],
       "scope": "search",
       "itemsKey": "results",
@@ -2735,7 +2821,7 @@
               "type": "string"
             },
             "reason": {
-              "enum": ["exclusion_budget"],
+              "enum": ["exclusion_budget", "time_budget"],
               "type": "string"
             }
           },
@@ -3376,7 +3462,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "resolve_case_law_decision",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "inputSchema": {
       "type": "object",
       "required": ["country", "identifier"],
@@ -3463,13 +3549,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],
@@ -3767,13 +3848,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],
@@ -7273,7 +7349,7 @@
                 },
                 "value": {
                   "type": "string",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7296,7 +7372,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7316,7 +7392,7 @@
                     "type": "string",
                     "minLength": 1
                   },
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7340,7 +7416,7 @@
                       "type": "null"
                     }
                   ],
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 }
               },
               "required": ["type", "value"],
@@ -7355,8 +7431,15 @@
                   "type": "string"
                 },
                 "value": {
-                  "type": "integer",
-                  "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The value: string for text, string or null for single-select, string array for multi-select, YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
                 },
                 "currency": {
                   "anyOf": [
@@ -10934,7 +11017,7 @@
       "itemsKey": "annotations"
     },
     "name": "list_reader_annotations",
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "inputSchema": {
       "type": "object",
       "required": ["target_type", "target_id"],
@@ -12592,7 +12675,7 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \"visible\". Requires audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -12601,7 +12684,7 @@
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Only entries scoped to this matter."
+          "description": "Matter ID"
         },
         "action": {
           "type": "string",
@@ -12622,6 +12705,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Actor user id"
+        },
+        "performer": {
+          "enum": ["people", "automations"],
+          "type": "string",
+          "description": "Members and their agents, or services"
         },
         "from": {
           "type": "string",
@@ -12647,7 +12735,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Next-page cursor"
         }
       }
     },

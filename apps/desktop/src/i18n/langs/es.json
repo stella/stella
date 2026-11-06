@@ -38,7 +38,7 @@
     "reconnectAccount": "Volver a conectar con stella web…"
   },
   "notification": {
-    "checkpointDelayedBody": "{fileName} — Los cambios permanecen locales y se reintentarán automáticamente",
+    "checkpointDelayedBody": "{fileName}: los cambios permanecen locales y se reintentarán automáticamente",
     "checkpointDelayedTitle": "Sincronización de punto de control retrasada",
     "diagnosticsCopiedBody": "Péguelo en su solicitud de soporte cuando sea necesario.",
     "diagnosticsCopiedTitle": "Diagnósticos copiados",
@@ -54,11 +54,13 @@
     "recoveryResetTitle": "Los datos de recuperación local fueron restablecidos",
     "revisionCreatedBody": "{fileName} guardado como versión {versionNumber}. Edición de escritorio finalizada",
     "revisionCreatedTitle": "Revisión de stella creada",
-    "sessionClosedSaved": "{fileName} — La copia local se mantiene preservada en Copias de trabajo temporales",
-    "sessionClosedUnsaved": "{fileName} — Tiene ediciones locales sin guardar. Encuentre su copia en Copias de trabajo temporales.",
-    "takenOverBody": "{fileName} — Vuelva a abrir desde stella aquí para recuperar la edición",
+    "sessionClosedSaved": "{fileName}: la copia local se mantiene preservada en Copias de trabajo temporales",
+    "sessionClosedUnsaved": "{fileName}: tiene ediciones locales sin guardar. Encuentre su copia en Copias de trabajo temporales.",
+    "takenOverBody": "{fileName}: vuelva a abrir desde stella aquí para recuperar la edición",
     "takenOverLocalError": "La edición de escritorio se movió a otro dispositivo. Esta copia local se mantiene preservada.",
-    "takenOverTitle": "Edición movida a otro dispositivo"
+    "takenOverTitle": "Edición movida a otro dispositivo",
+    "editsSetAsideTitle": "Ediciones apartadas",
+    "editsSetAsideBody": "Se apartaron las ediciones sin guardar. Vuelve a conectar la misma cuenta para abrir la carpeta de recuperación en Configuración."
   },
   "dialog": {
     "accountWindowTitle": "Conectar cuenta",
@@ -232,7 +234,16 @@
     "permissionDenied": "Desactivado en los ajustes del sistema.",
     "permissionManaged": "Gestionado por su organización",
     "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
-    "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso."
+    "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso.",
+    "recoveryTitle": "Ediciones apartadas",
+    "recoveryBody": "Las ediciones sin guardar se conservan aquí para tu cuenta. Abre la carpeta para recuperarlas.",
+    "recoverySignIn": "Las ediciones se apartaron para esa cuenta. Vuelve a conectar esa cuenta para abrir su carpeta.",
+    "recoveryUnassigned": "Algunas ediciones no tienen una cuenta registrada. Abre su carpeta para recuperarlas manualmente.",
+    "recoveryPending": "Algunas ediciones aún se están apartando. Inténtalo de nuevo para terminar.",
+    "recoveryOpenFolder": "Abrir carpeta de recuperación",
+    "recoveryOpenUnassigned": "Abrir ediciones sin asignar",
+    "recoveryFilePending": "Pendiente de apartar",
+    "recoveryError": "No se pudo abrir la carpeta de recuperación. Inténtalo de nuevo."
   },
   "clipboard": {
     "registryUnavailable": "No hay registros habilitados para las jurisdicciones donde ejerces.",
@@ -321,6 +332,12 @@
     "save": "Guardar",
     "search": "Buscar en el historial del portapapeles",
     "searchPlaceholder": "Buscar en el historial del portapapeles",
+    "searchOptions": "Opciones de búsqueda",
+    "searchOptionExactPhrase": "Frase exacta",
+    "searchOptionWholeWords": "Solo palabras completas",
+    "searchOptionMatchCase": "Distinguir mayúsculas y minúsculas",
+    "searchOptionMatchDiacritics": "Distinguir tildes y diacríticos",
+    "searchOptionsReset": "Restablecer opciones de búsqueda",
     "registrySearch": "Buscar en el registro mercantil",
     "registrySearchPlaceholder": "Nombre de la empresa o número de registro",
     "registryPreview": "Vista previa del registro mercantil",
@@ -484,6 +501,10 @@
     "evidenceTitles": "Títulos",
     "evidenceApps": "Aplicaciones",
     "rangeEmpty": "No se registró nada en este intervalo.",
+    "entryStart": "Inicio",
+    "entryEnd": "Fin",
+    "rangeEndBeforeStart": "Elija una hora de fin posterior al inicio.",
+    "rangeDraftedLeftOut": "{duration}, sin contar el tiempo ya en borrador",
     "calendarHint": "Abra una sugerencia con borde discontinuo para revisarla, o arrastre en la columna Registros de tiempo para preparar un registro de cualquier intervalo.",
     "aiDraftWrite": "Redactar con stella AI",
     "aiDraftAgain": "Redactar de nuevo",
@@ -711,6 +732,36 @@
     "callbackConnectedTitle": "ChatGPT está conectado",
     "callbackConnectedBody": "Puedes cerrar esta pestaña y volver a stella.",
     "callbackNotConnectedTitle": "ChatGPT no se ha conectado",
-    "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo."
+    "callbackNotConnectedBody": "Vuelve a stella para ver qué ha pasado e inténtalo de nuevo.",
+    "claudeCode": {
+      "title": "Claude Code",
+      "description": "Usa tu suscripción de Claude para los agentes locales en stella. El uso se descuenta de tu plan de Claude, aparte de tu suscripción a stella.",
+      "notInstalled": "Claude Code aún no está instalado en este ordenador.",
+      "signIn": "Iniciar sesión con Claude",
+      "openSignInPage": "Abrir la página de inicio de sesión",
+      "signedIn": "Sesión iniciada en Claude",
+      "signedInAs": "Sesión iniciada en Claude · {email}",
+      "signOut": "Cerrar sesión",
+      "apiKey": "Claude Code tiene la sesión iniciada con una clave de API, que stella no usa. Cierra la sesión y vuelve a iniciarla con tu suscripción de Claude.",
+      "failure": {
+        "notCompleted": "El inicio de sesión no se completó. Inténtalo de nuevo.",
+        "timedOut": "El inicio de sesión tardó demasiado. Inténtalo de nuevo.",
+        "unavailable": "No se pudo iniciar Claude Code en este ordenador. Inténtalo de nuevo."
+      }
+    },
+    "install": {
+      "notInstalled": "{name} aún no está instalado en este ordenador.",
+      "install": "Instalar",
+      "downloading": "Descargando {name} {version}: {percent} %",
+      "verifying": "Comprobando {name} {version}",
+      "ready": "{name} {version} está instalado.",
+      "retry": "Reintentar",
+      "activeStays": "Se sigue usando la versión {version}.",
+      "failure": {
+        "download": "No se pudo descargar {name}. Comprueba tu conexión a internet e inténtalo de nuevo.",
+        "verification": "No se pudo verificar {name}, así que no se ha instalado.",
+        "storage": "No se pudo guardar {name} en este ordenador. Comprueba que haya espacio libre en el disco."
+      }
+    }
   }
 }

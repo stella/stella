@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
 
 import {
@@ -109,9 +110,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -454,53 +455,52 @@ const CONTENT_ATTRIBUTE_PREFIX = "xPart@";
  * the record's elements (one name where both print it), the document's root
  * name and attributes, and the document itself.
  */
-const SOURCE_FIELDS = [
-  "id",
-  "signature",
-  "date",
-  "publicationDate",
-  "lastUpdate",
-  "courtId",
-  "departmentId",
-  "type",
-  "excerpt",
-  "chairman",
-  "judges",
-  "themePhrases",
-  "references",
-  "legalBases",
-  "recorder",
-  "decision",
-  "reviser",
-  "publisher",
-  "dateOfPublication",
-  "dateOfLastUpdate",
-  "thesis",
-  "xPart",
-  "xPart/xName",
-  "xPart@xVersion",
-  "xPart@xLang",
-  "xPart@xYear",
-  "xPart@xDocType",
-  "xPart@xVolType",
-  "xPart@xVolNmbr",
-  "xPart@xFromPg",
-  "xPart@xToPage",
-  "xPart@xFlag",
-  "xPart@xEditor",
-  "xPart@xEditorFullName",
-  "xPart@xPublisher",
-  "xPart@xPublisherFullName",
-  "xPart@xClassifier",
-  "xPart@xClassifierFullName",
-  "xPart@xClassified",
-  "xPart@xml:space",
-] as const;
+/** The publisher's detail record, beside the fields its listing row states. */
+type PlNcourtDetailRecord = {
+  chairman?: unknown;
+  judges?: unknown;
+  themePhrases?: unknown;
+  references?: unknown;
+  legalBases?: unknown;
+  recorder?: unknown;
+  decision?: unknown;
+  reviser?: unknown;
+  publisher?: unknown;
+  dateOfPublication?: unknown;
+  dateOfLastUpdate?: unknown;
+};
 
-type PlNcourtSourceField = (typeof SOURCE_FIELDS)[number];
+/** The publisher's document envelope: its `xPart` element and attributes. */
+type PlNcourtDocumentRecord = {
+  xPart?: unknown;
+  "xPart/xName"?: unknown;
+  "xPart@xVersion"?: unknown;
+  "xPart@xLang"?: unknown;
+  "xPart@xYear"?: unknown;
+  "xPart@xDocType"?: unknown;
+  "xPart@xVolType"?: unknown;
+  "xPart@xVolNmbr"?: unknown;
+  "xPart@xFromPg"?: unknown;
+  "xPart@xToPage"?: unknown;
+  "xPart@xFlag"?: unknown;
+  "xPart@xEditor"?: unknown;
+  "xPart@xEditorFullName"?: unknown;
+  "xPart@xPublisher"?: unknown;
+  "xPart@xPublisherFullName"?: unknown;
+  "xPart@xClassifier"?: unknown;
+  "xPart@xClassifierFullName"?: unknown;
+  "xPart@xClassified"?: unknown;
+  "xPart@xml:space"?: unknown;
+};
+
+type PlNcourtPublisherRecord = PlNcourtListingRow &
+  PlNcourtDetailRecord &
+  PlNcourtDocumentRecord;
+
+type PlNcourtSourceField = keyof PlNcourtPublisherRecord;
 
 const isSourceField = (value: string): value is PlNcourtSourceField =>
-  SOURCE_FIELDS.some((field) => field === value);
+  Object.hasOwn(PL_NCOURT_SOURCE_FIELDS, value);
 
 const DOCUMENT_FIELD = {
   disposition: "stored",
@@ -542,7 +542,7 @@ const PL_NCOURT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "documentTypes" },
   },
-  excerpt: excludedSourceField(
+  excerpt: legacyExcludedSourceField(
     "the opening characters of the document the document part holds whole",
   ),
   chairman: JUDGES_FIELD,
@@ -608,10 +608,13 @@ const PL_NCOURT_SOURCE_FIELDS = {
   "xPart@xClassifier": DOCUMENT_FIELD,
   "xPart@xClassifierFullName": DOCUMENT_FIELD,
   "xPart@xClassified": DOCUMENT_FIELD,
-  "xPart@xml:space": excludedSourceField(
+  "xPart@xml:space": legacyExcludedSourceField(
     "a serialisation directive for the XML, not a statement about the judgment",
   ),
-} as const satisfies Record<PlNcourtSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlNcourtPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The names a stored document states: its root, its name, its attributes. */
 const contentFieldNames = (content: PlNcourtContent): string[] => [

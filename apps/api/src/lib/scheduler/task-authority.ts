@@ -85,6 +85,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "bilingual-run-reconcile.ts",
     "Hands queued runs back to their queue, whose worker resolves the requester's run actor.",
   ),
+  "caseLaw.backfillParsedInputState": platform(
+    "case-law-parsed-input-state-backfill.ts",
+    "Public legal corpus maintenance.",
+  ),
   "caseLaw.backfillProvisionState": platform(
     "case-law-provision-state-backfill.ts",
     "Public legal corpus maintenance.",
@@ -124,6 +128,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.foldPopulationCounts": platform(
     "case-law-population-fold.ts",
     "Folds public legal corpus population deltas under the load governor.",
+  ),
+  "caseLaw.seedPopulationCounts": platform(
+    "case-law-population-seed.ts",
+    "Seeds public legal corpus population counts under the load governor.",
   ),
   "caseLaw.refreshSitemapShards": platform(
     "case-law-sitemap-shard-refresh.ts",

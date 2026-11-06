@@ -2,10 +2,6 @@ import { panic } from "better-result";
 
 import { normalizeCountry } from "@stll/agent-input";
 import {
-  ECLI_COURT_REGISTRY,
-  type RegisteredCourt,
-} from "@stll/api-contract/case-law-courts";
-import {
   exactDecisionMatches,
   parseDecisionQuery,
   resolveDecisionIdentity,
@@ -18,7 +14,6 @@ import {
 } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { compareByLocale, compareCodeUnit } from "@stll/collation";
-import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -27,23 +22,22 @@ import {
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
+import {
+  admitResolvedDecision,
+  atNamedCourt,
+  decisionConstraints,
+  type DecisionResolveResponse,
+  namesCourt,
+  namesUnrecognizedCourt,
+  readDecisionCitation,
+} from "@/api/handlers/legal-resolve/decision-constraints";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  mentionsCourt,
-  readCourtFilter,
-  storedCourtIdentities,
-} from "@/api/mcp/case-law-court-filter";
-import {
-  MCP_CONTENT_MAX_CHARS,
-  resolveTextWindowBounds,
-  toPlainCorpusText,
-} from "@/api/mcp/tool-utils";
+import { toPlainCorpusText } from "@/api/mcp/tool-utils";
 
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
@@ -68,80 +62,14 @@ const decisionText = (
     if (document === null || document.blocks.length === 0) {
       return { status: "unavailable" };
     }
-    const { blocks } = document;
-    const plainText = toPlainCorpusText({ blocks, fulltext: null });
+    const plainText = toPlainCorpusText({
+      blocks: document.blocks,
+      fulltext: null,
+    });
     if (plainText === null) {
       return { status: "unavailable" };
     }
-    const totalChars = plainText.length;
-    if (totalChars <= MCP_CONTENT_MAX_CHARS) {
-      return {
-        status: "readable",
-        blocks,
-        extent: { type: "complete" },
-      };
-    }
-
-    const returnedBlocks: Block[] = [];
-    let returnedChars = 0;
-    for (const [index, block] of blocks.entries()) {
-      const served = servedBlockText(block, blocks[index - 1]);
-      const separatorChars =
-        returnedChars > 0 && block.plainText !== "" ? 2 : 0;
-      // Counted as the served text prints the block, with its number and
-      // note mark, so the extent agrees with `totalChars`.
-      const candidateChars =
-        returnedChars +
-        separatorChars +
-        (block.plainText === "" ? 0 : served.length);
-      if (candidateChars > MCP_CONTENT_MAX_CHARS) {
-        if (returnedChars === 0) {
-          // The number or note mark the served text prints before the block
-          // shares the window with its words.
-          const numberChars = served.length - block.plainText.length;
-          const { end } = resolveTextWindowBounds({
-            text: block.plainText,
-            offset: 0,
-            size: MCP_CONTENT_MAX_CHARS - numberChars,
-          });
-          const text = block.plainText.slice(0, end);
-          switch (block.type) {
-            case "heading":
-            case "paragraph":
-              returnedBlocks.push({
-                ...block,
-                inlines: [{ type: "text", text }],
-                plainText: text,
-              });
-              break;
-            case "table":
-              returnedBlocks.push({
-                ...block,
-                rows: [
-                  [{ inlines: [{ type: "text", text }], plainText: text }],
-                ],
-                plainText: text,
-              });
-              break;
-            case "image":
-              returnedBlocks.push({ ...block, alt: text, plainText: text });
-              break;
-            default:
-              block satisfies never;
-              return panic("Unhandled decision block type");
-          }
-          returnedChars = text.length + numberChars;
-        }
-        break;
-      }
-      returnedBlocks.push(block);
-      returnedChars = candidateChars;
-    }
-    return {
-      status: "readable",
-      blocks: returnedBlocks,
-      extent: { type: "partial", returnedChars, totalChars },
-    };
+    return { status: "readable", charCount: plainText.length };
   }
   return { status: "withheld", reason: "licence" };
 };
@@ -162,33 +90,6 @@ const candidateLabel = (row: DecisionIdentityRow): string =>
  * same docket always lists the same holders in the same places whatever order
  * the lookup returned them in.
  */
-type NamedCourt =
-  | { type: "none" }
-  | { type: "court"; courts: readonly [string, ...string[]] }
-  | { type: "unrecognized" };
-
-/**
- * The court a citation names around its docket. A court the vocabulary
- * cannot read still constrains the citation: no holder of the docket is
- * known to be that court, so none may be resolved in its place. Words that
- * name no court at all leave the docket unconstrained.
- */
-const readNamedCourt = (
-  embeddedIn: string | undefined,
-  identities: Parameters<typeof readCourtFilter>[0]["identities"],
-): NamedCourt => {
-  if (embeddedIn === undefined) {
-    return { type: "none" };
-  }
-  const reading = readCourtFilter({ court: embeddedIn, identities });
-  if (reading.type === "court") {
-    return { type: "court", courts: reading.courts };
-  }
-  return mentionsCourt(embeddedIn)
-    ? { type: "unrecognized" }
-    : { type: "none" };
-};
-
 const compareDecisionDate = (
   left: string | null,
   right: string | null,
@@ -230,10 +131,14 @@ const candidate = (row: DecisionIdentityRow) => ({
   }),
 });
 
-const resolvedDecision = async (
+/**
+ * The document of a decision. Only `admitResolvedDecision` turns it into a
+ * resolved answer, once the decision has met every constraint.
+ */
+const decisionDocument = async (
   row: DecisionIdentityRow,
   read: typeof readDecisionReaderSource,
-): Promise<Extract<LegalResolveResponse, { status: "resolved" }>> => {
+): Promise<ResolvedDecisionDocument> => {
   const content = await read({
     decisionId: row.id,
     phase: "blocks",
@@ -250,26 +155,31 @@ const resolvedDecision = async (
     slug: row.slug,
   });
   return {
-    status: "resolved",
-    document: {
-      kind: "decision",
-      decisionId: row.id,
-      identifier: row.ecli ?? row.caseNumber,
-      country: row.country,
-      caseNumber: row.caseNumber,
-      court: row.court,
-      decisionDate: row.decisionDate,
-      language: row.language,
-      languageAlternates: row.languageAlternates.map(({ id, language }) => ({
-        decisionId: id,
-        language,
-      })),
-      ecli: row.ecli,
-      readerUrl,
-      text: decisionText(content),
-    },
+    kind: "decision",
+    decisionId: row.id,
+    identifier: row.ecli ?? row.caseNumber,
+    country: row.country,
+    caseNumber: row.caseNumber,
+    court: row.court,
+    decisionDate: row.decisionDate,
+    language: row.language,
+    languageAlternates: row.languageAlternates.map(({ id, language }) => ({
+      decisionId: id,
+      language,
+    })),
+    ecli: row.ecli,
+    readerUrl,
+    text: decisionText(content),
   };
 };
+
+const otherCourtCandidate = (row: DecisionIdentityRow) => ({
+  ...candidate(row),
+  court: row.court,
+  decisionDate: row.decisionDate,
+  decisionType: row.decisionType,
+  subjectSummary: row.subjectSummary ?? null,
+});
 
 type ResolveDecisionOptions = {
   admission: LawReadAdmission;
@@ -278,7 +188,12 @@ type ResolveDecisionOptions = {
   dependencies?: DecisionResolverDependencies;
 };
 
-export const resolveDecision = async ({
+/**
+ * Every answer the resolver gives is typed `DecisionResolveResponse`, whose
+ * resolved member only `admitResolvedDecision` can make; the exported entry
+ * point widens it to the wire type at the very end.
+ */
+const resolveConstrainedDecision = async ({
   admission: _admission,
   country: countryInput,
   identifier,
@@ -286,7 +201,7 @@ export const resolveDecision = async ({
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
   } = {},
-}: ResolveDecisionOptions): Promise<LegalResolveResponse> => {
+}: ResolveDecisionOptions): Promise<DecisionResolveResponse> => {
   if (identifier.trim().length === 0) {
     return { status: "incomplete_identifier", missing: ["identifier"] };
   }
@@ -307,41 +222,37 @@ export const resolveDecision = async ({
   }
   const grammar = decisionDocketGrammarForCountry(country);
   const reporters = decisionReporterGrammarForJurisdiction(country);
-  const intent = parseDecisionQuery(identifier, { grammar, reporters });
-  if (intent.type !== "identifier") {
+  const parsed = parseDecisionQuery(identifier, { grammar, reporters });
+  if (parsed.type !== "identifier") {
     return { status: "not_found", reason: "no_exact_identity" };
   }
+  const { intent, courtText } = readDecisionCitation({
+    country,
+    identifier,
+    intent: parsed,
+    grammar,
+    reporters,
+  });
   const rows = await lookup({
     caseLawDb: caseLawPublicReadDb,
     country,
     countries: CASE_LAW_SURFACE_COUNTRIES.identity,
     locator: decisionIdentityLocatorOf(intent),
   });
-  // Read the court against the full registry, not just this docket's holders:
-  // a court with no hit must still constrain the citation.
-  const registry = Object.entries(ECLI_COURT_REGISTRY).find(
-    ([jurisdiction]) => jurisdiction === normalized.value.alpha2,
-  )?.[1];
-  const identities = storedCourtIdentities(country, [
-    ...new Set([
-      ...Object.values<RegisteredCourt>(registry ?? {}).map(({ name }) => name),
-      ...rows.map(({ court }) => court),
-    ]),
-  ]);
-  const namedCourt = readNamedCourt(
-    intent.kind === "docket" ? intent.embeddedIn : undefined,
-    identities,
+  const named = namesCourt(
+    decisionConstraints({
+      country,
+      intent,
+      reporters,
+      courtText,
+      holders: rows,
+    }),
   );
-  const namedCourts =
-    namedCourt.type === "court" ? namedCourt.courts : undefined;
-  const unrecognizedCourt = namedCourt.type === "unrecognized";
   // A sheet lookup intentionally does not load every member of a file.
   // Discover other courts through the indexed bare-family lookup while
   // retaining the exact read for selecting the requested decision.
   const docketRows =
-    (namedCourts !== undefined || unrecognizedCourt) &&
-    intent.kind === "docket" &&
-    intent.selector.kind !== "none"
+    named && intent.kind === "docket" && intent.selector.kind !== "none"
       ? await lookup({
           caseLawDb: caseLawPublicReadDb,
           country,
@@ -354,105 +265,118 @@ export const resolveDecision = async ({
           },
         })
       : [];
-  const family = exactDecisionMatches(
+  const holders = [
+    ...new Map([...rows, ...docketRows].map((row) => [row.id, row])).values(),
+  ];
+  // Read the court against the directory and every holder's stored court: a
+  // court with no hit must still constrain the citation.
+  const constraints = decisionConstraints({
+    country,
     intent,
-    [...new Map([...rows, ...docketRows].map((row) => [row.id, row])).values()],
-    { reporters },
-  );
-  const toOtherCourtCandidates = (holders: readonly DecisionIdentityRow[]) =>
-    holders
+    reporters,
+    courtText,
+    holders,
+  });
+  const family = exactDecisionMatches(intent, holders, { reporters });
+  const toOtherCourtCandidates = (
+    holdersElsewhere: readonly DecisionIdentityRow[],
+  ) =>
+    holdersElsewhere
       .toSorted(byCourtThenDate(family[0]?.language ?? "en"))
       .slice(0, LIMITS.caseLawLookupCandidatesMax)
-      .map((row) => ({
-        ...candidate(row),
-        court: row.court,
-        decisionDate: row.decisionDate,
-        decisionType: row.decisionType,
-        subjectSummary: row.subjectSummary ?? null,
-      }));
-  if (unrecognizedCourt && family.length > 0) {
+      .map(otherCourtCandidate);
+  if (namesUnrecognizedCourt(constraints) && family.length > 0) {
     return {
       status: "not_found",
       reason: "court_unrecognized",
       otherCourtCandidates: toOtherCourtCandidates(family),
     };
   }
-  const otherCourtCandidates =
-    namedCourts === undefined
-      ? []
-      : toOtherCourtCandidates(
-          family.filter(({ court }) => !namedCourts.includes(court)),
-        );
-  const scopedRows =
-    namedCourts === undefined
-      ? rows
-      : rows.filter(({ court }) => namedCourts.includes(court));
-  if (
-    namedCourts !== undefined &&
-    family.length > 0 &&
-    !family.some(({ court }) => namedCourts.includes(court))
-  ) {
+  const constrained = namesCourt(constraints);
+  const atCourt = (row: DecisionIdentityRow) => atNamedCourt(constraints, row);
+  const otherCourtCandidates = constrained
+    ? toOtherCourtCandidates(family.filter((row) => !atCourt(row)))
+    : [];
+  const scopedRows = constrained ? rows.filter(atCourt) : rows;
+  if (constrained && family.length > 0 && !family.some(atCourt)) {
     return {
       status: "not_found",
       reason: "not_at_this_court",
       otherCourtCandidates,
     };
   }
-  type LookupResolutionResponse = Exclude<
-    LegalResolveResponse,
-    { status: "country_unavailable" }
-  >;
-  const resolve = async (): Promise<LookupResolutionResponse> => {
-    const resolution = resolveDecisionIdentity(intent, scopedRows, {
-      reporters,
+  const admit = async (row: DecisionIdentityRow) =>
+    await admitResolvedDecision({
+      constraints,
+      row,
+      document: async (verified) => await decisionDocument(verified, read),
+      candidate,
+      otherCourtCandidate,
+      otherCourtCandidates,
     });
-    switch (resolution.status) {
-      case "none":
-        return { status: "not_found", reason: "no_exact_identity" };
-      case "ambiguous": {
-        // A printed sheet no stored decision is known to carry. One decision
-        // in the file is the one the reader asked for; several are left open.
-        if (resolution.reason === "selector_unmatched") {
-          // Only a printed sheet narrows the open candidates to decisions with
-          // no recorded sheet; a part selector leaves the whole file open, so a
-          // lone candidate may be a sibling under another part.
-          const [only, ...rest] = resolution.candidates;
-          const printedSheet =
-            intent.kind === "docket" && intent.selector.kind === "sheet";
-          return printedSheet && only !== undefined && rest.length === 0
-            ? await resolvedDecision(only, read)
-            : { status: "not_found", reason: "no_exact_identity" };
-        }
-        return {
-          status: "ambiguous",
-          candidates: resolution.candidates
-            .slice(0, LIMITS.caseLawLookupCandidatesMax)
-            .map(candidate),
-        };
-      }
-      case "unique":
-        return await resolvedDecision(resolution.decision, read);
-      case "incomplete_identifier": {
-        // A bare docket of a file that can hold several decisions. When the
-        // lookup finds exactly one, that is the decision: asking for a sheet
-        // the reader does not have only hides it. Several stay unresolved, and
-        // exact identity never picks one of them for the caller.
+  const withOtherCourts = <
+    T extends Exclude<DecisionResolveResponse, { status: "resolved" }>,
+  >(
+    response: T,
+  ): T =>
+    otherCourtCandidates.length === 0
+      ? response
+      : { ...response, otherCourtCandidates };
+  const resolution = resolveDecisionIdentity(intent, scopedRows, {
+    reporters,
+  });
+  switch (resolution.status) {
+    case "none":
+      return withOtherCourts({
+        status: "not_found",
+        reason: "no_exact_identity",
+      });
+    case "ambiguous": {
+      // A printed sheet no stored decision is known to carry. One decision
+      // in the file is the one the reader asked for; several are left open.
+      if (resolution.reason === "selector_unmatched") {
+        // Only a printed sheet narrows the open candidates to decisions with
+        // no recorded sheet; a part selector leaves the whole file open, so a
+        // lone candidate may be a sibling under another part.
         const [only, ...rest] = resolution.candidates;
-        if (only !== undefined && rest.length === 0) {
-          return await resolvedDecision(only, read);
-        }
-        return {
-          status: "incomplete_identifier",
-          missing: [...resolution.missing],
-        };
+        const printedSheet =
+          intent.kind === "docket" && intent.selector.kind === "sheet";
+        return printedSheet && only !== undefined && rest.length === 0
+          ? await admit(only)
+          : withOtherCourts({
+              status: "not_found",
+              reason: "no_exact_identity",
+            });
       }
-      default:
-        resolution satisfies never;
-        return panic("Unhandled decision identity resolution");
+      return withOtherCourts({
+        status: "ambiguous",
+        candidates: resolution.candidates
+          .slice(0, LIMITS.caseLawLookupCandidatesMax)
+          .map(candidate),
+      });
     }
-  };
-  const result = await resolve();
-  return otherCourtCandidates.length === 0
-    ? result
-    : { ...result, otherCourtCandidates };
+    case "unique":
+      return await admit(resolution.decision);
+    case "incomplete_identifier": {
+      // A bare docket of a file that can hold several decisions. When the
+      // lookup finds exactly one, that is the decision: asking for a sheet
+      // the reader does not have only hides it. Several stay unresolved, and
+      // exact identity never picks one of them for the caller.
+      const [only, ...rest] = resolution.candidates;
+      if (only !== undefined && rest.length === 0) {
+        return await admit(only);
+      }
+      return withOtherCourts({
+        status: "incomplete_identifier",
+        missing: [...resolution.missing],
+      });
+    }
+    default:
+      resolution satisfies never;
+      return panic("Unhandled decision identity resolution");
+  }
 };
+
+export const resolveDecision = async (
+  options: ResolveDecisionOptions,
+): Promise<LegalResolveResponse> => await resolveConstrainedDecision(options);

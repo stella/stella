@@ -1,10 +1,30 @@
+import { TaggedError } from "better-result";
+
+import type { OAuthCallbackErrorCode } from "@stll/api-contract/oauth-callback-error";
+import { OAUTH_CALLBACK_ERROR_CODES } from "@stll/api-contract/oauth-callback-error";
+import { declareFingerprintFields } from "@stll/errors/fingerprint-fields";
+
 import {
   notifyUserError,
   reportUserVisibleError,
 } from "@/lib/errors/user-toast";
 
-class OAuthCallbackError extends Error {
-  override name = "OAuthCallbackError";
+const UNKNOWN_OAUTH_CALLBACK_ERROR = "unknown";
+
+type OAuthCallbackErrorReason =
+  OAuthCallbackErrorCode | typeof UNKNOWN_OAUTH_CALLBACK_ERROR;
+
+const oauthCallbackErrorReason = (code: string): OAuthCallbackErrorReason =>
+  OAUTH_CALLBACK_ERROR_CODES.find((known) => known === code) ??
+  UNKNOWN_OAUTH_CALLBACK_ERROR;
+
+class OAuthCallbackError extends TaggedError("OAuthCallbackError")<{
+  message: string;
+  reason: OAuthCallbackErrorReason;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
 }
 
 type OAuthErrorReporter = (
@@ -29,8 +49,12 @@ export const reportOAuthCallbackError = ({
   if (errorCode === undefined) {
     return;
   }
-  const error = new OAuthCallbackError(errorCode);
-  if (errorCode === "account_not_linked") {
+  const reason = oauthCallbackErrorReason(errorCode);
+  const error = new OAuthCallbackError({
+    message: `OAuth callback failed: ${reason}`,
+    reason,
+  });
+  if (reason === "account_not_linked") {
     reportWithoutToast(error, "auth", "/auth/error");
     return;
   }

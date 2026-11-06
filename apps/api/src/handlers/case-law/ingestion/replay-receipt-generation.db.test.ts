@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { caseLawDecisions, caseLawReplayBlocked } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
+import { caseLawParsedInputStateStatements } from "@/api/tests/pglite-schema";
 
 import type { BackgroundReplayBatch } from "./background-replay";
 import { completeReplayReceipt } from "./background-replay-store";
@@ -36,6 +37,7 @@ CREATE TABLE case_law_decisions (
   parsed_source_hash varchar(64),
   parsed_source_hash_version integer,
   parsed_source_raw_s3_key text,
+  parsed_input_state text,
   redacted_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now(),
   corpus_mirror_status text NOT NULL DEFAULT 'settled'
@@ -67,6 +69,9 @@ CREATE TABLE case_law_replay_blocked (
 const createDatabase = async () => {
   const client = new PGlite();
   await client.exec(SCHEMA);
+  for (const statement of caseLawParsedInputStateStatements()) {
+    await client.exec(statement);
+  }
   await client.exec(`
     INSERT INTO case_law_sources VALUES ('${SOURCE_ID}');
     INSERT INTO case_law_decisions

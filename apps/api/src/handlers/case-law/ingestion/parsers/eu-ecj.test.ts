@@ -931,6 +931,36 @@ test("excludes script and style from the keyword metadata chain", () => {
   expect(keywords).toEqual(["First", "Second"]);
 });
 
+test("a range's closing number stays in its keyword, with either separator spacing", () => {
+  const keywordsOf = (chain: string) =>
+    parseEcjDecisionHtml({
+      caseNumber: "C-383/07",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "62007CJ0383",
+      html: `<body><p class='coj-sum-title-1'>OTSUS</p><p class='coj-index'>${chain}</p><p class='coj-normal'>Body.</p></body>`,
+    }).keywords;
+  // The chain of C-383/07 in Estonian: paragraphs 1 to 3 of Article 1.
+  expect(
+    keywordsOf(
+      "„Eelotsusetaotlus — Määrus (EÜ) nr 258/97 — Artikli 1 lõiked 1 — 3 — Uuendtoit”",
+    ),
+  ).toEqual([
+    "Eelotsusetaotlus",
+    "Määrus (EÜ) nr 258/97",
+    "Artikli 1 lõiked 1 — 3",
+    "Uuendtoit",
+  ]);
+  expect(keywordsOf("(Appeal — Article 2(1) — 3 — 2003 reform)")).toEqual([
+    "Appeal",
+    "Article 2(1) — 3",
+    "2003 reform",
+  ]);
+});
+
 const parseStem = async (stem: string): Promise<Block[]> => {
   const html = await readFixture(`${stem}.html.gz`);
   if (html === undefined) {
