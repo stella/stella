@@ -42,6 +42,34 @@ const canonicalDocketArbitraries = {
             .padStart(4, "0")}`,
       ),
   ),
+  BRA: fc.oneof(
+    fc
+      .tuple(
+        fc.constantFrom("RE", "ARE", "ADI", "HC", "REsp", "AREsp", "MS"),
+        fc.integer({ min: 1, max: 99_999_999 }),
+        fc.constantFrom("", "/SP", "/DF"),
+        fc.constantFrom("", "AgInt no ", "EDcl no AgRg no "),
+        fc.constantFrom("", " AgR", " AgR-ED", " ED-segundos"),
+      )
+      .map(
+        ([className, number, state, incidents, trailing]) =>
+          `${incidents}${className} ${number.toLocaleString("pt-BR")}${state}${trailing}`,
+      ),
+    fc
+      .tuple(
+        fc.integer({ min: 1, max: 9_999_999 }),
+        fc.integer({ min: 0, max: 99 }),
+        fc.integer({ min: 1950, max: 2099 }),
+        fc.integer({ min: 1, max: 9 }),
+        fc.integer({ min: 0, max: 27 }),
+        fc.integer({ min: 0, max: 9999 }),
+        fc.constantFrom("", "RR - ", "Ag-AIRR-", "ApCiv "),
+      )
+      .map(
+        ([sequence, check, year, branch, tribunal, origin, lead]) =>
+          `${lead}${sequence}-${String(check).padStart(2, "0")}.${year}.${branch}.${String(tribunal).padStart(2, "0")}.${String(origin).padStart(4, "0")}`,
+      ),
+  ),
   CZE: fc.oneof(
     fc
       .tuple(
@@ -348,6 +376,35 @@ describe("declared decision docket grammars", () => {
     }
   });
 
+  test("Brazilian dockets are read only under their own scope", () => {
+    // Short class numbers ("MS 13", "AP 470") and bare twenty-digit runs occur
+    // in text that names no Brazilian case, so an unscoped entry never reaches
+    // the grammar.
+    for (const {
+      canonical,
+      variants,
+    } of DECISION_DOCKET_GRAMMAR_FIXTURES.BRA) {
+      for (const docket of [canonical, ...variants]) {
+        expect([docket, parseDecisionDocket(docket)]).toEqual([docket, null]);
+        expect(
+          parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.BRA })
+            ?.jurisdiction,
+        ).toBe("BRA");
+      }
+    }
+    for (const text of ["MS 13", "AP 470", "12345678901234567890"]) {
+      expect([text, parseDecisionDocket(text)]).toEqual([text, null]);
+    }
+  });
+
+  test("a Brazilian class number is bounded the same dotted and undotted", () => {
+    const grammar = DECISION_DOCKET_GRAMMARS.BRA;
+    expect(grammar.parse("RE 999.999.999")?.formatted).toBe("RE 999999999");
+    expect(grammar.parse("RE 999999999")?.formatted).toBe("RE 999999999");
+    expect(grammar.parse("RE 1.234.567.890")).toBeNull();
+    expect(grammar.parse("RE 1234567890")).toBeNull();
+  });
+
   test("no other jurisdiction's docket reads as a United States one", () => {
     // Unscoped parsing takes the first grammar that accepts, so a new grammar
     // must not reach a docket another jurisdiction already reads.
@@ -359,11 +416,15 @@ describe("declared decision docket grammars", () => {
       }
       for (const { canonical, variants } of fixtures) {
         for (const docket of [canonical, ...variants]) {
-          const claimed = parseDecisionDocket(docket)?.jurisdiction;
-          expect([docket, claimed !== undefined && claimed !== "USA"]).toEqual([
-            docket,
-            true,
-          ]);
+          // Brazil is read only under its own scope, so nothing claims its
+          // dockets unscoped; the United States grammar must still refuse them.
+          if (jurisdiction !== "BRA") {
+            const claimed = parseDecisionDocket(docket)?.jurisdiction;
+            expect([
+              docket,
+              claimed !== undefined && claimed !== "USA",
+            ]).toEqual([docket, true]);
+          }
           expect([docket, DECISION_DOCKET_GRAMMARS.USA.parse(docket)]).toEqual([
             docket,
             null,

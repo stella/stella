@@ -568,6 +568,7 @@ export const describeDocketFamilyIdentity = (
  */
 const GRAMMAR_SCENARIO_COURTS = {
   AUT: { court: "Bundesverwaltungsgericht", courtId: null, language: "de" },
+  BRA: { court: "Supremo Tribunal Federal", courtId: null, language: "pt" },
   CZE: { court: "Nejvyšší správní soud", courtId: null, language: "cs" },
   EU: { court: "Court of Justice", courtId: null, language: "en" },
   GBR: { court: "UKSC", courtId: null, language: "en" },

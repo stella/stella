@@ -44,6 +44,7 @@ import {
 } from "@stll/api-contract/decision-docket-grammar";
 
 import { DECISION_DATE_BOUNDS } from "@/api/lib/dates";
+import { sqlCaseExpression } from "@/api/lib/sql-case-expression";
 
 /** The `case_law_decisions` CHECK that holds `decisionDateWithinBoundsSql`. */
 export const CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT =
@@ -158,17 +159,56 @@ export const decisionDateWithinBoundsSql = (
 
 const quoteLiteral = (value: string) => `'${value.replaceAll("'", "''")}'`;
 
-/** Translate the grammar's Unicode classes to PostgreSQL ARE classes. */
-const postgresPattern = (pattern: RegExp) => {
+/** Translate the grammar's classes, retaining only the year capture for substring. */
+const postgresPatternSource = (pattern: RegExp) => {
   const source = pattern.source
-    .replaceAll(/\(\?<\w+>/gu, "(?:")
-    .replaceAll(String.raw`\p{L}`, "[[:alpha:]]")
-    .replaceAll(String.raw`\p{Lu}`, "[[:upper:]]")
-    .replaceAll(String.raw`\p{Ll}`, "[[:lower:]]");
-  if (source.includes(String.raw`\p{`)) {
-    return panic("Filing-year SQL has an unsupported Unicode class");
+    .replaceAll("(?<year>", "(")
+    .replaceAll(/\(\?<\w+>/gu, "(?:");
+  const unicodeClasses = [
+    [String.raw`\p{L}`, "[:alpha:]"],
+    [String.raw`\p{Lu}`, "[:upper:]"],
+    [String.raw`\p{Ll}`, "[:lower:]"],
+  ] as const;
+  let context: "pattern" | "character-class" = "pattern";
+  let translated = "";
+  for (let index = 0; index < source.length; index += 1) {
+    const character =
+      source[index] ?? panic("Missing filing-year regex character");
+    if (character === "\\") {
+      const property = unicodeClasses.find(([token]) =>
+        source.startsWith(token, index),
+      );
+      if (property !== undefined) {
+        const [token, posix] = property;
+        translated += context === "character-class" ? posix : `[${posix}]`;
+        index += token.length - 1;
+        continue;
+      }
+      if (
+        source.startsWith(String.raw`\p{`, index) ||
+        source.startsWith(String.raw`\P{`, index)
+      ) {
+        return panic("Filing-year SQL has an unsupported Unicode class");
+      }
+      const escaped =
+        source[index + 1] ?? panic("Unterminated filing-year regex escape");
+      // ECMAScript digits are ASCII; PostgreSQL's digit class is locale-aware.
+      if (escaped === "d") {
+        translated += context === "character-class" ? "0-9" : "[0-9]";
+      } else {
+        translated += `${character}${escaped}`;
+      }
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      context = "character-class";
+    } else if (character === "]") {
+      context = "pattern";
+    }
+    translated += character;
   }
-  return `folded ${pattern.ignoreCase ? "~*" : "~"} ${quoteLiteral(source)}`;
+  return `${pattern.ignoreCase ? "(?i)" : ""}${translated}`;
 };
 
 /** Migration DDL derived from every registered grammar's explicit policy. */
@@ -179,13 +219,40 @@ export const decisionDocketFilingYearFunctionSql = (
     ({ jurisdiction, filingYearRule }) => {
       switch (filingYearRule.type) {
         case "none-in-format":
-          return `WHEN ${quoteLiteral(jurisdiction)} THEN jsonb_build_object('type', 'none-in-format')`;
-        case "encoded":
-          return `WHEN ${quoteLiteral(jurisdiction)} THEN CASE
-        WHEN (${filingYearRule.patterns.map(postgresPattern).join(" OR ")})
-          AND substring(folded FROM '/([0-9]{4})$')::integer > 0
-        THEN jsonb_build_object('type', 'known', 'year', substring(folded FROM '/([0-9]{4})$')::integer)
-        ELSE jsonb_build_object('type', 'unparseable') END`;
+          return `WHEN jurisdiction = ${quoteLiteral(jurisdiction)} THEN jsonb_build_object('type', 'none-in-format')`;
+        case "formats": {
+          const formats = filingYearRule.formats.flatMap((format) =>
+            format.patterns.map((pattern) => {
+              const source = postgresPatternSource(pattern);
+              const matches = `folded ${pattern.ignoreCase ? "~*" : "~"} ${quoteLiteral(source)}`;
+              switch (format.type) {
+                case "none-in-format":
+                  return `WHEN ${matches} THEN jsonb_build_object('type', 'none-in-format')`;
+                case "encoded": {
+                  if (!pattern.source.includes("(?<year>")) {
+                    return panic(
+                      "Encoded filing-year SQL format has no year capture",
+                    );
+                  }
+                  const year = `substring(folded FROM ${quoteLiteral(source)})`;
+                  return `WHEN ${matches} THEN CASE
+          WHEN length(${year}) = 4 AND ${year}::integer > 0
+          THEN jsonb_build_object('type', 'known', 'year', ${year}::integer)
+          ELSE jsonb_build_object('type', 'unparseable') END`;
+                }
+                default:
+                  format satisfies never;
+                  return panic("Unknown docket filing-year SQL format");
+              }
+            }),
+          );
+          return `WHEN jurisdiction = ${quoteLiteral(jurisdiction)} THEN ${sqlCaseExpression(
+            {
+              branches: formats,
+              fallback: "jsonb_build_object('type', 'unparseable')",
+            },
+          )}`;
+        }
         default:
           filingYearRule satisfies never;
           return panic("Unknown docket filing-year SQL rule");
@@ -207,10 +274,7 @@ AS $function$
       regexp_replace(normalize(coalesce(case_number, ''), NFKC), ${quoteLiteral(`[${DECISION_DASH_CLASS_SOURCE}]`)}, '-', 'g'),
       U&'[${whitespace}]+', ' ', 'g')), '-[0-9]{1,4}$', '') AS folded
   )
-  SELECT CASE jurisdiction
-    ${branches.join("\n    ")}
-    ELSE jsonb_build_object('type', 'unparseable')
-  END FROM normalized
+  SELECT ${sqlCaseExpression({ branches, fallback: "jsonb_build_object('type', 'unparseable')" })} FROM normalized
 $function$;`;
 };
 
