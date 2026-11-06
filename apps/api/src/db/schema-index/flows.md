@@ -40,22 +40,22 @@ flow_runs.finished_at          timestamptz      null                    flows.ts
 flow_runs.created_at           timestamptz      default,not null        flows.ts:107
 ```
 
-## flow_run_steps · `flowRunSteps` · flows.ts:153
+## flow_run_steps · `flowRunSteps` · flows.ts:155
 
 One step in a run.
 
 ```text
-flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:156
-flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:157
-flow_run_steps.id                                        pUuid            pk,not null       flows.ts:158
-flow_run_steps.workspace_id                              safeWorkspaceId  fk,not null       flows.ts:159
-flow_run_steps.run_id                                    safeUuid         fk,not null       flows.ts:160
-flow_run_steps.index                                     integer          not null          flows.ts:161
-flow_run_steps.kind                                      text             not null          flows.ts:162
-flow_run_steps.status                                    text             default,not null  flows.ts:163
-flow_run_steps.output                                    jsonb            null              flows.ts:167
-flow_run_steps.error                                     text             null              flows.ts:168
-flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:178  The task a review gate raises for its reviewer while the run waits.
-flow_run_steps.started_at                                timestamptz      null              flows.ts:182
-flow_run_steps.finished_at                               timestamptz      null              flows.ts:183
+flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:158
+flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:159
+flow_run_steps.id                                        pUuid            pk,not null       flows.ts:160
+flow_run_steps.workspace_id                              safeWorkspaceId  fk,not null       flows.ts:161
+flow_run_steps.run_id                                    safeUuid         fk,not null       flows.ts:162
+flow_run_steps.index                                     integer          not null          flows.ts:163
+flow_run_steps.kind                                      text             not null          flows.ts:164
+flow_run_steps.status                                    text             default,not null  flows.ts:165
+flow_run_steps.output                                    jsonb            null              flows.ts:169
+flow_run_steps.error                                     text             null              flows.ts:170
+flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:180  The task a review gate raises for its reviewer while the run waits.
+flow_run_steps.started_at                                timestamptz      null              flows.ts:184
+flow_run_steps.finished_at                               timestamptz      null              flows.ts:185
 ```
