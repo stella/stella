@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -4197,6 +4198,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4254,6 +4256,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),
