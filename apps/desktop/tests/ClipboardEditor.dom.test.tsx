@@ -49,7 +49,7 @@ const renderEditor = async (native: { read: NativeRead }) => {
     async (command, payload) => {
       if (command === "clipboard_get_editor_context") {
         if (native.read.type === "failed") {
-          // A native command rejects with its bare message.
+          // oxlint-disable-next-line prefer-promise-reject-errors -- a native command rejects with a plain string
           await Promise.reject(native.read.message);
         }
         return CONTEXT;
