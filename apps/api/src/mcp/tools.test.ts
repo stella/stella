@@ -3063,7 +3063,12 @@ describe("OpenAI-compatible MCP tools", () => {
           toolName: "search_case_law",
         }),
       );
-      return (payload as { results: Record<string, unknown>[] }).results.at(0);
+      return v
+        .parse(
+          v.object({ results: v.array(v.record(v.string(), v.unknown())) }),
+          payload,
+        )
+        .results.at(0);
     };
 
     const http = await linksOf("https://example.test/decision");

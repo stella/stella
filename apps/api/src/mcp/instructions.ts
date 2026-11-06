@@ -35,7 +35,7 @@ export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
  * snake_case input-name ratchet that enforces the input half structurally.
  */
 export const MCP_CASING_RULE =
-  "Casing: tool inputs are snake_case (`matter_id`); response payloads are mostly camelCase (`matterId`, `entityId`, `nextCursor`); the publisher link is `source_url`.";
+  "Casing: inputs are snake_case (`matter_id`); outputs mostly camelCase (`matterId`, `nextCursor`), with `source_url`.";
 
 const defaultInstructions = (
   mode: "advanced" | "default",
