@@ -67,11 +67,13 @@ export type CorpusSearchAdmission =
 type CreateCorpusSearchAdmissionOptions = {
   slots: number;
   maxWaiters?: number | undefined;
+  now?: (() => number) | undefined;
 };
 
 export const createCorpusSearchAdmission = ({
   slots,
   maxWaiters = LIMITS.corpusIndexSearchQueueMax,
+  now = () => performance.now(),
 }: CreateCorpusSearchAdmissionOptions) => {
   const budget = createWorkBudget({
     slots,
@@ -93,13 +95,13 @@ export const createCorpusSearchAdmission = ({
     waitLimit: AbortSignal;
     signal?: AbortSignal | undefined;
   }): Promise<CorpusSearchAdmission> => {
-    const startedAt = performance.now();
+    const startedAt = now();
     const result = await budget.acquire({
       signal:
         signal === undefined ? waitLimit : AbortSignal.any([signal, waitLimit]),
       rank: admissionRank(),
     });
-    const waitedMs = performance.now() - startedAt;
+    const waitedMs = now() - startedAt;
     if (result.type === "admitted") {
       // A read admitted without queueing waited for nothing: the time to
       // resume after the await is not time spent waiting for a slot.
