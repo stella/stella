@@ -1381,7 +1381,7 @@ describe("harness holder over its socket", () => {
         fileName: "report.txt",
       });
       const lastFinish = chunks.findLastIndex(
-        (chunk) => chunk["type"] === "RUN_FINISHED",
+        (chunk) => chunk.type === "RUN_FINISHED",
       );
       expect(reportAt).toBeGreaterThanOrEqual(0);
       expect(reportAt).toBeLessThan(lastFinish);
