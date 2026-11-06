@@ -419,6 +419,7 @@ export const ENUM_COLUMNS = {
   expenses: ["category"],
   extracted_content: ["entity_feature_gate"],
   extraction_runs: ["scope"],
+  feature_enrolments: ["feature_id"],
   feedback_reports: ["area", "kind", "via"],
   fields: ["entity_feature_gate"],
   file_chat_threads: ["entity_feature_gate"],

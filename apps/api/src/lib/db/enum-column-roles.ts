@@ -330,6 +330,9 @@ export const ENUM_COLUMN_ROLES = {
   extraction_runs: {
     scope: ATTRIBUTE,
   },
+  feature_enrolments: {
+    feature_id: ATTRIBUTE,
+  },
   feedback_reports: {
     area: ATTRIBUTE,
     kind: ATTRIBUTE,
