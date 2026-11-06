@@ -8,7 +8,7 @@ export default {
     {
       introducedBy: "20261010212100_case_law_publication_filter",
       legacyName: "case_law_decisions_sitemap_shard_idx",
-      replacementNames: ["case_law_decisions_sitemap_shard_published_idx"],
+      replacementNames: ["case_law_decisions_sitemap_month_published_idx"],
     },
   ],
 } satisfies OnlineMigrationEntry;
