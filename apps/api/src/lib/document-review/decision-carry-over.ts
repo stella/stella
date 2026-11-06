@@ -26,6 +26,7 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
 import {
   DOCUMENT_REVIEW_DECISION,
@@ -201,20 +202,26 @@ export const carryOverDecisions = async ({
     .orderBy(desc(documentReviewRuns.createdAt), desc(documentReviewRuns.id))
     .limit(1);
 
-  const runs = await tx
-    .select({ id: documentReviewRuns.id, basis: documentReviewRuns.basis })
-    .from(documentReviewRuns)
-    .where(
-      and(
-        eq(documentReviewRuns.workspaceId, workspaceId),
-        // sql-perf-allow: bounded by this run and one previous run
-        or(
-          eq(documentReviewRuns.id, runId),
-          inArray(documentReviewRuns.id, previousRun),
+  const runsRead = await readBounded(
+    tx
+      .select({ id: documentReviewRuns.id, basis: documentReviewRuns.basis })
+      .from(documentReviewRuns)
+      .where(
+        and(
+          eq(documentReviewRuns.workspaceId, workspaceId),
+          // sql-perf-allow: bounded by this run and one previous run
+          or(
+            eq(documentReviewRuns.id, runId),
+            inArray(documentReviewRuns.id, previousRun),
+          ),
         ),
       ),
-    )
-    .limit(2);
+    2,
+  );
+  if (runsRead.type === "overflow") {
+    return panic("Carry-over matched more than this run and one previous run");
+  }
+  const runs = runsRead.rows;
   const thisRun =
     runs.find(({ id }) => id === runId) ??
     panic("Carry-over ran for a review run that does not exist");
