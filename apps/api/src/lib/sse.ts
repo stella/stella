@@ -837,7 +837,13 @@ const queueUserDelivery = (
   );
 };
 
-/** Push an SSE event to local connections for an entire organization. */
+/**
+ * Push an SSE event to local connections for an entire organization: every
+ * matter stream, which refreshes that matter's views, and every user stream,
+ * which each signed-in tab holds wherever it is, so organization-wide lists
+ * (contacts, for one) refresh on pages that have no matter open. The event is
+ * content-free — a resource type, never an id — like the rest of this fan-out.
+ */
 const broadcastLocalToOrganization = (
   organizationId: SafeId<"organization">,
   event: OrganizationRealtimeEvent,
@@ -853,6 +859,18 @@ const broadcastLocalToOrganization = (
     }
     if (set.size === 0 && connections.get(workspaceId) === set) {
       connections.delete(workspaceId);
+    }
+  }
+
+  for (const [userId, set] of userConnections) {
+    for (const conn of set) {
+      if (conn.organizationId !== organizationId) {
+        continue;
+      }
+      enqueueOrDrop({ chunk, connection: conn, set });
+    }
+    if (set.size === 0 && userConnections.get(userId) === set) {
+      userConnections.delete(userId);
     }
   }
 };

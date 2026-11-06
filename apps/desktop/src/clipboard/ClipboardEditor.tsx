@@ -72,6 +72,7 @@ import {
 import type { ClipboardGroupDraft } from "./ClipboardGroupFields";
 import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
+import { useClipsCopyFailed } from "./clips-copy-routing";
 
 type SaveState =
   { type: "idle" } | { type: "saving" } | { message: string; type: "error" };
@@ -564,6 +565,7 @@ type ClipboardEditorProps = {
 
 const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
   const t = useTranslations("clipboard");
+  const copyFailed = useClipsCopyFailed();
   const nameFieldId = useId();
   const groupFieldId = useId();
   const reportIdle = useEffectEvent(onIdle);
@@ -1215,6 +1217,11 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         {state.save.type === "error" ? (
           <p className="text-destructive text-xs" role="alert">
             {state.save.message}
+          </p>
+        ) : null}
+        {copyFailed ? (
+          <p className="text-destructive text-xs" role="alert">
+            {t("errorPaste")}
           </p>
         ) : null}
       </div>

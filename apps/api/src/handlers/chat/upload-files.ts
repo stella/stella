@@ -3,6 +3,10 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+} from "@stll/api-contract";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -493,6 +497,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat DOCX attachment did not contain extractable text",
           }),
@@ -526,6 +531,7 @@ export const hydrateFilePart = async ({
         }
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
             status: 422,
             message: "Chat XLSX attachment did not contain extractable text",
           }),
@@ -722,6 +728,7 @@ export const uploadUserFile = async ({
     if (!isChatFileMimeType(file.mimeType)) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentUnsupported,
           status: 422,
           message: "Unsupported file type",
         }),
@@ -749,6 +756,7 @@ export const uploadUserFile = async ({
       return Result.err(
         FileScanRejectedError.is(scanResult.error)
           ? new HandlerError({
+              code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
               status: 422,
               message: "Chat attachment was rejected by the security scan",
             })
@@ -783,6 +791,7 @@ export const uploadUserFile = async ({
     if (file.mimeType === XLSX_MIME_TYPE && extractedText === null) {
       return Result.err(
         new HandlerError({
+          code: CHAT_INPUT_REFUSAL_CODE.attachmentNoText,
           status: 422,
           message: "Chat XLSX attachment did not contain extractable text",
         }),

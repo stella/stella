@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.66.0
+
+### Minor Changes
+
+- [#7897](https://github.com/stella/stella/pull/7897) [`21f18d7`](https://github.com/stella/stella/commit/21f18d7eae6c328149c77ebf2a1baff624de33c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendar` blocks take a `topic` tone: a lighter tint from the matter palette, keyed by a stable topic key and drawn without a matter's edge. `mixed` blocks no longer draw diagonal stripes.
+
+- [#7899](https://github.com/stella/stella/pull/7899) [`e5ee9a9`](https://github.com/stella/stella/commit/e5ee9a9c120441b0bea4476df78e1432ace3146d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `TimeField` and `TimeFieldGroup` (`@stll/ui/time-field`): a wall-clock time to the minute as hour and minute selects in the locale's own clock and numerals. Fields in one `TimeFieldGroup` share a grid, so their labels, hours and minutes line up; in a narrow container each label moves above its selects, which never shrink below their value. The date picker's time row now uses it.
+
+- [#7619](https://github.com/stella/stella/pull/7619) [`254bf05`](https://github.com/stella/stella/commit/254bf058b481c2ea137f8e37664a37b80c537190) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AnimatedPreview` (`@stll/ui/animated-preview`): a frame of ordered stages that cross-fade into each other once or in a loop, nestable inside a stage, with `AnimatedPreviewMotion` for a carry gesture and `AnimatedPreviewCard` for a hover and focus preview that describes its trigger. Reduced motion shows the final stage statically; the styles ship through `@stll/ui/theme.css`, and `@stll/ui/use-prefers-reduced-motion` exports the preference hook.
+
+- [#7867](https://github.com/stella/stella/pull/7867) [`72b68c8`](https://github.com/stella/stella/commit/72b68c8fc423618a9e060ead157dc3f2f30e1583) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `DocumentMark` (`@stll/ui/document-mark`), a file format's mark (PDF, Word, Excel, PowerPoint, RTF, ODT, ODS, CSV, Markdown) drawn from one artwork source, with a React Native renderer under the `react-native` condition.
+
 ## 0.65.1
 
 ### Patch Changes

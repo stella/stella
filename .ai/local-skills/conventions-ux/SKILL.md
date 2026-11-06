@@ -113,6 +113,16 @@ backgrounds get a subtle `outline: 1px solid rgb(0 0 0 / 0.06)` edge.
 
 ## Interactions & Animations
 
+- **Right-click means the object's own actions.** An object the user
+  can act on (a matter, document, message, row, card, sidebar item,
+  tab) hands `EntityActions` (`@stll/ui/entity-actions`) one action
+  list; its "…" button (`EntityActionsButton`) and its right-click
+  menu both render that list. Shift + right-click, editable text,
+  links and selected text keep the native menu, and the desktop app
+  shows no browser menu elsewhere. `no-raw-context-menu` rejects a
+  hand-written `onContextMenu` or `contextmenu` listener.
+  [test: packages/ui/src/components/entity-actions.dom.test.tsx,
+  packages/ui/src/lib/native-context-menu.dom.test.ts]
 - **Interruptible animations:** use CSS `transition` for
   interactive state changes (hover, press) so the browser can
   interrupt mid-animation. Reserve `@keyframes` for staged

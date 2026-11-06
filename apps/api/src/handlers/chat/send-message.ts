@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserExtensionCapability,
+  CHAT_INPUT_REFUSAL_CODE,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -17,7 +18,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
-import { isServerChatToolCall } from "@stll/api-contract/chat";
+import {
+  isHarnessChatToolCall,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
@@ -36,6 +40,7 @@ import {
   type ActiveChatSkillContext,
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/active-skill-context";
+import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import {
   chatMessageFromPersisted,
   getAwaitedApprovalToolNames,
@@ -91,6 +96,7 @@ import {
   parseMessage,
   requireUserMessageContent,
   resolveBrowserExtensionCapability,
+  toolCallOwnershipOf,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -289,7 +295,11 @@ import {
   isChatRefContext,
   resolveChatRefInputState,
 } from "@/api/lib/chat/ref-token";
-import { encodeChatRunTarget } from "@/api/lib/chat/run-target";
+import {
+  chatRunTargetOf,
+  sameChatRunTarget,
+  storedChatRunTarget,
+} from "@/api/lib/chat/run-target";
 import {
   type ChatThreadNamesRead,
   readChatThreadNames,
@@ -1331,15 +1341,15 @@ const keepThreadRunTarget = async ({
   if (!routedLocally || runTarget === undefined) {
     return Result.ok();
   }
-  const runsOn = encodeChatRunTarget(runTarget);
-  const stored = thread.data.chatRunTarget;
-  if (stored === runsOn) {
+  const runsOn = storedChatRunTarget(runTarget);
+  const stored = thread.data.chatLocalRunTarget;
+  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatRunTarget: runsOn })
+      .set({ chatLocalRunTarget: runsOn })
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1352,7 +1362,7 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatRunTarget: { old: stored, new: runsOn } },
+      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
     });
   });
 };
@@ -1789,7 +1799,7 @@ type PrepareValidatedIncomingMessageOptions = {
     memberRole: ChatToolsInput["memberRole"];
     pinServerValidatedWorkspaceId: ChatToolsInput["pinServerValidatedWorkspaceId"];
     requestedContextMatterIds: SafeId<"workspace">[];
-    workspaceStatusById: NonNullable<ChatToolsInput["workspaceStatusById"]>;
+    workspaceStatusById: ChatToolsInput["workspaceStatusById"];
   };
   lifecycle: ChatSendLifecycle;
   persistence: {
@@ -1986,6 +1996,7 @@ const prepareValidatedIncomingMessage = async ({
       resume,
       safeDb,
       threadId: body.threadId,
+      toolCallOwnership: toolCallOwnershipOf(body.runTarget),
       tools: validationTools,
       userId,
     });
@@ -2481,6 +2492,7 @@ export const createSendMessage = (
         ]),
       );
       const scope = yield* resolveChatScope({
+        admitted: "active",
         getWorkspaceAccess,
         workspaceId: body.workspaceId,
       });
@@ -2795,7 +2807,9 @@ export const createSendMessage = (
           keepThreadRunTarget({
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
-            routedLocally: localRun !== undefined,
+            // A resumed run keeps the policy it started with, so its target
+            // was stored then; storing this request's would misstate it.
+            routedLocally: localRun !== undefined && resume === undefined,
             runTarget: body.runTarget,
             safeDb,
             thread,
@@ -3456,6 +3470,8 @@ export const createSendMessage = (
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
                     allowDeferredServerInput: outcome.type === "awaiting-user",
                     message: responseMessage,
+                    // A turn on a computer carries only what its harness ran.
+                    ownership: localRun === undefined ? "cloud" : "harness",
                     tools: streamingTools,
                   });
                   if (Result.isError(validatedToolParts)) {
@@ -3572,6 +3588,9 @@ export const createSendMessage = (
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
                     known: chatContext.decisionPassageNumbers,
+                  }),
+                  answerQuoteChecker: createTurnAnswerQuoteChecker({
+                    caseLawDb: dependencies.caseLawDb,
                   }),
                   resolveAssistantTextRefs:
                     refRegistry.resolveAssistantTextRefs,
@@ -4179,6 +4198,7 @@ type ActiveFileFallbackForModel =
 
 const activeFileSizeLimitError = () =>
   new HandlerError({
+    code: CHAT_INPUT_REFUSAL_CODE.activeFileTooLarge,
     status: 422,
     message: `Active file exceeds the ${String(CHAT_CONTEXT_FILE_MAX_MEGABYTES)} MB chat context limit`,
   });
@@ -4236,6 +4256,7 @@ const readActiveFileFallbackForModel = async ({
       if (extracted.value === null) {
         return Result.err(
           new HandlerError({
+            code: CHAT_INPUT_REFUSAL_CODE.activeFileNoText,
             status: 422,
             message: "Active file does not contain extractable text",
           }),
@@ -4340,8 +4361,11 @@ const resolveAssistantPartRefs = ({
   unresolvedInputRefs,
   refRegistry,
 }: ResolveAssistantPartRefsProps): ChatMessage["parts"][number] => {
+  // A harness call is stored as its harness reported it: its name only
+  // collides with a registry tool's by chance, so no registry ref rule
+  // applies to it.
   const withDeclaredToolRefs: unknown =
-    part.type === "tool-call"
+    part.type === "tool-call" && !isHarnessChatToolCall(part)
       ? {
           ...part,
           ...("input" in part
@@ -4476,7 +4500,8 @@ const hydrateAssistantMessageRefs = ({
     inputState: ChatRefInputState,
     unresolvedInputRefs: readonly ChatUnresolvedInputRefContext[],
   ): unknown => {
-    if (part.type !== "tool-call") {
+    // Stored as its harness reported it; see `resolveAssistantPartRefs`.
+    if (part.type !== "tool-call" || isHarnessChatToolCall(part)) {
       return part;
     }
     const rawInput: unknown = "input" in part ? part.input : undefined;

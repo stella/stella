@@ -22,6 +22,7 @@ import {
   test,
 } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -48,6 +49,7 @@ import {
 } from "../../../scripts/fake-stella-turn";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
+import { packageCacheEnvironment } from "../package-cache";
 import { harnessEventsToChunks } from "../stream-chunks";
 import { createCodexHarnessAdapter } from "./adapter";
 import { startAppServer } from "./app-server-client";
@@ -64,6 +66,8 @@ const FAKE_SERVER = path.join(
   "../../../scripts/fake-codex-app-server.ts",
 );
 const MCP_TOKEN = "run-token-123";
+/** The computer's package cache; the turn never creates it. */
+const CACHE_DIR = path.join(tmpdir(), "stella-agent-package-cache");
 
 const cleanups: (() => void)[] = [];
 const backgroundErrors: unknown[] = [];
@@ -90,7 +94,7 @@ const harnessFor = (
   const adapter = createCodexHarnessAdapter({
     launch: { executable: process.execPath, args: [FAKE_SERVER, scenario] },
     codexHome,
-    environment: { FAKE_CODEX_LOG: logPath, PATH: process.env["PATH"] ?? "" },
+    environment: { FAKE_HARNESS_LOG: logPath, PATH: process.env["PATH"] ?? "" },
     clientVersion: "0.0.1",
     gracePeriodMs: 1000,
     requestTimeoutMs: 10_000,
@@ -115,7 +119,7 @@ const harnessFor = (
       .map((entry) => entry.received);
   const startup = () =>
     JSON.parse(readFileSync(logPath, "utf-8").split("\n")[0] ?? "{}").startup;
-  return { adapter, codexHome, workspaceDir, received, startup };
+  return { adapter, codexHome, workspaceDir, logPath, received, startup };
 };
 
 const transcript: ModelMessage[] = [
@@ -133,7 +137,7 @@ const turnInput = (
   workspaceDir,
   model: "gpt-test",
   instructions: "Use the stella MCP server.",
-  policy: { network: "open", fs: "workspace" },
+  policy: { network: "open", fs: "workspace", approvals: "ask" },
   mcp: {
     serverName: "stella",
     url: "https://mcp.example.test/mcp",
@@ -141,6 +145,7 @@ const turnInput = (
   },
   transcript,
   continuation: { type: "fresh" },
+  cacheDir: CACHE_DIR,
   ...overrides,
 });
 
@@ -197,7 +202,10 @@ describe("Codex adapter over a stdio app-server", () => {
   test("runs with the stella-owned CODEX_HOME in the workspace and sends the MCP bearer only over stdio", async () => {
     const { events, received, startup, codexHome, workspaceDir } =
       await run("tool_calls");
-    expect(startup()).toEqual({ codexHome, cwd: realpathSync(workspaceDir) });
+    expect(startup()).toMatchObject({
+      codexHome,
+      cwd: realpathSync(workspaceDir),
+    });
     const threadStart = received().find(
       ({ method }) => method === "thread/start",
     );
@@ -208,6 +216,9 @@ describe("Codex adapter over a stdio app-server", () => {
       sandbox: "workspace-write",
       config: {
         "sandbox_workspace_write.network_access": true,
+        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+        "sandbox_workspace_write.exclude_slash_tmp": false,
         "mcp_servers.stella": {
           url: "https://mcp.example.test/mcp",
           http_headers: { Authorization: `Bearer ${MCP_TOKEN}` },
@@ -223,6 +234,38 @@ describe("Codex adapter over a stdio app-server", () => {
         reasoningOutputTokens: 5,
       },
     });
+  });
+
+  test("its one approval mode runs in the workspace sandbox, asks before leaving it, and writes caches to the package cache", async () => {
+    const { received, startup } = await run("tool_calls");
+    const threadStart = received().find(
+      ({ method }) => method === "thread/start",
+    );
+    expect(threadStart?.params).toMatchObject({
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+      config: {
+        "sandbox_workspace_write.writable_roots": [CACHE_DIR],
+        "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+        "sandbox_workspace_write.exclude_slash_tmp": false,
+      },
+    });
+    expect(startup().packageCache).toEqual(packageCacheEnvironment(CACHE_DIR));
+  });
+
+  test("an approval mode it does not offer refuses the turn before the harness starts", async () => {
+    for (const approvals of ["auto", "full_auto"] as const) {
+      const harness = harnessFor("tool_calls");
+      const started = await harness.adapter.startTurn(
+        turnInput(harness.workspaceDir, {
+          policy: { network: "open", fs: "workspace", approvals },
+        }),
+      );
+      expect(Result.isError(started) && started.error.reason).toBe(
+        "start_rejected",
+      );
+      expect(existsSync(harness.logPath)).toBe(false);
+    }
   });
 
   test("a local turn persists the same message as the cloud translator for the same native turn", async () => {
@@ -494,7 +537,7 @@ describe("Codex adapter over a stdio app-server", () => {
       }),
       deadlines: { requestMs: 300, terminateMs: 300 },
       cwd: root,
-      env: { FAKE_CODEX_LOG: log, PATH: process.env["PATH"] ?? "" },
+      env: { FAKE_HARNESS_LOG: log, PATH: process.env["PATH"] ?? "" },
       handlers: {
         notification: (method) => {
           if (method === "fake/ready") {
@@ -730,6 +773,15 @@ describe("Codex adapter over a stdio app-server", () => {
     });
   });
 
+  test("a question the chat could not answer back fails the turn instead of pausing it", async () => {
+    const { events } = await run("question_twice_named");
+    expect(events.map(({ type }) => type)).not.toContain("question.requested");
+    expect(terminal(events)).toMatchObject({
+      type: "turn.failed",
+      failure: { type: "protocol_violation" },
+    });
+  });
+
   test("a crashed harness fails the turn with its exit code", async () => {
     const { events } = await run("crash");
     expect(terminal(events)).toMatchObject({
@@ -774,6 +826,8 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume"],
+      approvalModes: ["ask"],
+      usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
     expect(methods).not.toContain("thread/start");

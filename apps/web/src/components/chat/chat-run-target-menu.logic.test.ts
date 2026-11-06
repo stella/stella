@@ -8,10 +8,14 @@ import {
 
 import {
   CHAT_LOCAL_HARNESS_NAMES,
+  type ChatLocalHarnessOption,
   chatLocalHarnessOptions,
   effectiveRunTarget,
   localRunModelLabel,
+  localRunTargetFor,
+  permissionView,
   runTargetValue,
+  sameRunTarget,
 } from "@/components/chat/chat-run-target-menu.logic";
 
 const READY_CODEX: ChatLocalHarnessReadiness = {
@@ -19,6 +23,7 @@ const READY_CODEX: ChatLocalHarnessReadiness = {
   state: "ready",
   version: "0.50.0",
   capabilities: ["approvals"],
+  approvalModes: ["ask"],
   models: [{ id: "gpt-5-codex", label: "GPT-5 Codex" }],
 };
 
@@ -77,6 +82,7 @@ describe("the Run on choices", () => {
       harness: "codex",
       state: "ready",
       models: READY_CODEX.models,
+      approvalModes: ["ask"],
     });
   });
 
@@ -101,17 +107,103 @@ describe("the Run on choices", () => {
     });
     expect(stateOf(options, "claude-code")).toBe("not_installed");
   });
+
+  test("a harness its computer could not check reads as unavailable, never as unsupported", () => {
+    const options = chatLocalHarnessOptions({
+      status: "enabled",
+      runners: [
+        runner([
+          { id: "codex", state: "unavailable", reason: "harness_failed" },
+          { id: "claude-code", state: "unsupported", version: "1.0.0" },
+        ]),
+      ],
+    });
+    expect(options).toEqual([
+      { harness: "codex", state: "unavailable" },
+      { harness: "claude-code", state: "unsupported" },
+    ]);
+  });
+});
+
+const LOCAL = {
+  kind: "local",
+  harness: "codex",
+  model: "gpt-5-codex",
+  approvals: "ask",
+} as const;
+
+/** A Claude Code that cannot sandbox on this computer. */
+const READY_CLAUDE: Extract<ChatLocalHarnessOption, { state: "ready" }> = {
+  harness: "claude-code",
+  state: "ready",
+  models: [{ id: "sonnet", label: "Sonnet" }],
+  approvalModes: ["ask", "auto"],
+};
+const CLAUDE = { ...LOCAL, harness: "claude-code", model: "sonnet" } as const;
+
+describe("the permission choice", () => {
+  test("is offered only for a local target whose harness is ready", () => {
+    expect(permissionView({ kind: "cloud" }, [READY_CLAUDE])).toBeNull();
+    expect(
+      permissionView(CLAUDE, [
+        { harness: "claude-code", state: "needs_login" },
+      ]),
+    ).toBeNull();
+    expect(permissionView(CLAUDE, [READY_CLAUDE])).toEqual({
+      type: "choice",
+      modes: [
+        { mode: "ask", available: true },
+        { mode: "auto", available: true },
+        { mode: "full_auto", available: false },
+      ],
+    });
+  });
+
+  test("a harness that runs in one mode offers no choice, only its fixed behaviour", () => {
+    const [codex] =
+      chatLocalHarnessOptions({
+        status: "enabled",
+        runners: [runner([READY_CODEX])],
+      }) ?? [];
+    expect(codex === undefined ? null : permissionView(LOCAL, [codex])).toEqual(
+      { type: "fixed", harness: "codex" },
+    );
+  });
+
+  test("a picked model keeps the permission mode the harness supports, else asks", () => {
+    const pick = (selected: Parameters<typeof sameRunTarget>[0]) =>
+      localRunTargetFor({ selected, option: READY_CLAUDE, model: "opus" });
+    expect(pick({ ...CLAUDE, approvals: "auto" })).toEqual({
+      ...CLAUDE,
+      model: "opus",
+      approvals: "auto",
+    });
+    expect(pick({ ...CLAUDE, approvals: "full_auto" })).toEqual({
+      ...CLAUDE,
+      model: "opus",
+      approvals: "ask",
+    });
+    expect(pick({ kind: "cloud" })).toEqual({ ...CLAUDE, model: "opus" });
+  });
 });
 
 describe("the selected run target", () => {
   test("cloud and each local model have distinct menu values", () => {
     const values = [
       runTargetValue({ kind: "cloud" }),
-      runTargetValue({ kind: "local", harness: "codex", model: "a" }),
-      runTargetValue({ kind: "local", harness: "claude-code", model: "a" }),
-      runTargetValue({ kind: "local", harness: "codex", model: "b" }),
+      runTargetValue({ ...LOCAL, harness: "codex", model: "a" }),
+      runTargetValue({ ...LOCAL, harness: "claude-code", model: "a" }),
+      runTargetValue({ ...LOCAL, harness: "codex", model: "b" }),
     ];
     expect(new Set(values).size).toBe(values.length);
+  });
+
+  test("a different permission mode is a different target, under the same model", () => {
+    const auto = { ...LOCAL, approvals: "auto" } as const;
+    expect(runTargetValue(auto)).toBe(runTargetValue(LOCAL));
+    expect(sameRunTarget(auto, LOCAL)).toBe(false);
+    expect(sameRunTarget(LOCAL, { ...LOCAL })).toBe(true);
+    expect(sameRunTarget({ kind: "cloud" }, LOCAL)).toBe(false);
   });
 
   test("a thread without a stored target runs in the cloud", () => {
@@ -123,6 +215,7 @@ describe("the selected run target", () => {
       kind: "local",
       harness: "codex",
       model: "gpt-5-codex",
+      approvals: "ask",
     } as const;
     expect(
       localRunModelLabel(

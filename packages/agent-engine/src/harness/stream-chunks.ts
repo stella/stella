@@ -9,6 +9,7 @@ import {
 import { panic } from "better-result";
 
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 
 import {
   approvalMessage,
@@ -38,7 +39,7 @@ import {
 export const HARNESS_CONTINUATION_EVENT = "harness.continuation";
 
 /** Tool name for a harness question, matching Codex's native item name. */
-export const HARNESS_QUESTION_TOOL = "request_user_input";
+export const HARNESS_QUESTION_TOOL = CHAT_LOCAL_RUN_QUESTION_TOOL;
 
 export type HarnessChunkContext = {
   harness: AgentHarness;
@@ -55,6 +56,7 @@ const FAILURE_CODE = {
   provider_error: "harness.provider_error",
   harness_exited: "harness.exited",
   protocol_violation: "harness.protocol_violation",
+  sandbox_unavailable: "harness.sandbox_unavailable",
 } as const satisfies Record<HarnessFailure["type"], string>;
 
 const toTokenUsage = (usage: HarnessUsage): TokenUsage => {

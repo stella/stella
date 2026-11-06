@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { PropertyContent } from "@/api/db/schema-validators";
+import type { ScalarPropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -57,7 +57,7 @@ export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
 
 const contentForType = (
   contentType: DeriveAskResult["contentType"],
-): PropertyContent => ({ version: 1, type: contentType });
+): ScalarPropertyContent => ({ version: 1, type: contentType });
 
 // The canonical grading inputs the derived question depends on, in stored order.
 // Ideal language is deliberately excluded: it drives FIX, not what to extract.

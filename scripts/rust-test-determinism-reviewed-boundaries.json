@@ -5,23 +5,23 @@
     "reason": "real cargo clippy compile-fail check that the disallowed file-creation lint fires; the process boundary is the subject of the test"
   },
   {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let started = Instant::now(); // kit-allow: restart backoff over a real process",
-    "reason": "measures how long a real sidecar process stayed up for its restart backoff in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let sleep = tokio::time::sleep(delay); // kit-allow: restart backoff over a real process",
-    "reason": "waits out the restart backoff between real sidecar processes in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
-  },
-  {
-    "file": "apps/desktop/src-tauri/src/harness_sidecar/mod.rs",
-    "line": "let spawned = Command::new(&launch.program) // kit-allow: spawns the supervised sidecar",
-    "reason": "spawns the supervised sidecar process in the sidecar supervisor's runtime code, which lib.rs compiles only under test until the desktop runner's harness host calls it; it is not test code"
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "let deadline = tokio::time::Instant::now() + WAIT; // kit-allow: waits on another process",
+    "reason": "bounds the wait for a condition another process (the stand-in holder) makes true; the process boundary is the subject of the test"
   },
   {
     "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
-    "line": "tokio::time::sleep(Duration::from_millis(50)).await; // kit-allow: polls a real process restart",
-    "reason": "polls until a real sidecar process has been restarted after a crash; the restart of a real process is the subject of the test"
+    "line": "assert!(tokio::time::Instant::now() < deadline, \"timed out: {what}\"); // kit-allow: waits on another process",
+    "reason": "checks the bound on a wait for a condition another process (the stand-in holder) makes true"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "tokio::time::sleep(Duration::from_millis(20)).await; // kit-allow: polls another process",
+    "reason": "polls a condition another process (the stand-in holder) makes true; it signals by files and its socket only"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/harness_sidecar/tests.rs",
+    "line": "tokio::time::sleep(Duration::from_millis(200)).await; // kit-allow: lets a dropped connection close in a real process",
+    "reason": "gives a real holder process the time to see a dropped supervisor's connection close before the next supervisor connects, as an app restart does"
   }
 ]

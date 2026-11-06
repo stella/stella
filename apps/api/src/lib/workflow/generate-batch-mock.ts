@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
+import { recordText } from "@/api/lib/fields/record-text";
 import {
   fetchInputFieldsForBatch,
   prepareBatchInput,
@@ -84,6 +85,8 @@ const getValueFromInputFields = (
         return `${toMajorUnitsText(field)} ${field.currency}`;
       case "person":
         return field.name;
+      case "record":
+        return recordText(field.state);
       default:
         throw new Unreachable({
           message: "Field type not matched",

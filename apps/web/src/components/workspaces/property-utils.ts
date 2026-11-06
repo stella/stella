@@ -46,9 +46,11 @@ export const PROPERTY_SORT_KINDS = {
   int: "number",
   money: "number",
   person: "text",
+  // A record has no single value to order by; its projection columns do.
+  record: null,
 } as const satisfies Record<
   WorkspaceProperty["content"]["type"],
-  ColumnSortKind
+  ColumnSortKind | null
 >;
 
 export type { ColorVariants } from "@stll/ui/option-color";

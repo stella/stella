@@ -12,7 +12,7 @@ import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
-  propertyContentSchema,
+  scalarPropertyContentSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
@@ -218,7 +218,7 @@ const hasCircularDependency = ({
 
 const updatePropertyBodySchema = v.object({
   name: displayNameSchema(),
-  content: propertyContentSchema,
+  content: scalarPropertyContentSchema,
   tool: v.union([
     v.intersect([
       aiModelToolSchema,

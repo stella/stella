@@ -20,9 +20,12 @@ type CreatePropertyDependency = {
   condition: PropertyDependency["condition"];
 };
 
+/** A record column is configured through its source, not a bare type. */
+type CreatablePropertyContentType = Exclude<PropertyContentType, "record">;
+
 type CreatePropertyVars = {
   name: string;
-  contentType: PropertyContentType;
+  contentType: CreatablePropertyContentType;
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
@@ -88,7 +91,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
 
 export type CreatePropertySpec = {
   name: string;
-  contentType: PropertyContentType;
+  contentType: CreatablePropertyContentType;
   toolType?: "ai-model" | "manual-input";
   prompt?: string;
   dependencies?: CreatePropertyDependency[];
@@ -161,7 +164,9 @@ type UpdatePropertyVars = {
   workspaceId: string;
   propertyId: string;
   name: string;
-  content: WorkspaceProperty["content"];
+  // A record column's shape is set through its source; the update endpoint
+  // takes scalar content only.
+  content: Exclude<WorkspaceProperty["content"], { type: "record" }>;
   // Verdict columns are system-computed and read-only; the update endpoint only
   // accepts manual/AI tools, so excluding it here makes editing one a compile
   // error rather than a runtime rejection.
@@ -223,7 +228,7 @@ type SuggestPromptVars = {
   workspaceId: string;
   name: string;
   /** The kinds a model fills: a file is uploaded, a person picked. */
-  contentType: Exclude<PropertyContentType, "file" | "person">;
+  contentType: Exclude<PropertyContentType, "file" | "person" | "record">;
   options?: { value: string }[];
   currentPrompt?: string;
   instruction: string;

@@ -998,6 +998,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/holder-server.ts",
+    class: "package-owned-client",
+    reason:
+      "Listens on, and probes for a live holder at, the private Unix socket or named pipe the desktop names; it reaches no other host.",
+    transports: ["module:node:net"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/mcp-proxy.ts",
     class: "operator-configured-infrastructure",
     reason:

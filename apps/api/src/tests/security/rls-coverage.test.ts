@@ -586,6 +586,7 @@ describe("policy coverage", () => {
     // the organization is a routing column for delivery, never a permission.
     // The dedicated assertion below covers the user-only policies.
     "push_devices",
+    "timer_activity_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -1130,21 +1131,24 @@ describe("policy coverage", () => {
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
   });
 
-  test("push devices admit only the person who registered them", async () => {
-    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
-      (p) => p.table_name === "push_devices",
-    );
-    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
-      new Set(["r", "a", "w", "d"]),
-    );
-    for (const policy of tablePolicies) {
-      expect(policy.permissive).toBe(true);
-      const expr =
-        policy.command === "a" ? policy.check_expr : policy.using_expr;
-      expect(expr).toContain("user_id");
-      expect(expr).toContain(SETTING_USER_ID);
-    }
-  });
+  test.each(["push_devices", "timer_activity_devices"])(
+    "%s admit only the person who registered them",
+    async (table) => {
+      const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+        (p) => p.table_name === table,
+      );
+      expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+        new Set(["r", "a", "w", "d"]),
+      );
+      for (const policy of tablePolicies) {
+        expect(policy.permissive).toBe(true);
+        const expr =
+          policy.command === "a" ? policy.check_expr : policy.using_expr;
+        expect(expr).toContain("user_id");
+        expect(expr).toContain(SETTING_USER_ID);
+      }
+    },
+  );
 
   test("user_files policies derive full scope from the owning thread", async () => {
     const policies = await fetchStellaPolicies(testDb);

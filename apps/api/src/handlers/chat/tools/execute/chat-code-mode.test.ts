@@ -97,6 +97,7 @@ const buildProps = (scopedDb: ScopedDb) => {
       accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
       pinnedIds: [],
     }),
+    workspaceStatusById: new Map([[WS_UUID, "active" as const]]),
     userId: toSafeId<"user">(`user_${userCounter}`),
     userEmail: `user_${userCounter}@example.test`,
     scriptCallTools: () => ({

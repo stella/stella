@@ -40,4 +40,39 @@ describe("Codex turn failures", () => {
       resetsAt: null,
     });
   });
+
+  test("a Sharing allowance reported as a stream disconnect is a usage limit with no known reset", () => {
+    const message =
+      "stream disconnected before completion: The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.";
+    expect(
+      classifyTurnFailure({
+        error: {
+          message,
+          codexErrorInfo: {
+            responseStreamDisconnected: { httpStatusCode: null },
+          },
+        },
+        rateLimits: exhaustedUntil(1_793_196_000),
+      }),
+    ).toEqual({ type: "usage_limit", message, resetsAt: null });
+  });
+
+  test("any other stream disconnect stays a provider error", () => {
+    const message = "stream disconnected before completion: connection reset";
+    expect(
+      classifyTurnFailure({
+        error: {
+          message,
+          codexErrorInfo: {
+            responseStreamDisconnected: { httpStatusCode: null },
+          },
+        },
+        rateLimits: null,
+      }),
+    ).toEqual({
+      type: "provider_error",
+      message,
+      code: "responseStreamDisconnected",
+    });
+  });
 });

@@ -192,6 +192,30 @@ export const filterDroppedWarning = ({
 });
 
 /**
+ * The filter named one value the data knows, but no stored record carries
+ * it: a court no decision in the corpus is filed under. Narrowing to it would
+ * empty the search, and narrowing to a neighbour would answer for a value the
+ * caller did not name, so the filter is dropped and both are said.
+ */
+export const filterNotHeldWarning = ({
+  filter,
+  received,
+  value,
+  known,
+}: {
+  filter: string;
+  received: string;
+  /** The value the filter was read as. */
+  value: string;
+  /** The stored values the caller could narrow to instead; bounded. */
+  known: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_dropped",
+  message: `${received} names ${filter} "${value}", which no stored decision is filed under, so this search ran without the ${filter} filter.`,
+  hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
+});
+
+/**
  * The stored values a filter is read against were unavailable in time, so
  * the search compared the value as sent: an exact stored spelling still
  * matches, any other spelling matches nothing.

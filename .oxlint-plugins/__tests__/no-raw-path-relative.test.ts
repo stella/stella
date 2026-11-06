@@ -17,23 +17,15 @@ const MULTILINE_RELATIVE = [
   ");",
 ].join("\n");
 
-for (const { name, now, changedLines, diagnostics } of [
+for (const { name, changedLines, diagnostics } of [
   {
     name: "unchanged during rollout",
-    now: "2026-10-14",
     changedLines: [],
     diagnostics: [],
   },
   {
     name: "changed inside the call during rollout",
-    now: "2026-10-14",
     changedLines: [4],
-    diagnostics: [2],
-  },
-  {
-    name: "unchanged after rollout expiry",
-    now: "2026-10-21",
-    changedLines: [],
     diagnostics: [2],
   },
 ]) {
@@ -55,7 +47,7 @@ for (const { name, now, changedLines, diagnostics } of [
       "../../packages/portable-path/src/index.ts",
     );
     const repository = path.resolve(import.meta.dirname, "../..");
-    // Inject clock and diff inputs; oxlint still executes the production detector and scope helper.
+    // Inject diff inputs; oxlint still executes the production detector and scope helper.
     await Bun.write(
       wrapper,
       `import { createPortablePathPlugin } from ${JSON.stringify(plugin)};
@@ -64,7 +56,6 @@ import { repoRelativePath } from ${JSON.stringify(portablePath)};
 export default createPortablePathPlugin((options) => guardEnforcesLine({
   ...options,
   rollouts: [{ id: "portable-path", type: "changed-lines", expiresAt: "2026-10-20T00:00:00.000Z", check: ["bun", "scripts/check-fixture.ts"] }],
-  now: new Date(${JSON.stringify(now)}),
   changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
 }));
 `,

@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { Button } from "@stll/ui/button";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -216,13 +217,13 @@ const Row = ({
   }
 
   return (
-    <button
-      className="catalogue-row-in hover:bg-muted/40 -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start"
-      onClick={onClick}
-      style={{ animationDelay: `${delay}ms` }}
-      type="button"
-    >
-      {content}
-    </button>
+    <Button className="-mx-1 flex" onClick={onClick} variant="plain">
+      <span
+        className="catalogue-row-in hover:bg-muted/40 flex w-full items-center gap-2.5 rounded-md px-1 py-1 text-start"
+        style={{ animationDelay: `${delay}ms` }}
+      >
+        {content}
+      </span>
+    </Button>
   );
 };

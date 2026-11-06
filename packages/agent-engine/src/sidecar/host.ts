@@ -15,6 +15,10 @@ import type {
   HarnessTurn,
 } from "../harness/adapter";
 import {
+  claudeCodeLaunch,
+  createClaudeCodeHarnessAdapter,
+} from "../harness/claude-code/adapter";
+import {
   codexAppServerLaunch,
   createCodexHarnessAdapter,
 } from "../harness/codex/adapter";
@@ -34,21 +38,28 @@ import {
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
-import {
-  SIDECAR_PROTOCOL,
-  type SidecarHostMessage,
-  type SidecarMessage,
-  type SidecarProbeOutcome,
-  type SidecarRejection,
-  type SidecarRunStart,
+import type {
+  SidecarHarnessLaunchSettings,
+  SidecarHostMessage,
+  SidecarHostOutput,
+  SidecarProbeOutcome,
+  SidecarRejection,
+  SidecarRunStart,
 } from "./protocol";
 
 /**
- * The sidecar's command loop: one host, any number of concurrent runs, one
- * harness process per run. Every accepted `run.start` ends with exactly one
+ * The sidecar's command loop: any number of concurrent runs, one harness
+ * process per run. Every accepted `run.start` ends with exactly one
  * `run.finished`, also when the harness never started, so the host's run
- * bookkeeping needs no second failure path.
+ * bookkeeping needs no second failure path. The holder (`holder.ts`) owns the
+ * connection, the handshake and the numbering of what this loop sends.
  */
+
+/** The host messages that act on harnesses and runs. */
+export type SidecarCommand = Exclude<
+  SidecarHostMessage,
+  { type: "hello" | "ack" | "resume" | "drain" | "shutdown" }
+>;
 
 type RunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
 
@@ -67,20 +78,40 @@ export type HarnessLaunch = {
   harness: AgentHarness;
   executable: string;
   configDir: string;
+  launch: SidecarHarnessLaunchSettings;
   clientVersion: string;
 };
 
 export type SidecarHostOptions = {
-  sidecarVersion: string;
   /**
-   * Writes one message to stdout. `false` when the message cannot be written
-   * within the contract (`encodeSidecarMessage`); nothing was written then.
+   * Hands one message to the holder. `false` when the message cannot be
+   * written within the contract (`encodeSidecarMessage`); the holder kept and
+   * sent nothing then.
    */
-  send: (message: SidecarMessage) => boolean;
-  /** One log line on stderr. Never passed tokens, prompts or outputs. */
+  send: (message: SidecarHostOutput) => boolean;
+  /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
+  /**
+   * How long a harness process whose launch asked for a grant waits for the
+   * desktop's `harness.process_granted` before the run or probe fails.
+   */
+  processGrantTimeoutMs: number;
+};
+
+/** The inherited environment with the launch's removals and settings applied. */
+const launchEnvironment = (
+  base: Readonly<Record<string, string>>,
+  settings: SidecarHarnessLaunchSettings,
+): Record<string, string> => {
+  const removed = new Set(settings.removedEnvironment);
+  return {
+    ...Object.fromEntries(
+      Object.entries(base).filter(([name]) => !removed.has(name)),
+    ),
+    ...settings.environment,
+  };
 };
 
 type HeldRun = {
@@ -95,21 +126,47 @@ type HeldRun = {
   requests: Map<string, string>;
 };
 
-type Config = { appVersion: string; proxy: McpProxy };
+type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
 
 /** Adapters by harness; `null` until the harness has one. */
 const ADAPTERS = {
   codex: (launch: HarnessLaunch, options: AdapterOptions) =>
     createCodexHarnessAdapter({
-      launch: codexAppServerLaunch(launch.executable),
+      launch: codexAppServerLaunch(
+        launch.executable,
+        launch.launch.configOverrides,
+      ),
       codexHome: launch.configDir,
-      environment: options.environment,
+      environment: launchEnvironment(options.environment, launch.launch),
       clientVersion: launch.clientVersion,
       gracePeriodMs: HARNESS_GRACE_MS,
       requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
+      ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
+      ...(launch.launch.clientName === null
+        ? {}
+        : { clientName: launch.launch.clientName }),
     }),
-  "claude-code": null,
+  "claude-code": (launch: HarnessLaunch, options: AdapterOptions) => {
+    // Claude Code takes no configuration overrides or client name, and
+    // nothing on the desktop authorizes its processes.
+    if (
+      launch.launch.configOverrides.length > 0 ||
+      launch.launch.clientName !== null ||
+      launch.launch.processGrant
+    ) {
+      panic("Claude Code adapter: launch settings it cannot apply");
+    }
+    return createClaudeCodeHarnessAdapter({
+      launch: claudeCodeLaunch(launch.executable),
+      claudeConfigDir: launch.configDir,
+      environment: launchEnvironment(options.environment, launch.launch),
+      gracePeriodMs: HARNESS_GRACE_MS,
+      requestTimeoutMs: HARNESS_REQUEST_TIMEOUT_MS,
+      onBackgroundError: options.onBackgroundError,
+      platform: process.platform,
+    });
+  },
   opencode: null,
 } as const satisfies Record<
   AgentHarness,
@@ -119,6 +176,8 @@ const ADAPTERS = {
 type AdapterOptions = {
   environment: Readonly<Record<string, string>>;
   onBackgroundError: (error: unknown, context: string) => void;
+  /** Waits for the desktop's grant of a new harness process; `null` without one. */
+  onProcess: ((pid: number) => Promise<boolean>) | null;
 };
 
 const START_FAILURE: Record<
@@ -139,6 +198,7 @@ const START_FAILURE: Record<
     message,
     code: "start_rejected",
   }),
+  sandbox_unavailable: (message) => ({ type: "sandbox_unavailable", message }),
 };
 
 type ProbeOutcomeOptions = {
@@ -182,10 +242,18 @@ const probeOutcome = ({
   if (probe.auth.type === "signed_out") {
     return { type: "needs_login", version: probe.version };
   }
+  if (probe.usageLimit !== null) {
+    return {
+      type: "limit_until",
+      version: probe.version,
+      resetsAt: probe.usageLimit.resetsAt,
+    };
+  }
   return {
     type: "ready",
     version: probe.version,
     capabilities: [...probe.capabilities],
+    approvalModes: [...probe.approvalModes],
     models: probe.models.slice(0, MAX_PROBED_MODELS).map((model) => ({
       id: model.id,
       label: model.displayName === "" ? model.id : model.displayName,
@@ -209,6 +277,8 @@ export class SidecarHost {
   private config: Config | null = null;
   private readonly runs = new Map<string, HeldRun>();
   private readonly finished = new Set<Promise<void>>();
+  /** Harness processes waiting for the desktop's grant, by run or probe id. */
+  private readonly grants = new Map<string, (granted: boolean) => void>();
   private stopping = false;
   private readonly detached: ReturnType<typeof createDetached>;
 
@@ -219,23 +289,52 @@ export class SidecarHost {
     });
   }
 
-  /** Handle one parsed host message. Returns `false` once the host is done. */
-  handle(message: SidecarHostMessage): boolean {
-    if (message.type === "hello") {
-      return this.hello(message);
-    }
-    if (this.config === null) {
-      this.reject("hello_required", message.type, null);
+  /**
+   * Take the connected desktop's version and API origin. The MCP proxy
+   * forwards to one origin, so another one is refused while runs use the
+   * proxy; with no run held, the proxy restarts on the new origin.
+   */
+  configure(appVersion: string, apiOrigin: string): boolean {
+    const config = this.config;
+    if (config?.apiOrigin === apiOrigin) {
+      config.appVersion = appVersion;
       return true;
     }
-    const config = this.config;
+    if (config !== null && this.runs.size > 0) {
+      return false;
+    }
+    if (config !== null) {
+      this.detached(config.proxy.stop(), "sidecar.proxy.stop");
+    }
+    this.config = {
+      appVersion,
+      apiOrigin,
+      proxy: startMcpProxy({ apiOrigin }),
+    };
+    return true;
+  }
+
+  /** Whether the run is still going: its `run.finished` is not sent yet. */
+  holds(runId: string) {
+    return this.runs.has(runId);
+  }
+
+  /** How many runs are still going. */
+  get running() {
+    return this.runs.size;
+  }
+
+  /** Handle one command; the holder passes them only after `configure`. */
+  handle(message: SidecarCommand) {
+    const config =
+      this.config ?? panic("The holder passed a command before configure");
     switch (message.type) {
       case "harness.probe":
         this.track(this.probe(message, config));
-        return true;
+        return;
       case "run.start":
         this.start(message, config);
-        return true;
+        return;
       case "run.approval":
         this.withRun(message, (run) => {
           this.respond(run, message.requestId, (requestId) => ({
@@ -244,7 +343,7 @@ export class SidecarHost {
             decision: message.decision,
           }));
         });
-        return true;
+        return;
       case "run.answer":
         this.withRun(message, (run) => {
           this.respond(run, message.requestId, (requestId) => ({
@@ -253,18 +352,19 @@ export class SidecarHost {
             answers: message.answers,
           }));
         });
-        return true;
+        return;
       case "run.interrupt":
         this.withRun(message, (run) => {
           this.stop(run);
         });
-        return true;
+        return;
       case "run.cancel":
-        this.withRun(message, (run) => {
-          run.cancelled = true;
-          this.stop(run);
-        });
-        return true;
+        this.cancel(message.runId);
+        return;
+      case "harness.process_granted":
+        // A grant nobody waits for answers a report sent again on resume.
+        this.grants.get(message.id)?.(true);
+        return;
       case "run.token":
         this.withRun(message, () => {
           if (
@@ -277,16 +377,22 @@ export class SidecarHost {
             this.options.log("ignored an MCP token older than the held one");
           }
         });
-        return true;
-      case "shutdown":
-        return false;
+        return;
       default:
         message satisfies never;
-        return panic("Unhandled sidecar host message");
+        panic("Unhandled sidecar command");
     }
   }
 
-  /** A line the host wrote that did not parse. */
+  /** Cancel a run; its `run.finished` reports `cancelled`. */
+  cancel(runId: string) {
+    this.withRun({ type: "run.cancel", runId }, (run) => {
+      run.cancelled = true;
+      this.stop(run);
+    });
+  }
+
+  /** A line the host wrote that the holder refused. */
   reject(
     reason: SidecarRejection,
     messageType: string | null,
@@ -299,33 +405,15 @@ export class SidecarHost {
   /** Stop every run, wait for each to finish, and close the proxy. */
   async shutdown() {
     this.stopping = true;
+    for (const refuse of [...this.grants.values()]) {
+      refuse(false);
+    }
     for (const run of this.runs.values()) {
       run.cancelled = true;
       this.stop(run);
     }
     await Promise.allSettled([...this.finished]);
     await this.config?.proxy.stop();
-  }
-
-  private hello(message: Extract<SidecarHostMessage, { type: "hello" }>) {
-    if (this.config !== null) {
-      this.reject("hello_repeated", message.type, null);
-      return true;
-    }
-    if (message.protocol !== SIDECAR_PROTOCOL) {
-      this.reject("protocol_mismatch", message.type, null);
-      return false;
-    }
-    this.config = {
-      appVersion: message.appVersion,
-      proxy: startMcpProxy({ apiOrigin: message.apiOrigin }),
-    };
-    this.options.send({
-      type: "hello",
-      protocol: SIDECAR_PROTOCOL,
-      sidecarVersion: this.options.sidecarVersion,
-    });
-    return true;
   }
 
   private track(work: Promise<void>) {
@@ -347,8 +435,33 @@ export class SidecarHost {
     act(run);
   }
 
+  /**
+   * Report a harness process to the desktop and wait for its grant; `false`
+   * once the wait times out or the holder stops.
+   */
+  private async awaitGrant(id: string, pid: number): Promise<boolean> {
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const timer = setTimeout(() => {
+      this.options.log("the desktop did not authorize a harness process");
+      settle(false);
+    }, this.options.processGrantTimeoutMs);
+    const settle = (granted: boolean) => {
+      clearTimeout(timer);
+      this.grants.delete(id);
+      resolve(granted);
+    };
+    this.grants.set(id, settle);
+    // A report the contract cannot carry is never granted: fail at once.
+    if (!this.options.send({ type: "harness.process", id, pid })) {
+      settle(false);
+    }
+    return promise;
+  }
+
+  /** The adapter for a run or probe; `id` names it in a process grant. */
   private adapter(
     launch: HarnessLaunch,
+    id: string,
   ): Result<HarnessAdapter, { message: string }> {
     const create = ADAPTERS[launch.harness];
     if (create === null) {
@@ -362,6 +475,9 @@ export class SidecarHost {
           onBackgroundError: (_error, context) => {
             this.options.log(`harness background work failed: ${context}`);
           },
+          onProcess: launch.launch.processGrant
+            ? async (pid) => this.awaitGrant(id, pid)
+            : null,
         }),
       catch: () => ({ message: "The harness launch options were refused." }),
     });
@@ -371,10 +487,10 @@ export class SidecarHost {
     message: Extract<SidecarHostMessage, { type: "harness.probe" }>,
     config: Config,
   ) {
-    const adapter = this.adapter({
-      ...message,
-      clientVersion: config.appVersion,
-    });
+    const adapter = this.adapter(
+      { ...message, clientVersion: config.appVersion },
+      message.requestId,
+    );
     const outcome: SidecarProbeOutcome = await (async () => {
       if (Result.isError(adapter)) {
         return {
@@ -495,10 +611,10 @@ export class SidecarHost {
         message: binding.error.message,
       });
     }
-    const adapter = this.adapter({
-      ...message,
-      clientVersion: config.appVersion,
-    });
+    const adapter = this.adapter(
+      { ...message, clientVersion: config.appVersion },
+      message.runId,
+    );
     if (Result.isError(adapter)) {
       return Result.err({
         type: "harness_exited",
@@ -511,6 +627,7 @@ export class SidecarHost {
       runId: message.runId,
       threadId: message.threadId,
       workspaceDir: message.workspaceDir,
+      cacheDir: message.cacheDir,
       model: message.model,
       instructions: message.instructions,
       policy: message.policy,
@@ -546,7 +663,7 @@ export class SidecarHost {
      * finishes `failed`.
      */
     const delivery = { broken: false };
-    const send = (runMessage: SidecarMessage) => {
+    const send = (runMessage: SidecarHostOutput) => {
       if (delivery.broken || this.options.send(runMessage)) {
         return;
       }

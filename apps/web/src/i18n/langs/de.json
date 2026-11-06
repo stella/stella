@@ -40,7 +40,6 @@
     "organizationId": "Organisations-ID",
     "organizationLeft": "Sie haben die Organisation verlassen.",
     "planAndUsage": "Tarif und Nutzung",
-    "title": "Organisationsverwaltung",
     "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
   },
   "agentClaim": {
@@ -163,7 +162,9 @@
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
       "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
-      "title": "Einladung zur Organisation"
+      "title": "Einladung zur Organisation",
+      "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
+      "wrongAccountHint": "Sie sind als {email} angemeldet. Melden Sie sich ab und mit der Adresse an, an die die Einladung gesendet wurde."
     },
     "lastUsed": "Zuletzt verwendet",
     "oneTimeCodeExpired": "Ihr Einmalcode ist abgelaufen. Fordern Sie einen neuen Code an.",
@@ -1461,6 +1462,8 @@
     },
     "answerQuote": {
       "showInDecision": "In der Entscheidung zeigen",
+      "unverified": "Zitat nicht verifiziert",
+      "unverifiedHint": "Die zitierten Entscheidungen enthalten diesen Text nicht wörtlich",
       "verified": "Verifiziertes Zitat",
       "verifiedHint": "Wörtlich in {source}"
     },
@@ -1686,10 +1689,18 @@
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "onThisComputer": "{harness} auf diesem Computer",
+      "permissionAskDescription": "Bearbeitet Dateien im Ordner des Laufs selbst; fragt vor allem anderen nach.",
+      "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
+      "permissionFullAuto": "Vollautomatisch",
+      "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Laufs nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
+      "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
+      "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
+      "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
@@ -1698,8 +1709,15 @@
       "stateNeedsLogin": "Anmeldung erforderlich",
       "stateNotInstalled": "Nicht installiert",
       "stateOffline": "Computer nicht verbunden",
+      "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
       "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Alles Zutreffende auswählen",
+      "dismiss": "Verwerfen und anhalten",
+      "secretAnswer": "Antwort verborgen",
+      "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
@@ -1842,10 +1860,18 @@
       "toolbarLabel": "Markierter Text"
     },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
+    "sendErrorActiveFileNoText": "Die geöffnete Datei enthält keinen Text, den stella lesen kann. Schließen Sie sie oder öffnen Sie eine andere Datei.",
+    "sendErrorActiveFileTooLarge": "Die geöffnete Datei ist für den Chat zu groß. Schließen Sie sie oder öffnen Sie eine kleinere Datei.",
+    "sendErrorAgentRunsDisabled": "Agent-Läufe sind hier nicht verfügbar. Wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
+    "sendErrorAttachmentNoText": "Eine angehängte Datei enthält keinen Text, den stella lesen kann. Entfernen Sie sie oder hängen Sie eine andere Datei an.",
+    "sendErrorAttachmentUnsupported": "Dieser Dateityp kann nicht an einen Chat angehängt werden. Hängen Sie eine andere Datei an.",
     "sendErrorConnectionFailed": "Die Verbindung zum Chat ist fehlgeschlagen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
+    "sendErrorDocumentUnsupported": "Dieses Modell kann eines der angehängten Dokumente nicht lesen. Entfernen Sie den Anhang oder wechseln Sie zu einem Modell, das ihn unterstützt.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
+    "sendErrorImageInvalid": "Dieses Bild konnte nicht für das Modell vorbereitet werden. Laden Sie ein kleineres Bild hoch oder wechseln Sie das Modell.",
+    "sendErrorImageUnsupported": "Dieses Modell kann angehängte Bilder nicht lesen. Entfernen Sie das Bild oder wechseln Sie zu einem Modell, das Bilder unterstützt.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
     "sendErrorMessageEmpty": "Diese Nachricht enthält keinen Text zum Senden. Geben Sie Ihre Frage ein oder hängen Sie eine Datei an und senden Sie die Nachricht dann.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
@@ -1857,6 +1883,7 @@
     "sendErrorQuotaExhausted": "Das Kontingent des KI-Anbieters ist ausgeschöpft. Versuchen Sie es in einer Minute erneut, oder wenden Sie sich an Ihren Arbeitsbereichs-Admin.",
     "sendErrorStreamIncomplete": "Die Antwort der KI wurde abgebrochen, bevor sie fertig war. Versuchen Sie es erneut.",
     "sendErrorTimedOut": "Der Chat hat nicht rechtzeitig geantwortet. Versuchen Sie es erneut.",
+    "sendErrorToolsUnsupported": "Dieses Modell kann keine Tools verwenden und daher keine Fragen zu Ihrer Akte beantworten. Wechseln Sie zu einem Modell, das Tools unterstützt.",
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
@@ -1903,7 +1930,7 @@
       "unavailable": "Es konnte kein Diagramm ausgewählt werden. Die Tabelle wird angezeigt.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Arbeite mit Kontext",
+    "thinking": "Nachdenken",
     "threadFiles": {
       "title": "Dateien in diesem Chat"
     },
@@ -2031,6 +2058,11 @@
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
     },
+    "turnStatus": {
+      "waitingForApproval": "Warten auf Genehmigung",
+      "waitingForInput": "Warten auf Eingabe",
+      "writing": "Antwort wird verfasst"
+    },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
     "usageFallbackNotice": "Tägliches KI-Kontingent aufgebraucht; Antworten laufen weiter über das Standardmodell.",
@@ -2039,7 +2071,6 @@
       "answer": "Zusammenfassung der Websuche",
       "answerDisclaimer": "Zusammengefasst aus den öffentlichen Webergebnissen unten. Bitte anhand der verlinkten Quellen überprüfen.",
       "fetchedFrom": "von {source}",
-      "openSource": "{source} in neuem Tab öffnen",
       "sources": "Quellen",
       "toggleDescription": "Dem Modell erlauben, in dieser Unterhaltung im öffentlichen Web zu suchen und Seiten zu lesen.",
       "toggleLabel": "Websuche",
@@ -2393,6 +2424,7 @@
     "notes": "Notizen",
     "open": "Öffnen",
     "openInNewTab": "In neuem Tab öffnen",
+    "openInSidePanel": "Im Seitenpanel öffnen",
     "openInStella": "In stella öffnen",
     "openOriginalSource": "Originalquelle öffnen",
     "options": "Optionen",
@@ -2786,6 +2818,11 @@
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
       "undoImport": "Import rückgängig machen ({count})",
+      "undoImportConfirm": "{count, plural, one {Den durch diesen Import erstellten Kontakt} other {Die # durch diesen Import erstellten Kontakte}} endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "undoImportTitle": "Diesen Import rückgängig machen?",
+      "undoneRow": "Durch Rückgängigmachen entfernt",
+      "undoneSummary": "Durch das Rückgängigmachen {count, plural, one {wurde # erstellter Kontakt} other {wurden # erstellte Kontakte}} entfernt.",
+      "undoneToast": "Import rückgängig gemacht: {count, plural, one {# Kontakt} other {# Kontakte}} gelöscht",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
       "warning": {
         "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
@@ -3227,7 +3264,6 @@
     "noFileInVersion": "Keine Datei in dieser Version",
     "noFullScreenPreview": "Für diesen Dateityp gibt es keine Vollbildvorschau.",
     "noLabel": "Keine Bezeichnung",
-    "openInSidePanel": "Im Seitenpanel öffnen",
     "redlinePreview": "Nachverfolgte Änderungen",
     "removeLabel": "Bezeichnung entfernen",
     "saveComparison": "Vergleich speichern",
@@ -5755,7 +5791,6 @@
     "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
-    "openProvision": "Vorschrift öffnen",
     "outline": "Inhalt",
     "outlineJumpLabel": "Zu einer Vorschrift springen",
     "outlineJumpPlaceholder": "§ 10 oder Überschrift",
@@ -6538,6 +6573,9 @@
       "calculating": "Berechnung...",
       "errored": "Fehler",
       "formatNotSupported": "Format nicht unterstützt",
+      "recordChoose": "{count, plural, one {# Treffer bestätigen} other {Aus # Treffern auswählen}}",
+      "recordCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+      "recordNotFound": "Nicht gefunden",
       "selectAValue": "Wert auswählen",
       "selectValues": "Werte auswählen",
       "wholeNumberOnly": "Ganze Zahl eingeben"
@@ -7230,6 +7268,7 @@
       "previewSubject": "Auf einem Beispiel testen",
       "previewUnsupported": "Vorschau für diesen Dokumenttyp nicht unterstützt.",
       "readingFrom": "KI liest aus",
+      "record": "Datensatz",
       "referencesItself": "Eigenschaft referenziert sich selbst über andere Eigenschaften",
       "resultType": "Ergebnistyp",
       "returnsLabel": "Format",
