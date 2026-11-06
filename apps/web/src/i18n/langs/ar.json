@@ -162,7 +162,9 @@
       "declinedDescription": "لقد رفضت هذه الدعوة. يمكنك إغلاق هذه الصفحة بأمان.",
       "description": "تمت دعوتك للانضمام إلى {organizationName} من قِبل {inviterEmail} بصفة {role}.",
       "goToWorkspaces": "الانتقال إلى الملفات القانونية",
-      "title": "دعوة المؤسسة"
+      "title": "دعوة المؤسسة",
+      "verifyEmailHint": "لتأكيد {email}، سجّل الخروج، ثم سجّل الدخول برمز لمرة واحدة سنرسله إلى هذا العنوان.",
+      "wrongAccountHint": "سجّلت الدخول باستخدام {email}. سجّل الخروج، ثم سجّل الدخول بالعنوان الذي أُرسلت إليه الدعوة."
     },
     "lastUsed": "آخر استخدام",
     "oneTimeCodeExpired": "انتهت صلاحية رمزك لمرة واحدة. اطلب رمزًا جديدًا.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "يطلب وكيل البرمجة على حاسوبك تسجيل الدخول مجددًا. سجّل الدخول عبر stella desktop ثم حاول مرة أخرى.",
       "errorUnavailable": "توقف حاسوبك عن معالجة هذا الرد. تأكد من أن stella desktop مفتوح ومتصل، ثم حاول مرة أخرى.",
       "onThisComputer": "{harness} على هذا الحاسوب",
+      "permissionAskDescription": "يعدّل الملفات في مجلد التشغيل من تلقاء نفسه، ويسأل قبل أي شيء آخر.",
+      "permissionAutoDescription": "ينفّذ من تلقاء نفسه ما يراه آمنًا، ويسأل عن الباقي.",
+      "permissionFullAuto": "تلقائي بالكامل",
+      "permissionFullAutoDescription": "لا يسأل عن أي شيء داخل مجلد التشغيل، ويسأل دائمًا قبل تغيير أي شيء على حاسوبك.",
+      "permissionSandboxed": "يعمل في بيئة معزولة، ويسأل قبل تغيير أي شيء على حاسوبك.",
+      "permissionUnavailable": "غير متاح على هذا الحاسوب",
+      "permissions": "الأذونات",
       "refusalConflictingRunMode": "يطلب هذا الطلب التشغيل مع الوكيل السحابي وعلى حاسوبك معًا. اختر واحدًا من قائمة التشغيل على.",
       "refusalHarnessUnavailable": "لا يستطيع وكيل البرمجة على حاسوبك تولّي هذا الطلب الآن. تحقّق منه في stella desktop.",
       "refusalModelUnavailable": "لم يعد وكيل البرمجة على حاسوبك يقدّم هذا النموذج. اختر نموذجًا آخر من قائمة التشغيل على.",
       "refusalNoComputer": "لا يوجد أي حاسوب من حواسيبك متصل. افتح stella desktop ثم أرسل مجددًا.",
+      "refusalPermissionUnavailable": "لا يمكن لوكيل البرمجة على حاسوبك العمل بهذه الأذونات. اختر خيارًا آخر من قائمة الأذونات.",
       "refusalTooLarge": "هذه الدردشة أطول من أن تُنقل إلى حاسوبك. ابدأ دردشة جديدة لتشغيلها هناك.",
       "refusalUnavailable": "تشغيل الدردشات على حاسوبك غير متاح لحسابك.",
       "runOn": "التشغيل على",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "غير متاح حاليًا",
       "stateUnsupported": "هذا الإصدار غير مدعوم",
       "waitingForComputer": "في انتظار إعادة اتصال حاسوبك…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "اختر كل ما ينطبق",
+      "dismiss": "تجاهل وإيقاف",
+      "secretAnswer": "الإجابة مخفية",
+      "secretPlaceholder": "تبقى إجابتك مخفية"
     },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {

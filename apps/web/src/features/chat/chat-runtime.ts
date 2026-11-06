@@ -24,6 +24,7 @@ import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
+import type { ChatLocalRunQuestionReply } from "@stll/api-contract/chat-run-target";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
@@ -47,6 +48,11 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
+import {
+  isSameLocalRunQuestionPause,
+  type LocalRunQuestionPause,
+  localRunQuestionPauseOf,
+} from "@/components/chat/local-run-question.logic";
 import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
@@ -141,6 +147,8 @@ export type ChatStopState =
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
+  /** The question a run on the member's computer paused the turn on. */
+  localRunQuestion: LocalRunQuestionPause | null;
   reconnecting: boolean;
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
@@ -179,6 +187,14 @@ export type ChatRuntime = ChatActivitySession & {
   addToolResult: (
     result: ChatToolResultInput,
     options?: ChatSendMessageOptions,
+  ) => Promise<void>;
+  /**
+   * Answer the question a local run paused on, or, with `null`, dismiss it:
+   * the server then stops the run's turn. A pause is answered once.
+   */
+  answerLocalRunQuestion: (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
   ) => Promise<void>;
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
@@ -426,6 +442,7 @@ export const createChatRuntime = ({
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
+    localRunQuestion: null,
     reconnecting: activeTurnId !== null,
     messages: initialMessages,
     sessionGenerating: false,
@@ -955,7 +972,21 @@ export const createChatRuntime = ({
         settleMountRead();
       }
     },
-    onInterruptStateChange: observeInterruptSubmission,
+    onInterruptStateChange: (state) => {
+      observeInterruptSubmission(state);
+      // TanStack holds a local run's question as an interrupt it cannot
+      // resolve (it carries no resume binding): the server owns the pause,
+      // and the card answers it through `answerLocalRunQuestion`.
+      const localRunQuestion = localRunQuestionPauseOf(state.interrupts);
+      if (
+        !isSameLocalRunQuestionPause(
+          snapshot.localRunQuestion,
+          localRunQuestion,
+        )
+      ) {
+        setSnapshot({ localRunQuestion });
+      }
+    },
     onCustomEvent: (name, value) => {
       if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
         return;
@@ -1294,6 +1325,46 @@ export const createChatRuntime = ({
    */
   const approvalAnswers = new Map<string, Promise<void>>();
 
+  /** Local-run pauses already answered or dismissed, by interrupt id. */
+  const answeredLocalRunQuestions = new Set<string>();
+
+  /**
+   * Resume the turn a local run paused on its question. TanStack exposes the
+   * pause as an unbound interrupt it cannot resolve, so the resume goes out as
+   * the AG-UI resume item the server reads: the answers as the reply payload,
+   * or a cancellation the server turns into a stop of the run's turn.
+   */
+  const answerLocalRunQuestion = async (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
+  ): Promise<void> => {
+    if (isStoppedTurn() || answeredLocalRunQuestions.has(interruptId)) {
+      return;
+    }
+    answeredLocalRunQuestions.add(interruptId);
+    if (!(await awaitRequestEnd())) {
+      return;
+    }
+    const resumed = await Result.tryPromise(
+      async () =>
+        await client.resumeInterruptsUnsafe([
+          answers === null
+            ? { interruptId, status: "cancelled" }
+            : {
+                interruptId,
+                status: "resolved",
+                payload: {
+                  answers,
+                } satisfies ChatLocalRunQuestionReply,
+              },
+        ]),
+    );
+    if (Result.isError(resumed)) {
+      answeredLocalRunQuestions.delete(interruptId);
+      captureRuntimeError(resumed.error.cause);
+    }
+  };
+
   const answerToolApproval = async (
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
@@ -1432,6 +1503,7 @@ export const createChatRuntime = ({
         captureRuntimeError(outcome.error.cause);
       }
     },
+    answerLocalRunQuestion,
     addToolResult: async (result, options) => {
       if (isStoppedTurn()) {
         return;

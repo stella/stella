@@ -238,6 +238,7 @@ export const WITHDRAWN_COPY_REGISTRY = {
       "chatModel",
       "chatReasoningEffort",
       "chatRunTarget",
+      "chatLocalRunTarget",
       "recapMessageId",
       "recapPromptVersion",
       "recapGeneratedAt",

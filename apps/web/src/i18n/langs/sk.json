@@ -162,7 +162,9 @@
       "declinedDescription": "Odmietli ste túto pozvánku. Môžete túto stránku zavrieť.",
       "description": "{inviterEmail} vás pozval/a do organizácie {organizationName} ako {role}.",
       "goToWorkspaces": "Prejsť na spisy",
-      "title": "Pozvánka do organizácie"
+      "title": "Pozvánka do organizácie",
+      "verifyEmailHint": "Ak chcete overiť adresu {email}, odhláste sa a prihláste sa jednorazovým kódom, ktorý na ňu odošleme.",
+      "wrongAccountHint": "Ste prihlásení ako {email}. Odhláste sa a prihláste sa adresou, na ktorú bola pozvánka odoslaná."
     },
     "lastUsed": "Naposledy použité",
     "oneTimeCodeExpired": "Platnosť jednorazového kódu vypršala. Požiadajte o nový kód.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Programovací agent vo vašom počítači vyžaduje nové prihlásenie. Prihláste sa cez stella desktop a skúste to znova.",
       "errorUnavailable": "Váš počítač prestal túto odpoveď spracúvať. Overte, že je stella desktop spustený a pripojený, a skúste to znova.",
       "onThisComputer": "{harness} v tomto počítači",
+      "permissionAskDescription": "Súbory v priečinku behu upravuje sám; na všetko ostatné sa opýta.",
+      "permissionAutoDescription": "Čo považuje za bezpečné, urobí sám; na zvyšok sa opýta.",
+      "permissionFullAuto": "Plne automaticky",
+      "permissionFullAutoDescription": "Na nič vnútri priečinka behu sa nepýta; skôr než zmení niečo vo vašom počítači, vždy sa opýta.",
+      "permissionSandboxed": "Beží v izolovanom prostredí; skôr než zmení niečo vo vašom počítači, opýta sa.",
+      "permissionUnavailable": "V tomto počítači nie je k dispozícii",
+      "permissions": "Oprávnenia",
       "refusalConflictingRunMode": "Táto požiadavka sa má spustiť zároveň v cloudovom agentovi aj vo vašom počítači. Vyberte jedno v ponuke Spustiť na.",
       "refusalHarnessUnavailable": "Programovací agent vo vašom počítači teraz túto požiadavku nemôže prevziať. Skontrolujte ho v stella desktop.",
       "refusalModelUnavailable": "Programovací agent vo vašom počítači už tento model neponúka. Vyberte iný v ponuke Spustiť na.",
       "refusalNoComputer": "Žiadny z vašich počítačov nie je pripojený. Otvorte stella desktop a odošlite správu znova.",
+      "refusalPermissionUnavailable": "Programovací agent vo vašom počítači s týmito oprávneniami bežať nemôže. Vyberte inú možnosť v ponuke Oprávnenia.",
       "refusalTooLarge": "Táto konverzácia je príliš dlhá na odovzdanie do vášho počítača. Na spustenie tam začnite nový chat.",
       "refusalUnavailable": "Spúšťanie chatov vo vašom počítači nie je pre váš účet dostupné.",
       "runOn": "Spustiť na",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Momentálne nedostupné",
       "stateUnsupported": "Táto verzia nie je podporovaná",
       "waitingForComputer": "Čaká sa, kým sa váš počítač znova pripojí…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Vyberte všetko, čo platí",
+      "dismiss": "Zamietnuť a zastaviť",
+      "secretAnswer": "Odpoveď je skrytá",
+      "secretPlaceholder": "Vaša odpoveď zostane skrytá"
     },
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mcpReconnect": {

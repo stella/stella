@@ -1157,6 +1157,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   "allow-in-conversation": recordedAs(approvedAs("allow-in-conversation")),
   "allow-once": recordedAs(approvedAs("allow-once")),
   "always-allow": recordedAs(({ type }) => type === "auto-approve"),
+  "answer-local-question": notRecorded(
+    "The recorder runs cloud turns only; local-run-question-card.dom.test.tsx drives a local run's question through the page.",
+  ),
   "answer-question": recordedAs(({ type }) => type === "answer"),
   "attach-files": notRecorded(
     "The recorder posts text messages only; attachments need stored files.",

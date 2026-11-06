@@ -90,6 +90,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "chat_threads.active_skill",
   // Generator identifiers and corpus decision IDs contain no member identifiers.
   "chat_threads.generation_provenance",
+  // A local run target names a harness and model, never a member.
+  "chat_threads.chat_local_run_target",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",

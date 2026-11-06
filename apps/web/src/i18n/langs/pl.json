@@ -162,7 +162,9 @@
       "declinedDescription": "Odrzuciłeś to zaproszenie. Możesz bezpiecznie zamknąć tę stronę.",
       "description": "{inviterEmail} zaprosił/a Cię do organizacji {organizationName} jako {role}.",
       "goToWorkspaces": "Przejdź do spraw",
-      "title": "Zaproszenie do organizacji"
+      "title": "Zaproszenie do organizacji",
+      "verifyEmailHint": "Aby zweryfikować adres {email}, wyloguj się, a następnie zaloguj się kodem jednorazowym, który wyślemy na ten adres.",
+      "wrongAccountHint": "Zalogowano jako {email}. Wyloguj się, a następnie zaloguj się adresem, na który wysłano zaproszenie."
     },
     "lastUsed": "Ostatnio użyte",
     "oneTimeCodeExpired": "Twój kod jednorazowy wygasł. Poproś o nowy kod.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Agent programistyczny na Twoim komputerze wymaga ponownego zalogowania. Zaloguj się w stella desktop i spróbuj ponownie.",
       "errorUnavailable": "Twój komputer przestał przetwarzać tę odpowiedź. Upewnij się, że stella desktop jest otwarty i połączony, i spróbuj ponownie.",
       "onThisComputer": "{harness} na tym komputerze",
+      "permissionAskDescription": "Sam edytuje pliki w folderze uruchomienia; o wszystko inne pyta.",
+      "permissionAutoDescription": "Sam robi to, co uznaje za bezpieczne; o resztę pyta.",
+      "permissionFullAuto": "W pełni automatycznie",
+      "permissionFullAutoDescription": "Nie pyta o nic w folderze uruchomienia; zawsze pyta, zanim zmieni coś na Twoim komputerze.",
+      "permissionSandboxed": "Działa w piaskownicy; pyta, zanim zmieni coś na Twoim komputerze.",
+      "permissionUnavailable": "Niedostępne na tym komputerze",
+      "permissions": "Uprawnienia",
       "refusalConflictingRunMode": "To żądanie ma działać jednocześnie z agentem w chmurze i na Twoim komputerze. Wybierz jedno w menu Uruchom na.",
       "refusalHarnessUnavailable": "Agent programistyczny na Twoim komputerze nie może teraz przyjąć tego żądania. Sprawdź go w stella desktop.",
       "refusalModelUnavailable": "Agent programistyczny na Twoim komputerze nie oferuje już tego modelu. Wybierz inny w menu Uruchom na.",
       "refusalNoComputer": "Żaden z Twoich komputerów nie jest połączony. Otwórz stella desktop i wyślij ponownie.",
+      "refusalPermissionUnavailable": "Agent programistyczny na Twoim komputerze nie może działać z tymi uprawnieniami. Wybierz inną opcję w menu Uprawnienia.",
       "refusalTooLarge": "Ta rozmowa jest zbyt długa, by przekazać ją do Twojego komputera. Rozpocznij nowy czat, aby uruchomić go tam.",
       "refusalUnavailable": "Uruchamianie czatów na Twoim komputerze nie jest dostępne dla Twojego konta.",
       "runOn": "Uruchom na",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Chwilowo niedostępne",
       "stateUnsupported": "Ta wersja nie jest obsługiwana",
       "waitingForComputer": "Oczekiwanie na ponowne połączenie Twojego komputera…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Wybierz wszystkie pasujące",
+      "dismiss": "Odrzuć i zatrzymaj",
+      "secretAnswer": "Odpowiedź ukryta",
+      "secretPlaceholder": "Twoja odpowiedź pozostanie ukryta"
     },
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mcpReconnect": {

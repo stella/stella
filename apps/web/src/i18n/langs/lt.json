@@ -162,7 +162,9 @@
       "declinedDescription": "Atmetėte šį kvietimą. Galite saugiai uždaryti šį puslapį.",
       "description": "{inviterEmail} pakvietė jus prisijungti prie {organizationName} kaip {role}.",
       "goToWorkspaces": "Eiti į bylas",
-      "title": "Kvietimas į organizaciją"
+      "title": "Kvietimas į organizaciją",
+      "verifyEmailHint": "Kad patvirtintumėte adresą {email}, atsijunkite ir prisijunkite vienkartiniu kodu, kurį išsiųsime šiuo adresu.",
+      "wrongAccountHint": "Esate prisijungę kaip {email}. Atsijunkite ir prisijunkite adresu, kuriuo buvo išsiųstas kvietimas."
     },
     "lastUsed": "Paskutinį kartą naudotas",
     "oneTimeCodeExpired": "Jūsų vienkartinio kodo galiojimas baigėsi. Paprašykite naujo kodo.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Programavimo agentas jūsų kompiuteryje prašo prisijungti iš naujo. Prisijunkite per stella desktop ir bandykite dar kartą.",
       "errorUnavailable": "Jūsų kompiuteris nustojo apdoroti šį atsakymą. Įsitikinkite, kad stella desktop atidarytas ir prijungtas, ir bandykite dar kartą.",
       "onThisComputer": "{harness} šiame kompiuteryje",
+      "permissionAskDescription": "Paleidimo aplanko failus redaguoja pats; dėl visko kito klausia.",
+      "permissionAutoDescription": "Tai, ką laiko saugiu, atlieka pats; dėl kito klausia.",
+      "permissionFullAuto": "Visiškai automatiškai",
+      "permissionFullAutoDescription": "Dėl nieko paleidimo aplanke neklausia; prieš ką nors keisdamas jūsų kompiuteryje, visada paklausia.",
+      "permissionSandboxed": "Veikia izoliuotoje aplinkoje; prieš ką nors keisdamas jūsų kompiuteryje, paklausia.",
+      "permissionUnavailable": "Šiame kompiuteryje nepasiekiama",
+      "permissions": "Leidimai",
       "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
       "refusalHarnessUnavailable": "Programavimo agentas jūsų kompiuteryje dabar negali priimti šios užklausos. Patikrinkite jį per stella desktop.",
       "refusalModelUnavailable": "Programavimo agentas jūsų kompiuteryje šio modelio nebesiūlo. Pasirinkite kitą meniu Paleisti.",
       "refusalNoComputer": "Nė vienas jūsų kompiuteris neprijungtas. Atidarykite stella desktop ir siųskite dar kartą.",
+      "refusalPermissionUnavailable": "Programavimo agentas jūsų kompiuteryje negali veikti su šiais leidimais. Pasirinkite kitą parinktį meniu Leidimai.",
       "refusalTooLarge": "Šis pokalbis per ilgas, kad jį būtų galima perduoti jūsų kompiuteriui. Pradėkite naują pokalbį, kad paleistumėte jį ten.",
       "refusalUnavailable": "Pokalbių paleidimas jūsų kompiuteryje jūsų paskyrai nepasiekiamas.",
       "runOn": "Paleisti",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Šiuo metu nepasiekiama",
       "stateUnsupported": "Ši versija nepalaikoma",
       "waitingForComputer": "Laukiama, kol jūsų kompiuteris vėl prisijungs…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Pasirinkite visus tinkamus",
+      "dismiss": "Atmesti ir sustabdyti",
+      "secretAnswer": "Atsakymas paslėptas",
+      "secretPlaceholder": "Jūsų atsakymas liks paslėptas"
     },
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mcpReconnect": {

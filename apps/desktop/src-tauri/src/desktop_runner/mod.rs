@@ -302,6 +302,7 @@ fn journal_backing(namespace: &str) -> JournalBacking {
 /// Where the host keeps its holders and run folders, under the app's data.
 const HOLDER_DIRECTORY: &str = "agent-holder";
 const RUNS_DIRECTORY: &str = "agent-runs";
+const PACKAGE_CACHE_DIRECTORY: &str = "agent-package-cache";
 
 /// The app's harness host: the bundled sidecar, the managed CLIs and the
 /// ChatGPT connection. `None` without a data folder.
@@ -331,6 +332,7 @@ fn sidecar_host(app: &AppHandle) -> Option<SidecarHarnessHost> {
         backoff: ReconnectBackoff::DEFAULT,
       },
       workspaces: data.join(RUNS_DIRECTORY),
+      package_cache: data.join(PACKAGE_CACHE_DIRECTORY),
       probe_interval: sidecar_host::PROBE_INTERVAL,
     },
     Arc::new(ManagedHarnesses { app: app.clone() }),

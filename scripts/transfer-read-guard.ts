@@ -692,6 +692,7 @@ class TransferReadInspector {
     const length = this.unwrap(condition.left);
     if (
       length.type !== "MemberExpression" ||
+      length.computed ||
       this.propertyName(length.property) !== "length" ||
       length.object.type !== "Identifier" ||
       length.object.name !== rowName ||

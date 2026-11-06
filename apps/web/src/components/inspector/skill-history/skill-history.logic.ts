@@ -52,6 +52,11 @@ export const PROPOSAL_STATUS_LABEL_KEY = {
 export const isOpenProposalStatus = (status: SkillProposalStatus): boolean =>
   status === "draft" || status === "proposed";
 
+/** Only a proposal its author submitted for review can be accepted or rejected. */
+export const isReviewableProposalStatus = (
+  status: SkillProposalStatus,
+): boolean => status === "proposed";
+
 // Bodies that ship with the product are replaced wholesale on update, so the
 // API refuses proposals against them.
 const PROPOSABLE_BY_ORIGIN = {

@@ -162,7 +162,9 @@
       "declinedDescription": "Olete selle kutse tagasi lükanud. Võite selle lehe sulgeda.",
       "description": "{inviterEmail} kutsus teid organisatsiooni {organizationName} liikmeks rolliga {role}.",
       "goToWorkspaces": "Mine toimikutesse",
-      "title": "Kutse organisatsiooni"
+      "title": "Kutse organisatsiooni",
+      "verifyEmailHint": "Aadressi {email} kinnitamiseks logige välja ja logige sisse ühekordse koodiga, mille sellele aadressile saadame.",
+      "wrongAccountHint": "Olete sisse logitud kontoga {email}. Logige välja ja logige sisse aadressiga, kuhu kutse saadeti."
     },
     "lastUsed": "Viimati kasutatud",
     "oneTimeCodeExpired": "Sinu ühekordne kood on aegunud. Küsi uus kood.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
       "onThisComputer": "{harness} selles arvutis",
+      "permissionAskDescription": "Muudab käituse kaustas olevaid faile ise; kõige muu kohta küsib.",
+      "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",
+      "permissionFullAuto": "Täisautomaatne",
+      "permissionFullAutoDescription": "Ei küsi käituse kaustas millegi kohta; küsib alati enne, kui sinu arvutis midagi muudab.",
+      "permissionSandboxed": "Töötab liivakastis; küsib enne, kui sinu arvutis midagi muudab.",
+      "permissionUnavailable": "Selles arvutis pole saadaval",
+      "permissions": "Õigused",
       "refusalConflictingRunMode": "See päring soovib käivituda korraga pilveagendiga ja sinu arvutis. Vali menüüs Käivita üks.",
       "refusalHarnessUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa seda päringut praegu vastu võtta. Kontrolli seda stella desktopis.",
       "refusalModelUnavailable": "Sinu arvutis töötav programmeerimisagent seda mudelit enam ei paku. Vali menüüs Käivita mõni teine.",
       "refusalNoComputer": "Ükski sinu arvuti pole ühendatud. Ava stella desktop ja saada uuesti.",
+      "refusalPermissionUnavailable": "Sinu arvutis töötav programmeerimisagent ei saa nende õigustega töötada. Vali menüüs Õigused mõni muu valik.",
       "refusalTooLarge": "See vestlus on sinu arvutile üleandmiseks liiga pikk. Alusta uut vestlust, et seda seal käitada.",
       "refusalUnavailable": "Vestluste käitamine sinu arvutis pole sinu konto jaoks saadaval.",
       "runOn": "Käivita",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Praegu pole saadaval",
       "stateUnsupported": "Seda versiooni ei toetata",
       "waitingForComputer": "Ootame, kuni sinu arvuti uuesti ühendub…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Valige kõik sobivad",
+      "dismiss": "Jäta kõrvale ja peata",
+      "secretAnswer": "Vastus on peidetud",
+      "secretPlaceholder": "Teie vastus jääb peidetuks"
     },
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mcpReconnect": {

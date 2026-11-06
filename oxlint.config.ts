@@ -2275,6 +2275,8 @@ const config = defineConfig({
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
+    "./.oxlint-plugins/radius-scale.ts",
+    "./.oxlint-plugins/no-raw-context-menu.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
@@ -7399,6 +7401,38 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-overflow-scroll/no-raw-overflow-scroll": "error",
+      },
+    },
+    {
+      // Corner radii name a step of one scale (DESIGN.md, Border Radius). The
+      // design-system components are in scope: `shadcn/no-arbitrary-values`
+      // is off there, so nothing else holds their radii to the scale.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/radius-scale.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "radius-scale/radius-scale": "error",
+      },
+    },
+    {
+      // Right-click opens an object's own actions through EntityActions
+      // (@stll/ui/entity-actions), which renders the object's actions button
+      // and its right-click menu from one list and keeps the native menu for
+      // Shift + right-click, editable text, links and selected text. The
+      // sanctioned listeners are listed in the rule itself; a test fires
+      // synthetic events rather than listening.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-context-menu.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
+      rules: {
+        "no-raw-context-menu/no-raw-context-menu": "error",
       },
     },
     {

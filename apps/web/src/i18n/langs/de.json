@@ -162,7 +162,9 @@
       "declinedDescription": "Sie haben diese Einladung abgelehnt. Sie können diese Seite schließen.",
       "description": "Sie wurden von {inviterEmail} als {role} zu {organizationName} eingeladen.",
       "goToWorkspaces": "Zu Akten",
-      "title": "Einladung zur Organisation"
+      "title": "Einladung zur Organisation",
+      "verifyEmailHint": "Um {email} zu bestätigen, melden Sie sich ab und mit einem Einmalcode an, den wir an diese Adresse senden.",
+      "wrongAccountHint": "Sie sind als {email} angemeldet. Melden Sie sich ab und mit der Adresse an, an die die Einladung gesendet wurde."
     },
     "lastUsed": "Zuletzt verwendet",
     "oneTimeCodeExpired": "Ihr Einmalcode ist abgelaufen. Fordern Sie einen neuen Code an.",
@@ -1687,10 +1689,18 @@
       "errorNeedsLogin": "Der Coding-Agent auf Ihrem Computer verlangt eine erneute Anmeldung. Melden Sie sich über stella desktop an und versuchen Sie es dann erneut.",
       "errorUnavailable": "Ihr Computer hat die Bearbeitung dieser Antwort beendet. Stellen Sie sicher, dass stella desktop geöffnet und verbunden ist, und versuchen Sie es erneut.",
       "onThisComputer": "{harness} auf diesem Computer",
+      "permissionAskDescription": "Bearbeitet Dateien im Ordner des Laufs selbst; fragt vor allem anderen nach.",
+      "permissionAutoDescription": "Erledigt selbst, was es für sicher hält; fragt beim Rest nach.",
+      "permissionFullAuto": "Vollautomatisch",
+      "permissionFullAutoDescription": "Fragt bei nichts innerhalb des Ordners des Laufs nach; fragt immer, bevor es etwas an Ihrem Computer ändert.",
+      "permissionSandboxed": "Läuft in einer Sandbox; fragt, bevor es etwas an Ihrem Computer ändert.",
+      "permissionUnavailable": "Auf diesem Computer nicht verfügbar",
+      "permissions": "Berechtigungen",
       "refusalConflictingRunMode": "Diese Anfrage soll zugleich mit dem Cloud-Agenten und auf Ihrem Computer laufen. Wählen Sie unter „Ausführen auf“ eines aus.",
       "refusalHarnessUnavailable": "Der Coding-Agent auf Ihrem Computer kann diese Anfrage gerade nicht übernehmen. Prüfen Sie ihn in stella desktop.",
       "refusalModelUnavailable": "Der Coding-Agent auf Ihrem Computer bietet dieses Modell nicht mehr an. Wählen Sie unter „Ausführen auf“ ein anderes.",
       "refusalNoComputer": "Keiner Ihrer Computer ist verbunden. Öffnen Sie stella desktop und senden Sie erneut.",
+      "refusalPermissionUnavailable": "Der Coding-Agent auf Ihrem Computer kann mit diesen Berechtigungen nicht laufen. Wählen Sie unter „Berechtigungen“ eine andere Option.",
       "refusalTooLarge": "Diese Unterhaltung ist zu lang, um sie an Ihren Computer zu übergeben. Starten Sie einen neuen Chat, um sie dort auszuführen.",
       "refusalUnavailable": "Chats auf Ihrem Computer auszuführen ist für Ihr Konto nicht verfügbar.",
       "runOn": "Ausführen auf",
@@ -1702,6 +1712,12 @@
       "stateUnavailable": "Derzeit nicht verfügbar",
       "stateUnsupported": "Diese Version wird nicht unterstützt",
       "waitingForComputer": "Warten, bis sich Ihr Computer wieder verbindet…"
+    },
+    "localRunQuestion": {
+      "chooseSeveral": "Alles Zutreffende auswählen",
+      "dismiss": "Verwerfen und anhalten",
+      "secretAnswer": "Antwort verborgen",
+      "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
