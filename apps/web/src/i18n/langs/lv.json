@@ -3988,6 +3988,7 @@
     "reopenTab": "Atkārtoti atvērt {name}",
     "resizePane": "Mainīt paneļa izmēru",
     "review": {
+      "acceptChange": "Pieņemt izmaiņas",
       "actionNeeded": "Nepieciešama rīcība",
       "addComment": "Pievienot kā komentāru",
       "addNote": "Pievienot komentāru pretpusei",
@@ -4074,6 +4075,7 @@
         "label": "Secinājumi blakus klauzulām, par kurām tie ir",
         "unanchored": "Nav saistīts ar klauzulu"
       },
+      "markAsReviewed": "Atzīmēt kā pārbaudītu",
       "newTopic": "Jauna pārbaudes tēma",
       "noChangeNeeded": "Izmaiņas nav nepieciešamas",
       "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",

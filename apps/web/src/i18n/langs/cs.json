@@ -3988,6 +3988,7 @@
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
+      "acceptChange": "Přijmout změnu",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -4074,6 +4075,7 @@
         "label": "Zjištění vedle ustanovení, kterých se týkají",
         "unanchored": "Bez vazby na ustanovení"
       },
+      "markAsReviewed": "Označit jako zkontrolované",
       "newTopic": "Nové téma kontroly",
       "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",

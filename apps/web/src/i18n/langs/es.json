@@ -3988,6 +3988,7 @@
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
     "review": {
+      "acceptChange": "Aceptar el cambio",
       "actionNeeded": "Requiere acción",
       "addComment": "Añadir como comentario",
       "addNote": "Añadir comentario para la contraparte",
@@ -4074,6 +4075,7 @@
         "label": "Hallazgos junto a las cláusulas correspondientes",
         "unanchored": "No vinculado a ninguna cláusula"
       },
+      "markAsReviewed": "Marcar como revisado",
       "newTopic": "Nuevo tema de revisión",
       "noChangeNeeded": "No se necesita ningún cambio",
       "noEditor": "Abre el documento para aceptar los cambios",

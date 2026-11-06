@@ -3988,6 +3988,7 @@
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
     "review": {
+      "acceptChange": "Nõustu muudatusega",
       "actionNeeded": "Vajab tegutsemist",
       "addComment": "Lisa kommentaarina",
       "addNote": "Lisa kommentaar vastaspoolele",
@@ -4074,6 +4075,7 @@
         "label": "Leiud nende klauslite kõrval, mida need puudutavad",
         "unanchored": "Ei ole seotud ühegi klausliga"
       },
+      "markAsReviewed": "Märgi ülevaadatuks",
       "newTopic": "Uus läbivaatuse teema",
       "noChangeNeeded": "Muudatust pole vaja",
       "noEditor": "Avage dokument, et muudatusi aktsepteerida",

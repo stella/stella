@@ -3988,6 +3988,7 @@
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
     "review": {
+      "acceptChange": "Änderung annehmen",
       "actionNeeded": "Handlungsbedarf",
       "addComment": "Als Kommentar hinzufügen",
       "addNote": "Kommentar für die Gegenpartei hinzufügen",
@@ -4074,6 +4075,7 @@
         "label": "Ergebnisse neben den betreffenden Klauseln",
         "unanchored": "Nicht an eine Klausel gebunden"
       },
+      "markAsReviewed": "Als geprüft markieren",
       "newTopic": "Neues Prüfthema",
       "noChangeNeeded": "Keine Änderung nötig",
       "noEditor": "Öffnen Sie das Dokument, um Änderungen anzunehmen",

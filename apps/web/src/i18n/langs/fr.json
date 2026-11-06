@@ -3988,6 +3988,7 @@
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {
+      "acceptChange": "Accepter la modification",
       "actionNeeded": "Action requise",
       "addComment": "Ajouter comme commentaire",
       "addNote": "Ajouter un commentaire pour la contrepartie",
@@ -4074,6 +4075,7 @@
         "label": "Constats à côté des clauses concernées",
         "unanchored": "Non rattaché à une clause"
       },
+      "markAsReviewed": "Marquer comme révisé",
       "newTopic": "Nouveau thème de revue",
       "noChangeNeeded": "Aucune modification nécessaire",
       "noEditor": "Ouvrez le document pour accepter les modifications",

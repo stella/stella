@@ -3988,6 +3988,7 @@
     "reopenTab": "{name} újranyitása",
     "resizePane": "Panel átméretezése",
     "review": {
+      "acceptChange": "Módosítás elfogadása",
       "actionNeeded": "Teendő",
       "addComment": "Hozzáadás megjegyzésként",
       "addNote": "Megjegyzés hozzáadása az ellenfélnek",
@@ -4074,6 +4075,7 @@
         "label": "Megállapítások az érintett kikötések mellett",
         "unanchored": "Nincs kikötéshez kötve"
       },
+      "markAsReviewed": "Megjelölés ellenőrzöttként",
       "newTopic": "Új ellenőrzési téma",
       "noChangeNeeded": "Nincs szükség módosításra",
       "noEditor": "Nyissa meg a dokumentumot a módosítások elfogadásához",

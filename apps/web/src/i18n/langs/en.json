@@ -3988,6 +3988,7 @@
     "reopenTab": "Reopen {name}",
     "resizePane": "Resize pane",
     "review": {
+      "acceptChange": "Accept change",
       "actionNeeded": "Action needed",
       "addComment": "Add as comment",
       "addNote": "Add comment for counterparty",
@@ -4074,6 +4075,7 @@
         "label": "Findings beside the clauses they are about",
         "unanchored": "Not tied to a clause"
       },
+      "markAsReviewed": "Mark as reviewed",
       "newTopic": "New review topic",
       "noChangeNeeded": "No change needed",
       "noEditor": "Open the document to accept changes",

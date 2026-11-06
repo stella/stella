@@ -3988,6 +3988,7 @@
     "reopenTab": "Otwórz ponownie {name}",
     "resizePane": "Zmień rozmiar panelu",
     "review": {
+      "acceptChange": "Akceptuj zmianę",
       "actionNeeded": "Wymaga działania",
       "addComment": "Dodaj jako komentarz",
       "addNote": "Dodaj komentarz dla kontrahenta",
@@ -4074,6 +4075,7 @@
         "label": "Ustalenia obok klauzul, których dotyczą",
         "unanchored": "Niepowiązane z klauzulą"
       },
+      "markAsReviewed": "Oznacz jako zweryfikowane",
       "newTopic": "Nowy temat przeglądu",
       "noChangeNeeded": "Brak potrzeby zmiany",
       "noEditor": "Otwórz dokument, aby zaakceptować zmiany",

@@ -4417,7 +4417,7 @@ const FindingDecisionButtons = ({
         size="sm"
       >
         <CheckIcon className="me-1 size-3.5" />
-        {t("common.accept")}
+        {t("inspector.review.markAsReviewed")}
       </Button>
       <Button
         className="h-7 px-2.5"
@@ -4482,7 +4482,7 @@ const SuggestionButtons = ({
               : { tooltip: t("inspector.review.noEditor") })}
           >
             <CheckIcon className="me-1 size-3.5" />
-            {t("common.accept")}
+            {t("inspector.review.acceptChange")}
           </Button>
           <Button
             className="h-7 px-2.5"
