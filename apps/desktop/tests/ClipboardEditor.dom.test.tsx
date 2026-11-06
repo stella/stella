@@ -49,7 +49,8 @@ const renderEditor = async (native: { read: NativeRead }) => {
     (command, payload) => {
       if (command === "clipboard_get_editor_context") {
         if (native.read.type === "failed") {
-          throw native.read.message;
+          // A native command rejects with its bare message.
+          return Promise.reject<never>(native.read.message);
         }
         return CONTEXT;
       }
