@@ -31,19 +31,22 @@ test("an enum column joins the inventory by its role, not its name", () => {
   const table = pgTable("role_fixture", {
     id: text().primaryKey(),
     connection: text({ enum: ["connected", "disconnected"] }),
-    channel: text({ enum: ["email", "post"] }),
+    channel: text("delivery_channel", { enum: ["email", "post"] }),
   });
+  // Roles name the SQL table and column; the inventory keeps the export's keys.
   const maps = statusColumnMaps(
     { roleTable: table },
     {
-      roleTable: {
+      role_fixture: {
         connection: ENUM_COLUMN_ROLE.lifecycle,
-        channel: ENUM_COLUMN_ROLE.attribute,
+        delivery_channel: ENUM_COLUMN_ROLE.attribute,
       },
     },
   );
   expect(maps.writableStatusColumns).toEqual({ roleTable: ["connection"] });
-  expect(maps.enumColumns).toEqual({ roleTable: ["channel", "connection"] });
+  expect(maps.enumColumns).toEqual({
+    role_fixture: ["connection", "delivery_channel"],
+  });
 });
 
 test("an unclassified enum column stops the inventory", () => {
@@ -52,6 +55,6 @@ test("an unclassified enum column stops the inventory", () => {
     stage: text({ enum: ["draft", "final"] }),
   });
   expect(() => statusColumnMaps({ stagedTable: table }, {})).toThrow(
-    "Classify stagedTable.stage",
+    "Classify unclassified_fixture.stage",
   );
 });
