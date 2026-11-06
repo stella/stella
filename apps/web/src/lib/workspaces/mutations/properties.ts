@@ -228,7 +228,7 @@ type SuggestPromptVars = {
   workspaceId: string;
   name: string;
   /** The kinds a model fills: a file is uploaded, a person picked. */
-  contentType: Exclude<PropertyContentType, "file" | "person">;
+  contentType: Exclude<PropertyContentType, "file" | "person" | "record">;
   options?: { value: string }[];
   currentPrompt?: string;
   instruction: string;
