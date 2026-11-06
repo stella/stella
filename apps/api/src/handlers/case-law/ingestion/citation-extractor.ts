@@ -204,7 +204,7 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // (a dropped diacritic, likely an encoding fallback) is the same class.
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
-const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+export const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
 
 const CZECH_REPORTER_CITATION_RE = new RegExp(
   `^${CZECH_REPORTER_CITATION_SOURCE}$`,
@@ -234,7 +234,7 @@ const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům
  * the form the court cites it: `N 53/26 SbNU 73` is nález 53 of volume 26,
  * printed on page 73 (`U` for an usnesení).
  */
-const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
+export const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
 
 /**
  * The same entry in the older spelled-out form, where the kind is written as

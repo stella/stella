@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import path from "node:path";
 import * as v from "valibot";
 
 import {
@@ -24,7 +25,13 @@ const SANDBOX_MODE = {
 const NETWORK_ACCESS = {
   open: true,
 } as const satisfies Record<HarnessRunPolicy["network"], boolean>;
-/** The harness asks before acting outside its sandbox; stella relays it. */
+/**
+ * Codex runs every command inside its sandbox and asks before acting outside
+ * it; stella relays the question. That is its one approval mode: `never`
+ * would turn those questions into silent refusals, so Codex offers no other.
+ */
+export const CODEX_APPROVAL_MODE =
+  "ask" satisfies HarnessRunPolicy["approvals"];
 const APPROVAL_POLICY = "on-request";
 /** A dotted config key carries the name, so it must stay a bare TOML key. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
@@ -36,6 +43,9 @@ const threadParams = (input: HarnessTurnInput) => {
   if (!MCP_SERVER_NAME.test(input.mcp.serverName)) {
     panic("Codex adapter: the MCP server name must be a bare TOML key");
   }
+  if (!path.isAbsolute(input.cacheDir)) {
+    panic("Codex adapter: the cache directory must be an absolute path");
+  }
   return {
     model: input.model,
     cwd: input.workspaceDir,
@@ -45,6 +55,11 @@ const threadParams = (input: HarnessTurnInput) => {
     config: {
       "sandbox_workspace_write.network_access":
         NETWORK_ACCESS[input.policy.network],
+      // Package caches live outside the workspace; the temp directory and
+      // `/tmp` stay writable, as tools that make scratch files expect.
+      "sandbox_workspace_write.writable_roots": [input.cacheDir],
+      "sandbox_workspace_write.exclude_tmpdir_env_var": false,
+      "sandbox_workspace_write.exclude_slash_tmp": false,
       // Only stella's server is overridden; others in the home survive. The
       // token travels over stdio, never on the command line.
       [`mcp_servers.${input.mcp.serverName}`]: {

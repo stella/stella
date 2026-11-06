@@ -10,6 +10,7 @@ import {
   DESKTOP_RUNNER_MAX_TOKEN_LENGTH,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   DESKTOP_RUNNER_TIMING,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
@@ -89,6 +90,8 @@ export type StartLocalRunInput = {
   harness: AgentHarness;
   harnessVersion: string;
   model: string;
+  /** How much the run asks before it acts; the computer must report it. */
+  approvals: DesktopRunnerApprovalMode;
   harnessSessionId: string | null;
   instructions: string;
   messages: RunStart["messages"];
@@ -109,6 +112,7 @@ export type StartLocalRunOutcome =
       report: DesktopRunnerHarnessReport | null;
     }
   | { type: "model_unavailable" }
+  | { type: "approvals_unavailable" }
   /** The message would not fit one frame, even with the longest token. */
   | { type: "too_large" };
 
@@ -224,7 +228,7 @@ const startRun = async (
     harnessSessionId: input.harnessSessionId,
     instructions: input.instructions,
     messages: input.messages,
-    policy: { network: "open", fs: "workspace" },
+    policy: { network: "open", fs: "workspace", approvals: input.approvals },
     mcp: input.mcp,
   } as const;
   const checked = v.safeParse(desktopRunnerServerMessageSchema, {
@@ -250,6 +254,7 @@ const startRun = async (
         harness: input.harness,
         harnessVersion: input.harnessVersion,
         model: input.model,
+        approvals: input.approvals,
         workspaceIds: input.workspaceIds,
         chat: input.chat ?? null,
         payload: message,

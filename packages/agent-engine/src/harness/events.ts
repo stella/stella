@@ -146,7 +146,12 @@ export type HarnessFailure =
       exitCode: number | null;
       signal: string | null;
     }
-  | { type: "protocol_violation"; message: string };
+  | { type: "protocol_violation"; message: string }
+  /**
+   * The run's approval mode needs the harness's OS sandbox and the sandbox
+   * could not start; the run never runs without it.
+   */
+  | { type: "sandbox_unavailable"; message: string };
 
 export type HarnessEvent =
   | {
@@ -183,4 +188,5 @@ export const HARNESS_FAILURE_OUTCOME = {
   provider_error: "failed",
   harness_exited: "failed",
   protocol_violation: "failed",
+  sandbox_unavailable: "failed",
 } as const satisfies Record<HarnessFailure["type"], DesktopRunnerRunOutcome>;

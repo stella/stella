@@ -141,6 +141,13 @@ export const resolveChatLocalRun = async ({
           "The harness on your computer does not offer that model.",
         );
       }
+      if (!desktop.harness.approvalModes.includes(runTarget.approvals)) {
+        return refuse(
+          409,
+          CHAT_LOCAL_RUN_REFUSAL.approvalsUnavailable,
+          "Your computer cannot run the harness with those permissions.",
+        );
+      }
       const plan: LocalRunPlan = {
         type: "start",
         destination: {
@@ -148,6 +155,7 @@ export const resolveChatLocalRun = async ({
           harness: runTarget.harness,
           harnessVersion: desktop.harness.version,
           model: runTarget.model,
+          approvals: runTarget.approvals,
         },
       };
       return Result.ok(createLocalChatRun(context, plan));

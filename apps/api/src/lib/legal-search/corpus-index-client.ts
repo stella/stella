@@ -53,18 +53,27 @@ type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
  * being served (an MCP tool call) running out before the engine answered: the
  * engine may be up and merely slower than the caller can wait, so it is the
  * caller's timeout, never an outage; its cause is the budget's own
- * `TimeoutError` (`requestBudgetExpiry`). `answered` is everything else,
- * including a response this client could not read, which no retry fixes.
+ * `TimeoutError` (`requestBudgetExpiry`). `caller_aborted` is the signal the
+ * caller passed ending the request: whoever asked stopped waiting, which says
+ * nothing of the engine. `answered` is everything else, including a response
+ * this client could not read, which no retry fixes.
  */
 type CorpusIndexErrorReach =
-  "answered" | "unreachable" | "index_missing" | "budget_expired";
+  | "answered"
+  | "unreachable"
+  | "index_missing"
+  | "budget_expired"
+  | "caller_aborted";
 
 /**
  * What a failed exchange says of the engine itself. `budget_expired` is named
  * only by `corpusIndexBudgetExpiry`, which carries the budget's own expiry,
  * so no failure reads as the budget's without the budget's evidence.
  */
-type EngineReach = Exclude<CorpusIndexErrorReach, "budget_expired">;
+type EngineReach = Exclude<
+  CorpusIndexErrorReach,
+  "budget_expired" | "caller_aborted"
+>;
 
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
@@ -115,6 +124,7 @@ export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
       return true;
     case "answered":
     case "budget_expired":
+    case "caller_aborted":
       return false;
     default:
       error.reach satisfies never;
@@ -797,21 +807,32 @@ const requestFailure = ({
   reach,
 }: RequestFailureOptions & {
   reach: EngineReach;
-}): CorpusIndexError =>
-  (endedByRequestDeadline(request, error)
-    ? corpusIndexBudgetExpiry({
-        label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
-        cause: error,
-      })
-    : undefined) ??
-  new CorpusIndexError({
-    message: isAborted(error)
-      ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
-      : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
-    cause: error,
-    rejection: "unknown",
-    reach,
-  });
+}): CorpusIndexError => {
+  if (request.signal?.aborted === true) {
+    return new CorpusIndexError({
+      message: `corpus index ${requestLabel(request)} was cancelled by its caller: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach: "caller_aborted",
+    });
+  }
+  return (
+    (endedByRequestDeadline(request, error)
+      ? corpusIndexBudgetExpiry({
+          label: `${requestLabel(request)} after ${request.timeoutMs}ms`,
+          cause: error,
+        })
+      : undefined) ??
+    new CorpusIndexError({
+      message: isAborted(error)
+        ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
+        : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
+      cause: error,
+      rejection: "unknown",
+      reach,
+    })
+  );
+};
 
 /**
  * A body that stopped arriving (the budget expired or the connection dropped
@@ -923,7 +944,7 @@ const withSearchAdmission = async <T>(
         {
           init: { method: "POST" },
           path: read.path,
-          signal,
+          signal: read.signal,
           ...waiting,
         },
         admitted,

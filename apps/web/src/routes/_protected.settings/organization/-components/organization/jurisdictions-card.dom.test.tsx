@@ -2,7 +2,6 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -103,7 +102,8 @@ const SK: PracticeJurisdiction = { countryCode: "SK", isPrimary: false };
 
 // Lets queued work (a scoped mutation continuing, a refetch) reach the
 // transport before asserting what was sent.
-const drain = async () => await testing.act(async () => await sleep(0));
+const drain = async () =>
+  await testing.act(async () => await Promise.resolve());
 
 const mountCard = async () => {
   const client = new QueryClient({

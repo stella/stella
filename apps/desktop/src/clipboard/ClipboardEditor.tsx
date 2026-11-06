@@ -88,6 +88,9 @@ const EDITOR_HEADER_PADDING_CLASS = navigator.userAgent.includes("Macintosh")
   ? "ps-24"
   : "ps-5";
 
+/** `clipboard_get_editor_context`'s rejection when the open clip no longer exists. */
+const CLIPBOARD_ITEM_GONE_ERROR = "clipboard item no longer exists";
+
 type EditorState =
   | { type: "loading" }
   | { message: string; type: "error" }
@@ -609,6 +612,15 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
 
   useEffect(() => {
     let disposed = false;
+    // A reload must never take away a draft that is already open: saving says
+    // so in place if the clip is gone by then.
+    const showLoadError = () => {
+      setState((current) =>
+        current.type === "ready"
+          ? current
+          : { message: loadError, type: "error" },
+      );
+    };
     const loadContext = () => {
       void invoke<unknown>("clipboard_get_editor_context")
         .then((value) => {
@@ -625,7 +637,7 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
               window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
             });
-            setState({ message: loadError, type: "error" });
+            showLoadError();
             return undefined;
           }
           setState((current) => {
@@ -658,13 +670,16 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
           if (disposed) {
             return;
           }
-          reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-            detail: describeError(error),
-            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
-            window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
-          });
-          setState({ message: loadError, type: "error" });
+          // History pruned or replaced the open clip, which it may do at any time.
+          if (error !== CLIPBOARD_ITEM_GONE_ERROR) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardEditorRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboardEditor,
+            });
+          }
+          showLoadError();
         });
     };
     loadContext();
