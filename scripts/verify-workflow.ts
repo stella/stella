@@ -209,14 +209,15 @@ export const parseVerifyWorkflow = (
 };
 
 const RUNNER_TEMP_ENTRY = /RUNNER_TEMP\}?"?\/([A-Za-z0-9._-]+)/gu;
-const LOCAL_BRANCH_MARKER = "STELLA_VERIFY_LOCAL";
+const CI_ONLY_ARM =
+  /^([ \t]*)if \[\[ "\$\{STELLA_VERIFY_LOCAL:-false\}" == true \]\]; then\n([\s\S]*?)^\1else\n[\s\S]*?^\1fi$/gmu;
 
 /**
  * `RUNNER_TEMP` entries that marked steps use but an unmarked step of the
  * same job touches first. In CI the unmarked step creates the entry; the
  * local runner skips unmarked steps, so it must create the entry itself.
- * A marked step that branches on `STELLA_VERIFY_LOCAL` owns its local path
- * and is not scanned.
+ * The `else` arm of an exact `STELLA_VERIFY_LOCAL` branch never runs locally,
+ * so it is ignored; everything else in a marked step is scanned.
  */
 export const parseHarnessRunnerTempEntries = (
   source: string,
@@ -237,10 +238,8 @@ export const parseHarnessRunnerTempEntries = (
         marker,
         label: `Job ${job} step ${index + 1}`,
       });
-      if (marked && run.includes(LOCAL_BRANCH_MARKER)) {
-        continue;
-      }
-      for (const match of run.matchAll(RUNNER_TEMP_ENTRY)) {
+      const scanned = marked ? run.replaceAll(CI_ONLY_ARM, "$2") : run;
+      for (const match of scanned.matchAll(RUNNER_TEMP_ENTRY)) {
         const name = match[1];
         if (name === undefined) {
           continue;

@@ -110,7 +110,7 @@ describe("harness RUNNER_TEMP entries", () => {
     expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([]);
   });
 
-  test("a marked step that branches on STELLA_VERIFY_LOCAL owns its local path", () => {
+  test("the CI arm of a STELLA_VERIFY_LOCAL branch is not an obligation", () => {
     const source = workflow([
       { name: "Restore", run: 'ls "$RUNNER_TEMP/cache"' },
       marked(
@@ -125,6 +125,28 @@ describe("harness RUNNER_TEMP entries", () => {
       ),
     ]);
     expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual([]);
+  });
+
+  test.each([
+    ["a comment", '# STELLA_VERIFY_LOCAL\ncat "$RUNNER_TEMP/cache"'],
+    [
+      "an unrelated branch",
+      `[[ "\${STELLA_VERIFY_LOCAL:-}" == true ]] && echo hi\ncat "$RUNNER_TEMP/cache"`,
+    ],
+    [
+      "the local arm",
+      `if [[ "\${STELLA_VERIFY_LOCAL:-false}" == true ]]; then\n  cat "$RUNNER_TEMP/cache"\nelse\n  true\nfi`,
+    ],
+    [
+      "a line after the branch",
+      `if [[ "\${STELLA_VERIFY_LOCAL:-false}" == true ]]; then\n  true\nelse\n  true\nfi\ncat "$RUNNER_TEMP/cache"`,
+    ],
+  ])("a read in %s stays an obligation", (_, run) => {
+    const source = workflow([
+      { name: "Restore", run: 'ls "$RUNNER_TEMP/cache"' },
+      marked("Read", run),
+    ]);
+    expect(parseHarnessRunnerTempEntries(source, "verify")).toEqual(["cache"]);
   });
 
   test("obligations are scoped to the job that creates the entry", () => {
