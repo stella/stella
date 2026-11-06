@@ -27,6 +27,8 @@ import {
   STATUS_COLORS,
   STATUS_ICONS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { stateHue } from "@/features/avt/state-chip";
+import type { ClaimState } from "@/features/avt/types";
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
@@ -351,24 +353,131 @@ const TimelinePreview = () => (
   </div>
 );
 
-// Prose lines whose claims carry verdict underlines.
+// A statement's claims (start side) linked to the anchor facts (end side)
+// that grade them. Each link draws in on its own beat in its verdict's hue;
+// the last claim finds no fact and keeps the dotted no-coverage mark.
 const AvtPreview = () => (
-  <div className="flex h-full flex-col justify-center gap-2.5 px-1">
-    <div className="flex items-center gap-1.5">
-      <div className="bg-muted h-1.5 w-1/4 rounded-full" />
-      <div className="border-success h-2.5 w-2/5 border-b-2" />
-      <div className="bg-muted h-1.5 flex-1 rounded-full" />
-    </div>
-    <div className="flex items-center gap-1.5">
-      <div className="border-destructive h-2.5 w-1/3 border-b-2" />
-      <div className="bg-muted h-1.5 flex-1 rounded-full" />
-    </div>
-    <div className="flex items-center gap-1.5">
-      <div className="bg-muted h-1.5 w-1/5 rounded-full" />
-      <div className="border-warning h-2.5 w-1/2 border-b-2" />
-    </div>
+  <div className="relative size-full rtl:-scale-x-100">
+    <svg className="absolute inset-0 size-full" viewBox={AVT_VIEWBOX}>
+      <rect
+        className="fill-card stroke-border"
+        height={112}
+        rx={6}
+        width={AVT_CARD_END - 4}
+        x={4}
+        y={8}
+      />
+      <rect
+        className="fill-muted-foreground/30"
+        height={4}
+        rx={2}
+        width={40}
+        x={12}
+        y={16}
+      />
+      {AVT_PREVIEW_CLAIMS.flatMap((claim) =>
+        claim.prose.map(([x1, x2]) => (
+          <rect
+            className="fill-muted"
+            height={5}
+            key={`${claim.id}:${x1}`}
+            rx={2.5}
+            width={x2 - x1}
+            x={x1}
+            y={claim.y - 2.5}
+          />
+        )),
+      )}
+      {AVT_PREVIEW_CLAIMS.map((claim) => (
+        <rect
+          className="fill-muted-foreground/25"
+          height={5}
+          key={claim.id}
+          rx={2.5}
+          width={claim.span[1] - claim.span[0]}
+          x={claim.span[0]}
+          y={claim.y - 2.5}
+        />
+      ))}
+      {AVT_PREVIEW_FACTS.map((fact) => (
+        <g key={fact.id}>
+          <rect
+            className="fill-card stroke-border"
+            height={AVT_FACT_HEIGHT}
+            rx={5}
+            width={236 - AVT_FACT_START}
+            x={AVT_FACT_START}
+            y={fact.y - AVT_FACT_HEIGHT / 2}
+          />
+          <rect
+            className="fill-muted-foreground/30"
+            height={4}
+            rx={2}
+            width={fact.width}
+            x={AVT_FACT_START + 8}
+            y={fact.y - 2}
+          />
+        </g>
+      ))}
+    </svg>
+    {AVT_PREVIEW_CLAIMS.map((claim, index) => (
+      <AnimatedPreview
+        className="absolute inset-0"
+        key={claim.id}
+        pace="beat"
+        stagger={index * 3}
+        stages={[
+          { id: "pending", content: null },
+          { id: "graded", content: <AvtPreviewLink claim={claim} /> },
+        ]}
+      />
+    ))}
   </div>
 );
+
+const AvtPreviewLink = ({ claim }: { claim: AvtPreviewClaim }) => {
+  const hue = stateHue(claim.state);
+  const [x1, x2] = claim.span;
+  const underline = claim.y + 5;
+  if (claim.factY === null) {
+    return (
+      <svg className="size-full" viewBox={AVT_VIEWBOX}>
+        <line
+          stroke={hue}
+          strokeDasharray="1.5 2"
+          strokeLinecap="round"
+          strokeWidth={1.5}
+          x1={x1}
+          x2={x2}
+          y1={underline}
+          y2={underline}
+        />
+      </svg>
+    );
+  }
+  const bend = (AVT_CARD_END + AVT_FACT_START) / 2;
+  return (
+    <svg className="size-full" viewBox={AVT_VIEWBOX}>
+      <line
+        stroke={hue}
+        strokeLinecap="round"
+        strokeWidth={1.5}
+        x1={x1}
+        x2={x2}
+        y1={underline}
+        y2={underline}
+      />
+      <path
+        d={`M ${AVT_CARD_END} ${claim.y} C ${bend} ${claim.y}, ${bend} ${claim.factY}, ${AVT_FACT_START} ${claim.factY}`}
+        fill="none"
+        stroke={hue}
+        strokeWidth={1.5}
+      />
+      <circle cx={AVT_CARD_END} cy={claim.y} fill={hue} r={2.5} />
+      <circle cx={AVT_FACT_START} cy={claim.factY} fill={hue} r={2.5} />
+    </svg>
+  );
+};
 
 // The matter's address above the messages filed to it.
 const CorrespondencePreview = () => (
@@ -402,6 +511,64 @@ const CORRESPONDENCE_PREVIEW_ROWS = [
 
 // Fixed timestamp: previews are static mock data, and the ambient clock would make
 // the rendered output differ between sessions for no reason.
+const AVT_VIEWBOX = "0 0 240 128";
+const AVT_CARD_END = 124;
+const AVT_FACT_START = 168;
+const AVT_FACT_HEIGHT = 22;
+
+const AVT_PREVIEW_FACTS = [
+  { id: "a", y: 30, width: 44 },
+  { id: "b", y: 64, width: 36 },
+  { id: "c", y: 98, width: 48 },
+] as const;
+
+type AvtPreviewClaim = {
+  id: string;
+  state: ClaimState;
+  y: number;
+  /** The claim's words: where its verdict mark is drawn. */
+  span: readonly [number, number];
+  /** The sentence around the claim. */
+  prose: readonly (readonly [number, number])[];
+  /** The fact the claim is graded against; null for no coverage. */
+  factY: number | null;
+};
+
+const AVT_PREVIEW_CLAIMS = [
+  {
+    id: "c1",
+    state: "supported",
+    y: 34,
+    span: [40, 104],
+    prose: [[12, 36]],
+    factY: AVT_PREVIEW_FACTS[0].y,
+  },
+  {
+    id: "c2",
+    state: "contradicted",
+    y: 56,
+    span: [12, 72],
+    prose: [[76, 112]],
+    factY: AVT_PREVIEW_FACTS[1].y,
+  },
+  {
+    id: "c3",
+    state: "tension",
+    y: 78,
+    span: [34, 96],
+    prose: [[12, 30]],
+    factY: AVT_PREVIEW_FACTS[0].y,
+  },
+  {
+    id: "c4",
+    state: "nocover",
+    y: 100,
+    span: [12, 80],
+    prose: [[84, 112]],
+    factY: null,
+  },
+] as const satisfies readonly AvtPreviewClaim[];
+
 const PREVIEW_CREATED_AT = "2026-01-15T09:00:00.000Z";
 
 type MockTaskOptions = {
