@@ -105,6 +105,7 @@ describe("computeRawUsageMicroUnits", () => {
     "gpt-6-sol": [272_000, 55_400, 110_301],
     "gpt-6-luna": [272_000, 2770, 5516],
     "gpt-6.1-sol": [272_000, 55_400, 110_301],
+    "gpt-6.1-terra": [272_000, 27_700, 55_151],
     "claude-haiku-5-5": [100_000, 1050, 5251],
     "us.anthropic.claude-haiku-5-5": [100_000, 1155, 5776],
   } as const;
@@ -279,18 +280,23 @@ describe("computeRawUsageMicroUnits", () => {
   test("clamps absurdly large counts instead of overflowing", () => {
     // 2^40 caps every component, so even MAX_SAFE_INTEGER tokens meter
     // to a finite conservative amount with telemetry, never a crash.
+    // Its own model: an anomaly is reported once per model in a process.
     const units = computeRawUsageMicroUnits({
-      modelId: "unknown-model-name",
+      modelId: "unknown-model-clamped",
       uncachedInputTokens: 0,
       outputTokens: Number.MAX_SAFE_INTEGER,
     });
     expect(Number.isSafeInteger(units)).toBe(true);
     expect(units).toBe(2 ** 41);
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
-      { anomaly: "invalid-outputTokens", source: "usage-unit-model" },
-    ]);
+    // A model new to the process also reports that it has no rate.
+    expect(analytics.exceptions().map((event) => event.properties)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          anomaly: "invalid-outputTokens",
+          source: "usage-unit-model",
+        }),
+      ]),
+    );
   });
 
   test("keeps rate scaling exact when the intermediate product is unsafe", () => {
