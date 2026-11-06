@@ -8,46 +8,26 @@
  * walk marks it. Only that direction matters: a stale true would merely let the
  * queue's outstanding-intent probe refuse the row, as it always has.
  *
- * The walk is bounded ranges of the revisions' primary key. A marked row leaves
- * the update's predicate, so an interrupted run resumes by running again, and
- * the cursor and adaptive holds commit with each batch. A final cursor written
- * after the last batch is the proof the walk finished.
+ * A marked row leaves the update's predicate, so an interrupted walk resumes by
+ * running again. A final cursor written after the last batch is the proof the
+ * walk finished.
  */
 
 import { panic } from "better-result";
 
-import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import type { Verdict } from "@stll/db-load-gate/health";
-
-import { loadGateHealthConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
-import { createBackfillRuntime } from "./backfill-runtime";
-import type {
-  MigrationOwnedOnlineRepair,
-  OnlineMigrationConnection,
-} from "./online-migration-connection";
+import {
+  type CorpusProjectionRevisionWalkRuntime,
+  walkCorpusProjectionRevisions,
+} from "./corpus-projection-revision-walk";
+import type { MigrationOwnedOnlineRepair } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-applied-revision-settled";
 const STATES_TABLE = "corpus_index_projection_states";
 const INTENTS_TABLE = "corpus_index_projection_intents";
 
-const BATCH = 1000;
-const BATCH_LOCK_TIMEOUT = "30s";
-const BATCH_STATEMENT_TIMEOUT = "1min";
-
-/** Primary-key floor: every UUID sorts after it, so the walk starts here. */
-const ID_FLOOR = "00000000-0000-0000-0000-000000000000";
 /** The checkpoint cursor of a finished walk. No UUID can equal it. */
 const WALK_COMPLETE = "complete";
-
-const READ_BATCH_BOUNDARY_SQL = `
-  SELECT id
-  FROM public."${INTENTS_TABLE}"
-  WHERE id > $1
-  ORDER BY id
-  OFFSET $2
-  LIMIT 1
-`;
 
 const MARK_UNMARKED_SQL = `
   UPDATE public."${STATES_TABLE}" state
@@ -88,77 +68,8 @@ const READ_ANY_UNMARKED_SQL = `
   LIMIT 1
 `;
 
-const readBatchBoundary = async (
-  connection: Pick<OnlineMigrationConnection, "query">,
-  cursor: string,
-  size: number,
-): Promise<string | null> => {
-  const row = (
-    await connection.query(READ_BATCH_BOUNDARY_SQL, [cursor, size - 1])
-  ).at(0);
-  if (row === undefined) {
-    return null;
-  }
-  if (!isRecord(row) || typeof row["id"] !== "string") {
-    return panic(
-      `Online repair ${REPAIR_NAME}: batch boundary has an invalid shape`,
-    );
-  }
-  return row["id"];
-};
-
-type RepairRuntimeOptions = {
-  readVerdict?: () => Promise<Verdict>;
-  sleep?: (milliseconds: number) => Promise<void>;
-  clock?: () => number;
-  log?: (record: unknown) => void;
-};
-
-const walkRevisions = async (
-  connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
-) => {
-  const runtime = createBackfillRuntime({
-    name: REPAIR_NAME,
-    tableName: STATES_TABLE,
-    initialSize: BATCH,
-    config: {
-      ...loadGateHealthConfig(),
-      batchLockTimeoutMs: 30_000,
-      batchStatementTimeoutMs: 60_000,
-    },
-    connection,
-    readVerdict,
-    clock,
-    log,
-  });
-  try {
-    return await runBackfillPass({
-      holdPolicy: "propagate",
-      sleep,
-      step: async () =>
-        await runtime.step(async ({ tx, cursor, size }) => {
-          await tx.execute(`SET LOCAL lock_timeout = '${BATCH_LOCK_TIMEOUT}'`);
-          await tx.execute(
-            `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
-          );
-          const floor = cursor ?? ID_FLOOR;
-          const boundary = await readBatchBoundary(tx, floor, size);
-          if (boundary === null) {
-            await tx.execute(REPAIR_TAIL_SQL, [floor]);
-            return { cursor: floor, done: true, value: null };
-          }
-          await tx.execute(REPAIR_RANGE_SQL, [floor, boundary]);
-          return { cursor: boundary, done: false, value: null };
-        }),
-    });
-  } finally {
-    await runtime.close();
-  }
-};
-
 export const createCorpusProjectionAppliedRevisionSettledRepair = (
-  options: RepairRuntimeOptions = {},
+  options: CorpusProjectionRevisionWalkRuntime = {},
 ): MigrationOwnedOnlineRepair => ({
   introducedBy: "20261106140000_corpus_projection_revision_settled",
   name: REPAIR_NAME,
@@ -218,7 +129,16 @@ export const createCorpusProjectionAppliedRevisionSettledRepair = (
     ) {
       return { type: "complete" };
     }
-    const pass = await walkRevisions(connection, options);
+    const pass = await walkCorpusProjectionRevisions(
+      connection,
+      {
+        name: REPAIR_NAME,
+        tableName: STATES_TABLE,
+        repairRangeSql: REPAIR_RANGE_SQL,
+        repairTailSql: REPAIR_TAIL_SQL,
+      },
+      options,
+    );
     if (pass.isErr()) {
       throw pass.error;
     }

@@ -85,14 +85,12 @@ const insertState = async (revision: string, epoch: number): Promise<void> => {
 };
 
 const settledFlag = async (): Promise<boolean> => {
-  const { rows } = await db.execute(
-    sql.raw(`
-      SELECT applied_revision_settled AS settled
-      FROM corpus_index_projection_states
-      WHERE entity_id = '${ENTITY}'
-    `),
+  const { rows } = await client.query<{ settled: boolean }>(
+    `SELECT applied_revision_settled AS settled
+     FROM corpus_index_projection_states
+     WHERE entity_id = '${ENTITY}'`,
   );
-  return (rows.at(0) as { settled: boolean } | undefined)?.settled === true;
+  return rows.at(0)?.settled === true;
 };
 
 test("the flag follows the applied revision into and out of settled", async () => {

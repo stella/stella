@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORPUS_FAMILIES,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
@@ -360,6 +362,48 @@ export const corpusIndexProjectionIntents = p.pgTable(
 );
 
 /** PostgreSQL-authoritative desired and applied state for one generation. */
+const corpusIndexProjectionWorkShape = ({
+  workStatus,
+  retryNotBefore,
+  failureAttempts,
+  lastFailureKind,
+  lastFailureMessage,
+}: Record<
+  | "workStatus"
+  | "retryNotBefore"
+  | "failureAttempts"
+  | "lastFailureKind"
+  | "lastFailureMessage",
+  SQLWrapper
+>) => sql`CASE ${workStatus}
+        WHEN 'eligible' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'retry_scheduled' THEN
+          ${retryNotBefore} IS NOT NULL
+          AND (
+            (${failureAttempts} = 0
+              AND ${lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
+              AND ${lastFailureMessage} IS NOT NULL)
+            OR (${failureAttempts} > 0
+              AND ${lastFailureKind} IS NOT NULL
+              AND ${lastFailureMessage} IS NOT NULL)
+          )
+        WHEN 'repair_scheduled' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} = 0
+          AND ${lastFailureKind} IS NULL
+          AND ${lastFailureMessage} IS NULL
+        WHEN 'blocked' THEN
+          ${retryNotBefore} IS NULL
+          AND ${failureAttempts} > 0
+          AND ${lastFailureKind} IS NOT NULL
+          AND ${lastFailureMessage} IS NOT NULL
+        ELSE false
+      END`;
+
 export const corpusIndexProjectionStates = p.pgTable(
   "corpus_index_projection_states",
   {
@@ -550,34 +594,7 @@ export const corpusIndexProjectionStates = p.pgTable(
     ),
     p.check(
       "corpus_index_projection_states_work_shape",
-      sql`CASE ${t.workStatus}
-        WHEN 'eligible' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'retry_scheduled' THEN
-          ${t.retryNotBefore} IS NOT NULL
-          AND (
-            (${t.failureAttempts} = 0
-              AND ${t.lastFailureKind} IN (${sqlValues(CORPUS_INDEX_PROJECTION_UNCHARGED_RETRY_FAILURE_KINDS)})
-              AND ${t.lastFailureMessage} IS NOT NULL)
-            OR (${t.failureAttempts} > 0
-              AND ${t.lastFailureKind} IS NOT NULL
-              AND ${t.lastFailureMessage} IS NOT NULL)
-          )
-        WHEN 'repair_scheduled' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} = 0
-          AND ${t.lastFailureKind} IS NULL
-          AND ${t.lastFailureMessage} IS NULL
-        WHEN 'blocked' THEN
-          ${t.retryNotBefore} IS NULL
-          AND ${t.failureAttempts} > 0
-          AND ${t.lastFailureKind} IS NOT NULL
-          AND ${t.lastFailureMessage} IS NOT NULL
-        ELSE false
-      END`,
+      corpusIndexProjectionWorkShape(t),
     ),
     p.check(
       "corpus_index_projection_states_epoch_order",
