@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { updateClauseSlotHandler } from "@/api/lib/template-clause-links";
 
@@ -13,7 +13,7 @@ const updateClauseSlotParamsSchema = v.object({
 });
 
 const updateClauseSlotBodySchema = v.object({
-  slotName: v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  slotName: v.nullable(displayNameSchema({ maxLength: 128, allowEmpty: true })),
 });
 
 const config = {

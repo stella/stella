@@ -16,6 +16,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 
 import {
   entityFeatureGateRoutines,
@@ -272,7 +273,9 @@ describe.skipIf(!runPostgresTests)(
             `DROP TABLE IF EXISTS public.${FIXTURE_TABLE} CASCADE`,
           );
           await applyStatements(client, originalRoutines);
-          await client`DELETE FROM organization WHERE id = ${organizationId}`;
+          await client.unsafe(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+            organizationId,
+          ]);
         }
       });
     }, 120_000); // timeout: applies generated DDL, including concurrent indexes, to the migrated database

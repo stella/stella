@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
@@ -8,8 +9,24 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type * as v from "valibot";
 
+import type { envWebClientSchema } from "../../src/env-schema";
 import { expect, test } from "../helpers/test";
+
+const fixtureEnv = {
+  VITE_API_URL: "http://coverage.test",
+  VITE_DOCUMENTS_BUCKET: "documents",
+  VITE_DOCUMENTS_ENDPOINT: "https://objects.coverage.test",
+} satisfies v.InferInput<v.ObjectSchema<typeof envWebClientSchema, undefined>>;
+
+// The narrow-screen switcher is the design system's Select: open it, then
+// pick the country by the name the (hidden) desktop link shows in this locale.
+const pickCountry = async (page: Page, anchor: string) => {
+  const name = await page.locator(`nav a[href$="#${anchor}"]`).textContent();
+  await page.getByRole("combobox").click();
+  await page.getByRole("option", { name: name ?? anchor, exact: true }).click();
+};
 
 const cache = path.resolve(import.meta.dirname, "../../.cache");
 mkdirSync(cache, { recursive: true });
@@ -30,7 +47,10 @@ test.beforeAll(() => {
       "--target=browser",
       "--minify",
       "--external=@tanstack/react-start/server",
-      '--define=import.meta.env={"VITE_API_URL":"http://coverage.test","DEV":false}',
+      `--define=import.meta.env=${JSON.stringify({
+        ...fixtureEnv,
+        DEV: false,
+      })}`,
       '--define=process.env.NODE_ENV="production"',
       "--outfile",
       output,
@@ -132,9 +152,9 @@ for (const locale of ["en", "ar"]) {
     await expect(switcher).toBeVisible();
     await toggle.focus();
     await page.keyboard.press("Space");
-    await switcher.selectOption("country-svk");
+    await pickCountry(page, "country-svk");
     await expect(page).toHaveURL(/#country-svk$/u);
-    await switcher.selectOption("country-cze");
+    await pickCountry(page, "country-cze");
     await expect(page).toHaveURL(/#country-cze$/u);
     await expect(table).toBeVisible();
     expect(
@@ -191,8 +211,8 @@ for (const locale of ["en", "ar"]) {
         node.style.fontSize = "24px";
       });
       if (width < 640) {
-        await page.getByRole("combobox").selectOption("country-svk");
-        await page.getByRole("combobox").selectOption("country-cze");
+        await pickCountry(page, "country-svk");
+        await pickCountry(page, "country-cze");
       } else {
         await navigation.locator('a[href$="#country-svk"]').click();
         await navigation.locator('a[href$="#country-cze"]').click();

@@ -9,6 +9,7 @@ import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
+import { WindowDragRegion } from "../shared/WindowDragRegion";
 import { ActivityStep } from "./ActivityStep";
 import { ConnectStep } from "./ConnectStep";
 import { DoneStep } from "./DoneStep";
@@ -145,6 +146,7 @@ const OnboardingFlow = ({ onRetry }: { onRetry: () => void }) => {
         DESKTOP_PLATFORM === "mac" ? "pt-10" : "pt-6",
       )}
     >
+      <WindowDragRegion />
       {flowContent()}
     </main>
   );

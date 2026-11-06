@@ -384,7 +384,6 @@ type CzRegionalFinaldoc = {
     affectedDocs?: unknown;
     regulations?: unknown[] | null;
     flags?: string[] | null;
-    [key: string]: unknown;
   } | null;
 };
 

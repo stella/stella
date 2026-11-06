@@ -11,12 +11,12 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { parseTimeZoneId } from "@stll/time";
 
 import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const sourceId = "019a0000-0000-7000-8000-000000000004";
@@ -39,6 +39,8 @@ const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
@@ -55,9 +57,8 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 

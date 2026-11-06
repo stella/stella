@@ -18,8 +18,11 @@ export const STATUS_ERROR_KEYS = {
   validation: "errors.api.validation",
 } as const satisfies Record<string, TranslationKey>;
 
+export type StatusErrorKey =
+  (typeof STATUS_ERROR_KEYS)[keyof typeof STATUS_ERROR_KEYS];
+
 export const STATUS_TO_KEY: Readonly<
-  Record<number, TranslationKey | undefined>
+  Record<number, StatusErrorKey | undefined>
 > = {
   400: STATUS_ERROR_KEYS.badRequest,
   401: STATUS_ERROR_KEYS.unauthorized,

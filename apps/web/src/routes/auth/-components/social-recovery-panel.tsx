@@ -9,6 +9,7 @@ import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import {
   Frame,
   FrameDescription,
@@ -183,8 +184,8 @@ export const SocialRecoveryPanel = ({
       </FrameHeader>
       <FramePanel>
         {error === "account_not_linked" ? (
-          <form
-            className="flex flex-col gap-3"
+          <Form
+            density="snug"
             onSubmit={(event) => {
               event.preventDefault();
               sendCode.mutate();
@@ -214,7 +215,7 @@ export const SocialRecoveryPanel = ({
             >
               {t("auth.continueWithEmail")}
             </Button>
-          </form>
+          </Form>
         ) : (
           <Button
             className="w-full"

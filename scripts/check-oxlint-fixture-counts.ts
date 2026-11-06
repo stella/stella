@@ -8,6 +8,9 @@
 // the following line, a same-line suppression one hit on its own line, and a
 // rationale of `-- xN` (e.g. `-- x2: both forms`) expects N. A comment
 // `expect-clean: <rule>` marks the next line as a case the rule must accept.
+// Suppression-free `expect-error: <rule>` markers expect one next-line hit.
+// A file marked `expect-error-fixture` exports a String.raw template that is
+// unwrapped only in the temporary copy, keeping normal fixture lint inert.
 //
 // Both the `oxlint-` and `eslint-` spellings count. Any other local-rule hit
 // in a fixture is a failure. An `expect-clean` marker must precede code (the
@@ -61,6 +64,7 @@ const COUNT_PATTERN = /(?:^|\s)x(?<count>\d+)(?:\s|:|$)/u;
 // each id is trimmed, so the pattern needs no trailing whitespace groups.
 const CLEAN_MARKER_PATTERN =
   /^\s*(?:\/\/|\{?\/\*)\s*expect-clean:(?<rules>[^*]*)/u;
+const ERROR_MARKER_PATTERN = /^\s*\/\/\s*expect-error:\s*(?<rules>[^*]*)/u;
 const NON_CODE_LINE_PATTERN = /^\s*(?:$|\/\/|\/\*|\*|\{\/\*)/u;
 
 type Expectation = { file: string; line: number; ruleId: string };
@@ -75,25 +79,117 @@ type RewriteResult = {
   problems: string[];
 };
 
+type ExpectedMarker = {
+  kind: "error" | "clean";
+  rules: string[];
+};
+
+const markerRules = (line: string): ExpectedMarker | null => {
+  const error = ERROR_MARKER_PATTERN.exec(line)?.groups?.["rules"];
+  if (error !== undefined) {
+    return {
+      kind: "error",
+      rules: error
+        .split(",")
+        .map((rule) => rule.trim())
+        .filter(Boolean),
+    };
+  }
+  const clean = CLEAN_MARKER_PATTERN.exec(line)?.groups?.["rules"];
+  return clean === undefined
+    ? null
+    : {
+        kind: "clean",
+        rules: clean
+          .split(",")
+          .map((rule) => rule.trim())
+          .filter(Boolean),
+      };
+};
+
+type RecordMarkerOptions = {
+  file: string;
+  index: number;
+  lines: readonly string[];
+  marker: ExpectedMarker;
+  expected: Map<string, number>;
+  clean: Set<string>;
+  problems: string[];
+  text: string;
+};
+
+const recordMarker = ({
+  file,
+  index,
+  lines,
+  marker,
+  expected,
+  clean,
+  problems,
+  text,
+}: RecordMarkerOptions): string => {
+  if (NON_CODE_LINE_PATTERN.test(lines[index + 1] ?? "")) {
+    problems.push(
+      `${file}:${index + 1}: expect-${marker.kind} must precede code`,
+    );
+  }
+  for (const ruleId of marker.rules) {
+    const key = expectationKey({ file, line: index + 2, ruleId });
+    if (marker.kind === "error") {
+      if (isCountedRule(ruleId)) {
+        expected.set(key, (expected.get(key) ?? 0) + 1);
+      }
+    } else {
+      clean.add(key);
+    }
+  }
+  return marker.kind === "error" ? "" : text;
+};
+
+const unwrapExpectedErrorFixture = (
+  file: string,
+  source: string,
+): { source: string; problems: string[] } => {
+  if (!source.startsWith("// expect-error-fixture\n")) {
+    return { source, problems: [] };
+  }
+  const match =
+    /^\/\/ expect-error-fixture\nexport const [A-Za-z_$][\w$]* = String\.raw`(?<body>[\s\S]*)\n`;\s*$/u.exec(
+      source,
+    );
+  const body = match?.groups?.["body"];
+  if (body === undefined) {
+    return {
+      source,
+      problems: [
+        `${file}:1: expect-error-fixture must wrap a String.raw template`,
+      ],
+    };
+  }
+  return { source: `\n${body}\n`, problems: [] };
+};
+
 // Remove counted rules from each directive, recording what the directive
 // promised. Line count is preserved so reported lines match the original.
 export const rewriteFixture = (file: string, source: string): RewriteResult => {
   const expected = new Map<string, number>();
   const clean = new Set<string>();
-  const problems: string[] = [];
-  const lines = source.split("\n");
+  const unwrapped = unwrapExpectedErrorFixture(file, source);
+  const problems = [...unwrapped.problems];
+  const lines = unwrapped.source.split("\n");
   const rewritten = lines.map((text, index) => {
-    const cleanMatch = CLEAN_MARKER_PATTERN.exec(text);
-    if (cleanMatch !== null) {
-      if (NON_CODE_LINE_PATTERN.test(lines[index + 1] ?? "")) {
-        problems.push(`${file}:${index + 1}: expect-clean must precede code`);
-      }
-      for (const ruleId of (cleanMatch.groups?.["rules"] ?? "")
-        .split(",")
-        .map((rule) => rule.trim())
-        .filter(Boolean)) {
-        clean.add(expectationKey({ file, line: index + 2, ruleId }));
-      }
+    const marker = markerRules(text);
+    if (marker !== null) {
+      return recordMarker({
+        file,
+        index,
+        lines,
+        marker,
+        expected,
+        clean,
+        problems,
+        text,
+      });
     }
     const commentStart = text.search(/\/\/|\/\*|\{\/\*/u);
     if (commentStart === -1) {

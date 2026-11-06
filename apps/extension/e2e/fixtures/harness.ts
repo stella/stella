@@ -196,8 +196,9 @@ export const launchExtensionHarness = async ({
           if (tab?.id === undefined) {
             return false;
           }
+          // The stella page registers itself with its first message.
           await chrome.storage.session.set({
-            browserController: { controllerId: id, origin, tabId: tab.id },
+            browserController: { controllerId: id, origin },
           });
           return true;
         },

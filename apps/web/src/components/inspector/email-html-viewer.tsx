@@ -9,6 +9,12 @@ import {
 } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { textMarkClass } from "@stll/ui/text-mark";
@@ -44,6 +50,7 @@ import {
 } from "@/lib/files/email-citations";
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 import { formatFullTimestamp } from "@/lib/relative-time";
 
 /** A header field a citation points at wears the active text mark. */
@@ -329,7 +336,7 @@ export const EmailHtmlViewer = ({
         >
           <BidiText as="span">{subject}</BidiText>
         </h1>
-        <dl className="mt-3 grid min-w-0 gap-1.5 text-xs">
+        <DetailsGrid className="mt-3" variant="list">
           <EmailParticipantRow
             activeCitationBlockId={activeCitationBlockId}
             citationBlockId={EMAIL_HEADER_CITATION_ID.from}
@@ -343,46 +350,54 @@ export const EmailHtmlViewer = ({
             values={preview.to}
           />
           {formattedDate ? (
-            <div
-              className={cn(
-                "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
-                activeCitationBlockId === EMAIL_HEADER_CITATION_ID.date &&
-                  ACTIVE_CITATION_CLASS,
-              )}
+            <DetailsItem
               data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.date}
+              label={t("common.date")}
             >
-              <dt>{t("common.date")}</dt>
-              <dd className="min-w-0 truncate">
+              <span
+                className={cn(
+                  "block truncate",
+                  activeCitationBlockId === EMAIL_HEADER_CITATION_ID.date &&
+                    ACTIVE_CITATION_CLASS,
+                )}
+              >
                 <time dateTime={parsedDate?.toISOString()}>
                   {formattedDate}
                 </time>
-              </dd>
-            </div>
+              </span>
+            </DetailsItem>
           ) : null}
-        </dl>
+        </DetailsGrid>
         {hasAdditionalParticipants ? (
-          <details
-            className="mt-2 text-xs"
-            onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
-          >
-            <summary className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex min-h-11 cursor-pointer items-center rounded-md py-2 text-start underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:outline-none">
-              {detailsOpen ? t("common.hideDetails") : t("common.showDetails")}
-            </summary>
-            <dl className="grid gap-1.5 pb-1">
-              <EmailParticipantRow
-                activeCitationBlockId={activeCitationBlockId}
-                citationBlockId={EMAIL_HEADER_CITATION_ID.cc}
-                label={t("emailViewer.cc")}
-                values={preview.cc}
-              />
-              <EmailParticipantRow
-                activeCitationBlockId={activeCitationBlockId}
-                citationBlockId={EMAIL_HEADER_CITATION_ID.bcc}
-                label={t("emailViewer.bcc")}
-                values={preview.bcc}
-              />
-            </dl>
-          </details>
+          <div className="mt-2 text-xs">
+            <Collapsible onOpenChange={setDetailsOpen} open={detailsOpen}>
+              <CollapsibleTrigger render={<Button variant="plain" />}>
+                <span className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center rounded-md py-2 underline-offset-4 hover:underline">
+                  {detailsOpen
+                    ? t("common.hideDetails")
+                    : t("common.showDetails")}
+                </span>
+              </CollapsibleTrigger>
+              {/* Kept in the page while closed, like the native disclosure
+                it replaces: find-in-page still reaches a Cc or Bcc name. */}
+              <CollapsiblePanel>
+                <DetailsGrid variant="list">
+                  <EmailParticipantRow
+                    activeCitationBlockId={activeCitationBlockId}
+                    citationBlockId={EMAIL_HEADER_CITATION_ID.cc}
+                    label={t("emailViewer.cc")}
+                    values={preview.cc}
+                  />
+                  <EmailParticipantRow
+                    activeCitationBlockId={activeCitationBlockId}
+                    citationBlockId={EMAIL_HEADER_CITATION_ID.bcc}
+                    label={t("emailViewer.bcc")}
+                    values={preview.bcc}
+                  />
+                </DetailsGrid>
+              </CollapsiblePanel>
+            </Collapsible>
+          </div>
         ) : null}
         {preview.attachments.length > 0 ? (
           <section
@@ -401,35 +416,37 @@ export const EmailHtmlViewer = ({
                 <li
                   key={getAttachmentKey(attachment, attachmentKeyOccurrences)}
                 >
-                  <button
-                    className="bg-muted/50 hover:bg-muted focus-visible:ring-ring inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none"
+                  <Button
+                    className="max-w-full"
                     onClick={() => {
                       onOpenAttachment(
                         getEmailAttachmentActivationId(attachment),
                       );
                     }}
-                    type="button"
+                    variant="plain"
                   >
-                    <DocumentIcon
-                      className="text-muted-foreground size-4 shrink-0"
-                      fileName={
-                        attachment.fileName ??
-                        t("emailViewer.unnamedAttachment")
-                      }
-                      mimeType={
-                        attachment.mimeType ?? "application/octet-stream"
-                      }
-                    />
-                    <BidiText as="span" className="max-w-48 min-w-0 truncate">
-                      {attachment.fileName ??
-                        t("emailViewer.unnamedAttachment")}
-                    </BidiText>
-                    {attachment.sizeBytes > 0 ? (
-                      <span className="text-muted-foreground shrink-0">
-                        {formatAttachmentSize(attachment.sizeBytes, format)}
-                      </span>
-                    ) : null}
-                  </button>
+                    <span className="bg-muted/50 hover:bg-muted inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs">
+                      <DocumentIcon
+                        className="text-muted-foreground size-4 shrink-0"
+                        fileName={
+                          attachment.fileName ??
+                          t("emailViewer.unnamedAttachment")
+                        }
+                        mimeType={
+                          attachment.mimeType ?? "application/octet-stream"
+                        }
+                      />
+                      <BidiText as="span" className="max-w-48 min-w-0 truncate">
+                        {attachment.fileName ??
+                          t("emailViewer.unnamedAttachment")}
+                      </BidiText>
+                      {attachment.sizeBytes > 0 ? (
+                        <span className="text-muted-foreground shrink-0">
+                          {formatAttachmentSize(attachment.sizeBytes, format)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -504,23 +521,21 @@ const EmailParticipantRow = ({
   const valueOccurrences = new Map<string, number>();
 
   return (
-    <div
-      className={cn(
-        "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
-        activeCitationBlockId === citationBlockId && ACTIVE_CITATION_CLASS,
-      )}
-      data-stella-email-anchor={citationBlockId}
-    >
-      <dt>{label}</dt>
-      <dd className="min-w-0 text-start wrap-break-word">
+    <DetailsItem data-stella-email-anchor={citationBlockId} label={label}>
+      <span
+        className={cn(
+          "text-start wrap-break-word",
+          activeCitationBlockId === citationBlockId && ACTIVE_CITATION_CLASS,
+        )}
+      >
         {values.map((value, index) => (
           <Fragment key={getOccurrenceKey(value, valueOccurrences)}>
             {index > 0 ? ", " : null}
             <BidiText>{value}</BidiText>
           </Fragment>
         ))}
-      </dd>
-    </div>
+      </span>
+    </DetailsItem>
   );
 };
 
@@ -544,7 +559,7 @@ const scrollToEmailCitation = ({
 
   const headerTarget = findEmailCitationElement(article, blockId);
   if (headerTarget) {
-    openAncestorDetails(headerTarget);
+    revealEnclosingDisclosures(headerTarget);
     headerTarget.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -556,7 +571,7 @@ const scrollToEmailCitation = ({
   if (!bodyTarget) {
     return;
   }
-  openAncestorDetails(bodyTarget);
+  revealEnclosingDisclosures(bodyTarget);
   bodyTarget.dataset["stellaEmailCitationActive"] = "";
   resizeEmailBodyFrame(bodyFrame);
   const articleRect = article?.getBoundingClientRect();
@@ -610,16 +625,6 @@ const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
     marginBlockEnd,
     marginBlockStart,
   })}px`;
-};
-
-const openAncestorDetails = (target: HTMLElement): void => {
-  let ancestor = target.parentElement;
-  while (ancestor) {
-    if (ancestor.tagName === "DETAILS") {
-      ancestor.setAttribute("open", "");
-    }
-    ancestor = ancestor.parentElement;
-  }
 };
 
 const findEmailCitationElement = (

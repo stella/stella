@@ -31,6 +31,14 @@
     "subject": "رمز التحقق الخاص بك في stella",
     "twoFactorManage": "استخدم هذا الرمز لتأكيد التغييرات على إعدادات المصادقة الثنائية الخاصة بك."
   },
+  "pushAlert": {
+    "announcement": "نشرت مؤسستك إعلانًا",
+    "flowRunAwaitingApproval": "مسار عمل بانتظار موافقتك",
+    "flowRunCompleted": "اكتمل مسار عمل",
+    "flowRunFailed": "فشل مسار عمل",
+    "mention": "تمت الإشارة إليك في تعليق",
+    "taskAssigned": "تم إسناد مهمة إليك"
+  },
   "reportExportStatus": {
     "action": "فتح stella",
     "completedBody": "أصبح تصدير تقريرك جاهزًا. افتح stella لعرضه أو تنزيله.",

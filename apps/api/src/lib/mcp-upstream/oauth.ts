@@ -10,6 +10,7 @@ import type { McpOAuthRegistrationResponse } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { FIRST_PARTY_OAUTH_CLIENTS } from "@/api/lib/auth/oauth-consent-info";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   FetchBoundaryError,
@@ -499,7 +500,10 @@ export const createOAuthState = (): string => randomBase64Url(32);
 
 export const getMcpOAuthRedirectUri = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL("/v1/mcp/oauth/callback", publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.redirect.path,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientRegistrationMode = "cimd" | "dcr" | "unsupported";
@@ -659,11 +663,12 @@ export const clientRegistrationMode = (
   return "unsupported";
 };
 
-const MCP_CLIENT_METADATA_DOCUMENT_PATH = "/v1/mcp/oauth/client-metadata.json";
-
 export const getMcpClientMetadataDocumentUrl = (): string => {
   const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
-  return new URL(MCP_CLIENT_METADATA_DOCUMENT_PATH, publicUrl).toString();
+  return new URL(
+    FIRST_PARTY_OAUTH_CLIENTS.mcp_connector.documentPath,
+    publicUrl,
+  ).toString();
 };
 
 export type McpClientMetadataDocument = {

@@ -936,13 +936,22 @@ describe("public-law reader role", () => {
         columns.at(0) ??
           panic("An existing relation must have a declared column"),
       );
+      const privileges = await testDb.execute<{ writable: boolean }>(sql`
+        SELECT has_table_privilege(${READER_ROLE}, ${relation}, ${WRITE_PRIVILEGES})
+          OR has_any_column_privilege(${READER_ROLE}, ${relation}, 'INSERT, UPDATE, REFERENCES') AS writable
+      `);
+      expect(privileges.rows).toEqual([{ writable: false }]);
       for (const statement of [
         `UPDATE ${quoted(relation)} SET ${column} = ${column}`,
         `DELETE FROM ${quoted(relation)}`,
         `INSERT INTO ${quoted(relation)} DEFAULT VALUES`,
       ]) {
         const failure = await readerStatementFailure(statement);
-        if (!errorMessageChain(failure).includes("permission denied")) {
+        const message = errorMessageChain(failure);
+        if (
+          !message.includes("permission denied") &&
+          !/cannot (?:update|delete from|insert into) view/u.test(message)
+        ) {
           written.push(statement);
         }
       }
@@ -1189,7 +1198,7 @@ describe("public-law reader role", () => {
         });
         exercised.add(readCaseLawCourtActivityQuery.publicLawSharedQuery);
 
-        await readCaseLawCoverageSourcesQuery(tx);
+        await readCaseLawCoverageSourcesQuery(tx, []);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
 
         expect(await readCaseLawCoverageSummaryQuery(tx)).toEqual({
@@ -1321,7 +1330,7 @@ describe("public-law reader role", () => {
     );
   });
 
-  test("reads the case-law views and the previous base-table reads still work", async () => {
+  test("reads the case-law views and is refused the base table", async () => {
     await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(READER_ROLE)}`));
       await tx.execute(
@@ -1330,12 +1339,23 @@ describe("public-law reader role", () => {
       await tx.execute(
         sql.raw('SELECT "id" FROM "case_law_unredacted_decisions" LIMIT 0'),
       );
-      await tx.execute(
-        sql.raw(
-          'SELECT "id", "case_number", "fulltext", "metadata" FROM "case_law_decisions" LIMIT 0',
-        ),
-      );
     });
+    for (const role of [READER_ROLE, ROLLOUT_READER_ROLE]) {
+      const rejection: unknown = await testDb
+        .transaction(async (tx) => {
+          await tx.execute(sql.raw(`SET LOCAL ROLE ${quoted(role)}`));
+          await tx.execute(
+            sql.raw('SELECT "id" FROM "case_law_decisions" LIMIT 0'),
+          );
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toBeInstanceOf(Error);
+      expect(errorMessageChain(rejection)).toContain("permission denied");
+      expect(errorMessageChain(rejection)).toContain("case_law_decisions");
+    }
   });
 
   test("has SELECT policies for required relations and only declared relations", async () => {
@@ -1349,11 +1369,11 @@ describe("public-law reader role", () => {
     `);
 
     const policies = result.rows.map(({ tablename }) => tablename);
-    const viewRelations = new Set([
-      "case_law_published_decisions",
-      "case_law_unredacted_decisions",
-      "case_law_withdrawal_status",
-    ]);
+    const views = await testDb.execute<{ relation: string }>(sql`
+      SELECT relname AS relation FROM pg_class
+      WHERE relnamespace = 'public'::regnamespace AND relkind = 'v'
+    `);
+    const viewRelations = new Set(views.rows.map(({ relation }) => relation));
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
@@ -1403,10 +1423,15 @@ const stripLineComments = (contents: string): string =>
     .join("\n");
 
 const identifiers = (list: string): string[] =>
-  list.split(",").map((entry) => entry.trim().replaceAll('"', ""));
+  list.split(",").map((entry) =>
+    entry
+      .trim()
+      .replaceAll('"', "")
+      .replace(/^public\./u, ""),
+  );
 
 const STATEMENT_PATTERN =
-  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON TABLE (?<tables>.+?) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
+  /^(?<verb>GRANT|REVOKE) SELECT(?: \((?<columns>[^)]+)\))? ON (?:TABLE )?(?<tables>(?:(?:"public"|public)\.)?(?:"[a-z_][a-z0-9_]*"|[a-z_][a-z0-9_]*)(?:, (?:(?:"public"|public)\.)?(?:"[a-z_][a-z0-9_]*"|[a-z_][a-z0-9_]*))*) (?:TO|FROM) "?(?<role>stella_(?:caselaw_reader|public_law_reader))"?$/iu;
 const READER_SELECT_STATEMENT_PATTERN = /^(?:GRANT|REVOKE) SELECT\b/iu;
 const READER_ROLE_NAME_PATTERN =
   /\bstella_(?:caselaw_reader|public_law_reader)\b/iu;
@@ -1557,7 +1582,7 @@ describe("public-law reader migrations", () => {
     expect([...granted].filter((column) => !declared.has(column))).toEqual([]);
   });
 
-  test("keeps the legacy base-table grant beside the published views", () => {
+  test("keeps the legacy reader on the published views, not the base table", () => {
     const sources = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>

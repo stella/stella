@@ -2,11 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, expectTypeOf, test } from "bun:test";
 
 import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import type { FileConversionRefusal } from "@stll/workspace-ui/types";
 
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render, screen } = await import("@testing-library/react");

@@ -23,7 +23,11 @@ import {
   ConfigurationError,
   SchedulerJobTimeoutError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorSystemFields,
+  errorTag,
+} from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
@@ -254,7 +258,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      detached(runTick(), "scheduler-runner.run-tick");
+      detached(async () => runTick(), "scheduler-runner.run-tick");
     }, pollIntervalMs);
   };
 
@@ -290,7 +294,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    detached(runTick(), "scheduler-runner.run-tick");
+    detached(async () => runTick(), "scheduler-runner.run-tick");
   }, 0);
 
   return {
@@ -520,16 +524,17 @@ export const startLeaseHeartbeat = ({
 
   const timer = setInterval(() => {
     detached(
-      renew().catch((error: unknown) => {
-        logger.warn("scheduler.lease_heartbeat_failed", {
-          "scheduler.job_id": jobId,
-          "scheduler.runner_id": runnerId,
-          "error.type": errorTag(error),
-        });
-        if (performance.now() - lastRenewedAt >= leaseMs) {
-          markLost();
-        }
-      }),
+      async () =>
+        renew().catch((error: unknown) => {
+          logger.warn("scheduler.lease_heartbeat_failed", {
+            "scheduler.job_id": jobId,
+            "scheduler.runner_id": runnerId,
+            "error.type": errorTag(error),
+          });
+          if (performance.now() - lastRenewedAt >= leaseMs) {
+            markLost();
+          }
+        }),
       "scheduler-runner.renew",
     );
   }, intervalMs);
@@ -916,6 +921,9 @@ const resolveRunOutcome = async ({
     "scheduler.run_id": runId,
     "scheduler.runner_id": runnerId,
     "scheduler.task": job.task,
+    // A panic has no code or cause, so its frame is the only thing that names
+    // the failing site. The fingerprint carries no message.
+    ...errorFingerprint(raceError),
     ...errorSystemFields(raceError),
   });
   await finishRunFailure({

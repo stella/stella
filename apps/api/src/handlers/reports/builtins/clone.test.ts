@@ -62,6 +62,7 @@ const createContext = (
     request: new Request("https://example.test/v1/reports/templates/clone"),
     server: null,
   };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
   return {
     workspaceId,
     user: { id: userId },
@@ -74,7 +75,6 @@ const createContext = (
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
   } as Parameters<typeof cloneBuiltinReportTemplate.handler>[0];
 };
 

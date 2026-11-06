@@ -13,6 +13,8 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - typography: no em dash, the catalogue half of the `no-em-dash-copy`
+ *    oxlint rule (oxlint does not parse JSON).
  *  - bare errors: no en message says only that something failed ("Error",
  *    "Something went wrong") without telling the person what to do next.
  *    Never grandfathered.
@@ -33,7 +35,7 @@ import path from "node:path";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { parseGlossary } from "./glossary-gen";
-import type { Glossary } from "./glossary-gen";
+import type { Glossary, Term } from "./glossary-gen";
 import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
@@ -111,6 +113,17 @@ const collectArgNames = (
       }
     }
   }
+};
+
+/** The interpolation variables and rich-text tags a message carries; empty when it does not parse. */
+export const findArgumentNames = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (!ast) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names];
 };
 
 /**
@@ -517,6 +530,15 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
   return false;
 };
 
+// Match the `no-em-dash-copy` oxlint rule for locale JSON: copy breaks a
+// sentence with a period, comma, colon or parentheses, in every locale. A
+// value that is only the glyph is the empty-cell marker, not punctuation.
+export const hasEmDash = (value: string): boolean =>
+  value.includes("\u2014") && value !== "\u2014";
+
+export const EM_DASH_GUIDANCE =
+  "no em dash: rewrite the break with a period, comma, colon or parentheses";
+
 export type ForbiddenRule = {
   concept: string;
   guidance?: string;
@@ -665,6 +687,25 @@ export const findForbiddenTerms = (
   return hits;
 };
 
+type FindMentionedTermsOptions = {
+  glossary: Glossary;
+  source: string;
+  key: string;
+};
+
+/** Glossary terms a message is about, by the same triggers the terminology lint uses. */
+export const findMentionedTerms = ({
+  glossary,
+  source,
+  key,
+}: FindMentionedTermsOptions): Term[] =>
+  [...glossary.verbs, ...glossary.legalConcepts, ...glossary.nouns].filter(
+    (term) =>
+      !(term.keyExempt ?? []).some((exempt) => key.includes(exempt)) &&
+      (containsWord(source, term.en, "en") ||
+        (term.keyTriggers ?? []).some((trigger) => key.includes(trigger))),
+  );
+
 /**
  * Whole messages that say something failed and nothing else. Nobody can act
  * on them, so a failure message says what to do next (try again, reload).
@@ -795,7 +836,8 @@ const findViolations = (
         locale === "en" &&
         (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
           0 ||
-          hasInvalidCapitalizedStella(targetValue))
+          hasInvalidCapitalizedStella(targetValue) ||
+          hasEmDash(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -818,7 +860,8 @@ const findViolations = (
     if (
       findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
         0 ||
-      hasInvalidCapitalizedStella(targetValue)
+      hasInvalidCapitalizedStella(targetValue) ||
+      hasEmDash(targetValue)
     ) {
       result.terminology.push(key);
     }
@@ -920,13 +963,16 @@ if (import.meta.main) {
           } else if (!isSuppressed(baseline, category, key, locale, entry)) {
             const guidance =
               category === "terminology"
-                ? findForbiddenGuidance({
-                    source: entry.source,
-                    target: entry.target,
-                    locale,
-                    rules,
-                    key,
-                  })
+                ? [
+                    ...findForbiddenGuidance({
+                      source: entry.source,
+                      target: entry.target,
+                      locale,
+                      rules,
+                      key,
+                    }),
+                    ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                  ]
                 : [];
             const suffix =
               guidance.length > 0 ? ` (${guidance.join("; ")})` : "";

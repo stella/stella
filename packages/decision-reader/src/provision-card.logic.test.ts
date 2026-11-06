@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -113,6 +117,12 @@ const wording = (blockIds: readonly string[]) => ({
   heading: null,
   headings: [],
   language: "cs",
+});
+
+/** A whole provision read in e-Sbírka's grammar. */
+const czech = (whole: ReturnType<typeof wording>) => ({
+  scheme: E_SBIRKA_ANCHORS,
+  wording: whole,
 });
 
 describe("full provision reads", () => {
@@ -307,7 +317,7 @@ describe("a provision card's passage", () => {
       ];
       const withoutPart = provisionCardPassage(
         citations,
-        wording(["par_226-odst_1", "par_226-odst_20"]),
+        czech(wording(["par_226-odst_1", "par_226-odst_20"])),
       );
       if (withoutPart.type !== "passage") {
         panic("Expected a full passage");
@@ -320,12 +330,14 @@ describe("a provision card's passage", () => {
       ]);
       const recovered = provisionCardPassage(
         citations,
-        wording([
-          "par_226-odst_1",
-          "par_226-odst_2",
-          "par_226-odst_2-pism_a",
-          "par_226-odst_20",
-        ]),
+        czech(
+          wording([
+            "par_226-odst_1",
+            "par_226-odst_2",
+            "par_226-odst_2-pism_a",
+            "par_226-odst_20",
+          ]),
+        ),
       );
       if (recovered.type !== "passage") {
         panic("Expected a recovered full passage");
@@ -336,10 +348,49 @@ describe("a provision card's passage", () => {
         "par_226-odst_2",
         "par_226-odst_2-pism_a",
       ]);
-      expect(provisionCardPassage(citations, wording([]))).toEqual(
+      expect(provisionCardPassage(citations, czech(wording([])))).toEqual(
         provisionCardPassage(citations),
       );
     }
+  });
+
+  test("a cited Slov-Lex letter recovers its points from the full read", () => {
+    const anchorId = "paragraf-15";
+    const letter = "paragraf-15.pismeno-b";
+    const base = target({ part: null });
+    const cited: CitedProvisionTarget = {
+      ...base,
+      payload: {
+        ...base.payload,
+        anchorId,
+        highlightAnchorId: letter,
+        jurisdiction: "SVK",
+        provisionLabel: letter,
+      },
+    };
+    const full = {
+      ...wording([
+        "paragraf-15.pismeno-a",
+        letter,
+        "paragraf-15.pismeno-b.bod-1",
+        "paragraf-15.pismeno-b.bod-1.bod-1a",
+        "paragraf-15.pismeno-c",
+      ]),
+      anchorId,
+    };
+    const passage = provisionCardPassage([{ target: cited, wording: null }], {
+      scheme: SLOV_LEX_ANCHORS,
+      wording: full,
+    });
+    if (passage.type !== "passage") {
+      panic("Expected a full passage");
+    }
+    expect(passage.unavailable).toEqual([]);
+    expect([...passage.cited]).toEqual([
+      letter,
+      "paragraf-15.pismeno-b.bod-1",
+      "paragraf-15.pismeno-b.bod-1.bod-1a",
+    ]);
   });
 });
 

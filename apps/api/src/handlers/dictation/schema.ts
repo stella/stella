@@ -20,11 +20,14 @@ export const dictationBodySchema = v.strictObject({
     fileSchema({ maxBytes: MAX_TRANSCRIPTION_AUDIO_BYTES }),
     v.minSize(1),
   ),
-  modelId: v.pipe(
-    v.picklist(
-      Object.keys(TRANSCRIPTION_MODELS).filter(isTranscriptionModelId),
+  /** Absent: the cheapest model offered in the organization's region. */
+  modelId: v.optional(
+    v.pipe(
+      v.picklist(
+        Object.keys(TRANSCRIPTION_MODELS).filter(isTranscriptionModelId),
+      ),
+      v.maxLength(MAX_TRANSCRIPTION_MODEL_ID_LENGTH),
     ),
-    v.maxLength(MAX_TRANSCRIPTION_MODEL_ID_LENGTH),
   ),
   language: v.optional(v.picklist(LANGUAGES.map(({ code }) => code))),
   vocabulary: v.optional(

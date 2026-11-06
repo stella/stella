@@ -358,6 +358,27 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
 });
+test("a declared corpus gap succeeds only with a passed preflight and skipped MCP", () => {
+  const declared = {
+    CORPUS_DECLARED_GAP: "true",
+    CORPUS_SEARCH_WAIVED: "false",
+    CORPUS_PREFLIGHT: "success",
+    MCP_SMOKE: "skipped",
+  };
+  expect(statuses(record(declared)).at(0)).toMatchObject({
+    state: "success",
+    description: "Staging smoke success, corpus_reads=search-only: run 1",
+  });
+  for (const overrides of [
+    { CORPUS_PREFLIGHT: "failure" },
+    { MCP_SMOKE: "failure" },
+    { WEB_SMOKE: "failure" },
+  ]) {
+    expect(statuses(record({ ...declared, ...overrides })).at(0)?.state).toBe(
+      "failure",
+    );
+  }
+});
 // timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {
   const unused = record({ CORPUS_PREFLIGHT: "success", MCP_SMOKE: "success" });

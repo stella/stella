@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
-import { serverFS } from "tsrs/unstable/fs";
+import { API } from "tsrs/async";
+import { serverFS } from "tsrs/fs";
 
 type CreateProgramOptions = {
   readonly configPath?: string;
@@ -67,13 +67,13 @@ export const createProgram = async ({
       ...(compilerOptions === undefined ? {} : { compilerOptions }),
       files,
       include: [],
-      ...(parsed?.projectReferences === undefined
-        ? {}
-        : {
+      ...(parsed?.projectReferences !== undefined
+        ? {
             references: parsed.projectReferences.map(
               ({ path: referencePath }) => ({ path: referencePath }),
             ),
-          }),
+          }
+        : {}),
     });
     const snapshot = await api.createSnapshot({ openProjects: [virtualPath] });
     const project =

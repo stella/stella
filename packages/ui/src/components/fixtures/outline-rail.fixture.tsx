@@ -11,13 +11,30 @@ const presentation = (() => {
   return value === "panel" || value === "rail" ? value : "popover";
 })();
 
-const items: OutlineItem[] = Array.from({ length: 64 }, (_, index) => ({
+const headings: OutlineItem[] = Array.from({ length: 64 }, (_, index) => ({
   id: `heading-${index + 1}`,
   label: index % 3 === 0 ? `Section ${index + 1}` : `§ ${index + 1}`,
   title: `Long heading title for the synthetic legal provision ${index + 1}, covering jurisdiction, filing requirements, and the supporting record`,
   level: index % 4 === 0 ? 1 : 2,
   meta: String(Math.floor(index / 8) + 1),
 }));
+
+const PEOPLE = ["Nováková Jana", "Dvořák Petr", "Malá Eva", "Černý Jiří"];
+
+const items: OutlineItem[] =
+  new URLSearchParams(window.location.search).get("people") === "true"
+    ? [
+        ...headings,
+        {
+          id: "separate-opinion",
+          label: PEOPLE.join(", "),
+          level: 1,
+          portraitCredit: "Portrait source: Court",
+          portraits: PEOPLE.map((name) => ({ image: null, name })),
+          title: "Dissenting opinion",
+        },
+      ]
+    : headings;
 
 const OutlineRailFixture = () => {
   const documentRef = useRef<HTMLDivElement>(null);

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import type { EntityVersionUploadResult } from "@/lib/files/upload-entity-version";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
   commitCompletedUpload,
+  createPageOrganizerOperationOwner,
   createPageOrganizerUploadOwner,
 } from "./page-organizer-upload.logic";
 
@@ -14,6 +16,7 @@ const receipt = (suffix: string) => ({
 
 describe("page organizer upload ownership", () => {
   test("cancelled upload resolving late preserves the pre-upload view for save and sign", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const pending = owner.begin();
     const commits: string[] = [];
@@ -22,10 +25,15 @@ describe("page organizer upload ownership", () => {
     owner.cancel(pending);
     const late = owner.prepareCompletion(pending, receipt("withdrawn"));
     if (late.type === "completed") {
-      commitCompletedUpload(late, (upload) => {
-        commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
-        visibleVersion = upload.fileId;
-      });
+      commitCompletedUpload(
+        operationOwner.operation,
+        operationOwner,
+        late,
+        (upload) => {
+          commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
+          visibleVersion = upload.fileId;
+        },
+      );
     }
 
     expect(late).toEqual({ type: "cancelled", uploadId: pending.uploadId });
@@ -34,6 +42,7 @@ describe("page organizer upload ownership", () => {
   });
 
   test("a new upload after cancellation is saved and signed", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const cancelled = owner.begin();
     owner.cancel(cancelled);
@@ -46,15 +55,21 @@ describe("page organizer upload ownership", () => {
     const commits: string[] = [];
 
     if (outcome.type === "completed") {
-      commitCompletedUpload(outcome, (upload) => {
-        commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
-      });
+      commitCompletedUpload(
+        operationOwner.operation,
+        operationOwner,
+        outcome,
+        (upload) => {
+          commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
+        },
+      );
     }
 
     expect(commits).toEqual(["save:file-next", "sign:file-next"]);
   });
 
   test("only the newest upload can be committed when the first resolves last", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const first = owner.begin();
     const second = owner.begin();
@@ -71,7 +86,12 @@ describe("page organizer upload ownership", () => {
 
     for (const outcome of [secondOutcome, firstOutcome]) {
       if (outcome.type === "completed") {
-        commitCompletedUpload(outcome, (upload) => commits.push(upload.fileId));
+        commitCompletedUpload(
+          operationOwner.operation,
+          operationOwner,
+          outcome,
+          (upload) => commits.push(upload.fileId),
+        );
       }
     }
 
@@ -83,6 +103,7 @@ describe("page organizer upload ownership", () => {
   });
 
   test("unmount during query invalidation prevents saving or reading the signing target", async () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const pending = owner.begin();
     const provisional = owner.prepareCompletion(pending, receipt("dismissed"));
@@ -99,10 +120,15 @@ describe("page organizer upload ownership", () => {
       await invalidation;
       const outcome = owner.commit(provisional);
       if (outcome.type === "completed") {
-        commitCompletedUpload(outcome, (upload) => {
-          savedVersions.push(upload.fileId);
-          signingTargetReads.push(upload.fileId);
-        });
+        commitCompletedUpload(
+          operationOwner.operation,
+          operationOwner,
+          outcome,
+          (upload) => {
+            savedVersions.push(upload.fileId);
+            signingTargetReads.push(upload.fileId);
+          },
+        );
       }
       return outcome;
     };
@@ -118,4 +144,156 @@ describe("page organizer upload ownership", () => {
     expect(savedVersions).toEqual([]);
     expect(signingTargetReads).toEqual([]);
   });
+
+  test("revoked operations cannot commit a completed receipt", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
+    const uploadOwner = createPageOrganizerUploadOwner();
+    const pending = uploadOwner.begin();
+    const provisional = uploadOwner.prepareCompletion(pending, receipt("late"));
+    if (provisional.type !== "provisional") {
+      throw new Error("Expected the upload to be provisional");
+    }
+    const completed = uploadOwner.commit(provisional);
+    if (completed.type !== "completed") {
+      throw new Error("Expected the upload to complete");
+    }
+    const commits: string[] = [];
+
+    operationOwner.revoke();
+    const result = commitCompletedUpload(
+      operationOwner.operation,
+      operationOwner,
+      completed,
+      (upload) => commits.push(upload.fileId),
+    );
+
+    expect(result).toBeNull();
+    expect(commits).toEqual([]);
+  });
+
+  test("only the newest transform request remains current", () => {
+    const owner = createPageOrganizerOperationOwner();
+    const first = owner.beginRequest(owner.operation);
+    const second = owner.beginRequest(owner.operation);
+
+    expect(owner.isCurrent(first)).toBe(false);
+    expect(owner.isCurrent(second)).toBe(true);
+  });
+});
+
+test("a newer request aborts every controller owned by the superseded request", () => {
+  const owner = createPageOrganizerOperationOwner();
+  const first = owner.beginRequest(owner.operation);
+  const transform = new AbortController();
+  const upload = new AbortController();
+  owner.ownController(first, transform);
+  owner.ownController(first, upload);
+
+  owner.beginRequest(owner.operation);
+
+  expect(transform.signal.aborted).toBe(true);
+  expect(upload.signal.aborted).toBe(true);
+});
+
+test("releasing a completed transform leaves the same request upload live", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const transform = new AbortController();
+  const upload = new AbortController();
+  operationOwner.ownController(request, transform);
+  operationOwner.ownController(request, upload);
+  const pending = uploadOwner.begin(request);
+
+  operationOwner.releaseController(request, transform);
+
+  expect(upload.signal.aborted).toBe(false);
+  const provisional = uploadOwner.prepareCompletion(pending, receipt("saved"));
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected the live upload to be provisional");
+  }
+  const completed = uploadOwner.commit(provisional);
+  operationOwner.releaseController(request, upload);
+
+  expect(completed).toMatchObject({
+    type: "completed",
+    fileId: "file-saved",
+  });
+  expect(operationOwner.isCurrent(request)).toBe(true);
+});
+
+test("a receipt is single-use and bound to its request and upload owner", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const otherUploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const pending = uploadOwner.begin(request);
+  const provisional = uploadOwner.prepareCompletion(pending, receipt("bound"));
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected provisional upload");
+  }
+  const completed = uploadOwner.commit(provisional);
+  if (completed.type !== "completed") {
+    throw new Error("Expected completed upload");
+  }
+  const commits: string[] = [];
+
+  expect(
+    otherUploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBeNull();
+  expect(
+    uploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBe(1);
+  expect(
+    uploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBeNull();
+  expect(commits).toEqual(["file-bound"]);
+});
+
+test("an upload result with its own type still becomes a committable receipt", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const pending = uploadOwner.begin(request);
+  const uploaded = {
+    type: "uploaded",
+    ...receipt("uploaded"),
+  } satisfies EntityVersionUploadResult;
+
+  const provisional = uploadOwner.prepareCompletion(pending, uploaded);
+
+  expect(provisional).toMatchObject({
+    type: "provisional",
+    fileId: "file-uploaded",
+  });
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected the uploaded result to be provisional");
+  }
+  expect(uploadOwner.commit(provisional)).toMatchObject({
+    type: "completed",
+    entityVersionId: "version-uploaded",
+    fileId: "file-uploaded",
+  });
+});
+
+test("a remounted owner accepts new requests but not ones from before the remount", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const stale = operationOwner.beginRequest(operationOwner.operation);
+  const staleUpload = new AbortController();
+  operationOwner.ownController(stale, staleUpload);
+
+  operationOwner.revoke();
+  operationOwner.activate();
+  const fresh = operationOwner.beginRequest(operationOwner.operation);
+
+  expect(staleUpload.signal.aborted).toBe(true);
+  expect(operationOwner.isCurrent(stale)).toBe(false);
+  expect(operationOwner.isLive(operationOwner.operation)).toBe(true);
+  expect(operationOwner.isCurrent(fresh)).toBe(true);
 });

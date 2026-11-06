@@ -10,10 +10,15 @@ import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
 import { cpSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 
+// The interface languages come from `@stll/locales` itself, so iOS is told
+// exactly the languages the app ships.
+import { UI_LOCALES } from "@stll/locales/languages";
+
 // Evaluated by Node through Expo's config loader, which cannot follow a
-// workspace package's extensionless TypeScript imports; so this file imports
-// only npm packages, and `src/architecture.test.ts` pins every value below to
-// `@stll/api-contract/mobile-client`.
+// workspace package's extensionless TypeScript imports. So this file imports
+// npm packages and only workspace modules that import nothing (as
+// `@stll/locales/languages`), and `src/architecture.test.ts` pins every value
+// below to `@stll/api-contract/mobile-client`.
 
 const VARIANTS = ["development", "preview", "production"] as const;
 
@@ -281,6 +286,10 @@ const appConfigBase = ({
       // matter's documents.
       NSCameraUsageDescription:
         "stella scans paper documents with the camera to add them to a matter.",
+      // iOS runs an app only in a language its bundle declares: without the
+      // list the app's locale is English on every phone, so the catalogs it
+      // ships for the device's language never load.
+      CFBundleLocalizations: [...UI_LOCALES],
     },
   },
   android: {
@@ -309,6 +318,17 @@ const appConfigBase = ({
         ],
       },
     ],
+    // The composer's microphone dictates a message
+    // (src/components/use-dictation.ts); recording only while the app is open.
+    [
+      "expo-audio",
+      {
+        microphonePermission:
+          "stella records your voice while you dictate a message, to type it for you.",
+        recordAudioAndroid: true,
+        enableBackgroundRecording: false,
+      },
+    ] satisfies [string, unknown],
     // Notifications from the server: mentions, approvals, finished exports
     // (src/components/push-registration.tsx).
     ...(pushNotifications
@@ -320,7 +340,8 @@ const appConfigBase = ({
         ]
       : []),
     // A running timer on the Lock Screen and in the Dynamic Island
-    // (src/widgets/timer-activity.ios.tsx).
+    // (src/widgets/timer-activity.ios.tsx). With the push entitlement the
+    // activity takes tokens, so a timer changed on another device reaches it.
     ...(liveActivities
       ? [
           [
@@ -328,6 +349,7 @@ const appConfigBase = ({
             {
               bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
               groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
+              enablePushNotifications: pushNotifications,
             },
           ] satisfies [string, unknown],
         ]

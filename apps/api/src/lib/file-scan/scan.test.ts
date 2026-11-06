@@ -1,10 +1,9 @@
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { scanFile } from "./scan";
 
@@ -57,25 +56,24 @@ type ThreatDocxOpts = {
  * are exercised against inflated entries rather than raw archive bytes.
  */
 const makeThreatDocx = async (opts: ThreatDocxOpts): Promise<Uint8Array> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     opts.contentTypesXml ?? '<?xml version="1.0"?><Types></Types>',
   );
-  writeZipEntry(zip, "word/document.xml", "<document/>");
+  zip.set("word/document.xml", "<document/>");
   if (opts.vbaContent !== undefined) {
-    writeZipEntry(zip, "word/vbaProject.bin", opts.vbaContent);
+    zip.set("word/vbaProject.bin", opts.vbaContent);
   }
   if (opts.relsXml !== undefined) {
-    writeZipEntry(zip, "word/_rels/document.xml.rels", opts.relsXml);
+    zip.set("word/_rels/document.xml.rels", opts.relsXml);
   }
   if (opts.extraFiles) {
     for (const [name, content] of Object.entries(opts.extraFiles)) {
-      writeZipEntry(zip, name, content);
+      zip.set(name, content);
     }
   }
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  return zip.generate();
 };
 
 /** OLE2 binary with compound file magic. */
@@ -778,11 +776,11 @@ describe("ooxml threats", () => {
   });
 
   test("ordinary ZIP files with non-OPC .rels entries are not rejected", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "notes.rels", "not XML");
+    const zip = new ZipArchive();
+    zip.set("notes.rels", "not XML");
     const result = Result.unwrap(
       await scanFile({
-        buffer: await zip.generateAsync({ type: "uint8array" }),
+        buffer: await zip.generate({ compression: "store" }),
         declaredMimeType: "application/zip",
         fileName: "notes.zip",
       }),
