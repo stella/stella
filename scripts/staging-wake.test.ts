@@ -543,13 +543,14 @@ describe("the wake in deploy-staging.yml", () => {
       "resolve",
       "staging-health",
       "staging-wake",
+      "rc-manifest",
       "build-api",
       "build-web",
     ]);
     // Without a status function a skipped wake two levels up would skip the
     // promotion and end the run green with nothing deployed.
     expect(job?.["if"]).toBe(
-      "!cancelled() && github.ref == 'refs/heads/main' && needs.resolve.result == 'success' && ((inputs.release_ref != '' && (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) || (needs.build-api.result == 'success' && needs.build-web.result == 'success'))",
+      "!cancelled() && github.ref == 'refs/heads/main' && needs.resolve.result == 'success' && ((inputs.release_ref != '' && needs.rc-manifest.result == 'success' && (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) || (needs.build-api.result == 'success' && needs.build-web.result == 'success'))",
     );
   });
 

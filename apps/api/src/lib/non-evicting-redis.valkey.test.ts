@@ -80,7 +80,7 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
       expect(Result.isError(refused)).toBe(true);
       if (Result.isError(refused)) {
         expect(refused.error).toMatchObject({
-          reason: "unavailable",
+          reason: "configuration_incomplete",
           message: expect.stringContaining("maxmemory-policy noeviction"),
         });
       }
@@ -102,7 +102,7 @@ describe.skipIf(!runValkeyTests)("admission policy over Valkey", () => {
       expect(Result.isError(fenced)).toBe(true);
       if (Result.isError(fenced)) {
         expect(fenced.error).toMatchObject({
-          reason: "unavailable",
+          reason: "configuration_incomplete",
           message: expect.stringContaining("maxmemory-policy noeviction"),
         });
       }

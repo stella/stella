@@ -33,153 +33,11 @@ CHANGED_FILES="$(git diff --name-only "$BASE_REF"...HEAD)"
 bun scripts/check-migration-order.ts "$BASE_REF"
 bun scripts/check-migration-locks.ts --base "$BASE_REF"
 
-extract_schema_files() {
-  local source_file="$1"
-
-  bun -e '
-    const fs = require("node:fs");
-    const path = require("node:path");
-    const sourceFile = process.argv.at(1);
-    const source = fs.readFileSync(sourceFile, "utf8");
-    const schemaMatch = source.match(/schema\s*:\s*\[([\s\S]*?)\]/m);
-
-    if (!schemaMatch) {
-      process.exit(2);
-    }
-
-    const schemaFiles = [...schemaMatch[1].matchAll(/["'"'"'`]([^"'"'"'`]+\.ts)["'"'"'`]/g)]
-      .map((match) => {
-        const schemaPath = match[1];
-
-        if (schemaPath.startsWith(".")) {
-          return path.posix.normalize(path.posix.join("apps/api", schemaPath));
-        }
-
-        return path.posix.normalize(schemaPath);
-      })
-      .sort();
-
-    if (schemaFiles.length === 0) {
-      process.exit(3);
-    }
-
-    console.log(schemaFiles.join("\n"));
-  ' "$source_file"
-}
-
-SCHEMA_FILES="$(extract_schema_files apps/api/drizzle.config.ts || true)"
-
-if [[ -z "$SCHEMA_FILES" ]]; then
-  echo "ERROR: Could not find schema inputs in apps/api/drizzle.config.ts." >&2
-  exit 1
-fi
-
-BASE_SCHEMA_FILES="$(
-  git show "$BASE_REF:apps/api/drizzle.config.ts" 2>/dev/null \
-    | extract_schema_files /dev/stdin \
-    || true
-)"
-
-SCHEMA_CHANGED=false
-MIGRATION_CHANGED=false
-SCHEMA_INPUTS_CHANGED=false
 MIGRATION_SQL_FILES=()
 
-if [[ -n "$BASE_SCHEMA_FILES" && "$BASE_SCHEMA_FILES" != "$SCHEMA_FILES" ]]; then
-  SCHEMA_INPUTS_CHANGED=true
-fi
-
-is_schema_file() {
-  local changed_file="$1"
-  local schema_file
-
-  while IFS= read -r schema_file; do
-    if [[ "$changed_file" == "$schema_file" ]]; then
-      return 0
-    fi
-  done <<< "$SCHEMA_FILES"
-
-  return 1
-}
-
-schema_file_has_migration_relevant_diff() {
-  local changed_file="$1"
-
-  # Type-only import ownership changes do not alter the generated DDL.
-  bun -e '
-    const { spawnSync } = require("node:child_process");
-    const fs = require("node:fs");
-    const { parseSource, walk } = require("@stll/scripts/src/syntax-tree");
-    const transpiler = new Bun.Transpiler({
-      loader: "ts",
-      tsconfig: { compilerOptions: { verbatimModuleSyntax: true } },
-    });
-
-    const baseRef = process.argv.at(1);
-    const changedFile = process.argv.at(2);
-
-    const normalizeSchemaSource = (source) => {
-      // Type-only imports and zero-argument `$type<T>()` calls do not alter DDL.
-      // AST erasure preserves runtime calls and SQL text around nested types.
-      const parsed = parseSource(changedFile, source);
-      const edits = [];
-      walk(parsed.program, (node) => {
-        if (
-          node.type === "CallExpression" &&
-          node.arguments.length === 0 &&
-          node.typeArguments?.params.length > 0 &&
-          !node.optional &&
-          node.callee.type === "MemberExpression" &&
-          !node.callee.computed &&
-          !node.callee.optional &&
-          node.callee.property.type === "Identifier" &&
-          node.callee.property.name === "$type"
-        ) {
-          edits.push({ start: node.callee.object.end, end: node.end });
-        }
-      });
-      let erased = source;
-      // Keep offsets stable while removing comments Bun would otherwise preserve.
-      for (const { start, end } of parsed.comments.toReversed()) {
-        erased = erased.slice(0, start)
-          + source.slice(start, end).replace(/[^\r\n]/g, " ")
-          + erased.slice(end);
-      }
-      for (const { start, end } of edits.toSorted((a, b) => b.start - a.start)) {
-        erased = erased.slice(0, start) + erased.slice(end);
-      }
-      return transpiler.transformSync(erased);
-    };
-
-    const currentSource = fs.readFileSync(changedFile, "utf8");
-    const baseSource = spawnSync("git", ["show", `${baseRef}:${changedFile}`], {
-      encoding: "utf8",
-    });
-
-    if (baseSource.status !== 0) {
-      process.exit(0);
-    }
-
-    process.exit(
-      normalizeSchemaSource(currentSource) === normalizeSchemaSource(baseSource.stdout)
-        ? 1
-        : 0,
-    );
-  ' "$BASE_REF" "$changed_file"
-}
-
 while IFS= read -r file; do
-  if is_schema_file "$file"; then
-    if schema_file_has_migration_relevant_diff "$file"; then
-      SCHEMA_CHANGED=true
-    fi
-    continue
-  fi
-
   case "$file" in
     apps/api/drizzle/*)
-      MIGRATION_CHANGED=true
-
       if [[ "$file" == apps/api/drizzle/*.sql && -f "$file" ]]; then
         MIGRATION_SQL_FILES+=("$file")
       fi
@@ -187,15 +45,7 @@ while IFS= read -r file; do
   esac
 done <<< "$CHANGED_FILES"
 
-if [[ "$SCHEMA_INPUTS_CHANGED" == "true" ]]; then
-  SCHEMA_CHANGED=true
-fi
-
-if [[ "$SCHEMA_CHANGED" == "true" && "$MIGRATION_CHANGED" != "true" ]]; then
-  echo "ERROR: Database schema changed without a migration file in apps/api/drizzle/." >&2
-  echo "Generate one with: cd apps/api && bun --bun drizzle-kit generate --name <change-name>" >&2
-  exit 1
-fi
+bun scripts/check-migration-schema.ts "$BASE_REF"
 
 # Grandfather already-applied migrations: lint only files NOT in the baseline.
 # Existing migrations are immutable — Drizzle tracks them by content hash, so

@@ -8,11 +8,11 @@
 
 import { panic } from "better-result";
 
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 type AdapterLoader = () => Promise<SourceAdapter>;
 

@@ -8,6 +8,7 @@
  */
 
 import {
+  gradedDocumentFetchBudget,
   type OnDemandDocumentDeps,
   recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
@@ -48,7 +49,9 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
           decisionId: decision.id,
           scopedDb: getCaseLawIngestionDb(),
           signal: AbortSignal.any([
-            AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            gradedDocumentFetchBudget(
+              AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+            ),
             ...(io.signal === undefined ? [] : [io.signal]),
           ]),
         }),

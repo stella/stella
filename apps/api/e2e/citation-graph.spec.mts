@@ -47,6 +47,7 @@ const citation = (
     citationId: `fixture-citation-${index}`,
     citationText: `Fixture reference ${index + 1}`,
     textWithheldReason: null,
+    extractionWarnings: [],
     polarity,
     doctrine: null,
     decision:
@@ -267,6 +268,7 @@ const mountGraph = async ({
                 result: toolResult({
                   status: "unavailable",
                   metadata: {
+                    extractionWarnings: [],
                     decisionId,
                     url: `https://stella.example/law/cze/cases/${decisionId}`,
                     caseNumber: "Fixture case",

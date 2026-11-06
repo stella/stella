@@ -34,6 +34,10 @@ import * as v from "valibot";
 import type { ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import {
+  onlineUniqueIndexTarget,
+  USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
@@ -337,7 +341,7 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelTask: ModelTask | "decision";
+  modelTask: ModelTask | "decision" | "transcription";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
@@ -431,7 +435,10 @@ export const recordUsageEvent = async ({
     .insert(usageEvents)
     .values(values)
     .onConflictDoNothing({
-      target: [usageEvents.organizationId, usageEvents.idempotencyKey],
+      target: onlineUniqueIndexTarget(
+        USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+        usageEvents,
+      ),
       where: sql`idempotency_key IS NOT NULL`,
     })
     .returning({ id: usageEvents.id });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeEach,
@@ -9,9 +9,11 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -20,13 +22,16 @@ import {
 } from "@stll/api-contract/signals";
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
   chatMessageRevisions,
   chatMessages,
   chatThreads,
@@ -47,6 +52,7 @@ import {
   legalReaderAnswers,
   notifications,
   numberSeries,
+  organizationSettings,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -63,7 +69,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
@@ -83,6 +89,7 @@ import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
 import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -118,6 +125,14 @@ import {
   desktopBatchFingerprint,
 } from "@/api/handlers/desktop-time-entries/batch";
 import { createDesktopTimeEntryBatchStatusEndpoint } from "@/api/handlers/desktop-time-entries/batch-status";
+import {
+  createDesktopBillingDraftSettingsReadEndpoint,
+  createDesktopBillingDraftSettingsUpdateEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import {
+  type BillingDraftPrompt,
+  createDesktopBillingDraftEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-drafts";
 import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
 import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
 import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
@@ -137,8 +152,8 @@ import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
-import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
-import listReaderAnswers from "@/api/handlers/legal-reader/answers/list";
+import { createListReaderAnnotations } from "@/api/handlers/legal-reader/annotations/list";
+import { createListReaderAnswers } from "@/api/handlers/legal-reader/answers/list";
 import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import deleteMemory from "@/api/handlers/memories/delete";
@@ -196,15 +211,20 @@ import { cents } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import type {
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
+} from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
@@ -220,6 +240,11 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+const readCopies = createTestWithdrawalCopyReader(() => testDb);
+const listReaderAnnotations = createListReaderAnnotations({ readCopies });
+const listReaderAnswers = createListReaderAnswers({ readCopies });
+const lookupResearchAnswers = createLookupResearchAnswers({ readCopies });
 
 beforeEach(() => {
   streamChatStub.mockClear();
@@ -759,6 +784,40 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
   ]);
 };
 
+const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
+
+// Grants and preference changes apply to the revision the caller last read.
+const putDraftSettings = async (
+  caller: (request: Request) => Promise<Response>,
+  change:
+    { type: "grant_consent" } | { type: "set_preference"; preference: string },
+) => {
+  const current = await caller(desktopRequest("/draft-settings"));
+  expect(current.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsResponseSchema,
+    await current.json(),
+  );
+  const response = await caller(
+    desktopRequest("/draft-settings", { ...change, revision }),
+  );
+  expect(response.status).toBe(200);
+};
+
+const grantDraftConsent = async (
+  caller: (request: Request) => Promise<Response>,
+) => await putDraftSettings(caller, { type: "grant_consent" });
+
+const saveOrganizationBDraftSettings = async (
+  desktopB: (request: Request) => Promise<Response>,
+) => {
+  await grantDraftConsent(desktopB);
+  await putDraftSettings(desktopB, {
+    type: "set_preference",
+    preference: DESKTOP_DRAFT_PREFERENCE_B,
+  });
+};
+
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
   {
     name: "desktop registry saved format",
@@ -891,6 +950,78 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
       expect(result).toEqual({
         type: "committed",
         entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
+      }),
+  },
+  {
+    // Consent and preference are kept per organization: the same user's
+    // settings in B never answer a request bound to A.
+    name: "desktop billing draft settings",
+    runAAgainstB: async ({ desktopA, desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopA(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopB(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toEqual({
+        revision: null,
+        effectiveMode: "plain",
+        consent: "revoked",
+        preference: null,
+      }),
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        revision: expect.any(String),
+        effectiveMode: "plain",
+        consent: "granted",
+        preference: DESKTOP_DRAFT_PREFERENCE_B,
+      }),
+  },
+  {
+    // Drafting reads the selected matter before guidelines or the model, so
+    // B's matter is refused to A, while B, with consent and no firm
+    // guideline file bound, gets a plain description.
+    name: "desktop billing drafts",
+    runAAgainstB: async ({ desktopA, ids: testIds }) => {
+      await grantDraftConsent(desktopA);
+      const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      await grantDraftConsent(desktopB);
+      const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    expectDenied: (result) => {
+      expect(result).toMatchObject({ status: 403 });
+      expect(JSON.stringify(result)).toContain(
+        "Selected matter is unavailable",
+      );
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        status: 200,
+        body: {
+          result: {
+            mode: "plain",
+            drafts: [
+              {
+                entryId: "entry_1",
+                narrative: "Reviewed the agreement",
+                matchedEarlierEntryIds: [],
+              },
+            ],
+          },
+          earlierEntries: [],
+        },
       }),
   },
   {
@@ -1950,6 +2081,17 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
+    name: "active chat run list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listActiveChatRuns, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listActiveChatRuns, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(activeChatRunThreadIds(result)).not.toContain(chatTurnThreadB),
+    expectPositive: (result) =>
+      expect(activeChatRunThreadIds(result)).toContain(chatTurnThreadB),
+  },
+  {
     name: "chat thread list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listChatThreads, workspaceA, { query: {} }),
@@ -2865,6 +3007,10 @@ testState.beforeAll(async () => {
     name: "Matrix format B",
     format: "[company name]",
   });
+  await testDb
+    .update(organizationSettings)
+    .set({ aiBillingDraftsMode: "enabled" })
+    .where(inArray(organizationSettings.organizationId, [ids.orgA, ids.orgB]));
   desktopCredentials = await createRlsDesktopCredentials(testDb, ids);
   await testDb.insert(desktopTimeEntryBatches).values({
     organizationId: ids.orgB,
@@ -3362,6 +3508,86 @@ afterAll(async () => {
 });
 
 describe("cross-tenant handler isolation", () => {
+  test.each([
+    "reader answers across organizations",
+    "legal reader annotation list",
+    "case-law research answers lookup",
+  ])(
+    "%s: withdrawal changes content but preserves visible resource identities",
+    async (name) => {
+      const testCase =
+        isolationCases.find((candidate) => candidate.name === name) ??
+        panic("Missing withdrawal isolation case");
+      const context = createIsolationContext();
+      const beforeA = await testCase.runAAgainstB(context);
+      const beforeB = await testCase.runBPositive(context);
+      testCase.expectDenied(beforeA, context);
+      testCase.expectPositive(beforeB, context);
+      const identities = (result: unknown) =>
+        getPageItems(result).map((item) => ({
+          id: item["id"],
+          columnId: item["columnId"],
+          decisionId: item["decisionId"],
+        }));
+      const sourceId = createSafeId<"caseLawSource">();
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: sourceId,
+        name: "Withdrawal isolation fixture",
+        enabled: false,
+      });
+      const [originalDecision] = await testDb
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, ids.caseLawDecisionB))
+        .limit(1);
+      try {
+        await testDb
+          .insert(caseLawDecisions)
+          .values({
+            id: ids.caseLawDecisionB,
+            sourceId,
+            sourceDocumentId: ids.caseLawDecisionB,
+            caseNumber: "Fixture",
+            court: "Fixture court",
+            country: "POL",
+            language: "pl",
+            redactedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: caseLawDecisions.id,
+            set: {
+              redactedAt: new Date(),
+              fulltext: null,
+              contentHash: null,
+              sections: null,
+              documentAst: null,
+            },
+          });
+        const afterA = await testCase.runAAgainstB(createIsolationContext());
+        const afterB = await testCase.runBPositive(createIsolationContext());
+        expect(getStatusCode(afterA)).toBeNull();
+        expect(getStatusCode(afterB)).toBeNull();
+        expect(identities(afterA)).toEqual(identities(beforeA));
+        expect(identities(afterB)).toEqual(identities(beforeB));
+        expect(JSON.stringify(afterB)).toContain("Withdrawn by publisher");
+      } finally {
+        if (originalDecision !== undefined) {
+          await testDb
+            .update(caseLawDecisions)
+            .set(originalDecision)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        } else {
+          await testDb
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        }
+        await testDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
   for (const testCase of isolationCases) {
     test(`${testCase.name}: workspace A cannot read workspace/org B resource IDs`, async () => {
       const context = createIsolationContext();
@@ -3672,6 +3898,15 @@ function chatToolGrantIds(result: unknown): unknown[] {
   return grants.map((grant) => recordField(grant, "id"));
 }
 
+function activeChatRunThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const runs = recordField(result, "items");
+  if (!Array.isArray(runs)) {
+    throw new TypeError("Expected an active chat run list response");
+  }
+  return runs.map((run) => recordField(run, "threadId"));
+}
+
 function globalChatThreadIds(result: unknown): unknown[] {
   expect(getStatusCode(result)).toBeNull();
   const threads = recordField(result, "global");
@@ -3768,6 +4003,34 @@ const desktopServer = (): TestServer => {
   const batch = createDesktopTimeEntryBatchEndpoint(authorize);
   const batchStatus = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
+  const readDraftSettings =
+    createDesktopBillingDraftSettingsReadEndpoint(authorize);
+  const updateDraftSettings =
+    createDesktopBillingDraftSettingsUpdateEndpoint(authorize);
+  const drafts = createDesktopBillingDraftEndpoint({
+    authorizeAccount: authorize,
+    // The model is the one external boundary: it describes each selected
+    // entry under the reference the prompt gave it.
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
+      async ({ prompt }: { prompt?: string }) => ({
+        drafts: asTestRaw<BillingDraftPrompt>(
+          JSON.parse(prompt ?? "{}"),
+        ).entries.map(({ entryId }) => ({
+          entryId,
+          narrative: "Reviewed the agreement",
+          matchedEarlierEntryIds: [],
+        })),
+      }),
+    ),
+    admit: asTestRaw<typeof withActionAdmission>(
+      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+        Result.ok(
+          await run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        ),
+    ),
+  });
   // The real routes on the real HTTP core: each definition decodes its own
   // input and answers through its own response schemas.
   return serveForTest(
@@ -3781,6 +4044,8 @@ const desktopServer = (): TestServer => {
         "/batch": { PUT: batch },
         "/status": { PUT: batchStatus },
         "/single/:workspaceId": { PUT: single },
+        "/draft-settings": { GET: readDraftSettings, PUT: updateDraftSettings },
+        "/drafts": { POST: drafts },
       }),
     }),
   );
@@ -3799,6 +4064,22 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
     tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
   return await desktopRoutes.fetch(await credential.signRequest(request));
 };
+
+const desktopDraftRequest = (matterId: string) =>
+  new Request("http://localhost/drafts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(
+      createDesktopBillingDraftRequest({
+        matterId,
+        entry: {
+          date: DESKTOP_ENTRY.dateWorked,
+          timezone: DESKTOP_ENTRY.timezoneId,
+          durationMinutes: DESKTOP_ENTRY.durationMinutes,
+        },
+      }),
+    ),
+  });
 
 /** A request as the desktop app sends it: its HTTP client names itself on
  *  every call, and the registry route admits no other agent. */

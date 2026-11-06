@@ -1,8 +1,9 @@
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, StyleSheet } from "react-native";
+import { ActivityIndicator } from "react-native";
 
+import { useRevisedLoad } from "@/components/changes";
 import { LoadedMatters } from "@/components/loaded-matters";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -11,8 +12,15 @@ import { listMatters } from "@/state/matters";
 import type { MattersLoad } from "@/state/matters";
 import { useAppColors } from "@/theme";
 
-/** Loads the signed-in person's matters once, and again on every pull to refresh. */
-export const MattersList = ({ source }: { source: AccessTokenSource }) => {
+/**
+ * Loads the signed-in person's matters once, again on every pull to
+ * refresh, and afresh after a matter is opened from the header's "+".
+ */
+export const MattersList = ({ source }: { source: AccessTokenSource }) => (
+  <MattersLoader source={source} />
+);
+
+const MattersLoader = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
   const { end } = useSession();
   // A session the server ended sends the person back to sign in, from the
@@ -24,7 +32,7 @@ export const MattersList = ({ source }: { source: AccessTokenSource }) => {
     }
     return { loadedAt: epochMilliseconds(), result };
   };
-  const [load, setLoad] = useState(loadMatters);
+  const [load, setLoad] = useRevisedLoad(loadMatters, ["matters"]);
   const [refreshing, startRefresh] = useTransition();
   const reload = () => {
     startRefresh(() => {
@@ -34,17 +42,9 @@ export const MattersList = ({ source }: { source: AccessTokenSource }) => {
 
   return (
     <Suspense
-      fallback={
-        <ActivityIndicator color={colors.accent} style={styles.loading} />
-      }
+      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
     >
       <LoadedMatters load={load} onReload={reload} refreshing={refreshing} />
     </Suspense>
   );
 };
-
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-  },
-});

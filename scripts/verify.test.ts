@@ -798,6 +798,7 @@ exit 0
           });
           for (const file of [
             "scripts/autofix-plan.ts",
+            "scripts/autofix-select-paths.ts",
             "scripts/autofix-push-scope.ts",
             "scripts/autofix-baseline-prune.ts",
             "scripts/baseline-shrink.ts",
@@ -916,6 +917,7 @@ exit 0
                 HOME: home,
                 PATH: bin,
                 CI: ci,
+                GITHUB_WORKSPACE: undefined,
                 TEST_ENTRY: entry,
                 TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
                 TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),

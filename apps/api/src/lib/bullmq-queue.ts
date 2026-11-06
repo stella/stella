@@ -126,17 +126,20 @@ export const BULLMQ_QUEUE_HOSTS = {
   "document-review-runs-v2": "api",
   "document-translation-runs": "api",
   "entity-deletion-cleanup": "api",
-  "file-derivatives": "api",
+  "file-derivatives": "file-derivative-worker",
   "flow-run": "api",
   "legal-list-verification-runs": "api",
+  "push-notifications": "api",
   "report-exports": "api",
   "style-set-package-cleanup": "api",
+  "timer-activity-updates": "api",
   "uploaded-mail-correspondence": "api",
   workflow: "api",
   "workflow-flex": "api",
 } as const satisfies Record<string, BullMqWorkerHost>;
 
-export type BullMqWorkerHost = "api" | "document-processing-worker";
+export type BullMqWorkerHost =
+  "api" | "document-processing-worker" | "file-derivative-worker";
 
 export type BullMqQueueName = keyof typeof BULLMQ_QUEUE_HOSTS;
 

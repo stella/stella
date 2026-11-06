@@ -142,6 +142,7 @@ const expression = (value: boolean | string | undefined, waived: boolean) => {
     needs: { resolve: { outputs: { corpus_search_waived: String(waived) } } },
     steps: {
       "smoke-deps": { conclusion: "success" },
+      "proof-readiness": { outputs: { status: "ready" } },
       "corpus-preflight": { outcome: "failure", conclusion: "success" },
     },
   });
@@ -167,6 +168,12 @@ const assertScope = (candidate = workflow) => {
         expect(step.if).toContain("github.token != ''");
         expect(step.if).not.toContain("corpus_search_waived");
         expect(step["continue-on-error"]).toBe(true);
+        continue;
+      }
+      if (step.id === "proof-readiness") {
+        expect(jobName).toBe("promote-staging");
+        expect(step["continue-on-error"]).toBe(true);
+        expect(step.run).toContain("staging-proof-readiness-cli.ts");
         continue;
       }
       if (step.id === "corpus-preflight") {
@@ -229,6 +236,8 @@ const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
       WAIVE_REASON:
         "Backend verification deferred; evidence=artifacts/corpus-check.log",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
       ...overrides,
     },
   );
@@ -348,6 +357,27 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
   expect(result.summary).toContain(
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
+});
+test("a declared corpus gap succeeds only with a passed preflight and skipped MCP", () => {
+  const declared = {
+    CORPUS_DECLARED_GAP: "true",
+    CORPUS_SEARCH_WAIVED: "false",
+    CORPUS_PREFLIGHT: "success",
+    MCP_SMOKE: "skipped",
+  };
+  expect(statuses(record(declared)).at(0)).toMatchObject({
+    state: "success",
+    description: "Staging smoke success, corpus_reads=search-only: run 1",
+  });
+  for (const overrides of [
+    { CORPUS_PREFLIGHT: "failure" },
+    { MCP_SMOKE: "failure" },
+    { WEB_SMOKE: "failure" },
+  ]) {
+    expect(statuses(record({ ...declared, ...overrides })).at(0)?.state).toBe(
+      "failure",
+    );
+  }
 });
 // timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {

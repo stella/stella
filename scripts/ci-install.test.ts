@@ -9,10 +9,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   createInstallWatchdog,
+  INSTALL_STALL_MS,
   installStoreProgress,
   installWarningBudgetMs,
+  retryStalledInstall,
   runLoggedInstall,
 } from "./ci-install";
 
@@ -49,7 +53,7 @@ afterEach(() => {
   }
 });
 
-test("failed and hung installers preserve output and never retry", async () => {
+test("failed installers do not retry and stalled installers retry exactly once", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "ci-install-"));
   roots.push(root);
   const logFile = path.join(root, "logs/install.log");
@@ -84,7 +88,176 @@ test("failed and hung installers preserve output and never retry", async () => {
   expect(hung).toContain("partial output before hang");
   expect(hung).toContain("Install finished;");
   expect(hung).toContain("kind=infra class=install-stall");
-  expect(hung.match(/Install started/gu)).toHaveLength(1);
+  expect(hung.match(/Install started/gu)).toHaveLength(2);
+  expect(hung).toContain("class=install-stall");
+});
+
+test("a stalled fake child is killed, retried once, and can recover", async () => {
+  const attempts: number[] = [];
+  const result = await retryStalledInstall(async (attempt) => {
+    attempts.push(attempt);
+    return attempt === 1
+      ? { exitCode: 137, stalled: true }
+      : { exitCode: 0, stalled: false };
+  });
+  expect(attempts).toEqual([1, 2]);
+  expect(result).toEqual({ exitCode: 0, stalled: false, retried: true });
+});
+
+test("two stalled fake children produce a typed terminal stall", async () => {
+  const attempts: number[] = [];
+  const result = await retryStalledInstall(async (attempt) => {
+    attempts.push(attempt);
+    return { exitCode: 137, stalled: true };
+  });
+  expect(attempts).toEqual([1, 2]);
+  expect(result).toEqual({ exitCode: 137, stalled: true, retried: true });
+});
+
+test("initial recording failures clean up before install monitoring starts", async () => {
+  const root = mkdtempSync(
+    path.join(tmpdir(), "ci-install-initial-recording-"),
+  );
+  roots.push(root);
+  const recordingError = new Error("installer log cannot be initialized");
+  let attempts = 0;
+  let kills = 0;
+  let activeTimers = 0;
+  let exitCode: number | null = null;
+  const exit = Promise.withResolvers<number>();
+
+  const attempt = runLoggedInstall({
+    command: ["fake-install"],
+    logFile: path.join(root, "install.log"),
+    record: () => {
+      throw recordingError;
+    },
+    scheduleInterval: () => {
+      activeTimers += 1;
+      return () => {
+        activeTimers -= 1;
+      };
+    },
+    spawn: () => {
+      attempts += 1;
+      return {
+        pid: 123,
+        stdout: new ReadableStream<Uint8Array>(),
+        stderr: new ReadableStream<Uint8Array>(),
+        exited: exit.promise,
+        get exitCode() {
+          return exitCode;
+        },
+        signalCode: null,
+        kill: () => {
+          kills += 1;
+          exitCode = 137;
+          exit.resolve(exitCode);
+        },
+      };
+    },
+  });
+
+  expect(await rejectionOf(attempt)).toBe(recordingError);
+  expect(attempts).toBe(1);
+  expect(kills).toBe(1);
+  expect(activeTimers).toBe(0);
+});
+
+test("recording failures clean up the active install attempt", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ci-install-recording-"));
+  roots.push(root);
+  const recordingError = new Error("installer log is full");
+  let attempts = 0;
+  let kills = 0;
+  let probes = 0;
+  let probeSettled = false;
+  let exitCode: number | null = null;
+  const exit = Promise.withResolvers<number>();
+  const probe = Promise.withResolvers<undefined>();
+  let fireTimer: () => void = () => undefined;
+  let timerActive = false;
+  let now = 0;
+  const timerCancelled = Promise.withResolvers<undefined>();
+  let stdoutController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      stdoutController = controller;
+    },
+  });
+  const stderr = new ReadableStream<Uint8Array>();
+  let writes = 0;
+  const recordingFailed = Promise.withResolvers<undefined>();
+
+  const attempt = runLoggedInstall({
+    command: ["fake-install"],
+    logFile: path.join(root, "install.log"),
+    budgetMs: 1000,
+    stallMs: 10,
+    progressRoots: [],
+    now: () => now,
+    record: (descriptor, chunk) => {
+      writes += 1;
+      if (writes === 2) {
+        recordingFailed.resolve(undefined);
+        throw recordingError;
+      }
+      writeFileSync(descriptor, chunk);
+    },
+    sampleStore: async (_roots, active) => {
+      probes += 1;
+      await probe.promise;
+      expect(active?.()).toBe(false);
+      probeSettled = true;
+      return { signature: "", newest: 0 };
+    },
+    scheduleInterval: (callback) => {
+      timerActive = true;
+      fireTimer = () => {
+        if (timerActive) {
+          return callback();
+        }
+      };
+      return () => {
+        timerActive = false;
+        timerCancelled.resolve(undefined);
+      };
+    },
+    spawn: () => {
+      attempts += 1;
+      return {
+        pid: 123,
+        stdout,
+        stderr,
+        exited: exit.promise,
+        get exitCode() {
+          return exitCode;
+        },
+        signalCode: null,
+        kill: () => {
+          kills += 1;
+          exitCode = 137;
+          exit.resolve(exitCode);
+        },
+      };
+    },
+  });
+
+  now = 5;
+  fireTimer();
+  stdoutController?.enqueue(Buffer.from("first installer chunk"));
+  await recordingFailed.promise;
+  await timerCancelled.promise;
+  probe.resolve(undefined);
+  expect(await rejectionOf(attempt)).toBe(recordingError);
+
+  expect(attempts).toBe(1);
+  expect(kills).toBe(1);
+  expect(probeSettled).toBe(true);
+  const probesAfterRejection = probes;
+  expect(timerActive).toBe(false);
+  fireTimer();
+  expect(probes).toBe(probesAfterRejection);
 });
 
 test.each([0, 7])(
@@ -128,12 +301,13 @@ test.each([0, 7])(
   },
 );
 
-test("slow progressing installs warn once and pass beyond the wall budget (fake clock)", () => {
+test("progress gaps just under the stall window are not killed", () => {
+  expect(INSTALL_STALL_MS).toBe(60_000);
   let now = 0;
   const events: string[] = [];
   const monitor = createInstallWatchdog({
     budgetMs: 90,
-    stallMs: 120,
+    stallMs: INSTALL_STALL_MS,
     now: () => now,
     warn: () => {
       events.push("warning");
@@ -142,7 +316,11 @@ test("slow progressing installs warn once and pass beyond the wall budget (fake 
       events.push("install-stall");
     },
   });
-  for (now = 50; now <= 500; now += 50) {
+  for (
+    now = INSTALL_STALL_MS - 1;
+    now <= INSTALL_STALL_MS * 5;
+    now += INSTALL_STALL_MS - 1
+  ) {
     monitor.progress();
     monitor.tick();
   }
@@ -150,6 +328,216 @@ test("slow progressing installs warn once and pass beyond the wall budget (fake 
   expect(events).toEqual(["warning"]);
   expect(monitor.wasStalled()).toBe(false);
 });
+
+test.each([
+  { captureError: undefined, expectedEvidence: "ps state evidence" },
+  {
+    captureError: new Error("inspection unavailable"),
+    expectedEvidence: "inspection unavailable",
+  },
+])(
+  "stall evidence is reported before kill and capture failures still retry",
+  async ({ captureError, expectedEvidence }) => {
+    const root = mkdtempSync(path.join(tmpdir(), "ci-install-stall-evidence-"));
+    roots.push(root);
+    const events: string[] = [];
+    let attempts = 0;
+    const install = runLoggedInstall({
+      command: ["fake-install"],
+      logFile: path.join(root, "install.log"),
+      budgetMs: 20,
+      stallMs: 20,
+      progressRoots: [path.join(root, "store")],
+      report: (message) => {
+        events.push(`report:${message}`);
+      },
+      inspectProcess: async () => {
+        if (captureError !== undefined) {
+          throw captureError;
+        }
+        return "ps state evidence\n";
+      },
+      sampleStore: async () => ({ signature: "unchanged", newest: 0 }),
+      spawn: () => {
+        attempts += 1;
+        let exitCode: number | null = null;
+        const exited = Promise.withResolvers<number>();
+        let stdoutController:
+          ReadableStreamDefaultController<Uint8Array> | undefined;
+        let stderrController:
+          ReadableStreamDefaultController<Uint8Array> | undefined;
+        return {
+          pid: 100 + attempts,
+          stdout: new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              stdoutController = controller;
+            },
+          }),
+          stderr: new ReadableStream<Uint8Array>({
+            start: (controller) => {
+              stderrController = controller;
+            },
+          }),
+          exited: exited.promise,
+          get exitCode() {
+            return exitCode;
+          },
+          signalCode: null,
+          kill: () => {
+            events.push("kill");
+            exitCode = 137;
+            stdoutController?.close();
+            stderrController?.close();
+            exited.resolve(exitCode);
+          },
+        };
+      },
+    });
+    expect(await install).toBe(137);
+    expect(attempts).toBe(2);
+    const evidenceIndexes = events
+      .map((event, index) =>
+        event.startsWith("report:::group::") && event.includes(expectedEvidence)
+          ? index
+          : -1,
+      )
+      .filter((index) => index >= 0);
+    const killIndexes = events
+      .map((event, index) => (event === "kill" ? index : -1))
+      .filter((index) => index >= 0);
+    expect(evidenceIndexes).toHaveLength(2);
+    expect(killIndexes).toHaveLength(2);
+    expect(evidenceIndexes[0]).toBeLessThan(killIndexes[0] ?? -1);
+    expect(evidenceIndexes[1]).toBeLessThan(killIndexes[1] ?? -1);
+  },
+);
+
+test.each(["record-failure", "report-failure", "completed"] as const)(
+  "stall inspection preserves cleanup and the installer outcome: %s",
+  async (scenario) => {
+    const root = mkdtempSync(path.join(tmpdir(), "ci-install-inspection-"));
+    roots.push(root);
+    const loggingError = new Error("stall evidence cannot be written");
+    const evidenceReported = Promise.withResolvers<undefined>();
+    const inspected = Promise.withResolvers<string>();
+    const inspectionStarted = Promise.withResolvers<undefined>();
+    const exited = Promise.withResolvers<number>();
+    let exitCode: number | null = null;
+    let kills = 0;
+    let attempts = 0;
+    let now = 100;
+    let tick: () => void = () => undefined;
+    const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
+    const stdout = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        streams.push(controller);
+      },
+    });
+    const stderr = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        streams.push(controller);
+      },
+    });
+    const finish = (code: number) => {
+      if (exitCode !== null) {
+        return;
+      }
+      exitCode = code;
+      for (const controller of streams) {
+        controller.close();
+      }
+      exited.resolve(code);
+    };
+    const failEvidence = (message: string) => {
+      if (!message.startsWith("::group::Stalled install")) {
+        return;
+      }
+      evidenceReported.resolve(undefined);
+      throw loggingError;
+    };
+    const install = runLoggedInstall({
+      command: ["fake-install"],
+      logFile: path.join(root, "install.log"),
+      budgetMs: 1000,
+      stallMs: 10,
+      now: () => now,
+      progressRoots: [],
+      record: (descriptor, chunk) => {
+        if (scenario === "record-failure") {
+          failEvidence(Buffer.from(chunk).toString());
+        }
+        writeFileSync(descriptor, chunk);
+      },
+      report: scenario === "report-failure" ? failEvidence : () => undefined,
+      sampleStore: async () => ({ signature: "unchanged", newest: 0 }),
+      inspectProcess: async () => {
+        inspectionStarted.resolve(undefined);
+        return inspected.promise;
+      },
+      scheduleInterval: (callback) => {
+        tick = callback;
+        return () => undefined;
+      },
+      spawn: () => {
+        attempts += 1;
+        if (attempts > 1) {
+          return {
+            pid: 124,
+            stdout: new ReadableStream<Uint8Array>({
+              start: (controller) => controller.close(),
+            }),
+            stderr: new ReadableStream<Uint8Array>({
+              start: (controller) => controller.close(),
+            }),
+            exited: Promise.resolve(7),
+            exitCode: 7,
+            signalCode: null,
+            kill: () => undefined,
+          };
+        }
+        return {
+          pid: 123,
+          stdout,
+          stderr,
+          exited: exited.promise,
+          get exitCode() {
+            return exitCode;
+          },
+          signalCode: null,
+          kill: () => {
+            kills += 1;
+            finish(137);
+          },
+        };
+      },
+    });
+    const outcome = install.then(
+      (code) => ({ status: "completed", code }) as const,
+      (error: unknown) => ({ status: "failed", error }) as const,
+    );
+    now = 110;
+    tick();
+    await inspectionStarted.promise;
+    if (scenario === "completed") {
+      finish(0);
+    }
+    inspected.resolve("process evidence\n");
+    if (scenario !== "completed") {
+      await evidenceReported.promise;
+      try {
+        expect(kills).toBe(1);
+      } finally {
+        finish(137);
+      }
+      expect(await outcome).toEqual({ status: "failed", error: loggingError });
+      expect(attempts).toBe(1);
+      return;
+    }
+    expect(await outcome).toEqual({ status: "completed", code: 0 });
+    expect(kills).toBe(0);
+    expect(attempts).toBe(1);
+  },
+);
 
 test("silent hangs warn then emit exactly one stall kill (fake clock)", () => {
   let now = 0;
@@ -218,7 +606,7 @@ test.each(["hit", "cold"] as const)(
     expect(result).toBe(0);
     expect(messages.join("")).toContain("::warning title=install-budget::");
     expect(messages.join("")).toContain(
-      `restore=${restoreOutcome} key=${restoreOutcome === "hit" ? "test-key" : "unavailable"}`,
+      `restore=${restoreOutcome} key=${restoreOutcome === "hit" ? "test-key" : "uncached:filtered-install"}`,
     );
     expect(messages.join("")).not.toContain("class=install-stall");
   },

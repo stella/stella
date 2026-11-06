@@ -6,6 +6,7 @@ export default {
   owner: [
     "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
     "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
+    "apps/api/src/lib/hosted-usage-provider/webhook-result-transitions.ts",
   ],
   summary:
     "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",

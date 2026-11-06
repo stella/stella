@@ -35,8 +35,8 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   desktop_telemetry::{
     DesktopErrorReport, DesktopTelemetry, DesktopTelemetryErrorCode,
-    DesktopTelemetryOperation, DesktopTelemetrySpan, DesktopTelemetryWindow,
-    DesktopTimingReport,
+    DesktopTelemetryOperation, DesktopTelemetryReason, DesktopTelemetrySpan,
+    DesktopTelemetryWindow, DesktopTimingReport,
   },
   foreground_app::{AppExclusion, normalize_exclusions, normalized_identifier},
   foreground_app_visual::{
@@ -1681,11 +1681,17 @@ impl ClipboardManager {
       return Ok(false);
     };
     let checkpoint = self.checkpoint();
-    let mut item = self.items.remove(index);
-    item.set_copied_at(copied_at);
-    self.items.insert(0, item);
+    self.move_to_front(index, copied_at);
     self.persist_or_restore(checkpoint)?;
     Ok(true)
+  }
+
+  /// History runs newest first by `copied_at`, the last time a clip was
+  /// copied or edited; a clip used again takes the front with that time.
+  fn move_to_front(&mut self, index: usize, at: DateTime<Utc>) {
+    let mut item = self.items.remove(index);
+    item.set_copied_at(at);
+    self.items.insert(0, item);
   }
 
   pub fn clear(&mut self) -> Result<(), String> {
@@ -1897,7 +1903,8 @@ impl ClipboardManager {
 
   /// The editor's Save: name, group and, for a text clip, its content land
   /// together or not at all. `text` is required for text clips and refused
-  /// for images.
+  /// for images. A changed name or text is an edit and moves the clip to the
+  /// front as of now; a group-only save files it and keeps its place.
   pub fn save_editor_item(
     &mut self,
     id: &str,
@@ -1926,9 +1933,12 @@ impl ClipboardManager {
       })
       .transpose()?;
     let checkpoint = self.checkpoint();
-    let Some(item) = self.items.iter_mut().find(|item| item.id() == id) else {
+    let Some(index) = self.items.iter().position(|item| item.id() == id) else {
       return Ok(false);
     };
+    let now = Utc::now();
+    let item = &mut self.items[index];
+    let mut edited = false;
     match (matches!(&*item, ClipboardItem::Image { .. }), text) {
       (true, Some(_)) => {
         return Err("clipboard image cannot be edited as text".to_string());
@@ -1940,16 +1950,23 @@ impl ClipboardManager {
       (false, Some((plain_text, html))) => {
         if !item.same_text_content(plain_text, html.as_deref()) {
           item.replace_content(plain_text.to_string(), html);
+          edited = true;
         }
       }
     }
-    if let Some(name) = name {
+    if let Some(name) = name
+      && item.name() != name.as_deref()
+    {
       item.set_name(name);
+      edited = true;
     }
     if item.group_id() != group_id.as_deref() {
-      item.set_group_id(group_id, Utc::now());
+      item.set_group_id(group_id, now);
     }
-    prune_items_preserving(&mut self.items, self.retention, Utc::now(), Some(id));
+    if edited {
+      self.move_to_front(index, now);
+    }
+    prune_items_preserving(&mut self.items, self.retention, now, Some(id));
     self.persist_or_restore(checkpoint)?;
     Ok(true)
   }
@@ -2159,12 +2176,15 @@ impl ClipboardManager {
 
     self.remember_source_app_visual(source_app_visual);
 
-    let preserved_metadata = self
+    // Copying a clip's content again moves that clip to the front under its
+    // own id: an open editor, a selection or a pending command still names it.
+    let preserved = self
       .items
       .iter()
       .find(|item| item.same_text_content(&plain_text, html.as_deref()))
       .map(|item| {
         (
+          item.id().to_string(),
           item.group_id().map(str::to_string),
           item.grouped_at(),
           item.name().map(str::to_string),
@@ -2174,13 +2194,16 @@ impl ClipboardManager {
     self
       .items
       .retain(|item| !item.same_text_content(&plain_text, html.as_deref()));
-    let id = uuid::Uuid::new_v4().to_string();
-    let (group_id, grouped_at, name, retention_class) = preserved_metadata.unwrap_or((
-      None,
-      None,
-      None,
-      ClipboardItemRetentionClass::History,
-    ));
+    let (id, group_id, grouped_at, name, retention_class) =
+      preserved.unwrap_or_else(|| {
+        (
+          uuid::Uuid::new_v4().to_string(),
+          None,
+          None,
+          None,
+          ClipboardItemRetentionClass::History,
+        )
+      });
     let item = match html {
       Some(html) => ClipboardItem::FormattedText {
         copied_at,
@@ -2248,10 +2271,12 @@ impl ClipboardManager {
           byte_size,
           group_id,
           grouped_at,
+          id,
           name,
           retention_class,
           ..
         } => (
+          id.clone(),
           blob_id.clone(),
           *byte_size,
           group_id.clone(),
@@ -2266,11 +2291,12 @@ impl ClipboardManager {
     self
       .items
       .retain(|item| item.image_checksum() != Some(checksum.as_str()));
-    let id = uuid::Uuid::new_v4().to_string();
-    let (blob_id, byte_size, group_id, grouped_at, name, retention_class) =
+    // As with text, the same image keeps its clip's id when it returns.
+    let (id, blob_id, byte_size, group_id, grouped_at, name, retention_class) =
       match existing {
         Some(existing) => existing,
         None => (
+          uuid::Uuid::new_v4().to_string(),
           uuid::Uuid::new_v4().to_string(),
           image.len(),
           None,
@@ -3271,16 +3297,16 @@ impl ClipboardHandler for HistoryClipboardHandler {
     #[cfg(target_os = "macos")]
     if let Err(error) = manager.reconcile_image_exports() {
       tracing::warn!(error = %error, "replaced clipboard image export cleanup will be retried");
-      self.telemetry.capture(DesktopErrorReport {
-        window: DesktopTelemetryWindow::Clipboard,
-        operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-        code: DesktopTelemetryErrorCode::PersistenceFailed,
-      });
+      self.telemetry.capture_with_reason(
+        DesktopErrorReport {
+          window: DesktopTelemetryWindow::Clipboard,
+          operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+          code: DesktopTelemetryErrorCode::PersistenceFailed,
+        },
+        DesktopTelemetryReason::ImageExportCleanup,
+      );
     }
-    if formats
-      .iter()
-      .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
-    {
+    if is_internal_clipboard_write(&formats) {
       manager.clear_suppression();
       return;
     }
@@ -3439,11 +3465,14 @@ impl HistoryClipboardHandler {
           }
           Err(error) => {
             tracing::error!(error = %error, "clipboard capture could not be persisted");
-            self.telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            self.telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::HistoryCapture,
+            );
             return ClipboardCaptureOutcome::Rejected;
           }
         }
@@ -3868,11 +3897,14 @@ pub fn initialize_and_watch(
           Ok(changed) => changed,
           Err(error) => {
             tracing::error!(error = %error, "expired clipboard history could not be removed");
-            retention_telemetry.capture(DesktopErrorReport {
-              window: DesktopTelemetryWindow::Clipboard,
-              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-              code: DesktopTelemetryErrorCode::PersistenceFailed,
-            });
+            retention_telemetry.capture_with_reason(
+              DesktopErrorReport {
+                window: DesktopTelemetryWindow::Clipboard,
+                operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+                code: DesktopTelemetryErrorCode::PersistenceFailed,
+              },
+              DesktopTelemetryReason::RetentionSweep,
+            );
             false
           }
         },
@@ -4023,8 +4055,9 @@ fn current_clipboard_export_file() -> Result<Option<PathBuf>, String> {
 }
 
 /// Whether a write carries the internal marker that makes the watcher skip it.
-/// Only content history already holds may be marked; anything else would be
-/// copied without ever reaching history.
+/// Only content history already holds, or a selection copied inside a Clips
+/// window, may be marked; anything else would be copied without ever reaching
+/// history.
 enum ClipboardWriteOrigin {
   History,
   New,
@@ -4063,25 +4096,148 @@ pub(crate) fn write_text_and_html(
   )
 }
 
-fn set_clipboard_contents(
-  clipboard: &ClipboardContext,
-  mut contents: Vec<ClipboardContent>,
-  origin: ClipboardWriteOrigin,
+/// Upper bound for a selection copied inside a Clips window: every stored clip
+/// selected at once, with room for the markup around them.
+const MAX_SELECTION_COPY_BYTES: usize = 2 * MAX_HISTORY_BYTES;
+
+/// The pasteboard item for a selection copied or cut inside a Clips window.
+fn selection_clipboard_contents(
+  plain_text: String,
+  html: Option<String>,
+) -> Result<Vec<ClipboardContent>, String> {
+  if plain_text.is_empty() {
+    return Err("the copied selection is empty".to_string());
+  }
+  if plain_text.len() > MAX_SELECTION_COPY_BYTES
+    || html
+      .as_ref()
+      .is_some_and(|html| html.len() > MAX_SELECTION_COPY_BYTES)
+  {
+    return Err("the copied selection is too large".to_string());
+  }
+  let mut contents = vec![ClipboardContent::Text(plain_text)];
+  if let Some(html) = html.filter(|html| !html.is_empty()) {
+    contents.push(ClipboardContent::Html(html));
+  }
+  Ok(contents)
+}
+
+/// Writes a selection copied inside a Clips window. It carries the internal
+/// marker: text copied out of a clip or the editor is never a new clip, and
+/// recording it would feed the history its own contents.
+pub(crate) fn write_clips_selection(
+  plain_text: String,
+  html: Option<String>,
 ) -> Result<(), String> {
+  let contents = selection_clipboard_contents(plain_text, html)?;
+  let clipboard = ClipboardContext::new()
+    .map_err(|error| format!("clipboard is unavailable: {error}"))?;
+  set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::History)
+}
+
+fn marked_clipboard_contents(
+  mut contents: Vec<ClipboardContent>,
+  origin: &ClipboardWriteOrigin,
+) -> Vec<ClipboardContent> {
   if matches!(origin, ClipboardWriteOrigin::History) {
     contents.push(ClipboardContent::Other(
       INTERNAL_CLIPBOARD_FORMAT.to_string(),
       Vec::new(),
     ));
   }
+  contents
+}
+
+/// Whether the watcher must skip a change: stella wrote it with the marker.
+fn is_internal_clipboard_write(formats: &[String]) -> bool {
+  formats
+    .iter()
+    .any(|format| format.eq_ignore_ascii_case(INTERNAL_CLIPBOARD_FORMAT))
+}
+
+fn set_clipboard_contents(
+  clipboard: &ClipboardContext,
+  contents: Vec<ClipboardContent>,
+  origin: ClipboardWriteOrigin,
+) -> Result<(), String> {
   clipboard
-    .set(contents)
+    .set(marked_clipboard_contents(contents, &origin))
     .map_err(|error| format!("clipboard write failed: {error}"))
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
+
+  fn content_formats(contents: &[ClipboardContent]) -> Vec<String> {
+    contents
+      .iter()
+      .map(|content| match content {
+        ClipboardContent::Text(_) => "text".to_string(),
+        ClipboardContent::Html(_) => "html".to_string(),
+        ClipboardContent::Other(format, _) => format.clone(),
+        _ => "other".to_string(),
+      })
+      .collect()
+  }
+
+  #[test]
+  fn a_selection_copied_inside_clips_is_marked_so_the_watcher_skips_it() {
+    let contents = selection_clipboard_contents(
+      "Clause 4".to_string(),
+      Some("<b>Clause 4</b>".to_string()),
+    )
+    .unwrap();
+    let formats = content_formats(&marked_clipboard_contents(
+      contents,
+      &ClipboardWriteOrigin::History,
+    ));
+    assert_eq!(formats, ["text", "html", INTERNAL_CLIPBOARD_FORMAT]);
+    assert!(is_internal_clipboard_write(&formats));
+  }
+
+  #[test]
+  fn new_content_written_by_stella_still_reaches_history() {
+    let formats = content_formats(&marked_clipboard_contents(
+      vec![ClipboardContent::Text("registry result".to_string())],
+      &ClipboardWriteOrigin::New,
+    ));
+    assert!(!is_internal_clipboard_write(&formats));
+  }
+
+  #[test]
+  fn a_plain_selection_has_no_html_and_empty_or_oversized_ones_are_refused() {
+    let plain =
+      selection_clipboard_contents("Clause 4".to_string(), Some(String::new()))
+        .unwrap();
+    assert_eq!(content_formats(&plain), ["text"]);
+    assert!(selection_clipboard_contents(String::new(), None).is_err());
+    assert!(
+      selection_clipboard_contents("x".repeat(MAX_SELECTION_COPY_BYTES + 1), None)
+        .is_err()
+    );
+    assert!(
+      selection_clipboard_contents(
+        "x".to_string(),
+        Some("x".repeat(MAX_SELECTION_COPY_BYTES + 1))
+      )
+      .is_err()
+    );
+  }
+
+  #[test]
+  fn a_selection_of_the_whole_history_fits() {
+    let contents = selection_clipboard_contents(
+      "x".repeat(MAX_HISTORY_BYTES),
+      Some("x".repeat(MAX_HISTORY_BYTES)),
+    )
+    .unwrap();
+    assert_eq!(content_formats(&contents), ["text", "html"]);
+  }
 
   #[test]
   fn clipboard_capture_update_excludes_unchanged_history() {
@@ -5775,11 +5931,19 @@ mod tests {
     manager.persistence = ClipboardPersistence::MemoryOnly;
 
     assert!(capture(&mut manager, "first", None, now));
+    let first_id = manager.items[0].id().to_string();
     assert!(capture(&mut manager, "second", None, now));
     assert!(capture(&mut manager, "first", None, now));
 
     assert_eq!(manager.items.len(), 2);
     assert_eq!(manager.items[0].plain_text(), Some("first"));
+    // The clip keeps its id, so an editor opened on it can still read it.
+    assert_eq!(manager.items[0].id(), first_id);
+    assert!(
+      manager
+        .item_for_webview(&first_id, &ClipboardCaller::for_test())
+        .is_some()
+    );
   }
 
   #[test]
@@ -6560,7 +6724,7 @@ mod tests {
       ClipboardCaptureOutcome::Captured
     );
     assert_eq!(manager.items.len(), 1);
-    assert_ne!(manager.items[0].id(), original_id);
+    assert_eq!(manager.items[0].id(), original_id);
     assert_eq!(
       manager.items[0].image_blob_id(),
       Some(original_blob_id.as_str())
@@ -6627,6 +6791,83 @@ mod tests {
     );
     assert_eq!(manager.items[0].name(), None);
     assert_eq!(manager.items[0].group_id(), None);
+  }
+
+  #[test]
+  fn editor_save_moves_an_edited_clip_to_the_front_and_keeps_a_filed_one_in_place() {
+    let now = Utc::now();
+    let mut manager = ready_manager();
+    let group_id = manager
+      .create_group(
+        "Research",
+        ClipboardGroupColor::parse("#34d399").unwrap(),
+        None,
+      )
+      .unwrap();
+    let newest = text_item(now - Duration::minutes(1), "newest");
+    let older = text_item(now - Duration::hours(2), "older");
+    let newest_id = newest.id().to_string();
+    let older_id = older.id().to_string();
+    manager.items = vec![newest, older];
+    let save = |manager: &mut ClipboardManager,
+                name: ClipboardEditorNameUpdate,
+                group_id: Option<String>,
+                text: &str| {
+      assert!(
+        manager
+          .save_editor_item(&older_id, name, group_id, Some((text, None)))
+          .unwrap()
+      );
+    };
+    let order = |manager: &ClipboardManager| {
+      manager
+        .items
+        .iter()
+        .map(|item| item.id().to_string())
+        .collect::<Vec<_>>()
+    };
+
+    // Filing it, or saving it unchanged, is not an edit.
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Preserve,
+      Some(group_id.clone()),
+      "older",
+    );
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Set {
+        value: String::new(),
+      },
+      Some(group_id.clone()),
+      "older",
+    );
+    assert_eq!(order(&manager), [newest_id.clone(), older_id.clone()]);
+    assert_eq!(manager.items[1].copied_at(), now - Duration::hours(2));
+
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Preserve,
+      Some(group_id.clone()),
+      "older, revised",
+    );
+    assert_eq!(order(&manager), [older_id.clone(), newest_id.clone()]);
+    let edited_at = manager.items[0].copied_at();
+    assert!(edited_at >= now);
+    assert_eq!(manager.items[0].plain_text(), Some("older, revised"));
+
+    // A rename is an edit too.
+    manager.items.swap(0, 1);
+    save(
+      &mut manager,
+      ClipboardEditorNameUpdate::Set {
+        value: "Clause 4".to_string(),
+      },
+      Some(group_id),
+      "older, revised",
+    );
+    assert_eq!(order(&manager), [older_id, newest_id]);
+    assert!(manager.items[0].copied_at() >= edited_at);
   }
 
   #[test]

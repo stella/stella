@@ -8,6 +8,9 @@ import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
+import recordInvoicePayment from "@/api/handlers/invoices/payments/create";
+import listInvoicePayments from "@/api/handlers/invoices/payments/list";
+import voidInvoicePayment from "@/api/handlers/invoices/payments/void";
 import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import prefillInvoice from "@/api/handlers/invoices/prefill";
 import transitionInvoice from "@/api/handlers/invoices/transition";
@@ -34,6 +37,11 @@ export const invoicesRoute = routes(
       DELETE: deleteInvoiceLine,
     },
     "/:invoiceId/pdf": { POST: exportInvoicePdf },
+    "/:invoiceId/payments": {
+      GET: listInvoicePayments,
+      POST: recordInvoicePayment,
+    },
+    "/:invoiceId/payments/:paymentId/void": { POST: voidInvoicePayment },
   },
   {
     prefix: "/invoices/:workspaceId",

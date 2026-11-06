@@ -16,6 +16,7 @@ import type * as v from "valibot";
 
 import type {
   AgendaItemWireFields,
+  AiCellSettlement,
   EntityFind,
   OcrExportStatus,
 } from "@stll/api-contract";
@@ -45,6 +46,7 @@ import {
 } from "@/api/db/schema";
 import type {
   CellMetadata,
+  CellOverride,
   EntityKind,
   FieldContent,
 } from "@/api/db/schema-validators";
@@ -87,6 +89,7 @@ import {
 } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { activeCellOverride } from "@/api/lib/fields/cell-override";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -119,12 +122,31 @@ export type QueryEntityAssignee = {
   image: string | null;
 };
 
+/**
+ * A person's value over a machine one, as a table shows it: the machine value
+ * and when its run settled, who replaced it last and why. Citations of the
+ * machine value stay server-side (they are restored with it), so a table read
+ * does not carry them for every edited cell.
+ */
+type CellOverrideResult = {
+  machine: {
+    content: CellOverride["machine"]["content"];
+    settledAt: string;
+  };
+  editedBy: string;
+  editedByName: string | null;
+  editedByImage: string | null;
+  editedAt: string;
+  reason: string | null;
+};
+
 type CellMetadataResult = Omit<
   CellMetadata,
-  "flagProvenance" | "lockProvenance"
+  "flagProvenance" | "lockProvenance" | "override"
 > & {
   flagProvenance?: Record<string, CellMetadataFlagProvenanceResult>;
   lockProvenance?: CellLockProvenanceResult;
+  override?: CellOverrideResult;
 };
 
 /**
@@ -170,6 +192,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
     propertyId: string;
     entityId: string;
     content: FieldContent & { truncated?: true };
+    aiSettlement?: AiCellSettlement | null;
     ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {
@@ -286,6 +309,9 @@ const getCellMetadataActorIds = (
     if (row.metadata.lockProvenance) {
       userIds.add(row.metadata.lockProvenance.lockedBy);
     }
+    if (row.metadata.override) {
+      userIds.add(row.metadata.override.editedBy);
+    }
   }
   return [...userIds];
 };
@@ -296,10 +322,37 @@ type CellMetadataActor = {
   image: string | null;
 };
 
-const enrichCellMetadata = (
-  metadata: CellMetadata,
+const enrichCellOverride = (
+  override: CellOverride,
   actorMap: Map<string, CellMetadataActor>,
-): CellMetadataResult => {
+): CellOverrideResult => {
+  const editor = actorMap.get(override.editedBy);
+  return {
+    machine: {
+      content: override.machine.content,
+      settledAt: override.machine.settlement.settledAt,
+    },
+    editedBy: override.editedBy,
+    editedByName: editor?.name ?? null,
+    editedByImage: editor?.image ?? null,
+    editedAt: override.editedAt,
+    reason: override.reason,
+  };
+};
+
+type EnrichCellMetadataArgs = {
+  metadata: CellMetadata;
+  actorMap: Map<string, CellMetadataActor>;
+  /** The cell's current settlement; a settled cell's stored override is stale. */
+  aiSettlement: AiCellSettlement | null | undefined;
+};
+
+const enrichCellMetadata = ({
+  metadata,
+  actorMap,
+  aiSettlement,
+}: EnrichCellMetadataArgs): CellMetadataResult => {
+  const override = activeCellOverride({ metadata, aiSettlement });
   const provenanceEntries = Object.entries(metadata.flagProvenance ?? {});
   const lockActor = metadata.lockProvenance
     ? actorMap.get(metadata.lockProvenance.lockedBy)
@@ -332,6 +385,7 @@ const enrichCellMetadata = (
     }),
     ...(metadata.locked === true && { locked: true }),
     ...(lockProvenance && { lockProvenance }),
+    ...(override && { override: enrichCellOverride(override, actorMap) }),
   };
 };
 
@@ -1073,6 +1127,7 @@ const queryEntitiesGenerator = async function* ({
           entityVersionId: fields.entityVersionId,
           id: fields.id,
           propertyId: fields.propertyId,
+          aiSettlement: fields.aiSettlement,
           content:
             textMode === "preview"
               ? sql<FieldContent & { truncated?: true }>`CASE
@@ -1346,11 +1401,18 @@ const queryEntitiesGenerator = async function* ({
         propertyId: field.propertyId,
         entityId: entity.id,
         content: field.content,
+        aiSettlement: field.aiSettlement,
         ocrExportStatus: field.ocrExportStatus,
       })),
       cellMetadata: entityCellMetadata.map((entry) => ({
         propertyId: entry.propertyId,
-        metadata: enrichCellMetadata(entry.metadata, cellMetadataActorMap),
+        metadata: enrichCellMetadata({
+          metadata: entry.metadata,
+          actorMap: cellMetadataActorMap,
+          aiSettlement: entityFields.find(
+            (field) => field.propertyId === entry.propertyId,
+          )?.aiSettlement,
+        }),
       })),
       assignees: arrayOrEmpty(assigneesByEntityId.get(entity.id)),
     });

@@ -81,6 +81,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // A roster row of a court, addressed only as the subject of a portrait.
   caseLawJudge: { type: "non_resource", reason: "subresource" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
+  legislationMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
@@ -171,6 +172,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   documentTranslationRun: { type: "non_resource", reason: "job" },
   documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
+  documentReviewFindingDecision: {
+    type: "non_resource",
+    reason: "subresource",
+  },
   // Detected parties are recomputed from the entity version and its prompt
   // version, like `entityVersionAiSummary`: nothing addresses one directly.
   documentReviewParty: { type: "non_resource", reason: "projection" },
@@ -206,6 +211,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",
@@ -235,6 +241,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListItemComment: { type: "non_resource", reason: "subresource" },
   legalListItemReview: { type: "non_resource", reason: "subresource" },
   legalListItemSource: { type: "non_resource", reason: "subresource" },
+  legalListItemSourceDecision: {
+    type: "non_resource",
+    reason: "subresource",
+  },
   legalListSection: { type: "non_resource", reason: "subresource" },
   legalReaderAnnotation: { type: "non_resource", reason: "subresource" },
   // Passage-bound conversations and their messages have no portable ResourceRef.
@@ -274,6 +284,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.REPORT_EXPORT,
   },
+  requestIdempotencyReceipt: { type: "non_resource", reason: "workflow" },
   savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
   savedTimeNarrative: {
     type: "resource",

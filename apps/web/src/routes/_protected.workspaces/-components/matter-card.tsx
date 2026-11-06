@@ -7,8 +7,8 @@ import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { DAY_IN_MS, Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import { FileIcon } from "@stll/ui/icons";
+import { IdentityText } from "@stll/ui/identity-text";
 import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   PreviewCard,
@@ -32,6 +32,8 @@ import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
+
+import { matterCardPreviewEnabled } from "./matter-card.logic";
 
 type OverviewData = NonNullable<
   Awaited<
@@ -68,7 +70,7 @@ export const MatterCard = ({
 
   const previewQuery = useQuery({
     ...overviewOptions(workspace.id),
-    enabled: previewEnabled,
+    enabled: matterCardPreviewEnabled(workspace.status, previewEnabled),
   });
   const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
@@ -121,6 +123,7 @@ export const MatterCard = ({
         name: workspace.name,
         color: workspace.color,
         client: workspace.client,
+        isArchived: workspace.status === "archived",
       }}
     >
       {({ rename, menuOpen }) => (
@@ -178,7 +181,7 @@ export const MatterCard = ({
                     params={{ workspaceId: workspace.id }}
                     to="/workspaces/$workspaceId"
                   >
-                    {workspace.name}
+                    <IdentityText>{workspace.name}</IdentityText>
                   </Link>
                 )}
               </h2>
@@ -205,7 +208,7 @@ export const MatterCard = ({
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
                 >
-                  <BidiText>{workspace.client.displayName}</BidiText>
+                  <IdentityText>{workspace.client.displayName}</IdentityText>
                 </Link>
               ) : (
                 <span className="text-muted-foreground -mt-1 truncate text-xs italic">
@@ -363,11 +366,11 @@ const PreviewPopupContent = ({
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">
-            <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+            <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
               {t("workspaces.documentsCount", { count: preview.documentCount })}
             </div>
             {preview.taskCount > 0 && (
-              <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+              <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
                 {t("workspaces.tasksCount", { count: preview.taskCount })}
               </div>
             )}
@@ -386,7 +389,7 @@ const PreviewPopupContent = ({
             ) : (
               <FileIcon className="text-muted-foreground size-3.5 shrink-0" />
             )}
-            <span className="min-w-0 flex-1 truncate">{entity.name}</span>
+            <IdentityText className="flex-1">{entity.name}</IdentityText>
             {entity.updatedAt && (
               <Tooltip
                 content={formatFullTimestamp(entity.updatedAt)}

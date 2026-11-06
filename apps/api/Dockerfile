@@ -251,6 +251,19 @@ RUN bun build \
     --entry-naming document-processing-worker.js \
     apps/api/src/scripts/document-processing-worker.ts && \
     bun apps/api/scripts/strip-source-map-content.ts /app/bundles/document-processing-worker.js.map
+# Dedicated file-derivative worker (PDF previews and thumbnails). Deploy the
+# same image with command override ["bun", "/app/file-derivative-worker.js"].
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
+    --target bun \
+    --sourcemap=linked \
+    --outdir /app/bundles \
+    --public-path /app/ \
+    --entry-naming file-derivative-worker.js \
+    apps/api/src/scripts/file-derivative-worker.ts && \
+    bun apps/api/scripts/strip-source-map-content.ts /app/bundles/file-derivative-worker.js.map
 # Bundle the migration entrypoint so its full transitive @/api import graph is
 # resolved at build time. Mirror the source directory under the bundle tree
 # so its runtime `import.meta.dir`-relative migrationsFolder lookup resolves

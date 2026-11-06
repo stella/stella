@@ -25,7 +25,7 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 import {
@@ -67,6 +67,7 @@ import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/lan
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import { publisherSummaryMetadataSql } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { LIMITS } from "@/api/lib/limits";
@@ -185,6 +186,8 @@ export type DecisionIdentityRow = {
    * can hold several, which a list of candidates has to tell apart.
    */
   decisionType: string | null;
+  /** Bounded publisher headnote or classification, where recorded. */
+  subjectSummary?: string | null;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
@@ -259,10 +262,12 @@ const identifierRowDecisionIds = ({
 
 /**
  * The decision's own column a kind of reference is also held in, or null for
- * a kind held only in the identifier rows. ECLIs are published in one case but
- * cited in another, and the column stores the published spelling. The
- * docket's identity is its citation key, which `bareCitationKey` already
- * normalizes: the same function that writes the column.
+ * a kind held only in the identifier rows. An ECLI's letter case carries no
+ * identity (`Pl.US` and `PL.US` name one decision) while the column keeps the
+ * published spelling, so it is compared folded, by
+ * `case_law_decisions_ecli_upper_idx`. The docket's identity is its citation
+ * key, which `bareCitationKey` already normalizes: the same function that
+ * writes the column.
  */
 const ownColumnCondition = (locator: DecisionIdentityLocator) => {
   switch (locator.kind) {
@@ -272,10 +277,13 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
         docketFamilyCitationKeys(locator),
       );
     case "ecli":
-      return inArray(publishedCaseLawDecisions.ecli, [
-        locator.value,
-        locator.value.toUpperCase(),
-      ]);
+      return and(
+        isNotNull(publishedCaseLawDecisions.ecli),
+        eq(
+          sql`upper(${publishedCaseLawDecisions.ecli})`,
+          locator.value.toUpperCase(),
+        ),
+      );
     case "neutral":
     case "reporter":
       return null;
@@ -510,6 +518,9 @@ export const lookupDecisionsByIdentity = async ({
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
         decisionType: publishedCaseLawDecisions.decisionType,
+        subjectSummary: sql<
+          string | null
+        >`left(split_part(${publisherSummaryMetadataSql(publishedCaseLawDecisions.metadata)}, E'\\n', 1), ${LIMITS.caseLawLookupSubjectMaxChars})`,
         ecli: publishedCaseLawDecisions.ecli,
         id: publishedCaseLawDecisions.id,
         language: publishedCaseLawDecisions.language,

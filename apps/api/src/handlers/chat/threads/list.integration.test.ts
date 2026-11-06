@@ -22,6 +22,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -732,6 +733,8 @@ describe("chat thread list decision badges", () => {
     });
     const plainThreadId = await seedThread({ title: "Plain chat" });
     const failingBadges = createGetThreads({
+      readCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       readDecisionBadges: async () =>
         Result.err(
           new HandlerError({ status: 500, message: "corpus unavailable" }),

@@ -1,5 +1,8 @@
 // parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Crawl listing availability controls checkpoints; stored decision parsing is unchanged.
@@ -58,40 +61,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-  UnreadListedItem,
-  UnreadOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
@@ -114,6 +83,7 @@ import {
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
 import {
   type AbsenceEvidence,
+  isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
   type ReadOutcome,
   readPresent,
@@ -130,8 +100,44 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+  UnreadListedItem,
+  UnreadOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -2387,6 +2393,7 @@ const SK_US_SOURCE_FIELDS_LIST = [
   "mkWordRegister",
   "mkMaterialRegister",
   "mkComplainedLegalRegulation",
+  "mkComplainedLegalRegulationAct",
   "mkClarificationOfLegalRegulation",
   "mkFileReference",
   "mkReferences",
@@ -2415,6 +2422,16 @@ type SkUsPublisherRecord = Readonly<
 >;
 
 const SK_US_SOURCE_FIELDS = {
+  mkComplainedLegalRegulationAct: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "codelists",
+      path: ["codelist", "mkComplainedLegalRegulationAct"],
+      reason:
+        "The publisher's act vocabulary is retained verbatim alongside the decision's challenged legislation.",
+    },
+  },
   documentId: { disposition: "stored", target: { type: "identity" } },
   docType: {
     disposition: "stored",
@@ -2763,9 +2780,9 @@ export const skUsStoredRawParts = (
  * is refused: its metadata was never stored, and inventing it from the
  * database row would write a decision the publisher never stated.
  */
-const reparseStoredRaw = (
+const reparseStoredRaw = async (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Promise<StoredRawReparseValue> => {
   if (
     stored.contentType !== null &&
     !SK_US_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
@@ -2777,10 +2794,15 @@ const reparseStoredRaw = (
     };
   }
 
+  const readObject = await readStoredDocumentObject(stored, "document-file");
+  if (Result.isError(readObject)) {
+    return readObject;
+  }
+  const pdfBytes = readObject.value;
   const raw = new TextDecoder().decode(stored.raw);
   const parts = skUsStoredRawParts(raw, stored.contentType);
   const listingJson = parts?.["listing"];
-  if (listingJson === undefined) {
+  if (parts === null || listingJson === undefined) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
@@ -2815,65 +2837,41 @@ const reparseStoredRaw = (
     };
   }
 
-  const decisionDate = parseApiDate(listing.mkDateOfDecision);
-  const decisionType = listing.mkFormOfDecision ?? undefined;
-  const court = stored.court;
-  const documentUrl = `${DOC_DOWNLOAD_URL}/${fields.documentId}`;
-  const documentXhtml = parts?.["document"];
-  const facetsJson = parts?.["facets"];
-  const collection = skUsCollectionMatch({
+  // A row stored without its XHTML rendition or its document file replays
+  // from what was stored, the way the ingestion assembles a row whose
+  // document read is still pending.
+  const documentXhtml = parts["document"];
+  const refusal: unknown = Result.try({
+    try: (): unknown => JSON.parse(parts["refusal"] ?? "null"),
+    catch: () => null,
+  }).unwrapOr(null);
+  const result = assembleSkUsDecision({
     doc: listing,
-    collectionJson: parts?.["collection-listing"],
-    facetsJson,
+    caseNumber: fields.caseNumber,
+    documentId: fields.documentId,
+    responses: {
+      codelist: undefined,
+      documentXhtml,
+      facetsJson: parts["facets"],
+      collectionJson: parts["collection-listing"],
+      courtFileJson: parts["file"],
+      pdfBytes: pdfBytes ?? undefined,
+      withheld: isReadRefusal(refusal) ? refusal : undefined,
+    },
   });
-
-  const parsed =
-    documentXhtml === undefined
-      ? null
-      : parseSkUsDocumentXhtml({
-          xhtml: documentXhtml,
-          caseNumber: fields.caseNumber,
-          ecli: listing.mkECLI ?? undefined,
-          court,
-          decisionDate,
-          decisionType,
-          documentUrl,
-        });
-
+  // Codelists contain the digest and used values of a corpus-level response,
+  // not the full codelist. Keep that captured evidence byte-for-byte.
+  const sourceRaw = encodeSourceRawEnvelope(parts);
   return {
     type: "parsed",
-    result: plainTextIngestionResult({
-      caseNumber: fields.caseNumber,
-      sourceDocumentId: fields.documentId,
-      ecli: listing.mkECLI ?? undefined,
-      court,
-      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_US].country,
-      language: SK_US_LANGUAGE,
-      decisionDate,
-      decisionType,
-      ...(parsed === null ? {} : { fulltext: parsed.fulltext }),
-      judges: skUsJudges({
-        rapporteurs: skUsRapporteurs(listing),
-        dissenters: facetValues(facetsJson, "mkDifferentViewJudges"),
+    result: {
+      ...result,
+      sourceRaw,
+      rawHash: sourceFingerprint({
+        sourceRaw,
+        sourceRawObjects: result.sourceRawObjects,
       }),
-      sourceUrl: documentUrl,
-      documentUrl,
-      textFields: skUsCollectionTextFields(listing, collection),
-      metadata: checkedDecisionMetadata(
-        skUsMetadata({
-          doc: listing,
-          facetsJson,
-          header: courtFileHeader(parts?.["file"]),
-          collection,
-        }),
-      ),
-      // The stored envelope names each object by the digest of its bytes.
-      rawHash: sourceFingerprint({ sourceRaw: raw }),
-      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_US],
-      documentAst: parsed === null ? EMPTY_AST : parsed.documentAst,
-      sourceRaw: raw,
-      sourceRawContentType: stored.contentType ?? "application/json",
-    }),
+    },
   };
 };
 
@@ -3124,6 +3122,7 @@ export const skUsAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: PAGE_SIZE },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor:
               year < currentYear
                 ? encodeCursor({ year: year + 1, offset: 0 })
@@ -3136,12 +3135,14 @@ export const skUsAdapter = defineSourceAdapter({
             // Move to next year
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
             };
           }
           // Current year exhausted; park at current offset
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset }),
           };
         }
@@ -3254,6 +3255,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year, offset: nextOffset }),
           };
         }
@@ -3264,6 +3266,7 @@ export const skUsAdapter = defineSourceAdapter({
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
             ...unreadPage(unreadItems),
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({ year: year + 1, offset: 0 }),
           };
         }
@@ -3281,6 +3284,7 @@ export const skUsAdapter = defineSourceAdapter({
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
           ...unreadPage(unreadItems),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeCursor({
             year,
             offset: offset + items.length,

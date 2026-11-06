@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { REQUIRED_RECORD_KEYS } from "./ci-required-record";
 import { renderResultInputs } from "./ci-result-inputs";
 
 // ci-result's outcome step, run as CI runs it, against a GitHub API served
@@ -119,7 +120,11 @@ const recordSchema = v.looseObject({
 });
 
 type Fixtures = Record<string, unknown>;
-const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
+const runOutcome = (
+  env: Record<string, string>,
+  fixtures: Fixtures,
+  missingInput?: "needs" | "plan",
+) => {
   const directory = mkdtempSync(path.join(tmpdir(), "ci-result-"));
   directories.push(directory);
   const gh = path.join(directory, "gh-retry.sh");
@@ -131,7 +136,10 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
   writeFileSync(output, "");
   // Job results and plan outputs reach the outcome script as the inputs step
   // writes them, never through the environment.
-  const rendered = renderResultInputs(script, {
+  const inputFailure = missingInput
+    ? `rm "$RUNNER_TEMP/ci-result-${missingInput}.json"\n`
+    : "";
+  const rendered = renderResultInputs(inputFailure + script, {
     needs: env["NEEDS"] ?? "{}",
     plan: env["PLAN"] ?? "{}",
   });
@@ -174,9 +182,8 @@ const runOutcome = (env: Record<string, string>, fixtures: Fixtures) => {
       },
     },
   );
-  const line = readFileSync(output, "utf-8")
-    .split("\n")
-    .find((entry) => entry.startsWith("required_summary="));
+  const lines = readFileSync(output, "utf-8").split("\n");
+  const line = lines.find((entry) => entry.startsWith("required_summary="));
   return {
     exitCode: child.exitCode,
     log: child.stdout.toString() + child.stderr.toString(),
@@ -416,6 +423,93 @@ test("a metadata run mirrors a code run's evaluated success", () => {
   });
 });
 
+const enqueue = (fixtures: Fixtures) =>
+  runOutcome(
+    {
+      PR_ACTION: "enqueued",
+      QUEUE_VALIDATION: "true",
+      RUN_REQUIRED: "false",
+      NEEDS: JSON.stringify(
+        Object.fromEntries([
+          ...needs.map((job) => [job, { result: "skipped" }]),
+          ["ci-plan", { result: "success" }],
+        ]),
+      ),
+    },
+    fixtures,
+  );
+
+test("queue entries retain a direct reference to the evaluated head beyond recent pass-through runs", () => {
+  const run = enqueue(
+    mirrorFixtures([
+      ...[99, 98, 97, 96, 95].map((id) => ({
+        id,
+        record: record(id, {
+          basis: "pass_through",
+          pass_through_reason: "enqueued",
+          required: [],
+        }),
+      })),
+      { id: 90, record: record(90) },
+    ]),
+  );
+  expect(run.exitCode, run.log).toBe(0);
+  expect(run.record).toMatchObject({
+    basis: "pass_through",
+    pass_through_reason: "enqueued",
+    reused_from_run_id: 90,
+    verdict: "success",
+  });
+});
+
+test("every evidence-bearing pass-through resolves directly to the evaluated run", () => {
+  for (const reason of ["metadata", "enqueued", "reused"]) {
+    const fixtures = mirrorFixtures(
+      [
+        {
+          id: 91,
+          record: record(91, {
+            basis: "pass_through",
+            pass_through_reason: reason,
+            reused_from_run_id: 80,
+            required: [],
+          }),
+        },
+      ],
+      { "record:80": record(80), ...codeRunJobs(80, 1) },
+    );
+    for (const carrier of [enqueue, mirror]) {
+      const run = carrier(fixtures);
+      expect(run.exitCode, `${reason}: ${run.log}`).toBe(0);
+      expect(run.record?.reused_from_run_id, reason).toBe(80);
+    }
+  }
+});
+
+test("queue entries cannot certify absent, stale or unevaluated evidence", () => {
+  for (const source of [
+    [],
+    [{ id: 90, record: record(90, { head_sha: "c".repeat(40) }) }],
+    [{ id: 90, record: record(90), attempt: 2 }],
+    [{ id: 90, record: superseded(90) }],
+    [
+      {
+        id: 90,
+        record: record(90, {
+          basis: "pass_through",
+          pass_through_reason: "draft",
+          required: [],
+        }),
+      },
+    ],
+    [{ id: 90, record: record(90, { verdict: "failure" }) }],
+  ]) {
+    const run = enqueue(mirrorFixtures(source));
+    expect(run.exitCode, run.log).not.toBe(0);
+    expect(run.record?.verdict).toBe("failure");
+  }
+});
+
 test("a metadata run never waits on a newer run of its head", () => {
   // A newer metadata run waits on this run's concurrency group, listing no
   // job yet: waiting on it would deadlock until the deadline.
@@ -531,24 +625,12 @@ test("the required-jobs artifact keeps its exact external schema", () => {
     [...(schema ?? "").matchAll(/(?:\{|,)\s*([a-z_]+):/gu)].map(
       ([, field]) => field,
     ),
-  ).toEqual([
-    "version",
-    "event",
-    "head_sha",
-    "base_sha",
-    "run_id",
-    "run_attempt",
-    "depth",
-    "coverage_profile",
-    "reused_from_run_id",
-    "basis",
-    "pass_through_reason",
-    "required",
-    "job",
-    "conclusion",
-    "not_required",
-    "verdict",
-  ]);
+  ).toEqual(
+    // Each `required` entry is a {job, conclusion} pair.
+    REQUIRED_RECORD_KEYS.flatMap((key) =>
+      key === "required" ? [key, "job", "conclusion"] : [key],
+    ),
+  );
 });
 
 test("metadata mirroring and verified supersession remain fail closed", () => {
@@ -559,4 +641,67 @@ test("metadata mirroring and verified supersession remain fail closed", () => {
   );
   expect(script).toContain("cancelled_dependencies_were_superseded");
   expect(script).toContain("CI run was superseded by a newer run");
+});
+
+test("every missing evaluator input fails the outcome", () => {
+  for (const missingInput of ["needs", "plan"] as const) {
+    const run = runOutcome({ NEEDS: "{}" }, {}, missingInput);
+    expect(run.exitCode, run.log).not.toBe(0);
+  }
+});
+
+test("heavy infrastructure cancellations and code failures always record a failure", () => {
+  for (const job of [
+    { conclusion: "cancelled", runner_name: "", steps: [] },
+    {
+      conclusion: "cancelled",
+      runner_name: "runner",
+      steps: [],
+      annotation:
+        "This job failed because of a scheduled macOS 14 runner image brownout.",
+    },
+    {
+      conclusion: "cancelled",
+      runner_name: "runner",
+      steps: [{ name: "Test", number: 1, conclusion: "failure" }],
+    },
+    {
+      conclusion: "failure",
+      runner_name: "runner",
+      steps: [{ name: "Test", number: 1, conclusion: "failure" }],
+    },
+  ]) {
+    const run = runOutcome(
+      {
+        NEEDS: JSON.stringify({
+          "ci-plan": { result: "success" },
+          "desktop-rust-tests": { result: job.conclusion },
+        }),
+        HEAVY_ONLY: "true",
+        HEAVY_JOBS: '["desktop-rust-tests"]',
+        EVENT: "workflow_dispatch",
+        SUITE_DEPTH: "full",
+        PLAN: '{"desktop_rust_checks_required":"true"}',
+      },
+      {
+        [`repos/${REPO}/actions/runs/${RUN}/attempts/1/jobs?per_page=100`]: [
+          {
+            jobs: [
+              {
+                ...job,
+                name: "Desktop Rust Tests (macos)",
+                check_run_url: checkRun(1000),
+                html_url: "",
+              },
+            ],
+          },
+        ],
+        [`${checkRun(1000)}/annotations?per_page=100`]: [
+          job.annotation ? [{ message: job.annotation }] : [],
+        ],
+      },
+    );
+    expect(run.exitCode, run.log).toBe(1);
+    expect(run.record?.verdict, run.log).toBe("failure");
+  }
 });

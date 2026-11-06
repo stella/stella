@@ -8,6 +8,14 @@ const lint = async (source: string) =>
   });
 
 describe.serial("publisher raw archive projections", () => {
+  test("a binding beside a rest element omits nothing itself", async () => {
+    expect(
+      await lint(
+        "const { raw, ...head } = record;\nconst row = { sourceRaw: JSON.stringify(raw) };",
+      ),
+    ).toEqual([]);
+  });
+
   test("filtering, picking, omitted rest fields, deleted fields and JSON replacers fail at the write boundary", async () => {
     const projections = [
       "const raw = Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'newField'));",

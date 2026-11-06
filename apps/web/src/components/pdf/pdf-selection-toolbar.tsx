@@ -13,7 +13,7 @@ import { AddCommentIcon } from "@stll/ui/icons";
 import { composerText } from "@/components/chat-editor-source";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
-import type { FileChatDraftDelivery } from "@/components/inspector/inspector-store-types";
+import type { FileChatHandoff } from "@/components/inspector/inspector-store-types";
 import {
   pdfPageLocator,
   pdfPassageCitation,
@@ -34,7 +34,10 @@ import {
   MarkColorSwatches,
   MarkStyleButtons,
 } from "@/components/selection-toolbar-marks";
-import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
+import {
+  scrollMovesSelection,
+  selectionToolbarAnchor,
+} from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMessageLocale } from "@/i18n/message-locale";
@@ -207,13 +210,18 @@ export const PdfSelectionToolbar = ({
       }
     };
     const onViewportChange = () => readSelection();
+    const onScroll = (event: Event) => {
+      if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
+        readSelection();
+      }
+    };
     ownerDoc.addEventListener("selectionchange", onSelectionChange);
     ownerDoc.addEventListener("copy", onCopy);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
     ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
-    ownerDoc.addEventListener("scroll", onViewportChange, true);
+    ownerDoc.addEventListener("scroll", onScroll, true);
     ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
     const observer = new ResizeObserver(onViewportChange);
     observer.observe(root);
@@ -226,7 +234,7 @@ export const PdfSelectionToolbar = ({
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
       ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
-      ownerDoc.removeEventListener("scroll", onViewportChange, true);
+      ownerDoc.removeEventListener("scroll", onScroll, true);
       ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
     };
   });
@@ -236,25 +244,22 @@ export const PdfSelectionToolbar = ({
   }
 
   const { passage } = selected;
-  const citation = pdfPassageCitation({
-    document: citedDocument,
-    locator: pdfPageLocator(passage.pages, {
-      page: (page) => t("workspaces.pdf.selection.pageLocator", { page }),
-      pageRange: (start, end) =>
-        t("workspaces.pdf.selection.pageRangeLocator", { end, start }),
-    }),
+  const locator = pdfPageLocator(passage.pages, {
+    page: (page) => t("workspaces.pdf.selection.pageLocator", { page }),
+    pageRange: (start, end) =>
+      t("workspaces.pdf.selection.pageRangeLocator", { end, start }),
   });
+  const citation = pdfPassageCitation({ document: citedDocument, locator });
   const clearSelection = () => {
     doc?.getSelection()?.removeAllRanges();
     setSelected(null);
   };
   // The document's chat already carries the document, so the draft only has
   // to say which words are at issue and where they sit.
-  const handToChat = (delivery: FileChatDraftDelivery, prompt: string) => {
+  const handToChat = (handoff: FileChatHandoff) => {
     useInspectorCommandStore.getState().requestFileChatDraft({
-      delivery,
       fileFieldId: citedDocument.fileFieldId,
-      markdown: composerText(prompt),
+      handoff,
     });
     clearSelection();
   };
@@ -282,22 +287,31 @@ export const PdfSelectionToolbar = ({
         {chat === PDF_SELECTION_CHAT.fileChat && (
           <SelectionAIActions
             onAsk={() => {
-              handToChat(
-                FILE_CHAT_DRAFT_DELIVERY.draft,
-                t("legalReader.annotations.askPassagePrompt", {
-                  citation: citation.inline,
-                  quote: passage.quote,
-                }),
-              );
+              // The passage joins the composer as a chip named by its page;
+              // the chip's text names where it sits for the model.
+              handToChat({
+                type: "passage",
+                quote: {
+                  label: locator,
+                  source: "paste",
+                  text: t("legalReader.annotations.askPassagePrompt", {
+                    citation: citation.inline,
+                    quote: passage.quote,
+                  }).trim(),
+                },
+              });
             }}
             onExplain={() => {
-              handToChat(
-                FILE_CHAT_DRAFT_DELIVERY.send,
-                t("workspaces.pdf.selection.explainPassagePrompt", {
-                  citation: citation.inline,
-                  quote: passage.quote,
-                }),
-              );
+              handToChat({
+                type: "prose",
+                delivery: FILE_CHAT_DRAFT_DELIVERY.send,
+                markdown: composerText(
+                  t("workspaces.pdf.selection.explainPassagePrompt", {
+                    citation: citation.inline,
+                    quote: passage.quote,
+                  }),
+                ),
+              });
             }}
           />
         )}

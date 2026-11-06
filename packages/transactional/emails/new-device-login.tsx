@@ -1,18 +1,16 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
+import { brand } from "./_shared";
 
 type Props = {
   device: string;
@@ -35,63 +33,54 @@ export const Email = ({
     <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
       <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
-      <Body style={styles["body"]}>
-        <Container style={styles["container"]}>
-          <Heading style={styles["heading"]}>
+      <Body style={styles.body}>
+        <Container style={styles.container}>
+          <Heading style={styles.heading}>
             {t("newDeviceLogin.heading")}
           </Heading>
-          <Text style={styles["text"]}>{t("newDeviceLogin.body")}</Text>
-          <Section style={styles["detailsSection"]}>
-            <Text style={styles["detailRow"]}>
+          <Text style={styles.text}>{t("newDeviceLogin.body")}</Text>
+          <Section style={styles.detailsSection}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.device")}:</strong> {device}
             </Text>
-            <Text style={styles["detailRow"]}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
             </Text>
-            <Text style={styles["detailRow"]}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          <Section style={styles["buttonSection"]}>
-            <Button href={sessionsUrl} style={styles["button"]}>
+          <Section style={styles.buttonSection}>
+            <Button href={sessionsUrl} style={styles.button}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
-          <Hr style={styles["hr"]} />
-          <Text style={styles["footer"]}>{t("newDeviceLogin.ignore")}</Text>
+          <Hr style={styles.hr} />
+          <Text style={styles.footer}>{t("newDeviceLogin.ignore")}</Text>
         </Container>
       </Body>
     </Html>
   );
 };
 
-Email.PreviewProps = {
-  device: "Chrome on macOS",
-  ipAddress: "203.0.113.42",
-  time: "Mar 6, 2026, 2:30 PM UTC",
-  sessionsUrl: "http://localhost:3000/account/sessions",
-  lang: "en",
-} satisfies Props;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   body: {
     margin: "0",
-    backgroundColor: "#f6f9fc",
+    backgroundColor: brand.backgroundPage,
     padding: "24px 0",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: brand.fontFamily,
   },
   container: {
     margin: "0 auto",
     maxWidth: "520px",
     borderRadius: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: brand.backgroundCard,
     padding: "24px",
-    border: "1px solid #e5e7eb",
+    border: `1px solid ${brand.border}`,
   },
   heading: {
     margin: "0 0 12px",
-    color: "#111827",
+    color: brand.foreground,
     fontSize: "24px",
     lineHeight: "32px",
     fontWeight: "700",
@@ -99,7 +88,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   text: {
     margin: "0 0 16px",
-    color: "#374151",
+    color: brand.textPrimary,
     fontSize: "16px",
     lineHeight: "24px",
     textAlign: "center",
@@ -107,12 +96,12 @@ const styles: Record<string, React.CSSProperties> = {
   detailsSection: {
     marginBottom: "16px",
     borderRadius: "10px",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: brand.backgroundCodeBlock,
     padding: "16px",
   },
   detailRow: {
     margin: "0 0 4px",
-    color: "#374151",
+    color: brand.textPrimary,
     fontSize: "14px",
     lineHeight: "22px",
   },
@@ -121,9 +110,9 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center" as const,
   },
   button: {
-    backgroundColor: "#111827",
+    backgroundColor: brand.foreground,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",
@@ -131,13 +120,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   hr: {
     margin: "0 0 16px",
-    borderColor: "#e5e7eb",
+    borderColor: brand.border,
   },
   footer: {
     margin: "0",
-    color: "#6b7280",
+    color: brand.textMuted,
     fontSize: "13px",
     lineHeight: "20px",
     textAlign: "center",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

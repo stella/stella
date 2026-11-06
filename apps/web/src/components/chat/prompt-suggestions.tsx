@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import type { PromptSuggestion } from "@/lib/prompts/types";
@@ -38,27 +39,29 @@ export const PromptSuggestions = ({
       </p>
       <div className="flex w-full flex-col items-stretch gap-2">
         {prompts.map((prompt) => (
-          <button
-            className="border-border hover:border-foreground/20 hover:bg-accent/50 group flex gap-3 rounded-md border px-4 py-3 text-start"
+          <Button
+            className="group"
             key={prompt.id}
             onClick={() => onSelect(prompt)}
-            type="button"
+            variant="plain"
           >
-            {/* The slash marks a prompt the composer also answers to as a
-                command; a built-in question has none, and keeps the column
-                so the names still line up. */}
-            <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none">
-              {prompt.command === undefined ? "" : "/"}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="text-foreground block text-sm leading-5 font-medium">
-                {prompt.name}
+            <span className="border-border group-hover:border-foreground/20 group-hover:bg-accent/50 flex w-full gap-3 rounded-md border px-4 py-3">
+              {/* The slash marks a prompt the composer also answers to as a
+                  command; a built-in question has none, and keeps the column
+                  so the names still line up. */}
+              <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none">
+                {prompt.command === undefined ? "" : "/"}
               </span>
-              <span className="text-muted-foreground line-clamp-2 text-xs leading-4">
-                {prompt.body}
+              <span className="min-w-0 flex-1">
+                <span className="text-foreground block text-sm leading-5 font-medium">
+                  {prompt.name}
+                </span>
+                <span className="text-muted-foreground line-clamp-2 text-xs leading-4">
+                  {prompt.body}
+                </span>
               </span>
             </span>
-          </button>
+          </Button>
         ))}
       </div>
     </div>

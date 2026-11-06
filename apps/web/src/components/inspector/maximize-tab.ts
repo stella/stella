@@ -41,7 +41,7 @@ export const buildMaximizeTabAction = (
 ): (() => void) | undefined => {
   if (isCaseDecisionGenericTab(tab)) {
     return () => {
-      useInspectorTabsStore.getState().closeTab(tab.id);
+      useInspectorTabsStore.getState().closeTab(tab.id, { movedToMain: true });
       detached(
         navigateToCaseDecisionMain(navigate, tab.payload),
         "maximize-tab.navigate-case-decision",
@@ -91,7 +91,7 @@ export const buildMaximizeTabAction = (
       }),
       "maximize-tab.invalidate-chat-thread-across-scopes",
     );
-    useInspectorTabsStore.getState().closeTab(tab.id);
+    useInspectorTabsStore.getState().closeTab(tab.id, { movedToMain: true });
     if (tabWorkspaceId === undefined) {
       detached(
         navigate({

@@ -1,3 +1,6 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: adapter callback normalization preserves successful parsing and translates typed read failures at its protocol boundary.
+// parser-output-unchanged: Stored-object readers and metadata-only replay outcomes leave ingestion parsing unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -67,6 +70,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type SourceRawParts,
 } from "@/api/lib/legal-search/source-raw-envelope";
+import { readStoredRawReparseResult } from "@/api/lib/legal-search/stored-raw-reparse-boundary";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -650,7 +654,26 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+  /**
+   * Whether the publisher was heard while building this page. Required, so
+   * an adapter cannot leave it to a default: only `answered` moves the
+   * source's `last_sync_at`, which coverage reads as how current it is.
+   */
+  publisherRequest: PublisherRequest;
 };
+
+/** What a page says about asking the publisher. */
+export const PUBLISHER_REQUEST = {
+  /** A request reached the publisher and it answered, whatever it held. */
+  ANSWERED: "answered",
+  /** Nothing was asked: the cursor is parked, waiting, or past the end. */
+  NONE: "none",
+  /** Every request this page made failed; recovery may advance the cursor. */
+  FAILED: "failed",
+} as const;
+
+export type PublisherRequest =
+  (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<
@@ -854,6 +877,8 @@ export const LEGACY_RAW_SHAPES = {
  */
 export type StoredRawReparseInput = {
   raw: Uint8Array;
+  /** Reads stored envelope objects only; supplied by the replay driver. */
+  readObject?: StoredRawResultReader;
   /** Media type recorded with the payload; null on rows stored without one. */
   contentType: string | null;
   caseNumber: string;
@@ -891,6 +916,18 @@ export const STORED_RAW_REPARSE_REJECTION = {
 export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
+export const STORED_RAW_REPLAY_STATUS = {
+  METADATA_ONLY: "metadata-only",
+} as const;
+
+/** Missing capture is incomplete metadata, never a parsed-document withdrawal. */
+type StoredRawMetadataOnlyOutcome = {
+  type: "rejected";
+  rejection: typeof STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA;
+  status: typeof STORED_RAW_REPLAY_STATUS.METADATA_ONLY;
+  detail: string;
+};
+
 export type StoredRawReparseOutcome =
   | {
       type: "parsed";
@@ -912,9 +949,15 @@ export type StoredRawReparseOutcome =
   | {
       type: "rejected";
       rejection: StoredRawReparseRejection;
+      status?: never;
       /** Row-specific context for the operator; safe to print. */
       detail: string;
-    };
+    }
+  | StoredRawMetadataOnlyOutcome;
+
+/** Definitions can return a typed read failure; the adapter factory owns callback rejection. */
+export type StoredRawReparseValue =
+  StoredRawReparseOutcome | Result<StoredRawReparseOutcome, StoredRawReadError>;
 
 /** A rejection on its own, for a step that can refuse before a result exists. */
 type StoredRawReparseRejected = Extract<
@@ -1717,10 +1760,15 @@ export type SourceAdapter = {
 
 type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   SourceAdapter,
-  "country" | "key" | "name" | "observeDocumentStage"
+  "country" | "key" | "name" | "observeDocumentStage" | "reparseStoredRaw"
 > & {
   readonly key: TKey;
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
+  reparseStoredRaw?:
+    | ((
+        stored: StoredRawReparseInput,
+      ) => StoredRawReparseValue | Promise<StoredRawReparseValue>)
+    | undefined;
 };
 
 type ScopedCallbacks<TSource> = {
@@ -1732,6 +1780,23 @@ type ScopedCallbacks<TSource> = {
       ? never
       : TKey
   ]-?: TSource[TKey] | undefined;
+};
+
+/** The publisher record a stored replay produced, for field-coverage inspection. */
+const replayedPublisherRecord = (
+  outcome: StoredRawReparseOutcome,
+): IngestionResult | undefined => {
+  switch (outcome.type) {
+    case "parsed":
+      return outcome.result;
+    case "supplement":
+      return outcome.supplement.document;
+    case "rejected":
+      return undefined;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled publisher replay outcome");
+  }
 };
 
 /** Build an adapter from the source facts declared for its registry key. */
@@ -1813,32 +1878,16 @@ export const defineSourceAdapter = <
       reparseStoredRaw === undefined
         ? undefined
         : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
-            const outcome = await reparseStoredRaw.call(this, stored);
-            switch (outcome.type) {
-              case "parsed":
-                if (
-                  stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
-                  decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "") !==
-                    null
-                ) {
-                  await inspectRecord(outcome.result);
-                }
-                break;
-              case "supplement":
-                if (
-                  stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
-                  decodeSourceRawEnvelope(
-                    outcome.supplement.document.sourceRaw ?? "",
-                  ) !== null
-                ) {
-                  await inspectRecord(outcome.supplement.document);
-                }
-                break;
-              case "rejected":
-                break;
-              default:
-                outcome satisfies never;
-                return panic("Unhandled publisher replay outcome");
+            const outcome = readStoredRawReparseResult(
+              await reparseStoredRaw.call(this, stored),
+            );
+            const record = replayedPublisherRecord(outcome);
+            if (
+              record !== undefined &&
+              (stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
+                decodeSourceRawEnvelope(record.sourceRaw ?? "") !== null)
+            ) {
+              await inspectRecord(record);
             }
             return outcome;
           }),

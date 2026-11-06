@@ -32,7 +32,9 @@ else
   git tag -a "$final" "$rc_sha" -m "$final"
   git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
 fi
-is_draft=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
+# The RC release is a draft until published here, and only a token with
+# push access sees a draft, so this read uses the tag token.
+is_draft=$(bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
 case "$is_draft" in
   true) bash "$gh_retry_script" release edit "$rc" --repo "$repo" --draft=false --prerelease --latest=false ;;
   false) ;;

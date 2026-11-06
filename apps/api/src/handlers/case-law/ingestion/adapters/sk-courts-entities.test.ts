@@ -1,38 +1,24 @@
 import { panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { encodeHTML } from "entities";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  decodeSourceRawEnvelope,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
-
-const replay = async (stored: StoredRawReparseInput) => {
-  const rejectPublisherIo = () =>
-    panic("Stored SK entity replay must not fetch publisher responses");
-  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(rejectPublisherIo, { preconnect: rejectPublisherIo }),
-  );
-  try {
-    const parser =
-      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
-    const outcome = await parser(stored);
-    expect(publisherFetch).not.toHaveBeenCalled();
-    return outcome;
-  } finally {
-    publisherFetch.mockRestore();
-  }
-};
+import {
+  capturedSkDocumentReplayInput,
+  replayCapturedSkDocument as replay,
+} from "@/api/tests/helpers/sk-document-raw-storage";
 
 const fixture = () =>
   ({
@@ -210,10 +196,36 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       documentUrl: null,
       metadata: {},
     };
-    const first = await replay(input);
-    const second = await replay(input);
-    expect(first).toMatchObject({ type: "parsed", result: original });
+    const captured = await capturedSkDocumentReplayInput(input);
+    const replayStored =
+      skCourtsAdapter.reparseStoredRaw ?? panic("SK courts replay required");
+    const first = await replayStored(captured);
+    const second = await replayStored(captured);
+    expect(first).toMatchObject({
+      type: "parsed",
+      result: {
+        ...original,
+        fulltext: expect.stringContaining("Stored decision text."),
+        documentAst: expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({ plainText: "Stored decision text." }),
+          ]),
+        }),
+        sections: expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.stringContaining("Stored decision text."),
+          }),
+        ]),
+        sourceRaw: new TextDecoder().decode(captured.raw),
+      },
+    });
     expect(second).toEqual(first);
+    if (first.type !== "parsed") {
+      panic("Captured decision must replay");
+    }
+    expect(decodeSourceRawEnvelope(first.result.sourceRaw ?? "")).toEqual(
+      decodeSourceRawEnvelope(original.sourceRaw ?? ""),
+    );
   });
 
   describe("a row stored before decoding replays under its encoded docket", () => {

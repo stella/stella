@@ -5,16 +5,26 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import type { ChatDraft, SentFile } from "@/state/chat-attachments";
 
 /**
- * A stored message part. Only text and tool calls are drawn; every other
- * kind (reasoning, attachments, results) passes the schema and is skipped,
+ * A stored message part. Text, tool calls and attached files are drawn;
+ * every other kind (reasoning, results) passes the schema and is skipped,
  * so a part this build has never seen does not fail the thread.
  */
 const partSchema = v.looseObject({
   type: v.string(),
   content: v.optional(v.unknown()),
   name: v.optional(v.unknown()),
+  source: v.optional(v.unknown()),
+  metadata: v.optional(v.unknown()),
+});
+
+/** An attached file's part: an image or a document, with the file's name and type. */
+const filePartSchema = v.object({
+  type: v.picklist(["image", "document"]),
+  source: v.looseObject({ mimeType: v.optional(v.string()) }),
+  metadata: v.optional(v.looseObject({ filename: v.optional(v.string()) })),
 });
 
 const messageSchema = v.object({
@@ -31,13 +41,17 @@ const messagesPageSchema = v.object({
   usedAnonymization: v.optional(v.boolean(), false),
 });
 
-/** A message as the thread shows it: its text, and the tools the assistant used on the way. */
+/**
+ * A message as the thread shows it: its text, the tools the assistant used
+ * on the way, and the files the person attached.
+ */
 export type ChatEntry = {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly createdAt: string;
   readonly text: string;
   readonly tools: readonly string[];
+  readonly files: readonly SentFile[];
 };
 
 /**
@@ -75,7 +89,18 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
       ? [part.name]
       : [],
   );
-  if (text === "" && tools.length === 0) {
+  const files = message.parts.flatMap((part): SentFile[] => {
+    const file = v.safeParse(filePartSchema, part);
+    return file.success
+      ? [
+          {
+            name: file.output.metadata?.filename ?? "",
+            mimeType: file.output.source.mimeType ?? "",
+          },
+        ]
+      : [];
+  });
+  if (text === "" && tools.length === 0 && files.length === 0) {
     return undefined;
   }
   return {
@@ -84,8 +109,28 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
     createdAt: message.createdAt,
     text,
     tools,
+    files,
   };
 };
+
+/** A message this phone sends, as the thread shows it until the stored one replaces it. */
+export const sentEntry = ({
+  createdAt,
+  draft: { files, text },
+  messageId,
+}: {
+  readonly createdAt: string;
+  readonly draft: ChatDraft;
+  readonly messageId: string;
+}): ChatEntry => ({
+  id: messageId,
+  role: "user",
+  createdAt,
+  text,
+  tools: [],
+  // The thread names each file; its bytes have gone with the message.
+  files: files.map(({ mimeType, name }) => ({ mimeType, name })),
+});
 
 const toPage = (
   page: v.InferOutput<typeof messagesPageSchema>,

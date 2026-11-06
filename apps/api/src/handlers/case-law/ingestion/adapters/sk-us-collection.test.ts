@@ -1,13 +1,15 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { readGzipJson } from "@/api/lib/gzip-json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 const fixture = async () => {
@@ -68,19 +70,35 @@ const replay = async ({
   ) {
     return panic("The adapter and fixture must support stored replay");
   }
-  const sourceRaw = encodeSourceRawEnvelope({
-    listing: JSON.stringify(listing),
-    facets: JSON.stringify({ documents: siblings, numFound: siblings.length }),
-    ...(entries === undefined
-      ? {}
-      : {
-          "collection-listing": JSON.stringify({
-            documents: entries,
-            numFound: collectionTotal ?? entries.length,
+  const bytes = new TextEncoder().encode("%PDF-fixture");
+  const sourceRaw = encodeSourceRawEnvelope(
+    {
+      listing: JSON.stringify(listing),
+      document: "<html><body><p>Rozhodnutie súdu.</p></body></html>",
+      facets: JSON.stringify({
+        documents: siblings,
+        numFound: siblings.length,
+      }),
+      ...(entries === undefined
+        ? {}
+        : {
+            "collection-listing": JSON.stringify({
+              documents: entries,
+              numFound: collectionTotal ?? entries.length,
+            }),
           }),
-        }),
-  });
+    },
+    {
+      "document-file": {
+        location: "document-file",
+        sha256: sha256Hex(bytes),
+        byteLength: bytes.byteLength,
+        contentType: "application/pdf",
+      },
+    },
+  );
   const outcome = await reparse({
+    readObject: async () => Result.ok(bytes),
     raw: new TextEncoder().encode(sourceRaw),
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
     caseNumber: listing["mkRSAPNumberOfFile"],

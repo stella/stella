@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { STORED_DATA_BOX_ID_PATTERN } from "@stll/api-contract/data-box";
 import { Button } from "@stll/ui/button";
 import { InboxIcon, MailIcon, PhoneIcon, Trash2Icon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
@@ -13,7 +14,6 @@ import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { AddContactMethodForm } from "@/routes/_protected.contacts/-components/add-contact-method-form";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
-  DATA_BOX_ID_PATTERN,
   EMAIL_SCHEMA,
   getContactMetadata,
 } from "@/routes/_protected.contacts/-components/contact-metadata";
@@ -105,7 +105,7 @@ export const ContactCommunicationEditor = ({
       return;
     }
 
-    if (!DATA_BOX_ID_PATTERN.test(id)) {
+    if (!STORED_DATA_BOX_ID_PATTERN.test(id)) {
       notifyUserProblem(t("contacts.communication.invalidDataBox"));
       return;
     }
@@ -268,7 +268,7 @@ const ContactMethodRow = ({
       <div className="flex min-w-0 flex-1 items-baseline gap-2">{children}</div>
       <Button
         aria-label={t("common.delete")}
-        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         disabled={disabled}
         onClick={onRemove}
         size="icon-xs"

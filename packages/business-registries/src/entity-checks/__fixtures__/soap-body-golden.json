@@ -1,0 +1,2286 @@
+{
+  "fixtures": [
+    {
+      "name": "entity-checks/__fixtures__/adis-not-found.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": [
+            {
+              "@typSubjektu": "NENALEZEN",
+              "@dic": "9999999999",
+              "@nespolehlivyPlatce": "NENALEZEN"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-not-found.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "@typSubjektu": "NENALEZEN",
+            "@dic": "9999999999",
+            "@nespolehlivyPlatce": "NENALEZEN"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-not-found.xml",
+      "repeated": [],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "@typSubjektu": "NENALEZEN",
+            "@dic": "9999999999",
+            "@nespolehlivyPlatce": "NENALEZEN"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-unreliable-payer.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": [
+            {
+              "zverejneneUcty": {
+                "ucet": [
+                  {
+                    "standardniUcet": {
+                      "@cislo": "258795779",
+                      "@kodBanky": "0600"
+                    },
+                    "@datumZverejneni": "2023-07-26"
+                  }
+                ]
+              },
+              "nazevSubjektu": "LIDRU, A.S.",
+              "adresa": {
+                "uliceCislo": "153",
+                "castObce": "LIBOTENICE",
+                "mesto": "LIBOTENICE",
+                "psc": "41201",
+                "stat": "Česká republika"
+              },
+              "@typSubjektu": "PLATCE_DPH",
+              "@dic": "00121100",
+              "@nespolehlivyPlatce": "ANO",
+              "@datumZverejneniNespolehlivosti": "2017-03-16",
+              "@cisloFu": "456"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-unreliable-payer.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "zverejneneUcty": {
+              "ucet": {
+                "standardniUcet": {
+                  "@cislo": "258795779",
+                  "@kodBanky": "0600"
+                },
+                "@datumZverejneni": "2023-07-26"
+              }
+            },
+            "nazevSubjektu": "LIDRU, A.S.",
+            "adresa": {
+              "uliceCislo": "153",
+              "castObce": "LIBOTENICE",
+              "mesto": "LIBOTENICE",
+              "psc": "41201",
+              "stat": "Česká republika"
+            },
+            "@typSubjektu": "PLATCE_DPH",
+            "@dic": "00121100",
+            "@nespolehlivyPlatce": "ANO",
+            "@datumZverejneniNespolehlivosti": "2017-03-16",
+            "@cisloFu": "456"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-unreliable-payer.xml",
+      "repeated": [],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "zverejneneUcty": {
+              "ucet": {
+                "standardniUcet": {
+                  "@cislo": "258795779",
+                  "@kodBanky": "0600"
+                },
+                "@datumZverejneni": "2023-07-26"
+              }
+            },
+            "nazevSubjektu": "LIDRU, A.S.",
+            "adresa": {
+              "uliceCislo": "153",
+              "castObce": "LIBOTENICE",
+              "mesto": "LIBOTENICE",
+              "psc": "41201",
+              "stat": "Česká republika"
+            },
+            "@typSubjektu": "PLATCE_DPH",
+            "@dic": "00121100",
+            "@nespolehlivyPlatce": "ANO",
+            "@datumZverejneniNespolehlivosti": "2017-03-16",
+            "@cisloFu": "456"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-vat-payer-clear.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": [
+            {
+              "zverejneneUcty": {
+                "ucet": [
+                  {
+                    "standardniUcet": {
+                      "@cislo": "71504011",
+                      "@kodBanky": "0100"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@cislo": "2001260209",
+                      "@kodBanky": "2600"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ6426000000002001268200"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ2326000000002001260305"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@cislo": "200126599",
+                      "@kodBanky": "2600"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@cislo": "98765422",
+                      "@kodBanky": "0800"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ7703001712800100061003"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@predcisli": "27",
+                      "@cislo": "5868650297",
+                      "@kodBanky": "0100"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@cislo": "4901711",
+                      "@kodBanky": "0100"
+                    },
+                    "@datumZverejneni": "2013-04-01"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ5803000000000017640143"
+                    },
+                    "@datumZverejneni": "2013-07-26"
+                  },
+                  {
+                    "standardniUcet": {
+                      "@predcisli": "19",
+                      "@cislo": "2808601",
+                      "@kodBanky": "0100"
+                    },
+                    "@datumZverejneni": "2013-08-12"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ5026000000002001266803"
+                    },
+                    "@datumZverejneni": "2013-12-24"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ1426000000002001262407"
+                    },
+                    "@datumZverejneni": "2013-12-24"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ8926000000002001265907"
+                    },
+                    "@datumZverejneni": "2013-12-24"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ4701000000271445680277"
+                    },
+                    "@datumZverejneni": "2014-02-14"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ2826000000002001260700"
+                    },
+                    "@datumZverejneni": "2014-02-14"
+                  },
+                  {
+                    "nestandardniUcet": {
+                      "@cislo": "CZ1926000000002001262802"
+                    },
+                    "@datumZverejneni": "2014-11-25"
+                  }
+                ]
+              },
+              "nazevSubjektu": "ČEZ, A. S.",
+              "adresa": {
+                "uliceCislo": "Duhová 1444/2",
+                "castObce": "MICHLE (PRAHA 4)",
+                "mesto": "PRAHA 4",
+                "psc": "14000",
+                "stat": "Česká republika"
+              },
+              "@typSubjektu": "PLATCE_DPH",
+              "@dic": "45274649",
+              "@nespolehlivyPlatce": "NE",
+              "@cisloFu": "13"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-vat-payer-clear.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "zverejneneUcty": {
+              "ucet": [
+                {
+                  "standardniUcet": {
+                    "@cislo": "71504011",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "2001260209",
+                    "@kodBanky": "2600"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ6426000000002001268200"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ2326000000002001260305"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "200126599",
+                    "@kodBanky": "2600"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "98765422",
+                    "@kodBanky": "0800"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ7703001712800100061003"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@predcisli": "27",
+                    "@cislo": "5868650297",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "4901711",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ5803000000000017640143"
+                  },
+                  "@datumZverejneni": "2013-07-26"
+                },
+                {
+                  "standardniUcet": {
+                    "@predcisli": "19",
+                    "@cislo": "2808601",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-08-12"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ5026000000002001266803"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ1426000000002001262407"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ8926000000002001265907"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ4701000000271445680277"
+                  },
+                  "@datumZverejneni": "2014-02-14"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ2826000000002001260700"
+                  },
+                  "@datumZverejneni": "2014-02-14"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ1926000000002001262802"
+                  },
+                  "@datumZverejneni": "2014-11-25"
+                }
+              ]
+            },
+            "nazevSubjektu": "ČEZ, A. S.",
+            "adresa": {
+              "uliceCislo": "Duhová 1444/2",
+              "castObce": "MICHLE (PRAHA 4)",
+              "mesto": "PRAHA 4",
+              "psc": "14000",
+              "stat": "Česká republika"
+            },
+            "@typSubjektu": "PLATCE_DPH",
+            "@dic": "45274649",
+            "@nespolehlivyPlatce": "NE",
+            "@cisloFu": "13"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/adis-vat-payer-clear.xml",
+      "repeated": [],
+      "body": {
+        "StatusNespolehlivySubjektRozsirenyResponse": {
+          "status": {
+            "@odpovedGenerovana": "2026-09-26",
+            "@statusCode": "0",
+            "@statusText": "OK"
+          },
+          "statusSubjektu": {
+            "zverejneneUcty": {
+              "ucet": [
+                {
+                  "standardniUcet": {
+                    "@cislo": "71504011",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "2001260209",
+                    "@kodBanky": "2600"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ6426000000002001268200"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ2326000000002001260305"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "200126599",
+                    "@kodBanky": "2600"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "98765422",
+                    "@kodBanky": "0800"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ7703001712800100061003"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@predcisli": "27",
+                    "@cislo": "5868650297",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "standardniUcet": {
+                    "@cislo": "4901711",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-04-01"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ5803000000000017640143"
+                  },
+                  "@datumZverejneni": "2013-07-26"
+                },
+                {
+                  "standardniUcet": {
+                    "@predcisli": "19",
+                    "@cislo": "2808601",
+                    "@kodBanky": "0100"
+                  },
+                  "@datumZverejneni": "2013-08-12"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ5026000000002001266803"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ1426000000002001262407"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ8926000000002001265907"
+                  },
+                  "@datumZverejneni": "2013-12-24"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ4701000000271445680277"
+                  },
+                  "@datumZverejneni": "2014-02-14"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ2826000000002001260700"
+                  },
+                  "@datumZverejneni": "2014-02-14"
+                },
+                {
+                  "nestandardniUcet": {
+                    "@cislo": "CZ1926000000002001262802"
+                  },
+                  "@datumZverejneni": "2014-11-25"
+                }
+              ]
+            },
+            "nazevSubjektu": "ČEZ, A. S.",
+            "adresa": {
+              "uliceCislo": "Duhová 1444/2",
+              "castObce": "MICHLE (PRAHA 4)",
+              "mesto": "PRAHA 4",
+              "psc": "14000",
+              "stat": "Česká republika"
+            },
+            "@typSubjektu": "PLATCE_DPH",
+            "@dic": "45274649",
+            "@nespolehlivyPlatce": "NE",
+            "@cisloFu": "13"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-clear.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-clear.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-clear.xml",
+      "repeated": [],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found-pending.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": {
+            "ic": "26863154",
+            "cisloSenatu": "25",
+            "druhVec": "INS",
+            "bcVec": "10525",
+            "rocnik": "2016",
+            "nazevOrganizace": "Krajský soud v Ostravě",
+            "nazevOsoby": "Správa pohledávek OKD, a.s.",
+            "druhAdresy": "SÍDLO FY",
+            "mesto": "Karviná",
+            "ulice": "Stonavská",
+            "cisloPopisne": "2179",
+            "psc": "735 06",
+            "druhStavKonkursu": "REORGANIZ",
+            "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+            "dalsiDluznikVRizeni": "F",
+            "datumPmZahajeniUpadku": "2016-05-09Z"
+          },
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found-pending.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": [
+            {
+              "ic": "26863154",
+              "cisloSenatu": "25",
+              "druhVec": "INS",
+              "bcVec": "10525",
+              "rocnik": "2016",
+              "nazevOrganizace": "Krajský soud v Ostravě",
+              "nazevOsoby": "Správa pohledávek OKD, a.s.",
+              "druhAdresy": "SÍDLO FY",
+              "mesto": "Karviná",
+              "ulice": "Stonavská",
+              "cisloPopisne": "2179",
+              "psc": "735 06",
+              "druhStavKonkursu": "REORGANIZ",
+              "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+              "dalsiDluznikVRizeni": "F",
+              "datumPmZahajeniUpadku": "2016-05-09Z"
+            }
+          ],
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found-pending.xml",
+      "repeated": [],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": {
+            "ic": "26863154",
+            "cisloSenatu": "25",
+            "druhVec": "INS",
+            "bcVec": "10525",
+            "rocnik": "2016",
+            "nazevOrganizace": "Krajský soud v Ostravě",
+            "nazevOsoby": "Správa pohledávek OKD, a.s.",
+            "druhAdresy": "SÍDLO FY",
+            "mesto": "Karviná",
+            "ulice": "Stonavská",
+            "cisloPopisne": "2179",
+            "psc": "735 06",
+            "druhStavKonkursu": "REORGANIZ",
+            "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+            "dalsiDluznikVRizeni": "F",
+            "datumPmZahajeniUpadku": "2016-05-09Z"
+          },
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": {
+            "ic": "26863154",
+            "cisloSenatu": "25",
+            "druhVec": "INS",
+            "bcVec": "10525",
+            "rocnik": "2016",
+            "nazevOrganizace": "Krajský soud v Ostravě",
+            "nazevOsoby": "Správa pohledávek OKD, a.s.",
+            "druhAdresy": "SÍDLO FY",
+            "mesto": "Karviná",
+            "ulice": "Stonavská",
+            "cisloPopisne": "2179",
+            "psc": "735 06",
+            "druhStavKonkursu": "REORGANIZ",
+            "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+            "dalsiDluznikVRizeni": "F",
+            "datumPmZahajeniUpadku": "2016-05-09Z"
+          },
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": [
+            {
+              "ic": "26863154",
+              "cisloSenatu": "25",
+              "druhVec": "INS",
+              "bcVec": "10525",
+              "rocnik": "2016",
+              "nazevOrganizace": "Krajský soud v Ostravě",
+              "nazevOsoby": "Správa pohledávek OKD, a.s.",
+              "druhAdresy": "SÍDLO FY",
+              "mesto": "Karviná",
+              "ulice": "Stonavská",
+              "cisloPopisne": "2179",
+              "psc": "735 06",
+              "druhStavKonkursu": "REORGANIZ",
+              "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+              "dalsiDluznikVRizeni": "F",
+              "datumPmZahajeniUpadku": "2016-05-09Z"
+            }
+          ],
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-company-found.xml",
+      "repeated": [],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "data": {
+            "ic": "26863154",
+            "cisloSenatu": "25",
+            "druhVec": "INS",
+            "bcVec": "10525",
+            "rocnik": "2016",
+            "nazevOrganizace": "Krajský soud v Ostravě",
+            "nazevOsoby": "Správa pohledávek OKD, a.s.",
+            "druhAdresy": "SÍDLO FY",
+            "mesto": "Karviná",
+            "ulice": "Stonavská",
+            "cisloPopisne": "2179",
+            "psc": "735 06",
+            "druhStavKonkursu": "REORGANIZ",
+            "urlDetailRizeni": "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+            "dalsiDluznikVRizeni": "F",
+            "datumPmZahajeniUpadku": "2016-05-09Z"
+          },
+          "stav": {
+            "pocetVysledku": "1",
+            "relevanceVysledku": "2",
+            "casSynchronizace": "2026-09-26T15:26:35.000Z"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-invalid-combination.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS1",
+            "textChyby": "Nesprávná kombinace parametrů",
+            "popisChyby": "Kontrola na správnost vyplnění parametrů neproběhla v pořádku - nesprávná kombinace parametrů"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-invalid-combination.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS1",
+            "textChyby": "Nesprávná kombinace parametrů",
+            "popisChyby": "Kontrola na správnost vyplnění parametrů neproběhla v pořádku - nesprávná kombinace parametrů"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-invalid-combination.xml",
+      "repeated": [],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS1",
+            "textChyby": "Nesprávná kombinace parametrů",
+            "popisChyby": "Kontrola na správnost vyplnění parametrů neproběhla v pořádku - nesprávná kombinace parametrů"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-person-clear.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-person-clear.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-person-clear.xml",
+      "repeated": [],
+      "body": {
+        "getIsirWsCuzkDataResponse": {
+          "stav": {
+            "kodChyby": "WS2",
+            "textChyby": "Prázdný výsledek",
+            "popisChyby": "Zadaným kritériím neodpovídají žádné záznamy"
+          }
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-soap-fault.xml",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "soap:Client",
+          "faultstring": "Data nejsou validní, neodpovídají aktuální definici struktury. Chyba: 'cvc-enumeration-valid: Value '9' is not facet-valid with respect to enumeration '[1, 2, 3, 4, 5, 6, 7]'. It must be a value from the enumeration.'."
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-soap-fault.xml",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "soap:Client",
+          "faultstring": "Data nejsou validní, neodpovídají aktuální definici struktury. Chyba: 'cvc-enumeration-valid: Value '9' is not facet-valid with respect to enumeration '[1, 2, 3, 4, 5, 6, 7]'. It must be a value from the enumeration.'."
+        }
+      }
+    },
+    {
+      "name": "entity-checks/__fixtures__/isir-soap-fault.xml",
+      "repeated": [],
+      "body": {
+        "Fault": {
+          "faultcode": "soap:Client",
+          "faultstring": "Data nejsou validní, neodpovídají aktuální definici struktury. Chyba: 'cvc-enumeration-valid: Value '9' is not facet-valid with respect to enumeration '[1, 2, 3, 4, 5, 6, 7]'. It must be a value from the enumeration.'."
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "name": "empty body",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": ""
+    },
+    {
+      "name": "empty body",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": ""
+    },
+    {
+      "name": "empty body",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": ""
+    },
+    {
+      "name": "self-closing body",
+      "xml": "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body/></s:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": ""
+    },
+    {
+      "name": "self-closing body",
+      "xml": "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body/></s:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": ""
+    },
+    {
+      "name": "self-closing body",
+      "xml": "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body/></s:Envelope>",
+      "repeated": [],
+      "body": ""
+    },
+    {
+      "name": "prefixed payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><ns2:resp xmlns:ns2=\"urn:x\"><ns2:data><ns2:id>007</ns2:id></ns2:data></ns2:resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "resp": {
+          "data": {
+            "id": "007"
+          }
+        }
+      }
+    },
+    {
+      "name": "prefixed payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><ns2:resp xmlns:ns2=\"urn:x\"><ns2:data><ns2:id>007</ns2:id></ns2:data></ns2:resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "resp": {
+          "data": [
+            {
+              "id": "007"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "prefixed payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><ns2:resp xmlns:ns2=\"urn:x\"><ns2:data><ns2:id>007</ns2:id></ns2:data></ns2:resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "resp": {
+          "data": {
+            "id": "007"
+          }
+        }
+      }
+    },
+    {
+      "name": "single repeated element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "data": {
+            "a": "1"
+          }
+        }
+      }
+    },
+    {
+      "name": "single repeated element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "a": "1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "single repeated element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "data": {
+            "a": "1"
+          }
+        }
+      }
+    },
+    {
+      "name": "two repeated elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data><data><a>2</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "a": "1"
+            },
+            {
+              "a": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "two repeated elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data><data><a>2</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "a": "1"
+            },
+            {
+              "a": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "two repeated elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns=\"urn:r\"><data><a>1</a></data><data><a>2</a></data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "a": "1"
+            },
+            {
+              "a": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "non-repeated siblings",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><x>1</x><x>2</x><x>3</x></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "x": [
+            "1",
+            "2",
+            "3"
+          ]
+        }
+      }
+    },
+    {
+      "name": "non-repeated siblings",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><x>1</x><x>2</x><x>3</x></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "x": [
+            "1",
+            "2",
+            "3"
+          ]
+        }
+      }
+    },
+    {
+      "name": "non-repeated siblings",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><x>1</x><x>2</x><x>3</x></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "x": [
+            "1",
+            "2",
+            "3"
+          ]
+        }
+      }
+    },
+    {
+      "name": "attributes and text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v unit=\"CZK\" note=\" padded \">  12.50  </v></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "v": {
+            "#text": "12.50",
+            "@unit": "CZK",
+            "@note": "padded"
+          }
+        }
+      }
+    },
+    {
+      "name": "attributes and text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v unit=\"CZK\" note=\" padded \">  12.50  </v></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "v": {
+            "#text": "12.50",
+            "@unit": "CZK",
+            "@note": "padded"
+          }
+        }
+      }
+    },
+    {
+      "name": "attributes and text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v unit=\"CZK\" note=\" padded \">  12.50  </v></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "v": {
+            "#text": "12.50",
+            "@unit": "CZK",
+            "@note": "padded"
+          }
+        }
+      }
+    },
+    {
+      "name": "attributes only",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v a=\"1\" b=\"two\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "v": {
+            "@a": "1",
+            "@b": "two"
+          }
+        }
+      }
+    },
+    {
+      "name": "attributes only",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v a=\"1\" b=\"two\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "v": {
+            "@a": "1",
+            "@b": "two"
+          }
+        }
+      }
+    },
+    {
+      "name": "attributes only",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><v a=\"1\" b=\"two\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "v": {
+            "@a": "1",
+            "@b": "two"
+          }
+        }
+      }
+    },
+    {
+      "name": "empty element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><e/><f></f><g>   </g></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "e": "",
+          "f": "",
+          "g": ""
+        }
+      }
+    },
+    {
+      "name": "empty element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><e/><f></f><g>   </g></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "e": "",
+          "f": "",
+          "g": ""
+        }
+      }
+    },
+    {
+      "name": "empty element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><e/><f></f><g>   </g></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "e": "",
+          "f": "",
+          "g": ""
+        }
+      }
+    },
+    {
+      "name": "whitespace between elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>\n  <a>1</a>\n  <b>2</b>\n</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "a": "1",
+          "b": "2"
+        }
+      }
+    },
+    {
+      "name": "whitespace between elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>\n  <a>1</a>\n  <b>2</b>\n</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "a": "1",
+          "b": "2"
+        }
+      }
+    },
+    {
+      "name": "whitespace between elements",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>\n  <a>1</a>\n  <b>2</b>\n</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "a": "1",
+          "b": "2"
+        }
+      }
+    },
+    {
+      "name": "mixed content",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>one<b>two</b>three</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "b": "two",
+          "#text": "onethree"
+        }
+      }
+    },
+    {
+      "name": "mixed content",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>one<b>two</b>three</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "b": "two",
+          "#text": "onethree"
+        }
+      }
+    },
+    {
+      "name": "mixed content",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>one<b>two</b>three</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "b": "two",
+          "#text": "onethree"
+        }
+      }
+    },
+    {
+      "name": "entities",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"x &amp; y &lt;z&gt;\">&quot;q&quot; &apos;a&apos; &amp;amp;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "#text": "\"q\" 'a' &amp;",
+          "@a": "x & y <z>"
+        }
+      }
+    },
+    {
+      "name": "entities",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"x &amp; y &lt;z&gt;\">&quot;q&quot; &apos;a&apos; &amp;amp;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "#text": "\"q\" 'a' &amp;",
+          "@a": "x & y <z>"
+        }
+      }
+    },
+    {
+      "name": "entities",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"x &amp; y &lt;z&gt;\">&quot;q&quot; &apos;a&apos; &amp;amp;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "#text": "\"q\" 'a' &amp;",
+          "@a": "x & y <z>"
+        }
+      }
+    },
+    {
+      "name": "numeric references",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"&#65;\">&#66;&#x43;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "#text": "&#66;&#x43;",
+          "@a": "&#65;"
+        }
+      }
+    },
+    {
+      "name": "numeric references",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"&#65;\">&#66;&#x43;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "#text": "&#66;&#x43;",
+          "@a": "&#65;"
+        }
+      }
+    },
+    {
+      "name": "numeric references",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r a=\"&#65;\">&#66;&#x43;</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "#text": "&#66;&#x43;",
+          "@a": "&#65;"
+        }
+      }
+    },
+    {
+      "name": "CDATA",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[<raw> & stuff]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "<raw> & stuff"
+      }
+    },
+    {
+      "name": "CDATA",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[<raw> & stuff]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "<raw> & stuff"
+      }
+    },
+    {
+      "name": "CDATA",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[<raw> & stuff]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "<raw> & stuff"
+      }
+    },
+    {
+      "name": "CDATA beside text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>pre<![CDATA[mid]]>post</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "premidpost"
+      }
+    },
+    {
+      "name": "CDATA beside text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>pre<![CDATA[mid]]>post</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "premidpost"
+      }
+    },
+    {
+      "name": "CDATA beside text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r>pre<![CDATA[mid]]>post</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "premidpost"
+      }
+    },
+    {
+      "name": "comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><!-- c --><a>1</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "a": "1"
+        }
+      }
+    },
+    {
+      "name": "comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><!-- c --><a>1</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "a": "1"
+        }
+      }
+    },
+    {
+      "name": "comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><!-- c --><a>1</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "a": "1"
+        }
+      }
+    },
+    {
+      "name": "prefixed attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:p=\"urn:p\" p:id=\"5\" plain=\"6\"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "@id": "5",
+          "@plain": "6"
+        }
+      }
+    },
+    {
+      "name": "prefixed attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:p=\"urn:p\" p:id=\"5\" plain=\"6\"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "@id": "5",
+          "@plain": "6"
+        }
+      }
+    },
+    {
+      "name": "prefixed attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:p=\"urn:p\" p:id=\"5\" plain=\"6\"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "@id": "5",
+          "@plain": "6"
+        }
+      }
+    },
+    {
+      "name": "xsi nil",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><n xsi:nil=\"true\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "n": {
+            "@nil": "true"
+          }
+        }
+      }
+    },
+    {
+      "name": "xsi nil",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><n xsi:nil=\"true\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "n": {
+            "@nil": "true"
+          }
+        }
+      }
+    },
+    {
+      "name": "xsi nil",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"><n xsi:nil=\"true\"/></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "n": {
+            "@nil": "true"
+          }
+        }
+      }
+    },
+    {
+      "name": "default namespace on payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><resp xmlns=\"urn:d\" xmlns:q=\"urn:q\"><q:item>1</q:item></resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "resp": {
+          "item": "1"
+        }
+      }
+    },
+    {
+      "name": "default namespace on payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><resp xmlns=\"urn:d\" xmlns:q=\"urn:q\"><q:item>1</q:item></resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "resp": {
+          "item": "1"
+        }
+      }
+    },
+    {
+      "name": "default namespace on payload",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><resp xmlns=\"urn:d\" xmlns:q=\"urn:q\"><q:item>1</q:item></resp></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "resp": {
+          "item": "1"
+        }
+      }
+    },
+    {
+      "name": "fault",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>soapenv:Server</faultcode><faultstring>boom</faultstring></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "soapenv:Server",
+          "faultstring": "boom"
+        }
+      }
+    },
+    {
+      "name": "fault",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>soapenv:Server</faultcode><faultstring>boom</faultstring></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "soapenv:Server",
+          "faultstring": "boom"
+        }
+      }
+    },
+    {
+      "name": "fault",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>soapenv:Server</faultcode><faultstring>boom</faultstring></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "Fault": {
+          "faultcode": "soapenv:Server",
+          "faultstring": "boom"
+        }
+      }
+    },
+    {
+      "name": "fault with detail",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>Client</faultcode><detail><e code=\"1\">x</e></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "Client",
+          "detail": {
+            "e": {
+              "#text": "x",
+              "@code": "1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "fault with detail",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>Client</faultcode><detail><e code=\"1\">x</e></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "Fault": {
+          "faultcode": "Client",
+          "detail": {
+            "e": {
+              "#text": "x",
+              "@code": "1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "fault with detail",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><soapenv:Fault><faultcode>Client</faultcode><detail><e code=\"1\">x</e></detail></soapenv:Fault></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "Fault": {
+          "faultcode": "Client",
+          "detail": {
+            "e": {
+              "#text": "x",
+              "@code": "1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "leading zero values",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><ico>00121100</ico><n>1e3</n><b>true</b></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "ico": "00121100",
+          "n": "1e3",
+          "b": "true"
+        }
+      }
+    },
+    {
+      "name": "leading zero values",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><ico>00121100</ico><n>1e3</n><b>true</b></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "ico": "00121100",
+          "n": "1e3",
+          "b": "true"
+        }
+      }
+    },
+    {
+      "name": "leading zero values",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><ico>00121100</ico><n>1e3</n><b>true</b></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "ico": "00121100",
+          "n": "1e3",
+          "b": "true"
+        }
+      }
+    },
+    {
+      "name": "unicode",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><nazev>Česká spořitelna, a.s.</nazev></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "nazev": "Česká spořitelna, a.s."
+        }
+      }
+    },
+    {
+      "name": "unicode",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><nazev>Česká spořitelna, a.s.</nazev></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "nazev": "Česká spořitelna, a.s."
+        }
+      }
+    },
+    {
+      "name": "unicode",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><nazev>Česká spořitelna, a.s.</nazev></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "nazev": "Česká spořitelna, a.s."
+        }
+      }
+    },
+    {
+      "name": "CRLF text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>line1\r\nline2</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "a": "line1\nline2"
+        }
+      }
+    },
+    {
+      "name": "CRLF text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>line1\r\nline2</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "a": "line1\nline2"
+        }
+      }
+    },
+    {
+      "name": "CRLF text",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>line1\r\nline2</a></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "a": "line1\nline2"
+        }
+      }
+    },
+    {
+      "name": "deep nesting",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><a><b><c><d><e>deep</e></d></c></b></a></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": "deep"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "deep nesting",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><a><b><c><d><e>deep</e></d></c></b></a></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": "deep"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "deep nesting",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><a><b><c><d><e>deep</e></d></c></b></a></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "a": {
+          "b": {
+            "c": {
+              "d": {
+                "e": "deep"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "repeated with attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><data id=\"1\"/><data id=\"2\">t</data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "@id": "1"
+            },
+            {
+              "#text": "t",
+              "@id": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "repeated with attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><data id=\"1\"/><data id=\"2\">t</data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "@id": "1"
+            },
+            {
+              "#text": "t",
+              "@id": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "repeated with attributes",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><data id=\"1\"/><data id=\"2\">t</data></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "data": [
+            {
+              "@id": "1"
+            },
+            {
+              "#text": "t",
+              "@id": "2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "text then element same name",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>1</a>tail</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "a": "1",
+          "#text": "tail"
+        }
+      }
+    },
+    {
+      "name": "text then element same name",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>1</a>tail</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "a": "1",
+          "#text": "tail"
+        }
+      }
+    },
+    {
+      "name": "text then element same name",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><a>1</a>tail</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "a": "1",
+          "#text": "tail"
+        }
+      }
+    },
+    {
+      "name": "header with content",
+      "xml": "<?xml version=\"1.0\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header><h>1</h></soapenv:Header><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "header with content",
+      "xml": "<?xml version=\"1.0\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header><h>1</h></soapenv:Header><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "header with content",
+      "xml": "<?xml version=\"1.0\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header><h>1</h></soapenv:Header><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "no header",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "no header",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "no header",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Body><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "ok"
+      }
+    },
+    {
+      "name": "CDATA with spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[  x  ]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "  x  "
+      }
+    },
+    {
+      "name": "CDATA with spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[  x  ]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "  x  "
+      }
+    },
+    {
+      "name": "CDATA with spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r><![CDATA[  x  ]]></r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "  x  "
+      }
+    },
+    {
+      "name": "text around element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <b/> c </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "b": "",
+          "#text": "ac"
+        }
+      }
+    },
+    {
+      "name": "text around element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <b/> c </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "b": "",
+          "#text": "ac"
+        }
+      }
+    },
+    {
+      "name": "text around element",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <b/> c </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "b": "",
+          "#text": "ac"
+        }
+      }
+    },
+    {
+      "name": "text split by comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <!-- c --> b </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "a  b"
+      }
+    },
+    {
+      "name": "text split by comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <!-- c --> b </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "a  b"
+      }
+    },
+    {
+      "name": "text split by comment",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r> a <!-- c --> b </r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "a  b"
+      }
+    },
+    {
+      "name": "attribute with entity and spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r v=\" &amp; \"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": {
+          "@v": "&"
+        }
+      }
+    },
+    {
+      "name": "attribute with entity and spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r v=\" &amp; \"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": {
+          "@v": "&"
+        }
+      }
+    },
+    {
+      "name": "attribute with entity and spaces",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body><r v=\" &amp; \"/></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": {
+          "@v": "&"
+        }
+      }
+    },
+    {
+      "name": "envelope attributes",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" soapenv:encodingStyle=\"x\"><soapenv:Body a=\"b\"><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "statusSubjektu",
+        "ucet"
+      ],
+      "body": {
+        "r": "ok",
+        "@a": "b"
+      }
+    },
+    {
+      "name": "envelope attributes",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" soapenv:encodingStyle=\"x\"><soapenv:Body a=\"b\"><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [
+        "data"
+      ],
+      "body": {
+        "r": "ok",
+        "@a": "b"
+      }
+    },
+    {
+      "name": "envelope attributes",
+      "xml": "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" soapenv:encodingStyle=\"x\"><soapenv:Body a=\"b\"><r>ok</r></soapenv:Body></soapenv:Envelope>",
+      "repeated": [],
+      "body": {
+        "r": "ok",
+        "@a": "b"
+      }
+    }
+  ]
+}

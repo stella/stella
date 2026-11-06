@@ -19,6 +19,7 @@ import {
   cutMaintenanceRelease,
   type MaintenanceCutEffects,
   MaintenanceReleaseError,
+  type PreviousRelease,
   runCutGate,
 } from "./prepare-maintenance-release";
 import {
@@ -94,14 +95,23 @@ const write = (root: string, file: string, contents: string) => {
 };
 
 /** A release tree with a pending changeset, as the cut meets it on main. */
-const releaseTree = (mainVersion = "1.2.3"): string => {
+const releaseTree = (mainVersion = "1.2.3", refusedRef?: string): string => {
   const root = mkdtempSync(nodePath.join(tmpdir(), "stella-cut-gates-"));
   roots.push(root);
   write(root, "VERSION", `${mainVersion}\n`);
+  // Stands in for the lag check: records its arguments and, like the real
+  // check, exits 1 when the ref it is given has a package missing from npm.
   write(
     root,
     "scripts/check-npm-publish-lag.ts",
-    `await Bun.write(${JSON.stringify(`${root}.npm-arguments.json`)}, JSON.stringify(process.argv.slice(2)));\n`,
+    [
+      `await Bun.write(${JSON.stringify(`${root}.npm-arguments.json`)}, JSON.stringify(process.argv.slice(2)));`,
+      `if (process.argv[3] === ${JSON.stringify(refusedRef ?? null)}) {`,
+      `  console.error("npm-publish-lag: @stll/cli is not on npm at " + process.argv[3]);`,
+      "  process.exit(1);",
+      "}",
+      "",
+    ].join("\n"),
   );
   write(root, "docs/changelog/v1.2.3.md", "# Previous release\n");
   write(
@@ -159,10 +169,16 @@ type CutRun = {
   npmArguments: readonly string[];
 };
 
+const PUBLISHED_PREVIOUS: PreviousRelease = {
+  kind: "published",
+  publishedAt: "2026-02-03T04:05:06Z",
+};
+
 const runCut = async (
   root: string,
   script: GateScript,
   args: readonly string[] = [],
+  previousRelease: PreviousRelease = PUBLISHED_PREVIOUS,
 ): Promise<CutRun> => {
   const before = snapshot(root);
   const npmArgumentsPath = `${root}.npm-arguments.json`;
@@ -199,10 +215,7 @@ const runCut = async (
     openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
-    readPreviousRelease: async () => ({
-      kind: "published",
-      publishedAt: "2026-02-03T04:05:06Z",
-    }),
+    readPreviousRelease: async () => previousRelease,
     ensureFreshRecordings: () => undefined,
     // The repository's version script, reduced to the writes it makes.
     versionPackages: (rootDir) => {
@@ -244,6 +257,19 @@ const runCut = async (
       : [],
   };
 };
+
+test("deployment environment contract blocks a cut without an override", () => {
+  expect(preCutGates()).toContainEqual({
+    name: "deploy-env-contract",
+    source: "cut",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-deploy-env-contract.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  });
+});
 
 const PRE_CUT_NAMES = preCutGates().map(({ name }) => name);
 
@@ -301,12 +327,64 @@ describe("the maintenance cut checks the tag gates first", () => {
       const run = await runCut(root, {});
       expect(run.error).toBeNull();
       expect(run.npmFinalTags).toEqual(["v1.2.3"]);
+      // GitHub dates the previous final, main's manifest does not yet: the
+      // cut checks the manifest the release PR will carry, so v1.2.3 itself.
       expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
       expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
         "1.2.4\n",
       );
     });
   }
+
+  test("refuses when the previous final is promoted but its package is missing from npm", async () => {
+    const root = releaseTree("1.2.3", "v1.2.3");
+    const before = snapshot(root);
+
+    const run = await runCut(root, {}, [], PUBLISHED_PREVIOUS);
+
+    expect(run.npmArguments).toEqual(["--ref", "v1.2.3"]);
+    expect(run.error).toBeInstanceOf(MaintenanceReleaseError);
+    expect(run.error instanceof Error ? run.error.message : "").toContain(
+      "npm-publish-lag:",
+    );
+    expect(run.versioned).toBe(0);
+    expect(snapshot(root)).toEqual(before);
+  });
+
+  test("an unpromoted previous final is skipped for the older promoted release", async () => {
+    const root = releaseTree("1.2.3", "v1.2.3");
+
+    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+
+    expect(run.error).toBeNull();
+    expect(run.npmArguments).toEqual(["--ref", "v1.2.2"]);
+    const dates: unknown = JSON.parse(
+      readFileSync(
+        nodePath.join(
+          root,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        "utf-8",
+      ),
+    );
+    expect(dates).toEqual({ "v1.2.2": "2026-01-01T00:00:00Z", "v1.2.3": null });
+  });
+
+  test("fails closed when no promoted release is below the cut", async () => {
+    const root = releaseTree();
+    write(
+      root,
+      "apps/landing/src/data/changelog-release-dates.json",
+      '{\n  "v1.2.2": null\n}\n',
+    );
+
+    const run = await runCut(root, {}, [], { kind: "unpromoted" });
+
+    expect(run.error instanceof Error ? run.error.message : "").toContain(
+      "records no promoted release below 1.2.4",
+    );
+    expect(run.versioned).toBe(0);
+  });
 
   test("reads a gate that cannot run as a failed gate and still runs the rest", async () => {
     const root = releaseTree();
@@ -392,6 +470,7 @@ describe("every release-tag gate is classified for the cut", () => {
     expect(tagPreCut.map(({ name }) => name)).toEqual([
       "dependency-audit",
       "npm-publish-lag",
+      "npm-publish-readiness",
     ]);
     for (const gate of tagPreCut) {
       switch (gate.check.kind) {
@@ -440,6 +519,7 @@ describe("a command gate", () => {
   const context = {
     baseSha: BASE_SHA,
     previousFinalTag: "v1.2.3",
+    releaseDates: {},
     rootDir: import.meta.dirname,
     write: () => undefined,
   };

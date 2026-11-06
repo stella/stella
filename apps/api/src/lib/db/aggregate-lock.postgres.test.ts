@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -9,6 +9,7 @@ import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { withResultSavepoint } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -18,12 +19,14 @@ import { isRecord } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import {
   withAggregateLock,
   withAggregateRowQuery,
   withAggregateSavepoint,
+  withSkipLockedBatch,
 } from "./aggregate-lock";
 import type { AGGREGATE_LOCKS, AggregateName } from "./aggregate-lock";
 
@@ -75,9 +78,7 @@ const withPublicRowFixture = async ({
     }
     await run({ organizationId, otherOrganizationId, workspaceId });
   } finally {
-    await db
-      .delete(organization)
-      .where(inArray(organization.id, [organizationId, otherOrganizationId]));
+    await deleteOrganizationsForTest(db, [organizationId, otherOrganizationId]);
   }
 };
 
@@ -103,6 +104,12 @@ const advisoryAcquisitions = () => {
   const workspaceId = createSafeId<"workspace">();
   const definitionId = createSafeId<"flowDefinition">();
   return {
+    caseLawSitemapMonth: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "caseLawSitemapMonth",
+        id: { country: "CZE", year: "2024", month: "01" },
+        tx,
+      }),
     organizationObjectIntent: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "organizationObjectIntent",
@@ -189,9 +196,21 @@ const advisoryAcquisitions = () => {
         id: { organizationId },
         tx,
       }),
+    desktopRunnerCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "desktopRunnerCapacity",
+        id: { organizationId, userId },
+        tx,
+      }),
     fileComparisonCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "fileComparisonCapacity",
+        id: { organizationId },
+        tx,
+      }),
+    billingDraftSettings: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "billingDraftSettings",
         id: { organizationId },
         tx,
       }),
@@ -221,6 +240,12 @@ const advisoryAcquisitions = () => {
           organizationId,
           userId,
         },
+        tx,
+      }),
+    organizationDataBoxes: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "organizationDataBoxes",
+        id: { organizationId },
         tx,
       }),
     personalCatalog: async (tx: AggregateAcquireTransaction) =>
@@ -310,6 +335,39 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate locks (postgres)", () => {
+    test("skip-locked discovery obeys its statement deadline", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withPublicRowFixture({
+          db,
+          workspace: "present",
+          run: async ({ workspaceId }) => {
+            const result = await Result.tryPromise(
+              async () =>
+                await withSkipLockedBatch({
+                  database: db,
+                  limit: 1,
+                  prepare: async (tx) =>
+                    await setSharedStatementTimeout(tx, 10),
+                  select: (tx) =>
+                    tx
+                      .select({ id: workspaces.id, pause: sql`pg_sleep(0.05)` })
+                      .from(workspaces)
+                      .where(eq(workspaces.id, workspaceId)),
+                  run: (_tx, rows) => rows,
+                }),
+            );
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) {
+              expect(getPgErrorCode(result.error)).toBe(
+                PG_ERROR.QUERY_CANCELED,
+              );
+            }
+          },
+        });
+      });
+    });
+
     test("empty selected rows retain ordering without claiming physical coverage", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();

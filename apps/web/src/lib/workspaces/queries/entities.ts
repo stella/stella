@@ -85,6 +85,7 @@ type RawWorkspaceEntity = Omit<
     propertyId: string;
     entityId: string;
     content: WorkspaceField["content"];
+    aiSettlement?: WorkspaceField["aiSettlement"];
     ocrExportStatus?: WorkspaceField["ocrExportStatus"];
   }[];
   cellMetadata: {
@@ -105,6 +106,9 @@ export const toWorkspaceEntity = (
       entityId: toSafeId<"entity">(field.entityId),
       propertyId,
       content: field.content,
+      ...(field.aiSettlement === undefined
+        ? {}
+        : { aiSettlement: field.aiSettlement }),
       ocrExportStatus: field.ocrExportStatus ?? "unavailable",
     };
   }
@@ -544,6 +548,36 @@ const fetchAllWorkspaceFiles = async ({
 
   return files;
 };
+
+const FILE_SEARCH_PAGE_SIZE = 50;
+
+type WorkspaceFileSearchKey = { workspaceId: string; search: string };
+
+// One bounded page of the matter's files per request, filtered on the
+// server, so a picker never walks the whole matter before showing anything.
+// Under the files key, so whatever refreshes the file list refreshes it too.
+export const workspaceFileSearchOptions = ({
+  workspaceId,
+  search,
+}: WorkspaceFileSearchKey) =>
+  infiniteQueryOptions({
+    queryKey: [...entitiesKeys.files(workspaceId), "search", search.trim()],
+    queryFn: async ({ signal, pageParam }) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .files.get({
+          fetch: { signal },
+          query: {
+            limit: FILE_SEARCH_PAGE_SIZE,
+            ...(search.trim() !== "" && { search: search.trim() }),
+            ...(pageParam !== undefined && { cursor: pageParam }),
+          },
+        });
+      return unwrapApiResponse(response);
+    },
+    initialPageParam: stringCursorSeed(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
 
 // Fetches every file-bearing entity in bounded pages, with just the
 // columns the organizer needs. The organizer still operates across the

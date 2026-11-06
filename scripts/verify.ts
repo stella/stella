@@ -146,6 +146,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
     AFFECTED_FLAG: options.scope === "all" ? "" : "--affected",
     TURBO_SCM_BASE: options.base,
     RUNNER_TEMP: temporary,
+    GITHUB_WORKSPACE: repo,
     GITHUB_OUTPUT: path.join(temporary, "outputs"),
     GITHUB_ENV: path.join(temporary, "env"),
     GITHUB_STEP_SUMMARY: path.join(temporary, "summary"),
@@ -233,6 +234,19 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
           path.join(temporary, "autofix-added-paths"),
           `${added.join("\0")}\0`,
         );
+        const selected = Bun.spawnSync(
+          [
+            process.execPath,
+            "scripts/autofix-select-paths.ts",
+            path.join(temporary, "autofix-fix-paths"),
+            path.join(temporary, "autofix-format-paths"),
+            path.join(temporary, "autofix-lint-paths"),
+          ],
+          { cwd: repo, stdout: "inherit", stderr: "inherit" },
+        );
+        if (selected.exitCode !== 0) {
+          return selected.exitCode;
+        }
         const plan = Bun.spawnSync(
           [process.execPath, "scripts/autofix-plan.ts", "plan"],
           {

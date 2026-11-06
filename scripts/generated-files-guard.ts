@@ -385,15 +385,21 @@ export const generatorInputCensus = (
   root = ROOT.pathname,
 ): string[] => {
   const failures: string[] = [];
-  for (const generator of generators) {
-    const starts = [
+  const entries = generators.map((generator) => ({
+    generator,
+    starts: [
       ...new Set([
         ...commandModules(generator.write),
         ...commandModules(generator.prepare ?? []),
         ...commandModules(generator.check ?? generator.checkedWith ?? []),
       ]),
-    ];
-    const graph = buildImportGraph(root, starts);
+    ],
+  }));
+  const graph = buildImportGraph(
+    root,
+    entries.flatMap(({ starts }) => starts),
+  );
+  for (const { generator, starts } of entries) {
     const closure = new Set(
       starts.flatMap((start) => [...graph.closure(start)]),
     );

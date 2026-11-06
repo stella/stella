@@ -2,6 +2,7 @@ import {
   billingCodes,
   expenses,
   invoiceLines,
+  invoicePayments,
   invoices,
   numberSeries,
   numberSeriesAllocations,
@@ -207,6 +208,7 @@ export const relations = defineRelations(
     expenses,
     invoices,
     invoiceLines,
+    invoicePayments,
     matterCounters,
     documentCounters,
     documentReferenceCounters,
@@ -1086,6 +1088,16 @@ export const relations = defineRelations(
       lines: r.many.invoiceLines({
         from: r.invoices.id,
         to: r.invoiceLines.invoiceId,
+      }),
+      payments: r.many.invoicePayments({
+        from: r.invoices.id,
+        to: r.invoicePayments.invoiceId,
+      }),
+    },
+    invoicePayments: {
+      invoice: r.one.invoices({
+        from: r.invoicePayments.invoiceId,
+        to: r.invoices.id,
       }),
     },
     invoiceLines: {

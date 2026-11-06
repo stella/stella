@@ -89,7 +89,7 @@ test("successive write recordings retain declarations and timing-conditional pea
             responseSizes: Object.fromEntries(
               observedRequests.map((key) => [key, 1024]),
             ),
-            missingResponseSizeCounts: {},
+            responseSizeFailures: {},
           },
         ],
       ]),
@@ -116,7 +116,7 @@ test("only a validated declaration permits measured growth", () => {
         dbQueries: { "GET /old": 2 },
         missingDbQueryCounts: {},
         responseSizes: { "GET /old": 1024 },
-        missingResponseSizeCounts: {},
+        responseSizeFailures: {},
       },
     ],
   ]);
@@ -176,7 +176,7 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       dbQueries: {},
       missingDbQueryCounts: {},
       responseSizes: {},
-      missingResponseSizeCounts: {},
+      responseSizeFailures: {},
     },
   };
   expect(

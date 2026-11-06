@@ -52,6 +52,7 @@ import type {
 } from "@/lib/types";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
@@ -90,6 +91,8 @@ export const PropertyPopover = ({
 }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
+  const sortKind = PROPERTY_SORT_KINDS[property.content.type];
+  const displayName = usePropertyDisplayName();
   const groupScope = useGroupScope();
   const [isOpen, setIsOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -112,7 +115,7 @@ export const PropertyPopover = ({
     availablePageRowIdSet.has(row.original.entityId),
   );
   const pageStates = pageRows.map((row) =>
-    propertyAiCellState(row.original.fields[id]?.content),
+    propertyAiCellState(row.original.fields[id]),
   );
   const runMenuItems = aiColumnRunMenu(pageStates);
   const selectedRowIds = Object.keys(rowSelection);
@@ -127,7 +130,7 @@ export const PropertyPopover = ({
   );
   const scopedStates = tableRows
     .filter((row) => availableScopeRowIds.has(row.original.entityId))
-    .map((row) => propertyAiCellState(row.original.fields[id]?.content));
+    .map((row) => propertyAiCellState(row.original.fields[id]));
   const headerRunAction = aiColumnRunMenu(scopedStates).at(0);
   const headerRunTargetIds =
     headerRunAction === undefined
@@ -263,10 +266,10 @@ export const PropertyPopover = ({
   // dependencies (not the server snapshot) so two edits fired before
   // the query refetches don't drop one another's in-flight changes.
   const replaceDependency = (index: number, next: PropertyDependency) => {
-    if (property.tool.type !== "ai-model") {
+    const { content, tool } = property;
+    if (tool.type !== "ai-model" || content.type === "record") {
       return;
     }
-    const tool = property.tool;
     const nextDependencies = latestDependenciesRef.current.map(
       (dependency, i) => (i === index ? next : dependency),
     );
@@ -281,7 +284,7 @@ export const PropertyPopover = ({
           workspaceId,
           propertyId: id,
           name,
-          content: property.content,
+          content,
           tool: { ...tool, dependencies: nextDependencies },
         });
         detached(startWorkflow(), "property-popover.start-workflow");
@@ -363,7 +366,7 @@ export const PropertyPopover = ({
           <span className="min-w-0 flex-1">
             <PropertyPopoverTrigger
               disabled={updateProperty.isPending}
-              name={name}
+              name={displayName(property)}
               property={property}
             />
           </span>
@@ -409,12 +412,16 @@ export const PropertyPopover = ({
                 <Separator />
               </>
             )}
-            <SortProperty
-              column={header.column}
-              directions={ALL_SORT_DIRECTIONS_AVAILABLE}
-              kind={PROPERTY_SORT_KINDS[property.content.type]}
-            />
-            <Separator />
+            {sortKind !== null && (
+              <>
+                <SortProperty
+                  column={header.column}
+                  directions={ALL_SORT_DIRECTIONS_AVAILABLE}
+                  kind={sortKind}
+                />
+                <Separator />
+              </>
+            )}
             <div className="flex flex-col p-1">
               <PropertyConditions
                 dependencies={displayedDependencies}

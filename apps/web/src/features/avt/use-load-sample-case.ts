@@ -5,6 +5,7 @@ import { loadSampleCaseAndOpen } from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { entityCreateLocalInvalidationKeys } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
@@ -19,6 +20,7 @@ export const useLoadSampleCase = ({
   view: AvtWorkspaceView;
   workspaceId: string;
 }) => {
+  const submit = useIdempotentSubmit();
   const queryClient = useQueryClient();
   const updateView = useUpdateView(workspaceId);
   const t = useTranslations();
@@ -34,9 +36,13 @@ export const useLoadSampleCase = ({
       await loadSampleCaseAndOpen({
         load: async () =>
           unwrapApiResponse(
-            await listsApi["sample-case"].post({
-              // Used only when the matter has no file property yet.
-              filePropertyName: t("common.documents"),
+            await submit.run({
+              operation: `sample.${workspaceId}.create`,
+              body: {
+                // Used only when the matter has no file property yet.
+                filePropertyName: t("common.documents"),
+              },
+              send: async (body) => listsApi["sample-case"].post(body),
             }),
           ),
         openList: async (listId) =>

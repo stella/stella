@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
@@ -21,18 +23,30 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
-  REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
-  refreshCaseLawBrowseFacetsTask,
-} from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
-import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import {
+  RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+  reconcileCaseLawDecisionIdentifiersTask,
+} from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
+import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
+  BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+  createCaseLawParsedInputStateBackfill,
+} from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
+import {
+  FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+  foldCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-fold";
+import {
+  SEED_CASE_LAW_POPULATION_COUNTS_TASK,
+  seedCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
@@ -123,6 +137,11 @@ import {
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import {
+  ERASE_HOSTED_CUSTOMERS_TASK,
+  eraseHostedCustomers,
+  runHostedCustomerErasures,
+} from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
+import {
   REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
   redactHostedUsageWebhookEvents,
 } from "@/api/lib/scheduler/tasks/hosted-usage-webhook-retention";
@@ -170,6 +189,10 @@ import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import {
+  SWEEP_REQUEST_RECEIPTS_TASK,
+  sweepRequestReceipts,
+} from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import {
   RESET_REVIEW_ORGANIZATION_TASK,
   resetReviewOrganizationTask,
@@ -237,6 +260,8 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
+  [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
   [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
@@ -265,8 +290,11 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
-  [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
+  [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
+  [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
+    reconcileCaseLawDecisionIdentifiersTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
@@ -281,6 +309,10 @@ const SCHEDULER_TASKS = {
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK]:
+    createCaseLawParsedInputStateBackfill({
+      clock: () => Temporal.Now.instant().epochMilliseconds,
+    }),
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
@@ -310,6 +342,9 @@ const SCHEDULER_TASKS = {
 >;
 
 type SchedulerTaskRegistryOptions = {
+  hostedCustomerErasureDependencies?: Parameters<
+    typeof runHostedCustomerErasures
+  >[1];
   resetReviewOrganization?: SchedulerTask;
 };
 
@@ -355,6 +390,16 @@ export const createSchedulerTaskRegistry = (
             key: name,
             run: async () => {
               const task = typeof entry === "function" ? entry : entry.task;
+              if (
+                name === ERASE_HOSTED_CUSTOMERS_TASK &&
+                options.hostedCustomerErasureDependencies !== undefined
+              ) {
+                await runHostedCustomerErasures(
+                  context,
+                  options.hostedCustomerErasureDependencies,
+                );
+                return undefined;
+              }
               const outcome = await task(context);
               if (outcome === undefined) {
                 return undefined;

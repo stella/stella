@@ -27,17 +27,18 @@
 import { panic } from "better-result";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { loadGateHealthConfig } from "../env-online-index";
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
 import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
   OnlineMigrationOutcome,
-  OnlineRepair,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-delete-receipt";
@@ -112,7 +113,7 @@ const repairFrom = async (
     tableName: TABLE_NAME,
     initialSize: BATCH,
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 60_000,
     },
@@ -174,7 +175,8 @@ type RepairRuntimeOptions = {
 
 export const createCorpusProjectionDeleteReceiptRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20260908140000_corpus_projection_delete_task_instant",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({

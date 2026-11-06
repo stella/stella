@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
 import type { DecisionDocketGrammar } from "./decision-docket-grammar";
@@ -40,11 +40,31 @@ const canonicalDockets = [
   "RV/7500368/2026",
 ] as const;
 
+/** ECLIs as their courts publish them, mixed-case ordinals included. */
 const eclis = [
   "ECLI:CZ:NS:2014:22.CDO.2653.2012.1",
+  "ECLI:CZ:NSS:2010:3.AFS.41.2008.98",
+  "ECLI:CZ:US:2025:Pl.US.32.25.1",
+  "ECLI:CZ:US:2020:3.US.1255.18.2",
   "ECLI:EU:C:2014:317",
   "ECLI:SK:NSSR:2020:1234567.1",
+  "ECLI:SK:USSR:2019:PL.US.12.2018.1",
 ] as const;
+
+/** The same identifier with each letter's case chosen independently. */
+const recasedOf = (identifier: string) =>
+  fc
+    .array(fc.boolean(), {
+      minLength: identifier.length,
+      maxLength: identifier.length,
+    })
+    .map((upper) =>
+      Array.from(identifier, (character, index) =>
+        upper[index] === true
+          ? character.toUpperCase()
+          : character.toLowerCase(),
+      ).join(""),
+    );
 
 /** A publisher's or a typist's spelling of the same identifier. */
 const spellingOf = (identifier: string) =>
@@ -66,7 +86,8 @@ const spellingOf = (identifier: string) =>
 
 describe("reading a case-law box entry", () => {
   test("every docket spelling the courts and typists produce is an identifier", () => {
-    fc.assert(
+    assertProperty(
+      "every docket spelling the courts and typists produce is an identifier",
       fc.property(
         fc.constantFrom(...canonicalDockets).chain(spellingOf),
         (entry) => {
@@ -78,17 +99,18 @@ describe("reading a case-law box entry", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("an ECLI in any spacing or case is an ECLI", () => {
-    fc.assert(
+    assertProperty(
+      "an ECLI in any spacing or case is an ECLI",
       fc.property(fc.constantFrom(...eclis).chain(spellingOf), (entry) => {
         const intent = parseDecisionQuery(entry);
         expect(intent).toMatchObject({ type: "identifier", kind: "ecli" });
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -125,12 +147,13 @@ describe("reading a case-law box entry", () => {
 
   test("prose is text, verbatim", () => {
     const word = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,12}$/u);
-    fc.assert(
+    assertProperty(
+      "prose is text, verbatim",
       fc.property(fc.array(word, { minLength: 2, maxLength: 6 }), (words) => {
         const text = words.join(" ");
         expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
       }),
-      propertyConfig(),
+      {},
     );
     expect(parseDecisionQuery("nájemní smlouva výpověď")).toEqual({
       type: "text",
@@ -220,7 +243,8 @@ describe("reading a reporter citation entry", () => {
   });
 
   test("no docket the corpus's grammars read is taken for a reporter citation", () => {
-    fc.assert(
+    assertProperty(
+      "no docket the corpus's grammars read is taken for a reporter citation",
       fc.property(
         fc.constantFrom(...canonicalDockets).chain(spellingOf),
         (entry) => {
@@ -229,7 +253,7 @@ describe("reading a reporter citation entry", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -243,8 +267,30 @@ const hit = (caseNumber: string, ecli: string | null = null) => ({
 });
 
 describe("the hits that are the named decision", () => {
+  test("the Court of Justice's short ECLI names the decision its full ECLI names", () => {
+    for (const entry of ["EU:C:2013:791", "eu:c:2013:791", " EU:C:2013:791 "]) {
+      const intent = identityOf(entry);
+      expect(intent.kind).toBe("ecli");
+      expect(
+        exactDecisionMatches(intent, [
+          hit("C-159/12", "ECLI:EU:C:2013:791"),
+          hit("C-159/12", "ECLI:EU:C:2013:529"),
+        ]),
+      ).toEqual([hit("C-159/12", "ECLI:EU:C:2013:791")]);
+    }
+    expect(
+      parseDecisionQuery("viz rozsudek Venturini, EU:C:2013:791"),
+    ).toMatchObject({ type: "identifier", kind: "ecli" });
+    // Not every colon-joined token is one: a time or a ratio stays text.
+    expect(parseDecisionQuery("EU:X:2013:791")).toEqual({
+      type: "text",
+      text: "EU:X:2013:791",
+    });
+  });
+
   test("spacing, case, dash style and the sheet number do not change identity", () => {
-    fc.assert(
+    assertProperty(
+      "spacing, case, dash style and the sheet number do not change identity",
       fc.property(
         fc
           .constantFrom(...canonicalDockets)
@@ -256,13 +302,34 @@ describe("the hits that are the named decision", () => {
           ]);
         },
       ),
-      propertyConfig(),
+      {},
     );
     expect(
       exactDecisionMatches(identityOf("21 Cdo 470/2017-28"), [
         hit("21 Cdo 470/2017"),
       ]),
     ).toHaveLength(1);
+  });
+
+  test("an ECLI names its decision in any letter case", () => {
+    assertProperty(
+      "an ECLI names its decision in any letter case",
+      fc.property(
+        fc
+          .constantFrom(...eclis)
+          .chain((ecli) => fc.tuple(fc.constant(ecli), recasedOf(ecli))),
+        ([stored, typed]) => {
+          const named = hit("1 As 1/2000", stored);
+          expect(
+            exactDecisionMatches(identityOf(typed), [
+              named,
+              hit("2 As 2/2000", "ECLI:CZ:NSS:2000:2.AS.2.2000.1"),
+            ]),
+          ).toEqual([named]);
+        },
+      ),
+      {},
+    );
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {
@@ -490,21 +557,24 @@ describe("an entry finds its decision within its own jurisdiction", () => {
         ),
       );
 
-    test(`${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`, () => {
-      fc.assert(
-        fc.property(
-          fc.oneof(constitutionalPair, ordinaryPair),
-          ([typed, stored, other]) => {
-            fc.pre(accepted(typed) && accepted(stored));
-            const hits = [hit(typed), hit(stored), hit(other)];
-            expect(
-              exactDecisionMatches(identityOf(typed, grammar), hits),
-              `${typed} ~ ${stored}`,
-            ).toEqual([hit(typed), hit(stored)]);
-          },
-        ),
-        propertyConfig(),
-      );
+    describe(jurisdiction, () => {
+      test("every accepted spelling matches itself and every stored spelling of it", () => {
+        assertProperty(
+          "every accepted spelling matches itself and every stored spelling of it",
+          fc.property(
+            fc.oneof(constitutionalPair, ordinaryPair),
+            ([typed, stored, other]) => {
+              fc.pre(accepted(typed) && accepted(stored));
+              const hits = [hit(typed), hit(stored), hit(other)];
+              expect(
+                exactDecisionMatches(identityOf(typed, grammar), hits),
+                `${typed} ~ ${stored}`,
+              ).toEqual([hit(typed), hit(stored)]);
+            },
+          ),
+          {},
+        );
+      });
     });
   }
 
