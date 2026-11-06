@@ -125,7 +125,7 @@ const TYPESCRIPT_TOOLCHAIN = {
   oxlint: "1.89.0",
   oxlintConfig: "1.7.0",
   tsgolint: "7.0.2005",
-  tsrs: "0.18.0-ts7.1.0-dev.20260929",
+  tsrs: "0.20.1-ts7.1.0-beta",
   typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
 } as const;
