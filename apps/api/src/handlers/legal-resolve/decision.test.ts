@@ -257,7 +257,7 @@ describe("decision legal resolution", () => {
             result.status !== "resolved" ||
             result.document.kind !== "decision"
           ) {
-            return panic("Expected a resolved decision");
+            panic("Expected a resolved decision");
           }
           expect(result.document.text).toEqual(
             served === null
