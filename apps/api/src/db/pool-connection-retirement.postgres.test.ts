@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import { envBaseServerSchema } from "@/api/env-base-schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 /**
@@ -14,7 +16,11 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
-const LIFETIME_S = 1;
+// Read through the setting deployed pools take, so its unit stays seconds here.
+const LIFETIME_S = v.parse(
+  envBaseServerSchema.DATABASE_POOL_MAX_LIFETIME_S,
+  "1",
+);
 const PAST_LIFETIME_S = LIFETIME_S * 2;
 
 const requiredDatabaseUrl = (): string =>

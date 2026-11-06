@@ -1,4 +1,5 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import type { ESTree } from "@oxlint/plugins";
 // A SQL statement whose text changes with its data leaves a prepared plan on
 // its connection for every length it ever sees: Bun keeps each prepared
 // statement until the connection retires. `VALUES ${rows}` is that statement,
@@ -15,7 +16,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import baseline from "./no-variable-arity-values-baseline.json" with { type: "json" };
 import { isAstNode, repoRelativeFilename } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
 
 const ENDS_IN_VALUES = /\bVALUES\s*$/iu;
 
@@ -49,12 +49,12 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const sites: AstNode[] = [];
+        const sites: ESTree.TemplateLiteral[] = [];
         return {
           before() {
             sites.length = 0;
           },
-          TemplateLiteral(node: AstNode) {
+          TemplateLiteral(node) {
             const quasis: unknown = node.quasis;
             const expressions: unknown = node.expressions;
             if (!Array.isArray(quasis) || !Array.isArray(expressions)) {
@@ -66,7 +66,7 @@ export default eslintCompatPlugin({
               }
             }
           },
-          "Program:exit"(program: AstNode) {
+          "Program:exit"(program) {
             const file = repoRelativeFilename(context);
             // One-off scripts and tests hold no long-lived pooled connection.
             if (/(?:^|\/)(?:scripts|tests|evals)\//u.test(file)) {

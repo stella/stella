@@ -31,6 +31,9 @@ export const BASELINE_PATHS = {
   rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** .oxlint-plugins/no-variable-arity-values.ts */
+  noVariableArityValues:
+    ".oxlint-plugins/no-variable-arity-values-baseline.json",
   /** scripts/check-write-contracts.ts */
   writeContracts: "scripts/write-contract-routes-baseline.json",
   /** scripts/check-aggregate-mutations.ts */
