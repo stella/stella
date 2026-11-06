@@ -4026,7 +4026,8 @@
       "decisionFailed": "Nie udało się zapisać decyzji",
       "decisions": {
         "accepted": "Zaakceptowano",
-        "dismissed": "Odrzucono"
+        "dismissed": "Odrzucono",
+        "reviewed": "Zweryfikowano"
       },
       "description": "Wybierz przygotowany playbook, dokumenty referencyjne lub oba.",
       "documentChanged": "Ten dokument zmienił się po tej weryfikacji.",

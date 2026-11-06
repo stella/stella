@@ -4026,7 +4026,8 @@
       "decisionFailed": "Lēmumu neizdevās saglabāt",
       "decisions": {
         "accepted": "Pieņemts",
-        "dismissed": "Noraidīts"
+        "dismissed": "Noraidīts",
+        "reviewed": "Pārbaudīts"
       },
       "description": "Izvēlieties sagatavotu pārbaudes ceļvedi, atsauces dokumentus vai abus.",
       "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",

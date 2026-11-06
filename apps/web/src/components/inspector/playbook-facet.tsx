@@ -99,7 +99,6 @@ import {
   saveRunAsPlaybook,
 } from "@/components/ai-suggestions/document-review-queries";
 import type {
-  DecidedReviewDecision,
   DocumentReviewDecision,
   DocumentReviewFindingRow,
   DocumentReviewRunStatus,
@@ -204,6 +203,7 @@ import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
   buildRunSummarySentence,
+  decisionLabel,
   firstSentence,
   isReviewDeviation,
   isUndecidedDeviation,
@@ -4006,7 +4006,12 @@ const ReviewResultCard = ({
                 />
                 {item.decision !== REVIEW_DECISION.OPEN && (
                   <span className={POSITION_HEADER_META_CLASS}>
-                    {t(DECISION_LABEL[item.decision])}
+                    {t(
+                      decisionLabel({
+                        decision: item.decision,
+                        suggestionId: item.suggestionId,
+                      }),
+                    )}
                   </span>
                 )}
                 <span className={cn(POSITION_HEADER_META_CLASS, "text-end")}>
@@ -4235,14 +4240,6 @@ const WhyDisclosure = ({
     </div>
   );
 };
-
-/** How a recorded decision reads on the card. Total over the decisions a
- *  reviewer can take, so a new disposition must state its label here rather
- *  than rendering as nothing. */
-const DECISION_LABEL = {
-  accepted: "inspector.review.decisions.accepted",
-  dismissed: "inspector.review.decisions.dismissed",
-} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
 
 type ReviewCardActionsProps = {
   item: ReviewResultItem;

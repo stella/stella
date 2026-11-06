@@ -3344,6 +3344,7 @@
   "inspector.review.decisionFailed": "Couldn't record your decision",
   "inspector.review.decisions.accepted": "Accepted",
   "inspector.review.decisions.dismissed": "Dismissed",
+  "inspector.review.decisions.reviewed": "Reviewed",
   "inspector.review.description": "Choose an authored playbook, reference documents, or both.",
   "inspector.review.documentChanged": "This document changed after this review.",
   "inspector.review.export.counterparty": "Download for counterparty",

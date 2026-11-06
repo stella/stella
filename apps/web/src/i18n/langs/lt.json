@@ -4026,7 +4026,8 @@
       "decisionFailed": "Nepavyko įrašyti sprendimo",
       "decisions": {
         "accepted": "Priimta",
-        "dismissed": "Atmesta"
+        "dismissed": "Atmesta",
+        "reviewed": "Peržiūrėta"
       },
       "description": "Pasirinkite parengtą peržiūros vadovą, referencinius dokumentus arba abu.",
       "documentChanged": "Šis dokumentas pasikeitė po šios peržiūros.",

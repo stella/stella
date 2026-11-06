@@ -4026,7 +4026,8 @@
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
         "accepted": "مقبول",
-        "dismissed": "مستبعد"
+        "dismissed": "مستبعد",
+        "reviewed": "تمت المراجعة"
       },
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",

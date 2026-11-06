@@ -4026,7 +4026,8 @@
       "decisionFailed": "Couldn't record your decision",
       "decisions": {
         "accepted": "Accepted",
-        "dismissed": "Dismissed"
+        "dismissed": "Dismissed",
+        "reviewed": "Reviewed"
       },
       "description": "Choose an authored playbook, reference documents, or both.",
       "documentChanged": "This document changed after this review.",

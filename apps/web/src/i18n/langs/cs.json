@@ -4026,7 +4026,8 @@
       "decisionFailed": "Rozhodnutí se nepodařilo uložit",
       "decisions": {
         "accepted": "Přijato",
-        "dismissed": "Zamítnuto"
+        "dismissed": "Zamítnuto",
+        "reviewed": "Zkontrolováno"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
       "documentChanged": "Dokument se od této kontroly změnil.",

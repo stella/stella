@@ -4026,7 +4026,8 @@
       "decisionFailed": "Impossible d’enregistrer votre décision",
       "decisions": {
         "accepted": "Accepté",
-        "dismissed": "Écarté"
+        "dismissed": "Écarté",
+        "reviewed": "Révisé"
       },
       "description": "Choisissez un playbook rédigé, des documents de référence ou les deux.",
       "documentChanged": "Ce document a changé depuis cette révision.",

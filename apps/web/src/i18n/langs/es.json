@@ -4026,7 +4026,8 @@
       "decisionFailed": "No se pudo registrar tu decisión",
       "decisions": {
         "accepted": "Aceptado",
-        "dismissed": "Descartado"
+        "dismissed": "Descartado",
+        "reviewed": "Revisado"
       },
       "description": "Elige un playbook elaborado, documentos de referencia o ambos.",
       "documentChanged": "Este documento cambió después de esta revisión.",

@@ -10,7 +10,11 @@
 import type { ReviewFlag } from "@stll/api-contract";
 
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
-import type { ReviewFinding } from "@/components/ai-suggestions/document-review-queries";
+import { REVIEW_DECISION } from "@/components/ai-suggestions/document-review-queries";
+import type {
+  DecidedReviewDecision,
+  ReviewFinding,
+} from "@/components/ai-suggestions/document-review-queries";
 import { isDecisionSettled } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PinnedPosition,
@@ -20,6 +24,7 @@ import {
   isFlaggedVerdict,
   SEVERITY_ORDER,
 } from "@/components/ai-suggestions/review-verdict";
+import type { TranslationKey } from "@/i18n/types";
 
 export type ReviewResultItem = RestoredReviewFinding & {
   /** The position this finding was graded against, or `null` when the run's
@@ -63,6 +68,29 @@ export const buildReviewResultItems = ({
  * that leaves that side worse off needs the reviewer whatever its verdict.
  * Otherwise the verdict decides.
  */
+/** How a recorded decision reads on the card. Total over the decisions a
+ *  reviewer can take, so a new disposition must state its label here rather
+ *  than rendering as nothing. */
+const DECISION_LABEL = {
+  accepted: "inspector.review.decisions.accepted",
+  reviewed: "inspector.review.decisions.reviewed",
+  dismissed: "inspector.review.decisions.dismissed",
+} as const satisfies Record<DecidedReviewDecision | "reviewed", TranslationKey>;
+
+type DecisionLabelArgs = {
+  decision: DecidedReviewDecision;
+  suggestionId: ReviewResultItem["suggestionId"];
+};
+
+/** Accepting a finding with no proposed change only records that it was
+ *  looked at, which is what its button says, so the card says the same. */
+export const decisionLabel = ({ decision, suggestionId }: DecisionLabelArgs) =>
+  DECISION_LABEL[
+    decision === REVIEW_DECISION.ACCEPTED && suggestionId === null
+      ? "reviewed"
+      : decision
+  ];
+
 export const isReviewDeviation = ({ finding }: ReviewResultItem): boolean => {
   if (finding.impact === "unfavourable") {
     return true;

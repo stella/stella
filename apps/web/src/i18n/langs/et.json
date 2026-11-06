@@ -4026,7 +4026,8 @@
       "decisionFailed": "Otsust ei õnnestunud salvestada",
       "decisions": {
         "accepted": "Aktsepteeritud",
-        "dismissed": "Kõrvale jäetud"
+        "dismissed": "Kõrvale jäetud",
+        "reviewed": "Üle vaadatud"
       },
       "description": "Valige koostatud kontrolljuhend, võrdlusdokumendid või mõlemad.",
       "documentChanged": "See dokument on pärast seda ülevaatust muutunud.",

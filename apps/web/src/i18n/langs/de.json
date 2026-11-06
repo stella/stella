@@ -4026,7 +4026,8 @@
       "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
       "decisions": {
         "accepted": "Angenommen",
-        "dismissed": "Verworfen"
+        "dismissed": "Verworfen",
+        "reviewed": "Geprüft"
       },
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",

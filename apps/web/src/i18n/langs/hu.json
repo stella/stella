@@ -4026,7 +4026,8 @@
       "decisionFailed": "A döntést nem sikerült rögzíteni",
       "decisions": {
         "accepted": "Elfogadva",
-        "dismissed": "Elvetve"
+        "dismissed": "Elvetve",
+        "reviewed": "Ellenőrizve"
       },
       "description": "Válasszon egy kidolgozott playbookot, referenciadokumentumokat vagy mindkettőt.",
       "documentChanged": "A dokumentum az ellenőrzés óta megváltozott.",
