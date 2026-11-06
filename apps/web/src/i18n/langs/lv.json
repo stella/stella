@@ -1688,6 +1688,7 @@
       "errorLimitReached": "Programmēšanas aģents jūsu datorā ir sasniedzis lietojuma limitu. Mēģiniet vēlreiz, kad limits tiks atjaunots.",
       "errorNeedsLogin": "Programmēšanas aģents jūsu datorā prasa pieteikties vēlreiz. Piesakieties lietotnē stella desktop un mēģiniet vēlreiz.",
       "errorUnavailable": "Jūsu dators pārtrauca apstrādāt šo atbildi. Pārliecinieties, ka stella desktop ir atvērts un savienots, un mēģiniet vēlreiz.",
+      "filesNotShared": "Faili, kurus neizdevās kopīgot, paliek jūsu datorā: {fileNames}",
       "onThisComputer": "{harness} šajā datorā",
       "permissionAskDescription": "Tērzēšanas mapes failus rediģē pats; par visu citu jautā.",
       "permissionAutoDescription": "To, ko uzskata par drošu, dara pats; par pārējo jautā.",

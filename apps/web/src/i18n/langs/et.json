@@ -1688,6 +1688,7 @@
       "errorLimitReached": "Sinu arvutis töötav programmeerimisagent jõudis kasutuslimiidini. Proovi uuesti, kui limiit lähtestub.",
       "errorNeedsLogin": "Sinu arvutis töötav programmeerimisagent vajab uuesti sisselogimist. Logi sisse stella desktopi kaudu ja proovi uuesti.",
       "errorUnavailable": "Sinu arvuti lõpetas selle vastuse töötlemise. Veendu, et stella desktop on avatud ja ühendatud, ning proovi uuesti.",
+      "filesNotShared": "Failid, mida ei õnnestunud jagada, jäävad sinu arvutisse: {fileNames}",
       "onThisComputer": "{harness} selles arvutis",
       "permissionAskDescription": "Muudab vestluse kaustas olevaid faile ise; kõige muu kohta küsib.",
       "permissionAutoDescription": "Teeb ise seda, mida peab ohutuks; ülejäänu kohta küsib.",

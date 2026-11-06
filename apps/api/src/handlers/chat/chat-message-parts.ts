@@ -342,6 +342,19 @@ export const isChatAttachmentPart = (
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
 
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
+
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
 
@@ -1861,6 +1874,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&

@@ -1,5 +1,7 @@
 import type { ChatPersistedState, UIMessage } from "@tanstack/ai-client";
 
+import { chatLocalRunFilePartsOf } from "@stll/api-contract/chat-run-target";
+
 import type {
   ChatClientTools,
   PersistedChatMessage,
@@ -24,6 +26,23 @@ type ClientPart = UIMessage<ChatClientTools>["parts"][number];
 const isBlankText = (part: ClientPart): boolean =>
   part.type === "text" && part.content.trim().length === 0;
 
+/**
+ * A file a local run handed back rides the live stream as the answer's
+ * metadata and is stored as a part. The page reads parts only, so the chip is
+ * the same one live, on a rejoin and after a reload.
+ */
+const withLocalRunFileParts = (
+  message: PersistedChatMessage,
+): PersistedChatMessage => {
+  if (message.role !== "assistant") {
+    return message;
+  }
+  const files = chatLocalRunFilePartsOf(message.metadata, message.parts);
+  return files.length === 0
+    ? message
+    : { ...message, parts: [...message.parts, ...files] };
+};
+
 const withoutDroppedParts = (
   message: UIMessage<ChatClientTools>,
   isDropped: (part: ClientPart) => boolean,
@@ -41,7 +60,8 @@ const withoutDroppedParts = (
 /** One client message as the page holds it, computed afresh. */
 export const toPersistedChatMessage = (
   message: UIMessage<ChatClientTools>,
-): PersistedChatMessage => withoutDroppedParts(message, isBlankText);
+): PersistedChatMessage =>
+  withLocalRunFileParts(withoutDroppedParts(message, isBlankText));
 
 /**
  * The client never changes a message or part object in place: it replaces
@@ -75,7 +95,9 @@ export const toPersistedChatMessages = (
     if (known !== undefined) {
       return known;
     }
-    const persisted = withoutDroppedParts(message, isDroppedPart);
+    const persisted = withLocalRunFileParts(
+      withoutDroppedParts(message, isDroppedPart),
+    );
     persistedByClientMessage.set(message, persisted);
     return persisted;
   });

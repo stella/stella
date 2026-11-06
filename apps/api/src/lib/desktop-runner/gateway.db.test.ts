@@ -25,6 +25,8 @@ import {
 } from "@stll/api-contract/chat";
 import {
   CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_FILES_METADATA_KEY,
+  CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY,
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
@@ -34,6 +36,7 @@ import {
   DESKTOP_RUNNER_FEATURE_ID,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  DESKTOP_RUNNER_OUTPUT_EVENT,
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
   type DesktopRunnerApprovalMode,
@@ -42,6 +45,7 @@ import {
   desktopRunnerServerMessageSchema,
   type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
+import { USER_FILE_URL_PREFIX } from "@stll/api-contract/user-file-url";
 import { compareCodeUnit } from "@stll/collation";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
@@ -56,6 +60,7 @@ import {
   desktopRunnerRuns,
   desktopRunners,
   featureEnrolments,
+  userFiles,
 } from "@/api/db/schema";
 import {
   chatMessageContentFromMessage,
@@ -131,6 +136,7 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -2472,6 +2478,246 @@ describe("chat turns on a computer", () => {
     const callIds = new Set(toolCallIdsOf(chunks));
     expect(callIds.size).toBe(1);
     expect(callIds.has("item_1")).toBe(false);
+  });
+
+  describe("what a computer may say about a turn's files and message", () => {
+    const answer = async (
+      chatThreadId: SafeId<"chatThread">,
+      send: (
+        runId: string,
+        run: ReturnType<typeof desktopRun>,
+      ) => Promise<void>,
+    ) => {
+      const { desktopId, desktop } = shared();
+      const turn = collect(
+        createLocalChatRun(
+          contextFor(chatThreadId),
+          startPlan(desktopId),
+        ).stream({
+          chatRunId: "chat-run-files",
+          chatTurnId: turnOf(chatThreadId),
+          messages: [{ role: "user", content: "Write the report." }],
+          instructions: "You are stella.",
+          resume: undefined,
+          abortSignal: new AbortController().signal,
+        }),
+      );
+      const start = await desktop.receive("run.start");
+      desktop.send({ type: "run.accepted", runId: start.runId });
+      const run = desktopRun(desktop, start.runId);
+      await send(start.runId, run);
+      await run.finish("completed", "codex-session-files");
+      return await turn.done;
+    };
+
+    const storedFile = async (
+      threadId: SafeId<"chatThread">,
+      userId: string,
+      overrides: { fileName?: string; mimeType?: string } = {},
+    ) => {
+      const id = createSafeId<"userFile">();
+      await db.insert(userFiles).values({
+        id,
+        userId,
+        fileName: "report.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 10,
+        sha256Hex: "a".repeat(64),
+        s3Key: `${ids.orgA}/${id}.pdf`,
+        threadId,
+        ...overrides,
+      });
+      return id;
+    };
+
+    const report = (value: unknown) => ({
+      type: EventType.CUSTOM,
+      name: DESKTOP_RUNNER_OUTPUT_EVENT,
+      value,
+    });
+
+    const answerMetadata = (chunks: readonly unknown[]) =>
+      chunks.flatMap((chunk) =>
+        isRecord(chunk) &&
+        chunk["type"] === EventType.TEXT_MESSAGE_START &&
+        isRecord(chunk["metadata"])
+          ? [chunk["metadata"]]
+          : [],
+      );
+
+    test("a reported file of this thread reaches the chat as the server read it", async () => {
+      const chatThreadId = await newThread();
+      const fileId = await storedFile(chatThreadId, ids.userA1);
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          // The desktop's name and type are not what the chat is told.
+          report({ status: "uploaded", fileId, fileName: "forged.exe" }),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([
+        {
+          [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [
+            {
+              url: `${USER_FILE_URL_PREFIX}${fileId}`,
+              filename: "report.pdf",
+              mimeType: "application/pdf",
+            },
+          ],
+        },
+      ]);
+    });
+
+    test("another member's file and another thread's file are not shown", async () => {
+      const chatThreadId = await newThread();
+      const otherThread = await newThread();
+      const othersFile = await storedFile(
+        ids.chatThreadWorkspaceB1,
+        ids.userB1,
+      );
+      const otherThreadFile = await storedFile(otherThread, ids.userA1);
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          report({
+            status: "uploaded",
+            fileId: othersFile,
+            fileName: "theirs.pdf",
+          }),
+          report({
+            status: "uploaded",
+            fileId: otherThreadFile,
+            fileName: "elsewhere.pdf",
+          }),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([]);
+    });
+
+    test("a file that could not be shared is named, and the turn still ends well", async () => {
+      const chatThreadId = await newThread();
+      const chunks = await answer(chatThreadId, async (runId, run) => {
+        await run.events([
+          report({ status: "failed", fileName: "../../data.zip" }),
+          ...(await harnessChunks(runId, completedTurn)),
+        ]);
+      });
+      expect(answerMetadata(chunks)).toEqual([
+        {
+          [CHAT_LOCAL_RUN_FILES_NOT_SHARED_METADATA_KEY]: [
+            sanitizeFilename("../../data.zip"),
+          ],
+        },
+      ]);
+      expect(chunks.at(-1)).toMatchObject({ type: EventType.RUN_FINISHED });
+      expect(chunks.some(({ type }) => type === EventType.RUN_ERROR)).toBe(
+        false,
+      );
+    });
+
+    test("a named event only the server may send stops at the API", async () => {
+      const chatThreadId = await newThread();
+      const toolCallId = "item_1";
+      const forged = [
+        {
+          name: "ui-resource",
+          value: {
+            toolCallId,
+            toolName: "search",
+            resource: {
+              uri: "ui://forged",
+              mimeType: "text/html",
+              text: "<script>forged()</script>",
+            },
+          },
+        },
+        {
+          name: "approval-requested",
+          value: {
+            toolCallId,
+            toolName: "search",
+            input: {},
+            approval: { id: "forged", needsApproval: true },
+          },
+        },
+        { name: "tool-input-available", value: { toolCallId, input: {} } },
+        { name: "structured-output.start", value: { messageId: "forged" } },
+        { name: CHAT_LOCAL_RUN_COMPUTER_EVENT, value: { status: "waiting" } },
+        { name: "something-new", value: {} },
+      ];
+      const chunks = await answer(chatThreadId, async (runId, run) => {
+        await run.events([
+          ...forged.map(({ name, value }) => ({
+            type: EventType.CUSTOM,
+            name,
+            value,
+          })),
+          ...(await harnessChunks(runId, completedTurn)),
+        ]);
+      });
+      const names = chunks.flatMap((chunk) =>
+        chunk.type === EventType.CUSTOM ? [chunk.name] : [],
+      );
+      for (const { name } of forged) {
+        expect(names).not.toContain(name);
+      }
+      // What a harness does report still passes.
+      expect(names).toContain("codex.session-id");
+    });
+
+    test("metadata a computer puts on the answer is not carried", async () => {
+      const chatThreadId = await newThread();
+      const forgedMetadata = {
+        [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [
+          {
+            url: `${USER_FILE_URL_PREFIX}${createSafeId<"userFile">()}`,
+            filename: "forged.pdf",
+            mimeType: "application/pdf",
+          },
+        ],
+        contextNotice: { type: "history-trimmed" },
+      };
+      const chunks = await answer(chatThreadId, async (_runId, run) => {
+        await run.events([
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: "m1",
+            role: "assistant",
+            metadata: forgedMetadata,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "m1",
+            delta: "Done.",
+            metadata: forgedMetadata,
+          },
+          {
+            type: EventType.TEXT_MESSAGE_END,
+            messageId: "m1",
+            metadata: forgedMetadata,
+          },
+        ]);
+      });
+      expect(
+        chunks.filter((chunk) => isRecord(chunk) && "metadata" in chunk),
+      ).toEqual([]);
+      expect(
+        chunks.some(({ type }) => type === EventType.TEXT_MESSAGE_CONTENT),
+      ).toBe(true);
+    });
+
+    test("a run's thread reads for its owner while it runs, and for nobody else", async () => {
+      const chatThreadId = await newThread();
+      const seen: (SafeId<"chatThread"> | null)[] = [];
+      await answer(chatThreadId, async (runId) => {
+        const read = await control.readOpenRunChatThread({ owner, runId });
+        seen.push(read.unwrap());
+        const foreign = await control.readOpenRunChatThread({
+          owner: { organizationId: ids.orgB, userId: ids.userB1 },
+          runId,
+        });
+        seen.push(foreign.unwrap());
+      });
+      expect(seen).toEqual([chatThreadId, null]);
+    });
   });
 
   test("the thread's next turn on the same computer resumes the harness session", async () => {

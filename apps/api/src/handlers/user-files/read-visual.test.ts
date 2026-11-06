@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 
+import { userFiles } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -96,3 +97,19 @@ test.each(["Ordinary text attachment", JSON.stringify({ title: "Example" })])(
     });
   },
 );
+
+test("never renders a run's HTML output, even when it reads as a generated view", async () => {
+  const fileId = createSafeId<"userFile">();
+  await database.insert(userFiles).values({
+    id: fileId,
+    userId: ids.userA1,
+    fileName: "report.html",
+    mimeType: "text/html",
+    sizeBytes: 10,
+    sha256Hex: "e".repeat(64),
+    s3Key: `${ids.orgA}/${fileId}.html`,
+    threadId: ids.chatThreadWorkspaceA1,
+  });
+  const response = await read(fileId);
+  expect(response).toMatchObject({ status: 404 });
+});

@@ -1262,6 +1262,145 @@ describe("harness holder over its socket", () => {
     await host.shutdown();
   });
 
+  describe("files a turn writes to its outputs folder", () => {
+    /**
+     * A real host and fake harness against a real listener standing in for the
+     * API. The turn pauses on an approval: what is planted during the pause
+     * was written by the turn, as far as the folder can tell.
+     */
+    const runWritingOutputs = async (
+      answer: (request: Request) => Promise<Response>,
+    ) => {
+      const root = mkdtempSync(path.join(tmpdir(), "stella-sidecar-outputs-"));
+      const configDir = path.join(root, "codex-home");
+      const workspaceDir = path.join(root, "workspace");
+      const outputs = path.join(workspaceDir, "outputs");
+      mkdirSync(configDir);
+      mkdirSync(outputs, { recursive: true });
+      writeFileSync(path.join(outputs, "earlier.txt"), "an earlier turn");
+      const api = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: answer });
+      const apiOrigin = `http://127.0.0.1:${String(api.port)}`;
+      const written: SidecarHostOutput[] = [];
+      const { promise: finished, resolve } =
+        Promise.withResolvers<
+          Extract<SidecarHostOutput, { type: "run.finished" }>
+        >();
+      const { promise: paused, resolve: pause } =
+        Promise.withResolvers<string>();
+      const host = new SidecarHost({
+        send: (message) => {
+          written.push(message);
+          if (message.type === "run.approval_request") {
+            pause(message.requestId);
+          }
+          if (message.type === "run.finished") {
+            resolve(message);
+          }
+          return true;
+        },
+        log: () => {},
+        environment: {
+          PATH: process.env["PATH"] ?? "",
+          FAKE_HARNESS_LOG: path.join(root, "fake.log"),
+        },
+        processGrantTimeoutMs: WAIT_MS,
+      });
+      cleanups.push(async () => {
+        await host.shutdown();
+        await api.stop(true);
+        rmSync(root, { recursive: true, force: true });
+      });
+      host.configure("1.4.0", apiOrigin);
+      const runId = crypto.randomUUID();
+      host.handle({
+        type: "run.start",
+        runId,
+        threadId: "thread-1",
+        harness: "codex",
+        executable: fakeCodex(root, "approval"),
+        configDir,
+        launch: PLAIN_LAUNCH,
+        workspaceDir,
+        cacheDir: path.join(root, "agent-package-cache"),
+        model: "gpt-test",
+        instructions: "Use the stella MCP server.",
+        messages: [{ role: "user", content: "Write the report." }],
+        attachments: [],
+        harnessSessionId: null,
+        policy: { network: "open", fs: "workspace", approvals: "ask" },
+        mcp: {
+          serverName: "stella",
+          url: `${apiOrigin}/mcp`,
+          token: RUN_TOKEN,
+          expiresAt: "2026-10-28T12:00:00.000Z",
+        },
+      });
+      const requestId = await paused;
+      writeFileSync(path.join(outputs, "report.txt"), "written this turn");
+      host.handle({
+        type: "run.approval",
+        runId,
+        requestId,
+        decision: "deny",
+      });
+      return { finished: await finished, runId, written };
+    };
+
+    const chunksOfRun = (written: readonly SidecarHostOutput[]) =>
+      written.flatMap((message) =>
+        message.type === "run.event" ? [message.chunk] : [],
+      );
+
+    test("upload what the turn wrote, with the run's token, before the turn's finish", async () => {
+      const received: { name: string; authorization: string | null }[] = [];
+      const fileId = crypto.randomUUID();
+      const { finished, written } = await runWritingOutputs(async (request) => {
+        const form = await request.formData();
+        const file = form.get("file");
+        if (file === null || typeof file === "string") {
+          return new Response(null, { status: 400 });
+        }
+        received.push({
+          name: file.name,
+          authorization: request.headers.get("authorization"),
+        });
+        return Response.json({ fileId });
+      });
+      // The file that was there when the run started stays out of it.
+      expect(received).toEqual([
+        { name: "report.txt", authorization: `Bearer ${RUN_TOKEN}` },
+      ]);
+      expect(finished.outcome).toBe("completed");
+      const chunks = chunksOfRun(written);
+      const reportAt = chunks.findIndex(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(chunks[reportAt]?.["value"]).toEqual({
+        status: "uploaded",
+        fileId,
+        fileName: "report.txt",
+      });
+      const lastFinish = chunks.findLastIndex(
+        (chunk) => chunk["type"] === "RUN_FINISHED",
+      );
+      expect(reportAt).toBeGreaterThanOrEqual(0);
+      expect(reportAt).toBeLessThan(lastFinish);
+    });
+
+    test("an API that refuses the file leaves the run completed and says so", async () => {
+      const { finished, written } = await runWritingOutputs(
+        async () => await Promise.resolve(new Response(null, { status: 500 })),
+      );
+      expect(finished.outcome).toBe("completed");
+      const reports = chunksOfRun(written).filter(
+        (chunk) => chunk["name"] === "stella.run-output",
+      );
+      expect(reports.map((chunk) => chunk["value"])).toEqual([
+        { status: "failed", fileName: "report.txt" },
+      ]);
+    });
+  });
+
   test("closing the connection keeps runs going; shutdown cancels them and exits", async () => {
     const holder = await spawnHolder();
     const first = await desktop(holder);

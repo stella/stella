@@ -1344,6 +1344,7 @@
   "chat.localRun.errorLimitReached": "The coding agent on your computer reached its usage limit. Try again once the limit resets.",
   "chat.localRun.errorNeedsLogin": "The coding agent on your computer needs you to sign in again. Sign in through stella desktop, then try again.",
   "chat.localRun.errorUnavailable": "Your computer stopped running this turn. Make sure stella desktop is open and connected, then try again.",
+  "chat.localRun.filesNotShared": "Files that could not be shared stay on your computer: {fileNames}",
   "chat.localRun.onThisComputer": "{harness} on this computer",
   "chat.localRun.permissionAskDescription": "Edits files in the chat's folder on its own; asks before anything else.",
   "chat.localRun.permissionAutoDescription": "Does what it judges safe on its own; asks about the rest.",
