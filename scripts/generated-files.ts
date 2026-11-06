@@ -213,6 +213,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/hosted-usage-provider/config.ts",
     "apps/api/src/lib/hosted-usage-provider/external-account-ref.ts",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
+    "apps/api/src/lib/hosted-usage-provider/webhook-result-transitions.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",
     "apps/api/src/lib/infosoud/client.ts",
     "apps/api/src/lib/infosoud/result.ts",
