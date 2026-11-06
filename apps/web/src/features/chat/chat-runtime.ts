@@ -95,7 +95,10 @@ import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatFetchClient, chatResponseError } from "./chat-fetch";
-import { observeChatProviderDiagnostic } from "./chat-provider-diagnostic";
+import {
+  isClassifiedRunError,
+  observeChatProviderDiagnostic,
+} from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
   ActiveFileContext,
@@ -349,7 +352,10 @@ const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
   (findChatRequestError(shown) !== undefined &&
     findChatRequestError(next) === undefined) ||
   (providerDiagnosticFromThrown(shown) !== undefined &&
-    providerDiagnosticFromThrown(next) === undefined);
+    providerDiagnosticFromThrown(next) === undefined) ||
+  (shown !== undefined &&
+    isClassifiedRunError(shown) &&
+    !isClassifiedRunError(next));
 
 const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
 
