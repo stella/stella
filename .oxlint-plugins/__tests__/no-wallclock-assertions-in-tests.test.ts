@@ -12,6 +12,22 @@ const ELAPSED_ASSERTION =
   "expect(performance.now() - start).toBeLessThan(100);";
 
 describe(RULE, () => {
+  test("reads an instant shifted by a constant as an instant", async () => {
+    expect(
+      await lint(
+        [
+          'import { expect } from "bun:test";',
+          "const start = performance.now();",
+          "const end = performance.now();",
+          "expect(end - (start + 1000)).toBeLessThan(100);",
+          "expect(end - (start - 1000)).toBeLessThan(100);",
+          "expect(end - (1000 + start)).toBeLessThan(100);",
+          "expect(1000 + start).toBe(1000 + start);",
+        ].join("\n"),
+      ),
+    ).toEqual([4, 5, 6]);
+  });
+
   test("rejects all ordered elapsed matchers, including modifiers", async () => {
     expect(
       await lint(

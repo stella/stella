@@ -45,6 +45,7 @@ const updateThread = createSafeRootHandler(
     recordAuditEvent,
   }) {
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });

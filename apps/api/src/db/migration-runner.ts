@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import type { ReservedSQL } from "bun";
+import type { MaybePromise, ReservedSQL } from "bun";
 import { sql } from "drizzle-orm";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
@@ -49,6 +49,7 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import type { OnlineRepairOptions } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
@@ -599,6 +600,7 @@ const reportSchemaStep = async ({
 };
 
 type PrepareSchemaPhaseOptions = {
+  readMigrations: typeof readMigrationFiles;
   connection: ReservedSQL;
   migrationsFolder: string;
   migrationsSchema: string;
@@ -611,6 +613,7 @@ type PrepareSchemaPhaseOptions = {
 };
 
 const prepareSchemaPhase = async ({
+  readMigrations,
   connection,
   migrationsFolder,
   migrationsSchema,
@@ -623,15 +626,18 @@ const prepareSchemaPhase = async ({
 }: PrepareSchemaPhaseOptions) => {
   await observeSchema(SCHEMA_LANE_STEP, async () => {
     await connection.unsafe(bootstrapRoleSql);
-    const [liftTimeout, takeLane, restoreTimeout] =
-      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-    await connection.unsafe(liftTimeout);
-    await connection.unsafe(takeLane);
+    const { lift, lock, restore } = CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+    for (const statement of lift) {
+      await connection.unsafe(statement);
+    }
+    await connection.unsafe(lock);
     onLaneAcquired();
-    await connection.unsafe(restoreTimeout);
+    for (const statement of restore) {
+      await connection.unsafe(statement);
+    }
   });
 
-  const bundle = readMigrationFiles({ migrationsFolder });
+  const bundle = readMigrations({ migrationsFolder });
   const schemaDatabase = createDatabase({ client: connection });
   const retriesAtStart = lockTelemetry.retriesSpent;
   let adoption: Awaited<ReturnType<typeof preflightAndAdopt>> | undefined;
@@ -803,7 +809,13 @@ const emitFailedPhase = (
   }
 };
 
+type OnlineMigrationRunner = (
+  ...args: Parameters<typeof runOnlineMigrations>
+) => MaybePromise<Awaited<ReturnType<typeof runOnlineMigrations>>>;
+
 type RunMigrationsOptions = {
+  /** Local test templates replay existing cluster roles without changing source hashes. */
+  readMigrations?: typeof readMigrationFiles;
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
   databaseUrl: string;
@@ -812,14 +824,15 @@ type RunMigrationsOptions = {
   ebs: ConfiguredEbsConfiguration;
   migrationsSchema?: string;
   migrationsTable?: string;
-  runOnline?: typeof runOnlineMigrations;
+  runOnline?: OnlineMigrationRunner;
+  observeRepair?: OnlineRepairOptions["observeRepair"];
   onlineIndexHold?: OnlineIndexHoldRef;
   /** Test seam: lock retry configuration and runtime. */
   lockWaitRetry?: LockWaitRetry;
   /** Where phase and online step durations go; JSON lines on stdout otherwise. */
   timing?: MigrationTiming;
   lockTelemetry?: MigrationLockTelemetry;
-  reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+  reserveSchemaObserver?: typeof openOnlineIndexObserver;
 };
 
 const migrationSessionCanUnlock = (
@@ -880,6 +893,7 @@ const createOnlineSession = (
 });
 
 export const runMigrations = async ({
+  readMigrations = readMigrationFiles,
   connection,
   databaseUrl,
   migrationsFolder,
@@ -887,12 +901,12 @@ export const runMigrations = async ({
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
+  observeRepair,
   onlineIndexHold = createOnlineIndexHold(),
   lockWaitRetry = DEFAULT_LOCK_WAIT_RETRY,
   timing = DEFAULT_MIGRATION_TIMING,
   lockTelemetry = createMigrationLockTelemetry(),
-  reserveSchemaObserver = async () =>
-    await openOnlineIndexObserver(databaseUrl),
+  reserveSchemaObserver = openOnlineIndexObserver,
 }: RunMigrationsOptions) => {
   let laneHeld = false;
   const clock: MigrationPhaseClock = {
@@ -908,7 +922,7 @@ export const runMigrations = async ({
   const schemaRetriesAtStart = lockTelemetry.retriesSpent;
   let onlineRetriesAtStart = 0;
   try {
-    schemaObserver = await reserveSchemaObserver();
+    schemaObserver = await reserveSchemaObserver(databaseUrl);
     const observeSchema = await createSchemaObservation({
       observer: schemaObserver,
       connection,
@@ -919,6 +933,7 @@ export const runMigrations = async ({
       },
     });
     const { preflight, migrations, database } = await prepareSchemaPhase({
+      readMigrations,
       connection,
       migrationsFolder,
       migrationsSchema,
@@ -1028,6 +1043,7 @@ export const runMigrations = async ({
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        observeRepair,
         repairs: ONLINE_MIGRATION_REPAIRS,
       },
     );
@@ -1053,11 +1069,9 @@ export const runMigrations = async ({
     }
     return { status: "applied" as const, predictedNames, insertedNames };
   } catch (error: unknown) {
-    if (clock.phase === "online") {
-      clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
-    } else {
-      clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
-    }
+    const retriesAtStart =
+      clock.phase === "online" ? onlineRetriesAtStart : schemaRetriesAtStart;
+    clock.retriesSpent = lockTelemetry.retriesSpent - retriesAtStart;
     emitFailedPhase(timing, clock, elapsedMs());
     throw error;
   } finally {

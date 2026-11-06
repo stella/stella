@@ -495,8 +495,8 @@ const findExistingDecisionTx = async (
   const repairClaimIsCurrent =
     exactClaimedDecisionId !== undefined ||
     repairClaimedDecisionId === undefined ||
-    (provisionalIdentified?.sourceDocumentId !== null &&
-      provisionalIdentified?.sourceDocumentId !== undefined &&
+    (provisionalIdentified !== undefined &&
+      provisionalIdentified.sourceDocumentId !== null &&
       repairSourceIdentityCandidates.includes(
         provisionalIdentified.sourceDocumentId,
       ));

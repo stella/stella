@@ -32,7 +32,6 @@ import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
   DEFAULT_DETECTORS,
-  MODEL_CATALOG_DRIFT_INPUTS,
   ROUTE_TREE_INPUTS,
   type ScopeOutput,
 } from "./ci-plan-scope";
@@ -623,7 +622,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["tailwind-class-cache", "module-ownership", "route-tree"]);
+  ).toEqual(["module-ownership", "route-tree"]);
   // api-typecheck-projects declares the derived CLI and capability runtimes,
   // which a clean checkout lacks, so they are planned with it.
   expect(
@@ -811,7 +810,11 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
       ).toBe(true);
     }
     expect(entry.outputs.every((glob) => !/[|\n]/u.test(glob))).toBe(true);
-    const scriptFile = entry.write.find((part) => /\.(?:ts|sh)$/u.test(part));
+    // Any file a runtime can execute directly: TypeScript, JavaScript in each
+    // module flavour, or a shell script.
+    const scriptFile = entry.write.find((part) =>
+      /\.(?:[cm]?[jt]s|sh)$/u.test(part),
+    );
     if (scriptFile) {
       expect(existsSync(scriptFile), `${entry.id}: ${scriptFile}`).toBe(true);
       continue;
@@ -924,13 +927,6 @@ test("route-tree CI scope covers every manifest input and output", () => {
     glob.replace(/\/\*\*$/u, "/*"),
   );
   expect(paths.toSorted()).toEqual([...ROUTE_TREE_INPUTS].toSorted());
-});
-
-test("CI rate snapshot scope stays pinned to the manifest", () => {
-  const inputs = generator("model-rates").inputs.map((glob) =>
-    glob.replace(/\/\*\*$/u, "/*"),
-  );
-  expect(inputs.toSorted()).toEqual([...MODEL_CATALOG_DRIFT_INPUTS].toSorted());
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

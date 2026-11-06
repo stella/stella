@@ -25,7 +25,9 @@ const rule = createTestDeterminismRule({
             "node:timers/promises",
             "timers/promises",
           ].includes(source) &&
-          ["setTimeout", "setInterval", "*", "default"].includes(imported)
+          ["setTimeout", "setInterval", "scheduler", "*", "default"].includes(
+            imported,
+          )
         ) {
           return [
             imported === "*" || imported === "default"
@@ -53,8 +55,10 @@ const rule = createTestDeterminismRule({
           SLEEP_HELPERS.has(path) ||
           (path.startsWith(`${IMPORTED_HELPERS}.`) &&
             SLEEP_HELPERS.has(path.slice(IMPORTED_HELPERS.length + 1))) ||
+          path === "scheduler.wait" ||
           path === `${IMPORTED_TIMERS}.setTimeout` ||
-          path === `${IMPORTED_TIMERS}.setInterval`,
+          path === `${IMPORTED_TIMERS}.setInterval` ||
+          path === `${IMPORTED_TIMERS}.scheduler.wait`,
       );
     };
   },

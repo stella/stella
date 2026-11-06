@@ -3,6 +3,7 @@
 import { useCallback, useId, useState } from "react";
 
 import { cn } from "../lib/utils";
+import { withoutDirectionalControls } from "./bidi-text";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
 
 type IdentityTextProps = {
@@ -16,6 +17,7 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
   const [overflow, setOverflow] = useState(false);
   const [hasFocusOwner, setHasFocusOwner] = useState(false);
   const [open, setOpen] = useState(false);
+  const name = withoutDirectionalControls(children);
   const textRef = useCallback((node: HTMLSpanElement | null) => {
     if (node === null) {
       return undefined;
@@ -73,11 +75,11 @@ export const IdentityText = ({ children, className }: IdentityTextProps) => {
           />
         }
       >
-        {children}
+        {name}
       </TooltipTrigger>
       <TooltipPopup className="max-w-sm" role="tooltip">
         <span className="block max-w-sm wrap-break-word" dir="auto">
-          {children}
+          {name}
         </span>
       </TooltipPopup>
     </Tooltip>

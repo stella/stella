@@ -42,6 +42,8 @@ export const getBrowserApprovalDetails = (
   command: BrowserControlCommand,
 ): BrowserApprovalDetail[] => {
   switch (command.action) {
+    // A tab switch shows the address the model saw the tab on.
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.open:
       return [{ type: "website", value: command.url }];
     case BROWSER_CONTROL_ACTION.click:

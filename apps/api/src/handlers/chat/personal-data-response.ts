@@ -113,6 +113,8 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   // Consumed to decide whether `title` is user-authored; only then is the
   // title exported.
   "titleSource",
+  // Internal derivation metadata, not authored account content.
+  "generationProvenance",
   // Per-thread runtime settings: how the assistant ran, not authored content.
   "webSearchEnabled",
   // Skill selected at thread start: runtime setting that can reference an
@@ -120,6 +122,7 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "activeSkill",
   "chatModel",
   "chatReasoningEffort",
+  "chatRunTarget",
   // Internal processing flag recording that anonymization ran on a turn.
   "usedAnonymization",
   // Disconnect-compensation token for thread creation; internal machinery.

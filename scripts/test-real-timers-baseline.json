@@ -39,6 +39,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/db/corpus-schema-lane.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts": {
     "count": 3,
     "owner": "api",
@@ -196,6 +201,11 @@
   },
   "apps/api/src/lib/db/caller-async-context.postgres.test.ts": {
     "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/lib/desktop-runner/gateway.db.test.ts": {
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -439,6 +449,11 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/desktop/tests/AgentSubscriptionsSection.dom.test.tsx": {
+    "count": 2,
+    "owner": "desktop",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
@@ -564,8 +579,8 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/components/provider-diagnostic-message.dom.test.tsx": {
-    "count": 1,
+  "apps/web/src/components/legal-reader/reference-peek.dom.test.tsx": {
+    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -620,7 +635,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": {
-    "count": 5,
+    "count": 6,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -799,9 +814,29 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/agent-engine/src/sidecar/sidecar.test.ts": {
+    "count": 7,
+    "owner": "agent-engine",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/business-registries/src/ares/client.test.ts": {
     "count": 1,
     "owner": "business-registries",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/auth/loopback-listener.test.ts": {
+    "count": 1,
+    "owner": "cli",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/auth/refresh-lock.test.ts": {
+    "count": 1,
+    "owner": "cli",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "packages/cli/src/auth/resolve-access-token.test.ts": {
+    "count": 1,
+    "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/cli/src/mcp-client.test.ts": {
@@ -869,6 +904,11 @@
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/scripts/src/shared-test-postgres.test.ts": {
+    "count": 1,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/scripts/src/windows-process-ownership.test.ts": {
     "count": 1,
     "owner": "scripts",
@@ -890,7 +930,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/oxlint-tailwind-design-system.test.ts": {
-    "count": 1,
+    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }

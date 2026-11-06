@@ -1,10 +1,12 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import { Link } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
+import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
+import { knowledgeSections } from "@/lib/knowledge/navigation";
 import type { KnowledgeSection } from "@/lib/knowledge/navigation";
 
 type LandingCardContent = {
@@ -26,6 +28,9 @@ type KnowledgeLandingViewProps = {
   /** A line under the cards. */
   footer?: ReactNode;
 };
+
+const LANDING_CLASS = "flex flex-1 flex-col p-6";
+const GRID_CLASS = "grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3";
 
 const CARD_CLASS = cn(
   "bg-card flex h-full flex-col rounded-xl border p-5",
@@ -62,22 +67,26 @@ export const KnowledgeLandingView = ({
   cards,
   footer,
 }: KnowledgeLandingViewProps) => (
-  <div className="flex flex-1 flex-col p-6">
-    <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <div className={LANDING_CLASS}>
+    <div className={GRID_CLASS}>
       {cards.map((card) =>
         "to" in card ? (
           <Link className={CARD_CLASS} key={card.key} to={card.to}>
             <CardBody card={card} />
           </Link>
         ) : (
-          <button
-            className={cn(CARD_CLASS, "text-start")}
+          // A section that needs something first is a button; it draws the
+          // same card as the linked sections beside it.
+          <Button
+            className="flex h-full"
             key={card.key}
             onClick={card.onOpen}
-            type="button"
+            variant="plain"
           >
-            <CardBody card={card} />
-          </button>
+            <div className={cn(CARD_CLASS, "w-full")}>
+              <CardBody card={card} />
+            </div>
+          </Button>
         ),
       )}
     </div>
@@ -85,15 +94,39 @@ export const KnowledgeLandingView = ({
   </div>
 );
 
-const SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-/** The landing's shape while the visitor is not known yet. */
-export const KnowledgeLandingSkeleton = () => (
-  <div className="flex flex-1 flex-col p-6">
-    <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {SKELETON_KEYS.map((key) => (
-        <Skeleton className="h-36 rounded-xl" key={key} />
-      ))}
+/** The section copy is already known; reserve its wrapping and card geometry. */
+export const KnowledgeLandingSkeleton = ({
+  audience,
+}: {
+  audience: "public" | "member";
+}) => {
+  const t = useTranslations();
+  const sections = knowledgeSections.filter(
+    (section) =>
+      audience === "member" || section.publicAccess !== "unavailable",
+  );
+  return (
+    <div aria-hidden="true" className={LANDING_CLASS}>
+      <div className={GRID_CLASS}>
+        {sections.map((section) => (
+          <div className={CARD_CLASS} key={section.key}>
+            <CardBody
+              card={{
+                key: section.key,
+                icon: section.icon,
+                title: t(section.titleKey),
+                description:
+                  section.key === "styles"
+                    ? t("styleSets.description")
+                    : t(`knowledge.sections.${section.key}.description`),
+                ...(audience === "public" && section.publicAccess === "account"
+                  ? { note: t("knowledge.landing.withAccount") }
+                  : {}),
+              }}
+            />
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};

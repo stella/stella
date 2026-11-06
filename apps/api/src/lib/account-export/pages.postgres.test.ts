@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { createTestClock } from "@stll/test-kit";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
@@ -14,7 +14,6 @@ import {
 } from "@/api/db/rls";
 import {
   aiMemories,
-  contacts,
   entities,
   legalListClaims,
   legalListVerificationRuns,
@@ -47,6 +46,8 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -423,6 +424,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
                   startOffset: 0,
                   endOffset: 5,
                   quote: "Claim",
+                  quotePrefix: "",
+                  quoteSuffix: "",
                   body: comment.body,
                   createdAt: createdAt.toISOString(),
                   updatedAt: updatedAt.toISOString(),
@@ -510,9 +513,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           expect.objectContaining({ id: membershipIds.at(1) }),
         );
       } finally {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(db, [organizationId]);
         await db.delete(user).where(inArray(user.id, users));
       }
     });
@@ -578,12 +579,14 @@ describe.skipIf(!enabled)("account export personal data", () => {
           name: "Export matter fixture",
           reference: Bun.randomUUIDv7(),
         });
-        await db.insert(contacts).values({
-          organizationId: organizationA,
-          createdBy: userId,
-          type: "person",
-          displayName: "Organization contact fixture",
-        });
+        await insertOwnerContacts(db, [
+          {
+            organizationId: organizationA,
+            createdBy: userId,
+            type: "person",
+            displayName: "Organization contact fixture",
+          },
+        ]);
         const prepared = await Promise.all(
           organizations.map(async (organizationId, index) => {
             const query = queries.at(index);
@@ -655,12 +658,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
           if (bytes === undefined) {
             panic("Archive publication required");
           }
-          return await JSZip.loadAsync(bytes);
+          return await ZipArchive.read(bytes);
         };
         const archive = await archiveFor(userId);
         const historyText = await archive
-          .file("search_history_entries.json")
-          ?.async("string");
+          .entry("search_history_entries.json")
+          ?.text();
         if (historyText === undefined) {
           panic("History archive entry required");
         }
@@ -684,10 +687,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
             },
           ]),
         );
-        expect(await archive.file("ai_memories.json")?.async("string")).toBe(
-          "[]",
-        );
-        expect(Object.keys(archive.files).toSorted()).toEqual(
+        expect(await archive.entry("ai_memories.json")?.text()).toBe("[]");
+        expect(archive.paths().toSorted()).toEqual(
           [
             ...EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => `${table}.json`),
             "manifest.json",
@@ -697,13 +698,11 @@ describe.skipIf(!enabled)("account export personal data", () => {
           ACCOUNT_EXPORT_REGISTRY,
         )) {
           if (disposition.type === "exempt") {
-            expect(archive.file(`${table}.json`)).toBeNull();
+            expect(archive.entry(`${table}.json`)).toBeUndefined();
           }
         }
       } finally {
-        await db
-          .delete(organization)
-          .where(inArray(organization.id, organizations));
+        await deleteOrganizationsForTest(db, organizations);
         await db.delete(user).where(inArray(user.id, users));
       }
     });

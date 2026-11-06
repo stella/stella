@@ -46,6 +46,16 @@ const binaryTiming = ({
   if (operator === "-" && left === "instant" && right === "instant") {
     return "elapsed";
   }
+  // An instant shifted by a fixed amount is still an instant, so subtracting
+  // one from it below reads as elapsed time.
+  if (
+    (left === "instant" &&
+      right === null &&
+      (operator === "+" || operator === "-")) ||
+    (left === null && right === "instant" && operator === "+")
+  ) {
+    return "instant";
+  }
   if (["+", "-", "*", "/"].some((candidate) => candidate === operator)) {
     return [left, right].includes("elapsed") ? "elapsed" : null;
   }

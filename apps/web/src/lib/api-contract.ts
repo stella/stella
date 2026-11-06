@@ -42,8 +42,10 @@ export type PropertyOptionColor = Extract<
   PropertyContent,
   { type: "multi-select" | "single-select" }
 >["options"][number]["color"];
-export type UpsertFieldContent =
-  WebApiRoutes["fields"][":workspaceId"]["post"]["body"]["content"];
+/** A value to write; the route also takes `null`, which clears the cell. */
+export type UpsertFieldContent = NonNullable<
+  WebApiRoutes["fields"][":workspaceId"]["post"]["body"]["content"]
+>;
 export type BoundingBox =
   WebApiRoutes["workspaces"][":workspaceId"]["bounding-boxes"]["post"]["response"][200]["boxes"][number];
 export type {

@@ -332,3 +332,25 @@ test("reports synchronous Bun sleeps through direct, global and aliased calls", 
   ].join("\n");
   expect(await lintSingleRule(rule, source, options)).toEqual([1, 2, 3, 4]);
 });
+
+test("reports scheduler.wait from the timer promises modules", async () => {
+  const source = [
+    'import { scheduler } from "node:timers/promises";',
+    'import { scheduler as pacer } from "timers/promises";',
+    'import * as timers from "node:timers/promises";',
+    "await scheduler.wait(1);",
+    "await pacer.wait(1);",
+    "await timers.scheduler.wait(1);",
+    "const { wait } = scheduler; await wait(1);",
+    "await scheduler.yield();",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([4, 5, 6, 7]);
+});
+
+test("leaves a local scheduler's wait alone", async () => {
+  const source = [
+    "const scheduler = { wait: async () => {} };",
+    "await scheduler.wait();",
+  ].join("\n");
+  expect(await lintSingleRule(rule, source, options)).toEqual([]);
+});

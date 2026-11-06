@@ -152,6 +152,9 @@ const openWindow = async (
       account_record_use: () => null,
       // No connection status: the section stays hidden, as with local agents off.
       chatgpt_auth_get_status: () => null,
+      claude_code_auth_get_status: () => null,
+      // No install status either, read the same as the refusal with local agents off.
+      harness_get_status: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,
@@ -171,8 +174,19 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
+      dictation_get_snapshot: () => ({ available: false }),
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
+      // Consent given, so Settings lays out its stella AI drafting rows too.
+      billing_draft_get_settings: () => ({
+        scopeKey: '["org_fixture","user_fixture"]',
+        settings: {
+          revision: "revision-1",
+          effectiveMode: "plain",
+          consent: "granted",
+          preference: null,
+        },
+      }),
     }),
   });
   await page.goto(path);

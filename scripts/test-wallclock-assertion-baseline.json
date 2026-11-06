@@ -84,6 +84,11 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "apps/api/src/lib/scheduler/tasks/case-law-population-fold.postgres.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "apps/api/src/lib/search/highlight.test.ts": {
     "count": 1,
     "owner": "api",
@@ -100,6 +105,11 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
+    "count": 1,
+    "owner": "api",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "apps/api/src/mcp/search-index-unavailable.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -134,6 +144,11 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/cli/src/auth/loopback-listener.test.ts": {
+    "count": 2,
+    "owner": "cli",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "packages/legal-atlas/src/document-stage-observer.test.ts": {
     "count": 1,
     "owner": "legal-atlas",
@@ -164,6 +179,11 @@
     "owner": "template-conditions",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
+  "packages/ui/src/components/animated-preview.dom.test.tsx": {
+    "count": 1,
+    "owner": "ui",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
   "scripts/ci-check-pool.test.ts": {
     "count": 1,
     "owner": "scripts",
@@ -176,6 +196,11 @@
   },
   "scripts/code-quality-task-budget.test.ts": {
     "count": 3,
+    "owner": "scripts",
+    "reason": "pre-kit census; migrate to @stll/test-kit"
+  },
+  "scripts/generate-tailwind-classes.test.ts": {
+    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }

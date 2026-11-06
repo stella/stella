@@ -3,14 +3,11 @@ import * as v from "valibot";
 import {
   currencyCodeSchema,
   propertyContentSchema,
-  propertyContentTypeSchema,
+  scalarPropertyContentTypeSchema,
 } from "@/api/db/schema-validators";
 import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import {
-  defaultVarcharSchema,
-  resourceIdSchema,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
@@ -28,8 +25,8 @@ const selectOptionSchema = v.object({
 });
 
 export const createPropertyBodySchema = v.object({
-  name: defaultVarcharSchema,
-  contentType: propertyContentTypeSchema,
+  name: displayNameSchema(),
+  contentType: scalarPropertyContentTypeSchema,
   toolType: v.optional(v.picklist(["ai-model", "manual-input"])),
   prompt: v.optional(v.pipe(v.string(), v.maxLength(1000))),
   dependencies: v.optional(

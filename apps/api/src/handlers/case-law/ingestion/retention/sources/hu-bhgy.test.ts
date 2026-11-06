@@ -9,7 +9,8 @@ import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
 } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
-import { huBhgyRetention } from "@/api/handlers/case-law/ingestion/retention/sources/hu-bhgy";
+import { sourceRetentionForAdapter } from "@/api/handlers/case-law/ingestion/retention/retention-sources";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
@@ -60,6 +61,11 @@ const DOCUMENTS = [
 ] as const;
 
 describe("hu-bhgy retention projection", () => {
+  const { policy } = sourceRetentionForAdapter(ADAPTER_KEYS.HU_BHGY);
+  if (policy.type !== "checked") {
+    expect.unreachable("The registered source checks retained text");
+  }
+
   test.each(DOCUMENTS.map((fixture) => [fixture.name, fixture] as const))(
     "the parsed decision keeps the file's text: %s",
     async (_name, fixture) => {
@@ -80,9 +86,9 @@ describe("hu-bhgy retention projection", () => {
       if (!hasUsableAst(ast)) {
         throw new Error("the fixture built no document");
       }
-      const projection = await huBhgyRetention.project(
-        built.decision.sourceRaw ?? "",
-      );
+      const projection = await policy.project(built.decision.sourceRaw ?? "", {
+        sourceRawObjects: built.decision.sourceRawObjects ?? {},
+      });
       if (projection.type !== "source") {
         throw new Error(`expected a source projection, got ${projection.type}`);
       }
@@ -106,7 +112,9 @@ describe("hu-bhgy retention projection", () => {
 
   test("a listing stored without its file has no publisher text", async () => {
     expect(
-      await huBhgyRetention.project(encodeSourceRawEnvelope({ listing: "{}" })),
+      await policy.project(encodeSourceRawEnvelope({ listing: "{}" }), {
+        sourceRawObjects: {},
+      }),
     ).toEqual({ type: "no-text", reason: "not-published" });
   });
 
@@ -116,7 +124,7 @@ describe("hu-bhgy retention projection", () => {
       document: Buffer.from("PK\u0003\u0004 truncated").toString("base64"),
     });
 
-    expect(await huBhgyRetention.project(raw)).toEqual({
+    expect(await policy.project(raw, { sourceRawObjects: {} })).toEqual({
       type: "unreadable",
       reason: "unreadable-document",
     });

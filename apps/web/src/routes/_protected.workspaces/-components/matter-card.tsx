@@ -33,6 +33,8 @@ import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
 
+import { matterCardPreviewEnabled } from "./matter-card.logic";
+
 type OverviewData = NonNullable<
   Awaited<
     ReturnType<
@@ -68,7 +70,7 @@ export const MatterCard = ({
 
   const previewQuery = useQuery({
     ...overviewOptions(workspace.id),
-    enabled: previewEnabled,
+    enabled: matterCardPreviewEnabled(workspace.status, previewEnabled),
   });
   const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
@@ -121,6 +123,7 @@ export const MatterCard = ({
         name: workspace.name,
         color: workspace.color,
         client: workspace.client,
+        isArchived: workspace.status === "archived",
       }}
     >
       {({ rename, menuOpen }) => (
@@ -363,11 +366,11 @@ const PreviewPopupContent = ({
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">
-            <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+            <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
               {t("workspaces.documentsCount", { count: preview.documentCount })}
             </div>
             {preview.taskCount > 0 && (
-              <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+              <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
                 {t("workspaces.tasksCount", { count: preview.taskCount })}
               </div>
             )}

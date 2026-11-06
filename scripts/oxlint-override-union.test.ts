@@ -100,10 +100,18 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db/root#rlsDb,rootDb",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
+      "path:@stll/errors#createDetached",
       ...PROVIDER_ADAPTER_IMPORT_KEYS,
     ],
     reason:
       "Tests build handler context, owner-level DB handles and provider adapters directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "apps/api/src/lib/analytics/capture.ts",
+    drops: ["path:@stll/errors#createDetached"],
+    reason:
+      "This module owns API detached work: it builds `detached` from the shared factory once, so it is the one API module that imports createDetached.",
   },
   {
     rule: "no-restricted-imports",
@@ -511,7 +519,7 @@ test("new web and UI surfaces cannot import element registration outside an owne
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
     "apps/web/src/routes/knowledge/-components/position-editor.tsx",
-    "apps/web/src/routes/_protected.admin/-components/organization/document-types-card.tsx",
+    "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx",
     "apps/web/src/components/pdf/page-organizer.tsx",
     "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
     "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",

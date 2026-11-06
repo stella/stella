@@ -4,36 +4,53 @@ import { accountExportParams } from "@/api/handlers/account-exports/params";
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { status } from "@/api/http/status";
 import { recordAccountExportDownload } from "@/api/lib/account-export/store";
+import type { AccountExportReader } from "@/api/lib/account-export/store";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
-import { AUTH_REJECTION_BODY, authenticateSession } from "@/api/lib/auth";
+import {
+  AUTH_REJECTION_BODY,
+  authenticateSession,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { CallerOutcome, SessionCaller } from "@/api/lib/auth";
 import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
-import type { SafeId } from "@/api/lib/branded-types";
-import { readAccountEmail } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { authenticateAccountExportRequest } from "@/api/mcp/auth";
+import { McpTokenVerificationError } from "@/api/mcp/errors";
+
+const ACCOUNT_EXPORT_DOWNLOAD_VERIFICATION_UNAVAILABLE = failureSink({
+  event: "account_export.download_verification_unavailable",
+  expected: [],
+});
+
+const ACCOUNT_EXPORT_DOWNLOAD_MEMBERSHIP_UNAVAILABLE = failureSink({
+  event: "account_export.download_membership_unavailable",
+  expected: [],
+});
 
 type DownloadAuthenticationDependencies = {
   authenticateOAuth?: typeof authenticateAccountExportRequest;
   authenticateBrowserSession?: typeof authenticateSession;
-  resolveOAuthUser?: (
-    userId: SafeId<"user">,
-  ) => Promise<SessionCaller["user"] | null>;
+  resolveOAuthMembership?: typeof resolveCredentialMemberAuthorization;
 };
 
-const resolveOAuthUser = async (
-  userId: SafeId<"user">,
-): Promise<SessionCaller["user"] | null> => {
-  const email = await readAccountEmail(userId);
-  return email === undefined ? null : { id: userId, email };
-};
+/**
+ * A bearer credential is an OAuth client acting under account-export consent;
+ * without one the caller is the account holder's browser session. The same
+ * reading picks the authentication below and the exports the caller may take.
+ */
+const accountExportReaderOf = (request: Request): AccountExportReader =>
+  request.headers.get("authorization") === null
+    ? "browser_session"
+    : "delegated";
 
 const authenticateAccountExportDownload = async (
   ctx: Parameters<typeof authenticateSession>[0],
@@ -41,19 +58,37 @@ const authenticateAccountExportDownload = async (
   {
     authenticateOAuth = authenticateAccountExportRequest,
     authenticateBrowserSession = authenticateSession,
-    resolveOAuthUser: resolveUser = resolveOAuthUser,
+    resolveOAuthMembership = resolveCredentialMemberAuthorization,
   }: DownloadAuthenticationDependencies = {},
 ): Promise<CallerOutcome<SessionCaller>> => {
   const authorization = ctx.request.headers.get("authorization");
-  if (authorization === null) {
+  if (
+    authorization === null ||
+    accountExportReaderOf(ctx.request) === "browser_session"
+  ) {
     return await authenticateBrowserSession(ctx, access);
   }
   if (!authorization.startsWith("Bearer ")) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
   const authenticated = await authenticateOAuth(authorization.slice(7));
+  if (Result.isError(authenticated)) {
+    if (authenticated.error instanceof McpTokenVerificationError) {
+      return {
+        ok: false,
+        answer: observedStatus(
+          {
+            sink: ACCOUNT_EXPORT_DOWNLOAD_VERIFICATION_UNAVAILABLE,
+            cause: authenticated.error,
+          },
+          500,
+          AUTH_REJECTION_BODY[500],
+        ),
+      };
+    }
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
+  }
   if (
-    Result.isError(authenticated) ||
     !hasAccountExportAuthority(
       {
         credential: authenticated.value.credential,
@@ -68,14 +103,39 @@ const authenticateAccountExportDownload = async (
   if (userId === null) {
     return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
-  const user = await Result.tryPromise(async () => await resolveUser(userId));
-  if (Result.isError(user)) {
-    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
+  const organizationId = parseAuthProviderId<"organization">(
+    authenticated.value.organizationId,
+  );
+  if (organizationId === null) {
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
   }
-  if (user.value === null) {
-    return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
+  const membership = await Result.tryPromise(
+    async () => await resolveOAuthMembership({ userId, organizationId }),
+  );
+  if (Result.isError(membership)) {
+    return {
+      ok: false,
+      answer: observedStatus(
+        {
+          sink: ACCOUNT_EXPORT_DOWNLOAD_MEMBERSHIP_UNAVAILABLE,
+          cause: membership.error,
+        },
+        500,
+        AUTH_REJECTION_BODY[500],
+      ),
+    };
   }
-  return { ok: true, caller: { user: user.value } };
+  if (
+    membership.value === null ||
+    membership.value.userDeleted ||
+    membership.value.memberId !== authenticated.value.memberId
+  ) {
+    return { ok: false, answer: status(403, AUTH_REJECTION_BODY[403]) };
+  }
+  return {
+    ok: true,
+    caller: { user: { id: userId, email: membership.value.email } },
+  };
 };
 
 type DownloadPersonalDataExportDependencies =
@@ -110,7 +170,12 @@ export const createDownloadPersonalDataExport = ({
     async function* ({ user, params: { exportId }, request }) {
       const row = yield* Result.await(
         Result.tryPromise(
-          async () => await recordDownload({ id: exportId, userId: user.id }),
+          async () =>
+            await recordDownload({
+              id: exportId,
+              userId: user.id,
+              reader: accountExportReaderOf(request),
+            }),
         ),
       );
       const objectKey = row?.objectKey ?? null;
@@ -132,7 +197,11 @@ export const createDownloadPersonalDataExport = ({
           body: source.body,
           contentType: "application/zip",
           disposition: "attachment",
-          fileName: sanitizeFilename(`personal-data-${row.id}.zip`),
+          fileName: sanitizeFilename(
+            row.kind === "organization_audit"
+              ? `organization-audit-log-${row.id}.zip`
+              : `personal-data-${row.id}.zip`,
+          ),
           ...(source.contentLength === undefined
             ? {}
             : { contentLength: source.contentLength }),

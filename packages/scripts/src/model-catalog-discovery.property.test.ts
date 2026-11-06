@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   findUnreviewedModels,
@@ -62,7 +62,8 @@ const makeIneligible = (
 
 describe("model catalog discovery invariants", () => {
   test("every relevant unclassified upstream launch fails discovery", () => {
-    fc.assert(
+    assertProperty(
+      "every relevant unclassified upstream launch fails discovery",
       fc.property(relevantModel, (model) => {
         expect(
           findUnreviewedModels({
@@ -72,12 +73,13 @@ describe("model catalog discovery invariants", () => {
           }),
         ).toEqual([model]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("offering or explicitly reviewing a launch is the only way to clear it", () => {
-    fc.assert(
+    assertProperty(
+      "offering or explicitly reviewing a launch is the only way to clear it",
       fc.property(relevantModel, fc.boolean(), (model, offerModel) => {
         const key = `${model.provider}:${model.modelId}`;
         const offered = {
@@ -96,12 +98,13 @@ describe("model catalog discovery invariants", () => {
           }),
         ).toEqual([]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("missing release dates cannot bypass discovery", () => {
-    fc.assert(
+    assertProperty(
+      "missing release dates cannot bypass discovery",
       fc.property(relevantModel, (model) => {
         const undatedModel = { ...model, releaseDate: null };
 
@@ -113,12 +116,13 @@ describe("model catalog discovery invariants", () => {
           }),
         ).toEqual([undatedModel]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("month-only dates in the discovery epoch cannot bypass discovery", () => {
-    fc.assert(
+    assertProperty(
+      "month-only dates in the discovery epoch cannot bypass discovery",
       fc.property(relevantModel, (model) => {
         const monthPrecisionModel = { ...model, releaseDate: "2026-06" };
 
@@ -130,12 +134,13 @@ describe("model catalog discovery invariants", () => {
           }),
         ).toEqual([monthPrecisionModel]);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("specialized and unsupported model classes do not create noise", () => {
-    fc.assert(
+    assertProperty(
+      "specialized and unsupported model classes do not create noise",
       fc.property(
         relevantModel,
         fc.constantFrom(
@@ -156,7 +161,7 @@ describe("model catalog discovery invariants", () => {
           ).toEqual([]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

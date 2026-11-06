@@ -1,5 +1,24 @@
 # @stll/agent-input
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
+## 0.4.0
+
+### Minor Changes
+
+- Share JSON Schema optional-value handling through the agent-input package.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Normalize surrounding whitespace in slug inputs while preserving their lowercase token identity.
+
 ## 0.2.2
 
 ### Patch Changes

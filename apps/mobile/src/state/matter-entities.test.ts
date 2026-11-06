@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 import { ApiRequestError } from "@/state/api-request";
@@ -15,7 +16,6 @@ import {
   EMPTY_ENTITIES_LOAD,
   ENTITY_PAGE_SIZE,
   entitySections,
-  fileTypeOf,
   listMatterEntities,
   type MatterEntity,
 } from "./matter-entities";
@@ -27,6 +27,7 @@ const SESSION: StoredSession = {
     "https://stella.example.com/v1/mcp/oauth/mobile-client-metadata.json",
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
+  signInId: "sign-in-1",
   refreshToken: "refresh-1",
   userId: "user-1",
 };
@@ -70,18 +71,22 @@ const server = (respond: (call: Call) => Response) => {
   return { fetch, calls };
 };
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    },
+    generation: store.generation(),
+    store,
   });
+};
 
 describe("listing a matter's entities", () => {
   test("posts the page query and keeps the fields a row shows", async () => {
@@ -163,23 +168,17 @@ describe("listing a matter's entities", () => {
     });
     expect(
       result.isOk()
-        ? result.value.items.map((entity) => entity.fileType)
+        ? result.value.items.map((entity) => entity.format)
         : result.error._tag,
-    ).toEqual(["PDF", "DOCX", undefined]);
+    ).toEqual([
+      { kind: "pdf", label: "PDF" },
+      { kind: "word", label: "DOCX" },
+      undefined,
+    ]);
     const [call] = calls;
     expect(call !== "token" && call?.body).toMatchObject({
       fieldIds: ["files"],
     });
-  });
-
-  test("a format is the media type's name, else the file name's extension", () => {
-    expect(fileTypeOf("application/pdf; charset=binary", undefined)).toBe(
-      "PDF",
-    );
-    expect(fileTypeOf("application/octet-stream", "výpis.Xlsx")).toBe("XLSX");
-    expect(fileTypeOf(undefined, "bez přípony")).toBeUndefined();
-    expect(fileTypeOf("constructor", "a.pdf")).toBe("PDF");
-    expect(fileTypeOf("__proto__", undefined)).toBeUndefined();
   });
 
   test("the first page carries no cursor", async () => {

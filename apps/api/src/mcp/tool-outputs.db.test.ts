@@ -69,6 +69,9 @@ const OBJECT_STORAGE = "reads or writes DOCX files in object storage";
 const TOOL_COVERAGE = {
   search: excluded(SEARCH_INDEX),
   fetch: excluded(SEARCH_INDEX),
+  create_organization: excluded(
+    "dispatches the organizations.create HTTP capability; its output is covered by the organization creation PostgreSQL tests",
+  ),
   list_matters: RUN,
   read_contact: RUN,
   read_content_across_matters: excluded(SEARCH_INDEX),
@@ -82,6 +85,7 @@ const TOOL_COVERAGE = {
   open_case_law_decision: excluded(PUBLIC_CORPUS),
   read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
   preview_cited_provision: excluded(PUBLIC_CORPUS),
+  list_case_law_courts: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),

@@ -467,20 +467,24 @@ export const MatterMetadataPanel = ({
 
           {/* Danger zone */}
           {canDeleteWorkspace && (
-            <button
-              className={cn(
-                "text-destructive hover:bg-accent flex w-full shrink-0 items-center gap-2 border-t px-3 text-sm font-medium",
-                TOOLBAR_ROW_HEIGHT,
-              )}
+            <Button
+              className="block w-full shrink-0"
               disabled={deleteWorkspace.isPending}
               onClick={() => setDeleteDialogOpen(true)}
-              type="button"
+              variant="plain"
             >
-              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-                <TrashIcon className="size-4" />
+              <span
+                className={cn(
+                  "text-destructive hover:bg-accent flex w-full items-center gap-2 border-t px-3 text-sm font-medium",
+                  TOOLBAR_ROW_HEIGHT,
+                )}
+              >
+                <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                  <TrashIcon className="size-4" />
+                </span>
+                {t("workspaces.deleteWorkspace")}
               </span>
-              {t("workspaces.deleteWorkspace")}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -128,6 +128,9 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `phrasing_timed_out`: one of several phrasings ran out of the call's time
+ *   budget, so the page holds the phrasings that finished and none of its
+ *   hits; the hint names how to run it again.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
@@ -135,6 +138,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_unread",
   "many_required_terms",
   "provision_cited_widely",
+  "phrasing_timed_out",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -188,6 +192,30 @@ export const filterDroppedWarning = ({
 });
 
 /**
+ * The filter named one value the data knows, but no stored record carries
+ * it: a court no decision in the corpus is filed under. Narrowing to it would
+ * empty the search, and narrowing to a neighbour would answer for a value the
+ * caller did not name, so the filter is dropped and both are said.
+ */
+export const filterNotHeldWarning = ({
+  filter,
+  received,
+  value,
+  known,
+}: {
+  filter: string;
+  received: string;
+  /** The value the filter was read as. */
+  value: string;
+  /** The stored values the caller could narrow to instead; bounded. */
+  known: string;
+}): AgentCaseLawSearchWarning => ({
+  code: "filter_dropped",
+  message: `${received} names ${filter} "${value}", which no stored decision is filed under, so this search ran without the ${filter} filter.`,
+  hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
+});
+
+/**
  * The stored values a filter is read against were unavailable in time, so
  * the search compared the value as sent: an exact stored spelling still
  * matches, any other spelling matches nothing.
@@ -200,6 +228,30 @@ export const filterUnreadWarning = ({
   code: "filter_unread",
   message: `The stored ${filter} values could not be read in time, so the ${filter} filter was used exactly as sent.`,
   hint: `If this page looks narrower than expected, pass ${filter} as the corpus stores it, or search again.`,
+});
+
+/**
+ * A phrasing of a several-phrasing search stopped on the call's time budget
+ * while the others finished. Its absence from the page is not "nothing
+ * matched", so it is said: a continuation of the page retries it, and a
+ * phrasing that had not returned a page yet is rerun by name, since the
+ * cursor cannot hold a first page that never ran.
+ */
+export const phrasingTimedOutWarning = ({
+  query,
+  retriedByCursor,
+}: {
+  query: string;
+  /** Whether the page's cursor carries this phrasing's continuation. */
+  retriedByCursor: boolean;
+}): AgentCaseLawSearchWarning => ({
+  code: "phrasing_timed_out",
+  // The phrasing is named: two phrasings can time out on one page, and the
+  // call keeps each distinct note once, so identical wording would merge them.
+  message: `The phrasing ${JSON.stringify(query)} ran out of the search's time budget, so the page holds none of its hits; the phrasings that finished are on the page.`,
+  hint: retriedByCursor
+    ? "Pass the returned cursor to retry this phrasing with the others, or search it on its own."
+    : `Search this phrasing on its own (queries: [${JSON.stringify(query)}]), or narrow it with a court, date range or provision filter.`,
 });
 
 export const manyRequiredTermsWarning = ({
@@ -221,16 +273,13 @@ export const manyRequiredTermsWarning = ({
 
 export const provisionCitedWidelyWarning = ({
   provision,
-  citingDecisions,
 }: {
   /** The provision as the caller wrote it. */
   provision: string;
-  /** How many decisions cite it, counted exactly. */
-  citingDecisions: number;
 }): AgentCaseLawSearchWarning => ({
   code: "provision_cited_widely",
-  message: `${provision} is cited by ${String(citingDecisions)} decisions, more than one search can filter by: these results are the topic's best matches that cite it, not all of them.`,
-  hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
+  message: `${provision} has more citation links than one search can enumerate: these results are the topic's best matches that cite it, not all of them.`,
+  hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with pagination.",
 });
 
 export const partialMatchesAppendedWarning = ({
@@ -307,7 +356,6 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   provision_cited_widely: () =>
     provisionCitedWidelyWarning({
       provision: "§ 2910 OZ",
-      citingDecisions: 4037,
     }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
@@ -321,6 +369,11 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       ],
       wordCount: 6,
       slots: 5,
+    }),
+  phrasing_timed_out: () =>
+    phrasingTimedOutWarning({
+      query: "náhrada škody promlčení",
+      retriedByCursor: false,
     }),
 } as const satisfies Record<
   AgentCaseLawSearchWarningCode,

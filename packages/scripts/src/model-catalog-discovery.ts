@@ -61,9 +61,14 @@ const MODEL_FAMILY_PARSERS = {
       : null;
   },
   mistral: (modelId) => {
-    const match = /^mistral-(large|medium|small)-(\d{1,2})$/u.exec(modelId);
+    // Point releases spell the version with dashes (mistral-large-4-0-8);
+    // the patch component never starts a new generation.
+    const match =
+      /^mistral-(large|medium|small)-(\d{1,2})(?:-(\d{1,2})(?:-\d{1,2})?)?$/u.exec(
+        modelId,
+      );
     return match?.[1] !== undefined && match[2] !== undefined
-      ? { family: match[1], generation: parseGeneration(match[2]) }
+      ? { family: match[1], generation: parseGeneration(match[2], match[3]) }
       : null;
   },
   openai: (modelId) => {

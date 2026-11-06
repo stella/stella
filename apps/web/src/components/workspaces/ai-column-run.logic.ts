@@ -50,6 +50,21 @@ export const aiColumnRunScope = ({
 };
 
 /**
+ * The picked rows the page still shows, or `null` when every pick is shown.
+ * A new search can answer on the same page; a pick it no longer shows goes
+ * with its row, so a selection count is the count a run would use.
+ */
+export const selectionShownOnPage = ({
+  pageRowIds,
+  selectedRowIds,
+}: AiColumnRunScopeOptions): readonly string[] | null => {
+  const shown = new Set(pageRowIds);
+  return selectedRowIds.every((id) => shown.has(id))
+    ? null
+    : selectedRowIds.filter((id) => shown.has(id));
+};
+
+/**
  * Whether the header Play stays on screen or appears with hover and keyboard
  * focus. It stays while it is the header's only sign of rows that never ran or
  * are in flight, and while the column menu is open (the pointer has left the

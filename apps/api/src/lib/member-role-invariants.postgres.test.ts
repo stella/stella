@@ -28,6 +28,7 @@ import {
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -123,7 +124,7 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     organizationId,
     owners,
     cleanUp: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(
         inArray(
           user.id,
@@ -567,9 +568,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(member.id, owner.memberId));
           expect(retainedMember?.role).toBe("owner");
           await setup.db.transaction(async (tx) => {
-            await tx
-              .delete(organization)
-              .where(eq(organization.id, data.organizationId));
+            await deleteOrganizationsForTest(tx, [data.organizationId]);
           });
           const rows = await setup.db.execute(
             sql`SELECT id FROM member WHERE organization_id = ${data.organizationId}`,

@@ -16,11 +16,11 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -1069,17 +1069,14 @@ const replay = async (
     const lastEnded = exchanges.at(-1)?.ended;
     const midStream =
       lastEnded !== undefined && staysOpen(lastEnded) && next !== undefined;
-    await waitFor(
-      () => {
-        expect(server.posted.length, requests).toBe(expectedPosts);
-        expect(
-          midStream ? server.stalled() : server.streaming() === 0,
-          requests,
-        ).toBe(true);
-        expect(isSuspended(container)).toBe(false);
-      },
-      { timeout: 5000 },
-    );
+    await waitFor(() => {
+      expect(server.posted.length, requests).toBe(expectedPosts);
+      expect(
+        midStream ? server.stalled() : server.streaming() === 0,
+        requests,
+      ).toBe(true);
+      expect(isSuspended(container)).toBe(false);
+    });
     await flush();
     // Only the recorded requests, and nothing the recording did not serve.
     expect(server.posted.length, requests).toBe(expectedPosts);
