@@ -8,11 +8,13 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   DESKTOP_RUNNER_OUTPUT_MAX_BYTES,
   DESKTOP_RUNNER_PROTOCOL,
   desktopRunnerOutputPath,
+  desktopRunnerOutputUploadedSchema,
 } from "@stll/api-contract/desktop-runner";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -157,8 +159,7 @@ const storedRow = async (fileId: string) =>
 const fileIdOf = async (response: Response) => {
   expect(response.status).toBe(200);
   const answer: unknown = await response.json();
-  expect(answer).toEqual({ fileId: expect.any(String) });
-  return (answer as { fileId: string }).fileId;
+  return v.parse(desktopRunnerOutputUploadedSchema, answer).fileId;
 };
 
 beforeAll(async () => {

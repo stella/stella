@@ -281,7 +281,9 @@ describe("a file a turn on the computer hands back", () => {
       local.run = localRunFor({
         threadId,
         text: "The report is ready.",
-        onStart: (sent) => instructions.push(sent),
+        onStart: (sent) => {
+          instructions.push(sent);
+        },
         reports: () => reports,
       });
       // The chat thread exists from the first send, so the file is stored
@@ -517,6 +519,7 @@ describe("a file a turn on the computer hands back", () => {
     const { client, harness, local, threadId } = await openThread();
     try {
       const reports: RunReport[] = [];
+      const stored: SafeId<"userFile">[] = [];
       const run = localRunFor({
         threadId,
         text: "Done.",
@@ -532,6 +535,7 @@ describe("a file a turn on the computer hands back", () => {
               fileName: "report.pdf",
               mimeType: "application/pdf",
             });
+            stored.push(fileId);
             reports.push({
               status: "uploaded",
               fileId,
@@ -549,11 +553,10 @@ describe("a file a turn on the computer hands back", () => {
         metadata: { filename: "report.pdf" },
         source: { mimeType: "application/pdf" },
       });
-      expect(JSON.stringify(file)).toContain(
-        toUserFileUrl(
-          toSafeId<"userFile">((reports.at(0) as { fileId: string }).fileId),
-        ),
-      );
+      expect(stored).toHaveLength(1);
+      for (const fileId of stored) {
+        expect(JSON.stringify(file)).toContain(toUserFileUrl(fileId));
+      }
     } finally {
       client.dispose();
       await harness.close();
