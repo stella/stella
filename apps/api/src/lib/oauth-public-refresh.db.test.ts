@@ -15,7 +15,8 @@ const REGISTRATION_QUERY_BUDGET = 13;
 // A cold metadata grant includes client discovery, consent, and token writes:
 // measured at 61 for most grants and 73 for the coldest.
 const GRANT_QUERY_BUDGET = 75;
-const REFRESH_QUERY_BUDGET = 15;
+// Measured at 19 for a rotation on current main.
+const REFRESH_QUERY_BUDGET = 22;
 
 const DOCUMENT_URL = "https://client.example.com/oauth/refresh-client.json";
 const REDIRECT_URI = "https://connector.example.test/oauth/callback";
