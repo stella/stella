@@ -310,7 +310,7 @@
     "tailwindcss": "4.3.3",
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.1",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
+    "tsrs": "0.20.1-ts7.1.0-beta",
     "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "icu-minify": "4.14.9",

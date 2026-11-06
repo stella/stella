@@ -80,22 +80,6 @@
     "Název soudu": "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
     "URL adresa": "the retrieval address of the document the row already stores as sourceUrl"
   },
-  "sk-courts": {
-    "sud.adresaString": "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
-    "sud.suradnice.zemepisnaDlzka": "the courthouse's map position, as for its address",
-    "sud.suradnice.zemepisnaSirka": "the courthouse's map position, as for its address",
-    "zvyraznenie": "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
-    "povodnySud.adresaString": "the transferring courthouse's postal address, as for the deciding court's",
-    "povodnySud.suradnice.zemepisnaDlzka": "the transferring courthouse's map position, as for the deciding court's",
-    "povodnySud.suradnice.zemepisnaSirka": "the transferring courthouse's map position, as for the deciding court's"
-  },
-  "sk-us": {
-    "content": "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
-    "index": "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
-    "extension": "empty on every record of every corpus this endpoint serves",
-    "size": "empty on every record of every corpus this endpoint serves",
-    "mkDecisionInTermsOfForSort": "a sort projection of the basis field: the same values flattened into one string"
-  },
   "pl-ncourt": {
     "excerpt": "the opening characters of the document the document part holds whole",
     "xPart@xml:space": "a serialisation directive for the XML, not a statement about the judgment"

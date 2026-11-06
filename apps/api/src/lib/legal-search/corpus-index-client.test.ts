@@ -2115,6 +2115,13 @@ test("ingest names the request and its budget when the transport fails", async (
   }
 });
 
+/** A failure names what the wait for an engine slot left: a loaded runner waits. */
+const expectBudgetLeftOf = (message: string, timeoutMs: number): void => {
+  const budget = Number(/within its (\d+)ms budget/u.exec(message)?.[1]);
+  expect(budget).toBeGreaterThan(0);
+  expect(budget).toBeLessThanOrEqual(timeoutMs);
+};
+
 test("a search aborts within the remaining shared-request budget", async () => {
   const stub = async (
     _input: Parameters<typeof fetch>[0],
@@ -2147,7 +2154,7 @@ test("a search aborts within the remaining shared-request budget", async () => {
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.reach).toBe("unreachable");
-    expect(result.error.message).toContain("within its 20ms budget");
+    expectBudgetLeftOf(result.error.message, 20);
   }
 });
 
@@ -2355,7 +2362,7 @@ test.each([undefined, "jurisdiction:CZE"])(
     });
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.message).toContain("within its 20ms budget");
+      expectBudgetLeftOf(result.error.message, 20);
       expect(result.error.reach).toBe("unreachable");
     }
   },

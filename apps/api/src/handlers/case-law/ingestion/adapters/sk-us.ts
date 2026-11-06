@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-sk: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -107,7 +108,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -2438,18 +2438,46 @@ const SK_US_SOURCE_FIELDS = {
     target: { type: "metadata", key: "docType" },
   },
   title: { disposition: "stored", target: { type: "metadata", key: "title" } },
-  content: legacyExcludedSourceField(
-    "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
-  ),
-  index: legacyExcludedSourceField(
-    "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
-  ),
-  extension: legacyExcludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
-  size: legacyExcludedSourceField(
-    "empty on every record of every corpus this endpoint serves",
-  ),
+  content: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["content"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  index: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["index"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  extension: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["extension"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
+  size: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["size"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   contentType: {
     disposition: "stored",
     target: { type: "metadata", key: "contentType" },
@@ -2499,9 +2527,16 @@ const SK_US_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "legalBasis" },
   },
-  mkDecisionInTermsOfForSort: legacyExcludedSourceField(
-    "a sort projection of the basis field: the same values flattened into one string",
-  ),
+  mkDecisionInTermsOfForSort: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["mkDecisionInTermsOfForSort"],
+      reason:
+        "Publisher search field retained verbatim, including null or query-specific values",
+    },
+  },
   mkResultOfNegotiation: {
     disposition: "stored",
     target: { type: "metadata", key: "result" },
