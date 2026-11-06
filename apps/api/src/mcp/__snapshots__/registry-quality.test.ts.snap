@@ -518,7 +518,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
         "include": {
           "type": "array",
@@ -7869,7 +7869,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
         "include": {
           "type": "array",
@@ -15956,7 +15956,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
         "include": {
           "type": "array",
@@ -18034,7 +18034,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
         "include": {
           "type": "array",

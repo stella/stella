@@ -6968,6 +6968,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: string;
         }[];
         truncated?: true;
+        warnings?: { code: string; message: string; hint: string }[];
       };
       outline?: { page: number; title: string; url?: string }[];
       page?: number;
@@ -8032,6 +8033,47 @@ describe("OpenAI-compatible MCP tools", () => {
     // fields unless asked.
     expect(entry.decision).not.toHaveProperty("text");
     expect(entry.decision).not.toHaveProperty("court");
+  });
+
+  test("read_case_law_decision names the words of a query no paragraph holds whole", async () => {
+    const paragraphs = ["Nájemce zaplatil včas.", "Soud posoudil výpověď."];
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      documentAst: {
+        ...base.documentAst,
+        blocks: paragraphs.map((plainText, index) => ({
+          anchorId: `p-${String(index + 1)}`,
+          id: `b-${String(index + 1)}`,
+          inlines: [],
+          plainText,
+          type: "paragraph",
+        })),
+      },
+    });
+
+    const apart = await readOne({ query: "soud nájemce výpověď Listina" });
+    expect(apart.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_apart", audience: "agent" }],
+    });
+    expect(apart.decision?.matches?.warnings?.[0]?.message).toContain(
+      "Nowhere in the decision: Listina.",
+    );
+    expect(apart.decision?.matches?.warnings?.[0]?.hint).toContain(
+      'query "soud výpověď"',
+    );
+
+    const absent = await readOne({ query: "Listina" });
+    expect(absent.decision?.matches).toMatchObject({
+      hitCount: 0,
+      paragraphs: [],
+      warnings: [{ code: "query_words_absent", audience: "agent" }],
+    });
+
+    const found = await readOne({ query: "soud výpověď" });
+    expect(found.decision?.matches).not.toHaveProperty("warnings");
   });
 
   test("read_case_law_decision uses court paragraphs in match and outline links", async () => {

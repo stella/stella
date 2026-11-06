@@ -258,6 +258,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { readCaseLawCitationsArgsSchema } from "./case-law-citations-input";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 import { searchNotesForCall } from "./search-notes";
+import { MCP_NOTE_AUDIENCE } from "./tool-note-audience";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -797,7 +798,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full.",
+          "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full.",
         ),
       ),
     ),
@@ -3279,6 +3280,16 @@ const decisionTextPart = ({
           ...decisionBlockDeepLink({ url, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
+        ...(found.warning === null
+          ? {}
+          : {
+              warnings: [
+                {
+                  ...found.warning,
+                  audience: MCP_NOTE_AUDIENCE[found.warning.code],
+                },
+              ],
+            }),
       },
     };
   }
