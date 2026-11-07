@@ -120,7 +120,7 @@ const remapCitedCells = (
   fieldClones: ReadonlyMap<SafeId<"field">, SafeId<"field">>,
 ): JustificationContent => ({
   ...content,
-  blocks: content.blocks.flatMap((block) => {
+  blocks: content.blocks.flatMap((block): JustificationContent["blocks"] => {
     if (block.kind !== "pdf-bates" && block.kind !== "docx-folio") {
       return [block];
     }
