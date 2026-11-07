@@ -2,7 +2,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { isTestFile, repoRelativeFilename } from "./utils.ts";
+import {
+  type AstNode,
+  isAstNode,
+  isTestFile,
+  repoRelativeFilename,
+} from "./utils.ts";
 
 /**
  * A run or batch that finishes when a count of its rows reaches the planned
@@ -48,13 +53,6 @@ export const COUNT_GATED_COMPLETIONS: readonly Registration[] = [
   },
 ];
 
-type AstNode = { readonly type: string; readonly [key: string]: unknown };
-
-const isNode = (value: unknown): value is AstNode =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { type?: unknown }).type === "string";
-
 const children = (node: AstNode): AstNode[] => {
   const out: AstNode[] = [];
   for (const [key, value] of Object.entries(node)) {
@@ -63,11 +61,11 @@ const children = (node: AstNode): AstNode[] => {
     }
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (isNode(item)) {
+        if (isAstNode(item)) {
           out.push(item);
         }
       }
-    } else if (isNode(value)) {
+    } else if (isAstNode(value)) {
       out.push(value);
     }
   }
@@ -75,19 +73,19 @@ const children = (node: AstNode): AstNode[] => {
 };
 
 const identifierName = (node: unknown): string | null =>
-  isNode(node) && node.type === "Identifier" && typeof node["name"] === "string"
-    ? node["name"]
+  isAstNode(node) && node.type === "Identifier" && typeof node.name === "string"
+    ? node.name
     : null;
 
 const keyName = (node: unknown): string | null => {
-  if (!isNode(node)) {
+  if (!isAstNode(node)) {
     return null;
   }
-  if (node.type === "Identifier" && typeof node["name"] === "string") {
-    return node["name"];
+  if (node.type === "Identifier" && typeof node.name === "string") {
+    return node.name;
   }
-  if (node.type === "Literal" && typeof node["value"] === "string") {
-    return node["value"];
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
   return null;
 };
@@ -97,24 +95,24 @@ const COUNT_IN_SQL = /\bcount\s*\(/iu;
 /** `count()`, `countDistinct()`, `tx.$count()` or SQL text with `count(`. */
 const isCountRead = (node: AstNode): boolean => {
   if (node.type === "CallExpression") {
-    const callee = node["callee"];
+    const callee = node.callee;
     const name = identifierName(callee);
     if (name === "count" || name === "countDistinct") {
       return true;
     }
     if (
-      isNode(callee) &&
+      isAstNode(callee) &&
       callee.type === "MemberExpression" &&
-      keyName(callee["property"]) === "$count"
+      keyName(callee.property) === "$count"
     ) {
       return true;
     }
   }
   if (node.type === "TemplateElement") {
-    const value = node["value"];
+    const value = node.value;
     const raw =
-      typeof value === "object" && value !== null
-        ? (value as { raw?: unknown }).raw
+      typeof value === "object" && value !== null && "raw" in value
+        ? value.raw
         : undefined;
     return typeof raw === "string" && COUNT_IN_SQL.test(raw);
   }
@@ -123,18 +121,18 @@ const isCountRead = (node: AstNode): boolean => {
 
 /** `status: "completed"` or `status: RUN_STATUS.COMPLETED` in an object. */
 const isTerminalStatusWrite = (node: AstNode): boolean => {
-  if (node.type !== "Property" || keyName(node["key"]) !== "status") {
+  if (node.type !== "Property" || keyName(node.key) !== "status") {
     return false;
   }
-  const value = node["value"];
-  if (!isNode(value)) {
+  const value = node.value;
+  if (!isAstNode(value)) {
     return false;
   }
-  if (value.type === "Literal" && typeof value["value"] === "string") {
-    return TERMINAL_STATUSES.has(value["value"].toLowerCase());
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return TERMINAL_STATUSES.has(value.value.toLowerCase());
   }
   if (value.type === "MemberExpression") {
-    const member = keyName(value["property"]);
+    const member = keyName(value.property);
     return member !== null && TERMINAL_STATUSES.has(member.toLowerCase());
   }
   return false;
@@ -158,7 +156,7 @@ const isFunction = (node: AstNode) =>
  * function around it, which is the unit a reader of the code would name.
  */
 export const countGatedFunctions = (
-  program: AstNode,
+  program: unknown,
   lineOf: (offset: number) => number,
 ): { name: string; line: number }[] => {
   const units: Unit[] = [];
@@ -169,11 +167,11 @@ export const countGatedFunctions = (
   ) => {
     let current = unit;
     if (isFunction(node)) {
-      const declared = identifierName(node["id"]) ?? pendingName;
+      const declared = identifierName(node.id) ?? pendingName;
       if (declared !== null) {
         current = {
           name: declared,
-          line: lineOf(typeof node["start"] === "number" ? node["start"] : 0),
+          line: lineOf(typeof node.start === "number" ? node.start : 0),
           counts: false,
           completes: false,
         };
@@ -189,16 +187,18 @@ export const countGatedFunctions = (
       }
     }
     const nameForChild =
-      node.type === "VariableDeclarator" ? identifierName(node["id"]) : null;
+      node.type === "VariableDeclarator" ? identifierName(node.id) : null;
     for (const child of children(node)) {
       visit(
         child,
         current,
-        nameForChild !== null && child === node["init"] ? nameForChild : null,
+        nameForChild !== null && child === node.init ? nameForChild : null,
       );
     }
   };
-  visit(program, null, null);
+  if (isAstNode(program)) {
+    visit(program, null, null);
+  }
   return units
     .filter((unit) => unit.counts && unit.completes)
     .map(({ name, line }) => ({ name, line }));
@@ -256,7 +256,7 @@ export default eslintCompatPlugin({
             const text = context.sourceCode.text;
             const lineOf = (offset: number) =>
               text.slice(0, offset).split("\n").length;
-            const found = countGatedFunctions(node as AstNode, lineOf);
+            const found = countGatedFunctions(node, lineOf);
             const registered = COUNT_GATED_COMPLETIONS.filter(
               (registration) => registration.file === file,
             );
