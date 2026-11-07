@@ -622,11 +622,13 @@ describe("a host without a scanner on PATH", () => {
     expect(result.ranges).toEqual([]);
   });
 
+  const pinnedDigest = Object.entries(GITLEAKS_BINARY_SHA256).find(
+    ([key]) => key === platformKey,
+  )?.[1];
   const pinnedBinary =
-    platformKey in GITLEAKS_BINARY_SHA256 &&
+    pinnedDigest !== undefined &&
     REAL_GITLEAKS !== null &&
-    sha256Hex(readFileSync(REAL_GITLEAKS)) ===
-      GITLEAKS_BINARY_SHA256[platformKey as keyof typeof GITLEAKS_BINARY_SHA256]
+    sha256Hex(readFileSync(REAL_GITLEAKS)) === pinnedDigest
       ? REAL_GITLEAKS
       : null;
   test.skipIf(pinnedBinary === null)(
