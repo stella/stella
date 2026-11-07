@@ -49,7 +49,9 @@
 // `.update(T).set(...)`, an `.insert(T).values(...)` and an insert's
 // `.onConflictDoUpdate({ set })` whose payload names an owned column, as a
 // key, a shorthand, or inside a spread or local that resolves to an object
-// literal. A payload built elsewhere and passed in opaquely is not followed.
+// literal. A builder or conflict option held in a stable local is followed;
+// a payload mutated after it is initialised, or built elsewhere and passed in
+// opaquely, is not.
 
 import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -974,8 +976,9 @@ const isOwnedColumnRead = ({
   }
 };
 
-/** The receiver call of a chained method call, with the receiver's method name. */
+/** The receiver call of a chained method call, with the receiver's method name. A builder held in a stable local resolves to the call that made it. */
 const chainedReceiver = (
+  context: ScopeContext,
   call: AstNode,
 ): {
   method: string | null;
@@ -989,7 +992,7 @@ const chainedReceiver = (
   if (callee?.type !== "MemberExpression") {
     return null;
   }
-  const receiver = unwrapExpression(callee.object);
+  const receiver = stableValue(context, callee.object);
   if (
     receiver?.type !== "CallExpression" ||
     !Array.isArray(receiver.arguments)
@@ -1007,41 +1010,66 @@ const chainedReceiver = (
   };
 };
 
-/** The `set` of an insert's `.onConflictDoUpdate(...)`, with the insert's table argument. */
+/** The values an object literal, resolved through stable locals and spreads, holds under `name`. */
+const objectPropertyValues = (
+  context: ScopeContext,
+  value: unknown,
+  name: string,
+  seen = new Set<unknown>(),
+): unknown[] => {
+  const node = stableValue(context, value);
+  if (
+    node?.type !== "ObjectExpression" ||
+    !Array.isArray(node.properties) ||
+    seen.has(node)
+  ) {
+    return [];
+  }
+  seen.add(node);
+  return node.properties.flatMap((property: unknown) => {
+    if (!isAstNode(property)) {
+      return [];
+    }
+    if (property.type === "SpreadElement") {
+      return objectPropertyValues(context, property.argument, name, seen);
+    }
+    if (property.type !== "Property") {
+      return [];
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    return key === name ? [property.value] : [];
+  });
+};
+
+/** The `set` payloads of an insert's `.onConflictDoUpdate(...)`, with the insert's table argument. */
 const conflictSetTarget = (
+  context: ScopeContext,
   call: AstNode,
   values: AstNode,
 ): { table: unknown; payload: unknown } | null => {
-  const insert = chainedReceiver(values);
-  const options = unwrapExpression(
-    call.type === "CallExpression" && Array.isArray(call.arguments)
-      ? call.arguments.at(0)
-      : null,
-  );
+  const insert = chainedReceiver(context, values);
   if (
     insert?.receiverMethod !== "insert" ||
     !Array.isArray(insert.receiver.arguments) ||
-    options?.type !== "ObjectExpression" ||
-    !Array.isArray(options.properties)
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments)
   ) {
     return null;
   }
-  const set = options.properties.find(
-    (property: unknown) =>
-      isAstNode(property) &&
-      property.type === "Property" &&
-      getPropertyName(property.key) === "set",
-  );
-  return isAstNode(set) && set.type === "Property"
-    ? { table: insert.receiver.arguments.at(0), payload: set.value }
-    : null;
+  const sets = objectPropertyValues(context, call.arguments.at(0), "set");
+  return sets.length === 0
+    ? null
+    : { table: insert.receiver.arguments.at(0), payload: sets };
 };
 
 /** The table argument and payload of an insert, update or conflict set. */
 const writeTarget = (
+  context: ScopeContext,
   call: AstNode,
 ): { table: unknown; payload: unknown } | null => {
-  const chain = chainedReceiver(call);
+  const chain = chainedReceiver(context, call);
   if (
     chain === null ||
     call.type !== "CallExpression" ||
@@ -1061,7 +1089,7 @@ const writeTarget = (
   }
   return chain.method === "onConflictDoUpdate" &&
     chain.receiverMethod === "values"
-    ? conflictSetTarget(call, chain.receiver)
+    ? conflictSetTarget(context, call, chain.receiver)
     : null;
 };
 
@@ -1072,6 +1100,11 @@ const payloadNamesColumn = (
   columns: readonly string[],
   seen = new Set<unknown>(),
 ): boolean => {
+  if (Array.isArray(value)) {
+    return value.some((item: unknown) =>
+      payloadNamesColumn(context, item, columns, seen),
+    );
+  }
   const node = stableValue(context, value);
   if (node === null || seen.has(node)) {
     return false;
@@ -1079,7 +1112,14 @@ const payloadNamesColumn = (
   seen.add(node);
   if (node.type === "ArrayExpression" && Array.isArray(node.elements)) {
     return node.elements.some((element: unknown) =>
-      payloadNamesColumn(context, element, columns, seen),
+      payloadNamesColumn(
+        context,
+        isAstNode(element) && element.type === "SpreadElement"
+          ? element.argument
+          : element,
+        columns,
+        seen,
+      ),
     );
   }
   if (node.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
@@ -1110,7 +1150,7 @@ const createColumnWriteReporter =
     if (entries.length === 0) {
       return;
     }
-    const target = isAstNode(node) ? writeTarget(node) : null;
+    const target = isAstNode(node) ? writeTarget(context, node) : null;
     if (target === null) {
       return;
     }

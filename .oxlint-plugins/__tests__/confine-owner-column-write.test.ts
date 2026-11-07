@@ -38,8 +38,12 @@ describe.serial("cell claim write ownership", () => {
         "db.insert(cells).values({ content }).onConflictDoUpdate({ target, set: { ownerBatchId: null } });",
         "const claim = { ownerRunId: run, attempt: 0 }; db.update(cells).set({ ...claim });",
         'db.update(cells).set({ ["ownerRunId"]: null });',
+        "const update = db.update(cells); update.set({ ownerRunId: null });",
+        "const conflict = { target, set: { attempt: 1 } }; db.insert(cells).values({ content }).onConflictDoUpdate(conflict);",
+        "db.insert(cells).values({ content }).onConflictDoUpdate({ target, [`set`]: { deadlineAt } });",
+        "const rows = [{ content, ownerBatchId }]; db.insert(cells).values([...rows]);",
       ]),
-    ).toEqual([2, 3, 4, 5, 6, 7]);
+    ).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   });
 
   test("allows other columns, other tables, and the owners", async () => {
