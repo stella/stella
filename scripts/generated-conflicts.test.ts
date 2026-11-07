@@ -1647,7 +1647,8 @@ describe("branch update", () => {
       const fetch = async (url: string, init: RequestInit) => {
         const isMutation =
           url.endsWith("/graphql") &&
-          String(init.body).includes("updateRefs(input");
+          typeof init.body === "string" &&
+          init.body.includes("updateRefs(input");
         if (isMutation && remaining > 0) {
           remaining -= 1;
           calls.push({ route: "/graphql", body: null });
