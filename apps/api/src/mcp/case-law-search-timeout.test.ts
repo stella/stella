@@ -8,8 +8,17 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
+import {
+  flushFailureObservations,
+  resetFailureObservationsForTesting,
+} from "@/api/lib/observability/failure-shadow";
+import { caseLawSearchTimeoutResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -98,3 +107,46 @@ for (const failure of ["thrown", "returned", "provision lookup"] as const) {
     expect(JSON.stringify(result)).not.toContain("SQL diagnostics");
   });
 }
+
+test.each([
+  {
+    shape: "a returned timeout body",
+    failure: new HttpStatusResponse(503, {
+      code: PUBLIC_READ_TIMEOUT_CODE,
+      message: "Public read timed out. Please try again.",
+    }),
+  },
+  {
+    shape: "a cancelled statement",
+    failure: new SQL.PostgresError("private SQL diagnostics", {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "57014",
+      detail: "",
+      hint: "",
+      severity: "ERROR",
+    }),
+  },
+])("$shape grades as a public read timeout", ({ failure }) => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  resetFailureObservationsForTesting();
+  try {
+    expect(caseLawSearchTimeoutResult(failure)).not.toBeNull();
+    expect(analytics.exceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        attributes: {
+          "failure.grade": "transient",
+          "failure.reason": "public_read_timeout",
+        },
+      },
+    ]);
+  } finally {
+    resetFailureObservationsForTesting();
+    logs.restore();
+    analytics.restore();
+  }
+});

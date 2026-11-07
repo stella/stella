@@ -20,7 +20,10 @@ import type {
   PlaybookPositions,
   Position,
 } from "@/api/lib/workflow/playbook-positions";
-import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import {
+  canonicalRulesInput,
+  isTierStandard,
+} from "@/api/lib/workflow/position-runtime";
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
@@ -58,19 +61,6 @@ export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
 const contentForType = (
   contentType: DeriveAskResult["contentType"],
 ): ScalarPropertyContent => ({ version: 1, type: contentType });
-
-// The canonical grading inputs the derived question depends on, in stored order.
-// Ideal language is deliberately excluded: it drives FIX, not what to extract.
-const canonicalRulesInput = (position: TierStandardPosition) => {
-  const { tiers } = position.standard;
-  return {
-    issue: position.issue,
-    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
-    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
-    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
-    check: position.check ?? null,
-  };
-};
 
 export const computeRulesHash = (position: TierStandardPosition): string =>
   hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));

@@ -3,7 +3,6 @@ import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 import type { Transaction } from "@/api/db/root";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 
 type RunnerAccount = {
   readonly userId: SafeId<"user">;
@@ -15,8 +14,6 @@ export type RunnerFeatureAccess = (account: RunnerAccount) => Promise<boolean>;
 
 type RunnerFeatureAccessOptions = {
   db: Pick<Transaction, "select">;
-  /** The grants to decide with; the deployment's by default. */
-  grants?: () => FeatureAccessGrants;
 };
 
 /**
@@ -24,7 +21,7 @@ type RunnerFeatureAccessOptions = {
  * owner that answers the desktop's own feature read.
  */
 export const runnerFeatureAccess =
-  ({ db, grants }: RunnerFeatureAccessOptions): RunnerFeatureAccess =>
+  ({ db }: RunnerFeatureAccessOptions): RunnerFeatureAccess =>
   async (account: RunnerAccount) => {
     const { userId, organizationId } = account;
     const decision = await resolveFeatureAccess({
@@ -32,7 +29,6 @@ export const runnerFeatureAccess =
       organizationId,
       userId,
       featureId: DESKTOP_RUNNER_FEATURE_ID,
-      ...(grants === undefined ? {} : { grants: grants() }),
     });
     return decision.status === "enabled";
   };

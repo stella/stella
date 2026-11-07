@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -455,7 +456,7 @@ const deleteMatters = async (scope: ResetScope) => {
     LIMITS.workspacesCount,
   );
   return await deleteEach(scope, "matters", rows, async (matter) => {
-    if (matter.status === "archived") {
+    if (matter.status === WORKSPACE_STATUS.archived) {
       const unarchived = await Result.gen(() =>
         unarchiveWorkspaceHandler({
           safeDb: scope.safeDb,

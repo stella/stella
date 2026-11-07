@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/v1/chat/runs/active",
+    "The member's own unfinished chat runs are readable on every deployment that serves chat",
+  ],
+  [
     "/v1/chat/local-runners",
     "The chat computer list is mounted on every deployment and answers hidden unless the member's local-agents feature decision is enabled",
   ],

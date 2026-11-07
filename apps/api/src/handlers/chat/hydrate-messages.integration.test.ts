@@ -34,7 +34,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { hydrateMessages } from "./stream-chat";
+import { hydrateMessages, localRunAttachmentsOf } from "./stream-chat";
 
 // Evidence for the `no-raw-filename-write` waiver in `hydrateMessages`: the
 // filename handed to the provider-bound part is the stored `user_files` value,
@@ -187,6 +187,7 @@ afterAll(async () => {
 
 const hydrate = async (message: ChatMessage) =>
   await hydrateMessages({
+    copiesFilesToComputer: false,
     messages: [message],
     safeDb,
     sendMode: CHAT_SEND_MODE.rawOverride,
@@ -228,6 +229,47 @@ describe("chat attachment hydration provenance", () => {
 
     expect(hydrated).toContain(STORED_NAME);
     expect(hydrated).not.toContain("../../etc/passwd");
+  });
+
+  test("a turn on the computer names the file's place beside its text", async () => {
+    const message = attachmentMessage(ownFileId, "renamed-by-client.txt");
+    const hydrated = await hydrateMessages({
+      copiesFilesToComputer: true,
+      messages: [message],
+      safeDb,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      userId: ids.userA1,
+    });
+    const text = textOf(hydrated);
+    expect(text).toContain(`attachments/${ownFileId}/`);
+    expect(text).toContain("Attachment body");
+
+    const attachments = await localRunAttachmentsOf({
+      messages: [message, message],
+      safeDb,
+      userId: ids.userA1,
+    });
+    expect(attachments.unwrap()).toEqual([
+      {
+        path: `attachments/${ownFileId}/${STORED_NAME}`,
+        fileId: ownFileId,
+        fileName: STORED_NAME,
+        s3Key: createUserFileKey({
+          fileId: ownFileId,
+          mimeType: TEXT_PLAIN_MIME_TYPE,
+          organizationId: ids.orgA,
+        }),
+      },
+    ]);
+  });
+
+  test("a turn on the computer copies nothing of another member's", async () => {
+    const attachments = await localRunAttachmentsOf({
+      messages: [attachmentMessage(foreignFileId, "other-tenant-brief.txt")],
+      safeDb,
+      userId: ids.userA1,
+    });
+    expect(attachments.unwrap()).toEqual([]);
   });
 
   test("hydrates legacy XLSX files and persists their tenant-scoped cache in a batch", async () => {

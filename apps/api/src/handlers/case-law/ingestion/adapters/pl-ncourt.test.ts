@@ -8,7 +8,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
   DECISION_DOCUMENT_ROLE,
@@ -49,11 +49,14 @@ import { readPlNcourtContent } from "@/api/handlers/case-law/ingestion/parsers/p
 import { projectPlNcourtSourceRaw } from "@/api/handlers/case-law/ingestion/retention/sources/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   PUBLISHER_REQUEST,
 } from "@/api/lib/legal-search/ingestion-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
@@ -74,6 +77,16 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const assemblePlNcourtDecision = guardParser(uncheckedAssemblePlNcourtDecision);
 const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 const testFetchState = createTestFetch();
+
+const replayStoredRaw = async (stored: StoredRawReparseInput) => {
+  const publisherFetch = mock(async (): Promise<Response> =>
+    panic("Stored PL replay must not fetch publisher responses"),
+  );
+  testFetchState.set(asFetchMock(publisherFetch));
+  const outcome = await plNcourtAdapter.reparseStoredRaw?.(stored);
+  expect(publisherFetch).not.toHaveBeenCalled();
+  return outcome;
+};
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -242,7 +255,7 @@ describe("identity", () => {
 
   test("a stored row replays to the same identity and the same decision", async () => {
     const decision = await pairDecision();
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -388,7 +401,7 @@ describe("building a judgment", () => {
     expect(reconciled.type).toBe("built-supplement");
 
     // A replay of its stored payload is the supplement again.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(supplement.document.sourceRaw ?? ""),
       contentType: supplement.document.sourceRawContentType ?? null,
       caseNumber: supplement.document.caseNumber,
@@ -621,7 +634,7 @@ describe("building a judgment", () => {
     expect(decision.metadata["documentStatus"] === "publisher-404").toBe(true);
 
     // The status is kept in the envelope, so a replay states it too.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
       contentType: decision.sourceRawContentType ?? null,
       caseNumber: decision.caseNumber,
@@ -789,7 +802,7 @@ describe("decision types", () => {
         ),
       ).toBe(true);
       for (const metadata of [{}, { documentRole: role }]) {
-        const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+        const replayed = await replayStoredRaw({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
           contentType: decision.sourceRawContentType ?? null,
           caseNumber: decision.caseNumber,
@@ -1921,7 +1934,7 @@ describe("the walk", () => {
     );
 
     // The audit row replays to itself.
-    const replayed = await plNcourtAdapter.reparseStoredRaw?.({
+    const replayed = await replayStoredRaw({
       raw: new TextEncoder().encode(quarantine.sourceRaw ?? ""),
       contentType: quarantine.sourceRawContentType ?? null,
       caseNumber: quarantine.caseNumber,

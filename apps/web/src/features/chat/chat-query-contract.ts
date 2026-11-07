@@ -190,6 +190,14 @@ type AnswerRevisionQueryKey = {
 
 export const chatKeys = {
   all: ["chat"],
+  /** The reader's own chats that are working or waiting on them, all matters. */
+  activeRuns: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "runs",
+    "active",
+  ],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
     ...chatKeys.all,
     activeOrganizationId,

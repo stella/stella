@@ -12,6 +12,7 @@ const ALLOWED_NON_TURN_LOADERS = {
   "components/chat/chat-message-actions-menu.tsx": "export action",
   "components/chat/chat-prompt-improve-button.tsx": "prompt rewrite action",
   "components/chat/connect-connector-card.tsx": "connector authorization",
+  "components/chat/local-run-question-card.tsx": "submitting a user answer",
   "components/chat/message-export-menu.tsx": "message export action",
   "components/chat/needs-matter-card.tsx": "matter creation action",
   "components/chat/request-secret-card.tsx": "secret submission action",

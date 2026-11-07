@@ -201,7 +201,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
       {canReorderColumn && (
         <div
           aria-hidden="true"
-          className="text-muted-foreground hover:text-foreground border-border/70 bg-background absolute top-1/2 left-2 z-40 flex size-5 -translate-y-1/2 cursor-grab items-center justify-center rounded border opacity-0 shadow-sm transition-opacity group-hover/table-head:opacity-100 active:cursor-grabbing"
+          className="text-muted-foreground hover:text-foreground border-border/70 bg-background absolute top-1/2 left-2 z-40 flex size-5 -translate-y-1/2 cursor-grab items-center justify-center rounded-sm border opacity-0 shadow-sm transition-opacity group-hover/table-head:opacity-100 active:cursor-grabbing"
           data-row-expansion-ignore
           ref={dragHandleRef}
         >
@@ -218,7 +218,7 @@ export const DraggableHeaderCell = <TRow extends TableRowData>({
           onTouchStart={header.getResizeHandler()}
           variant="plain"
         >
-          <span className="bg-primary/25 my-1 mr-auto w-1 rounded" />
+          <span className="bg-primary/25 my-1 mr-auto w-1 rounded-sm" />
         </Button>
       )}
     </WorkspaceGridHead>

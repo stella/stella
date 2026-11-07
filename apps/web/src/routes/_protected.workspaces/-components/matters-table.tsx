@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -303,7 +304,7 @@ const MattersTableRow = ({
     name: workspace.name,
     color: workspace.color,
     client: workspace.client,
-    isArchived: workspace.status === "archived",
+    isArchived: workspace.status === WORKSPACE_STATUS.archived,
   });
   const isEditing = ctx.rename.status === "editing";
 

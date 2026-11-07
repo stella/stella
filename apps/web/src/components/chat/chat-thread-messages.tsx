@@ -56,6 +56,7 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import {
   ChatMessageActionsButton,
   ChatMessageActionsScope,
@@ -115,6 +116,8 @@ import {
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
+import { LocalRunQuestionCard } from "@/components/chat/local-run-question-card";
+import { localRunQuestionCallId } from "@/components/chat/local-run-question.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
@@ -313,6 +316,16 @@ const answerCanFork = ({
     messages,
   });
 
+/** Only an answer offers actions. A role never changes, so neither does the
+ *  shape of the tree around a message's content. */
+const messageActionsThreadRef = (
+  message: ChatUIMessage,
+  threadRef: ChatThreadRef | undefined,
+) =>
+  CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant"
+    ? threadRef
+    : undefined;
+
 /** The live status line of the turn that is running now. Memoized: the
  *  thread re-renders on every streamed chunk, while the line only changes
  *  with the running assistant message. */
@@ -442,7 +455,7 @@ export const ChatThreadMessages = ({
                 : null
             }
             message={message}
-            threadRef={threadRef}
+            threadRef={messageActionsThreadRef(message, threadRef)}
           >
             <MessageContent
               className={cn(
@@ -1955,6 +1968,16 @@ const AssistantMessageParts = ({
   workspaceId,
 }: AssistantMessagePartsProps) => {
   const label = useTranslations()("knowledge.playbooks.openInPane");
+  const localRunQuestion = use(ChatLocalRunQuestionContext);
+  // The paused question shows in place of its call while the turn waits on
+  // it, live and after a reload alike: both read the pause from the turn's
+  // pending interrupts.
+  const localRunQuestionPause =
+    isAwaitingUser && localRunQuestion !== null ? localRunQuestion.pause : null;
+  const localRunQuestionCall =
+    localRunQuestionPause === null
+      ? null
+      : localRunQuestionCallId(message.parts);
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -2021,6 +2044,21 @@ const AssistantMessageParts = ({
           partIndex={index}
           sourceOffsets={!isTurnActive}
           text={part.content}
+        />
+      );
+    }
+
+    if (
+      part.type === "tool-call" &&
+      part.id === localRunQuestionCall &&
+      localRunQuestion !== null &&
+      localRunQuestionPause !== null
+    ) {
+      return (
+        <LocalRunQuestionCard
+          key={localRunQuestionPause.interruptId}
+          onAnswer={localRunQuestion.answer}
+          pause={localRunQuestionPause}
         />
       );
     }

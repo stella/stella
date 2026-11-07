@@ -119,9 +119,6 @@ const caseLawSearchIdentityFields = {
   // Whether the decision holds every word of the query, or only some of them
   // (appended after the others when few decisions held every word).
   match: v.picklist(DECISION_SEARCH_MATCHES),
-  // The publisher's own decision URL, which may embed the publisher's
-  // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-  sourceUrl: v.nullable(publicUrl()),
 } as const;
 
 /**

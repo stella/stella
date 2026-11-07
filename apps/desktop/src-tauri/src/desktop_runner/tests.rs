@@ -202,13 +202,14 @@ fn run_start(run_id: &str, expires_at: &str) -> Value {
   json!({
     "type": "run.start",
     "runId": run_id,
+    "folderId": run_id,
     "harness": "codex",
     "harnessVersion": "0.50.0",
     "model": "gpt-5-codex",
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
-    "policy": {"network": "open", "fs": "workspace"},
+    "policy": {"network": "open", "fs": "workspace", "approvals": "ask"},
     "mcp": {
       "serverName": "stella",
       "url": "https://api.example.test/mcp",

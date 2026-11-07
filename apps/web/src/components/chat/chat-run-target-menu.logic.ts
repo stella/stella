@@ -10,6 +10,11 @@ import {
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 
 /** Product names of the harnesses, shown as they are in every locale. */
 export const CHAT_LOCAL_HARNESS_NAMES = {
@@ -29,6 +34,8 @@ export type ChatLocalHarnessOption =
       harness: ChatLocalRunHarness;
       state: "ready";
       models: readonly { id: string; label: string }[];
+      /** The permission modes the computer can run the harness in. */
+      approvalModes: readonly DesktopRunnerApprovalMode[];
     }
   | { harness: ChatLocalRunHarness; state: "limit_until"; resetsAt: string }
   | {
@@ -45,7 +52,12 @@ const optionOf = (
   }
   switch (report.state) {
     case "ready":
-      return { harness, state: "ready", models: report.models };
+      return {
+        harness,
+        state: "ready",
+        models: report.models,
+        approvalModes: report.approvalModes,
+      };
     case "limit_until":
       return { harness, state: "limit_until", resetsAt: report.resetsAt };
     case "needs_login":
@@ -115,11 +127,84 @@ export const localRunModelLabel = (
 
 const SEPARATOR = "::";
 
-/** The menu's radio value for a run target. */
+/**
+ * The menu's radio value for where a turn runs: the harness and model, not
+ * the permission mode, which has its own choice.
+ */
 export const runTargetValue = (target: ChatRunTarget): string =>
   target.kind === "local"
     ? `${target.harness}${SEPARATOR}${target.model}`
     : CHAT_RUN_TARGET_KIND.cloud;
+
+/** Whether two targets run a turn the same way, permission mode included. */
+export const sameRunTarget = (
+  left: ChatRunTarget,
+  right: ChatRunTarget,
+): boolean =>
+  runTargetValue(left) === runTargetValue(right) &&
+  (left.kind !== "local" ||
+    right.kind !== "local" ||
+    left.approvals === right.approvals);
+
+/**
+ * The target for a model picked under a ready harness. The permission mode
+ * carries over when this harness can run in it, and is Ask otherwise.
+ */
+export const localRunTargetFor = ({
+  selected,
+  option,
+  model,
+}: {
+  selected: ChatRunTarget;
+  option: Extract<ChatLocalHarnessOption, { state: "ready" }>;
+  model: string;
+}): ChatRunTarget => ({
+  kind: "local",
+  harness: option.harness,
+  model,
+  approvals:
+    selected.kind === "local" &&
+    option.approvalModes.includes(selected.approvals)
+      ? selected.approvals
+      : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+});
+
+/**
+ * What the menu shows about permissions for the selected target: a choice of
+ * modes, each with whether the computer can run it; the harness's one fixed
+ * behaviour when it reports a single mode, so nothing is offered that would
+ * run the same way; `null` when the turn runs in the cloud or its harness
+ * cannot take a turn.
+ */
+export type PermissionView =
+  | {
+      type: "choice";
+      modes: { mode: DesktopRunnerApprovalMode; available: boolean }[];
+    }
+  | { type: "fixed"; harness: ChatLocalRunHarness };
+
+export const permissionView = (
+  selected: ChatRunTarget,
+  options: readonly ChatLocalHarnessOption[],
+): PermissionView | null => {
+  if (selected.kind !== "local") {
+    return null;
+  }
+  const option = options.find(({ harness }) => harness === selected.harness);
+  if (option?.state !== "ready") {
+    return null;
+  }
+  if (option.approvalModes.length <= 1) {
+    return { type: "fixed", harness: option.harness };
+  }
+  return {
+    type: "choice",
+    modes: DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => ({
+      mode,
+      available: option.approvalModes.includes(mode),
+    })),
+  };
+};
 
 /**
  * The target a turn should carry. A local target whose harness no longer

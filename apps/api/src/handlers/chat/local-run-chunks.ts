@@ -22,6 +22,7 @@ import {
 import {
   type DESKTOP_RUNNER_APPROVAL_DECISIONS,
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerDesktopMessage,
   desktopRunnerDesktopMessageSchema,
   type DesktopRunnerHarnessReport,
@@ -39,6 +40,7 @@ import {
 import type {
   DesktopRunnerControl,
   DesktopRunnerControlError,
+  LocalRunAttachment,
   QueueCommandOutcome,
 } from "@/api/lib/desktop-runner/control";
 import type { DesktopRunnerRunBell } from "@/api/lib/desktop-runner/doorbell";
@@ -83,6 +85,7 @@ type LocalRunDestination = {
   harness: ChatLocalRunHarness;
   harnessVersion: string;
   model: string;
+  approvals: DesktopRunnerApprovalMode;
 };
 
 export type LocalRunContext = {
@@ -124,6 +127,10 @@ type LocalRunStreamInput = {
 /** A chat turn bound to a computer: started on a new turn, continued on a resume. */
 export type LocalChatRun = {
   readonly harness: ChatLocalRunHarness;
+  /** The same run, copying these files into its folder before it starts. */
+  readonly withAttachments: (
+    attachments: readonly LocalRunAttachment[],
+  ) => LocalChatRun;
   readonly stream: (
     input: LocalRunStreamInput,
   ) => AsyncIterable<PublicStreamChunk>;
@@ -787,6 +794,7 @@ const unavailableHarnessFailure = (
 };
 
 type StartOptions = {
+  attachments: readonly LocalRunAttachment[];
   context: LocalRunContext;
   destination: LocalRunDestination;
   input: LocalRunStreamInput;
@@ -798,6 +806,7 @@ type StartOptions = {
  * @yields Chunks of the chat run, ending with its terminal one.
  */
 async function* startLocalRun({
+  attachments,
   context,
   destination,
   input,
@@ -832,10 +841,12 @@ async function* startLocalRun({
       harness: destination.harness,
       harnessVersion: destination.harnessVersion,
       model: destination.model,
+      approvals: destination.approvals,
       harnessSessionId,
       instructions: input.instructions,
       // Copied to plain objects: the wire schema reads them as records.
       messages: messages.map((message) => ({ ...message })),
+      attachments,
       mcp: context.mcp,
       workspaceIds: context.workspaceIds,
       chat: { threadId: context.chatThreadId, turnId: input.chatTurnId },
@@ -882,6 +893,7 @@ async function* startLocalRun({
       return;
     case "no_computer":
     case "model_unavailable":
+    case "approvals_unavailable":
       yield* refuse(AI_FAILURE_CODES.local_runner_unavailable);
       return;
     case "too_large":
@@ -1106,17 +1118,24 @@ export type LocalRunPlan =
   | { type: "resume"; harness: ChatLocalRunHarness };
 
 /** A local chat run for one turn. */
-export const createLocalChatRun = (
+const localChatRun = (
   context: LocalRunContext,
   plan: LocalRunPlan,
+  attachments: readonly LocalRunAttachment[],
 ): LocalChatRun => ({
   harness: plan.type === "start" ? plan.destination.harness : plan.harness,
+  withAttachments: (next) => localChatRun(context, plan, next),
   stream: (input) => {
     const { resume } = input;
     switch (plan.type) {
       case "start":
         return resume === undefined || resume.length === 0
-          ? startLocalRun({ context, destination: plan.destination, input })
+          ? startLocalRun({
+              attachments,
+              context,
+              destination: plan.destination,
+              input,
+            })
           : panic("A new local turn was handed approvals to resume");
       case "resume":
         return resume !== undefined && resume.length > 0
@@ -1128,3 +1147,8 @@ export const createLocalChatRun = (
     }
   },
 });
+
+export const createLocalChatRun = (
+  context: LocalRunContext,
+  plan: LocalRunPlan,
+): LocalChatRun => localChatRun(context, plan, []);

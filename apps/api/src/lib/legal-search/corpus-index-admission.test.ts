@@ -236,3 +236,20 @@ test("a search queued under a public-read scope leaves the queue when the scope 
   }
   await Promise.all(holders);
 });
+
+test("a read admitted without queueing reports no wait, however late it resumes", async () => {
+  // Every reading of the clock is later than the last, as when other work
+  // delays the read's continuation.
+  let ms = 0;
+  const admission = createCorpusSearchAdmission({
+    now: () => (ms += 5),
+    slots: 1,
+  });
+  const result = await admission.acquire({ waitLimit: unbounded() });
+  const read =
+    result.type === "admitted"
+      ? result
+      : panic(`Expected admission, got ${result.reason}`);
+  read.release();
+  expect(read.waitedMs).toBe(0);
+});

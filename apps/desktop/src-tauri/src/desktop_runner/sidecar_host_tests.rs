@@ -142,6 +142,7 @@ impl Place {
       HostSettings {
         sidecar: self.fixture.settings_for("1.4.0", self.fixture.stand_in()),
         workspaces: self.workspaces(),
+        package_cache: self.package_cache(),
         probe_interval,
       },
       Arc::new(FakeHarnesses {
@@ -165,6 +166,10 @@ impl Place {
 
   fn workspaces(&self) -> PathBuf {
     self.fixture.root.join("runs")
+  }
+
+  fn package_cache(&self) -> PathBuf {
+    self.fixture.root.join("agent-package-cache")
   }
 
   /// Every message the holder read, of one type.
@@ -197,6 +202,8 @@ fn ready() -> Value {
     "type": "ready",
     "version": VERSION,
     "capabilities": ["approvals", "interrupt"],
+    // This desktop cannot sandbox the harness.
+    "approvalModes": ["ask", "auto"],
     "models": models,
   })
 }
@@ -215,13 +222,14 @@ fn run_start(run_id: &str, model: &str) -> Value {
   json!({
     "type": "run.start",
     "runId": run_id,
+    "folderId": run_id,
     "harness": "codex",
     "harnessVersion": VERSION,
     "model": model,
     "harnessSessionId": null,
     "instructions": "Summarize the matter.",
     "messages": [{"role": "user", "content": "Summarize the matter."}],
-    "policy": {"network": "open", "fs": "workspace"},
+    "policy": {"network": "open", "fs": "workspace", "approvals": "auto"},
     "mcp": {
       "serverName": "stella",
       "url": "https://api.example.test/mcp",
@@ -339,8 +347,8 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
       place.acks(&id).last() == Some(&3)
     })
     .await;
-    let workspace = place.workspaces().join(&id);
-    until("the run's folder was removed", || !workspace.exists()).await;
+    // The next turn of the chat works in the same folder.
+    assert!(place.workspaces().join(&id).is_dir());
     runner.stop().await;
   });
   stop_holders(&place);
@@ -364,6 +372,12 @@ fn a_run_streams_through_the_runner_in_its_own_order_and_acks_the_holder_once_jo
     start["workspaceDir"],
     place.workspaces().join(&id).to_str().unwrap()
   );
+  assert_eq!(start["cacheDir"], place.package_cache().to_str().unwrap());
+  assert!(place.package_cache().is_dir());
+  assert_eq!(
+    start["policy"],
+    json!({"network": "open", "fs": "workspace", "approvals": "auto"})
+  );
   assert_eq!(start["launch"]["processGrant"], false);
 }
 
@@ -380,10 +394,13 @@ fn runs_the_harness_cannot_take_are_refused_before_the_holder_sees_them() {
     older["harnessVersion"] = json!("0.49.0");
     let mut claude = run_start(&run_id(), "gpt-test");
     claude["harness"] = json!("claude-code");
+    let mut unsandboxed = run_start(&run_id(), "gpt-test");
+    unsandboxed["policy"]["approvals"] = json!("full_auto");
     let cases = [
       (run_start(&run_id(), "gpt-unknown"), "model_unavailable"),
       (older, "harness_version_unavailable"),
       (claude, "harness_not_installed"),
+      (unsandboxed, "policy_unsupported"),
     ];
     for (start, reason) in cases {
       connection.send(start.clone()).await;

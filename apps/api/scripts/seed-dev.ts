@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -62,6 +62,7 @@ import {
   expenses,
   extractedContent,
   fields,
+  invoiceLines,
   invoices,
   justifications,
   numberSeries,
@@ -103,6 +104,7 @@ import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedOrganizationId,
@@ -1052,6 +1054,38 @@ const buildProperties = (
     },
   ];
 };
+
+export const buildAllPropertySeeds = (): PropertySeed[] => [
+  ...seedWorkspaces.flatMap((workspace, index) =>
+    buildProperties(workspace.id, at(WS_LABELS, index)),
+  ),
+  ...MORE_WORKSPACES.flatMap(({ reference }) => {
+    const label = `extra-ws-${reference}`;
+    return buildProperties(seedId(label), label);
+  }),
+];
+
+export const buildPropertySeedDependencies = (seeds: readonly PropertySeed[]) =>
+  seeds
+    .filter(({ tool }) => tool.type === "ai-model")
+    .flatMap((prop) => {
+      const inputs = requireComputedColumnInputs({
+        candidates: seeds.filter(
+          ({ workspaceId }) => workspaceId === prop.workspaceId,
+        ),
+        inputs: [],
+      });
+      if (Result.isError(inputs)) {
+        return panic(`Seeded column ${prop.name} has no input`, inputs.error);
+      }
+      return inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+        id: seedId(`${prop.id}-input-${dependsOnPropertyId}`),
+        workspaceId: prop.workspaceId,
+        propertyId: prop.id,
+        dependsOnPropertyId,
+        condition,
+      }));
+    });
 
 // ─── Entities (per-workspace) ───────────────────────────
 
@@ -2724,6 +2758,28 @@ export async function seed(organizationId?: string, userId?: string) {
     }
   };
 
+  // Billing records keep their matter on purpose (ON DELETE NO ACTION), so a
+  // replay removes them before the matters. An invoice's lines can belong to
+  // another matter, so they go first; deleting an invoice takes the rest.
+  const deleteRetainedBilling = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    await withAggregateTransaction(db, async (tx) => {
+      await tx
+        .delete(invoiceLines)
+        .where(inArray(invoiceLines.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(invoices)
+        .where(inArray(invoices.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(timeEntries)
+        .where(inArray(timeEntries.workspaceId, [...workspaceIds]));
+      await tx
+        .delete(expenses)
+        .where(inArray(expenses.workspaceId, [...workspaceIds]));
+    });
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -2765,6 +2821,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${allSeedWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(allSeedWorkspaceIds);
       await db.transaction(async (tx) => {
         await tx
           .delete(workspaces)
@@ -2820,6 +2877,7 @@ export async function seed(organizationId?: string, userId?: string) {
               sql`${propertyDependencies.workspaceId} IN ${clientWorkspaceIds}`,
             ),
       );
+      await deleteRetainedBilling(clientWorkspaceIds);
     }
     await organizationTransaction(
       async (tx) =>
@@ -3075,17 +3133,7 @@ export async function seed(organizationId?: string, userId?: string) {
   );
 
   // 3. Properties
-  const allProperties: PropertySeed[] = [];
-  for (let i = 0; i < seedWorkspaces.length; i++) {
-    allProperties.push(
-      ...buildProperties(at(seedWorkspaces, i).id, at(WS_LABELS, i)),
-    );
-  }
-  for (const mw of MORE_WORKSPACES) {
-    const wsId = seedId(`extra-ws-${mw.reference}`);
-    const label = `extra-ws-${mw.reference}`;
-    allProperties.push(...buildProperties(wsId, label));
-  }
+  const allProperties = buildAllPropertySeeds();
   for (const prop of allProperties) {
     await db.transaction(
       async (tx) =>
@@ -3107,6 +3155,14 @@ export async function seed(organizationId?: string, userId?: string) {
           .onConflictDoNothing(),
     );
   }
+  await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .insert(propertyDependencies)
+        .values(buildPropertySeedDependencies(allProperties))
+        .onConflictDoNothing(),
+  );
   console.log(
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
   );

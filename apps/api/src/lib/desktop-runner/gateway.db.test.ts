@@ -8,7 +8,7 @@ import {
 import { ChatClient } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -28,6 +28,7 @@ import {
   chatLocalRunComputerEventSchema,
 } from "@stll/api-contract/chat-run-target";
 import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_FEATURE_ID,
@@ -35,6 +36,7 @@ import {
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_PATH,
   DESKTOP_RUNNER_PROTOCOL,
+  type DesktopRunnerApprovalMode,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
@@ -53,6 +55,7 @@ import {
   desktopRunnerEvents,
   desktopRunnerRuns,
   desktopRunners,
+  featureEnrolments,
 } from "@/api/db/schema";
 import {
   chatMessageContentFromMessage,
@@ -128,7 +131,6 @@ import {
   readNewestQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
-import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { abortControllerFromSignal } from "@/api/lib/tanstack-ai-generate";
 import { isRecord } from "@/api/lib/type-guards";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -167,30 +169,19 @@ const TIMING = {
 
 const clock = { now: Date.now() };
 
-/** Both fixture organizations hold the runner feature unless a test takes it away. */
-const RUNNER_GRANTS: FeatureAccessGrants = {
-  [DESKTOP_RUNNER_FEATURE_ID]: [
-    { type: "organization", organizationId: ids.orgA },
-    { type: "organization", organizationId: ids.orgB },
-  ],
-};
-const runnerGrants: { current: FeatureAccessGrants } = {
-  current: RUNNER_GRANTS,
-};
 /** The real credential check over the test database. */
 const isKeyLive: DesktopKeyLiveness = async (key) =>
   // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
   await desktopKeyLiveness(
     asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
   )(key);
-/** The real feature decision over the test database and the grants above. */
+/** The real feature decision over the test database. */
 const isRunnerEnabled: RunnerFeatureAccess = async (account) =>
   await runnerFeatureAccess({
     // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
     db: asTestRaw<
       NonNullable<NonNullable<Parameters<typeof runnerFeatureAccess>[0]>["db"]>
     >(db),
-    grants: () => runnerGrants.current,
   })(account);
 const now = () => new Date(clock.now);
 
@@ -203,6 +194,27 @@ const mintRunToken: MintRunToken = async () => {
     token: `run-token-${String(mintedTokens)}`,
     expiresAt: new Date(clock.now + 15 * 60_000),
   });
+};
+
+/** Every account the fixtures connect turns the runner feature on. */
+const enrolRunnerFeature = async () => {
+  await db
+    .insert(featureEnrolments)
+    .values(
+      [
+        { userId: ids.userA1, organizationId: ids.orgA },
+        { userId: ids.userA1, organizationId: ids.orgB },
+      ].map((account) => ({
+        ...account,
+        featureId: DESKTOP_RUNNER_FEATURE_ID,
+      })),
+    )
+    .onConflictDoNothing();
+};
+const leaveRunnerFeature = async () => {
+  await db
+    .delete(featureEnrolments)
+    .where(eq(featureEnrolments.featureId, DESKTOP_RUNNER_FEATURE_ID));
 };
 
 /** A transaction held open after its work, before it commits. */
@@ -248,6 +260,8 @@ const startInstance = async (
     instanceId,
     authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
     mintRunToken,
+    signAttachmentLink: async ({ s3Key }) =>
+      await Promise.resolve(`https://files.example.test/${s3Key}?signed`),
     now,
     random: () => 0.5,
     timing: { ...TIMING, ...overrides.timing },
@@ -287,6 +301,7 @@ beforeAll(async () => {
     .update(user)
     .set({ emailVerified: true })
     .where(eq(user.id, ids.userA1));
+  await enrolRunnerFeature();
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
   const updateRows = db.update.bind(db);
@@ -469,6 +484,8 @@ const openDesktop = async (
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
           { id: "claude-code", state: "needs_login", version: "2.1.0" },
@@ -536,15 +553,21 @@ const runnerRows = async (
       ),
     );
 
-const startInput = (desktopId: string) => ({
+const startInput = (
+  desktopId: string,
+  approvals: DesktopRunnerApprovalMode = "ask",
+  harness: "codex" | "claude-code" = "codex",
+) => ({
   owner,
   desktopId,
-  harness: "codex" as const,
+  harness,
   harnessVersion: HARNESS_VERSION,
   model: MODEL,
+  approvals,
   harnessSessionId: null,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
+  attachments: [],
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
 });
@@ -748,6 +771,48 @@ describe("run messages", () => {
       reason: DESKTOP_RUNNER_CLOSE.sequenceGap.reason,
     });
     expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1, 2]);
+  });
+
+  test("an attached file's link is signed on send and never stored", async () => {
+    const instance = await startInstance("api-attachments", sharedDoorbell);
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(instance, desktopId);
+    await desktop.hello();
+    const fileId = "019a0000-0000-7000-8000-000000000001";
+    const path = `attachments/${fileId}/a.pdf`;
+    const outcome = (
+      await control.startRun({
+        ...startInput(desktopId),
+        attachments: [
+          { path, fileId, fileName: "a.pdf", s3Key: "org/file.pdf" },
+        ],
+      })
+    ).unwrap();
+    if (outcome.type !== "assigned") {
+      panic(`the run was not assigned: ${outcome.type}`);
+    }
+    const start = await desktop.receive("run.start", ofRun(outcome.runId));
+    expect(start).toMatchObject({
+      attachments: [
+        { path, url: "https://files.example.test/org/file.pdf?signed" },
+      ],
+    });
+    const stored = JSON.stringify(
+      await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, outcome.runId)),
+    );
+    expect(stored).toContain("org/file.pdf");
+    expect(stored).not.toContain("?signed");
+    await desktop.close();
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(eq(desktopRunnerRuns.runId, outcome.runId));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 
   test("a chunk that is not a valid AG-UI event is refused unstored", async () => {
@@ -1004,6 +1069,78 @@ describe("leases", () => {
       .where(eq(desktopRunnerRuns.runId, accepted));
     expect(row?.desktopId).toBe(desktopId);
     await back.close();
+  });
+});
+
+describe("approval modes", () => {
+  test("a run starts in the thread's approval mode, and a mode the computer does not report is refused", async () => {
+    // A runner row as its socket's hello leaves it; no socket is needed to
+    // queue a start.
+    const desktopId = Bun.randomUUIDv7();
+    await db.insert(desktopRunners).values({
+      ...owner,
+      desktopId,
+      deviceJkt: credentials.a.deviceJkt,
+      keyId: credentials.a.keyId,
+      connection: "connected",
+      sessionId: Bun.randomUUIDv7(),
+      instanceId: "api-elsewhere",
+      protocol: DESKTOP_RUNNER_PROTOCOL.current,
+      appVersion: "1.4.0",
+      sidecarVersion: "1.4.0",
+      harnesses: [
+        {
+          id: "codex",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          // Codex runs in one approval mode.
+          approvalModes: ["ask"],
+          models: [{ id: MODEL, label: "GPT-5 Codex" }],
+        },
+        {
+          id: "claude-code",
+          state: "ready",
+          version: HARNESS_VERSION,
+          capabilities: ["approvals"],
+          approvalModes: ["ask", "auto", "full_auto"],
+          models: [{ id: MODEL, label: "Model" }],
+        },
+      ],
+      connectedAt: now(),
+      lastSeenAt: now(),
+    });
+    const runIds: string[] = [];
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const outcome = (
+        await control.startRun(startInput(desktopId, approvals, "claude-code"))
+      ).unwrap();
+      const runId =
+        outcome.type === "assigned"
+          ? outcome.runId
+          : panic(`the run was not assigned: ${outcome.type}`);
+      runIds.push(runId);
+      const [queued] = await db
+        .select({ payload: desktopRunnerCommands.payload })
+        .from(desktopRunnerCommands)
+        .where(eq(desktopRunnerCommands.runId, runId));
+      expect(queued?.payload).toMatchObject({
+        type: "run.start",
+        policy: { network: "open", fs: "workspace", approvals },
+      });
+    }
+    for (const approvals of ["auto", "full_auto"] as const) {
+      expect(
+        (await control.startRun(startInput(desktopId, approvals))).unwrap(),
+      ).toEqual({ type: "approvals_unavailable" });
+    }
+    // The account's other tests count its installations and open runs.
+    await db
+      .delete(desktopRunnerRuns)
+      .where(inArray(desktopRunnerRuns.runId, runIds));
+    await db
+      .delete(desktopRunners)
+      .where(eq(desktopRunners.desktopId, desktopId));
   });
 });
 
@@ -1294,7 +1431,7 @@ describe("runner feature", () => {
   test("an account without the runner feature is refused before the upgrade and keeps no runner", async () => {
     const desktopId = Bun.randomUUIDv7();
     const openBefore = first.gateway.openSessions();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       const refused = await first.gateway.upgrade(
         await upgradeRequest(first, desktopId),
@@ -1305,7 +1442,7 @@ describe("runner feature", () => {
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
     expect(first.gateway.openSessions()).toBe(openBefore);
     expect(
@@ -1331,14 +1468,14 @@ describe("runner feature", () => {
     );
     const desktop = await openDesktop(beating, Bun.randomUUIDv7());
     await desktop.hello();
-    runnerGrants.current = {};
+    await leaveRunnerFeature();
     try {
       expect(await desktop.closed).toEqual({
         code: DESKTOP_RUNNER_CLOSE.featureDisabled.code,
         reason: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       });
     } finally {
-      runnerGrants.current = RUNNER_GRANTS;
+      await enrolRunnerFeature();
     }
   });
 });
@@ -1858,6 +1995,8 @@ describe("outbound frames", () => {
             state: "ready",
             version: HARNESS_VERSION,
             capabilities: ["approvals", "interrupt"],
+            // This computer cannot sandbox the harness.
+            approvalModes: ["ask"],
             models: [{ id: MODEL, label: "GPT-5 Codex" }],
           },
         ],
@@ -2090,6 +2229,7 @@ describe("chat turns on a computer", () => {
       harness: "codex",
       harnessVersion: HARNESS_VERSION,
       model: CHAT_MODEL,
+      approvals: "ask",
     },
   });
 
@@ -2379,6 +2519,8 @@ describe("chat turns on a computer", () => {
         message.type === "run.start" && message.runId !== firstStart.runId,
     );
     expect(secondStart.harnessSessionId).toBe("codex-session-1");
+    expect(firstStart.folderId).toBe(chatThreadId);
+    expect(secondStart.folderId).toBe(chatThreadId);
     desktop.send({ type: "run.accepted", runId: secondStart.runId });
     const secondRun = desktopRun(desktop, secondStart.runId);
     await secondRun.events(
@@ -2842,6 +2984,10 @@ describe("chat turns on a computer", () => {
         { answers: { ...ANSWERS, tone: ["Casual"] } },
       ],
       ["a question left out", { answers: { tone: ["Formal"] } }],
+      [
+        "two answers to a single-choice question",
+        { answers: { ...ANSWERS, tone: ["Formal", "Friendly"] } },
+      ],
       ["a question never asked", { answers: { ...ANSWERS, venue: ["Brno"] } }],
     ];
     for (const [name, payload] of refusals) {
@@ -4076,6 +4222,10 @@ describe("chat turns on a computer", () => {
       ["answers as text", { answers: { law: "Czech" } }],
       ["an option the question lacks", { answers: { law: ["Austrian"] } }],
       ["a question left out", { answers: {} }],
+      [
+        "two answers to a single choice",
+        { answers: { law: ["Czech", "Slovak"] } },
+      ],
       [
         "a question never asked",
         { answers: { law: ["Czech"], venue: ["Brno"] } },

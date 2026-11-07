@@ -13,8 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::runner_protocol::{
-  Ack, ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunAnswer,
-  RunApproval, RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
+  Ack, ApprovalKind, ApprovalMode, Harness, HarnessCapability, JsonObject, McpBinding,
+  RunAnswer, RunApproval, RunAttachment, RunOutcome, RunPolicy, RunRef,
+  RunTokenRefresh,
 };
 
 pub(crate) const SIDECAR_PROTOCOL: u32 = 3;
@@ -188,10 +189,14 @@ pub(crate) struct SidecarRunStart {
   pub(crate) config_dir: String,
   pub(crate) launch: HarnessLaunchSettings,
   pub(crate) workspace_dir: String,
+  /// The computer's package-manager cache, writable in every sandbox.
+  pub(crate) cache_dir: String,
   pub(crate) model: String,
   pub(crate) instructions: String,
   pub(crate) messages: Vec<JsonObject>,
   pub(crate) harness_session_id: Option<String>,
+  /// Files to copy into `workspace_dir` before the harness starts.
+  pub(crate) attachments: Vec<RunAttachment>,
   pub(crate) policy: RunPolicy,
   pub(crate) mcp: McpBinding,
 }
@@ -278,10 +283,11 @@ pub(crate) struct ProbedModel {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum ProbeOutcome {
-  #[serde(rename = "ready")]
+  #[serde(rename = "ready", rename_all = "camelCase")]
   Ready {
     version: String,
     capabilities: Vec<HarnessCapability>,
+    approval_modes: Vec<ApprovalMode>,
     models: Vec<ProbedModel>,
   },
   #[serde(rename = "needs_login")]

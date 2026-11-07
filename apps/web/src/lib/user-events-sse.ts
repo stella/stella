@@ -1,22 +1,30 @@
 import type { QueryKey } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import {
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
-} from "@stll/api-contract";
-import type {
   REALTIME_EVENT_TYPE,
-  UserRealtimeEvent,
+  RESOURCE_TYPE,
+  resourceSetUpdatedRealtimeEvent,
 } from "@stll/api-contract";
+import type { UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
+import { activeChatRunsOptions } from "@/features/chat/active-runs";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
 import { firstNotificationsPageRefresh } from "@/lib/notification-queries";
 import { organizationEventQueryKeys } from "@/lib/organization/realtime.logic";
 import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
+
+/** A query the user stream refreshes, and what to trim before it does. */
+type UserEventRefresh = {
+  queryKey: QueryKey;
+  prepare?: () => void;
+};
 
 const USER_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -55,24 +63,34 @@ const reconnectDelayMs = (failures: number): number =>
  *
  * Reconnects are deliberately quiet here: an outage costs a delayed badge, not
  * lost data, and the workspace stream already reports connection failures for
- * the same session.
+ * the same session. Mount it once (`useUserEventRefreshes`): every call opens
+ * its own connection.
  */
 const useUserEventsSSE = (
   organizationId: string,
-  onEvent: (event: UserRealtimeEvent) => {
-    queryKey: QueryKey;
-    prepare?: () => void;
-  }[],
+  {
+    onEvent,
+    onResync,
+  }: {
+    onEvent: (event: UserRealtimeEvent) => UserEventRefresh[];
+    /**
+     * Everything the stream keeps fresh. Events sent while the stream was
+     * down are lost, so every reopen after the first re-reads all of it.
+     */
+    onResync: () => UserEventRefresh[];
+  },
 ): void => {
   const queryClient = useQueryClient();
   const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
   const handleEvent = useLatestCallback(onEvent);
+  const handleResync = useLatestCallback(onResync);
 
   useExternalSyncEffect(() => {
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let consecutiveFailures = 0;
     let disposed = false;
+    let hasOpened = false;
 
     const connect = () => {
       const stream = new EventSource(
@@ -83,6 +101,15 @@ const useUserEventsSSE = (
 
       stream.addEventListener("open", () => {
         consecutiveFailures = 0;
+        // The browser's own retries and ours both land here; either way the
+        // gap may have swallowed events. The first open re-reads nothing: the
+        // queries were just fetched, and a second read would only double them.
+        if (hasOpened) {
+          for (const { queryKey, prepare } of handleResync()) {
+            realtimeRefresh.refresh(queryKey, prepare);
+          }
+        }
+        hasOpened = true;
       });
       stream.addEventListener("message", (event: MessageEvent) => {
         const payload = jsonOrNull(String(event.data));
@@ -128,7 +155,7 @@ const useUserEventsSSE = (
       }
       source?.close();
     };
-  }, [handleEvent, organizationId, realtimeRefresh]);
+  }, [handleEvent, handleResync, organizationId, realtimeRefresh]);
 };
 
 /**
@@ -136,7 +163,9 @@ const useUserEventsSSE = (
  * open on every page whatever the tab shows or which features are on. It
  * carries the person's own events and the organization's content-free
  * fan-out, which `useUserEventsSSE` turns into refreshes of the firm-wide
- * lists. Mount it once: every call opens its own connection.
+ * lists. Each event kind names the queries it makes stale; they refresh only
+ * where something observes them. Mount it once: every call opens its own
+ * connection.
  */
 export const useUserEventRefreshes = ({
   organizationId,
@@ -146,13 +175,36 @@ export const useUserEventRefreshes = ({
   userId: string;
 }): void => {
   const queryClient = useQueryClient();
-  useUserEventsSSE(organizationId, ({ type: eventType }) => {
-    // The user channel carries a single event kind today; this bind makes a
-    // second kind a compile error here instead of a silently ignored event.
-    eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
-    return [
-      firstNotificationsPageRefresh({ organizationId, queryClient, userId }),
-    ];
+
+  const notifications = (): UserEventRefresh =>
+    firstNotificationsPageRefresh({ organizationId, queryClient, userId });
+  const activeChatRuns = (): UserEventRefresh => ({
+    queryKey: activeChatRunsOptions({
+      activeOrganizationId: organizationId,
+      userId,
+    }).queryKey,
+  });
+
+  useUserEventsSSE(organizationId, {
+    onEvent: ({ type: eventType }) => {
+      switch (eventType) {
+        case REALTIME_EVENT_TYPE.NEW_NOTIFICATION:
+          return [notifications()];
+        case REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED:
+          return [activeChatRuns()];
+        default:
+          eventType satisfies never;
+          return panic("Unhandled user realtime event");
+      }
+    },
+    onResync: () => [
+      notifications(),
+      activeChatRuns(),
+      ...organizationEventQueryKeys(
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.CONTACT),
+        organizationId,
+      ).map((queryKey) => ({ queryKey })),
+    ],
   });
 };
 

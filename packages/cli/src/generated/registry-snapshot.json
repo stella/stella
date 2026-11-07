@@ -865,9 +865,6 @@
                 "enum": ["all_terms", "some_terms"],
                 "type": "string"
               },
-              "sourceUrl": {
-                "type": ["string", "null"]
-              },
               "snippet": {
                 "type": ["string", "null"]
               },
@@ -917,7 +914,6 @@
               "matchingPassages",
               "textAvailability",
               "match",
-              "sourceUrl",
               "keywords",
               "headnote"
             ],
@@ -1234,7 +1230,7 @@
         "query": {
           "type": "string",
           "maxLength": 256,
-          "description": "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full."
+          "description": "Words to find: paragraphs holding all of them (any inflection), with neighbours, position, publisher label, verbatim headingPath and deep link, instead of a page. If none, matches.warnings names the words and next query. Takes no page/full."
         },
         "include": {
           "type": "array",
@@ -2876,9 +2872,6 @@
               "snippet": {
                 "type": ["string", "null"]
               },
-              "sourceUrl": {
-                "type": ["string", "null"]
-              },
               "status": {
                 "type": "string"
               },
@@ -2900,7 +2893,6 @@
               "resourceName",
               "score",
               "snippet",
-              "sourceUrl",
               "status",
               "title"
             ],
@@ -3027,9 +3019,6 @@
             "resourceName": {
               "type": "string"
             },
-            "sourceUrl": {
-              "type": ["string", "null"]
-            },
             "status": {
               "type": "string"
             },
@@ -3106,7 +3095,6 @@
             "eli",
             "language",
             "resourceName",
-            "sourceUrl",
             "status",
             "text",
             "title",
@@ -3462,7 +3450,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "resolve_case_law_decision",
-    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives the decision and text; continue with read_case_law_decision. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
+    "description": "Resolve a docket or ECLI; search_case_law handles descriptions. A CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts, not the requested one; ask the user to choose. Only elsewhere: not_found/not_at_this_court. Unknown court: not_found/court_unrecognized. Resolved gives identity, not text: read_case_law_decision reads it. Ambiguous gives candidates; incomplete_identifier gives missing parts. Country_unavailable: no identity surface. Missing stella:read requires OAuth consent.",
     "inputSchema": {
       "type": "object",
       "required": ["country", "identifier"],
@@ -3549,13 +3537,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],
@@ -3853,13 +3836,8 @@
                   "enum": ["readable", "withheld", "unavailable"],
                   "type": "string"
                 },
-                "blocks": {
-                  "type": "array",
-                  "items": {}
-                },
-                "extent": {
-                  "type": "object",
-                  "additionalProperties": true
+                "charCount": {
+                  "type": "number"
                 },
                 "reason": {
                   "enum": ["licence"],
