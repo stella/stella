@@ -11,9 +11,17 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { timingSafeEqual } from "node:crypto";
 
-import { TIMER_ACTIVITY_DEVICES_PER_USER_MAX } from "@stll/api-contract/timer-activity";
-import type { TimerActivityDeviceRegistration } from "@stll/api-contract/timer-activity";
+import {
+  TIMER_ACTIVITY_ACTION_KEY_HOURS,
+  TIMER_ACTIVITY_ACTION_KEY_MARGIN_HOURS,
+  TIMER_ACTIVITY_DEVICES_PER_USER_MAX,
+} from "@stll/api-contract/timer-activity";
+import type {
+  TimerActivityActionKey,
+  TimerActivityDeviceRegistration,
+} from "@stll/api-contract/timer-activity";
 
 import type { Transaction } from "@/api/db/root";
 import { timerActivityDevices } from "@/api/db/schema";
@@ -26,6 +34,17 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import {
+  createOpaqueToken,
+  hashOpaqueToken,
+  isOpaqueTokenShape,
+} from "@/api/lib/entities/opaque-tokens";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
+import type { CredentialPrincipal } from "@/api/lib/synthetic-principal/credential-policy";
 
 type DeviceWriteTx = Pick<Transaction, "insert" | "select" | "delete">;
 
@@ -49,8 +68,9 @@ const TIMER_ACTIVITY_START_HOLD_HOURS = 8;
  * File what a phone holds now. The app sends its whole state each time, so
  * the row is replaced, not merged, but only by a newer registration and
  * only while its sign-in lasts: one that arrives late, after a newer one or
- * after the sign-out, changes nothing. A registration also forgets that the
- * server started an activity here, since the app now reports what it shows.
+ * after the sign-out, changes nothing, and answers false. A registration
+ * also forgets that the server started an activity here, since the app now
+ * reports what it shows.
  * Past {@link TIMER_ACTIVITY_DEVICES_PER_USER_MAX} the signed-in rows seen
  * longest ago are dropped. A sign-out's mark is kept for two weeks, longer
  * than any registration can be on its way, and as long as a silent phone is
@@ -69,7 +89,7 @@ export const registerTimerActivityDevice = async (
     registration: TimerActivityDeviceRegistration;
     userId: SafeId<"user">;
   },
-): Promise<void> => {
+): Promise<boolean> => {
   const device = {
     organizationId,
     environment: registration.environment,
@@ -82,16 +102,18 @@ export const registerTimerActivityDevice = async (
     activityToken: registration.activity?.token ?? null,
     startedAt: null,
     sequence: registration.sequence,
+    actionKeyHeld: registration.actionKeyHeld,
   };
   // audit: skip - the person's own phone address for their timer, holding no content
-  await tx
+  const filed = await tx
     .insert(timerActivityDevices)
     .values({ ...device, userId, deviceId })
     .onConflictDoUpdate({
       target: [timerActivityDevices.userId, timerActivityDevices.deviceId],
       set: { ...device, lastSeenAt: sql`now()` },
       setWhere: sql`${timerActivityDevices.signedOutAt} IS NULL AND ${timerActivityDevices.sequence} < excluded.sequence`,
-    });
+    })
+    .returning({ deviceId: timerActivityDevices.deviceId });
 
   await tx.delete(timerActivityDevices).where(
     and(
@@ -122,6 +144,7 @@ export const registerTimerActivityDevice = async (
       ),
     ),
   );
+  return filed.length > 0;
 };
 
 /**
@@ -138,7 +161,14 @@ export const unregisterTimerActivityDevice = async (
     .update(timerActivityDevices)
     // The claim time stays: a late sign-out of an older sign-in must not
     // outrank a newer one on the same phone.
-    .set({ signedOutAt: sql`now()` })
+    .set({
+      signedOutAt: sql`now()`,
+      actionKeyHash: null,
+      actionKeyExpiresAt: null,
+      previousActionKeyHash: null,
+      previousActionKeyExpiresAt: null,
+      actionKeyHeld: false,
+    })
     .where(
       and(
         eq(timerActivityDevices.userId, userId),
@@ -163,6 +193,11 @@ export type TimerActivityDevice = Pick<
 > & {
   /** Whether a start the server sent still holds, so no other may be sent. */
   starting: boolean;
+  /**
+   * Whether the Lock Screen buttons may show: the phone said it holds a key,
+   * and the key outlives any activity shown now.
+   */
+  actions: boolean;
   /** The registration as read, at full precision, to change it only if unchanged. */
   seenToken: TimestampCasToken;
 };
@@ -177,6 +212,10 @@ const sharesToken = (column: "startToken" | "activityToken") =>
       eq(laterClaim.activityToken, timerActivityDevices[column]),
     ),
   );
+
+const actionKeyLive = sql<boolean>`coalesce(${timerActivityDevices.actionKeyExpiresAt} > now(), false)`;
+
+const actionKeyShown = sql<boolean>`${timerActivityDevices.actionKeyHeld} AND coalesce(${timerActivityDevices.actionKeyExpiresAt} > now() + make_interval(hours => ${TIMER_ACTIVITY_ACTION_KEY_MARGIN_HOURS}), false)`;
 
 const startHolds = sql<boolean>`coalesce(${timerActivityDevices.startedAt} > now() - make_interval(hours => ${TIMER_ACTIVITY_START_HOLD_HOURS}), false)`;
 
@@ -211,6 +250,7 @@ export const listTimerActivityDevices = async (
         startToken: timerActivityDevices.startToken,
         activityToken: timerActivityDevices.activityToken,
         starting: startHolds,
+        actions: actionKeyShown,
         seenToken: timestampCasToken(timerActivityDevices.lastSeenAt),
       })
       .from(timerActivityDevices)
@@ -306,4 +346,129 @@ export const forgetTimerActivityToken = async (
         : { activityId: null, activityToken: null, startedAt: null },
     )
     .where(unchanged(ref));
+};
+
+/**
+ * The secret half of a Lock Screen button key. It is a credential that acts
+ * for the person without their session, so the review account never gets
+ * one.
+ */
+export const createTimerActivityActionKeySecret = (
+  principal: CredentialPrincipal,
+): string => {
+  requireSessionCredentialIssuer("timerActivity", principal);
+  return createOpaqueToken();
+};
+
+export const hashTimerActivityActionKey = hashOpaqueToken;
+
+/**
+ * Give a signed-in phone a new key for its Lock Screen buttons. The key is
+ * shown here once; only its SHA-256 is kept. The key it held stays working
+ * until it expires, so a phone that misses this answer, or keeps an older
+ * one, is not locked out; the buttons show again once the phone says it
+ * holds a key. Null when the phone is not registered under this sign-in, or
+ * has signed out.
+ */
+export const issueTimerActivityActionKey = async (
+  tx: Pick<Transaction, "update">,
+  {
+    deviceId,
+    organizationId,
+    userId,
+  }: {
+    deviceId: string;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  },
+): Promise<TimerActivityActionKey | null> => {
+  const secret = createTimerActivityActionKeySecret({ userId, organizationId });
+  const keyHash = hashTimerActivityActionKey(secret);
+  // audit: skip - the person's own phone key for their own timers; using it is audited
+  const [row] = await tx
+    .update(timerActivityDevices)
+    .set({
+      previousActionKeyHash: sql`${timerActivityDevices.actionKeyHash}`,
+      previousActionKeyExpiresAt: sql`${timerActivityDevices.actionKeyExpiresAt}`,
+      actionKeyHash: keyHash,
+      actionKeyExpiresAt: sql`now() + make_interval(hours => ${TIMER_ACTIVITY_ACTION_KEY_HOURS})`,
+      actionKeyHeld: false,
+    })
+    .where(
+      and(
+        eq(timerActivityDevices.userId, userId),
+        eq(timerActivityDevices.deviceId, deviceId),
+        eq(timerActivityDevices.organizationId, organizationId),
+        isNull(timerActivityDevices.signedOutAt),
+      ),
+    )
+    .returning({ expiresAt: timerActivityDevices.actionKeyExpiresAt });
+  const expiresAt = row?.expiresAt ?? null;
+  return expiresAt === null
+    ? null
+    : { key: `${userId}.${secret}`, expiresAt: expiresAt.toISOString() };
+};
+
+const ACTION_KEY_MAX_LENGTH = 200;
+
+/**
+ * The person and organization a Lock Screen button key acts for, or null for
+ * a key that is malformed, unknown, expired or from a signed-out phone. The
+ * phone's current key and the one before it both work until they expire.
+ * Reads through the owner connection: the key is the only credential the
+ * request carries, so no person is known before this answers.
+ */
+export const verifyTimerActivityActionKey = async (
+  db: Pick<Transaction, "select">,
+  { deviceId, key }: { deviceId: string; key: string },
+): Promise<{
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+} | null> => {
+  if (key.length > ACTION_KEY_MAX_LENGTH) {
+    return null;
+  }
+  const separator = key.lastIndexOf(".");
+  const userId = key.slice(0, separator);
+  const secret = key.slice(separator + 1);
+  if (separator < 1 || !isOpaqueTokenShape(secret)) {
+    return null;
+  }
+  const [row] = await db
+    .select({
+      organizationId: timerActivityDevices.organizationId,
+      current: sql<
+        string | null
+      >`CASE WHEN ${actionKeyLive} THEN ${timerActivityDevices.actionKeyHash} END`,
+      previous: sql<
+        string | null
+      >`CASE WHEN ${timerActivityDevices.previousActionKeyExpiresAt} > now() THEN ${timerActivityDevices.previousActionKeyHash} END`,
+    })
+    .from(timerActivityDevices)
+    .where(
+      and(
+        eq(timerActivityDevices.userId, userId),
+        eq(timerActivityDevices.deviceId, deviceId),
+        isNull(timerActivityDevices.signedOutAt),
+      ),
+    )
+    .limit(1);
+  if (row === undefined) {
+    return null;
+  }
+  const presented = Buffer.from(hashTimerActivityActionKey(secret), "hex");
+  // Both live keys are compared, in constant time each.
+  const matches = [row.current, row.previous].map((storedHash) => {
+    const stored = Buffer.from(storedHash ?? "", "hex");
+    return (
+      stored.length === presented.length && timingSafeEqual(presented, stored)
+    );
+  });
+  if (!matches.includes(true)) {
+    return null;
+  }
+  return {
+    organizationId: brandPersistedOrganizationId(row.organizationId),
+    userId: brandPersistedUserId(userId),
+  };
 };

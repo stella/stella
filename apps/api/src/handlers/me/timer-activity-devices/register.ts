@@ -9,7 +9,10 @@ import type { TimerActivityDeviceRegistrationResponse } from "@stll/api-contract
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { registerTimerActivityDevice } from "@/api/lib/push/timer-activity-devices";
+import {
+  issueTimerActivityActionKey,
+  registerTimerActivityDevice,
+} from "@/api/lib/push/timer-activity-devices";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
@@ -18,7 +21,9 @@ const config = {
     "Register the phone the stella mobile app runs on for its Lock Screen " +
     "timer, or replace its registration: the tokens that start and update " +
     "the timer's Live Activity, and whether updates may name the timer's " +
-    "description and matter. Idempotent per device id.",
+    "description and matter. Asked for, it answers a new key the phone's " +
+    "Lock Screen buttons pause and resume the caller's own timers with, " +
+    "for 24 hours or until sign-out. Idempotent per device id.",
   // permissions-exempt: the write touches only the caller's own phone rows
   // (user-scoped RLS); workspace:read is the access floor every member has.
   permissions: { workspace: ["read"] },
@@ -45,18 +50,26 @@ const registerTimerActivityDeviceEndpoint = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       userId: user.id,
     };
-    yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await registerTimerActivityDevice(tx, {
-            ...owner,
-            deviceId: params.deviceId,
-            registration: body,
-          }),
-      ),
+    const actionKey = yield* Result.await(
+      safeDb(async (tx) => {
+        const filed = await registerTimerActivityDevice(tx, {
+          ...owner,
+          deviceId: params.deviceId,
+          registration: body,
+        });
+        // A registration that arrived after a newer one gets no key: the
+        // phone keeps the newer registration's.
+        return filed && body.actionKey
+          ? await issueTimerActivityActionKey(tx, {
+              ...owner,
+              deviceId: params.deviceId,
+            })
+          : null;
+      }),
     );
     return Result.ok({
       registered: true,
+      actionKey,
     } satisfies TimerActivityDeviceRegistrationResponse);
   },
 );

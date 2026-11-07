@@ -5,5 +5,7 @@
   "noMatter": "Sin asunto",
   "noDescription": "Sin descripción",
   "more": "{count, plural, one {# temporizador más} other {# temporizadores más}}",
-  "startedElsewhere": "Se inició un temporizador en otro dispositivo"
+  "startedElsewhere": "Se inició un temporizador en otro dispositivo",
+  "pause": "Pausar",
+  "resume": "Reanudar"
 }
