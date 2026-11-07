@@ -40,6 +40,21 @@ const check = (files: Files, allowlist: readonly string[] = []) => {
 };
 
 describe("run step fetches", () => {
+  test("a workflow cannot use a direct partial-clone checkout", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Checkout: partial-clone actions/checkout must use ./.github/actions/partial-clone-checkout`,
+    ]);
+  });
+
   test("a curl wrapped in retry.sh with a step timeout passes", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Download tool

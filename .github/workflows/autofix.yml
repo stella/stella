@@ -373,14 +373,13 @@ jobs:
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: ./.github/actions/partial-clone-checkout
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
           # Recent history without file contents: enough to find the settled
           # commit and list what changed since.
           fetch-depth: 21
-          filter: blob:none
           sparse-checkout: |
             /scripts/
             /packages/scripts/src/generated-files.ts
