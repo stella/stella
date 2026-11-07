@@ -581,6 +581,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("confine-aggregate-lock.fixture.ts", [
     "confine-aggregate-lock/confine-aggregate-lock",
   ]),
+  fixtureRuleOverride("count-gated-completion.fixture.ts", [
+    "count-gated-completion/count-gated-completion",
+  ]),
   fixtureRuleOverride("no-adhoc-loader.fixture.tsx", [
     "no-adhoc-loader/no-adhoc-loader",
   ]),
@@ -1524,6 +1527,7 @@ const config = defineConfig({
   },
   rules: {
     "confine-aggregate-lock/confine-aggregate-lock": "error",
+    "count-gated-completion/count-gated-completion": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
       { allowedFiles: sha256AllowedFiles },
@@ -2354,6 +2358,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-unanchored-footnotes.ts",
     "./.oxlint-plugins/no-parser-inline-flatten.ts",
     "./.oxlint-plugins/confine-aggregate-lock.ts",
+    "./.oxlint-plugins/count-gated-completion.ts",
     "./.oxlint-plugins/no-direct-status-set.ts",
     "./.oxlint-plugins/no-discarded-transition-result.ts",
     "./.oxlint-plugins/queue-worker-error-sink.ts",
