@@ -45,10 +45,12 @@ type DocumentReviewRunRef = {
 // hand-listed subset of its fields.
 const documentReviewRunKeys = {
   all: (workspaceId: string) => ["document-review-runs", workspaceId] as const,
+  /** Every document's history in a workspace, for a refresh across them. */
+  histories: (workspaceId: string) =>
+    [...documentReviewRunKeys.all(workspaceId), "history"] as const,
   history: (target: DocumentReviewRunTarget) =>
     [
-      ...documentReviewRunKeys.all(target.workspaceId),
-      "history",
+      ...documentReviewRunKeys.histories(target.workspaceId),
       { entityId: target.entityId, fileFieldId: target.fileFieldId },
     ] as const,
   detail: (ref: DocumentReviewRunRef) =>
@@ -245,6 +247,8 @@ type CompletionMemory = {
   awaiting: Set<string>;
   /** Runs whose completion already refreshed the list. */
   refreshed: Set<string>;
+  /** Runs whose end already refreshed the document's review history. */
+  historyRefreshed: Set<string>;
 };
 
 /**
@@ -262,6 +266,7 @@ const completionMemory = (client: QueryClient): CompletionMemory => {
   const created: CompletionMemory = {
     awaiting: new Set(),
     refreshed: new Set(),
+    historyRefreshed: new Set(),
   };
   completionMemories.set(client, created);
   return created;
@@ -443,11 +448,60 @@ export type DecidedReviewFinding = Awaited<
   ReturnType<typeof decideReviewFinding>
 >;
 
+/**
+ * The history list is read once per open and keeps the row it read, so a run
+ * that ends while the review stays open would still read as running there.
+ * Call from the point read before it lands in the cache: the first read that
+ * reports the end of a run this client saw unfinished refreshes the document's
+ * history, once.
+ */
+const refreshHistoryOnRunEnd = ({
+  client,
+  workspaceId,
+  read: { run },
+}: RefreshSuggestionsOnRunCompletionArgs) => {
+  if (documentReviewRunPollInterval(run.status) !== false) {
+    return;
+  }
+  const { historyRefreshed } = completionMemory(client);
+  const cached = client.getQueryData(
+    documentReviewRunOptions({ workspaceId, runId: run.id }).queryKey,
+  );
+  const seenUnfinished =
+    cached !== undefined &&
+    documentReviewRunPollInterval(cached.run.status) !== false;
+  if (!seenUnfinished || historyRefreshed.has(run.id)) {
+    return;
+  }
+  historyRefreshed.add(run.id);
+  const historiesKey = documentReviewRunKeys.histories(workspaceId);
+  detached(
+    client.invalidateQueries({
+      queryKey: documentReviewRunKeys.histories(workspaceId),
+      predicate: ({ queryKey }) => {
+        const target = queryKey[historiesKey.length];
+        return (
+          typeof target === "object" &&
+          target !== null &&
+          "entityId" in target &&
+          target.entityId === run.entityId
+        );
+      },
+    }),
+    "document-review-queries.refresh-history-on-run-end",
+  );
+};
+
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
     queryKey: documentReviewRunKeys.detail(ref),
     queryFn: async ({ client, signal }) => {
       const detail = await fetchDocumentReviewRun(ref, signal);
+      refreshHistoryOnRunEnd({
+        client,
+        workspaceId: ref.workspaceId,
+        read: detail,
+      });
       refreshSuggestionsOnRunCompletion({
         client,
         workspaceId: ref.workspaceId,
