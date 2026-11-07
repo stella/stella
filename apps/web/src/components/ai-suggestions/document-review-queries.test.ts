@@ -304,3 +304,46 @@ describe.each(Object.entries(READ_RUN))(
     });
   },
 );
+
+test("the pending suggestion list refreshes when the run detail was evicted before the run completed", async () => {
+  const { documentReviewRunOptions } =
+    await import("./document-review-queries");
+  const server = serveReviewedDocument("running");
+  const queryClient = new QueryClient();
+  await pollRun(queryClient);
+  const suggestions = observeSuggestions(queryClient);
+  await suggestions.loadedIds(0);
+
+  // The reviewer closes the review while the document stays open.
+  queryClient.removeQueries({
+    queryKey: documentReviewRunOptions({
+      workspaceId: reviewedDocument.workspaceId,
+      runId: REVIEW_RUN_ID,
+    }).queryKey,
+    exact: true,
+  });
+  server.runStatus = "completed";
+  server.suggestionIds = ["staged-by-run"];
+  await pollRun(queryClient);
+
+  expect(await suggestions.loadedIds(1)).toEqual([toSafeId("staged-by-run")]);
+  suggestions.unsubscribe();
+  queryClient.clear();
+});
+
+test("the pending suggestion list refreshes once when both reads report the same completion", async () => {
+  const server = serveReviewedDocument("running");
+  const queryClient = new QueryClient();
+  await pollRun(queryClient);
+  const suggestions = observeSuggestions(queryClient);
+  await suggestions.loadedIds(0);
+
+  server.runStatus = "completed";
+  server.suggestionIds = ["staged-by-run"];
+  await Promise.all([pollRun(queryClient), readRunHistory(queryClient)]);
+
+  expect(await suggestions.loadedIds(1)).toEqual([toSafeId("staged-by-run")]);
+  expect(server.suggestionReads()).toBe(2);
+  suggestions.unsubscribe();
+  queryClient.clear();
+});
