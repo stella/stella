@@ -61,6 +61,7 @@ import {
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
 import type { LogRecord } from "@/api/lib/observability/logger";
+import { ownedMessage } from "@/api/lib/observability/owned-message";
 import { openRequestContext } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -262,10 +263,10 @@ const CASES: readonly LifecycleCase[] = [
     status: 502,
     body: '{"code":"upstream_unavailable","message":"The registry is not answering right now."}',
     records: [
-      ["request.failed", "ERROR", shadow("transient", "upstream_unavailable")],
+      ["request.failed", "WARN", shadow("transient", "upstream_unavailable")],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "upstream_unavailable"),
       ],
     ],
@@ -280,12 +281,12 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
       [
         "request.completed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -293,14 +294,22 @@ const CASES: readonly LifecycleCase[] = [
     metricReasons: ["pg_connection_lifecycle"],
   },
   {
-    name: "a 502 a handler returned itself is counted as unobserved",
+    name: "a 502 a handler built without its cause is enforced as unobserved",
     request: get("/v1/signals/count"),
     status: 502,
     body: '{"message":"Bad gateway"}',
     records: [
-      ["request.completed", "ERROR", shadow("defect", "unobserved_5xx")],
+      [
+        "request.completed",
+        "ERROR",
+        {
+          "failure.grade": "defect",
+          "failure.reason": "unobserved_5xx",
+          "failure.shadow": undefined,
+        },
+      ],
     ],
-    captures: 0,
+    captures: 1,
     metricReasons: [],
   },
   {
@@ -311,7 +320,7 @@ const CASES: readonly LifecycleCase[] = [
     records: [
       [
         "request.failed",
-        "ERROR",
+        "WARN",
         shadow("transient", "pg_connection_lifecycle"),
       ],
     ],
@@ -693,7 +702,7 @@ describe("the request lifecycle", () => {
                 mode === "configuration"
                   ? Result.err(
                       new ActionSizeError({
-                        message: "Unconfigured",
+                        message: ownedMessage("Unconfigured"),
                         reason: "configuration",
                       }),
                     )
@@ -789,10 +798,10 @@ describe("the request lifecycle", () => {
       [
         "request.handler_failed",
         "upstream_unavailable",
-        "log_error_and_capture",
+        "log_warn_and_capture",
         1,
       ],
-      ["request.completed", "unobserved_5xx", "log_error", 1],
+      ["request.completed", "unobserved_5xx", "log_error_and_capture", 1],
     ]);
   });
 

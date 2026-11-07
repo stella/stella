@@ -8,6 +8,7 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_STATUS,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
   RESOURCE_TYPE,
@@ -50,11 +51,12 @@ import {
   activeTemplateSchema,
   agUiSendMessageBodySchema,
   parseMessage,
+  requireUserMessageContent,
   resolveBrowserExtensionCapability,
   resolveEditedUserMessageId,
   sendMessageBodySchema,
-  validateMessage as validateMessageWithPersistence,
-  validateToolCallParts,
+  validateMessage as validateChatMessage,
+  validateToolCallParts as validateChatToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -91,6 +93,21 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
+/** Every case here validates a cloud turn's calls unless it names an owner. */
+type CloudByDefault<TInput, TKey extends keyof TInput> = Omit<TInput, TKey> &
+  Partial<Pick<TInput, TKey>>;
+const validateMessageWithPersistence = async (
+  input: CloudByDefault<
+    Parameters<typeof validateChatMessage>[0],
+    "toolCallOwnership"
+  >,
+) => await validateChatMessage({ toolCallOwnership: "cloud", ...input });
+const validateToolCallParts = (
+  input: CloudByDefault<
+    Parameters<typeof validateChatToolCallParts>[0],
+    "ownership"
+  >,
+) => validateChatToolCallParts({ ownership: "cloud", ...input });
 const validateMessage = async (
   input: Omit<
     Parameters<typeof validateMessageWithPersistence>[0],
@@ -574,7 +591,7 @@ describe("browser client capability", () => {
       status: "connected",
     });
     expect(resolveBrowserExtensionCapability(undefined).status).toBe(
-      "unsupported-browser",
+      "unsupported-device",
     );
   });
 });
@@ -822,6 +839,117 @@ describe("parseMessage", () => {
     expect(parsed.mentions.at(-1)?.id).toBe(
       `entity_${CHAT_RICH_PART_LIMITS.mentionsMax - 1}`,
     );
+  });
+});
+
+describe("user message content", () => {
+  const otherWorkspaceId = toSafeId<"workspace">("workspace_other");
+  const userMessage = (...contents: string[]) =>
+    toPersistableChatMessage({
+      id: chatMessageId("msg_content"),
+      role: "user",
+      parts: contents.map((content) => ({ type: "text" as const, content })),
+    });
+  const contentOf = (...contents: string[]) =>
+    requireUserMessageContent(
+      parseMessage({
+        accessibleWorkspaceIds: [],
+        message: userMessage(...contents),
+      }).message,
+    );
+
+  // Composer HTML the editor sends for a draft with nothing to read: its
+  // own emptiness check counts spaces and line breaks as content.
+  const BLANK_COMPOSER_HTML = [
+    "<p> </p>",
+    "<p><br></p>",
+    "<p>&nbsp; </p>",
+    "<p>  </p><p></p>",
+    // A matter chip from a workspace the sender cannot read is dropped.
+    `<p><entity-mention data-id="entity_1" data-label="Lease" data-category="entity" data-source-workspace-id="${otherWorkspaceId}"></entity-mention> </p>`,
+  ];
+
+  test.each(BLANK_COMPOSER_HTML)(
+    "refuses %s before a provider sees an empty user message",
+    (html) => {
+      // The raw HTML is not blank; only the normalized text is.
+      expect(html.trim()).not.toBe("");
+      const refused = contentOf(html);
+      expect(Result.isError(refused)).toBe(true);
+      if (Result.isOk(refused)) {
+        return;
+      }
+      expect(refused.error.status).toBe(422);
+      expect(refused.error.code).toBe(CHAT_MESSAGE_EMPTY_ERROR_CODE);
+    },
+  );
+
+  test("a message of chips alone is content: the quote and the decision", () => {
+    const decisionId = "0190f2b4-6a1e-7c2d-9a3b-1c2d3e4f5a6b";
+    const result = contentOf(
+      `<p><pasted-text data-label="1 Afs 2/2020" data-source="paste">Quoted words</pasted-text> <entity-mention data-id="${decisionId}" data-label="1 Afs 2/2020" data-category="decision" data-kind="decision"></entity-mention> </p>`,
+    );
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("pasted text beside a blank paragraph is content", () => {
+    const result = requireUserMessageContent(
+      parseMessage({
+        accessibleWorkspaceIds: [],
+        message: toPersistableChatMessage({
+          id: chatMessageId("msg_pasted_only"),
+          role: "user",
+          parts: [
+            { type: "text", content: "<p> </p>" },
+            createChatPastedTextPart("Clause 4.2"),
+          ],
+        }),
+      }).message,
+    );
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("blank composer HTML is refused and any visible word is accepted", () => {
+    const blankFragment = fc.constantFrom(
+      "<p>",
+      "</p>",
+      "<br>",
+      " ",
+      "\n",
+      "\t",
+      "&nbsp;",
+      "<p><br></p>",
+    );
+    assertProperty(
+      "blank composer HTML is refused and any visible word is accepted",
+      fc.property(
+        fc.array(blankFragment, { minLength: 1, maxLength: 12 }),
+        fc.stringMatching(/^[A-Za-z0-9]{1,12}$/u),
+        fc.nat(),
+        (fragments, word, at) => {
+          const blank = fragments.join("");
+          expect(Result.isError(contentOf(blank))).toBe(true);
+          const index = at % (fragments.length + 1);
+          const withWord = [
+            ...fragments.slice(0, index),
+            word,
+            ...fragments.slice(index),
+          ].join("");
+          expect(Result.isOk(contentOf(withWord))).toBe(true);
+        },
+      ),
+    );
+  });
+
+  test("assistant messages are not judged as user content", () => {
+    const result = requireUserMessageContent(
+      toPersistableChatMessage({
+        id: chatMessageId("msg_assistant_blank"),
+        role: "assistant",
+        parts: [],
+      }),
+    );
+    expect(Result.isOk(result)).toBe(true);
   });
 });
 

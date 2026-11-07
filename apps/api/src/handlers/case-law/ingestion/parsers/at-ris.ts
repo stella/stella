@@ -1,8 +1,9 @@
-/** Parse the publisher-structured XML served by Austria's RIS. */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
 
 import type { DecisionTextFidelity } from "@stll/api-contract/case-law-text-field";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+/** Parse the publisher-structured XML served by Austria's RIS. */
+import { load } from "@stll/html";
 import {
   type Block,
   type DocumentAst,
@@ -15,6 +16,12 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
+import {
+  type AtCourtTextSection,
+  type AtPrintedLine,
+  isAtBenchRecital,
+  readAtDecisionRoles,
+} from "@/api/handlers/case-law/ingestion/parsers/at-decision-regions";
 import {
   readRisContent,
   type RisItem,
@@ -109,6 +116,46 @@ const paragraphRole = (
 };
 
 /**
+ * The court's own text, by where the publisher filed it. Its role comes from
+ * what the court printed (`readAtDecisionRoles`); the label only says
+ * where the text starts.
+ */
+const courtTextSection = (
+  contentType: string | undefined,
+): AtCourtTextSection | undefined => {
+  switch (contentType) {
+    case "spruch": {
+      return "operative";
+    }
+    case "begruendung":
+    case "rechtlichebeurteilung": {
+      return "reasons";
+    }
+    case "text": {
+      return "text";
+    }
+    case undefined: {
+      return undefined;
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
+
+/**
+ * The role of a publisher field. The VwGH files its bench recital under
+ * `betreff`; elsewhere that label holds the publisher's subject line.
+ */
+const publisherFieldRole = (
+  contentType: string | undefined,
+  text: string,
+): ParagraphRole | undefined =>
+  contentType === "betreff" && isAtBenchRecital(text)
+    ? "intro"
+    : paragraphRole(contentType);
+
+/**
  * Every content type this document labels a section with.
  *
  * The inventory reads the stored XML through this, so a section type the
@@ -120,7 +167,7 @@ const paragraphRole = (
  * the parser below is where an unreadable document is an error.
  */
 export const listRisDocumentContentTypes = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const content = $("nutzdaten").first();
   const contentTypes = new Set<string>();
   content.find("absatz[ct]").each((_, element) => {
@@ -291,7 +338,7 @@ const titlesHeadMatter = (next: RisItem | undefined): boolean => {
 export const parseRisDecisionXml = (
   input: ParseRisDecisionInput,
 ): Result<ParseRisDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const content = $("nutzdaten").first().get(0);
   if (content === undefined) {
     return Result.err(
@@ -313,15 +360,47 @@ export const parseRisDecisionXml = (
   let blockIndex = 0;
   let bodyStarted = false;
   const units = joinWrappedLines(items);
-  for (const [index, item] of units.entries()) {
-    if (item.type === "break") {
-      continue;
+  const rendered = units.map((unit) => {
+    if (unit.type === "break") {
+      return undefined;
     }
     const inlines = rewriteInlineWhitespace(
-      item.inlines,
+      unit.inlines,
       collapseLetterSpacing,
     );
-    const text = plainTextOf(inlines);
+    return { inlines, text: plainTextOf(inlines) };
+  });
+  // The court's text is read whole before any role is given: where its
+  // parts start and end can depend on lines further down.
+  const courtRoles = readAtDecisionRoles(
+    units.map((unit, index): AtPrintedLine => {
+      const text = rendered[index]?.text ?? "";
+      if (unit.type === "break") {
+        return { type: "break" };
+      }
+      if (unit.type === "heading") {
+        return { type: "heading", text };
+      }
+      const section = courtTextSection(unit.contentType);
+      return section === undefined
+        ? { type: "field" }
+        : { type: "paragraph", text, section };
+    }),
+    [
+      input.caseNumber,
+      ...units.flatMap((unit, index) =>
+        unit.type === "paragraph" && unit.contentType === "gz"
+          ? [rendered[index]?.text ?? ""]
+          : [],
+      ),
+    ],
+  );
+  for (const [index, item] of units.entries()) {
+    const line = rendered[index];
+    if (item.type === "break" || line === undefined) {
+      continue;
+    }
+    const { inlines, text } = line;
     blockIndex += 1;
     if (item.type === "heading") {
       const heading = {
@@ -344,14 +423,17 @@ export const parseRisDecisionXml = (
       continue;
     }
     if (item.contentType !== undefined) {
-      const printed = sections.get(item.contentType);
-      if (printed === undefined) {
+      const sectionText = sections.get(item.contentType);
+      if (sectionText === undefined) {
         sections.set(item.contentType, [text]);
       } else {
-        printed.push(text);
+        sectionText.push(text);
       }
     }
-    const role = paragraphRole(item.contentType);
+    const role =
+      courtTextSection(item.contentType) === undefined
+        ? publisherFieldRole(item.contentType, text)
+        : courtRoles[index];
     const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,

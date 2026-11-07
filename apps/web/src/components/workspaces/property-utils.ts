@@ -5,7 +5,7 @@ import {
 } from "@stll/ui/option-color";
 import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
-import type { CreatableContentType } from "@/components/workspaces/properties/composer-primitives";
+import type { PropertyComposerContentType } from "@/components/workspaces/properties/composer-primitives";
 import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -22,7 +22,10 @@ export const propertyToolAction = (
   toolType: WorkspaceProperty["tool"]["type"] | undefined,
 ) => PROPERTY_TOOL_ACTIONS[toolType ?? "ai-model"];
 
-export const isCreatableContentType = (t: string): t is CreatableContentType =>
+export const isPropertyComposerContentType = (
+  t: string,
+): t is PropertyComposerContentType =>
+  t === "money" ||
   t === "text" ||
   t === "single-select" ||
   t === "multi-select" ||
@@ -43,9 +46,11 @@ export const PROPERTY_SORT_KINDS = {
   int: "number",
   money: "number",
   person: "text",
+  // A record has no single value to order by; its projection columns do.
+  record: null,
 } as const satisfies Record<
   WorkspaceProperty["content"]["type"],
-  ColumnSortKind
+  ColumnSortKind | null
 >;
 
 export type { ColorVariants } from "@stll/ui/option-color";

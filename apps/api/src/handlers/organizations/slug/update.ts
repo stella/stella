@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
-import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
+import {
+  createOpaqueOrganizationSlug,
+  ORGANIZATION_SLUG_RULES,
+} from "@stll/auth-model";
 
 import { changeOrganizationSlug } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -12,13 +15,6 @@ import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declar
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { consumeOrganizationSlugRateLimit } from "@/api/lib/rate-limit/organization-slug";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
-
-const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
-const OPAQUE_SUFFIX_LENGTH = 10;
-const opaqueSlug = () => {
-  const bytes = crypto.getRandomValues(new Uint8Array(OPAQUE_SUFFIX_LENGTH));
-  return `org-${Array.from(bytes, (byte) => BASE32_ALPHABET.charAt(byte % 32)).join("")}`;
-};
 
 const config = {
   contract: "patch",
@@ -75,7 +71,8 @@ const updateOrganizationSlug = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
         userId: user.id,
         memberRole,
-        slug: body.type === "opaque" ? opaqueSlug() : body.slug,
+        slug:
+          body.type === "opaque" ? createOpaqueOrganizationSlug() : body.slug,
         recordAuditEvent,
         auth: getAuth(),
       }),

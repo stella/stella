@@ -12,9 +12,11 @@ import {
 } from "@stll/api-contract";
 import {
   chatToolExecutor,
-  isServerChatToolCall,
+  isBrowserResolvedChatToolCall,
+  isHarnessChatToolCall,
   isUnsupportedChatPart,
 } from "@stll/api-contract/chat";
+import { CHAT_LOCAL_RUN_QUESTION_TOOL } from "@stll/api-contract/chat-run-target";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
@@ -339,6 +341,19 @@ export const isChatAttachmentPart = (
   isRecord(part["source"]) &&
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
+
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
 
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
@@ -798,6 +813,21 @@ export const isApprovedClientCallAwaitingResult = (
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
+/**
+ * A blocking question a harness on the member's computer asked and still
+ * waits on. Every other harness call is reported with its result; the
+ * question's call stays open until its answer reaches the run.
+ */
+const isAwaitedHarnessQuestionCall = (part: ChatToolCallPart): boolean => {
+  // A harness names its own tools; the chat registry's names do not cover them.
+  const name: string = part.name;
+  return (
+    part.state === "input-complete" &&
+    name === CHAT_LOCAL_RUN_QUESTION_TOOL &&
+    isHarnessChatToolCall(part)
+  );
+};
+
 export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
@@ -923,9 +953,13 @@ export const getAwaitingUserInteractions = (
       interactions.push({ type: "approval", toolCallId: part.id });
       continue;
     }
+    if (isAwaitedHarnessQuestionCall(part)) {
+      interactions.push({ type: "harness-question", toolCallId: part.id });
+      continue;
+    }
     if (
       (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
-        !isServerChatToolCall(part)) ||
+        isBrowserResolvedChatToolCall(part)) ||
       isApprovedClientCallAwaitingResult(part)
     ) {
       interactions.push({
@@ -996,6 +1030,17 @@ const CLIENT_INTERACTION_RESOLUTION = {
     "awaiting-input": null,
     complete: "resolved",
     error: "resolved",
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
+  // The call never moves: the answer travels as the resume payload of the
+  // question's interrupt, and the harness reports the call's result itself.
+  "harness-question": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: null,
+    error: null,
     "input-complete": "unchanged",
     "input-streaming": null,
   },
@@ -1827,7 +1872,9 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
   metadata.contextNotice === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&

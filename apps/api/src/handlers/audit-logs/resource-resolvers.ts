@@ -1,8 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { AuditResourceKind } from "@stll/api-contract/audit-log";
+import { isAuditNamedResourceKind } from "@stll/api-contract/audit-log";
+import type {
+  AuditNamedResourceKind,
+  AuditResourceKind,
+} from "@stll/api-contract/audit-log";
 
-import { workspaceIdCheck } from "@/api/db/rls";
+import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
@@ -22,6 +26,7 @@ import {
   brandPersistedUserFileId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ResolveOptions = {
   tx: Transaction;
@@ -32,7 +37,13 @@ type ResolveOptions = {
 
 type ResourceNames = Map<string, string | null>;
 type Resolver = (options: ResolveOptions) => Promise<ResourceNames>;
-type Resolution = Resolver | { type: "unresolvable"; reason: string };
+type Unresolvable = { type: "unresolvable"; reason: string };
+/** A kind resolves exactly when the contract lists it as named. */
+type Resolutions = {
+  [Kind in AuditResourceKind]: Kind extends AuditNamedResourceKind
+    ? Resolver
+    : Unresolvable;
+};
 
 const toNames = (rows: { id: string; name: string | null }[]) =>
   new Map(rows.map(({ id, name }) => [id, name]));
@@ -89,7 +100,7 @@ const resolveEntity: Resolver = async (options) => {
       .where(
         and(
           inArray(entities.id, ids.map(brandPersistedEntityId)),
-          workspaceIdCheck,
+          workspaceCheck,
         ),
       ),
   );
@@ -168,6 +179,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     reason: "No canonical user-facing name source",
   },
   [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
@@ -441,7 +456,40 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
-} as const satisfies Record<AuditResourceKind, Resolution>;
+} as const satisfies Resolutions;
+
+/**
+ * Where a delete event's `deleted.old` snapshot keeps the resource's name: the
+ * same column its resolver reads, so a deleted resource still reads as the
+ * name it had instead of as a lost one.
+ */
+const DELETED_SNAPSHOT_NAME_KEY = {
+  [AUDIT_RESOURCE_TYPE.CONTACT]: "displayName",
+  [AUDIT_RESOURCE_TYPE.ENTITY]: "name",
+  [AUDIT_RESOURCE_TYPE.INVOICE]: "invoiceNumber",
+  [AUDIT_RESOURCE_TYPE.TEMPLATE]: "name",
+  [AUDIT_RESOURCE_TYPE.USER_FILE]: "fileName",
+  [AUDIT_RESOURCE_TYPE.WORKSPACE]: "name",
+} as const satisfies Record<AuditNamedResourceKind, string>;
+
+/**
+ * The name a delete event recorded for its resource. Reads only the changes
+ * this reader may see, so it never discloses more than the entry's details.
+ */
+export const deletedSnapshotName = (
+  kind: AuditResourceKind,
+  visibleChanges: Record<string, unknown> | null,
+): string | null => {
+  if (!isAuditNamedResourceKind(kind)) {
+    return null;
+  }
+  const deleted = visibleChanges?.["deleted"];
+  const snapshot = isRecord(deleted) ? deleted["old"] : null;
+  const name = isRecord(snapshot)
+    ? snapshot[DELETED_SNAPSHOT_NAME_KEY[kind]]
+    : null;
+  return typeof name === "string" && name.trim() !== "" ? name : null;
+};
 
 export const resolveAuditResourceNames = async ({
   tx,

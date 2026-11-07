@@ -8,6 +8,12 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
+import {
+  API_KEY_REFUSAL_REASON,
+  type ApiKeyRefusalReason,
+  apiKeyVerificationRefusalReason,
+  logApiKeyRefusal,
+} from "@/api/lib/auth/api-key-refusal-log";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import {
   API_KEY_KIND,
@@ -29,20 +35,6 @@ import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import { getMcpResourceModeConfig, type McpMode } from "@/api/mcp/constants";
 import { McpAuthenticationError } from "@/api/mcp/errors";
-
-/**
- * Credential failures do not disclose server-side state. Audience mismatches
- * are the exception: they echo only the binding stored on the credential the
- * caller already presented, which gives a legitimate caller a corrective path
- * without revealing whether the owning member is still active.
- */
-const rejectCredential = (): McpAuthenticationError =>
-  new McpAuthenticationError({ message: "Invalid or expired API key" });
-
-const rejectAudienceMismatch = (audience: McpMode): McpAuthenticationError =>
-  new McpAuthenticationError({
-    message: `This API key is bound to the ${audience} audience. Use ${getMcpResourceModeConfig(audience).httpPath}.`,
-  });
 
 /**
  * Resolve a machine API key into the same authorization identity the JWT
@@ -161,11 +153,39 @@ const resolvePresentedMachineApiKey = async (
         })
       : {
           valid: true,
+          error: null,
           key: await readMachineApiKey(credential, { getAuthContext, clock }),
         };
 
+  const metadata = v.safeParse(
+    machineApiKeyMetadataSchema,
+    verification.key?.metadata,
+  );
+  const rejectCredential = (
+    reason: ApiKeyRefusalReason,
+    error = new McpAuthenticationError({
+      message: "Invalid or expired API key",
+    }),
+  ): McpAuthenticationError => {
+    logApiKeyRefusal({
+      reason,
+      mode,
+      ...(verification.key
+        ? {
+            key: {
+              start: verification.key.start,
+              ...(metadata.success ? { kind: metadata.output.kind } : {}),
+            },
+          }
+        : {}),
+    });
+    return error;
+  };
+
   if (!verification.valid || !verification.key) {
-    throw rejectCredential();
+    throw rejectCredential(
+      apiKeyVerificationRefusalReason(verification.error?.code),
+    );
   }
 
   const { key } = verification;
@@ -173,15 +193,14 @@ const resolvePresentedMachineApiKey = async (
   // `enabled` is surfaced separately from validity by the plugin; a revoked key
   // is disabled rather than deleted so its audit trail survives.
   if (!key.enabled) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.disabled);
   }
 
   // Both metadata validity and audience binding are decided before the owner
   // lookup. A mismatch names only the binding already carried by the presented
   // credential and cannot probe whether its owner is still a member.
-  const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
   if (!metadata.success) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidMetadata);
   }
   if (
     mode !== KEY_SELF_INSPECTION &&
@@ -190,7 +209,13 @@ const resolvePresentedMachineApiKey = async (
       mode,
     })
   ) {
-    throw rejectAudienceMismatch(metadata.output.audience ?? mode);
+    const audience = metadata.output.audience ?? mode;
+    throw rejectCredential(
+      API_KEY_REFUSAL_REASON.audienceMismatch,
+      new McpAuthenticationError({
+        message: `This API key is bound to the ${audience} audience. Use ${getMcpResourceModeConfig(audience).httpPath}.`,
+      }),
+    );
   }
 
   const storedPermissions = v.safeParse(
@@ -198,14 +223,14 @@ const resolvePresentedMachineApiKey = async (
     key.permissions,
   );
   if (!storedPermissions.success) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidPermissions);
   }
 
   const parsedPermissions = parseMachineApiKeyPermissions(
     storedPermissions.output,
   );
   if (parsedPermissions.type !== "valid") {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidPermissions);
   }
 
   const { organizationId, scopes } = metadata.output;
@@ -239,7 +264,11 @@ const resolvePresentedMachineApiKey = async (
     !authorization ||
     !isMemberRole(authorization.role)
   ) {
-    throw rejectCredential();
+    throw rejectCredential(
+      personalPolicy === "denied"
+        ? API_KEY_REFUSAL_REASON.personalPolicy
+        : API_KEY_REFUSAL_REASON.inactiveMember,
+    );
   }
 
   // The escalation guard, evaluated against the role the owner holds *now*
@@ -252,7 +281,7 @@ const resolvePresentedMachineApiKey = async (
       parsedPermissions.permissions,
     )
   ) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.rolePermissions);
   }
 
   return {

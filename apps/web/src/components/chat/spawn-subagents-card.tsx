@@ -137,7 +137,9 @@ const SpawnSubagentsSubtaskList = ({
         const result = results?.find((entry) => entry.index === index);
         return (
           <li key={key}>
-            <Accordion>
+            {/* Each result streams rendered Markdown; it mounts only when its
+                row is opened, not for every collapsed row of the card. */}
+            <Accordion hiddenUntilFound={false}>
               <AccordionItem value="result">
                 <AccordionTrigger>
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
@@ -191,7 +193,7 @@ const SpawnSubagentsSubtaskList = ({
                         {maskSubagentIdentifiers(result.error)}
                       </p>
                     )}
-                    <Accordion>
+                    <Accordion hiddenUntilFound={false}>
                       <AccordionItem value="prompt">
                         <AccordionTrigger>
                           {t("chat.toolCall.input")}
@@ -245,14 +247,14 @@ const SubtaskStatus = ({ callStatus, status }: SubtaskStatusProps) => {
   switch (status) {
     case "completed":
       return (
-        <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
+        <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium">
           <CheckIcon aria-hidden="true" className="size-3" />
           {t("common.done")}
         </span>
       );
     case "failed":
       return (
-        <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
+        <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 font-medium">
           {t("common.failed")}
         </span>
       );
@@ -265,14 +267,14 @@ const SubtaskStatus = ({ callStatus, status }: SubtaskStatusProps) => {
 
   if (callStatus !== SPAWN_SUBAGENTS_CALL_STATUS.running) {
     return (
-      <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
+      <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium">
         <CircleDashedIcon className="size-3" />
       </span>
     );
   }
 
   return (
-    <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
+    <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-medium">
       <Loader className="size-3" size="sm" variant="decorative" />
       {t("tasks.statusValues.in_progress")}
     </span>
@@ -297,7 +299,7 @@ const CallStatusIndicator = ({ status }: CallStatusIndicatorProps) => {
       );
     case SPAWN_SUBAGENTS_CALL_STATUS.failed:
       return (
-        <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs ms-auto flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-medium">
+        <span className="bg-destructive/10 text-destructive border-destructive/60 text-2xs ms-auto flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 font-medium">
           {t("common.failed")}
         </span>
       );

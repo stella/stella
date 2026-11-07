@@ -15,9 +15,16 @@ checks:
       CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
+      GREEN_BASE: ${{ inputs.green_base || '' }}
     run: |
       if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
         bun run code-check -- --leg web
+        exit 0
+      fi
+      # Main compared with itself checks nothing: check the change since the
+      # last commit known green, or every file when none is known.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
+        bun run code-check:affected -- --leg web --green-base "$GREEN_BASE"
         exit 0
       fi
       bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
@@ -48,9 +55,16 @@ checks:
       CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
+      GREEN_BASE: ${{ inputs.green_base || '' }}
     run: |
       if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
         bun run code-check -- --leg rest
+        exit 0
+      fi
+      # Main compared with itself checks nothing: check the change since the
+      # last commit known green, or every file when none is known.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
+        bun run code-check:affected -- --leg rest --green-base "$GREEN_BASE"
         exit 0
       fi
       bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"

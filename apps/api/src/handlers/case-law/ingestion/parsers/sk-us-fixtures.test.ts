@@ -7,8 +7,11 @@ import {
   projectPlainText,
 } from "@stll/legal-ast/document-ast";
 
-import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseSkUsDocumentXhtml as uncheckedParseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseSkUsDocumentXhtml = guardParser(uncheckedParseSkUsDocumentXhtml);
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -161,6 +164,21 @@ describe("the page numbers the markup keeps from the file", () => {
     );
   });
 
+  test("a separate opinion opening a fresh page leaves the page before it short (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const texts = paragraphs(blocks).map(textOf);
+    // Page 21 holds only the decision's closing lines; page 22 opens the
+    // separate opinion with the docket. Every page number still leaves.
+    expect(texts.filter((text) => /^\d{1,2} \p{Ll}/u.test(text))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes(
+          "Podľa jej vyjadrenia sa o tejto skutočnosti dozvedela až s veľkým časovým odstupom",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   test("a page number closing a page's last line leaves the text (PL. ÚS 1/2021)", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-1-2021", "PL. ÚS 1/2021");
     const first = paragraphs(blocks).find((block) => block.number === 1);
@@ -208,12 +226,27 @@ describe("PL. ÚS 10/2014", () => {
       .map((block) => ("inlines" in block ? textOf(block) : ""))
       .join("\n");
     expect(text).not.toContain(String.fromCodePoint(0xad));
-    expect(headings(blocks, 1)).toContain("PL. ÚS 10/2014-78");
+    expect(
+      headings(blocks, 1).some((heading) =>
+        heading.includes("PL. ÚS 10/2014-78"),
+      ),
+    ).toBe(true);
     expect(text).toContain("peer-to-peer (P2P)");
     expect(text).toContain("C-293/12 a C-594/12");
     // Hyphens at a line's end are the court's too: a compound and a docket.
     expect(text).toContain("obrazovo-zvukových");
     expect(text).toContain("Landesregierung a iní, C-293/12 a C-594/12");
+  });
+
+  // The file sets its word gaps as no-break spaces; its one plain gap
+  // between letters is the seam in the instruction's heading.
+  test("the instruction's heading the text layer splits reads whole", async () => {
+    const blocks = await parsedFixture("sk-us-pl-us-10-2014", "PL. ÚS 10/2014");
+    const text = blocks
+      .map((block) => ("inlines" in block ? textOf(block) : ""))
+      .join("\n");
+    expect(text).toContain("Poučenie");
+    expect(text).not.toContain("Pou čenie");
   });
 
   test("a quoted `takto rozhodol:` inside the reasoning does not turn the reasoning into the holding", async () => {
@@ -234,5 +267,97 @@ describe("PL. ÚS 10/2014", () => {
         (block) => block.role === "holding",
       ),
     ).toEqual([]);
+  });
+});
+
+describe("a file that sets its words apart with no-break spaces (II. ÚS 111/2015)", () => {
+  const holdingOf = async () => {
+    const blocks = await parsedFixture(
+      "sk-us-ii-us-111-2015",
+      "II. ÚS 111/2015",
+    );
+    return paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+  };
+
+  test("each point of the holding is its own paragraph, the one the file runs on after a finished sentence too", async () => {
+    const holding = await holdingOf();
+    expect(holding.map((text) => /^\d+\./u.exec(text)?.[0])).toEqual([
+      "1.",
+      "2.",
+      "3.",
+      "4.",
+      "5.",
+    ]);
+    expect(holding[0]).toEndWith("porušené boli.");
+    expect(holding[1]).toStartWith(
+      "2. Uznesenie Krajského súdu v Trnave sp. zn. 3 Tos 89/2014",
+    );
+  });
+
+  test("a word the file splits with a plain space reads whole", async () => {
+    const holding = (await holdingOf()).join("\n");
+    for (const word of [
+      "porušené",
+      "zrušuje",
+      "priznáva",
+      "povinná",
+      "uhradiť",
+    ]) {
+      expect(holding).toContain(word);
+    }
+    expect(holding).not.toMatch(
+      /zru šuje|prizn áva|povinn á|uhradi ť|poru šen/u,
+    );
+  });
+
+  test("the instruction keeps its heading", async () => {
+    const blocks = await parsedFixture(
+      "sk-us-ii-us-111-2015",
+      "II. ÚS 111/2015",
+    );
+    const text = blocks
+      .map((block) => ("inlines" in block ? textOf(block) : ""))
+      .join("\n");
+    expect(text).toContain("Poučenie:");
+    expect(text).not.toContain("Pou čenie");
+  });
+});
+
+describe("a file that runs a new block onto a finished sentence with plain spaces", () => {
+  test("the next point of the holding opens its own paragraph (III. ÚS 86/05)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding.map((text) => /^\d+\./u.exec(text)?.[0])).toEqual([
+      "1.",
+      "2.",
+      "3.",
+      "4.",
+    ]);
+    expect(holding[0]).toEndWith("porušené boli.");
+    expect(holding[1]).toStartWith("2. Zrušuje uznesenie Krajskej prokuratúry");
+  });
+
+  test("a part marker ending the holding's line opens the reasoning (III. ÚS 5/2019)", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-5-2019", "III. ÚS 5/2019");
+    expect(headings(blocks, 2)).toEqual(["rozhodol:", "Odôvodnenie:"]);
+    const holding = paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+    expect(holding).toHaveLength(1);
+    expect(holding[0]).toEndWith(
+      "odmieta ako podanú zjavne neoprávnenou osobou.",
+    );
+  });
+
+  test("a citation's number after an abbreviation stays in its sentence", async () => {
+    const blocks = await parsedFixture("sk-us-iii-us-86-05", "III. ÚS 86/05");
+    const opened = paragraphs(blocks)
+      .map(textOf)
+      .filter((text) => /^\d+\. (?:Ústavy|Dohovoru|Trestného)/u.test(text));
+    expect(opened).toEqual([]);
   });
 });

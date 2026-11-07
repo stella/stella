@@ -42,6 +42,12 @@ const FieldDescription = ({
   />
 );
 
+/**
+ * The message for an invalid field. With no `match` it shows whatever error
+ * the field has, including one the `Form` received in `errors` from the
+ * server; with a validity key (`match="valueMissing"`) it shows only for that
+ * constraint, so each rule can be worded on its own. See `Form`.
+ */
 const FieldError = ({ className, ...props }: FieldPrimitive.Error.Props) => (
   <FieldPrimitive.Error
     className={cn("text-destructive-foreground text-xs", className)}

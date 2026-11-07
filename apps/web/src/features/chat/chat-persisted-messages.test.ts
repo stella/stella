@@ -1,12 +1,20 @@
 import { ChatClient } from "@tanstack/ai-client";
-import type { ConnectConnectionAdapter } from "@tanstack/ai-client";
+import type { ConnectConnectionAdapter, UIMessage } from "@tanstack/ai-client";
 import { EventType } from "@tanstack/ai/client";
 import { panic } from "better-result";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { CHAT_LOCAL_RUN_FILES_METADATA_KEY } from "@stll/api-contract/chat-run-target";
 
-import { withCurrentChatMessages } from "./chat-persisted-messages";
+import type {
+  ChatClientTools,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
+
+import {
+  toPersistedChatMessages,
+  withCurrentChatMessages,
+} from "./chat-persisted-messages";
 
 test("a resumed stream retains history added between the persistence read and SDK hydration", async () => {
   const initialMessages = [
@@ -121,4 +129,74 @@ test("a resumed stream retains history added between the persistence read and SD
     finishStream.resolve(undefined);
     client.dispose();
   }
+});
+
+describe("a file a local run handed back", () => {
+  const url = "stella://file::019a0000-0000-7000-8000-000000000001";
+  const file = {
+    url,
+    filename: "report.pdf",
+    mimeType: "application/pdf",
+  };
+  const part = {
+    type: "document",
+    source: { type: "url", value: url, mimeType: "application/pdf" },
+    metadata: { filename: "report.pdf" },
+  } as const;
+  const message = (
+    overrides: Partial<UIMessage<ChatClientTools>>,
+  ): UIMessage<ChatClientTools> => ({
+    id: "answer",
+    role: "assistant",
+    parts: [{ type: "text", content: "Here it is." }],
+    ...overrides,
+  });
+
+  test("the live answer's metadata reads as the part the stored answer holds", () => {
+    const [live] = toPersistedChatMessages([
+      message({ metadata: { [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [file] } }),
+    ]);
+    const [stored] = toPersistedChatMessages([
+      message({ parts: [{ type: "text", content: "Here it is." }, part] }),
+    ]);
+    expect(live?.parts).toEqual(stored?.parts ?? []);
+  });
+
+  test("a message holding both shows the file once", () => {
+    const [shown] = toPersistedChatMessages([
+      message({
+        metadata: { [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [file] },
+        parts: [{ type: "text", content: "Here it is." }, part],
+      }),
+    ]);
+    expect(shown?.parts.filter(({ type }) => type === "document")).toHaveLength(
+      1,
+    );
+  });
+
+  test("only an answer reads it, and a malformed list adds nothing", () => {
+    const [fromUser] = toPersistedChatMessages([
+      message({
+        role: "user",
+        metadata: { [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: [file] },
+      }),
+    ]);
+    expect(fromUser?.parts).toHaveLength(1);
+    for (const listed of [
+      "report.pdf",
+      [
+        {
+          url: "https://example.test/report.pdf",
+          filename: "x",
+          mimeType: "x",
+        },
+      ],
+      [{ url }],
+    ]) {
+      const [shown] = toPersistedChatMessages([
+        message({ metadata: { [CHAT_LOCAL_RUN_FILES_METADATA_KEY]: listed } }),
+      ]);
+      expect(shown?.parts).toHaveLength(1);
+    }
+  });
 });

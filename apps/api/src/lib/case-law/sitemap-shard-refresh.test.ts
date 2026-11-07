@@ -8,8 +8,13 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
+import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  CorpusSchemaLaneUnavailableError,
+} from "@/api/db/corpus-schema-lane";
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
@@ -755,7 +760,7 @@ test(
  * `execute` recorded, and `onExecute` called before it runs.
  */
 const recordingRefreshDb = (
-  onExecute: (statement: string) => void = () => {},
+  onExecute: (statement: string) => unknown = () => undefined,
 ) => {
   const dialect = new PgDialect();
   const transactions: { sql: string; params: unknown[] }[][] = [];
@@ -768,12 +773,17 @@ const recordingRefreshDb = (
           new Proxy(tx, {
             get: (target, property, receiver) =>
               property === "execute"
-                ? async (query: SQL) => {
-                    const rendered = dialect.sqlToQuery(query);
+                ? async (query: SQL | string) => {
+                    const rendered =
+                      typeof query === "string"
+                        ? { sql: query, params: [] }
+                        : dialect.sqlToQuery(query);
                     const statement = rendered.sql.trim();
                     sent.push({ sql: statement, params: rendered.params });
-                    onExecute(statement);
-                    return await target.execute(query);
+                    // An answer from `onExecute` stands in for the database's.
+                    return (
+                      onExecute(statement) ?? (await target.execute(query))
+                    );
                   }
                 : Reflect.get(target, property, receiver),
           }),
@@ -821,6 +831,8 @@ test(
     await refreshCaseLawSitemapShards(recorded.db, { poolIdleTimeoutS: 20 });
     expect(recorded.transactions.length).toBeGreaterThan(2);
     for (const sent of recorded.transactions) {
+      // The lane comes first; its try cannot wait, so it needs no budget.
+      expect(sent.at(0)?.sql).toBe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL);
       const budgetAt = sent.findIndex(({ sql: statement }) =>
         statement.includes("set_config('statement_timeout'"),
       );
@@ -828,7 +840,7 @@ test(
       expect(sent[budgetAt]?.params).toContain("10000ms");
       expect(
         sent
-          .slice(0, budgetAt)
+          .slice(1, budgetAt)
           .every(
             ({ sql: statement }) =>
               statement.startsWith("SET ") ||
@@ -836,6 +848,50 @@ test(
           ),
       ).toBe(true);
     }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a refresh yields to a schema upgrade holding the lane and leaves the log for a later run",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const before = await snapshot();
+    await insertOne({ decisionDate: "2009-01-01" });
+    // An upgrade holds the lane exclusive: every try is refused.
+    const refused = recordingRefreshDb((statement) =>
+      statement === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL
+        ? [{ granted: false }]
+        : undefined,
+    );
+    const sleeps: number[] = [];
+    const rejection: unknown = await refreshCaseLawSitemapShards(refused.db, {
+      laneSleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Its task reads this refusal as a delayed continuation.
+    expect(CorpusSchemaLaneUnavailableError.is(rejection)).toBe(true);
+    // Each refused try ended its transaction having sent nothing else.
+    expect(refused.transactions.length).toBeGreaterThan(1);
+    expect(
+      refused.transactions.every(
+        (sent) =>
+          sent.length === 1 &&
+          sent[0]?.sql === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+      ),
+    ).toBe(true);
+    // It paused between tries, outside any transaction, until its budget ran out.
+    expect(sleeps).toHaveLength(refused.transactions.length - 1);
+    expect(sleeps.every((ms) => ms <= CORPUS_SCHEMA_LANE_RETRY_MS)).toBe(true);
+    expect(await snapshot()).toEqual(before);
+    expect(await loggedMonths()).toEqual(["CZE/2009/01"]);
+    // Once the lane is free the next run picks the month up.
+    await refreshUntilDone(refreshDb);
+    await expectMatchesFullRecount();
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -942,10 +998,10 @@ for (const target of [
     async () => {
       const plan = await monthCountPlan(target);
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_decisions_sitemap_shard_published_idx on case_law_decisions/u,
+        /Index (?:Only )?Scan using case_law_decisions_sitemap_month_published_idx on case_law_decisions/u,
       );
       expect(plan).not.toMatch(/Seq Scan on case_law_decisions/u);
-      const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_shard"));
+      const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_month"));
       expect(scan).toMatch(
         target.year === "undated"
           ? /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date IS NULL\)(?: AND \(source_id = case_law_sources.id\))?\)/u
@@ -1326,7 +1382,8 @@ test(
           step satisfies never;
       }
     };
-    await fc.assert(
+    await assertProperty(
+      "any sequence of writes interleaved with refreshes ends equal to a full recount",
       fc.asyncProperty(
         fc.array(operation, { minLength: 1, maxLength: 12 }),
         async (steps) => {
@@ -1339,7 +1396,7 @@ test(
           expect(await loggedMonths()).toEqual([]);
         },
       ),
-      propertyConfig({ numRuns: 25 }),
+      { numRuns: 25 },
     );
   },
   propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres

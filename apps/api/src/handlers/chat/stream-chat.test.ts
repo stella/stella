@@ -1503,6 +1503,7 @@ test("transient visual preview reaches the in-turn model but not wire, persisten
     v.safeParse(visualPreviewToolOutputSchema, previewCall.output).success,
   ).toBe(true);
   validateToolCallParts({
+    ownership: "cloud",
     message: settledMessage,
     tools: { [VISUAL_PREVIEW_TOOL_NAME]: visualTool },
   }).unwrap();
@@ -2644,6 +2645,7 @@ describe("native interrupt boundary persistence", () => {
       },
     ]);
     const validated = validateToolCallParts({
+      ownership: "cloud",
       message: finish.responseMessage,
       tools: { [SPAWN_SUBAGENTS_TOOL_NAME]: spawnSubagents },
     });
@@ -3047,6 +3049,13 @@ describe("approved client tool with an output schema", () => {
       elements: [],
       revision: "revision-1",
       tabId: 1,
+      tabs: [
+        {
+          active: true,
+          tabId: 1,
+          url: "https://example.com/",
+        },
+      ],
       text: "Example Domain",
       textOffset: 0,
       textTotalChars: 14,
@@ -3192,6 +3201,7 @@ describe("approved client tool with an output schema", () => {
     expect(
       Result.isOk(
         validateToolCallParts({
+          ownership: "cloud",
           allowPartialInput: false,
           allowDeferredServerInput: true,
           message: stored,
@@ -3215,6 +3225,7 @@ describe("approved client tool with an output schema", () => {
       approved.browser.getMessages().find(({ id }) => id === owningMessageId) ??
       panic("The browser lost the answered message");
     const continuation = await validateMessage({
+      toolCallOwnership: "cloud",
       message: {
         id: owningMessageId,
         role: "assistant",
@@ -6397,6 +6408,7 @@ describe("chat message hydration", () => {
     });
 
     const result = await hydrateMessages({
+      copiesFilesToComputer: false,
       messages: [
         {
           id: "msg_1",
@@ -6425,6 +6437,60 @@ describe("chat message hydration", () => {
     }
 
     expect(result.error.status).toBe(422);
+  });
+
+  test("a PDF for the computer stays out of the messages: the agent reads the copy", async () => {
+    const userFileId = toSafeId<"userFile">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const threadId = toSafeId<"chatThread">(
+      "22222222-2222-4222-8222-222222222222",
+    );
+    const userId = toSafeId<"user">("33333333-3333-4333-8333-333333333333");
+    const { safeDb } = createScopedDbMock({
+      query: {
+        userFiles: {
+          findMany: async () => [
+            {
+              extractedText: null,
+              id: userFileId,
+              userId,
+              threadId,
+              fileName: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
+              s3Key: "user/file",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await hydrateMessages({
+      copiesFilesToComputer: true,
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          parts: [
+            createChatAttachmentPart({
+              filename: "draft.pdf",
+              mimeType: PDF_MIME_TYPE,
+              url: toUserFileUrl(userFileId),
+            }),
+          ],
+        },
+      ],
+      safeDb,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      userId,
+    });
+
+    const parts = result.unwrap().flatMap((message) => message.parts);
+    expect(parts).toHaveLength(1);
+    expect(JSON.stringify(parts)).toContain(
+      `attachments/${userFileId}/draft.pdf`,
+    );
+    expect(parts.some((part) => part.type === "document")).toBe(false);
   });
 });
 

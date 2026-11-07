@@ -177,17 +177,6 @@ describe("CLI contract changeset guard", () => {
     });
   });
 
-  test("accepts a CLI changeset already present on the base branch", () => {
-    expect(
-      input(
-        ["packages/cli/src/generated/mcp-contract.ts"],
-        [".changeset/base-entry.md"],
-      ),
-    ).toMatchObject({
-      status: "satisfied-changeset",
-    });
-  });
-
   test("does not accept an empty or unrelated changeset", () => {
     expect(input(["packages/cli/src/generated/api-contract.ts"], [])).toEqual({
       status: "missing",
@@ -307,13 +296,23 @@ describe("CLI contract changeset guard integration", () => {
     });
   });
 
-  test("accepts a CLI changeset already pending on the base branch", () => {
+  test("a CLI changeset already on the base branch does not cover a new contract change", () => {
+    // A release branch consumes changesets when it is cut and `main` keeps them
+    // until the release pull request merges, so this entry may already have
+    // shipped: the published CLI would then lack the contract change.
     withGitFixture(
       (root) => {
         changeCatalogAndCommit(root);
+        expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(1);
+        writeFileSync(
+          path.join(root, ".changeset/own.md"),
+          '---\n"@stll/cli": patch\n---\n\nContract change.\n',
+        );
+        runGit(root, ["add", ".changeset/own.md"]);
+        runGit(root, ["commit", "-m", "carry its own changeset"]);
         expect(runCliContractGuard({ root, base: "main" }).exitCode).toBe(0);
       },
-      { baseChangeset: '---\n"@stll/cli": patch\n---\n\nContract change.\n' },
+      { baseChangeset: '---\n"@stll/cli": patch\n---\n\nEarlier change.\n' },
     );
   });
 

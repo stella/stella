@@ -3,8 +3,7 @@
   "rules": [
     "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease"
   ],
-  "type": "changed-lines",
-  "expiresAt": "2026-11-05T00:00:00.000Z",
+  "type": "full",
   "check": [
     "bun",
     "--bun",

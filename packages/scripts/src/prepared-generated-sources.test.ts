@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -18,9 +19,12 @@ import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
 import { createTestState } from "@stll/test-state";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
+import { TAILWIND_CLASS_CACHE } from "./generated-files";
 import {
+  generatedDirectoryFiles,
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedDirectory,
   hasPreparedGeneratedSources,
   preparedGeneratedFile,
   preparedManifestPath,
@@ -45,6 +49,14 @@ const fixture = () => {
     "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
+  write(
+    "node_modules/tsrs/package.json",
+    JSON.stringify({ version: "test-tsrs" }),
+  );
+  write(
+    "node_modules/oxc-parser/package.json",
+    JSON.stringify({ version: "test-oxc" }),
+  );
   write("input.ts", "export const input = 1;\n");
   write(
     "apps/api/src/mcp/generated/capability-dispatch.ts",
@@ -56,6 +68,8 @@ const fixture = () => {
       write(file, `prepared:${file}\n`);
     }
   }
+  // Ignored and never committed: generation names these files.
+  write(TAILWIND_SNAPSHOT, "{}\n");
   for (const args of [
     ["init", "-q"],
     [
@@ -86,19 +100,34 @@ const fixture = () => {
   const manifest = {
     ...generatedInputIdentity(root),
     files: Object.fromEntries(
-      ciGeneratedFiles(root).map((file) => [
-        file,
-        generatedFileHash(readFileSync(path.join(root, file))),
-      ]),
+      [...ciGeneratedFiles(root), ...generatedDirectoryFiles(root)].map(
+        (file) => [
+          file,
+          generatedFileHash(readFileSync(path.join(root, file))),
+        ],
+      ),
     ),
   };
   return { root, write, manifest };
 };
 
-test("the identity names the TypeScript 6 compiler the generators run on", () => {
-  const { root, manifest } = fixture();
+const TAILWIND_SNAPSHOT = `${TAILWIND_CLASS_CACHE.directory}/${"a".repeat(32)}.json`;
+
+test("the identity names the compilers the generators run on", () => {
+  const { root, manifest, write } = fixture();
   try {
-    expect(manifest.compilerVersion).toBe("test-compiler");
+    expect(manifest.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+    );
+    write(
+      "node_modules/oxc-parser/package.json",
+      JSON.stringify({ version: "next-oxc" }),
+    );
+    const upgraded = generatedInputIdentity(root);
+    expect(upgraded.compilerVersion).toBe(
+      "typescript6@test-compiler tsrs@test-tsrs oxc-parser@next-oxc",
+    );
+    expect(upgraded.inputHash).not.toBe(manifest.inputHash);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -259,18 +288,17 @@ test("source and toolchain changes invalidate prepared sources while output writ
 test("restore validates the whole artifact before any writes and restores every output", () => {
   const { root, manifest, write } = fixture();
   const source = path.join(root, "artifact");
-  const outputs = ciGeneratedFiles(root);
   try {
     mkdirSync(source);
     writeFileSync(path.join(source, "manifest.json"), JSON.stringify(manifest));
-    for (const file of outputs) {
+    for (const file of Object.keys(manifest.files)) {
       write(
         `artifact/files/${file}`,
         readFileSync(path.join(root, file), "utf-8"),
       );
       write(file, "before restore");
     }
-    for (const file of outputs) {
+    for (const file of Object.keys(manifest.files)) {
       const original = readFileSync(path.join(source, "files", file), "utf-8");
       write(`artifact/files/${file}`, "incomplete artifact");
       expect(() => restorePreparedGeneratedSources(root, source)).toThrow(
@@ -278,7 +306,7 @@ test("restore validates the whole artifact before any writes and restores every 
           ? "incomplete output inventory"
           : `Generated source artifact differs: ${file}`,
       );
-      for (const output of outputs) {
+      for (const output of Object.keys(manifest.files)) {
         expect(readFileSync(path.join(root, output), "utf-8")).toBe(
           "before restore",
         );
@@ -447,6 +475,104 @@ test("configured preparation fails closed and an ordinary checkout generates loc
   }
 });
 
+test("a generated directory travels by file name and bytes and is required", () => {
+  const { root, manifest, write } = fixture();
+  const source = path.join(root, "artifact");
+  try {
+    const withFiles = (files: Record<string, string>) => ({
+      ...manifest,
+      files,
+    });
+    const { [TAILWIND_SNAPSHOT]: snapshotHash, ...withoutCache } =
+      manifest.files;
+    expect(snapshotHash).toBe(generatedFileHash("{}\n"));
+    expect(() =>
+      validatePreparedManifest({ root, raw: withFiles(withoutCache) }),
+    ).toThrow("incomplete output inventory");
+    for (const name of [
+      `${TAILWIND_CLASS_CACHE.directory}/../input.ts`,
+      `${TAILWIND_CLASS_CACHE.directory}/notes.txt`,
+      `${TAILWIND_CLASS_CACHE.directory}/${"a".repeat(32)}.json.lock`,
+      `other/${"a".repeat(32)}.json`,
+    ]) {
+      expect(
+        () =>
+          validatePreparedManifest({
+            root,
+            raw: withFiles({
+              ...manifest.files,
+              [name]: generatedFileHash("{}"),
+            }),
+          }),
+        name,
+      ).toThrow("incomplete output inventory");
+    }
+    mkdirSync(source);
+    writeFileSync(path.join(source, "manifest.json"), JSON.stringify(manifest));
+    for (const file of Object.keys(manifest.files)) {
+      write(
+        `artifact/files/${file}`,
+        readFileSync(path.join(root, file), "utf-8"),
+      );
+    }
+    // An earlier generation's file, and a restore that replaces the directory.
+    const earlier = `${TAILWIND_CLASS_CACHE.directory}/${"c".repeat(32)}.json`;
+    write(earlier, "{}\n");
+    rmSync(path.join(root, TAILWIND_SNAPSHOT));
+    restorePreparedGeneratedSources(root, source);
+    expect(readFileSync(path.join(root, TAILWIND_SNAPSHOT), "utf-8")).toBe(
+      "{}\n",
+    );
+    expect(existsSync(path.join(root, earlier))).toBe(false);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a prepared generated directory is reused only with the producer's exact files", () => {
+  const { root, manifest, write } = fixture();
+  try {
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(false);
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
+    write(TAILWIND_SNAPSHOT, "{ }\n");
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${TAILWIND_SNAPSHOT}`);
+    write(TAILWIND_SNAPSHOT, "{}\n");
+    const extra = `${TAILWIND_CLASS_CACHE.directory}/${"b".repeat(32)}.decl-0f.json`;
+    write(extra, "{}\n");
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${extra}`);
+    rmSync(path.join(root, extra));
+    // Files the cache never holds, such as the writer lock, are not outputs.
+    write(`${TAILWIND_CLASS_CACHE.directory}/notes.txt`, "unrelated\n");
+    expect(
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toBe(true);
+    rmSync(path.join(root, TAILWIND_SNAPSHOT));
+    expect(() =>
+      hasPreparedGeneratedDirectory(root, TAILWIND_CLASS_CACHE.directory),
+    ).toThrow(`Prepared generated source differs: ${TAILWIND_SNAPSHOT}`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("API runtime generation works with only packaged sources and rejects a root-script import mutation", () => {
   const root = realpathSync(
     mkdtempSync(path.join(tmpdir(), "packaged-runtime-")),
@@ -591,7 +717,11 @@ test("prepared input identities retain tracked directory, symlink and byte frami
     });
     expect(inventory.exitCode).toBe(0);
     const oracle = createSha256().update(
-      JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
+      JSON.stringify({
+        bun: Bun.version,
+        compiler:
+          "typescript6@test-compiler tsrs@test-tsrs oxc-parser@test-oxc",
+      }),
     );
     const generated = new Set<string>(ciGeneratedFiles(root));
     for (const entry of inventory.stdout.toString().split("\0")) {

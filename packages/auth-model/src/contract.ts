@@ -1,5 +1,5 @@
 /** Better Auth version whose logical schema this contract describes. */
-export const BETTER_AUTH_CONTRACT_VERSION = "1.7.12";
+export const BETTER_AUTH_CONTRACT_VERSION = "1.7.16";
 
 export const AUTH_SESSION_STARTUP_HEADER = "x-stella-session-startup";
 
@@ -89,6 +89,34 @@ export const ORGANIZATION_SLUG_RULES = {
   maxLength: 128,
   pattern: /^[a-z0-9\x2d]+$/u,
 } as const;
+
+/** Random bytes behind an opaque organization slug. */
+export const ORGANIZATION_OPAQUE_SLUG_BYTES = 10;
+const OPAQUE_SLUG_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
+
+/**
+ * The shape of every slug `createOpaqueOrganizationSlug` returns: the `org-`
+ * prefix and one alphabet symbol per random byte.
+ */
+export const OPAQUE_ORGANIZATION_SLUG_PATTERN = /^org-[a-z2-7]{10}$/u;
+
+/**
+ * The opaque `org-` slug shared by organization creation and slug changes.
+ * The source fills this function's own fixed-size buffer, so it cannot change
+ * the identifier's length; organization names never enter the identifier.
+ */
+export const createOpaqueOrganizationSlug = (
+  fillRandom: (bytes: Uint8Array<ArrayBuffer>) => void = (bytes) => {
+    crypto.getRandomValues(bytes);
+  },
+): string => {
+  const bytes = new Uint8Array(ORGANIZATION_OPAQUE_SLUG_BYTES);
+  fillRandom(bytes);
+  const identifier = Array.from(bytes, (byte) =>
+    OPAQUE_SLUG_ALPHABET.charAt(byte % OPAQUE_SLUG_ALPHABET.length),
+  ).join("");
+  return `org-${identifier}`;
+};
 
 export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   allowUserToCreateOrganization: true,

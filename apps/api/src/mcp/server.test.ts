@@ -24,6 +24,7 @@ import {
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { createTestClock, waitFor } from "@stll/test-kit";
 
 import { env } from "@/api/env";
 import {
@@ -272,7 +273,10 @@ describe("handleMcpHttpRequest", () => {
       lines.push(line);
     });
     authenticateMcpRequestMock.mockImplementation(async () => {
-      await Bun.sleep(5);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 2 ? true : undefined), {
+        description: "the authentication phase delay",
+      });
       return Result.ok({
         organizationId: "org_1",
         scopes: ["stella:read"],
@@ -284,7 +288,10 @@ describe("handleMcpHttpRequest", () => {
       userId: "user_1",
     });
     listMcpToolsMock.mockImplementation(async () => {
-      await Bun.sleep(toolProjectionDelayMs);
+      let polls = 0;
+      await waitFor(async () => ((polls += 1) >= 11 ? true : undefined), {
+        description: "the tool projection phase delay",
+      });
       return [];
     });
 
@@ -1448,6 +1455,7 @@ describe("handleMcpHttpRequest", () => {
         "open_case_law_decision",
         "read_case_law_decision_blocks",
         "preview_cited_provision",
+        "list_case_law_courts",
         "search_legislation",
         "read_statute",
         "read_statute_provisions",
@@ -1534,7 +1542,11 @@ describe("handleMcpHttpRequest", () => {
       firstRead.then(({ done }) =>
         done ? ("ended" as const) : ("open" as const),
       ),
-      Bun.sleep(20).then(() => "open" as const),
+      // A clock advance drains an event-loop turn, so an immediate close
+      // reaches firstRead before the pending-stream observation wins.
+      createTestClock()
+        .advance(0)
+        .then(() => "open" as const),
     ]);
     expect(initialState).toBe("open");
 
@@ -1591,7 +1603,22 @@ describe("handleMcpHttpRequest", () => {
       );
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenCalledTimes(1);
-      expect((await reader.read()).done).toBe(true);
+      // The only frame the stream may carry before it ends is the tool-list
+      // signal it sends once it opens.
+      const decoder = new TextDecoder();
+      const framesBeforeEnd = async (
+        frames: readonly string[],
+      ): Promise<readonly string[]> => {
+        const read = await reader.read();
+        return read.done
+          ? frames
+          : await framesBeforeEnd([...frames, decoder.decode(read.value)]);
+      };
+      const frames = await framesBeforeEnd([]);
+      expect(frames.length).toBeLessThanOrEqual(1);
+      for (const frame of frames) {
+        expect(frame).toContain("notifications/tools/list_changed");
+      }
     } finally {
       await reader.cancel();
     }
@@ -1640,7 +1667,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",
@@ -1709,7 +1740,11 @@ describe("handleMcpHttpRequest", () => {
     });
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
-        credential: { clientId: "client_1", type: "oauth_client" },
+        credential: {
+          clientId: "client_1",
+          issuedAt: 1_700_000_000,
+          type: "oauth_client",
+        },
         organizationId: "org_1",
         scopes: ["stella:read"],
         userId: "user_1",

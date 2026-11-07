@@ -10,6 +10,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  CARRIED_FIELD_COLUMNS,
+  carriedFieldValues,
+} from "@/api/lib/entity-versions/field-clone-policy";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -56,7 +60,7 @@ export default createSafeHandler(
           },
           columns: { id: true, versionNumber: true },
           with: {
-            fields: { columns: { content: true, propertyId: true } },
+            fields: { columns: CARRIED_FIELD_COLUMNS },
           },
         }),
       ),
@@ -164,10 +168,9 @@ export default createSafeHandler(
         // Clone all fields from the source version
         if (version.fields.length > 0) {
           await tx.insert(fields).values(
-            version.fields.map((f) => ({
-              content: f.content,
+            version.fields.map((field) => ({
+              ...carriedFieldValues(field),
               entityVersionId: nextVersionId,
-              propertyId: f.propertyId,
               workspaceId,
             })),
           );

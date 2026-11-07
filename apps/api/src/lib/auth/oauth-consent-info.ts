@@ -28,7 +28,7 @@ type HttpsUrl = `https://${string}`;
 /** The brands only stella's own origins can verify. */
 type FirstPartyBrand = Extract<
   VerifiedOAuthClientBrand,
-  "stella" | "stella_ios"
+  "stella" | "stella_ios" | "stella_cli"
 >;
 
 /**
@@ -210,7 +210,7 @@ export const FIRST_PARTY_OAUTH_CLIENTS = {
   cli: {
     documentPath: CLI_CLIENT_METADATA_PATH,
     redirect: { type: "loopback", path: LOOPBACK_REDIRECT_PATH },
-    brand: "stella",
+    brand: "stella_cli",
   },
   mobile: {
     documentPath: MOBILE_CLIENT_METADATA_PATH,

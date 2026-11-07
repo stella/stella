@@ -133,7 +133,9 @@ export type ReviewRunHistoryEntry = Pick<
   "id" | "status" | "errorCode"
 >;
 
-const isActiveRun = ({ status }: ReviewRunHistoryEntry): boolean =>
+const isActiveRun = ({
+  status,
+}: Pick<ReviewRunHistoryEntry, "status">): boolean =>
   status === "queued" || status === "running";
 
 /**
@@ -161,6 +163,63 @@ export const resolveReviewRunRestore = (
     return { type: "failed", runId: failed.id, errorCode: failed.errorCode };
   }
   return { type: "none" };
+};
+
+/**
+ * What the panel says about a run's origin. Only a table run gets a notice, and
+ * what it adds after explaining itself depends on what the reader can do next.
+ */
+export type TableRunNotice =
+  | { type: "none" }
+  | { type: "explanation-only" }
+  | { type: "open-full-review"; runId: string }
+  | { type: "run-another-review" };
+
+type ResolveTableRunNoticeArgs = {
+  shownRun: Pick<DocumentReviewRunRow, "id" | "executor" | "status">;
+  /** The document's runs, newest first. */
+  runs: readonly (ReviewRunHistoryEntry &
+    Pick<DocumentReviewRunSummary, "entityVersionId" | "executor">)[];
+  currentEntityVersionId: string | null;
+};
+
+/**
+ * A full review of an older version describes text that has since changed, so
+ * only one of the current version is worth pointing at. Without one the reader
+ * is sent to start a review, unless a run is still active: the server allows
+ * one active run per document, so a new review could not start yet. The shown
+ * run answers for itself: its detail is polled to completion, while the list
+ * is not, so the list's copy of it can still say running after it settled.
+ */
+export const resolveTableRunNotice = ({
+  shownRun,
+  runs,
+  currentEntityVersionId,
+}: ResolveTableRunNoticeArgs): TableRunNotice => {
+  switch (shownRun.executor) {
+    case "worker":
+      return { type: "none" };
+    case "table":
+      break;
+    default:
+      shownRun.executor satisfies never;
+      return panic(`Unhandled executor: ${String(shownRun.executor)}`);
+  }
+  const fullReview = runs.find(
+    (run) =>
+      run.executor === "worker" &&
+      run.status === "completed" &&
+      run.entityVersionId === currentEntityVersionId,
+  );
+  if (fullReview !== undefined) {
+    return { type: "open-full-review", runId: fullReview.id };
+  }
+  const otherRunActive = runs.some(
+    (run) => run.id !== shownRun.id && isActiveRun(run),
+  );
+  return isActiveRun(shownRun) || otherRunActive
+    ? { type: "explanation-only" }
+    : { type: "run-another-review" };
 };
 
 /** The run this restore decision tracks, or `null` when there is none. */

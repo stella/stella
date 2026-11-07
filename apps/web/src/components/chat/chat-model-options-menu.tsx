@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -34,6 +35,7 @@ import type {
   ModelPickerEntry,
   ModelRecommendation,
 } from "@/components/chat/chat-model-options-menu.logic";
+import { ChatRunTargetMenu } from "@/components/chat/chat-run-target-menu";
 import {
   ComposerSubmenuSearch,
   useFocusSearchOnOpen,
@@ -73,6 +75,14 @@ export type ComposerModelsMenuProps = {
     model: string | null;
     reasoningEffort: ReasoningEffort | null;
   }) => void;
+  /**
+   * Where the thread's turns run. Absent on surfaces whose turns always run
+   * on stella's own models; the menu then offers no Run on choice.
+   */
+  runTarget?: {
+    selected: ChatRunTarget;
+    select: (target: ChatRunTarget) => void;
+  };
 };
 
 type ModelOption = {
@@ -95,8 +105,34 @@ type ChatModelOptionsMenuProps = {
   open: boolean;
 };
 
-/** The single model-picker body shared by the composer (+) menu and dock. */
+/**
+ * The single model-picker body shared by the composer (+) menu and dock. A
+ * thread that runs on the member's computer uses the model its harness
+ * offers, chosen under Run on, so stella's own models are not offered as if
+ * they applied; choosing stella cloud brings them back.
+ */
 export const ChatModelOptionsMenu = ({
+  enabled,
+  models,
+  open,
+}: ChatModelOptionsMenuProps) => (
+  <>
+    {models.runTarget && (
+      <ChatRunTargetMenu
+        activeOrganizationId={models.activeOrganizationId}
+        enabled={enabled}
+        onSelect={models.runTarget.select}
+        selected={models.runTarget.selected}
+      />
+    )}
+    {models.runTarget?.selected.kind !== "local" && (
+      <CloudModelOptions enabled={enabled} models={models} open={open} />
+    )}
+  </>
+);
+
+/** stella's own models: Auto routing or an explicit model and effort. */
+const CloudModelOptions = ({
   enabled,
   models,
   open,
@@ -329,7 +365,7 @@ const ModelOptionRow = ({
                 {option.displayName}
               </BidiText>
               {recommendation === "new" && (
-                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-px font-medium">
+                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded-sm px-1.5 py-px font-medium">
                   {t("chat.modelSelector.newModel")}
                 </span>
               )}
