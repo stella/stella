@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
 
@@ -112,7 +113,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -542,9 +542,16 @@ const PL_NCOURT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "documentTypes" },
   },
-  excerpt: legacyExcludedSourceField(
-    "the opening characters of the document the document part holds whole",
-  ),
+  excerpt: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: [],
+      reason:
+        "The exact excerpt is retained in the original listing XML, independently of the selected document rendition",
+    },
+  },
   chairman: JUDGES_FIELD,
   judges: JUDGES_FIELD,
   themePhrases: {
@@ -608,9 +615,16 @@ const PL_NCOURT_SOURCE_FIELDS = {
   "xPart@xClassifier": DOCUMENT_FIELD,
   "xPart@xClassifierFullName": DOCUMENT_FIELD,
   "xPart@xClassified": DOCUMENT_FIELD,
-  "xPart@xml:space": legacyExcludedSourceField(
-    "a serialisation directive for the XML, not a statement about the judgment",
-  ),
+  "xPart@xml:space": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "document",
+      path: [],
+      reason:
+        "The original XML retains its whitespace directive with the complete xPart document",
+    },
+  },
 } as const satisfies Record<
   keyof PlNcourtPublisherRecord,
   SourceFieldDisposition

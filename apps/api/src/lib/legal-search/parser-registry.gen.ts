@@ -110,9 +110,9 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.PL_KIO]: 14,
 
-  [ADAPTER_KEYS.PL_KIS]: 17,
+  [ADAPTER_KEYS.PL_KIS]: 18,
 
-  [ADAPTER_KEYS.PL_NCOURT]: 21,
+  [ADAPTER_KEYS.PL_NCOURT]: 22,
 
   [ADAPTER_KEYS.PL_NSA]: 10,
 
@@ -120,9 +120,9 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.PL_TK]: 12,
 
-  [ADAPTER_KEYS.PL_UODO]: 16,
+  [ADAPTER_KEYS.PL_UODO]: 17,
 
-  [ADAPTER_KEYS.PL_UOKIK]: 18,
+  [ADAPTER_KEYS.PL_UOKIK]: 19,
 
   [ADAPTER_KEYS.SK_COURTS]: 27,
 
@@ -238,9 +238,9 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.PL_KIO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
 
-  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
+  [ADAPTER_KEYS.PL_KIS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS], scope: {"type":"all","reason":"Re-read word-processor HTML so single printed line breaks stay inside their sentence and blank lines alone end paragraphs. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
-  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."} },
+  [ADAPTER_KEYS.PL_NCOURT]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
   [ADAPTER_KEYS.PL_NSA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA], scope: {"type":"all","reason":"Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."} },
 
@@ -248,9 +248,9 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.PL_TK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics."} },
 
-  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."} },
+  [ADAPTER_KEYS.PL_UODO]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UODO], scope: {"type":"all","reason":"Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
-  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read `Ŝ`, which a common Polish font encoding prints for `ż`, as `ż` in body, note and ruling text; the letter has no feature storage of its own."} },
+  [ADAPTER_KEYS.PL_UOKIK]: { version: PARSER_VERSIONS[ADAPTER_KEYS.PL_UOKIK], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Read publisher page furniture and preserve document numbers and footnote targets from stored PDF text alongside printed roles, title order, bold and italic emphasis; preserve sentence continuations across spacing and indentation while retaining explicit paragraph points. Translate separately extracted reference positions after inline indices are stripped. Classify attached footnote regions before repeated furniture, using their measured line pitch and a page body-height fallback. These values have no separate feature storage. A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own. Read `Ŝ`, which a common Polish font encoding prints for `ż`, as `ż` in body, note and ruling text; the letter has no feature storage of its own. Retain the publisher's excluded fields in the stored record instead of naming them as exclusions."} },
 
   [ADAPTER_KEYS.SK_COURTS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS], scope: {"type":"all","reason":"Replay reads the stored source envelope and document objects through the ingestion parser, verifying each recorded digest and length; parser output is unchanged and the parsed decision has no feature storage of its own. Revalidate deferred stored PDF payloads through the shared typed corpus-validation result; invalid textless structure is a classified no-document outcome, while readable source text and AST retain the same parser. Preserve PDF paragraph gaps, lettered items and the bounded first-page metadata table when rebuilding document text and block boundaries from captured PDF bytes. Rows without captured PDF bytes yield a metadata-only replay outcome and retain their applied parser version; populated historical rows require an explicit PDF capture refresh. Metadata-derived titles require extracted document blocks. Paragraph-gap thresholds derive from font metrics rather than the frequency of observed gaps. Recompute printed paragraph labels from stored raw: local duplicate or OCR markers preserve surrounding labels, and Czech and Slovak separate opinions have independent numbering scopes; AST roles and labels have no separate feature storage. Re-read legacy, suffixed and Unicode Adobe Glyph List names from stored PDF bytes; extraction has no separate feature storage. Read words the court sets letter-spaced as words, keeping the wider gap between two of them as the word boundary; paragraph text has no separate feature storage. Paragraph text and block boundaries are recomputed from stored PDFs through the shared hard-wrap reader, preserving first-line and hanging indentation, line pitch and short final lines; multiline titles and all block anchors are rebuilt with document-unique identities; none has feature storage of its own."} },
 
