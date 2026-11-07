@@ -6,11 +6,16 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { sha256Hex } from "@stll/sha256/node";
+
+import { GITLEAKS_BINARY_SHA256, GITLEAKS_VERSION } from "./gitleaks-pins";
 
 const SCRIPT = fileURLToPath(
   new URL("check-pushed-secrets.sh", import.meta.url),
@@ -160,6 +165,9 @@ type ScanOptions = {
   /** What the scanner logs as read: a count, or "none" for no line. */
   scannerScanned?: string;
   scannerBinary?: string;
+  /** Replaces PATH entirely, leaving out the fake scanner. */
+  path?: string;
+  cacheHome?: string;
 };
 type ScanResult = {
   exitCode: number;
@@ -176,6 +184,8 @@ const scan = (
     scannerExit = 0,
     scannerScanned,
     scannerBinary,
+    path: searchPath,
+    cacheHome,
   }: ScanOptions = {},
 ): ScanResult => {
   rmSync(log, { force: true });
@@ -190,7 +200,8 @@ const scan = (
       ...(scannerScanned === undefined
         ? {}
         : { FAKE_GITLEAKS_SCANNED: scannerScanned }),
-      PATH: `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
+      PATH: searchPath ?? `${pathPrefix}:${bin}:${process.env["PATH"] ?? ""}`,
+      ...(cacheHome === undefined ? {} : { XDG_CACHE_HOME: cacheHome }),
     },
     stdin: new TextEncoder().encode(stdin),
     stderr: "pipe",
@@ -571,6 +582,65 @@ regexes = ['''sk_test_FAKE''']
     expect(result.ranges).toContain(`--diff-merges=first-parent -n 1 ${tip}`);
     expect(result.patch).toContain(MAIN_ONLY);
   });
+});
+
+describe("a host without a scanner on PATH", () => {
+  const dir = initRepo("no-scanner");
+  const before = commitFile(dir, { file: "kept.txt", text: "one\n" });
+  publish(dir, { ref: "main", oid: before });
+  const changed = commitFile(dir, { file: "kept.txt", text: "two\n" });
+  const push = `refs/heads/x ${changed} refs/heads/x ${before}\n`;
+  // Only Git, Bun and the base system tools: no gitleaks anywhere on PATH.
+  const toolsBin = path.join(root, "no-scanner-bin");
+  mkdirSync(toolsBin);
+  symlinkSync(REAL_GIT, path.join(toolsBin, "git"));
+  symlinkSync(process.execPath, path.join(toolsBin, "bun"));
+  const searchPath = `${toolsBin}:/usr/bin:/bin`;
+  const platformKey = `${process.platform}-${process.arch}`;
+  const pinnedCache = (cacheHome: string) =>
+    path.join(cacheHome, "stella", "gitleaks", GITLEAKS_VERSION, platformKey);
+
+  test("the test PATH really has no scanner", () => {
+    const probe = Bun.spawnSync(["bash", "-c", "command -v gitleaks"], {
+      env: { PATH: searchPath },
+    });
+    expect(probe.exitCode).not.toBe(0);
+  });
+
+  test("an unverifiable scanner download refuses the push", () => {
+    const cacheHome = mkdtempSync(path.join(root, "cache-"));
+    mkdirSync(pinnedCache(cacheHome), { recursive: true });
+    // A cached archive is reverified before use, so this one never runs.
+    writeFileSync(
+      path.join(pinnedCache(cacheHome), "archive.tar.gz"),
+      "not the release",
+    );
+    const result = scan(push, { cwd: dir, path: searchPath, cacheHome });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("checksum mismatch");
+    expect(result.stderr).toContain("secret scanning refused");
+    expect(result.ranges).toEqual([]);
+  });
+
+  const pinnedBinary =
+    platformKey in GITLEAKS_BINARY_SHA256 &&
+    REAL_GITLEAKS !== null &&
+    sha256Hex(readFileSync(REAL_GITLEAKS)) ===
+      GITLEAKS_BINARY_SHA256[platformKey as keyof typeof GITLEAKS_BINARY_SHA256]
+      ? REAL_GITLEAKS
+      : null;
+  test.skipIf(pinnedBinary === null)(
+    "the provisioned pinned scanner scans the push",
+    () => {
+      const cacheHome = mkdtempSync(path.join(root, "cache-"));
+      mkdirSync(pinnedCache(cacheHome), { recursive: true });
+      const cached = path.join(pinnedCache(cacheHome), "gitleaks");
+      writeFileSync(cached, readFileSync(pinnedBinary ?? ""), { mode: 0o755 });
+      const result = scan(push, { cwd: dir, path: searchPath, cacheHome });
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain("commits scanned");
+    },
+  );
 });
 
 describe("what the scanner read", () => {
