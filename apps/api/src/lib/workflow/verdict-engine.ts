@@ -19,8 +19,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { recordText } from "@/api/lib/fields/record-text";
+import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { UNTRUSTED_DOCUMENT_INSTRUCTION } from "@/api/lib/workflow/ai-prompts";
 import type {
   AIJustification,
   AIResult,
@@ -251,7 +253,7 @@ export const TIER_MATCH_SYSTEM_PROMPT =
   "structurally out of scope, so it counts neither for nor against compliance; " +
   "omit matched. Do not use not-applicable merely because a clause is absent " +
   '(that is a "missing" gap). Judge by legal substance and effect, not wording. ' +
-  "Give a short one-sentence rationale.";
+  `Give a short one-sentence rationale. ${UNTRUSTED_DOCUMENT_INSTRUCTION}`;
 
 export const buildTierMatchUserMessage = ({
   tiers,
@@ -292,7 +294,11 @@ export const buildTierMatchUserMessage = ({
     lines.push("(none)");
   }
 
-  lines.push("", "Extracted value:", askValue);
+  lines.push(
+    "",
+    "Extracted value:",
+    sanitizeForPrompt(untrustedText(askValue)),
+  );
   return lines.join("\n");
 };
 
