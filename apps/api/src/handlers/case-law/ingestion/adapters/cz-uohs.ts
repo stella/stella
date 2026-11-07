@@ -475,6 +475,18 @@ const decisionDateMetadata = (
   return { decisionDateAvailability: { status: "not-published-by-source" } };
 };
 
+/**
+ * The export names the type only by a code-list address, so a decision whose
+ * text prints no title states its type in no words; the absence is typed.
+ */
+const decisionTypeMetadata = (
+  decisionType: string | undefined,
+  documentRead: boolean,
+) =>
+  decisionType !== undefined || !documentRead
+    ? {}
+    : { decisionTypeAvailability: { status: "not-published-by-source" } };
+
 type CzUohsDocumentRead =
   | { type: "publisher"; signal: AbortSignal | undefined }
   | { type: "stored"; documents: ReadonlyMap<string, Uint8Array> };
@@ -660,6 +672,7 @@ const assembleCzUohsDecision = async ({
       // An authority decision carries no ECLI, and the export states none.
       ecliAvailability: { status: "not_published" },
       ...decisionDateMetadata(decisionDate, fulltext !== undefined),
+      ...decisionTypeMetadata(decisionType, fulltext !== undefined),
       legalForceDate: record.datum_právní_moci ?? null,
       proceedingTypes: record.typ_řízení,
       decisionTypes: record.typ_rozhodnutí,
