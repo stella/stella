@@ -18,6 +18,56 @@ import baseline from "./no-variable-arity-values-baseline.json" with { type: "js
 import { isAstNode, repoRelativeFilename } from "./utils.ts";
 
 const ENDS_IN_VALUES = /\bVALUES\s*$/iu;
+const LAST_VALUES = /\bVALUES\b(?![\s\S]*\bVALUES\b)/iu;
+/** A fragment after a complete row, as in `VALUES (${a}, ${b}), ${more}`. */
+const AFTER_A_ROW = /\)\s*,\s*$/u;
+/** A clause that ends the list, so a later `), ${x}` belongs to it instead. */
+const LIST_ENDED = /\b(?:ON|RETURNING|SELECT|WHERE|SET|FROM)\b/iu;
+
+/**
+ * Whether the interpolation after `prefix` extends a VALUES list: it either
+ * follows the keyword itself or follows a complete row inside the list.
+ */
+const extendsValuesList = (prefix: string, quasi: string): boolean => {
+  if (ENDS_IN_VALUES.test(quasi)) {
+    return true;
+  }
+  const keyword = LAST_VALUES.exec(prefix);
+  if (keyword === null) {
+    return false;
+  }
+  const list = prefix.slice(keyword.index + keyword[0].length);
+  // `now(),` ends in `),` too: a row is complete only where the parentheses
+  // opened since VALUES have all closed.
+  return (
+    AFTER_A_ROW.test(quasi) &&
+    !LIST_ENDED.test(list) &&
+    parenthesisDepth(list) === 0
+  );
+};
+
+const parenthesisDepth = (text: string): number => {
+  let depth = 0;
+  for (const character of text) {
+    if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+    }
+  }
+  return depth;
+};
+
+/**
+ * Files that hold no long-lived pooled connection: tests, evals and one-off
+ * scripts. A worker that lives under `scripts/` keeps its pool, so it is not.
+ */
+const EXEMPT_FILE = /(?:^|\/)(?:tests|evals)\/|\.(?:test|spec)\.[cm]?tsx?$/u;
+const SCRIPT_FILE = /(?:^|\/)scripts\//u;
+const WORKER_FILE = /-worker\.[cm]?ts$/u;
+
+const isExempt = (file: string): boolean =>
+  EXEMPT_FILE.test(file) || (SCRIPT_FILE.test(file) && !WORKER_FILE.test(file));
 
 const knownSites: Record<string, number> = baseline;
 
@@ -60,29 +110,34 @@ export default eslintCompatPlugin({
             if (!Array.isArray(quasis) || !Array.isArray(expressions)) {
               return;
             }
+            let prefix = "";
             for (let index = 0; index < expressions.length; index++) {
-              if (ENDS_IN_VALUES.test(quasiText(quasis[index]))) {
+              const quasi = quasiText(quasis[index]);
+              prefix += quasi;
+              if (extendsValuesList(prefix, quasi)) {
                 sites.push(node);
               }
+              prefix += "?";
             }
           },
           "Program:exit"(program) {
             const file = repoRelativeFilename(context);
-            // One-off scripts and tests hold no long-lived pooled connection.
-            if (/(?:^|\/)(?:scripts|tests|evals)\/|\.test\.tsx?$/u.test(file)) {
+            if (isExempt(file)) {
               return;
             }
-            const allowed = knownSites[file] ?? 0;
-            if (allowed === 0) {
-              for (const node of sites) {
+            // Counted per list, reported once per statement.
+            const report = (nodes: readonly ESTree.TemplateLiteral[]) => {
+              for (const node of new Set(nodes)) {
                 context.report({ node, messageId: "variableArity" });
               }
+            };
+            const allowed = knownSites[file] ?? 0;
+            if (allowed === 0) {
+              report(sites);
               return;
             }
             if (sites.length > allowed) {
-              for (const node of sites.slice(allowed)) {
-                context.report({ node, messageId: "variableArity" });
-              }
+              report(sites.slice(allowed));
             } else if (sites.length < allowed) {
               context.report({
                 node: program,
