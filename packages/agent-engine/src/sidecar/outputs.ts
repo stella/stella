@@ -122,6 +122,14 @@ const hasPlainParents = (workspaceDir: string, entryPath: string) => {
   return true;
 };
 
+/** A flag the platform has, or none: Windows defines neither of these two. */
+const platformFlag = (name: "O_NOFOLLOW" | "O_NONBLOCK") =>
+  name in constants ? constants[name] : 0;
+
+/** Distinct bits, so their sum is their union. */
+const OUTPUT_OPEN_FLAGS =
+  platformFlag("O_NOFOLLOW") + platformFlag("O_NONBLOCK");
+
 /**
  * The file's bytes, or `null` when it may not leave the computer. The final
  * segment opens without following a link, and what was opened is what gets
@@ -132,9 +140,12 @@ const readOutput = async (workspaceDir: string, entryPath: string) => {
     return null;
   }
   // Read-only is the zero flag, so this is read-only without following a link.
+  // Non-blocking too: a file the agent swapped for a pipe after the scan would
+  // otherwise hold this open, and the turn's finish with it, for as long as no
+  // one writes to it.
   const handle = await open(
     path.join(workspaceDir, OUTPUTS_FOLDER, entryPath),
-    constants.O_NOFOLLOW,
+    OUTPUT_OPEN_FLAGS,
   );
   try {
     const stat = await handle.stat();
