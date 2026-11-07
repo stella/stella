@@ -14,6 +14,7 @@ const ARRANGEMENT_COLUMNS = {
   currency: billingArrangements.currency,
   flatFeeAmount: billingArrangements.flatFeeAmount,
   capAmount: billingArrangements.capAmount,
+  capMinutes: billingArrangements.capMinutes,
   alertThresholdBps: billingArrangements.alertThresholdBps,
   revision: billingArrangements.revision,
 };
@@ -25,6 +26,8 @@ const UNPROJECTED_ARRANGEMENT_COLUMNS = [
   // Crossing state is internal audit deduplication; the summary computes live usage.
   "thresholdState",
   "capState",
+  "minuteThresholdState",
+  "minuteCapState",
   "currencyState",
   "crossingSequence",
   // Revision is the configuration's concurrency token; update time is not part of it.

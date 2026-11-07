@@ -14,6 +14,8 @@ import {
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -47,6 +49,12 @@ const config = {
 
 const SUGGEST_TITLE_TIMEOUT_MS = 15_000;
 
+const anonymizedConversationError = () =>
+  new HandlerError({
+    status: 403,
+    message: "Title suggestion is unavailable for anonymized conversations",
+  });
+
 // Proposes a title for an existing conversation from the same message window
 // the recap uses. Read-only by contract: the only title writer stays
 // `PATCH /threads/:threadId/title`, which owns titleSource stamping, the
@@ -73,6 +81,7 @@ export const createSuggestThreadTitle = ({
       user,
     } = ctx;
     const scope = yield* resolveChatScope({
+      admitted: "active",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -106,13 +115,7 @@ export const createSuggestThreadTitle = ({
     yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message:
-            "Title suggestion is unavailable for anonymized conversations",
-        }),
-      );
+      return Result.err(anonymizedConversationError());
     }
 
     const messageWindow = yield* Result.await(
@@ -121,13 +124,7 @@ export const createSuggestThreadTitle = ({
     // Re-read with the messages: the thread may have switched since the
     // check above.
     if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message:
-            "Title suggestion is unavailable for anonymized conversations",
-        }),
-      );
+      return Result.err(anonymizedConversationError());
     }
 
     if (messageWindow.messages.length === 0) {
@@ -139,6 +136,10 @@ export const createSuggestThreadTitle = ({
       );
     }
 
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -146,26 +147,24 @@ export const createSuggestThreadTitle = ({
       task: "short-text",
     });
 
-    const authorization = await authorizeHandlerUsage({
-      metering: { actionType: "chat", modelTask: "short-text" },
-      organizationId: session.activeOrganizationId,
-      orgAIConfig,
-      workspaceId: persistedWorkspaceId,
-      userId: user.id,
-      safeDb,
-      ctx,
-      managedAIResidency,
-      promptCachingEnabled,
-      threadId,
-      thread,
-      messageWindow,
-      admit,
-      generateTextForTask,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-    return await authorization.value.execute(async ({ proof }) => {
+    const authorization = yield* Result.await(
+      authorizeHandlerUsage({
+        metering: { actionType: "chat", modelTask: "short-text" },
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        workspaceId: persistedWorkspaceId,
+        userId: user.id,
+        safeDb,
+        ctx,
+        managedAIResidency,
+        promptCachingEnabled,
+        threadId,
+        thread,
+        messageWindow,
+        admit,
+      }),
+    );
+    return await authorization.execute(async ({ proof }) => {
       const checked = proof.input.value;
       const admittedContext = cloneOperationInput(checked.ctx);
       return await Result.gen(async function* () {
@@ -213,7 +212,7 @@ export const createSuggestThreadTitle = ({
                 const generated = yield* Result.await(
                   Result.tryPromise({
                     try: async () =>
-                      await checked.generateTextForTask({
+                      await generateTextForTask({
                         userId: modelAdmission.userId,
                         dataClass: "customer",
                         abortSignal: actionSignal,

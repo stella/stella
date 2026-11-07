@@ -85,9 +85,22 @@ if (!databaseUrl || !runPostgresTests) {
             .update(schedulerJobs)
             .set({
               lockedBy: "evicted",
+              lockedAt: dbClock.ago(61_000),
               lockedUntil: dbClock.ago(1000),
             })
             .where(eq(schedulerJobs.id, jobId));
+
+          // Wait for the event, not for a time: the heartbeat's next renewal
+          // finds the lease gone and aborts the task. The hang guard only names
+          // the wait if that never happens; it does not bound runner speed.
+          await settledWithin(firstTaskAborted.promise, {
+            description: "runner 1 to stop its task after losing the lease",
+          });
+          releaseFirstTask.resolve();
+          // A renewal already waiting behind the eviction can briefly retain
+          // the row lock after its token check fails. Drain runner 1 before
+          // runner 2 claims with SKIP LOCKED, which may otherwise skip that row.
+          const firstResult = await firstRunner;
 
           const secondResult = await runSchedulerOnce({
             db: secondDb,
@@ -97,15 +110,6 @@ if (!databaseUrl || !runPostgresTests) {
             runnerId: "runner-2",
           });
           expect(secondResult.succeeded).toBe(1);
-
-          // Wait for the event, not for a time: the heartbeat's next renewal
-          // finds the lease gone and aborts the task. The hang guard only names
-          // the wait if that never happens; it does not bound runner speed.
-          await settledWithin(firstTaskAborted.promise, {
-            description: "runner 1 to stop its task after losing the lease",
-          });
-          releaseFirstTask.resolve();
-          const firstResult = await firstRunner;
 
           expect(firstResult).toMatchObject({ acquired: 1, skipped: 1 });
           expect(committedBy).toEqual(["runner-2"]);

@@ -21,7 +21,7 @@ import {
   fetchWithTimeout as aliasedFetch,
 } from "@stll/fetch";
 
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { api } from "@/lib/api";
 
 declare const ids: string[];

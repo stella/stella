@@ -27,6 +27,10 @@ export const readSourceRawField = (
   if (part === undefined) {
     return undefined;
   }
+  // An empty address names the verbatim response, including HTML and XML.
+  if (target.path.length === 0) {
+    return part;
+  }
   const parsed = Result.try({
     try: (): unknown => JSON.parse(part),
     catch: () => undefined,

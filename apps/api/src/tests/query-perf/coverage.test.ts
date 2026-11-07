@@ -1,0 +1,368 @@
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
+import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
+
+import {
+  publishedCaseLawDecisions,
+  unredactedCaseLawDecisions,
+} from "@/api/db/schema";
+import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT } from "@/api/lib/case-law/population-count-limits";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { LIMITS } from "@/api/lib/limits";
+import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import { isRecord } from "@/api/lib/type-guards";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
+
+import { coverageIndexBuildSql } from "./coverage-indexes";
+import {
+  budgetProblem,
+  metricsFromPlan,
+  scaleViolations,
+  sumMetrics,
+} from "./measurement";
+import plannerSettings from "./planner-settings.json" with { type: "json" };
+import { READ_BUDGET_PROFILES } from "./registry";
+import {
+  assertPlannerSettings,
+  QUERY_PERF_CONNECTION_SETTINGS,
+} from "./settings";
+
+const SEED_CHUNK_ROWS = 5000;
+const COVERAGE_BUDGET_ID = "statement.caseLaw.coverageSources";
+
+const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
+
+describe.skipIf(!enabled)("coverage refresh read budget", () => {
+  test("coverage reads stay bounded at both corpus sizes, including rejected filing dates", async () => {
+    const sizes: number[] = [];
+    const measuredIds = new Set<string>();
+    for (const rows of [60_000, 120_000]) {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ??
+        panic("DATABASE_URL required for coverage query perf");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const captured: { text: string; params: unknown[] }[] = [];
+        const { db, sql: client } = openClient({
+          max: 1,
+          connection: {
+            ...QUERY_PERF_CONNECTION_SETTINGS,
+            statement_timeout: CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
+          },
+          logger: {
+            logQuery: (text, params) => {
+              captured.push({ text, params });
+            },
+          },
+        });
+        for (const [name, value] of Object.entries(plannerSettings)) {
+          // db-await-in-loop: apply the committed fixed planner settings to the fixture's single session.
+          await db.execute(sql`SELECT set_config(${name}, ${value}, false)`);
+        }
+        await db.transaction(
+          async (tx) => await assertPlannerSettings(tx, "owner"),
+        );
+        const schemaName = `coverage_budget_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+        const schema = sql.identifier(schemaName);
+        const metadataSourceId = Bun.randomUUIDv7();
+        const [rootQueue] = await db.execute(sql`SELECT EXISTS (
+          SELECT 1 FROM public.case_law_population_deltas
+        ) AS pending`);
+        expect(rootQueue?.["pending"]).toBe(false);
+        await db.execute(
+          sql`VACUUM (ANALYZE) public.case_law_population_deltas`,
+        );
+        await db.execute(sql`CREATE SCHEMA ${schema}`);
+        try {
+          for (const table of [
+            "case_law_sources",
+            "case_law_decisions",
+            "case_law_browse_facet_counts",
+            "case_law_population_counts",
+            "case_law_population_deltas",
+          ]) {
+            // db-await-in-loop: five fixed fixture tables cloned with their production indexes.
+            await db.execute(
+              sql`CREATE TABLE ${schema}.${sql.identifier(table)} (LIKE public.${sql.identifier(table)} INCLUDING ALL)`,
+            );
+          }
+          await db.execute(sql`SET search_path TO ${schema}, public`);
+          const [guard] = await client`SELECT pg_get_functiondef(
+            'public.case_law_population_backlog_within_window()'::regprocedure
+          ) AS definition`;
+          if (!isRecord(guard) || typeof guard["definition"] !== "string") {
+            panic("Coverage fixture requires the production backlog guard");
+          }
+          const guardDefinition = guard["definition"]
+            .replace(
+              "FUNCTION public.case_law_population_backlog_within_window",
+              () =>
+                `FUNCTION ${schemaName}.case_law_population_backlog_within_window`,
+            )
+            .replaceAll(
+              "public.case_law_population_deltas",
+              () => `${schemaName}.case_law_population_deltas`,
+            )
+            .replace(
+              /SET search_path TO[^\n]+/u,
+              () =>
+                `SET search_path TO pg_catalog, ${schemaName}, public, pg_temp`,
+            );
+          await db.execute(sql.raw(guardDefinition));
+          const dialect = new PgDialect();
+          for (const view of [
+            publishedCaseLawDecisions,
+            unredactedCaseLawDecisions,
+          ]) {
+            const config = getViewConfig(view);
+            // db-await-in-loop: two production publication views over the cloned tables.
+            await db.execute(
+              sql`CREATE VIEW ${schema}.${sql.identifier(config.name)} AS (${sql.raw(dialect.sqlToQuery(config.query).sql)})`,
+            );
+          }
+          const [liveView] = await client`SELECT pg_get_viewdef(
+            'public.case_law_population_counts_live'::regclass, true
+          ) AS definition`;
+          if (
+            !isRecord(liveView) ||
+            typeof liveView["definition"] !== "string"
+          ) {
+            panic(
+              "Coverage fixture requires the production effective counts view",
+            );
+          }
+          const liveDefinition = liveView["definition"]
+            .replaceAll(
+              "public.case_law_population_counts",
+              () => `${schemaName}.case_law_population_counts`,
+            )
+            .replaceAll(
+              "public.case_law_population_deltas",
+              () => `${schemaName}.case_law_population_deltas`,
+            )
+            .replaceAll(
+              "public.case_law_population_backlog_within_window",
+              () => `${schemaName}.case_law_population_backlog_within_window`,
+            );
+          await db.execute(sql`CREATE VIEW ${schema}.case_law_population_counts_live
+            WITH (security_invoker = true) AS ${sql.raw(liveDefinition)}`);
+          for (const build of coverageIndexBuildSql(schemaName)) {
+            // db-await-in-loop: install the production online coverage indexes in the isolated fixture.
+            await db.execute(sql.raw(build));
+          }
+          await db.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name)
+          SELECT ('01990000-eeee-7000-8000-' || lpad(n::text, 12, '0'))::uuid, 'coverage-budget-' || n, 'Coverage fixture' FROM generate_series(1, 4) n`);
+          for (let first = 1; first <= rows; first += SEED_CHUNK_ROWS) {
+            const last = Math.min(first + SEED_CHUNK_ROWS - 1, rows);
+            // db-await-in-loop: bounded seed chunks keep index predicate evaluation inside the production statement timeout.
+            await db.execute(sql`INSERT INTO case_law_decisions
+          (id, source_id, case_number, court, country, language, decision_date, fulltext)
+          SELECT gen_random_uuid(), s.id,
+            CASE WHEN s.adapter_key = 'coverage-budget-3' THEN '1 Cdo ' || n || '/2025' ELSE 'fixture/' || n END,
+            'Court ' || (n % 30), 'CZE', 'cs', DATE '2000-01-01', 'Fixture text'
+          FROM case_law_sources s CROSS JOIN generate_series(${first}, ${last}) n WHERE s.adapter_key <> 'coverage-budget-4'`);
+          }
+          await db.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, decision_date, fulltext)
+          SELECT gen_random_uuid(), id, 'fixed/' || n, 'Fixed court', 'CZE', 'cs', DATE '2000-01-01', 'Fixture text'
+          FROM case_law_sources CROSS JOIN generate_series(1, 20) n WHERE adapter_key = 'coverage-budget-4'`);
+          // The correctness suite exercises transactional projection maintenance.
+          // This large read fixture materializes the same buckets in one seed pass.
+          await db.execute(sql`INSERT INTO case_law_population_counts (kind, country, source_id, value, total)
+          SELECT bucket->>'kind', d.country, d.source_id, bucket->>'value', count(*)::integer
+          FROM case_law_decisions d
+          CROSS JOIN LATERAL jsonb_array_elements(public.case_law_population_buckets(ROW(d.*)::public.case_law_decisions)) bucket
+          GROUP BY bucket->>'kind', d.country, d.source_id, bucket->>'value'`);
+          // A partially folded log must contribute its net changes exactly once.
+          // Base court counts lag these signed deltas; the effective population
+          // still equals the independently seeded decision corpus.
+          await db.execute(sql`INSERT INTO case_law_population_deltas
+            (kind, country, source_id, value, delta)
+          SELECT 'court', 'CZE', s.id, 'Court ' || (((n - 1) / 2) % 30),
+            CASE WHEN n % 2 = 1 THEN 2 ELSE -1 END
+          FROM generate_series(1, ${CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT}) n
+          JOIN case_law_sources s ON s.adapter_key =
+            'coverage-budget-' || ((((n - 1) / 2 / 30) % 3) + 1)`);
+          // The qualified production freshness function reads the real queue.
+          // Give it the same bounded backlog as the private population fixture.
+          await db.execute(sql`INSERT INTO public.case_law_population_deltas
+            (kind, country, source_id, value, delta)
+            SELECT 'court', 'CZE', ${metadataSourceId}::uuid, 'Court fixture', 1
+            FROM generate_series(1, ${CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT})`);
+          await db.execute(sql`UPDATE case_law_population_counts counts
+          SET total = counts.total - pending.total
+          FROM (
+            SELECT kind, country, source_id, value, sum(delta)::integer AS total
+            FROM case_law_population_deltas
+            GROUP BY kind, country, source_id, value
+          ) pending
+          WHERE (counts.kind, counts.country, counts.source_id, counts.value) =
+            (pending.kind, pending.country, pending.source_id, pending.value)`);
+          await db.execute(
+            sql`SELECT ${schema}.case_law_population_backlog_within_window()`,
+          );
+          for (const table of [
+            "case_law_sources",
+            "case_law_decisions",
+            "case_law_browse_facet_counts",
+            "case_law_population_counts",
+            "case_law_population_deltas",
+          ]) {
+            // db-await-in-loop: VACUUM cannot share statements or transactions; five fixed tables.
+            await db.execute(sql`VACUUM (ANALYZE) ${sql.identifier(table)}`);
+          }
+          captured.length = 0;
+          const sources = await readCaseLawCoverageSourcesQuery(
+            asTestRaw<CaseLawPublicReadTransaction>(db),
+            [],
+          );
+          const statements = captured.slice();
+          expect(statements).toHaveLength(1);
+          expect(sources).toHaveLength(4);
+          for (const source of sources) {
+            const expected =
+              source.adapterKey === "coverage-budget-4" ? 20 : rows;
+            expect(source.publishedDecisions).toBe(expected);
+            expect(
+              source.courts.reduce((sum, court) => sum + court.decisions, 0),
+            ).toBe(expected);
+            if (source.adapterKey === "coverage-budget-4") {
+              expect(source.courts).toEqual([
+                { court: "Fixed court", decisions: 20 },
+              ]);
+            } else {
+              const namedCourts = Array.from(
+                { length: 30 },
+                (_, index) => `Court ${index}`,
+              ).toSorted();
+              const visibleCourts = namedCourts.slice(
+                0,
+                LIMITS.caseLawFacetLimit,
+              );
+              const remainingCourts = namedCourts.length - visibleCourts.length;
+              expect(source.courts).toHaveLength(
+                visibleCourts.length + (remainingCourts > 0 ? 1 : 0),
+              );
+              const byCourt = new Map(
+                source.courts.map(({ court, decisions }) => [court, decisions]),
+              );
+              for (const court of visibleCourts) {
+                expect(byCourt.get(court)).toBe(rows / 30);
+              }
+              if (remainingCourts > 0) {
+                expect(byCourt.get(null)).toBe((remainingCourts * rows) / 30);
+              }
+            }
+          }
+          expect(
+            sources.find(
+              ({ adapterKey }) => adapterKey === "coverage-budget-3",
+            ),
+          ).toMatchObject({ decisionYearFrom: null, decisionYearTo: null });
+          expect(
+            sources.find(
+              ({ adapterKey }) => adapterKey === "coverage-budget-1",
+            ),
+          ).toMatchObject({ decisionYearFrom: 2000, decisionYearTo: 2000 });
+          const samples = [];
+          for (let sample = 0; sample <= 5; sample++) {
+            const metrics = [];
+            for (const statement of statements) {
+              // db-await-in-loop: sequential cache warmup and five measurements of the actual reader statements.
+              const result = await client.unsafe(
+                `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${statement.text}`,
+                statement.params,
+              );
+              const first = result.at(0);
+              const documents: unknown = isRecord(first)
+                ? first["QUERY PLAN"]
+                : undefined;
+              const plan: unknown = Array.isArray(documents)
+                ? documents.at(0)
+                : undefined;
+              if (
+                !Array.isArray(documents) ||
+                documents.length !== 1 ||
+                !isRecord(plan) ||
+                !isRecord(plan["Plan"])
+              ) {
+                panic(
+                  "Coverage measurement requires exactly one analyzed plan document",
+                );
+              }
+              const document = { ...plan, Plan: plan["Plan"] };
+              expect(
+                scanOccurrences(document.Plan).filter(
+                  ({ relation }) => relation === "case_law_decisions",
+                ),
+              ).toEqual([]);
+              metrics.push(metricsFromPlan(document));
+              if (sample === 5) {
+                console.info(
+                  JSON.stringify({
+                    event: "coverage_read_plan",
+                    rows,
+                    plan: document,
+                  }),
+                );
+              }
+            }
+            if (sample !== 0) {
+              samples.push(sumMetrics(metrics));
+            }
+          }
+          const measured = {
+            sharedBlocks: Math.max(
+              ...samples.map(({ sharedBlocks }) => sharedBlocks),
+            ),
+            executionTimeMs: Math.max(
+              ...samples.map(({ executionTimeMs }) => executionTimeMs),
+            ),
+          };
+          measuredIds.add(COVERAGE_BUDGET_ID);
+          sizes.push(measured.sharedBlocks);
+          console.info(
+            JSON.stringify({
+              event: "coverage_read_budget",
+              rows,
+              corpusDecisions: rows * 3 + 20,
+              unfoldedDeltaRows: CASE_LAW_POPULATION_DELTA_BACKLOG_LIMIT,
+              ...measured,
+            }),
+          );
+          expect(budgetProblem(COVERAGE_BUDGET_ID, measured)).toBeUndefined();
+          expect(measured.sharedBlocks).toBeLessThanOrEqual(
+            READ_BUDGETS[COVERAGE_BUDGET_ID].pages,
+          );
+        } finally {
+          await db.execute(sql`SET search_path TO public`);
+          await db.execute(
+            sql`DELETE FROM public.case_law_population_deltas WHERE source_id = ${metadataSourceId}::uuid`,
+          );
+          await db.execute(
+            sql`VACUUM (ANALYZE) public.case_law_population_deltas`,
+          );
+          await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
+        }
+      });
+    }
+    expect([...measuredIds].toSorted()).toEqual(
+      Object.entries(READ_BUDGET_PROFILES)
+        .filter(([, profile]) => profile === "coverage")
+        .map(([id]) => id)
+        .toSorted(),
+    );
+    const [size, double] = sizes;
+    expect(size).toBeDefined();
+    expect(double).toBeDefined();
+    expect(
+      scaleViolations({
+        size: size ?? panic("Missing first measurement"),
+        double: double ?? panic("Missing second measurement"),
+      }),
+    ).toEqual([]);
+  }, 360_000); // timeout: two fixtures seed 540,040 decisions in 5,000-row per-source chunks; measured SQL keeps its 30-second deadline.
+});

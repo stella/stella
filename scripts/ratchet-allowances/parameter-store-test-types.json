@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The parameter-store package declares bun-types as a development dependency for its bun:test types."
+}

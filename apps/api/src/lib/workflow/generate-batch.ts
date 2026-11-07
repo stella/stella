@@ -1,4 +1,4 @@
-import { PDF, rgb, Standard14Font, StandardFonts } from "@libpdf/core";
+import { PDF, Standard14Font, StandardFonts } from "@libpdf/core";
 import { Result } from "better-result";
 
 import type { FolioAIBlock } from "@stll/folio-core/server";
@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { libpdfColor, PDF_NEUTRALS } from "@/api/lib/files/pdf-color";
 import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
@@ -94,14 +95,14 @@ const addBatesNumbers = async (
         y: pos.y,
         width: rectangleWidth,
         height: rectangleHeight,
-        color: rgb(0, 0, 0),
+        color: libpdfColor(PDF_NEUTRALS.black),
       });
 
       page.drawText(batesNumber, {
         x: pos.x + padding,
         y: pos.y + padding,
         size: fontSize,
-        color: rgb(1, 1, 1),
+        color: libpdfColor(PDF_NEUTRALS.white),
       });
     }
   }
@@ -351,7 +352,7 @@ export const generateBatch = async (
       }),
     );
 
-    const output = yield* Result.await(
+    const generation = yield* Result.await(
       generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
@@ -377,7 +378,11 @@ export const generateBatch = async (
     const settlements = new Map<SafeId<"property">, BatchSettlement>();
 
     for (const property of aiInputProperties) {
-      const propertyResult = output[property.id];
+      if (generation.refusedPropertyIds.has(property.id)) {
+        settlements.set(property.id, "refused");
+        continue;
+      }
+      const propertyResult = generation.output[property.id];
       if (!propertyResult) {
         settlements.set(property.id, "notStated");
         continue;

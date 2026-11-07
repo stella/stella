@@ -17,6 +17,7 @@ import {
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -105,6 +106,7 @@ export const seedSuggestionRangeScaling = async (
       await database
         .delete(auditLogs)
         .where(inArray(auditLogs.resourceId, resourceIds));
+      await deleteMatterBillingRecords(database, { workspaceIds: matters });
       await database.delete(workspaces).where(inArray(workspaces.id, matters));
     },
   };

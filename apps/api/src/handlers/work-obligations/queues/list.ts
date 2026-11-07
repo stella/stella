@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { workTask } from "@/api/lib/tasks/work-task";
 import {
   resolveWorkAsOf,
   workObligationAtRisk,
@@ -203,7 +204,7 @@ const myWork = createSafeRootHandler(
                 and(
                   eq(entities.id, workObligations.entityId),
                   eq(entities.workspaceId, workObligations.workspaceId),
-                  eq(entities.kind, "task"),
+                  workTask(entities),
                   workObligationEligibleEntity,
                 ),
               )

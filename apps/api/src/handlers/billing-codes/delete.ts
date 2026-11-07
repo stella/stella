@@ -1,13 +1,14 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { billingCodes } from "@/api/db/schema";
+import { billingCodes, rateEntries } from "@/api/db/schema";
 import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { lockBillingCode } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteBillingCodeBodySchema = v.object({
@@ -20,7 +21,7 @@ const config = {
     "Permanently delete one billing code (a task or activity code) from a " +
     "matter's code list. Time entries already recorded under it keep their " +
     "stored code string, so past entries are not rewritten; the code just " +
-    "stops being offered.",
+    "stops being offered. Remove activity rates referencing the code before deleting it.",
   permissions: { billingCode: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -32,31 +33,28 @@ const config = {
 const deleteBillingCode = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
-    const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.billingCodes.findFirst({
-          where: {
-            id: { eq: body.id },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: {
-            id: true,
-            type: true,
-            code: true,
-            label: true,
-          },
-        }),
-      ),
-    );
-
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Billing code not found" }),
-      );
-    }
-
-    yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        const existing = await lockBillingCode(tx, {
+          id: body.id,
+          workspaceId,
+        });
+        if (!existing) {
+          return { type: "not_found" as const };
+        }
+        const references = await tx
+          .select({ id: rateEntries.id })
+          .from(rateEntries)
+          .where(
+            and(
+              eq(rateEntries.workspaceId, workspaceId),
+              eq(rateEntries.activityCodeId, body.id),
+            ),
+          )
+          .limit(1);
+        if (references.length > 0) {
+          return { type: "referenced" as const };
+        }
         await tx
           .delete(billingCodes)
           .where(
@@ -65,7 +63,6 @@ const deleteBillingCode = createSafeHandler(
               eq(billingCodes.workspaceId, workspaceId),
             ),
           );
-
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DELETE,
           resourceType: AUDIT_RESOURCE_TYPE.BILLING_CODE,
@@ -81,8 +78,29 @@ const deleteBillingCode = createSafeHandler(
             },
           },
         });
+        return { type: "deleted" as const };
       }),
     );
+    switch (outcome.type) {
+      case "not_found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Billing code not found" }),
+        );
+      case "referenced":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message:
+              "Remove the activity rates using this code before deleting it",
+          }),
+        );
+      case "deleted":
+        break;
+      default: {
+        outcome satisfies never;
+        return panic("Unknown billing code deletion outcome");
+      }
+    }
 
     return Result.ok({ deleted: true });
   },

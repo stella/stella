@@ -137,3 +137,28 @@ export const citationCopyText = (
     }
   }
 };
+
+/** How much of a long quotation a copy preview shows before trimming. */
+export const PREVIEW_QUOTE_CHARS = 220;
+
+/**
+ * The quotation a copy preview shows. A preview demonstrates where each
+ * choice puts the words and the citation, so a long passage is trimmed and
+ * the citation stays a short scroll away. The cut falls after a whole word,
+ * unless the passage has no break in the second half of the budget (one long
+ * token), where it falls at the budget. Only the preview is trimmed; the copy
+ * itself always carries the full quotation.
+ */
+export const previewQuotation = (quote: string): string => {
+  if (quote.length <= PREVIEW_QUOTE_CHARS) {
+    return quote;
+  }
+  // One character past the budget, so a break right at the budget counts.
+  const head = quote.slice(0, PREVIEW_QUOTE_CHARS + 1);
+  const lastBreak = head.search(/\s\S*$/u);
+  const cut =
+    lastBreak >= PREVIEW_QUOTE_CHARS / 2
+      ? head.slice(0, lastBreak)
+      : quote.slice(0, PREVIEW_QUOTE_CHARS);
+  return `${cut.trimEnd()}…`;
+};

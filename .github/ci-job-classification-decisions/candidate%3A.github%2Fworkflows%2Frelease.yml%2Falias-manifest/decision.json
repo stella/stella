@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Points the final release image tags and manifest at the proven release-candidate digests, without rebuilding."
+}

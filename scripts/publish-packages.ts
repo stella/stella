@@ -7,6 +7,7 @@ export const LIBRARY_PACKAGE_ORDER = [
   "text-normalize",
   "anonymize-chat",
   "ui",
+  "html",
   "chat",
   "country-codes",
   "business-registries",
@@ -28,6 +29,9 @@ export const LIBRARY_PACKAGE_ORDER = [
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;
+
+export const npmReleaseJobId = (directory: string): string =>
+  `release-${directory}`;
 
 // Packages whose releases moved to another repository, by package directory,
 // with that repository as `github.com/<owner>/<name>`. The journey canary

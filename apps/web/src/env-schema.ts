@@ -42,11 +42,14 @@ export const envWebClientSchema = {
     ),
     "45901",
   ),
+  VITE_DOCUMENTS_BUCKET: v.string(),
+  VITE_DOCUMENTS_ENDPOINT: v.pipe(v.string(), v.url()),
   VITE_AUTH_GOOGLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
   VITE_AUTH_MICROSOFT: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
+  VITE_AUTH_APPLE: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
   // Set to "true" only on self-hosted instances. Enables the
   // in-app "update available" banner that polls the public GitHub
   // Releases API and surfaces newer versions to the operator.

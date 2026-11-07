@@ -31,7 +31,9 @@ const states = {
   queued: { type: "queued" },
   running: { type: "running" },
   done: { type: "done" },
+  not_stated: { type: "not_stated" },
   failed: { type: "failed" },
+  refused: { type: "refused", reason: "modelRefusal" },
   refused_budget: { type: "refused_budget" },
 } as const satisfies Record<AiCellState["type"], AiCellState>;
 
@@ -42,7 +44,9 @@ const expectedLabels = {
   queued: "Queued",
   running: "Answering",
   done: "Answer value",
+  not_stated: "Nothing found",
   failed: "Error",
+  refused: "The model refused to answer",
   refused_budget: "answer budget unavailable",
 } as const satisfies Record<AiCellState["type"], string>;
 
@@ -135,6 +139,7 @@ describe("every AI cell lifecycle state is visible", () => {
     const expected = {
       pending: "running",
       answered: "done",
+      withdrawn: "done",
       not_stated: "done",
       not_allowed: "failed",
       failed: "failed",
@@ -157,14 +162,52 @@ describe("every AI cell lifecycle state is visible", () => {
       questionAiCellState({ answer: undefined, refusedBudget: true }).type,
     ).toBe("refused_budget");
     expect(propertyAiCellState(undefined).type).toBe("not_run");
-    expect(propertyAiCellState({ version: 1, type: "pending" }).type).toBe(
-      "running",
-    );
-    expect(propertyAiCellState({ version: 1, type: "error" }).type).toBe(
-      "failed",
-    );
     expect(
-      propertyAiCellState({ version: 1, type: "text", value: "answer" }).type,
+      propertyAiCellState({
+        aiSettlement: null,
+        content: { version: 1, type: "pending" },
+      }).type,
+    ).toBe("running");
+    expect(
+      propertyAiCellState({
+        aiSettlement: null,
+        content: { version: 1, type: "error" },
+      }).type,
+    ).toBe("failed");
+    expect(
+      propertyAiCellState({
+        aiSettlement: null,
+        content: { version: 1, type: "text", value: "answer" },
+      }).type,
+    ).toBe("done");
+    const metadata = { runId: "run-1", settledAt: "2026-10-28T00:00:00Z" };
+    expect(
+      propertyAiCellState({
+        content: { version: 1, type: "unsupported" },
+        aiSettlement: { ...metadata, type: "notStated" },
+      }).type,
+    ).toBe("not_stated");
+    expect(
+      propertyAiCellState({
+        content: { version: 1, type: "unsupported" },
+        aiSettlement: {
+          ...metadata,
+          type: "refused",
+          reason: "modelRefusal",
+        },
+      }),
+    ).toEqual({ type: "refused", reason: "modelRefusal" });
+    expect(
+      propertyAiCellState({
+        content: { version: 1, type: "error" },
+        aiSettlement: { ...metadata, type: "failed" },
+      }).type,
+    ).toBe("failed");
+    expect(
+      propertyAiCellState({
+        content: { version: 1, type: "text", value: "answer" },
+        aiSettlement: { ...metadata, type: "value" },
+      }).type,
     ).toBe("done");
   });
 });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   InvoiceExportLine,
@@ -10,15 +10,57 @@ import type {
 } from "@stll/invoicing";
 import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
+import type { TimeZoneId } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  invoiceInMatter,
+  invoiceTouchesMatter,
+} from "@/api/lib/billing/invoice-scope";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+
+/**
+ * The day an invoice was settled: the date of the latest payment still
+ * counted, which is the one that reached its total. An invoice marked paid
+ * before payments were recorded carries only the moment it was marked.
+ */
+export const exportPaidDate = (
+  invoice: {
+    status: string;
+    paidAt: Date | null;
+    payments: readonly { paidOn: string; voidedAt: Date | null }[];
+  },
+  timeZone: TimeZoneId,
+): string | null => {
+  if (invoice.status !== INVOICE_STATUS.PAID) {
+    return null;
+  }
+  let settledOn: string | null = null;
+  for (const payment of invoice.payments) {
+    // ISO dates order as text.
+    if (
+      payment.voidedAt === null &&
+      (settledOn === null || payment.paidOn > settledOn)
+    ) {
+      settledOn = payment.paidOn;
+    }
+  }
+  if (settledOn !== null) {
+    return settledOn;
+  }
+  return invoice.paidAt === null
+    ? null
+    : todayFor(
+        timeZone,
+        Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
+      ).toString();
+};
 
 /**
  * The most invoices one export holds. Every line is built in memory before
@@ -110,7 +152,10 @@ export const loadInvoiceExport = async (
   });
   const invoices = await tx.query.invoices.findMany({
     where: {
-      workspaceId: { eq: workspaceId },
+      RAW: (table) =>
+        invoiceIds === undefined
+          ? invoiceTouchesMatter(table, workspaceId)
+          : invoiceInMatter(table, workspaceId),
       organizationId: { eq: organizationId },
       status: { in: [...EXPORTABLE_STATUSES] },
       ...(invoiceIds ? { id: { in: [...invoiceIds] } } : {}),
@@ -120,6 +165,30 @@ export const loadInvoiceExport = async (
     limit: MAX_EXPORT_INVOICES + 1,
     with: EXPORT_RELATIONS,
   });
+  const matterIds = [
+    ...new Set(
+      invoices.flatMap((invoice) => [
+        ...(invoice.workspaceId === null ? [] : [invoice.workspaceId]),
+        ...invoice.lines.map((line) => line.workspaceId),
+        ...invoice.timeEntries.map(
+          (entry) =>
+            entry.workspaceId ?? panic("Invoiced time entry has no matter"),
+        ),
+        ...invoice.expenses.map((expense) => expense.workspaceId),
+      ]),
+    ),
+  ];
+  const matterRows =
+    matterIds.length === 0
+      ? []
+      : await tx.query.workspaces.findMany({
+          where: {
+            id: { in: matterIds },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true, name: true, reference: true },
+          limit: matterIds.length,
+        });
   const sellerIds = [
     ...new Set(invoices.flatMap((invoice) => invoice.sellerProfileId ?? [])),
   ];
@@ -142,7 +211,7 @@ export const loadInvoiceExport = async (
       : await tx.query.invoices.findMany({
           where: {
             id: { in: originalIds },
-            workspaceId: { eq: workspaceId },
+            RAW: (table) => invoiceInMatter(table, workspaceId),
             organizationId: { eq: organizationId },
           },
           columns: { id: true, invoiceNumber: true, invoiceDate: true },
@@ -159,6 +228,7 @@ export const loadInvoiceExport = async (
       : await selectTimekeeperNames(tx, { organizationId, userIds });
   return {
     matter,
+    matters: new Map(matterRows.map((row) => [row.id, row])),
     invoices,
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
@@ -198,11 +268,17 @@ const sourceOf = (
   return expense === undefined ? "manual" : "expense";
 };
 
-const exportLines = (
-  invoice: LoadedInvoice,
-  amounts: DocumentAmounts,
-  timekeepers: LoadedExport["timekeepers"],
-): InvoiceExportLine[] => {
+type ExportLinesOptions = {
+  invoice: LoadedInvoice;
+  amounts: DocumentAmounts;
+  loaded: LoadedExport;
+};
+
+const exportLines = ({
+  invoice,
+  amounts,
+  loaded,
+}: ExportLinesOptions): InvoiceExportLine[] => {
   const timeEntries = new Map(
     invoice.timeEntries.map((entry) => [entry.id, entry]),
   );
@@ -217,7 +293,18 @@ const exportLines = (
       ? timeEntries.get(line.timeEntryId)
       : undefined;
     const expense = line.expenseId ? expenses.get(line.expenseId) : undefined;
+    const workspaceId =
+      stored?.workspaceId ??
+      entry?.workspaceId ??
+      expense?.workspaceId ??
+      invoice.workspaceId;
+    const matter =
+      workspaceId === null ? undefined : loaded.matters.get(workspaceId);
+    if (matter === undefined) {
+      return panic("Exported invoice line has no authorized matter metadata");
+    }
     return {
+      matter,
       position: index + 1,
       description: line.description,
       quantity: line.quantity,
@@ -232,7 +319,7 @@ const exportLines = (
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
-        ? { id: entry.userId, name: timekeepers.get(entry.userId) ?? "" }
+        ? { id: entry.userId, name: loaded.timekeepers.get(entry.userId) ?? "" }
         : null,
       taskCode: entry?.taskCode ?? null,
       activityCode: entry?.activityCode ?? null,
@@ -342,9 +429,10 @@ export const toExportRecords = (
       );
     }
     const amounts = readInvoiceDocumentLines(invoice);
-    if (amounts.isErr()) {
-      return Result.err(amounts.error);
-    }
+    const lines = exportLines({ invoice, amounts, loaded });
+    const invoiceMatters = [
+      ...new Map(lines.map((line) => [line.matter.id, line.matter])).values(),
+    ];
     records.push({
       id: invoice.id,
       number: invoice.invoiceNumber,
@@ -362,17 +450,24 @@ export const toExportRecords = (
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
       dueDate: invoice.dueDate,
-      paidDate:
-        invoice.paidAt === null
-          ? null
-          : todayFor(
-              loaded.timeZone,
-              Temporal.Instant.fromEpochMilliseconds(invoice.paidAt.getTime()),
-            ).toString(),
+      paidDate: exportPaidDate(invoice, loaded.timeZone),
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,
-      matter: { id: matter.id, name: matter.name, reference: matter.reference },
+      scope:
+        invoice.workspaceId === null
+          ? {
+              type: "client",
+              clientId:
+                invoice.clientId ?? panic("Client invoice has no client"),
+              matters: invoiceMatters,
+            }
+          : {
+              type: "matter",
+              matter:
+                loaded.matters.get(invoice.workspaceId) ??
+                panic("Invoice has no authorized matter metadata"),
+            },
       seller: exportSellerOf(seller),
       buyer: partyOf(invoice.buyerName ?? "", {
         registrationNumber: invoice.buyerRegistrationId,
@@ -384,8 +479,8 @@ export const toExportRecords = (
         postalCode: invoice.buyerPostalCode,
         country: invoice.buyerCountry,
       }),
-      lines: exportLines(invoice, amounts.value, loaded.timekeepers),
-      totals: amounts.value.totals,
+      lines,
+      totals: amounts.totals,
     });
   }
   return Result.ok(records);

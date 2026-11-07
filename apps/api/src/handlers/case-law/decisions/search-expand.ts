@@ -16,6 +16,7 @@ import { Temporal } from "@stll/time";
 import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -297,6 +298,10 @@ const expandCaseLawSearch = createSafeRootHandler(
     session,
     user,
   }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok(NO_ALTERNATIVES);
+    }
+
     const countryRead = readPublicLawCountry(body.country, {
       domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,

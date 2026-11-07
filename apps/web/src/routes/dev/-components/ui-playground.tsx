@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { BRAND_COLORS } from "@stll/brand";
 import { sleep } from "@stll/concurrency/sleep";
 import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
@@ -206,7 +207,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
@@ -315,7 +316,9 @@ export function UiPlayground() {
   const [otpValue, setOtpValue] = useState("123");
   const [dateValue, setDateValue] = useState<string | null>("2026-04-27");
   const [colorValue, setColorValue] = useState("blue");
-  const [hexColor, setHexColor] = useState("#59A1D4");
+  const [hexColor, setHexColor] = useState(
+    BRAND_COLORS.blueAccent.toUpperCase(),
+  );
   const [byokDialogOpen, setByokDialogOpen] = useState(false);
   const destructiveConfirmation = useDestructiveActionConfirmation(
     "delete this workspace",
@@ -690,18 +693,19 @@ export function UiPlayground() {
                     moreLabel={t("common.showMore")}
                     onClear={() => setColorValue("")}
                     onSelect={setColorValue}
+                    trigger={
+                      <Button variant="outline">
+                        Color
+                        <span
+                          className="size-4 rounded-sm border"
+                          style={{
+                            backgroundColor: `var(--option-${colorValue})`,
+                          }}
+                        />
+                      </Button>
+                    }
                     value={colorValue}
-                  >
-                    <Button variant="outline">
-                      Color
-                      <span
-                        className="size-4 rounded border"
-                        style={{
-                          backgroundColor: `var(--option-${colorValue})`,
-                        }}
-                      />
-                    </Button>
-                  </ColorPicker>
+                  />
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -1112,7 +1116,7 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      notifyUserError(undefined, "Unable to save", {
+                      notifyUserProblem("Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}

@@ -14,6 +14,7 @@ import type {
 } from "@/api/lib/review-organization/reset";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -21,6 +22,15 @@ export const RESET_REVIEW_ORGANIZATION_TASK =
   "reviewOrganization.reset" as const;
 
 const REPORTED_FAILURES_MAX = 20;
+
+/** Rows removed by table, before the matters and in the closing sweep. */
+const sweptRowTotal = (report: ReviewResetReport): number => {
+  let total = 0;
+  for (const rows of [...report.billing.values(), ...report.swept.values()]) {
+    total += rows;
+  }
+  return total;
+};
 
 /** What one reset run did, as the counts its system audit row records. */
 const reviewResetAuditCounts = (
@@ -33,10 +43,7 @@ const reviewResetAuditCounts = (
     deletedClauses: report.deleted.clauses,
     deletedTemplates: report.deleted.templates,
     deletedPlaybooks: report.deleted.playbooks,
-    sweptRows: [...report.swept.values()].reduce(
-      (total, rows) => total + rows,
-      0,
-    ),
+    sweptRows: sweptRowTotal(report),
     failedDeletes: report.failures.length,
     seededContacts: seeded?.contacts.created ?? 0,
     seededMatters: seeded?.matters.created ?? 0,
@@ -73,7 +80,7 @@ type ReviewResetTaskOptions = {
 export const createResetReviewOrganizationTask =
   ({
     readConfig = readReviewOrganizationConfig,
-    dependencies,
+    dependencies = { flushWorkspaceSearchRepairs },
     rlsDatabase,
   }: ReviewResetTaskOptions = {}): ReviewResetTask =>
   async ({ db, runId, signal, logger }) => {

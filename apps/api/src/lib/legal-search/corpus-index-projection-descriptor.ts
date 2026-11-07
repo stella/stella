@@ -5,6 +5,7 @@ import {
   publisherKeywordsOf,
   publisherSummaryOf,
 } from "@/api/lib/case-law/publisher-summary";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupContractForJurisdiction,
@@ -17,6 +18,7 @@ import {
   corpusIndexManifestDigest,
   type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
+  corpusIndexRankingSignals,
   corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -68,6 +70,12 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
    * group reads them, writes them and fingerprints them.
    */
   provisionKeys: readonly string[];
+  /**
+   * What search ranks the decision by beyond its text
+   * (`readCaseLawRankingSignals`). Read for every decision; only a generation
+   * whose manifest carries ranking signals writes them and fingerprints them.
+   */
+  rankingSignals: CaseLawRankingSignals;
   /**
    * The generation the gated flip moved this decision's jurisdiction away
    * from (the jurisdiction-serving pointer's `from_generation`), or null while
@@ -205,6 +213,30 @@ const groupContractFingerprintFields = (
   }
 };
 
+/**
+ * What the ranking signals add to a fingerprint: nothing for a generation that
+ * does not write them, so every earlier fingerprint keeps its bytes. One that
+ * does covers each value it writes that can move without the decision being
+ * edited (its authority bucket, whether its language group is shared) and the
+ * inputs the court tier is resolved from, so the decisions whose written
+ * signals moved re-project, and no others. The passage count is covered by
+ * the content hash it is derived from.
+ */
+const rankingSignalFingerprintFields = (
+  manifest: CorpusIndexManifest,
+  input: CaseLawProjectionInput,
+): { rankingSignals?: Record<string, string | number | boolean | null> } =>
+  corpusIndexRankingSignals(manifest) === null
+    ? {}
+    : {
+        rankingSignals: {
+          citationAuthorityBucket: input.rankingSignals.citationAuthorityBucket,
+          courtId: input.courtId,
+          languageGroupKey: input.rankingSignals.languageGroupKey,
+          languageGroupShared: input.rankingSignals.languageGroupShared,
+        },
+      };
+
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
   input: CorpusIndexProjectionInput,
@@ -282,6 +314,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
           ecli: input.ecli,
           ...publisher,
           ...groupContractFingerprintFields(manifest, input),
+          ...rankingSignalFingerprintFields(manifest, input),
         }),
       };
     }

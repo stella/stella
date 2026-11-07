@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
 import {
@@ -23,7 +25,6 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { SYNTHETIC_PRINCIPAL } from "./constants";
 

@@ -14,6 +14,7 @@ import {
   entityTabGlyph,
   InspectorEntityTab,
   InspectorRailIconButton,
+  InspectorRailTab,
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { getMatterSwatch } from "@stll/ui/matter-colors";
@@ -45,6 +46,7 @@ import type {
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
@@ -54,7 +56,6 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -417,15 +418,7 @@ const SuggestedReviveTab = () => {
     <Tooltip
       content={label}
       render={
-        <button
-          aria-label={label}
-          className={cn(
-            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-          onClick={reviveSuggestedTab}
-          type="button"
-        />
+        <InspectorRailTab aria-label={label} onClick={reviveSuggestedTab} />
       }
       side="left"
     >
@@ -518,6 +511,9 @@ const VerticalTab = (props: VerticalTabProps) => {
   if (tab.type === "chat") {
     return <ChatVerticalTab {...props} tab={tab} />;
   }
+  if (tab.type === "task") {
+    return <TaskVerticalTab {...props} tab={tab} />;
+  }
   if (tab.type !== "view") {
     return <VerticalTabCell {...props} />;
   }
@@ -535,6 +531,21 @@ const VerticalTab = (props: VerticalTabProps) => {
   );
 };
 
+const TaskVerticalTab = ({
+  tab,
+  ...props
+}: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
+  const t = useTranslations();
+  const taskQuery = useQuery(taskTabDetailOptions(tab));
+  const taskView = queryView(taskQuery);
+  useQueryViewError(taskView, "TaskVerticalTab:query");
+  const label =
+    taskView.type === "items"
+      ? taskView.items.name || t("tasks.untitled")
+      : (tab.creationStatus === "pending" && tab.label) || t("common.loading");
+  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
+};
+
 const VerticalTabCell = ({
   onDropTab,
   tab,
@@ -543,7 +554,7 @@ const VerticalTabCell = ({
   onClose,
 }: VerticalTabProps) => {
   const [dragOver, setDragOver] = useState(false);
-  const tooltipLabel = tab.label || tab.id.slice(0, 6);
+  const tooltipLabel = tab.label;
   const tabRef = useRef<HTMLButtonElement>(null);
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();
@@ -579,6 +590,7 @@ const VerticalTabCell = ({
   const contextMenu = useTabContextMenu({
     canRename: tab.type !== "matter",
     tabId: tab.id,
+    tabLabel: tab.label,
     onClose,
     onMaximize: buildMaximizeTabAction(tab, {
       activeOrganizationId,

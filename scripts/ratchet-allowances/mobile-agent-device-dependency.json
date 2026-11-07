@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Agents drive the mobile app on a simulator through agent-device, a dependency-free MIT CLI pinned to an exact version, the same tool t3code's mobile agent skill uses."
+}

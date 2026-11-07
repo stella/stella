@@ -11,6 +11,25 @@ type GeneratorDefinition = {
 };
 
 export const PR_GENERATORS = {
+  "migration-restamp": {
+    command: [
+      "bun",
+      "scripts/migration-restamp.ts",
+      "--write",
+      "--base",
+      "origin/main",
+    ],
+    environment: {},
+    services: [],
+    prerequisites: [],
+    outputs: [
+      "apps/api/drizzle/**",
+      "apps/api/src/lib/db/migration-alias-inventory.json",
+      "scripts/sha256-migration-ledger.json",
+      "scripts/migration-lock-baseline.ts",
+      "scripts/migration-lock-allowances/**",
+    ],
+  },
   "query-plan-contracts": {
     command: [
       "bun",
@@ -115,8 +134,15 @@ export const assertOutputPaths = (
   files: readonly string[],
 ) => {
   const selected = selectedGenerator(generator);
-  const outputs = new Set<string>(selected.outputs);
-  const unexpected = files.filter((file) => !outputs.has(file));
+  const matchesOutput = (file: string, output: string) => {
+    if (output.endsWith("**")) {
+      return file.startsWith(output.slice(0, -2));
+    }
+    return file === output;
+  };
+  const unexpected = files.filter(
+    (file) => !selected.outputs.some((output) => matchesOutput(file, output)),
+  );
   if (unexpected.length > 0) {
     throw new PrRegenerationRefusalError(
       `Changes outside generator outputs: ${unexpected.join(", ")}`,

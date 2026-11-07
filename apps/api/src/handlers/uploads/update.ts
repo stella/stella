@@ -15,6 +15,7 @@ import { entityUploadRealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
+  authorizeUploadConsent,
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
@@ -193,6 +194,13 @@ const finalizeUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    const consent = authorizeUploadConsent({
+      grantedScopes: session.grantedScopes,
+      purpose: pending.purpose,
+    });
+    if (Result.isError(consent)) {
+      return Result.err(consent.error);
     }
     // A finished upload answers with its stored result at once; only work
     // that still has to read the file waits for capacity.

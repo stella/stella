@@ -1,3 +1,6 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -20,36 +23,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
@@ -101,6 +74,37 @@ import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors"
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -380,7 +384,6 @@ type CzRegionalFinaldoc = {
     affectedDocs?: unknown;
     regulations?: unknown[] | null;
     flags?: string[] | null;
-    [key: string]: unknown;
   } | null;
 };
 
@@ -1853,6 +1856,16 @@ const SOURCE_FIELDS = [
  * its own ECLI and dates, and a listing row reached without its document is
  * the only statement of the judge, the keywords and the statutes in words.
  */
+type CzRegionalPublisherRecord = Readonly<
+  Record<
+    | (typeof SOURCE_FIELDS)[number]
+    | `listing.${keyof CzRegionalApiItem}`
+    | `document.${keyof CzRegionalFinaldoc}`
+    | `document.metadata.${keyof NonNullable<CzRegionalFinaldoc["metadata"]>}`,
+    unknown
+  >
+>;
+
 const CZ_REGIONAL_SOURCE_FIELDS = {
   "listing.jednaciCislo": {
     disposition: "stored",
@@ -1916,7 +1929,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "document" },
   },
   "document.styles": { disposition: "stored", target: { type: "document" } },
-  "document.metadata": excludedSourceField(
+  "document.metadata": legacyExcludedSourceField(
     "the object holding the thirteen metadata keys below, each of which carries its own disposition",
   ),
   "document.texts[].text": {
@@ -1933,20 +1946,20 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.tableCellInfo": excludedSourceField(
+  "document.tableCellInfo": legacyExcludedSourceField(
     "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
   ),
   "document.styles[].localId": {
     disposition: "stored",
     target: { type: "document" },
   },
-  "document.styles[].alignment": excludedSourceField(
+  "document.styles[].alignment": legacyExcludedSourceField(
     "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
   ),
-  "document.styles[].hasSpaceBefore": excludedSourceField(
+  "document.styles[].hasSpaceBefore": legacyExcludedSourceField(
     "vertical spacing above the paragraph on the printed page, which the document model does not represent",
   ),
-  "document.styles[].hasSpaceAfter": excludedSourceField(
+  "document.styles[].hasSpaceAfter": legacyExcludedSourceField(
     "vertical spacing below the paragraph on the printed page, which the document model does not represent",
   ),
   "document.styles[].bold": {
@@ -2039,7 +2052,7 @@ const CZ_REGIONAL_SOURCE_FIELDS = {
     target: { type: "metadata", key: "affectingDocs" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof CzRegionalPublisherRecord,
   SourceFieldDisposition
 >;
 
@@ -2652,6 +2665,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             const next = advanceDate(state.date, skip);
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor:
                 next <= today
                   ? makeCursor({ date: next, page: 0, emptyDays: empty })
@@ -2702,6 +2716,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: nextCzRegionalListingCursor({
             state,
             totalPages: json.totalPages,

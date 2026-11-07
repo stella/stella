@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import { CASE_LAW_DECISIONS_SLUG_UIDX } from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
@@ -29,7 +30,7 @@ const isSlugUniqueViolation = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_slug_uidx",
+    CASE_LAW_DECISIONS_SLUG_UIDX,
   );
 
 const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {

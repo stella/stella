@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { POSTGRES_TEST_SHARD_IDS } from "../apps/api/scripts/postgres-test-shards";
+import {
+  POSTGRES_MAX_SHARDS,
+  POSTGRES_MIN_SHARDS,
+  postgresShardMatrix,
+} from "../apps/api/scripts/postgres-test-shards";
 import {
   formatPostgresSelectorMisses,
   fullPostgresRunSha,
@@ -101,29 +105,38 @@ test("selector misses name omitted failures and leave full selection unalerted",
   ).toEqual(failingFiles);
 });
 
-test("full-run certification requires every Postgres matrix shard", () => {
-  for (const prefix of ["", "Heavy suites / "]) {
-    const jobs = POSTGRES_TEST_SHARD_IDS.map((shard) => ({
-      name: `${prefix}postgres-service-suites (${shard})`,
-      conclusion: "success",
-      steps: [{ name: "Run Postgres-gated API suites", conclusion: "success" }],
-    })) satisfies Parameters<typeof hasSuccessfulPostgresShards>[0];
-    expect(hasSuccessfulPostgresShards(jobs)).toBeTrue();
-    for (const missing of jobs) {
-      expect(
-        hasSuccessfulPostgresShards(jobs.filter((job) => job !== missing)),
-      ).toBeFalse();
+const steps = [
+  { name: "Run Postgres-gated API suites", conclusion: "success" },
+];
+const shardRun = (values: readonly string[], prefix = "") =>
+  values.map((value) => ({
+    name: `${prefix}postgres-service-suites (${value})`,
+    conclusion: "success",
+    steps,
+  })) satisfies Parameters<typeof hasSuccessfulPostgresShards>[0];
+const plannedCounts = Array.from(
+  { length: POSTGRES_MAX_SHARDS - POSTGRES_MIN_SHARDS + 1 },
+  (_, index) => POSTGRES_MIN_SHARDS + index,
+);
+
+test("full-run certification requires every shard of the run's own n", () => {
+  for (const count of plannedCounts) {
+    for (const prefix of ["", "Heavy suites / "]) {
+      const jobs = shardRun(postgresShardMatrix(count), prefix);
+      expect(hasSuccessfulPostgresShards(jobs), `${count}`).toBeTrue();
+      for (const missing of jobs) {
+        expect(
+          hasSuccessfulPostgresShards(jobs.filter((job) => job !== missing)),
+          `${count} without ${missing.name}`,
+        ).toBeFalse();
+      }
     }
   }
   expect(hasSuccessfulPostgresShards([])).toBeFalse();
 });
 
 test("unsuccessful or absent Postgres steps cannot certify any shard", () => {
-  const jobs = POSTGRES_TEST_SHARD_IDS.map((shard) => ({
-    name: `postgres-service-suites (${shard})`,
-    conclusion: "success",
-    steps: [{ name: "Run Postgres-gated API suites", conclusion: "success" }],
-  })) satisfies Parameters<typeof hasSuccessfulPostgresShards>[0];
+  const jobs = shardRun(postgresShardMatrix(3));
   for (const target of jobs) {
     for (const conclusion of [null, "failure", "cancelled", "skipped"]) {
       expect(
@@ -154,58 +167,80 @@ test("unsuccessful or absent Postgres steps cannot certify any shard", () => {
   }
 });
 
-test("legacy service jobs and repeated shards cannot certify full Postgres coverage", () => {
-  const steps = [
-    { name: "Run Postgres-gated API suites", conclusion: "success" },
-  ];
+test("legacy and countless shard jobs cannot certify full Postgres coverage", () => {
   for (const name of [
     "service-suites",
     "Heavy suites / service-suites",
     "postgres-service-suites",
+    "postgres-service-suites (1)",
+    "postgres-service-suites (1/0)",
+    "postgres-service-suites (1/03)",
+    "postgres-service-suites (1/3/4)",
   ]) {
     expect(
       hasSuccessfulPostgresShards([{ name, conclusion: "success", steps }]),
     ).toBeFalse();
   }
-  const repeatedShard = {
-    name: "postgres-service-suites (1)",
-    conclusion: "success",
-    steps,
-  };
+  // Pre-planner runs named shards without their count.
+  expect(hasSuccessfulPostgresShards(shardRun(["1", "2", "3"]))).toBeFalse();
   expect(
-    hasSuccessfulPostgresShards(
-      POSTGRES_TEST_SHARD_IDS.map(() => repeatedShard),
-    ),
+    hasSuccessfulPostgresShards(shardRun(["1/3", "1/3", "1/3"])),
   ).toBeFalse();
+  expect(
+    hasSuccessfulPostgresShards(shardRun(["1/999999999999999999999999999999"])),
+  ).toBeFalse();
+  expect(hasSuccessfulPostgresShards(shardRun(["1/999"]))).toBeFalse();
+  expect(hasSuccessfulPostgresShards(shardRun(["1/9"]))).toBeFalse();
+  expect(
+    hasSuccessfulPostgresShards([
+      ...shardRun(postgresShardMatrix(3)),
+      {
+        name: "postgres-service-suites (1)",
+        conclusion: "success",
+        steps,
+      },
+    ]),
+  ).toBeFalse();
+  expect(
+    hasSuccessfulPostgresShards([
+      ...shardRun(postgresShardMatrix(3)),
+      { name: "unrelated-job", conclusion: "failure", steps: [] },
+    ]),
+  ).toBeTrue();
 });
 
-test("runs certify only with exactly today's shard topology", () => {
-  const steps = [
-    { name: "Run Postgres-gated API suites", conclusion: "success" },
-  ];
-  const run = (shards: readonly number[], failed?: number) =>
-    shards.map((shard) => ({
-      name: `postgres-service-suites (${shard})`,
-      conclusion: shard === failed ? "failure" : "success",
-      steps,
-    }));
-  const shards: readonly number[] = POSTGRES_TEST_SHARD_IDS;
-  expect(shards).toEqual(
-    Array.from({ length: shards.length }, (_, index) => index + 1),
-  );
-  expect(hasSuccessfulPostgresShards(run(shards))).toBeTrue();
-  for (const shard of shards) {
-    expect(hasSuccessfulPostgresShards(run(shards, shard))).toBeFalse();
-    // A run lacking any one shard never passes as a smaller topology.
+test("a run never passes as a smaller or mixed topology", () => {
+  for (const count of plannedCounts) {
+    const values = postgresShardMatrix(count);
+    // Dropping the last shard leaves 1..n-1, still named for n.
     expect(
-      hasSuccessfulPostgresShards(run(shards.filter((id) => id !== shard))),
+      hasSuccessfulPostgresShards(shardRun(values.slice(0, -1))),
+    ).toBeFalse();
+    // A shard beyond the planned n is not part of any exact topology.
+    expect(
+      hasSuccessfulPostgresShards(
+        shardRun([...values, `${count + 1}/${count}`]),
+      ),
+    ).toBeFalse();
+    // Shards of two different plans never combine into one certificate.
+    expect(
+      hasSuccessfulPostgresShards(
+        shardRun([...values.slice(0, -1), `${count}/${count + 1}`]),
+      ),
     ).toBeFalse();
   }
-  // Runs from other shard counts never certify today's coverage.
-  for (let count = 1; count <= shards.length + 1; count += 1) {
-    if (count !== shards.length) {
-      const other = Array.from({ length: count }, (_, index) => index + 1);
-      expect(hasSuccessfulPostgresShards(run(other))).toBeFalse();
-    }
-  }
+});
+
+test("a duplicate failed shard cannot be hidden by a successful duplicate", () => {
+  const jobs = shardRun(postgresShardMatrix(3));
+  expect(
+    hasSuccessfulPostgresShards([
+      ...jobs,
+      {
+        name: "postgres-service-suites (1/3)",
+        conclusion: "failure",
+        steps,
+      },
+    ]),
+  ).toBeFalse();
 });

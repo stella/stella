@@ -23,6 +23,13 @@
 //
 //   bun scripts/check-npm-publish-lag.ts --ref <git-ref> [--packages cli,ui]
 //   bun scripts/check-npm-publish-lag.ts --previous-release-of <git-ref>
+//
+// --previous-release-of checks the newest PROMOTED final release below the
+// ref's version (promoted-release-policy.ts reads the release publication
+// manifest at that ref): a final tag that never reached production never
+// publishes its coupled CLI, so it cannot be the reference. --ref checks
+// exactly the ref it names; the cut resolves its reference from the same
+// policy and passes it here.
 //     [--attempts 10 --interval-seconds 30]
 //
 // Exit codes: 0 every package is on npm, 1 a package lags, 2 bad arguments or
@@ -32,7 +39,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { STABLE_RELEASE_TAG } from "./promoted-release-policy";
+import { selectPromotedReleaseBelow } from "./promoted-release-policy";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -699,10 +706,6 @@ export const readPublishablePackages = ({
   });
 };
 
-/** The newest stable `vX.Y.Z` tag among those listed, newest first. */
-export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_RELEASE_TAG.test(tag));
-
 type Attempt = {
   readonly attempts: number;
   readonly intervalMs: number;
@@ -842,28 +845,60 @@ export const parseArgs = (argv: readonly string[]): Args => {
   };
 };
 
-const resolveRef = (args: Args): string => {
+const RELEASE_DATES_PATH = "apps/landing/src/data/changelog-release-dates.json";
+
+/** The newest promoted final below a version, from the manifest at a ref. */
+const resolvePromotedRef = (
+  version: string,
+  manifestRef: string,
+  execute: typeof run,
+): string => {
+  const shown = execute([
+    "git",
+    "show",
+    `${manifestRef}:${RELEASE_DATES_PATH}`,
+  ]);
+  if (!shown.ok) {
+    return fail(
+      `cannot read ${RELEASE_DATES_PATH} at ${manifestRef}: ${shown.stderr.trim()}`,
+    );
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(shown.stdout);
+  } catch {
+    return fail(`${RELEASE_DATES_PATH} at ${manifestRef} is not valid JSON`);
+  }
+  const selection = selectPromotedReleaseBelow(manifest, version);
+  if (selection.status !== "resolved") {
+    return fail(selection.message);
+  }
+  const tags = execute(["git", "tag", "--list", "v*"]);
+  if (!tags.ok) {
+    return fail(`git tag --list failed: ${tags.stderr.trim()}`);
+  }
+  if (!tags.stdout.split("\n").some((tag) => tag.trim() === selection.ref)) {
+    return fail(`promoted release ${selection.ref} has no tag in this clone`);
+  }
+  return selection.ref;
+};
+
+export const resolveRef = (args: Args, execute = run): string => {
   if (args.ref !== undefined) {
     return args.ref;
   }
-  const tags = run([
-    "git",
-    "tag",
-    "--merged",
-    args.previousReleaseOf ?? "HEAD",
-    "--list",
-    "v*",
-    "--sort=-v:refname",
-  ]);
-  if (!tags.ok) {
-    return fail(`git tag --merged failed: ${tags.stderr.trim()}`);
+  const previousReleaseOf = args.previousReleaseOf ?? "HEAD";
+  const versionFile = execute(["git", "show", `${previousReleaseOf}:VERSION`]);
+  if (!versionFile.ok) {
+    return fail(
+      `cannot read VERSION at ${previousReleaseOf}: ${versionFile.stderr.trim()}`,
+    );
   }
-  return (
-    newestStableTag(tags.stdout.split("\n").map((tag) => tag.trim())) ??
-    fail(
-      `no stable release tag is reachable from ${args.previousReleaseOf ?? "HEAD"}`,
-    )
-  );
+  const version = versionFile.stdout.trim();
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    return fail(`VERSION at ${previousReleaseOf} must be X.Y.Z`);
+  }
+  return resolvePromotedRef(version, previousReleaseOf, execute);
 };
 
 const main = async (argv: readonly string[]): Promise<number> => {

@@ -7,14 +7,17 @@ import * as v from "valibot";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
-import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import {
+  defaultInviteRole,
+  inviteMemberSchema,
+} from "@/lib/organization/role-assignment.logic";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/admin/members",
+  url: "http://localhost:3000/settings/organization/members",
 });
 
 const originalFetch = globalThis.fetch;
@@ -45,7 +48,7 @@ const { IntlProvider } = await import("use-intl");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { InviteMemberDialog } = await import("./invite-member-dialog");
 const { RoleCell } =
-  await import("@/routes/_protected.admin/-components/organization/member-role-cell");
+  await import("@/routes/_protected.settings/organization/-components/organization/member-role-cell");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
@@ -143,7 +146,7 @@ describe("mounted membership role controls", () => {
   for (const actorRole of ORGANIZATION_ROLE_NAMES) {
     test(`${actorRole} sees invitation options equal to the accepted form roles`, async () => {
       const expected = [...assignableRoles(actorRole)];
-      const schema = inviteMemberSchema(actorRole);
+      const schema = inviteMemberSchema(actorRole, "Invalid email");
       expect(
         ORGANIZATION_ROLE_NAMES.filter(
           (role) =>
@@ -167,7 +170,7 @@ describe("mounted membership role controls", () => {
         await submitInvitation();
         expect(requests.at(0)?.body).toMatchObject({
           email: "member@example.com",
-          role: assignableRoles(actorRole).at(-1),
+          role: defaultInviteRole(assignableRoles(actorRole)),
         });
       });
     }

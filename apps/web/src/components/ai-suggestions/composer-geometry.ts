@@ -23,3 +23,15 @@ export const DOCKED_COMPOSER_VEIL_WIDTH_CLASS =
  */
 export const DOCKED_COMPOSER_INSET_START_CLASS =
   "start-[var(--docked-composer-inset-start,0px)]";
+
+/**
+ * Marks a viewer's scrolling content whose end runs under the docked
+ * composer. While the composer floats, `file-viewer-with-ai.css` reserves
+ * trailing space on the marked element so the last page or line can scroll
+ * fully above the composer stack; anywhere else the marker does nothing.
+ * Spread it onto the scrolling content of every viewer `FileViewerWithAI`
+ * wraps.
+ */
+export const DOCKED_COMPOSER_CLEARANCE = {
+  "data-docked-composer-clearance": "",
+} as const;

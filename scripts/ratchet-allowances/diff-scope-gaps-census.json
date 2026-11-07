@@ -1,0 +1,5 @@
+{
+  "metric": "diff-scope-gaps",
+  "delta": 9,
+  "reason": "The census starts by recording the scope gaps that already exist in CI steps reading a base revision (missed dependents, scans that are empty outside a pull request, steps that never run); recording them is the starting point, and each fix removes its decision."
+}

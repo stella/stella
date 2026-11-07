@@ -23,8 +23,8 @@ corpus_index_generations.updated_at       timestamptz  default,not null  corpus-
 Sequence-ordered revisions for projection mutations.
 
 ```text
-corpus_index_projection_revisions.family          text         not null            corpus-index-generations.ts:92
-corpus_index_projection_revisions.generation      varchar      not null            corpus-index-generations.ts:93
+corpus_index_projection_revisions.family          text         fk,not null         corpus-index-generations.ts:92
+corpus_index_projection_revisions.generation      varchar      fk,not null         corpus-index-generations.ts:93
 corpus_index_projection_revisions.revision        bigint       generated,not null  corpus-index-generations.ts:96
 corpus_index_projection_revisions.transaction_id  bigint       not null            corpus-index-generations.ts:100
 corpus_index_projection_revisions.created_at      timestamptz  default,not null    corpus-index-generations.ts:101
@@ -35,8 +35,8 @@ corpus_index_projection_revisions.created_at      timestamptz  default,not null 
 One index group of a generation bound to the contract its physical index is created under, for a group whose index the manifest cannot vouch for: one under a g…
 
 ```text
-corpus_index_group_enrollments.family               text         not null          corpus-index-generations.ts:160
-corpus_index_group_enrollments.generation           varchar      not null          corpus-index-generations.ts:161
+corpus_index_group_enrollments.family               text         fk,not null       corpus-index-generations.ts:160
+corpus_index_group_enrollments.generation           varchar      fk,not null       corpus-index-generations.ts:161
 corpus_index_group_enrollments.index_group          varchar      not null          corpus-index-generations.ts:164
 corpus_index_group_enrollments.physical_index_id    varchar      not null          corpus-index-generations.ts:165
 corpus_index_group_enrollments.contract_version     text         not null          corpus-index-generations.ts:168
@@ -67,9 +67,9 @@ corpus_index_group_withdrawals.withdrawn_at      timestamptz  default,not null  
 The generation that serves one jurisdiction when it is not the family's serving generation.
 
 ```text
-corpus_index_jurisdiction_serving.family           text         not null          corpus-index-generations.ts:300
+corpus_index_jurisdiction_serving.family           text         fk,not null       corpus-index-generations.ts:300
 corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:301
-corpus_index_jurisdiction_serving.generation       varchar      not null          corpus-index-generations.ts:302
+corpus_index_jurisdiction_serving.generation       varchar      fk,not null       corpus-index-generations.ts:302
 corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:309  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
 corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:314
 ```

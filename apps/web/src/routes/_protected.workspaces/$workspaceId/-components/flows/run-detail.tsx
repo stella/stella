@@ -347,7 +347,7 @@ const StepRunOutput = ({
       {output.decision === "approved"
         ? t("flows.runs.review.approved")
         : t("flows.runs.review.rejected")}
-      {output.note ? ` — ${output.note}` : ""}
+      {output.note ? `: ${output.note}` : ""}
     </p>
   );
 };

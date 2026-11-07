@@ -40,8 +40,8 @@ Append-only lifecycle audit for a signal.
 
 ```text
 signal_events.id               pUuid               pk,not null       signals.ts:229
-signal_events.organization_id  safeOrganizationId  not null          signals.ts:230
-signal_events.signal_id        safeUuid            not null          signals.ts:231
+signal_events.organization_id  safeOrganizationId  fk,not null       signals.ts:230
+signal_events.signal_id        safeUuid            fk,not null       signals.ts:231
 signal_events.type             text                not null          signals.ts:232
 signal_events.actor_user_id    text                fk,null           signals.ts:233
 signal_events.payload          jsonb               null              signals.ts:236

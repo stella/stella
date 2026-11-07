@@ -8,6 +8,7 @@ import { isEntityKind, TASK_STATUSES } from "@stll/api-contract";
 import { entities, fields } from "@/api/db/schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -27,7 +28,7 @@ const invalidKanbanGroup = () =>
   new HandlerError({ status: 400, message: "Invalid Kanban group" });
 
 const buildStatusGroupCondition = (groupValue: string | null): SQL => {
-  const taskCondition = eq(entities.kind, "task");
+  const taskCondition = workTask(entities);
   if (groupValue === null) {
     return (
       and(

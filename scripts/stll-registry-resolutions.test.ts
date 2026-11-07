@@ -31,6 +31,7 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/docx-core",
   "@stll/folio-agents",
   "@stll/folio-core",
+  "@stll/folio-fonts",
   "@stll/folio-react",
   "@stll/fuzzy-search",
   "@stll/fuzzy-search-darwin-arm64",

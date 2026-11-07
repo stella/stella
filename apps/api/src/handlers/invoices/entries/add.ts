@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
@@ -13,6 +12,13 @@ import {
   INVOICE_STATUS,
   timeEntries,
 } from "@/api/db/schema";
+import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "@/api/lib/billing/invoice-concurrent-modification";
 import {
   ATTACHED_ENTRY_LINE_VAT,
   attachedEntryLineDrafts,
@@ -20,20 +26,13 @@ import {
   insertInvoiceLines,
   recalculateInvoiceTotals,
   requireDraftInvoiceForEntryChanges,
-} from "@/api/handlers/invoices/invoice-lines";
-import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditEvent } from "@/api/lib/audit-log";
-import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+} from "@/api/lib/billing/invoice-lines";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { claimInvoiceExpenses } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CentsAmount } from "@/api/lib/money";
-
-import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "../concurrent-modification";
 
 const addEntriesBodySchema = v.object({
   timeEntryIds: v.optional(
@@ -109,53 +108,6 @@ const buildAttachEvents = (params: {
   }
   return events;
 };
-
-type ClaimInvoiceExpensesOptions = {
-  workspaceId: SafeId<"workspace">;
-  invoiceId: SafeId<"invoice">;
-  expenseIds: readonly SafeId<"expense">[];
-  currency: string;
-  now: Date;
-};
-
-/**
- * Marks approved, billable, not-yet-invoiced expenses in the invoice
- * currency billed on a draft invoice, and returns the ones it claimed; fewer
- * rows than requested means a concurrent change. Callers record the attach
- * events and write the lines in the same transaction.
- */
-export const claimInvoiceExpenses = async (
-  tx: Transaction,
-  {
-    workspaceId,
-    invoiceId,
-    expenseIds,
-    currency,
-    now,
-  }: ClaimInvoiceExpensesOptions,
-) =>
-  // audit: skip - callers record each claimed expense in the same transaction
-  await tx
-    .update(expenses)
-    .set({ invoiceId, status: BILLING_STATUS.BILLED, updatedAt: now })
-    .where(
-      and(
-        eq(expenses.workspaceId, workspaceId),
-        inArray(expenses.id, [...expenseIds]),
-        eq(expenses.status, BILLING_STATUS.APPROVED),
-        eq(expenses.billable, true),
-        isNull(expenses.invoiceId),
-        eq(expenses.currency, currency),
-      ),
-    )
-    .returning({
-      id: expenses.id,
-      dateIncurred: expenses.dateIncurred,
-      amount: expenses.amount,
-      markup: expenses.markup,
-      description: expenses.description,
-      invoiceDescription: expenses.invoiceDescription,
-    });
 
 type AttachmentPreflightOptions = {
   invoiceId: SafeId<"invoice">;
@@ -356,8 +308,9 @@ const addEntries = createSafeHandler(
       "to a draft invoice as invoice lines without VAT, marking them billed " +
       "and recomputing the invoice totals. Every entry must match the " +
       "invoice currency, because an invoice is single-currency and nothing " +
-      "is converted. Only draft " +
-      "invoices accept entries, and a concurrent change to the same entries " +
+      "is converted. Only never-issued drafts accept entries; issued invoices " +
+      "require a credit note even after reverting to draft. A concurrent change " +
+      "to the same entries " +
       "fails with a retryable conflict rather than attaching part of the " +
       "set.",
     permissions: { invoice: ["update"] },
@@ -400,21 +353,25 @@ const addEntries = createSafeHandler(
     };
 
     const txResult = await resultTx(safeDb, async (tx) => {
-      const runningError = await guardRunningTimeEntries({
+      const running = await guardRunningTimeEntries({
         tx,
+        organizationId: session.activeOrganizationId,
         workspaceId,
         actorUserId: user.id,
-        selection: body.timeEntryIds
-          ? { type: "entries", ids: body.timeEntryIds }
-          : { type: "none" },
+        selection: {
+          type: "invoice",
+          runningCheck: "additional",
+          invoiceId: params.invoiceId,
+          additionalIds: body.timeEntryIds,
+        },
       });
-      if (runningError) {
-        return Result.err(runningError);
+      if (running.isErr()) {
+        return Result.err(running.error);
       }
-      const invoiceResult = await requireDraftInvoiceForEntryChanges(
-        tx,
-        entryChangeScope,
-      );
+      const invoiceResult = await requireDraftInvoiceForEntryChanges(tx, {
+        ...entryChangeScope,
+        matterLocks: running.value,
+      });
       if (invoiceResult.isErr()) {
         return Result.err(invoiceResult.error);
       }
@@ -513,7 +470,7 @@ const addEntries = createSafeHandler(
       }
 
       const scope = { invoiceId: params.invoiceId, workspaceId };
-      await insertInvoiceLines(
+      const inserted = await insertInvoiceLines(
         tx,
         { ...scope, organizationId: session.activeOrganizationId },
         attachedEntryLineDrafts({
@@ -523,6 +480,9 @@ const addEntries = createSafeHandler(
         }),
         { recordAuditEvent },
       );
+      if (inserted.isErr()) {
+        return Result.err(inserted.error);
+      }
       const totals = await recalculateInvoiceTotals(
         tx,
         scope,

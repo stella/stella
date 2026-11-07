@@ -14,10 +14,9 @@ import {
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
-import {
-  DOCUMENT_FETCH_BUDGET_MS,
-  recordDocumentFetchRequest,
-} from "@/api/lib/legal-search/sk-document-backfill";
+import { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { recordDocumentFetchRequest } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {
@@ -26,17 +25,30 @@ export const onDemandDocumentDeps: OnDemandDocumentDeps = {
     // and an abandoned recording must not sit on a stalled pool forever.
     await withTimeout(
       async () =>
-        await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
+        await withPublicReadIo(
+          "hydration",
+          async () =>
+            await recordDocumentFetchRequest(
+              decisionId,
+              getCaseLawIngestionDb(),
+            ),
+        ),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
   recordPacingOutcome: recordDocumentPacingOutcome,
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
   fetchDocument: async (decision, adapterKey) =>
-    await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
-      decisionId: decision.id,
-      scopedDb: getCaseLawIngestionDb(),
-      // The unit races its own wall-clock budget; the signal aborts the download.
-      signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-    }),
+    await withPublicReadIo(
+      "hydration",
+      async (io) =>
+        await DEFERRED_DOCUMENT_PROCESSORS[adapterKey]({
+          decisionId: decision.id,
+          scopedDb: getCaseLawIngestionDb(),
+          signal: AbortSignal.any([
+            startDocumentFetchBudget(),
+            ...(io.signal === undefined ? [] : [io.signal]),
+          ]),
+        }),
+    ),
 };

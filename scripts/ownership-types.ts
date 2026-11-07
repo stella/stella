@@ -61,6 +61,15 @@ export type OwnershipEnforcement =
       readonly table: string;
       readonly columns: readonly string[];
       readonly allowed: readonly AllowedFile[];
+    }
+  | {
+      // An insert, update or conflict set that names one of the columns: a
+      // column group that must change together, written by one owner.
+      readonly kind: "table-column-write";
+      readonly specifiers: readonly string[];
+      readonly table: string;
+      readonly columns: readonly string[];
+      readonly allowed: readonly AllowedFile[];
     };
 
 export type OwnershipEntry = {
@@ -68,6 +77,6 @@ export type OwnershipEntry = {
   readonly group?: "root-connection";
   readonly capability: string;
   readonly owner: readonly string[];
-  readonly summary: string;
+  readonly summary: string | (() => string);
   readonly enforcement: OwnershipEnforcement;
 };

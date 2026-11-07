@@ -34,12 +34,11 @@
  */
 
 import { panic } from "better-result";
-import JSZip from "jszip";
 import path from "node:path";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ecjEnvelopeDocument,
   fetchDecisionsByCelex,
@@ -54,6 +53,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import { parseFormex } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   formatProvenance,
@@ -274,9 +274,9 @@ const firstManifestationUri = (payload: unknown): string | undefined => {
 const unzipSingleEntry = async (
   archive: Uint8Array,
 ): Promise<Uint8Array | undefined> => {
-  const zip = await JSZip.loadAsync(archive);
-  const entry = Object.values(zip.files).find((file) => !file.dir);
-  return await entry?.async("uint8array");
+  const zip = await ZipArchive.read(archive);
+  const entry = zip.entries().at(0);
+  return await entry?.bytes();
 };
 
 // ── Recording ──────────────────────────────────────────────

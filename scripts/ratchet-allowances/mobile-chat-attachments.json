@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The mobile chat composer attaches a file the person picks from Files; Expo's document picker presents the system picker, at the version Expo SDK 58 ships."
+}

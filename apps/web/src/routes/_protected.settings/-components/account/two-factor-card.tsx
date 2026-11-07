@@ -49,7 +49,7 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
 
@@ -266,7 +266,7 @@ const showManagementMutationError = (
     return;
   }
   if (error.status === HTTP_BAD_REQUEST) {
-    notifyUserError(undefined, invalidCodeMessage);
+    notifyUserProblem(invalidCodeMessage);
     return;
   }
   const authError = toAuthClientError(error);
@@ -540,7 +540,7 @@ const EnableTwoFactorDialog = ({
                   <span className="text-muted-foreground text-xs">
                     {t("settings.account.twoFactor.manualSetupKey")}
                   </span>
-                  <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
+                  <code className="bg-muted rounded-sm px-2 py-1 font-mono text-sm">
                     {secret}
                   </code>
                 </div>

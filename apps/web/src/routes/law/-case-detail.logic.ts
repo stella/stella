@@ -24,6 +24,7 @@ import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match
 import {
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
+  decisionInTextCitationsInfiniteOptions,
 } from "@/features/case-law/queries/citations";
 import {
   decisionBySlugOptions,
@@ -63,6 +64,7 @@ const optionalPublicDecisionSearchQuerySchema = v.optional(
 );
 
 export const publicDecisionSearchSchema = routeSearchSchema({
+  caseFileCursor: v.optional(v.string()),
   // A stale or hand-edited value drops the note rather than failing the page.
   match: v.fallback(
     v.optional(v.picklist(Object.values(PUBLIC_DECISION_MATCH))),
@@ -201,6 +203,14 @@ const primeDecisionProvisions = (
       captureError,
     ),
     "case-law.citations-outgoing-prefetch",
+  );
+  detached(
+    prefetchNonCriticalInfiniteQuery(
+      queryClient,
+      routeQueryOptions(decisionInTextCitationsInfiniteOptions(decisionId)),
+      captureError,
+    ),
+    "case-law.citations-in-text-prefetch",
   );
 };
 
@@ -409,7 +419,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
         async () =>
           await ensureRouteQueryData(
             queryClient,
-            decisionOptions(extractId(routeDecisionId)),
+            decisionOptions(extractId(routeDecisionId), search.caseFileCursor),
           ),
       ),
       routeCountry,
@@ -431,9 +441,14 @@ export const loadPublicCaseLawDecisionRoute = async ({
           queryClient,
           decisionBySlugOptions(
             params.language === undefined || normalizedRouteLanguage === null
-              ? { country: routeCountry, slug: params.slug }
+              ? {
+                  country: routeCountry,
+                  slug: params.slug,
+                  caseFileCursor: search.caseFileCursor,
+                }
               : {
                   country: routeCountry,
+                  caseFileCursor: search.caseFileCursor,
                   language: normalizedRouteLanguage,
                   slug: params.slug,
                 },

@@ -4,6 +4,7 @@ import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-dig
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  chatRunsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
@@ -244,6 +245,24 @@ describe("user realtime events", () => {
     expect(parseUserRealtimeEvent(newNotificationRealtimeEvent())).toEqual(
       newNotificationRealtimeEvent(),
     );
+  });
+
+  test("the chat runs event carries no run", () => {
+    const event = chatRunsChangedRealtimeEvent();
+
+    expect(event).toEqual({
+      type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+      data: null,
+    });
+    expect(Object.keys(event)).toEqual(["type", "data"]);
+    expect(parseUserRealtimeEvent(event)).toEqual(event);
+    expect(
+      parseUserRealtimeEvent({
+        type: REALTIME_EVENT_TYPE.CHAT_RUNS_CHANGED,
+        data: { threadId: "thread-1" },
+      }),
+    ).toBeNull();
+    expect(parseWorkspaceRealtimeEvent(event)).toBeNull();
   });
 
   test("the user channel does not accept workspace events", () => {

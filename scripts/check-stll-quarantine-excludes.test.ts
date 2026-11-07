@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -326,6 +334,45 @@ minimumReleaseAgeExcludes = [
         now: new Date("2026-08-04T10:37:00.000Z"),
       }).errors,
     ).toEqual([]);
+  });
+
+  test("the prune CLI defaults to the root bunfig", () => {
+    const fixtureRoot = mkdtempSync(
+      path.join(tmpdir(), "stll-quarantine-prune-"),
+    );
+    try {
+      const fixtureScripts = path.join(fixtureRoot, "scripts");
+      const fixtureBunfig = path.join(fixtureRoot, "bunfig.toml");
+      const fixtureScript = path.join(
+        fixtureScripts,
+        "check-stll-quarantine-excludes.ts",
+      );
+      mkdirSync(fixtureScripts);
+      copyFileSync(
+        path.join(import.meta.dir, "check-stll-quarantine-excludes.ts"),
+        fixtureScript,
+      );
+      writeFileSync(
+        fixtureBunfig,
+        createBunfig(
+          '"better-result", # quarantine-expires: 2020-01-01T00:00:00.000Z',
+        ),
+      );
+
+      const result = Bun.spawnSync([
+        process.execPath,
+        fixtureScript,
+        "--prune",
+      ]);
+
+      expect(result.stderr.toString()).toBe("");
+      expect(result.exitCode).toBe(0);
+      const prunedBunfig = readFileSync(fixtureBunfig, "utf-8");
+      expect(prunedBunfig).not.toContain("better-result");
+      expect(prunedBunfig).toContain("@stll/native");
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
   });
 
   // Matching by name would take the renewed entry with the expired one, which

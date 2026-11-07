@@ -36,6 +36,10 @@ import {
   type ScriptCallCatalog,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 import {
+  type ResolveCurrentChatExecutionContext,
+  resolveCurrentChatRegistryContext,
+} from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
+import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
@@ -332,6 +336,8 @@ type BuildChatCodeModeProps = Omit<
   scriptCallTools: () => ChatScriptCallTools;
   /** The turn's source chips; every script read is held to them. */
   sourceScopes?: readonly ChatSourceScope[] | undefined;
+  /** Rebuild live authority before each registry read in a delayed script. */
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
 };
 
 export const buildChatCodeMode = (
@@ -341,11 +347,23 @@ export const buildChatCodeMode = (
     sourceScopes = [],
     documentedReads,
     refRegistry,
+    resolveCurrentExecutionContext,
     scriptCallTools,
     toolDefectMemo,
     ...contextDeps
   } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const resolveReadContext = async () => {
+    if (resolveCurrentExecutionContext === undefined) {
+      return Result.ok(context);
+    }
+    return (
+      await resolveCurrentChatRegistryContext({
+        contextDeps,
+        resolveCurrentExecutionContext,
+      })
+    ).map(buildMcpContextFromChat);
+  };
 
   return createChatCodeModeSurface({
     featureAccessContext: context,
@@ -356,11 +374,15 @@ export const buildChatCodeMode = (
         toolName,
         args: toolArgs,
         toolDefectMemo,
-        read: async () =>
-          await runRegistryReadTool({
+        read: async () => {
+          const currentContext = await resolveReadContext();
+          if (Result.isError(currentContext)) {
+            return Result.err(currentContext.error);
+          }
+          return await runRegistryReadTool({
             toolName,
             args: toolArgs,
-            context,
+            context: currentContext.value,
             refRegistry,
             scopeArgs: async (args) =>
               await scopeCorpusRead({
@@ -369,7 +391,8 @@ export const buildChatCodeMode = (
                 args,
                 resolveCountries: corpusResourceCountries,
               }),
-          }),
+          });
+        },
       }),
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.

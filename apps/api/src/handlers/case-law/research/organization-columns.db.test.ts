@@ -1,5 +1,6 @@
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -15,7 +16,7 @@ import {
   caseLawResearchColumns,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { readNamedResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -38,9 +39,15 @@ import type {
   CaseLawResearchColumnContent,
 } from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  CASE_LAW_RESEARCH_CELLS_EVENT,
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -60,6 +67,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const lookupResearchAnswers = createLookupResearchAnswers({
+  readCopies: createTestWithdrawalCopyReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -150,6 +160,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await releaseTestDb();
+});
+
+afterEach(() => {
+  resetMetricLineSinkForTesting();
 });
 
 beforeEach(async () => {
@@ -453,6 +467,20 @@ describe("a run answers only the cells that need it", () => {
     const columns = [
       { columnId, question: "Stale claim?", content: YES_NO_CONTENT },
     ];
+    // Settled cells are counted for the failure alarm only where the write
+    // landed, so the run that lost its claim reports nothing.
+    const metricLines: unknown[] = [];
+    setMetricLineSinkForTesting((line) => {
+      const record: unknown = JSON.parse(line);
+      if (
+        typeof record === "object" &&
+        record !== null &&
+        "event" in record &&
+        record.event === CASE_LAW_RESEARCH_CELLS_EVENT
+      ) {
+        metricLines.push(record);
+      }
+    });
 
     await runResearchAnswers(
       asTestRaw({
@@ -474,6 +502,7 @@ describe("a run answers only the cells that need it", () => {
     expect(afterStalled.every((cell) => cell.claimId === newer.claimId)).toBe(
       true,
     );
+    expect(metricLines).toEqual([]);
 
     // The run that does hold the claim writes, so the no-op above is the
     // claim check rather than the write path being broken.
@@ -495,6 +524,16 @@ describe("a run answers only the cells that need it", () => {
       .where(eq(caseLawResearchAnswers.columnId, columnId));
     expect(afterNewer.every((cell) => cell.state === "failed")).toBe(true);
     expect(afterNewer.every((cell) => cell.claimId === null)).toBe(true);
+    resetMetricLineSinkForTesting();
+    // One line per decision write: each decision's one cell failed unreadable.
+    expect(metricLines).toEqual(
+      newer.cells.map(() => ({
+        event: CASE_LAW_RESEARCH_CELLS_EVENT,
+        state: "failed",
+        failureReason: "decision_unavailable",
+        CaseLawResearchAnswerCells: 1,
+      })),
+    );
   });
 
   test("a run request is bounded by the page size, and oversize is refused", () => {

@@ -44,7 +44,9 @@ const config = {
     "capabilities contains caller decisions; deploymentFeatures supplies deployment availability. " +
     "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
-    "for CZ and SK, UTC otherwise). An organization that has never saved " +
+    "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
+    "zone the primary jurisdiction implies, regardless of an organization " +
+    "override. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -77,6 +79,7 @@ export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
   snapshot: FeatureAccessSnapshot,
 ) => {
+  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
   const visibleDecisions = Array.from(snapshot.decisions).filter(
     ([featureId]) =>
       featureId !== LIST_VERIFICATION_FEATURE_ID ||
@@ -107,7 +110,7 @@ export const projectOrganizationSettingsRow = (
     matterNumberPadding:
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    practiceJurisdictions,
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
     managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
     memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
@@ -120,7 +123,11 @@ export const projectOrganizationSettingsRow = (
       row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
     timeZone: effectiveOrganizationTimeZone({
       timeZone: row?.timeZone ?? null,
-      practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+      practiceJurisdictions,
+    }),
+    primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
+      timeZone: null,
+      practiceJurisdictions,
     }),
     timeZoneSource:
       (row?.timeZone ?? null) === null

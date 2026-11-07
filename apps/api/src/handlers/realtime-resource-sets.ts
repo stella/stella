@@ -55,7 +55,7 @@ export const flowRunRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.FLOW_RUN,
 );
 
-export const invoiceRealtimeUpdates = workspaceResourceSetUpdates(
+export const invoiceRealtimeUpdates = organizationResourceSetUpdates(
   RESOURCE_TYPE.INVOICE,
 );
 

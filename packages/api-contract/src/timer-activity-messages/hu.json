@@ -1,0 +1,11 @@
+{
+  "timer": "Időzítő",
+  "running": "Fut",
+  "paused": "Szüneteltetve",
+  "noMatter": "Nincs ügy",
+  "noDescription": "Nincs leírás",
+  "more": "{count, plural, other {még # időmérő}}",
+  "startedElsewhere": "Egy másik eszközön elindult egy időzítő",
+  "pause": "Szüneteltetés",
+  "resume": "Folytatás"
+}

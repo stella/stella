@@ -27,15 +27,21 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
-import type { api } from "@/lib/api";
+import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts" | "professional-use" | "route-search";
+  suite?:
+    | "leaf-shells"
+    | "law-hosts"
+    | "professional-use"
+    | "route-search"
+    | "chat-composer"
+    | "case-search";
   /** The router's reading of a URL, which the route-search suite checks with. */
   parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
@@ -97,6 +103,15 @@ const setupFixtureEnvironment = (
     });
   }
 };
+/**
+ * The event streams a shell opens: the open matter's stream, and the signed-in
+ * user's stream that the app shell opens on every page.
+ */
+const RECORDED_SHELL_EVENT_STREAMS: readonly string[] = [
+  "/v1/workspaces/00000000-0000-4000-8000-000000000001/events",
+  "/v1/notifications/events",
+];
+
 // Resolve EventTarget after Happy DOM installs its matching Event constructor.
 const createFixtureEventSource = () =>
   class FixtureEventSource extends EventTarget implements EventSource {
@@ -118,9 +133,7 @@ const createFixtureEventSource = () =>
       this.url = String(url);
       this.withCredentials = init.withCredentials ?? false;
       const path = new URL(this.url, window.location.origin).pathname;
-      if (
-        path !== "/v1/workspaces/00000000-0000-4000-8000-000000000001/events"
-      ) {
+      if (!RECORDED_SHELL_EVENT_STREAMS.includes(path)) {
         panic(`Unrecorded shell event stream: ${path}`);
       }
       queueMicrotask(() => {
@@ -227,7 +240,13 @@ const installFixtureNetwork = () => {
   };
   const unexpectedRequests: string[] = [];
   const requests: string[] = [];
-  const state: { audience: FixtureAudience } = {
+  const state: {
+    audience: FixtureAudience;
+    response?: (request: Request) =>
+      | Response
+      | undefined
+      | Promise<Response | undefined>;
+  } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
   const professionalUseState: { status: "accepted" | "required" } = {
@@ -269,6 +288,7 @@ const installFixtureNetwork = () => {
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies NonNullable<
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
@@ -277,10 +297,15 @@ const installFixtureNetwork = () => {
     id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
+    externalSource: null,
+    externalId: null,
+    externalChangeKey: null,
+    importedAt: null,
     reference: "2026/1",
     clientId: null,
     leadUserId: null,
     billingReference: null,
+    billingNarrativeLanguage: null,
     color: null,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
@@ -291,11 +316,15 @@ const installFixtureNetwork = () => {
     Awaited<ReturnType<ReturnType<typeof api.workspaces>["get"]>>["data"]
   >;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       await settleFixtureRequest();
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       requests.push(pathname);
+      const customResponse = await state.response?.(new Request(input, init));
+      if (customResponse !== undefined) {
+        return customResponse;
+      }
       if (pathname === "/api/auth/get-session") {
         return Response.json(
           state.audience === "member" ? { session, user } : null,
@@ -347,7 +376,63 @@ const installFixtureNetwork = () => {
         >);
       }
       if (/^\/v1\/chat\/threads\/[0-9a-f-]{36}\/messages$/u.test(pathname)) {
+        if (new URL(url).searchParams.get("allowMissingThread") === "true") {
+          return Response.json({
+            activeSkill: null,
+            activeTurnId: null,
+            attachedFiles: { fileCount: 0, files: [] },
+            context: {
+              estimatedTokens: 0,
+              triggerTokens: 0,
+              cacheStableTokens: 0,
+              summarizedMessageCount: 0,
+              breakdown: {
+                promptTokens: 0,
+                toolTokens: 0,
+                summaryTokens: 0,
+                attachmentTokens: 0,
+                conversationTokens: 0,
+              },
+            },
+            contextMatterIds: [],
+            forkProvenance: { type: "none" },
+            lastActivityAt: null,
+            messages: [],
+            model: null,
+            olderCursor: null,
+            reasoningEffort: null,
+            threadExists: false,
+            threadRevision: null,
+            usedAnonymization: false,
+            webSearchAvailable: false,
+            webSearchEnabled: false,
+          } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]);
+        }
         return Response.json({ message: "Not found" }, { status: 404 });
+      }
+      if (pathname === "/v1/skills") {
+        return Response.json({
+          builtIn: [],
+          installed: [],
+          canManageTeam: false,
+          limit: 100,
+          nextCursor: null,
+        } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/skill-availability") {
+        return Response.json({
+          unavailable: [],
+          unavailableHere: [],
+        } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/runs/active") {
+        return Response.json({
+          items: [],
+          limit: 100,
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.runs.active.get>>["data"]
+        >);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
@@ -459,6 +544,19 @@ const installFixtureNetwork = () => {
           },
         } satisfies NonNullable<
           Awaited<ReturnType<(typeof api)["search-history"]["get"]>>["data"]
+        >);
+      }
+      // The sidebar's Time link counts the entries waiting for approval.
+      if (pathname === "/v1/time-entries/approval-queue") {
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          limit: 1,
+          pendingCount: 0,
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<(typeof api)["time-entries"]["approval-queue"]["get"]>
+          >["data"]
         >);
       }
       if (pathname === "/health") {
@@ -670,7 +768,7 @@ const loadFixtureRuntime = async (
     ...network,
   };
 };
-type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
+export type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
 const fixtureSearch = (routeId: string, email: string) => {
   switch (routeId) {
     case "/auth/otp":
@@ -779,7 +877,12 @@ const declareCensus = (fixture: FixtureRuntime) => {
           .filter(
             (route) => route.parentRoute?.id === "__root__" && hasUi(route),
           )
-          .filter((route) => route.options.staticData?.appFrame === undefined)
+          .filter((route) => {
+            if (route.options.staticData === undefined) {
+              return true;
+            }
+            return route.options.staticData.appFrame === undefined;
+          })
           .map(({ id }) => id),
       ).toEqual([]);
       const publicLeaves = uiLeaves.filter((route) => !isLegacyTool(route));
@@ -1441,6 +1544,14 @@ export const declareRouteShellProviderFixture = async (
   declareLeafCases(fixture);
   await declareLawCases(fixture);
   declareProfessionalUseCases(fixture);
+  if (options.suite === "case-search") {
+    const { declareCaseSearchNavigationCases } =
+      await import("./case-search-navigation-fixture");
+    declareCaseSearchNavigationCases(fixture);
+    const { declareStatuteSearchNavigationCases } =
+      await import("./statute-search-navigation-fixture");
+    declareStatuteSearchNavigationCases(fixture);
+  }
   const {
     suite,
     selectedLeaves,
@@ -1472,4 +1583,5 @@ export const declareRouteShellProviderFixture = async (
       );
     }
   });
+  return fixture;
 };

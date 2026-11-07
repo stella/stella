@@ -38,6 +38,7 @@ export type NonChatAuditResourceType = Exclude<
 const CHAT_THREAD_SETTING_FIELDS = [
   "chatModel",
   "chatReasoningEffort",
+  "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
   "titleChanged",
@@ -311,6 +312,13 @@ export const AUDIT_DETAIL_POLICY = {
   },
   [AUDIT_RESOURCE_TYPE.MCP_CONNECTION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE]: {
+    default: {
+      type: "deployment-feature",
+      feature: "FEATURE_ORG_ACCESS_STATE",
+    },
+    operations: {},
+  },
   [AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.PLAYBOOK]: UNGATED_AUDIT_DETAILS,
@@ -325,6 +333,7 @@ export const AUDIT_DETAIL_POLICY = {
   [AUDIT_RESOURCE_TYPE.VAT_RATE]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.NUMBER_SERIES]: TIME_BILLING_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.STATUTE_ANNOTATION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.STYLE_SET]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.TEMPLATE]: UNGATED_AUDIT_DETAILS,
   [AUDIT_RESOURCE_TYPE.TEMPLATE_LOOKUP_FORMAT]: UNGATED_AUDIT_DETAILS,
@@ -412,6 +421,13 @@ type AuditReadColumns = {
 };
 
 /** Apply the same feature policy before a query derives values from changes. */
+/**
+ * Whether the stored row recorded any changes, regardless of read policy.
+ * Lets a caller say changes were withheld without ever reading their content.
+ */
+export const auditStoredChangesPresentSql = () =>
+  sql<boolean>`${auditLogs.changes} is not null`;
+
 export const auditReadChangesSql = (
   context: AuditReadContext,
   columns: AuditReadColumns = auditLogs,

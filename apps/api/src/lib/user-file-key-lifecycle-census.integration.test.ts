@@ -1,7 +1,9 @@
 import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
-import JSZip from "jszip";
+
+import { ZipArchive } from "@stll/docx-core/zip";
+import { createTestState } from "@stll/test-state";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -52,8 +54,8 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -275,9 +277,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
           fixture.organizationId,
         ),
       );
-    await database
-      .delete(organization)
-      .where(eq(organization.id, fixture.organizationId));
+    await deleteOrganizationsForTest(database, [fixture.organizationId]);
     await database.delete(user).where(eq(user.id, fixture.userId));
     await releaseTestDb();
   });
@@ -358,10 +358,10 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
     });
     expect(opened.toSorted()).toEqual(fixture.fileKeys.toSorted());
     const bytes = published.at(0) ?? panic("Archive publication required");
-    const archive = await JSZip.loadAsync(bytes);
-    const exportedFiles = Object.keys(archive.files).filter((name) =>
-      name.startsWith("files/"),
-    );
+    const archive = await ZipArchive.read(bytes);
+    const exportedFiles = archive
+      .paths()
+      .filter((name) => name.startsWith("files/"));
     expect(exportedFiles).toHaveLength(2);
   });
 

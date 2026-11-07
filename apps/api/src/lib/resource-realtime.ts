@@ -1,4 +1,5 @@
 import {
+  RESOURCE_TYPE,
   type ResourceChange,
   resourceDeletedRealtimeEvent,
   type ResourceRef,
@@ -54,6 +55,20 @@ export const broadcastWorkspaceResourceSetUpdated = (
   broadcastEvent(
     workspaceId,
     resourceSetUpdatedRealtimeEvent(resourceType, mutationDigest),
+  );
+};
+
+/**
+ * Tell every open tab of the organization that its address book changed, so
+ * contact lists and pages refresh without a reload. Call after the write
+ * commits; a static census holds every contact writer to it.
+ */
+export const announceContactSetChanged = (
+  organizationId: SafeId<"organization">,
+): void => {
+  broadcastOrganizationResourceSetUpdated(
+    organizationId,
+    RESOURCE_TYPE.CONTACT,
   );
 };
 

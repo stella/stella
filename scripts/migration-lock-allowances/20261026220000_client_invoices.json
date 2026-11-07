@@ -1,0 +1,8 @@
+{
+  "add-column": "Nullable columns without defaults use catalog-only expansion without rewriting existing rows; the existing 5s lock_timeout and 60s statement_timeout bound acquisition and execution, while client backfill runs in committed online batches.",
+  "alter-column": "Dropping the matter column NOT NULL flag changes metadata without scanning or rewriting rows; the NOT VALID scope check and tenant guard retain new-write invariants under the existing 5s lock_timeout and 60s statement_timeout.",
+  "add-constraint": "The scope and recorded-snapshot CHECK constraints are added NOT VALID without an initial table scan; new writes remain checked and the existing online validation phase scans later, after releasing schema locks, under unchanged 5s/60s migration limits.",
+  "add-foreign-key": "Both client references are added NOT VALID without scanning old rows; tenant and client triggers continue checking new writes, and validation runs in the online phase after short catalog locks governed by the unchanged 5s lock_timeout and 60s statement_timeout.",
+  "create-trigger": "Installing the three invoice, line and matter guards registers catalog entries without scanning existing rows; each guard enforces the reviewed tenant and client relationship on subsequent writes, under unchanged 5s lock_timeout and 60s statement_timeout.",
+  "create-policy": "The reviewed complete-document and restrictive line policies plus tenant-bound reset policies replace catalog definitions without scanning invoice rows; their organization and actor predicates remain intact, under unchanged 5s lock_timeout and 60s statement_timeout."
+}

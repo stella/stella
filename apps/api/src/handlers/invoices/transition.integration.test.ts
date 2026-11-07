@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,6 +8,9 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
+
+import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -29,6 +32,10 @@ import { VatRateUnavailableError } from "@/api/lib/billing/vat-exchange-rates";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -52,6 +59,8 @@ const seededInvoiceIds: SafeId<"invoice">[] = [];
 const seededTimeEntryIds: SafeId<"timeEntry">[] = [];
 const seededSeriesIds: SafeId<"numberSeries">[] = [];
 const seededExpenseIds: SafeId<"expense">[] = [];
+/** The seller every seeded invoice is issued by unless a test says otherwise. */
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -72,6 +81,7 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 
 afterAll(async () => {
@@ -96,6 +106,7 @@ afterAll(async () => {
         .delete(invoices)
         .where(inArray(invoices.id, seededInvoiceIds));
     }
+    await removeIssuingSeller(testDb, issuingSellerId);
   } finally {
     await releaseRlsFixture();
   }
@@ -112,6 +123,40 @@ describe("invoice transition integration", () => {
     expect(secondResult).toEqual({
       code: 409,
       response: { message: "Cannot finalize invoice from its current status" },
+    });
+    expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
+  test("finalizes a reverse charge only with the buyer's VAT ID", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId,
+      position: 0,
+      description: "Legal advice",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(10_000),
+      vatRateBps: 0,
+      vatTreatment: "reverse_charge",
+      netAmount: cents(10_000),
+      vatAmount: cents(0),
+      grossAmount: cents(10_000),
+      source: "manual",
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toMatchObject({
+      code: 400,
+      response: { message: "Reverse charge requires a buyer VAT ID" },
+    });
+    await testDb
+      .update(invoices)
+      .set({ buyerVatId: "DE123456789" })
+      .where(eq(invoices.id, invoiceId));
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
+      id: invoiceId,
     });
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
   });
@@ -179,6 +224,95 @@ describe("invoice transition integration", () => {
     await testDb
       .delete(sellerProfiles)
       .where(eq(sellerProfiles.id, sellerProfileId));
+  });
+
+  test("refinalizing legacy totals reads VAT without rewriting the issued document", async () => {
+    const sellerProfileId = createSafeId<"sellerProfile">();
+    await testDb.insert(sellerProfiles).values({
+      id: sellerProfileId,
+      organizationId: ids.orgA,
+      legalName: "Legacy invoice seller",
+      vatId: "SK1234567890",
+      vatPayer: true,
+      country: "SK",
+      defaultCurrency: "USD",
+    });
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.DRAFT });
+    try {
+      await testDb
+        .update(invoices)
+        .set({
+          sellerProfileId,
+          finalizedAt: new Date("2025-01-02T00:00:00Z"),
+          netAmount: null,
+          vatAmount: null,
+          totalAmount: cents(12_300),
+        })
+        .where(eq(invoices.id, invoiceId));
+      await testDb.insert(invoiceLines).values({
+        id: createSafeId<"invoiceLine">(),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        invoiceId,
+        position: 0,
+        description: "Issued legal services",
+        quantity: "1.0000",
+        unit: "h",
+        unitPrice: cents(10_000),
+        vatRateBps: 2300,
+        vatTreatment: "domestic_vat",
+        netAmount: cents(10_000),
+        vatAmount: cents(2300),
+        grossAmount: cents(12_300),
+        source: "manual",
+      });
+      const readDocument = async () =>
+        await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+          with: { lines: true },
+        });
+      const beforeRefusal = await readDocument();
+      const auditEvents: AuditEvent[] = [];
+      expect(await runTransition(invoiceId, "finalize", auditEvents)).toEqual({
+        code: 409,
+        response: {
+          message:
+            "This issued invoice states VAT in USD without the official exchange rate to EUR",
+          hint: "Its issued content cannot change: issue a credit note for it and a corrected invoice.",
+        },
+      });
+      expect(await readDocument()).toEqual(beforeRefusal);
+      expect(auditEvents).toEqual([]);
+
+      await testDb
+        .update(invoices)
+        .set({ currency: "EUR" })
+        .where(eq(invoices.id, invoiceId));
+      const beforeFinalize = await readDocument();
+      if (beforeFinalize === undefined) {
+        panic("The issued invoice must exist before re-finalizing");
+      }
+      expect(beforeFinalize).toMatchObject({
+        netAmount: null,
+        vatAmount: null,
+        totalAmount: cents(12_300),
+      });
+      expect(beforeFinalize.lines).toHaveLength(1);
+      expect(beforeFinalize.lines.at(0)?.vatAmount).toBe(cents(2300));
+      expect(await runTransition(invoiceId, "finalize")).toEqual({
+        id: invoiceId,
+      });
+      expect(await readDocument()).toEqual({
+        ...beforeFinalize,
+        status: INVOICE_STATUS.FINALIZED,
+        updatedAt: expect.any(Date),
+      });
+    } finally {
+      await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
+      await testDb
+        .delete(sellerProfiles)
+        .where(eq(sellerProfiles.id, sellerProfileId));
+    }
   });
 
   test("keys a Polish rate to the issue date of an invoice issued before the supply (art. 31a ust. 2)", async () => {
@@ -391,13 +525,21 @@ describe("invoice transition integration", () => {
         expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
           id: invoiceId,
         });
-        const reverted = await testDb.query.invoices.findFirst({
-          where: { id: { eq: invoiceId } },
-          columns: { vatExchangeRate: true, vatExchangeRateSource: true },
+        // An issued invoice keeps its content: reverting keeps the rate, and
+        // finalizing again restores the same document without a new rate.
+        const readRate = async () =>
+          await testDb.query.invoices.findFirst({
+            where: { id: { eq: invoiceId } },
+            columns: { vatExchangeRate: true, vatExchangeRateSource: true },
+          });
+        expect(await readRate()).toEqual({
+          vatExchangeRate: "24.750000000000",
+          vatExchangeRateSource: sample.source,
         });
-        expect(reverted).toEqual({
-          vatExchangeRate: null,
-          vatExchangeRateSource: null,
+        expect(await handler.handler(context)).toEqual({ id: invoiceId });
+        expect(await readRate()).toEqual({
+          vatExchangeRate: "24.750000000000",
+          vatExchangeRateSource: sample.source,
         });
       }
       await testDb.delete(invoices).where(eq(invoices.id, invoiceId));
@@ -665,7 +807,10 @@ describe("invoice transition integration", () => {
     });
     expect(await runTransition(unnumbered, "finalize")).toMatchObject({
       code: 409,
-      response: { hint: expect.any(String) },
+      response: {
+        code: INVOICE_ISSUE_BLOCKER.numberSeriesMissing,
+        hint: expect.stringContaining("number-series.create"),
+      },
     });
     expect(await readInvoiceStatus(unnumbered)).toBe(INVOICE_STATUS.DRAFT);
     const manual = await seedInvoice({
@@ -681,16 +826,64 @@ describe("invoice transition integration", () => {
     ).toEqual({ invoiceNumber: "MANUAL-001" });
   });
 
-  test("marking an invoice paid records the time and voiding clears it", async () => {
-    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
-    expect(await runTransition(invoiceId, "mark_paid")).toEqual({
+  test("refuses to issue an invoice without a seller profile, before any number is allocated", async () => {
+    const seriesId = createSafeId<"numberSeries">();
+    seededSeriesIds.push(seriesId);
+    // A series for all sellers would number it: only the seller is missing.
+    await testDb.insert(numberSeries).values({
+      id: seriesId,
+      organizationId: ids.orgA,
+      documentType: "invoice",
+      name: "Sellerless invoices",
+      pattern: "NOSELLER-{SEQ}",
+      padding: 3,
+      isDefault: true,
+    });
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+      sellerProfileId: null,
+    });
+
+    expect(await runTransition(invoiceId, "finalize")).toMatchObject({
+      code: 409,
+      response: {
+        code: INVOICE_ISSUE_BLOCKER.sellerProfileMissing,
+        hint: expect.stringContaining("seller-profiles.create"),
+      },
+    });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { status: true, invoiceNumber: true },
+      }),
+    ).toEqual({ status: INVOICE_STATUS.DRAFT, invoiceNumber: null });
+
+    await testDb
+      .update(invoices)
+      .set({ sellerProfileId: issuingSellerId })
+      .where(eq(invoices.id, invoiceId));
+    expect(await runTransition(invoiceId, "finalize")).toEqual({
       id: invoiceId,
     });
-    const paid = await testDb.query.invoices.findFirst({
-      where: { id: { eq: invoiceId } },
-      columns: { paidAt: true },
-    });
-    expect(paid?.paidAt).toBeInstanceOf(Date);
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { invoiceNumber: true },
+      }),
+    ).toEqual({ invoiceNumber: "NOSELLER-001" });
+    await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
+  });
+
+  test("paid is not a transition, and voiding clears the paid timestamp", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.PAID });
+    await testDb
+      .update(invoices)
+      .set({ paidAt: new Date("2026-06-30T10:00:00Z") })
+      .where(eq(invoices.id, invoiceId));
+    expect(v.is(transitionInvoice.config.body, { action: "mark_paid" })).toBe(
+      false,
+    );
     expect(await runTransition(invoiceId, "void")).toEqual({ id: invoiceId });
     expect(
       await testDb.query.invoices.findFirst({
@@ -755,20 +948,20 @@ describe("invoice transition integration", () => {
         columns: { invoiceId: true, status: true },
       }),
     ).toEqual({ invoiceId: null, status: BILLING_STATUS.APPROVED });
-    expect(auditEvents.map((event) => event.resourceId)).toEqual([
-      invoiceId,
-      timeEntryId,
-      expenseId,
-    ]);
+    expect(auditEvents.map((event) => event.resourceId).toSorted()).toEqual(
+      [invoiceId, timeEntryId, expenseId].toSorted(),
+    );
   });
 });
 
 const seedInvoice = async ({
   status,
   invoiceNumber,
+  sellerProfileId = issuingSellerId,
 }: {
   status: (typeof INVOICE_STATUS)[keyof typeof INVOICE_STATUS];
   invoiceNumber?: string | null;
+  sellerProfileId?: SafeId<"sellerProfile"> | null;
 }) => {
   const invoiceId = createSafeId<"invoice">();
   seededInvoiceIds.push(invoiceId);
@@ -780,6 +973,7 @@ const seedInvoice = async ({
       invoiceNumber === undefined ? `INV-TEST-${invoiceId}` : invoiceNumber,
     invoiceDate: "2026-06-23",
     currency: "USD",
+    sellerProfileId,
     status,
   });
   return invoiceId;

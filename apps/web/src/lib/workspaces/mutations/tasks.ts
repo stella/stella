@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { legalListsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -25,8 +26,8 @@ export const useCreateTask = () => {
   const analytics = useAnalytics();
   const t = useTranslations();
 
-  return useMutation({
-    mutationFn: async (workspaceId: string) =>
+  return useIdempotentMutation({
+    mutationFn: async (workspaceId: string, idempotent) =>
       readQueryResult(
         await runWorkspaceMutation({
           client: queryClient,
@@ -35,7 +36,12 @@ export const useCreateTask = () => {
               .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .put(
                 { name: t("tasks.untitled") },
-                { headers: { [RESOURCE_MUTATION_ID_HEADER]: mutationId } },
+                {
+                  headers: {
+                    ...idempotent.headers,
+                    [RESOURCE_MUTATION_ID_HEADER]: mutationId,
+                  },
+                },
               );
             return unwrapApiResponse(response);
           },

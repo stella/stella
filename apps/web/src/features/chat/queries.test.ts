@@ -5,7 +5,15 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -21,6 +29,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -54,6 +63,7 @@ import {
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
@@ -777,6 +787,27 @@ describe("buildSendRequestBody", () => {
       sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
+  });
+
+  test("carries a computer run target and leaves the cloud default unsent", () => {
+    const threadId = toChatThreadId("thread-A");
+    const bodyFor = (runTarget: ChatRunTarget | undefined) =>
+      buildSendRequestBody({
+        context:
+          runTarget === undefined ? {} : { getRunTarget: () => runTarget },
+        key: { scope: "global", threadId },
+        messages: [createMessage()],
+        run: { runId: "run-A", threadId },
+      });
+    const local: ChatRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "full_auto",
+    };
+    expect(bodyFor(local).runTarget).toEqual(local);
+    expect("runTarget" in bodyFor({ kind: "cloud" })).toBe(false);
+    expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 
   test("forwards the complete native AG-UI interrupt continuation", () => {
@@ -3001,6 +3032,9 @@ describe("chat runtime", () => {
       const refusal = {
         code,
         ...metadata,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       };
       const stored = {
@@ -3198,6 +3232,7 @@ describe("acquireChatRuntime reconcile", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+    mock.restore();
   });
 
   const threadId = toChatThreadId("thread-acquire");
@@ -3317,6 +3352,57 @@ describe("acquireChatRuntime reconcile", () => {
     },
   ];
 
+  test.each([
+    { code: "provider_unavailable", reported: false },
+    { code: "local_runner_needs_login", reported: false },
+    { code: ACTION_ADMISSION_CODES.concurrencyBusy, reported: false },
+    { code: "unknown", reported: true },
+    { code: undefined, reported: true },
+  ])(
+    "reports a run error with code $code only when the server left it unclassified",
+    async ({ code, reported }) => {
+      const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+        () => undefined,
+      );
+      globalThis.fetch = createFetchMock(async (_input, init) =>
+        createSseResponse([
+          {
+            type: "RUN_STARTED",
+            threadId,
+            runId: parseChatRequestRunId(init),
+          },
+          {
+            type: "RUN_ERROR",
+            message: code ?? "AI stream error",
+            ...(code === undefined ? {} : { code }),
+          },
+        ]),
+      );
+      const runtime = acquireChatRuntime({
+        activeOrganizationId,
+        context: { allowMissingThread: true },
+        data: buildThreadData(),
+        key: {
+          scope: "global",
+          threadId: toChatThreadId(`thread-run-${code ?? "none"}`),
+        },
+        queryClient: new QueryClient(),
+      });
+
+      await sendThreadChatMessage(
+        runtime,
+        createOutgoingMessage("22222222-2222-4222-8222-2222222222d1"),
+      );
+
+      expect(runtime.getSnapshot().status).toBe("error");
+      const reports = capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      );
+      expect(reports).toHaveLength(reported ? 1 : 0);
+    },
+  );
+
   test("shows a rejected native approval continuation as the thread error", async () => {
     const requests: unknown[] = [];
     globalThis.fetch = createFetchMock(async (_input, init) => {
@@ -3372,6 +3458,61 @@ describe("acquireChatRuntime reconcile", () => {
       code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
     });
     expect(runtime.getSnapshot().isLoading).toBe(false);
+  });
+
+  test("keeps a classified run error of an approval continuation out of error tracking", async () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    let requests = 0;
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests += 1;
+      return createSseResponse(
+        requests === 1
+          ? createApprovalSseChunks(parseChatRequestRunId(init))
+          : [
+              {
+                type: "RUN_STARTED",
+                threadId,
+                runId: parseChatRequestRunId(init),
+              },
+              {
+                type: "RUN_ERROR",
+                code: "provider_unavailable",
+                message: "provider_unavailable",
+              },
+            ],
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222d2"),
+    );
+    await started.stream;
+
+    await Result.tryPromise(async () => {
+      await runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-A",
+      });
+    });
+
+    expect(requests).toBe(2);
+    expect(runtime.getSnapshot().error).toMatchObject({
+      code: "provider_unavailable",
+    });
+    expect(
+      capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      ),
+    ).toEqual([]);
   });
 
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {

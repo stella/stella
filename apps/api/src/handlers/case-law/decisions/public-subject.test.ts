@@ -26,6 +26,7 @@ const SUBJECT_FREE_ROUTES = [
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/facets",
+  "GET /case/decisions/filter-validation",
   "GET /case/decisions/latest",
   "GET /case/decisions/status",
   // A judge's portrait belongs to the roster, not to any one decision: the

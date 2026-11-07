@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/workspaces/matter-1/invoices/new",
@@ -49,7 +49,7 @@ describe("prefetchPendingApprovals", () => {
     // The approver's lists were requested and failed, so the failure path ran.
     expect(
       queryClient.getQueryState(
-        timeEntriesOptions(WORKSPACE, USER, { status: "draft" }).queryKey,
+        timeEntriesOptions(WORKSPACE, USER, { status: "submitted" }).queryKey,
       )?.status,
     ).toBe("error");
     expect(requests.some((path) => path.includes("/time-entries/"))).toBe(true);

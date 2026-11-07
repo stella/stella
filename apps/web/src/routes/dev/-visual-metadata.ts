@@ -33,8 +33,19 @@ export const composerReferenceVariants = {
 
 export const composerReferenceStates = Object.keys(composerReferenceVariants);
 
+/** Button label benches, each a narrow card that stacks its content at the
+ * start, so only the button can keep its label inside, keyed to what the
+ * label does there: cut to one line, or wrap onto several. */
+export const buttonLabelBenches = {
+  "outline-label": "cut",
+  "icon-label": "cut",
+  "popover-trigger": "cut",
+  "wrap-layout": "wrap",
+} as const;
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
   "column-composer": { label: "Column composer alignment", layout: "plain" },
   "handoff-confirmation": {
@@ -51,6 +62,7 @@ export const visualRegistry = {
     layout: "plain",
   },
   "chat-status": { label: "Chat status motion", layout: "plain" },
+  "button-label": { label: "Button labels", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",
     layout: "plain",
@@ -60,7 +72,12 @@ export const visualRegistry = {
     label: "Chat statute citations",
     layout: "plain",
   },
+  "chat-answer-footer": { label: "Chat answer footer", layout: "plain" },
   "chat-link-icons": { label: "Chat link icons", layout: "plain" },
+  "case-law-text-availability": {
+    label: "Case-law text availability",
+    layout: "plain",
+  },
   "hungarian-decision": { label: "Hungarian decision", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },

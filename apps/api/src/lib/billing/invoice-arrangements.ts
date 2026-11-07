@@ -5,11 +5,11 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_BILLING_PURPOSE, invoiceLines } from "@/api/db/schema";
-import {
-  lockBillingArrangement,
-  readBillingUsage,
-} from "@/api/lib/billing/arrangements";
+import { readBillingUsage } from "@/api/lib/billing/arrangements";
+import { exceedsBillingCaps } from "@/api/lib/billing/arrangements.logic";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const flatFeeInvoiceRefusal = () =>
@@ -31,7 +31,10 @@ export const checkInvoiceBillingArrangement = async (
   { invoiceId, workspaceId }: CheckInvoiceBillingArrangementOptions,
 ) => {
   const invoice = await tx.query.invoices.findFirst({
-    where: { id: { eq: invoiceId }, workspaceId: { eq: workspaceId } },
+    where: {
+      id: { eq: invoiceId },
+      RAW: (table) => invoiceInMatter(table, workspaceId),
+    },
   });
   if (!invoice) {
     return panic("The locked invoice disappeared during billing validation");
@@ -72,7 +75,7 @@ export const checkInvoiceBillingArrangement = async (
   if (
     !arrangement ||
     arrangement.mode !== "hourly" ||
-    arrangement.capAmount === null ||
+    (arrangement.capAmount === null && arrangement.capMinutes === null) ||
     invoice.documentType === "credit_note"
   ) {
     return Result.ok(undefined);
@@ -80,6 +83,7 @@ export const checkInvoiceBillingArrangement = async (
   const [amount] = await tx
     .select({
       value: sql<string>`COALESCE(SUM(${invoiceLines.netAmount}), 0)::text`,
+      minutes: sql<string>`COALESCE(SUM(ROUND(${invoiceLines.quantity} * 60)), 0)::text`,
       count: sql<string>`COUNT(*)::text`,
     })
     .from(invoiceLines)
@@ -115,7 +119,14 @@ export const checkInvoiceBillingArrangement = async (
       }),
     );
   }
-  if (usage.billedAmount + candidate > BigInt(arrangement.capAmount)) {
+  if (
+    exceedsBillingCaps({
+      totalAmount: usage.billedAmount + candidate,
+      totalMinutes: usage.billedMinutes + BigInt(amount.minutes),
+      capAmount: arrangement.capAmount,
+      capMinutes: arrangement.capMinutes,
+    })
+  ) {
     return Result.err(
       new HandlerError({
         status: 409,

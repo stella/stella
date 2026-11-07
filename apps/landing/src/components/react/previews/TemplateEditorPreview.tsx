@@ -133,8 +133,8 @@ const DirectiveLabel = ({
 );
 
 const VAR_STYLE = {
-  background: "rgba(217, 119, 6, 0.18)",
-  color: "rgb(217, 119, 6)",
+  background: "color-mix(in srgb, var(--preview-amber) 18%, transparent)",
+  color: "var(--preview-amber)",
 } as const;
 
 const Var = ({ children }: { children: string }) => (

@@ -69,6 +69,8 @@ type VersionRowProps = {
   onContextMenu?: (event: React.MouseEvent) => void;
   /** Diff vs the previous version; empty array means no changes. */
   loadDiff?: (() => Promise<VersionDiffSegment[]>) | null;
+  /** Label for the diff toggle where there is nothing earlier to compare. */
+  diffLabel?: string | undefined;
   /** AI change summary; null means the versions are identical. */
   summarize?: (() => Promise<string | null>) | null;
 };
@@ -92,6 +94,7 @@ export const VersionRow = ({
   onActivate,
   onContextMenu,
   loadDiff,
+  diffLabel,
   summarize,
 }: VersionRowProps) => {
   const t = useTranslations();
@@ -201,14 +204,18 @@ export const VersionRow = ({
   let headerElement: React.ReactNode;
   if (onActivate) {
     headerElement = (
-      <button
-        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
-        type="button"
+      <Button
+        className="block w-full"
         onClick={onActivate}
         onContextMenu={onContextMenu}
+        variant="plain"
       >
-        {header}
-      </button>
+        <span
+          className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
+        >
+          {header}
+        </span>
+      </Button>
     );
   } else {
     headerElement = (
@@ -247,7 +254,7 @@ export const VersionRow = ({
               ) : (
                 <DirectionalIcon className="size-3" icon={ChevronRightIcon} />
               )}
-              {t("fileDetail.showDiff")}
+              {diffLabel ?? t("fileDetail.showDiff")}
             </Button>
           )}
           {summarize && (

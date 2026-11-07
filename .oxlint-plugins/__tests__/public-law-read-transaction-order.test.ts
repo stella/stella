@@ -226,3 +226,24 @@ test("rejects a configuration call with no helper binding in the module", async 
     ),
   ).toEqual([1]);
 });
+
+test("inspects the canonical public-read scope and the second transaction argument", async () => {
+  expect(
+    await lint(
+      'import { withPublicReadIo as own } from "@/api/lib/legal-search/public-read-timeout-context"; const publicLawReadDb = fn => own("database", async io => io.readTransaction(database, async tx => { await configureReadTransaction(tx); return fn(tx); }));',
+    ),
+  ).toEqual([]);
+  expect(
+    await lint(
+      'import { withPublicReadIo as own } from "@/api/lib/legal-search/public-read-timeout-context"; const publicLawReadDb = fn => own("database", async io => io.readTransaction(database, async tx => fn(tx)));',
+    ),
+  ).toEqual([1]);
+});
+
+test("an arbitrary nested scope cannot establish configured transactions", async () => {
+  expect(
+    await lint(
+      'const own = async (kind, run) => run(fake); const publicLawReadDb = fn => own("database", async io => io.readTransaction(database, async tx => { await configureReadTransaction(tx); return fn(tx); }));',
+    ),
+  ).toEqual([1]);
+});

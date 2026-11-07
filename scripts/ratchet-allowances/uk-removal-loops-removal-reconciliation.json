@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/ingestion/removal-reconciliation.ts",
+  "delta": 12,
+  "reason": "Ordered source CAS, durable per-item outcome commits and publisher backoff checks must fence each bounded discovery or retry step. They cannot be batched across remote observations without changing replay semantics."
+}
