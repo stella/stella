@@ -34,6 +34,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { api } from "@/lib/api";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
@@ -395,8 +396,13 @@ const StellaAppFrame = ({
       threadId: toSafeId<"chatThread">(threadRef.threadId),
     });
     const appCalls = thread["mcp-apps"]({ toolCallId: part.toolCallId });
-    const callTool = createStellaAppToolCaller(async (request) =>
-      unwrapApiResponse(await appCalls.call.post(request)),
+    // An app's tool call is a read the server runs for the app; it is not
+    // an automation capability of its own.
+    const callTool = createStellaAppToolCaller(
+      async (request) =>
+        await invokeAppOnlyWrite("chat.mcp-apps.call", async () =>
+          unwrapApiResponse(await appCalls.call.post(request)),
+        ),
     );
     return {
       toolInput: call.input,

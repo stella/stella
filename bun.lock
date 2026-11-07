@@ -576,7 +576,6 @@
         "@t3-oss/env-core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-client": "catalog:",
-        "@tanstack/ai-react": "catalog:",
         "@tanstack/react-devtools": "^0.10.13",
         "@tanstack/react-form": "^1.33.5",
         "@tanstack/react-hotkeys": "^0.14.5",
@@ -1880,7 +1879,6 @@
     "@tanstack/ai-openai": "0.27.0",
     "@tanstack/ai-openrouter": "0.21.1",
     "@tanstack/ai-persistence": "0.8.0",
-    "@tanstack/ai-react": "0.30.0",
     "@tanstack/ai-sandbox": "0.5.19",
     "@tanstack/charts": "1.1.0",
     "@tanstack/eslint-plugin-query": "5.104.5",
@@ -3580,7 +3578,6 @@
 
     "@tanstack/ai-persistence": ["@tanstack/ai-persistence@0.8.0", "", { "dependencies": { "@tanstack/ai-utils": "^0.4.1" }, "peerDependencies": { "@tanstack/ai": "^0.65.0", "vitest": "^4.1.10" }, "optionalPeers": ["vitest"] }, "sha512-fG5/48aYVMvwlxd1Pv5VZDUusrLXjFESESR3mZXEoh1eL+tK02knk4Kg2BczsLItI+3ulLBZ2Gmxd4KAxge0EA=="],
 
-    "@tanstack/ai-react": ["@tanstack/ai-react@0.30.0", "", { "dependencies": { "@tanstack/ai-client": "^0.38.0", "@tanstack/markdown": "^0.0.13" }, "peerDependencies": { "@mcp-ui/client": "^7", "@tanstack/ai": "^0.65.1", "@types/react": ">=18.0.0", "react": ">=18.0.0", "react-dom": ">=18.0.0" }, "optionalPeers": ["@mcp-ui/client", "react-dom"] }, "sha512-V1ZB5Kxo9dzUM7Fi3a3pLd/nEWCpMnYoKjKrbe0he+RkIdDMYsR0GyqW2fzO0bsvir/ZWdRBYkXMQPR2GOwSBQ=="],
 
     "@tanstack/ai-sandbox": ["@tanstack/ai-sandbox@0.5.19", "", { "dependencies": { "@modelcontextprotocol/sdk": "^1.29.0", "@tanstack/ai-skills": "^0.1.15" }, "peerDependencies": { "@ngrok/ngrok": "^1.0.0", "@tanstack/ai": "^0.65.0", "@tanstack/ai-persistence": "^0.8.0", "vitest": "^4.1.10" }, "optionalPeers": ["@ngrok/ngrok", "@tanstack/ai-persistence", "vitest"] }, "sha512-dCLkO0DTpcVFGvTnq+/OcxOZ/EnGAyExYWo5hQtVH4Xq0WCkOGDaZOd5nvLidoxFOJE9JRM8oCtEzn0Rb4+ptw=="],
 
@@ -3616,7 +3613,6 @@
 
     "@tanstack/hotkeys": ["@tanstack/hotkeys@0.15.1", "", { "dependencies": { "@tanstack/store": "^0.11.2" } }, "sha512-Ck8a3ON2KOQi2o9IKgCIJxQXhRMLpcau1EAK8xQd3KUKvXGi0asY6Zlco8SJNHYAQGVPn0f6DQhg64L7IeZKbw=="],
 
-    "@tanstack/markdown": ["@tanstack/markdown@0.0.13", "", { "peerDependencies": { "octane": ">=0.1.12", "react": ">=18" }, "optionalPeers": ["octane", "react"] }, "sha512-ZSQP2ulBvlPzdpZeRheBJnaELo7e4ET/D/XrfgweHyqhhLMN5vUJJAUl7ufSRd7GlfO/vwdzjKPh0E0JwqJkDA=="],
 
     "@tanstack/match-sorter-utils": ["@tanstack/match-sorter-utils@9.1.2", "", { "dependencies": { "remove-accents": "0.5.0" } }, "sha512-aPkUQctDzpXLSWhlx7jUDi3mInsI18xcnrK1hvIyIa88ab1ax88cACr7xU+BKMCGB4NZYNwh4SoNSEbv3RY2NA=="],
 

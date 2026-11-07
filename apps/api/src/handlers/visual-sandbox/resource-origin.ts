@@ -17,12 +17,12 @@ import type {
 } from "@stll/api-contract/stella-mcp-app";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   appPresentsTool,
   chatMcpAppByUri,
   chatMcpAppForTool,
-} from "@/api/handlers/chat/mcp-apps/catalog";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/chat/mcp-app-catalog";
 
 type IssueVisualResourceOptions = {
   fileId: SafeId<"userFile">;

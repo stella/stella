@@ -14,11 +14,6 @@ import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import {
-  appMayCall,
-  appPresentsTool,
-  chatMcpAppByUri,
-} from "@/api/handlers/chat/mcp-apps/catalog";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
@@ -30,6 +25,11 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
+import {
+  appMayCall,
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { readBounded } from "@/api/lib/db/read-bounded";
@@ -152,7 +152,7 @@ type MemberReadOptions = {
  * current membership, matters and features, the read's own gates, and the
  * MCP result shape the app parses.
  */
-export const runMemberRead = async ({
+const runMemberRead = async ({
   name,
   args,
   memberRole,

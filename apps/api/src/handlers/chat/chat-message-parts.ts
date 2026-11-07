@@ -31,10 +31,6 @@ import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
 import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import {
-  appPresentsTool,
-  chatMcpAppByUri,
-} from "@/api/handlers/chat/mcp-apps/catalog";
-import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
@@ -56,6 +52,10 @@ import type {
 } from "@/api/handlers/chat/types";
 import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
 import {
   isPersistedJsonObject,
   isPersistedJsonValue,

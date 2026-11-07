@@ -4,10 +4,10 @@ import * as v from "valibot";
 import type { StellaMcpAppBundle } from "@stll/api-contract/stella-mcp-app";
 import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 
-import { chatMcpAppByDirectory } from "@/api/handlers/chat/mcp-apps/catalog";
 import type { CachePolicy } from "@/api/http/cache";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { chatMcpAppByDirectory } from "@/api/lib/chat/mcp-app-catalog";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -41,20 +41,23 @@ const config = {
  * the sandboxed frame, which is the only place it runs. It reads no tenant
  * data, so the member's session is the whole of its authorization.
  */
-const readChatMcpAppBundle = createSafeRootHandler(
-  config,
-  // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
-  async function* ({ params, set }) {
-    const app = chatMcpAppByDirectory(params.app);
-    if (app === undefined) {
-      return Result.err(
+const bundleApp = (directory: string) => {
+  const app = chatMcpAppByDirectory(directory);
+  return app === undefined
+    ? Result.err(
         new HandlerError({
           status: 404,
           code: "not_found",
           message: "App not found",
         }),
-      );
-    }
+      )
+    : Result.ok(app);
+};
+
+const readChatMcpAppBundle = createSafeRootHandler(
+  config,
+  async function* ({ params, set }) {
+    const app = yield* bundleApp(params.app);
     set.headers["X-Content-Type-Options"] = "nosniff";
     set.cache = BUNDLE_CACHE;
     return Result.ok({

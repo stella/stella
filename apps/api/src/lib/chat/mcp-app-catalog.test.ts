@@ -5,7 +5,7 @@ import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import { isRegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 
-import { CHAT_MCP_APPS, chatMcpAppForTool } from "./catalog";
+import { CHAT_MCP_APPS, chatMcpAppForTool } from "./mcp-app-catalog";
 
 // The app routes are gated on the public corpus; an app that presented or
 // called anything else would be served where its tools are not.

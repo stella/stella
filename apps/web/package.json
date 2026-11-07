@@ -118,7 +118,6 @@
     "@t3-oss/env-core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-client": "catalog:",
-    "@tanstack/ai-react": "catalog:",
     "@tanstack/react-devtools": "^0.10.13",
     "@tanstack/react-form": "^1.33.5",
     "@tanstack/react-hotkeys": "^0.14.5",

@@ -5,7 +5,7 @@ import callChatMcpAppTool from "./call-tool";
 import readChatMcpAppBundle from "./read-bundle";
 
 /**
- * Every app chat shows presents public-law reads (`catalog.test.ts` holds
+ * Every app chat shows presents public-law reads (`mcp-app-catalog.test.ts` holds
  * them to it), so the apps are served only where the public corpus is.
  */
 export const chatMcpAppsRoute = routes(
