@@ -1,11 +1,16 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { MARKETING_LOCALES } from "@stll/playwright-tools/marketing-locales";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { getPropertyExecutionPlan } from "@/api/lib/workflow/get-execution-plan";
+
 import { SEED_CONTENT_BY_LOCALE } from "./seed-content/locales";
 import {
+  buildAllPropertySeeds,
+  buildPropertySeedDependencies,
   createMockDocx,
   createSeedEmail,
   seedRequiredCaseLaw,
@@ -142,4 +147,22 @@ test("a case-law backfill failure rejects the dev seed phase", async () => {
 
   expect(await rejectionOf(outcome)).toBe(unitFailure);
   expect(marketingStarted).toBe(false);
+});
+
+test("the workflow planner accepts every seeded column", () => {
+  const seeds = buildAllPropertySeeds();
+  const dependencies = buildPropertySeedDependencies(seeds);
+
+  const planned = getPropertyExecutionPlan({
+    properties: seeds.map(({ id, content, tool }) => ({
+      id,
+      content,
+      tool,
+      status: "stale",
+    })),
+    dependencies,
+  });
+
+  expect(Result.isOk(planned)).toBe(true);
+  expect(dependencies.length).toBeGreaterThan(0);
 });
