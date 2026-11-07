@@ -109,6 +109,7 @@
           "processGrant": true
         },
         "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
+        "attachments": [],
         "cacheDir": "C:\\data\\agent-package-cache",
         "model": "gpt-test",
         "instructions": "Answer briefly.",
@@ -146,6 +147,7 @@
           "processGrant": false
         },
         "workspaceDir": "/data/runs/0b6f5c8e",
+        "attachments": [],
         "cacheDir": "/data/agent-package-cache",
         "model": "gpt-test",
         "instructions": "",

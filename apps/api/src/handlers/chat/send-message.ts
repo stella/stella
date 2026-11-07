@@ -25,6 +25,7 @@ import {
 import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -148,6 +149,7 @@ import {
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { sourceScopesOfLatestUserMessage } from "@/api/handlers/chat/latest-source-scopes";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   resolveChatLocalRun,
   type ResolveChatLocalRunOptions,
@@ -175,7 +177,11 @@ import {
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
-import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
+import {
+  hydrateMessages,
+  localRunAttachmentsOf,
+  streamChat,
+} from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
@@ -268,6 +274,7 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -306,6 +313,7 @@ import {
 } from "@/api/lib/chat/thread-names";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
+import type { LocalRunAttachment } from "@/api/lib/desktop-runner/control";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
@@ -418,7 +426,7 @@ const usableWorkspaceIds = (
 ): AccessibleWorkspace["id"][] => {
   const ids: AccessibleWorkspace["id"][] = [];
   for (const workspace of workspaces) {
-    if (workspace.status !== "deleting") {
+    if (workspaceIsVisible(workspace.status)) {
       ids.push(workspace.id);
     }
   }
@@ -2373,6 +2381,17 @@ const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
   dependencies.resolveCurrentExecutionContext ??
   resolveCredentialMemberExecutionContext;
 
+/** A turn on the computer gets its files, unless a raw copy would defeat anonymization. */
+const turnCopiesFiles = (
+  localRun: LocalChatRun | undefined,
+  sendMode: ChatSendMode,
+) => localRun !== undefined && sendMode !== CHAT_SEND_MODE.anonymized;
+
+const localRunWithAttachments = (
+  localRun: LocalChatRun | undefined,
+  attachments: readonly LocalRunAttachment[],
+): LocalChatRun | undefined => localRun?.withAttachments(attachments);
+
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
 ) =>
@@ -3165,6 +3184,8 @@ export const createSendMessage = (
         };
         const chatContextResult = await prepareChatContext({
           caseLawDb: dependencies.caseLawDb,
+          copiesFilesToComputer: turnCopiesFiles(localRun, body.sendMode),
+          recordAuditEvent,
           featureAccessSnapshot,
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -3583,7 +3604,10 @@ export const createSendMessage = (
                   promptCachingEnabled,
                   runMode: turnRunModeOf(body),
                   sandboxRun,
-                  localRun,
+                  localRun: localRunWithAttachments(
+                    localRun,
+                    chatContext.localRunAttachments,
+                  ),
                   usageLane: turnLane.lane,
                   decisionPassageStamper: createTurnDecisionPassageStamper({
                     caseLawDb: dependencies.caseLawDb,
@@ -3804,6 +3828,8 @@ const turnRunModeOf = (
 
 type PrepareChatContextProps = {
   caseLawDb?: SendMessageDependencies["caseLawDb"];
+  copiesFilesToComputer: boolean;
+  recordAuditEvent: AuditRecorder;
   featureAccessSnapshot: FeatureAccessSnapshot;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft: IncomingActiveDraft | undefined;
@@ -3835,6 +3861,8 @@ type PrepareChatContextProps = {
 type PrepareChatContextResult = Result<
   {
     hydratedMessages: ChatMessage[];
+    /** The files a turn on the member's computer copies into its folder. */
+    localRunAttachments: readonly LocalRunAttachment[];
     promptCacheKey: string;
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
@@ -3861,8 +3889,51 @@ type PrepareChatContextResult = Result<
   HandlerError<403 | 404 | 422 | 500> | SafeDbError
 >;
 
+/**
+ * The files this turn copies to the member's computer, each recorded as their
+ * download. The run's links are signed later, when its command is sent.
+ */
+const auditedLocalRunAttachments = async ({
+  messages,
+  recordAuditEvent,
+  safeDb,
+  userId,
+  workspaceId,
+}: {
+  messages: ChatMessage[];
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+}) =>
+  await Result.gen(async function* () {
+    const attachments = yield* Result.await(
+      localRunAttachmentsOf({ messages, safeDb, userId }),
+    );
+    if (attachments.length > 0) {
+      yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await recordAuditEvent(
+              tx,
+              attachments.map(({ fileId, fileName }) => ({
+                action: CONTENT_DELIVERY_AUDIT_ACTION.attachment,
+                resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+                resourceId: fileId,
+                workspaceId,
+                metadata: { fileName, destination: "local_run" },
+              })),
+            ),
+        ),
+      );
+    }
+    return Result.ok(attachments);
+  });
+
 const prepareChatContext = async ({
   caseLawDb,
+  copiesFilesToComputer,
+  recordAuditEvent,
   featureAccessSnapshot,
   activeDecision,
   activeDraft,
@@ -3931,6 +4002,7 @@ const prepareChatContext = async ({
         workspaceId,
       }),
       hydrateMessages({
+        copiesFilesToComputer,
         messages: messageWindow,
         safeDb,
         sendMode,
@@ -3947,6 +4019,17 @@ const prepareChatContext = async ({
             })
           : error,
       );
+    const localRunAttachments = copiesFilesToComputer
+      ? yield* Result.await(
+          auditedLocalRunAttachments({
+            messages: messageWindow,
+            recordAuditEvent,
+            safeDb,
+            userId,
+            workspaceId,
+          }),
+        )
+      : [];
 
     const messagesWithActiveFileFallback = yield* Result.await(
       attachActiveFileFallbackWhenExtractionIsEmpty({
@@ -3981,6 +4064,7 @@ const prepareChatContext = async ({
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,
+      localRunAttachments,
     });
   });
 

@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 import { and, eq, not } from "drizzle-orm";
 
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { rootDb } from "@/api/db/root";
@@ -215,7 +219,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
         if (!authorized) {
           return { status: "not-authorized" } as const;
         }
-        if (workspace.status !== "active") {
+        if (!workspaceAcceptsWrites(workspace.status)) {
           return { status: "workspace-unavailable" } as const;
         }
 
@@ -236,7 +240,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
         // audit: skip; internal write fence for the DELETE event below.
         const fenced = await tx
           .update(workspaces)
-          .set({ status: "deleting" })
+          .set({ status: WORKSPACE_STATUS.deleting })
           .where(
             and(
               eq(workspaces.id, workspaceId),

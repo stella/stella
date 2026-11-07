@@ -1719,6 +1719,10 @@
       "secretAnswer": "Resposta oculta",
       "secretPlaceholder": "Sua resposta fica oculta"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# chat aguarda você} other {# chats aguardam você} many {# chats aguardam você}}",
+      "working": "{count, plural, one {# chat em andamento} other {# chats em andamento} many {# chats em andamento}}"
+    },
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# mais} many {+# mais} other {+# mais}}",
@@ -3984,6 +3988,7 @@
     "reopenTab": "Reabrir {name}",
     "resizePane": "Redimensionar painel",
     "review": {
+      "acceptChange": "Aceitar alteração",
       "actionNeeded": "Requer ação",
       "addComment": "Adicionar como comentário",
       "addNote": "Adicionar comentário para a contraparte",
@@ -4021,7 +4026,8 @@
       "decisionFailed": "Não foi possível registrar sua decisão",
       "decisions": {
         "accepted": "Aceito",
-        "dismissed": "Descartado"
+        "dismissed": "Descartado",
+        "reviewed": "Revisado"
       },
       "description": "Escolha um playbook elaborado, documentos de referência ou ambos.",
       "documentChanged": "Este documento mudou após esta revisão.",
@@ -4047,6 +4053,7 @@
       "history": {
         "backToLatest": "Voltar à versão mais recente",
         "decided": "{decided, number} de {total, number} decidido",
+        "fromTable": "Pela tabela",
         "references": "{count, plural, one {# referência} other {# referências} many {# referências}}"
       },
       "impact": {
@@ -4070,6 +4077,7 @@
         "label": "Constatações ao lado das cláusulas a que se referem",
         "unanchored": "Não vinculado a nenhuma cláusula"
       },
+      "markAsReviewed": "Marcar como revisado",
       "newTopic": "Novo tópico de revisão",
       "noChangeNeeded": "Nenhuma alteração necessária",
       "noEditor": "Abra o documento para aceitar as alterações",
@@ -4154,6 +4162,11 @@
         "noSide": "nenhuma parte",
         "proposedFromReferences": "posições propostas a partir das referências",
         "unnamedReferences": "{count, plural, one {# documento de referência} other {# documentos de referência} many {# documentos de referência}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Uma revisão completa desta versão</link>, com links e alterações propostas, está disponível no histórico de revisões.",
+        "origin": "<strong>Iniciada pela tabela.</strong> Estas constatações foram avaliadas com base nos valores extraídos para a tabela, por isso não têm links para o documento nem incluem alterações propostas.",
+        "runAnotherReview": "Para obter links e alterações propostas, use o botão <action>{label}</action>."
       },
       "targetAsReference": "O documento revisado não pode ser sua própria referência.",
       "targetColumn": "Este documento",

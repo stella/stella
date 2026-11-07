@@ -1719,6 +1719,10 @@
       "secretAnswer": "Odpověď je skrytá",
       "secretPlaceholder": "Vaše odpověď zůstane skrytá"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {Na vás čeká # chat} few {Na vás čekají # chaty} many {Na vás čeká # chatu} other {Na vás čeká # chatů}}",
+      "working": "{count, plural, one {Pracuje # chat} few {Pracují # chaty} many {Pracuje # chatu} other {Pracuje # chatů}}"
+    },
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# další} few {+# další} many {+# další} other {+# dalších}}",
@@ -3984,6 +3988,7 @@
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
+      "acceptChange": "Přijmout změnu",
       "actionNeeded": "K řešení",
       "addComment": "Přidat jako komentář",
       "addNote": "Přidat komentář pro protistranu",
@@ -4021,7 +4026,8 @@
       "decisionFailed": "Rozhodnutí se nepodařilo uložit",
       "decisions": {
         "accepted": "Přijato",
-        "dismissed": "Zamítnuto"
+        "dismissed": "Zamítnuto",
+        "reviewed": "Zkontrolováno"
       },
       "description": "Vyberte schválený playbook, referenční dokumenty nebo obojí.",
       "documentChanged": "Dokument se od této kontroly změnil.",
@@ -4047,6 +4053,7 @@
       "history": {
         "backToLatest": "Zpět na poslední",
         "decided": "rozhodnuto {decided, number} z {total, number}",
+        "fromTable": "Z tabulky",
         "references": "{count, plural, one {# reference} few {# reference} other {# referencí} many {# reference}}"
       },
       "impact": {
@@ -4070,6 +4077,7 @@
         "label": "Zjištění vedle ustanovení, kterých se týkají",
         "unanchored": "Bez vazby na ustanovení"
       },
+      "markAsReviewed": "Označit jako zkontrolované",
       "newTopic": "Nové téma kontroly",
       "noChangeNeeded": "Není třeba měnit",
       "noEditor": "Změny přijmete po otevření dokumentu",
@@ -4154,6 +4162,11 @@
         "noSide": "bez strany",
         "proposedFromReferences": "pozice navržené z referencí",
         "unnamedReferences": "{count, plural, one {# referenční dokument} few {# referenční dokumenty} other {# referenčních dokumentů} many {# referenčního dokumentu}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Úplná kontrola této verze</link> s odkazy a navrhovanými změnami je k dispozici v historii kontrol.",
+        "origin": "<strong>Spuštěno z tabulky.</strong> Tato zjištění byla vyhodnocena podle hodnot vytěžených pro tabulku, proto neodkazují na dokument a neobsahují navrhované změny.",
+        "runAnotherReview": "Odkazy a navrhované změny získáte přes tlačítko <action>{label}</action>."
       },
       "targetAsReference": "Kontrolovaný dokument nemůže být vlastní referencí.",
       "targetColumn": "Tento dokument",

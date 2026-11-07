@@ -1719,6 +1719,10 @@
       "secretAnswer": "الإجابة مخفية",
       "secretPlaceholder": "تبقى إجابتك مخفية"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, zero {لا توجد دردشات بانتظارك} one {دردشة واحدة بانتظارك} two {دردشتان بانتظارك} few {# دردشات بانتظارك} many {# دردشة بانتظارك} other {# دردشة بانتظارك}}",
+      "working": "{count, plural, zero {لا توجد دردشات قيد العمل} one {دردشة واحدة قيد العمل} two {دردشتان قيد العمل} few {# دردشات قيد العمل} many {# دردشة قيد العمل} other {# دردشة قيد العمل}}"
+    },
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mcpReconnect": {
       "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",
@@ -3984,6 +3988,7 @@
     "reopenTab": "إعادة فتح {name}",
     "resizePane": "تغيير حجم اللوحة",
     "review": {
+      "acceptChange": "قبول التغيير",
       "actionNeeded": "تحتاج إلى إجراء",
       "addComment": "إضافة كتعليق",
       "addNote": "إضافة تعليق للطرف المقابل",
@@ -4021,7 +4026,8 @@
       "decisionFailed": "تعذر تسجيل قرارك",
       "decisions": {
         "accepted": "مقبول",
-        "dismissed": "مستبعد"
+        "dismissed": "مستبعد",
+        "reviewed": "تمت المراجعة"
       },
       "description": "اختر دليل مراجعة مُعدًا أو مستندات مرجعية أو كليهما.",
       "documentChanged": "تغيّر هذا المستند بعد هذه المراجعة.",
@@ -4047,6 +4053,7 @@
       "history": {
         "backToLatest": "العودة إلى الأحدث",
         "decided": "{decided, number} من {total, number} مقرَّر",
+        "fromTable": "من الجدول",
         "references": "{count, plural, zero {لا مراجع} one {مرجع واحد} two {مرجعان} few {# مراجع} many {# مرجعًا} other {# مرجع}}"
       },
       "impact": {
@@ -4070,6 +4077,7 @@
         "label": "النتائج إلى جانب البنود التي تتعلق بها",
         "unanchored": "غير مرتبط ببند"
       },
+      "markAsReviewed": "وضع علامة «تمت المراجعة»",
       "newTopic": "موضوع مراجعة جديد",
       "noChangeNeeded": "لا حاجة إلى تغيير",
       "noEditor": "افتح المستند لقبول التغييرات",
@@ -4154,6 +4162,11 @@
         "noSide": "بلا طرف",
         "proposedFromReferences": "مواقف مقترحة من المراجع",
         "unnamedReferences": "{count, plural, zero {لا مستندات مرجعية} one {مستند مرجعي واحد} two {مستندان مرجعيان} few {# مستندات مرجعية} many {# مستندًا مرجعيًا} other {# مستند مرجعي}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>تتوفر مراجعة كاملة لهذا الإصدار</link>، مع روابط وتغييرات مقترحة، في سجل المراجعات.",
+        "origin": "<strong>من تشغيل عبر الجدول.</strong> قُيّمت هذه النتائج استنادًا إلى القيم المستخرجة للجدول، لذا لا ترتبط بالمستند ولا تتضمن تغييرات مقترحة.",
+        "runAnotherReview": "للحصول على الروابط والتغييرات المقترحة، استخدم زر <action>{label}</action>."
       },
       "targetAsReference": "لا يمكن أن يكون المستند قيد المراجعة مرجعًا لنفسه.",
       "targetColumn": "هذا المستند",

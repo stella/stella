@@ -154,7 +154,7 @@ const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   ),
   nodePath.join(
     DRIZZLE_DIR,
-    "20261106140000_corpus_projection_revision_settled",
+    "20261107183000_corpus_projection_revision_settled",
     "migration.sql",
   ),
 ] as const;

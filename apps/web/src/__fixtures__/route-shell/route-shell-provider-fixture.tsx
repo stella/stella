@@ -425,6 +425,15 @@ const installFixtureNetwork = () => {
           unavailableHere: [],
         } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
       }
+      if (pathname === "/v1/chat/runs/active") {
+        return Response.json({
+          items: [],
+          limit: 100,
+          nextCursor: null,
+        } satisfies NonNullable<
+          Awaited<ReturnType<typeof api.chat.runs.active.get>>["data"]
+        >);
+      }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
           global: [],

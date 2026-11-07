@@ -31,6 +31,10 @@ import type {
   DecisionDocumentAst,
   Inline,
 } from "@stll/legal-ast/document-ast";
+import {
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
@@ -247,11 +251,9 @@ export const parseRegionalDecision = (
       plainText: "Poučení:",
     });
 
-    // The synthesized heading stands for a label the court printed itself.
-    for (const { inlines, plainText } of information.filter(
-      ({ plainText: text }, index) =>
-        index > 0 || !INSTRUCTION_LABEL_RE.test(text),
-    )) {
+    // The synthesized heading stands for a label the court printed itself,
+    // whether alone in its paragraph or opening the first instruction.
+    for (const { inlines, plainText } of withoutInstructionLabel(information)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -355,8 +357,31 @@ const withoutPageFurniture = (
   return kept;
 };
 
-/** The court's own `Poučení:` label, alone in its paragraph. */
-const INSTRUCTION_LABEL_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í\s*:?$/iu;
+/**
+ * The court's own `Poučení:` label opening the first instruction paragraph:
+ * alone (the colon optional) or followed by the instruction itself.
+ */
+const INSTRUCTION_LABEL_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í\s*(?::\s*|$)/iu;
+
+/** Drop the court's label from the instructions the heading already names. */
+const withoutInstructionLabel = (
+  information: readonly { inlines: Inline[]; plainText: string }[],
+) =>
+  information.flatMap((paragraph, index) => {
+    if (index > 0) {
+      return [paragraph];
+    }
+    const { match, line } = stripInlineLinePrefix(
+      normalizeInlineLine(paragraph.inlines),
+      INSTRUCTION_LABEL_RE,
+    );
+    if (match === null) {
+      return [paragraph];
+    }
+    return line.plainText.length > 0
+      ? [{ inlines: line.inlines, plainText: line.plainText }]
+      : [];
+  });
 
 const OPENING_QUOTE = "„";
 const SPACE_RE = /^[ \t ]$/u;

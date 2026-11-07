@@ -5,12 +5,12 @@ const NEEDS_WORK_SQL =
 
 export default {
   id: "indexes-corpus-index-projection-states-append-route-idx",
-  revision: 1415,
+  revision: 1416,
   type: "indexes",
   values: [
     {
       name: "corpus_index_projection_states_append_route_idx",
-      introducedBy: "20261106140000_corpus_projection_revision_settled",
+      introducedBy: "20261107183000_corpus_projection_revision_settled",
       tableName: "corpus_index_projection_states",
       isUnique: false,
       createSql: `CREATE INDEX CONCURRENTLY "corpus_index_projection_states_append_route_idx" ON public.corpus_index_projection_states (family, generation, desired_index_id, COALESCE(retry_not_before, updated_at), entity_id) WHERE ((${NEEDS_WORK_SQL}) AND ((applied_revision IS NULL) OR applied_revision_settled))`,

@@ -1719,6 +1719,10 @@
       "secretAnswer": "Antwort verborgen",
       "secretPlaceholder": "Ihre Antwort bleibt verborgen"
     },
+    "matterRuns": {
+      "needsYou": "{count, plural, one {# Chat wartet auf Sie} other {# Chats warten auf Sie}}",
+      "working": "{count, plural, one {# Chat arbeitet} other {# Chats arbeiten}}"
+    },
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mcpReconnect": {
       "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
@@ -3984,6 +3988,7 @@
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
     "review": {
+      "acceptChange": "Änderung annehmen",
       "actionNeeded": "Handlungsbedarf",
       "addComment": "Als Kommentar hinzufügen",
       "addNote": "Kommentar für die Gegenpartei hinzufügen",
@@ -4021,7 +4026,8 @@
       "decisionFailed": "Entscheidung konnte nicht gespeichert werden",
       "decisions": {
         "accepted": "Angenommen",
-        "dismissed": "Verworfen"
+        "dismissed": "Verworfen",
+        "reviewed": "Geprüft"
       },
       "description": "Wählen Sie ein erstelltes Playbook, Referenzdokumente oder beides.",
       "documentChanged": "Dieses Dokument hat sich seit dieser Prüfung geändert.",
@@ -4047,6 +4053,7 @@
       "history": {
         "backToLatest": "Zurück zur neuesten Version",
         "decided": "{decided, number} von {total, number} entschieden",
+        "fromTable": "Aus der Tabelle",
         "references": "{count, plural, one {# Referenz} other {# Referenzen}}"
       },
       "impact": {
@@ -4070,6 +4077,7 @@
         "label": "Ergebnisse neben den betreffenden Klauseln",
         "unanchored": "Nicht an eine Klausel gebunden"
       },
+      "markAsReviewed": "Als geprüft markieren",
       "newTopic": "Neues Prüfthema",
       "noChangeNeeded": "Keine Änderung nötig",
       "noEditor": "Öffnen Sie das Dokument, um Änderungen anzunehmen",
@@ -4154,6 +4162,11 @@
         "noSide": "keine Partei",
         "proposedFromReferences": "aus den Referenzen vorgeschlagene Standpunkte",
         "unnamedReferences": "{count, plural, one {# Referenzdokument} other {# Referenzdokumente}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Eine vollständige Prüfung dieser Version</link> mit Verweisen und vorgeschlagenen Änderungen finden Sie im Prüfverlauf.",
+        "origin": "<strong>Aus der Tabelle gestartet.</strong> Diese Ergebnisse wurden anhand der für die Tabelle extrahierten Werte bewertet. Sie verweisen daher nicht auf das Dokument und enthalten keine vorgeschlagenen Änderungen.",
+        "runAnotherReview": "Verweise und vorgeschlagene Änderungen erhalten Sie über die Schaltfläche <action>{label}</action>."
       },
       "targetAsReference": "Das geprüfte Dokument kann nicht seine eigene Referenz sein.",
       "targetColumn": "Dieses Dokument",

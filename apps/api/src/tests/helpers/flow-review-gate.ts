@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 
+import { createTestClock } from "@stll/test-kit";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -26,6 +28,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+
+const stateClock = createTestClock();
 
 type Action = "approved" | "rejected" | "cancel";
 
@@ -111,10 +115,13 @@ export const flowReviewGateFixture = async (
         createdByUserId: userId,
       });
     }
+    const startedAt =
+      initialRunStatus === "pending" ? null : new Date(stateClock.now());
     await db.insert(flowRuns).values({
       id: runId,
       workspaceId,
       status: initialRunStatus,
+      startedAt,
       definitionSnapshot: { name: "Review flow", steps },
       triggerSource: { type: "manual", userId },
     });
@@ -126,7 +133,9 @@ export const flowReviewGateFixture = async (
         index,
         kind: step.kind,
         reviewTaskEntityId: index === 0 ? taskEntityId : null,
-        status: index === 0 ? initialRunStatus : ("pending" as const),
+        ...(index === 0
+          ? { status: initialRunStatus, startedAt }
+          : { status: "pending" as const }),
       })),
     );
   } catch (error) {

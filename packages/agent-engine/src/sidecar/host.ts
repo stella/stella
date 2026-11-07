@@ -37,6 +37,7 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { harnessTranscriptSchema } from "../harness/transcript-handoff";
+import { copyAttachments } from "./attachments";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
 import type {
   SidecarHarnessLaunchSettings,
@@ -114,11 +115,24 @@ const launchEnvironment = (
   };
 };
 
+/**
+ * Why a run was asked to stop, if it was. A cancel outranks an interrupt, so
+ * its `run.finished` reports `cancelled`; the host stopping cancels its runs.
+ */
+const RUN_STOP = {
+  none: "none",
+  interrupt: "interrupt",
+  cancel: "cancel",
+} as const;
+
+type RunStop = (typeof RUN_STOP)[keyof typeof RUN_STOP];
+
 type HeldRun = {
   turn: HarnessTurn | null;
-  cancelled: boolean;
-  /** Set by `run.interrupt` or `run.cancel` before the turn started. */
-  stopRequested: boolean;
+  /** Set before the turn starts too: a turn that opens later stops at once. */
+  stop: RunStop;
+  /** Ends the attachment copy that comes before the turn. */
+  readonly stopCopying: AbortController;
   /**
    * Runner request id (a UUID) to the harness's own request id, for both
    * approvals and blocking questions.
@@ -263,6 +277,13 @@ const probeOutcome = ({
 };
 
 /** The event stream for a run that ends before its harness starts. */
+const stoppedBeforeStart = (): AsyncIterable<HarnessEvent> => {
+  const queue = createEventQueue<HarnessEvent>();
+  queue.push({ type: "turn.interrupted" });
+  queue.close();
+  return queue.items;
+};
+
 const failedBeforeStart = (
   failure: HarnessFailure,
 ): AsyncIterable<HarnessEvent> => {
@@ -355,7 +376,7 @@ export class SidecarHost {
         return;
       case "run.interrupt":
         this.withRun(message, (run) => {
-          this.stop(run);
+          this.stop(run, RUN_STOP.interrupt);
         });
         return;
       case "run.cancel":
@@ -387,8 +408,7 @@ export class SidecarHost {
   /** Cancel a run; its `run.finished` reports `cancelled`. */
   cancel(runId: string) {
     this.withRun({ type: "run.cancel", runId }, (run) => {
-      run.cancelled = true;
-      this.stop(run);
+      this.stop(run, RUN_STOP.cancel);
     });
   }
 
@@ -409,8 +429,7 @@ export class SidecarHost {
       refuse(false);
     }
     for (const run of this.runs.values()) {
-      run.cancelled = true;
-      this.stop(run);
+      this.stop(run, RUN_STOP.cancel);
     }
     await Promise.allSettled([...this.finished]);
     await this.config?.proxy.stop();
@@ -536,8 +555,9 @@ export class SidecarHost {
     }
     const run: HeldRun = {
       turn: null,
-      cancelled: false,
-      stopRequested: this.stopping,
+      // A run that starts while the host stops is cancelled like the held ones.
+      stop: this.stopping ? RUN_STOP.cancel : RUN_STOP.none,
+      stopCopying: new AbortController(),
       requests: new Map(),
     };
     this.runs.set(message.runId, run);
@@ -549,8 +569,12 @@ export class SidecarHost {
     );
   }
 
-  private stop(run: HeldRun) {
-    run.stopRequested = true;
+  private stop(run: HeldRun, reason: RunStop) {
+    run.stop =
+      run.stop === RUN_STOP.cancel || reason === RUN_STOP.cancel
+        ? RUN_STOP.cancel
+        : RUN_STOP.interrupt;
+    run.stopCopying.abort();
     if (run.turn !== null) {
       this.detached(run.turn.interrupt(), "sidecar.interrupt");
     }
@@ -586,6 +610,7 @@ export class SidecarHost {
   private async open(
     message: SidecarRunStart,
     config: Config,
+    run: HeldRun,
   ): Promise<Result<HarnessTurn, HarnessFailure>> {
     // The wire checks each message's role only, as the runner socket does;
     // the turn reads more, so the rest is checked before anything starts.
@@ -623,6 +648,29 @@ export class SidecarHost {
         signal: null,
       });
     }
+    const copied = await copyAttachments(
+      message.attachments,
+      message.workspaceDir,
+      { signal: run.stopCopying.signal },
+    );
+    if (run.stop !== RUN_STOP.none) {
+      // Stopped during the copy: no harness starts for a run nobody wants now.
+      return Result.err({
+        type: "harness_exited",
+        message: "The run was stopped before it started.",
+        exitCode: null,
+        signal: null,
+      });
+    }
+    if (Result.isError(copied)) {
+      this.options.log(`a run's attachment failed: ${copied.error.message}`);
+      return Result.err({
+        type: "harness_exited",
+        message: "An attached file could not be copied to this computer.",
+        exitCode: null,
+        signal: null,
+      });
+    }
     const started = await adapter.value.startTurn({
       runId: message.runId,
       threadId: message.threadId,
@@ -651,7 +699,7 @@ export class SidecarHost {
     config: Config,
     run: HeldRun,
   ) {
-    const opened = await this.open(message, config);
+    const opened = await this.open(message, config, run);
     const outcome: { value: RunOutcome; sessionId: string | null } = {
       value: "failed",
       sessionId: null,
@@ -671,7 +719,7 @@ export class SidecarHost {
       this.options.log(
         `a run's ${runMessage.type} message could not be written; stopping the run`,
       );
-      this.stop(run);
+      this.stop(run, RUN_STOP.interrupt);
     };
     const relabel = (nativeId: string) => {
       const requestId = crypto.randomUUID();
@@ -731,7 +779,8 @@ export class SidecarHost {
             yield event;
             break;
           case "turn.interrupted":
-            outcome.value = run.cancelled ? "cancelled" : "interrupted";
+            outcome.value =
+              run.stop === RUN_STOP.cancel ? "cancelled" : "interrupted";
             yield event;
             break;
           case "turn.failed":
@@ -756,10 +805,12 @@ export class SidecarHost {
     let events: AsyncIterable<HarnessEvent>;
     if (Result.isOk(opened)) {
       run.turn = opened.value;
-      if (run.stopRequested) {
+      if (run.stop !== RUN_STOP.none) {
         this.detached(opened.value.interrupt(), "sidecar.interrupt");
       }
       events = opened.value.events;
+    } else if (run.stop !== RUN_STOP.none) {
+      events = stoppedBeforeStart();
     } else {
       events = failedBeforeStart(opened.error);
     }

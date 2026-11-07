@@ -1,6 +1,6 @@
 /**
  * Online repair behind migration
- * 20261106140000_corpus_projection_revision_settled.
+ * 20261107183000_corpus_projection_revision_settled.
  *
  * The migration's triggers keep `applied_revision_settled` equal to the applied
  * revision's status from then on, but a revision that settled earlier still
@@ -71,7 +71,7 @@ const READ_ANY_UNMARKED_SQL = `
 export const createCorpusProjectionAppliedRevisionSettledRepair = (
   options: CorpusProjectionRevisionWalkRuntime = {},
 ): MigrationOwnedOnlineRepair => ({
-  introducedBy: "20261106140000_corpus_projection_revision_settled",
+  introducedBy: "20261107183000_corpus_projection_revision_settled",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
     const checkpoint = (

@@ -213,6 +213,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/hosted-usage-provider/config.ts",
     "apps/api/src/lib/hosted-usage-provider/external-account-ref.ts",
     "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts",
+    "apps/api/src/lib/hosted-usage-provider/webhook-result-transitions.ts",
     "apps/api/src/lib/infosoud/agenda-import.ts",
     "apps/api/src/lib/infosoud/client.ts",
     "apps/api/src/lib/infosoud/result.ts",
@@ -382,6 +383,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/workspaces/authorized-workspace-ids.ts",
     "apps/api/src/lib/workspaces/create-workspace-row.ts",
     "apps/api/src/lib/workspaces/matter-name.ts",
+    "apps/api/src/lib/workspaces/visible-workspace-sql.ts",
     "apps/api/src/tests/setup-env.ts",
     "apps/api/src/tests/test-database-environment.ts",
     "packages/agent-input/src/*",
@@ -1354,6 +1356,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/db/auth-schema.ts",
       "apps/api/src/db/agent-auth-schema.ts",
       "apps/api/scripts/generate-status-tables.ts",
+      "apps/api/src/lib/db/enum-column-roles.ts",
     ],
     checkInputs: [
       "bunfig.toml",

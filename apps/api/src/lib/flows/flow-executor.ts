@@ -269,15 +269,20 @@ export const executeFlowStep = async (
         }),
       );
     }
+    const startedAt = new Date();
     await tx
       .update(flowRunSteps)
-      .set({ status: "running", startedAt: new Date() })
+      .set({ status: "running", startedAt })
       .where(
         and(eq(flowRunSteps.runId, runId), eq(flowRunSteps.index, stepIndex)),
       );
     await tx
       .update(flowRuns)
-      .set({ status: "running" })
+      .set({
+        status: "running",
+        // A run starts when it leaves `pending`; later steps keep that time.
+        ...(current.run.status === "pending" ? { startedAt } : {}),
+      })
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });

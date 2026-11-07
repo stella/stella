@@ -854,9 +854,19 @@ type ExecuteCheckCommandsOptions = {
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
+  /** Run every command after a failure, to report them all in one pass. */
+  keepGoing?: boolean;
   budgetDeadlineMs?: number;
   now?: () => number;
 };
+
+/**
+ * A pull request learns every finding in one run. A merge group keeps stopping
+ * at the first failure: it cannot merge anyway, and its runners are wanted by
+ * the groups behind it.
+ */
+const keepsGoingByDefault = () =>
+  process.env["GITHUB_EVENT_NAME"] === "pull_request";
 
 export const executeCheckCommands = async ({
   commands,
@@ -865,6 +875,7 @@ export const executeCheckCommands = async ({
     process.stdout.write(output);
   },
   dryRun = false,
+  keepGoing = keepsGoingByDefault(),
   now = Date.now,
   budgetDeadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
@@ -887,7 +898,9 @@ export const executeCheckCommands = async ({
       : runner(command, timeoutMs));
     if (result.isErr()) {
       failures.push(result.error);
-      break;
+      if (!keepGoing) {
+        break;
+      }
     }
   }
   if (failures.length === 0) {
