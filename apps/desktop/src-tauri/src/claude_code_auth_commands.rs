@@ -146,7 +146,10 @@ pub fn manage(app: &AppHandle) {
         opener.opener().open_url(url, None::<&str>).is_ok()
       }),
       changed: Box::new(move || {
-        let _ = changed.emit(CHANGED_EVENT, ());
+        crate::logging::best_effort(
+          changed.emit(CHANGED_EVENT, ()),
+          "Claude Code connection change was not announced",
+        );
       }),
     },
   );
@@ -154,7 +157,10 @@ pub fn manage(app: &AppHandle) {
   let installed = app.clone();
   tauri::async_runtime::spawn(async move {
     while installs.changed().await.is_ok() {
-      let _ = installed.emit(CHANGED_EVENT, ());
+      crate::logging::best_effort(
+        installed.emit(CHANGED_EVENT, ()),
+        "Claude Code connection change was not announced",
+      );
     }
   });
 }
@@ -165,7 +171,10 @@ pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
   if !enabled && let Some(auth) = app.try_state::<ClaudeCodeAuth>() {
     auth.cancel();
   }
-  let _ = app.emit(CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "Claude Code connection change was not announced",
+  );
 }
 
 #[cfg(test)]
