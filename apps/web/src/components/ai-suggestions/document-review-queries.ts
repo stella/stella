@@ -4,7 +4,9 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { ReviewFlag } from "@stll/api-contract";
 
 import { documentReviewRunPollInterval } from "@/components/ai-suggestions/document-review-run.logic";
+import { refetchDocxSuggestionsList } from "@/components/ai-suggestions/docx-suggestion-cache";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -232,6 +234,43 @@ export const documentReviewRunDetailSeeds = (
   ];
 };
 
+type RefreshSuggestionsOnRunCompletionArgs = {
+  client: QueryClient;
+  workspaceId: string;
+  read: DocumentReviewRunDetail;
+};
+
+/**
+ * A run's fixes become pending suggestions in the transaction that marks it
+ * completed, so a list read while the run was active cannot hold them. Call
+ * before the read lands in the cache: only a run this client last saw unfinished
+ * refreshes the list, so reopening a finished review costs no extra request.
+ */
+const refreshSuggestionsOnRunCompletion = ({
+  client,
+  workspaceId,
+  read: { run },
+}: RefreshSuggestionsOnRunCompletionArgs) => {
+  const cached = client.getQueryData(
+    documentReviewRunOptions({ workspaceId, runId: run.id }).queryKey,
+  );
+  if (
+    cached === undefined ||
+    cached.run.status === "completed" ||
+    run.status !== "completed"
+  ) {
+    return;
+  }
+  detached(
+    refetchDocxSuggestionsList({
+      queryClient: client,
+      workspaceId,
+      entityId: run.entityId,
+    }),
+    "document-review-queries.refresh-suggestions-on-completion",
+  );
+};
+
 export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
   queryOptions({
     queryKey: documentReviewRunKeys.history(target),
@@ -248,6 +287,11 @@ export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
         target.workspaceId,
         page,
       )) {
+        refreshSuggestionsOnRunCompletion({
+          client,
+          workspaceId: target.workspaceId,
+          read: detail,
+        });
         client.setQueryData(options.queryKey, detail);
       }
       return page;
@@ -364,7 +408,15 @@ export type DecidedReviewFinding = Awaited<
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
     queryKey: documentReviewRunKeys.detail(ref),
-    queryFn: async ({ signal }) => await fetchDocumentReviewRun(ref, signal),
+    queryFn: async ({ client, signal }) => {
+      const detail = await fetchDocumentReviewRun(ref, signal);
+      refreshSuggestionsOnRunCompletion({
+        client,
+        workspaceId: ref.workspaceId,
+        read: detail,
+      });
+      return detail;
+    },
     staleTime: DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS,
     // Progress and findings arrive while the worker executes, and this read
     // answers with both — so the poll that advances the progress line is the

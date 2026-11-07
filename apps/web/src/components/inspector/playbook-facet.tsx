@@ -4484,8 +4484,8 @@ const FindingResolution = ({
       />
     );
   }
-  // The run staged a redline for this finding, but the document has not been
-  // opened in this session yet, so the suggestion it lives on is not loaded.
+  // The run staged a redline for this finding, but the suggestion it lives on
+  // is not loaded: the document's editor is not open, or not ready to build it.
   // Deciding here would answer the finding without touching the change it
   // stands for; the reviewer opens the document and resolves it there.
   return (

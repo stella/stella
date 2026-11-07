@@ -1,7 +1,11 @@
-import { QueryClient } from "@tanstack/react-query";
-import { afterEach, expect, mock, test } from "bun:test";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+
+import { waitFor } from "@stll/test-kit";
 
 import { APIError } from "@/lib/errors/api";
+import { toSafeId } from "@/lib/safe-id";
+import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 
 const originalFetch = globalThis.fetch;
 
@@ -148,3 +152,155 @@ test("the launcher reuses a positive cached read and still detects after not-det
   });
   queryClient.clear();
 });
+
+const reviewedDocument = {
+  workspaceId: "matter",
+  entityId: "reviewed-doc",
+  fileFieldId: "file",
+};
+const REVIEW_RUN_ID = "run-1";
+
+const reviewRunDetail = (status: string) => ({
+  run: {
+    id: REVIEW_RUN_ID,
+    status,
+    entityId: reviewedDocument.entityId,
+  },
+  findings: [],
+});
+
+type ReviewedDocumentServer = {
+  runStatus: string;
+  suggestionIds: string[];
+  suggestionReads: () => number;
+};
+
+const serveReviewedDocument = (
+  runStatus: string,
+  suggestionIds: string[] = [],
+): ReviewedDocumentServer => {
+  let suggestionReads = 0;
+  const server: ReviewedDocumentServer = {
+    runStatus,
+    suggestionIds,
+    suggestionReads: () => suggestionReads,
+  };
+  const fetchMock = mock(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const { url } = new Request(input, init);
+      const { pathname } = new URL(url);
+      if (pathname.includes("docx-suggestions")) {
+        suggestionReads += 1;
+        return Response.json({
+          items: server.suggestionIds.map((id) => ({
+            id,
+            createdAt: "2026-11-07T16:04:24.000Z",
+          })),
+          nextCursor: null,
+        });
+      }
+      const detail = reviewRunDetail(server.runStatus);
+      return Response.json(
+        pathname.endsWith(`/runs/${REVIEW_RUN_ID}`)
+          ? detail
+          : { items: [], latest: detail, nextCursor: null },
+      );
+    },
+  );
+  globalThis.fetch = Object.assign(fetchMock, {
+    preconnect: originalFetch.preconnect,
+  });
+  return server;
+};
+
+const pollRun = async (queryClient: QueryClient) => {
+  const { documentReviewRunOptions } =
+    await import("./document-review-queries");
+  await queryClient.query({
+    ...documentReviewRunOptions({
+      workspaceId: reviewedDocument.workspaceId,
+      runId: REVIEW_RUN_ID,
+    }),
+    staleTime: 0,
+  });
+};
+
+const readRunHistory = async (queryClient: QueryClient) => {
+  const { documentReviewRunsOptions } =
+    await import("./document-review-queries");
+  await queryClient.query(documentReviewRunsOptions(reviewedDocument));
+};
+
+const observeSuggestions = (queryClient: QueryClient) => {
+  const observer = new QueryObserver(
+    queryClient,
+    docxSuggestionsOptions(reviewedDocument),
+  );
+  const unsubscribe = observer.subscribe(() => undefined);
+  const loadedIds = async (expectedLength: number) =>
+    await waitFor(
+      () => {
+        const { data, isFetching } = observer.getCurrentResult();
+        const ids = data?.items.map(({ id }) => id);
+        return !isFetching && ids?.length === expectedLength ? ids : undefined;
+      },
+      { description: `${expectedLength} loaded suggestions` },
+    );
+  return { loadedIds, unsubscribe };
+};
+
+const READ_RUN = { poll: pollRun, history: readRunHistory };
+
+describe.each(Object.entries(READ_RUN))(
+  "the pending suggestion list when a run is read by %s",
+  (_name, readRun) => {
+    test("loads the changes a run staged once the run completes", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      await pollRun(queryClient);
+      const suggestions = observeSuggestions(queryClient);
+      expect(await suggestions.loadedIds(0)).toEqual([]);
+
+      server.runStatus = "completed";
+      server.suggestionIds = ["staged-by-run"];
+      await readRun(queryClient);
+
+      expect(await suggestions.loadedIds(1)).toEqual([
+        toSafeId("staged-by-run"),
+      ]);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+
+    test("stays as it is for a run that was already completed", async () => {
+      const server = serveReviewedDocument("completed");
+      const queryClient = new QueryClient();
+      const suggestions = observeSuggestions(queryClient);
+      await suggestions.loadedIds(0);
+
+      await readRun(queryClient);
+      await readRun(queryClient);
+      await suggestions.loadedIds(0);
+
+      expect(server.suggestionReads()).toBe(1);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+
+    test("stays as it is for a run that failed", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      await pollRun(queryClient);
+      const suggestions = observeSuggestions(queryClient);
+      await suggestions.loadedIds(0);
+
+      server.runStatus = "failed";
+      await readRun(queryClient);
+      await suggestions.loadedIds(0);
+
+      expect(server.suggestionReads()).toBe(1);
+      suggestions.unsubscribe();
+      queryClient.clear();
+    });
+  },
+);
