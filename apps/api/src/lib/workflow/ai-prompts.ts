@@ -123,7 +123,7 @@ const createJustificationSchema = (
       if (filename.kind === "pdf-bates") {
         return `- ${filename.simplified} (PDF — cite Bates stamps from the page corners, e.g. ${filename.simplified}-0002)`;
       }
-      return `- ${filename.simplified} (DOCX — cite folio blockIds from the JSON list, e.g. seq-0010)`;
+      return `- ${filename.simplified} (DOCX — cite folio blockIds from its block list, e.g. seq-0010)`;
     })
     .join("\n");
   const hasCitableFiles = filenames.length > 0;
@@ -138,7 +138,7 @@ const createJustificationSchema = (
   if (hasDocx) {
     citationGuide.push(
       "DOCX files: each citation is a folio blockId taken verbatim " +
-        'from that file\'s JSON block list (e.g., "seq-0010").',
+        'from the first field of that file\'s block list (e.g., "seq-0010").',
     );
   }
   if (hasPdf && hasDocx) {
@@ -266,6 +266,39 @@ const truncateBlockText = (text: string): string => {
   return `${text.slice(0, DOCX_PROMPT_BLOCK_KEPT_CHARS)}${PROMPT_TRUNCATION_MARKER}`;
 };
 
+// Every character a reader could take for a line end or a field break, so that
+// one block is always one line whatever its text holds.
+const BLOCK_LINE_ESCAPES = new Map([
+  ["\\", "\\\\"],
+  ["\n", "\\n"],
+  ["\r", "\\r"],
+  ["\t", "\\t"],
+  ["\v", "\\u000b"],
+  ["\f", "\\u000c"],
+  ["\u0085", "\\u0085"],
+  ["\u2028", "\\u2028"],
+  ["\u2029", "\\u2029"],
+]);
+const BLOCK_LINE_UNSAFE = /[\\\n\r\t\v\f\u0085\u2028\u2029]/gu;
+
+const escapeBlockField = (field: string): string =>
+  field.replace(
+    BLOCK_LINE_UNSAFE,
+    (char) =>
+      BLOCK_LINE_ESCAPES.get(char) ?? panic("Unmapped block line character"),
+  );
+
+export const encodeDocxBlockLine = (block: FolioAIBlock): string =>
+  [
+    block.id,
+    block.kind,
+    block.displayLabel ?? "",
+    block.styleId ?? "",
+    truncateBlockText(block.text),
+  ]
+    .map(escapeBlockField)
+    .join("\t");
+
 export const buildDocxBlocksMessage = ({
   simplifiedName,
   blocks,
@@ -283,32 +316,16 @@ export const buildDocxBlocksMessage = ({
     ),
     maxChars: DOCX_PROMPT_BLOCK_TEXT_MAX_CHARS,
   });
-  const promptBlocks = blocks.map((block) => {
-    const out: {
-      blockId: string;
-      kind: typeof block.kind;
-      text: string;
-      label?: string;
-      styleId?: string;
-    } = {
-      blockId: block.id,
-      kind: block.kind,
-      text: truncateBlockText(block.text),
-    };
-    if (block.displayLabel) {
-      out.label = block.displayLabel;
-    }
-    if (block.styleId) {
-      out.styleId = block.styleId;
-    }
-    return out;
-  });
 
   return [
     `DOCX file ${simplifiedName} — folio block list. Cite blocks by ` +
-      `their "blockId" in any justification that references this file.`,
-    "```json",
-    JSON.stringify(promptBlocks),
+      "their blockId in any justification that references this file. Each " +
+      "line is one block, with tab-separated fields: blockId, kind, label, " +
+      "styleId, text. A field the block lacks is empty. In a field, \\n, \\r " +
+      "and \\t stand for a line break, a carriage return and a tab, \\\\ for a " +
+      "backslash, and \\uXXXX for that character.",
+    "```text",
+    ...blocks.map(encodeDocxBlockLine),
     "```",
   ].join("\n");
 };
