@@ -173,6 +173,7 @@ type ReviewedDocumentServer = {
   runStatus: string;
   suggestionIds: string[];
   suggestionReads: () => number;
+  historyReads: () => number;
 };
 
 const serveReviewedDocument = (
@@ -180,10 +181,12 @@ const serveReviewedDocument = (
   suggestionIds: string[] = [],
 ): ReviewedDocumentServer => {
   let suggestionReads = 0;
+  let historyReads = 0;
   const server: ReviewedDocumentServer = {
     runStatus,
     suggestionIds,
     suggestionReads: () => suggestionReads,
+    historyReads: () => historyReads,
   };
   const fetchMock = mock(
     async (input: string | URL | Request, init?: RequestInit) => {
@@ -200,11 +203,11 @@ const serveReviewedDocument = (
         });
       }
       const detail = reviewRunDetail(server.runStatus);
-      return Response.json(
-        pathname.endsWith(`/runs/${REVIEW_RUN_ID}`)
-          ? detail
-          : { items: [], latest: detail, nextCursor: null },
-      );
+      if (pathname.endsWith(`/runs/${REVIEW_RUN_ID}`)) {
+        return Response.json(detail);
+      }
+      historyReads += 1;
+      return Response.json({ items: [], latest: detail, nextCursor: null });
     },
   );
   globalThis.fetch = Object.assign(fetchMock, {
@@ -345,5 +348,71 @@ test("the pending suggestion list refreshes once when both reads report the same
   expect(await suggestions.loadedIds(1)).toEqual([toSafeId("staged-by-run")]);
   expect(server.suggestionReads()).toBe(2);
   suggestions.unsubscribe();
+  queryClient.clear();
+});
+
+const observeRunHistory = async (queryClient: QueryClient) => {
+  const { documentReviewRunsOptions } =
+    await import("./document-review-queries");
+  const observer = new QueryObserver(
+    queryClient,
+    documentReviewRunsOptions(reviewedDocument),
+  );
+  const unsubscribe = observer.subscribe(() => undefined);
+  const settled = async (description: string, latestStatus?: string) =>
+    await waitFor(
+      () => {
+        const { data, isFetching } = observer.getCurrentResult();
+        if (isFetching || data === undefined) {
+          return undefined;
+        }
+        return latestStatus === undefined ||
+          data.latest?.run.status === latestStatus
+          ? data
+          : undefined;
+      },
+      { description },
+    );
+  return { settled, unsubscribe };
+};
+
+describe.each(["completed", "failed", "cancelled"])(
+  "the open review history when its run ends as %s",
+  (endStatus) => {
+    test("reads the history again once", async () => {
+      const server = serveReviewedDocument("running");
+      const queryClient = new QueryClient();
+      const history = await observeRunHistory(queryClient);
+      await history.settled("the first history read");
+      await pollRun(queryClient);
+      expect(server.historyReads()).toBe(1);
+
+      server.runStatus = endStatus;
+      await pollRun(queryClient);
+      await history.settled("the refreshed history", endStatus);
+
+      expect(server.historyReads()).toBe(2);
+
+      await pollRun(queryClient);
+      await history.settled("the history after a later poll");
+      expect(server.historyReads()).toBe(2);
+      history.unsubscribe();
+      queryClient.clear();
+    });
+  },
+);
+
+test("the open review history stays as it is for a run read already ended", async () => {
+  const server = serveReviewedDocument("completed");
+  const queryClient = new QueryClient();
+  const history = await observeRunHistory(queryClient);
+  await history.settled("the first history read");
+
+  await pollRun(queryClient);
+  await pollRun(queryClient);
+  await history.settled("the history after the polls");
+
+  expect(server.historyReads()).toBe(1);
+  history.unsubscribe();
   queryClient.clear();
 });
