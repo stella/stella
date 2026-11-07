@@ -22,6 +22,24 @@ for (const context of ["staging/verified", "main/heavy", "main/pr-depth"]) {
   }
 }
 
+for (const [name, gate, now] of [
+  ["a missing", "missing", "missing"],
+  ["a pending", { state: "pending", creator: "User" }, "pending"],
+  ["a failed", { state: "failure", creator: "User" }, "failure"],
+  ["a bot's", { state: "success", creator: "Bot" }, "not-a-person"],
+] as const) {
+  test(`${name} release/prod-gate waits without a final tag or publication`, () => {
+    const proof = finalize({ gate });
+    expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
+    expect(proof.result.stderr.toString()).toContain(
+      `waits for release/prod-gate=success on ${proof.sha} (now: ${now})`,
+    );
+    expect(proof.finalSha).toBeNull();
+    expect(proof.pushes).toBe("");
+    expect(proof.publications).toBe("");
+  });
+}
+
 test("green receipts for another SHA create no final tag", () => {
   const proof = finalize({ runSha: "f".repeat(40) });
   expect(proof.result.exitCode).not.toBe(0);
