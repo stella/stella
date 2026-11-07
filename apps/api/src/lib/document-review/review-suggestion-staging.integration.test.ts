@@ -654,6 +654,7 @@ describe("a review whose reference text comes from another matter", () => {
    *  matter, and the run itself pins no references. */
   const withQuotedPosition = (
     workspaceId: SafeId<"workspace">,
+    enabled = true,
   ): DocumentReviewRunBasis => ({
     ...basis,
     playbook: {
@@ -683,7 +684,7 @@ describe("a review whose reference text comes from another matter", () => {
                 ],
               },
               ask: { mode: "auto" },
-              enabled: true,
+              enabled,
             },
           ],
         },
@@ -824,6 +825,51 @@ describe("a review whose reference text comes from another matter", () => {
       expect(await finish()).toEqual(WITHHELD);
       expect(await stagedSources(findingId)).toEqual([]);
     });
+  });
+
+  test("a disabled position's matter neither withholds fixes nor is recorded", async () => {
+    // The requester cannot open wsB1, but the position quoting it is disabled.
+    const { findingId, finish } = await finalizeAsWorker(
+      withQuotedPosition(ids.wsB1, false),
+    );
+
+    expect(await finish()).toEqual(STAGED);
+    expect(await stagedSources(findingId)).toEqual([[]]);
+  });
+
+  test("a replay that can stage withheld fixes clears the withheld count", async () => {
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    await withoutReferenceMembership(async () => {
+      expect(await finish()).toEqual(WITHHELD);
+    });
+
+    expect(await finish()).toEqual(STAGED);
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 0,
+    });
+    expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
+  });
+
+  test("a replay after losing the reference matter does not count fixes already staged", async () => {
+    const { runId, findingId, finish } = await finalizeAsWorker(
+      withReferences(ids.wsA2),
+    );
+    expect(await finish()).toEqual(STAGED);
+
+    await withoutReferenceMembership(async () => {
+      expect(await finish()).toEqual({
+        ...WITHHELD,
+        skippedForUnreadableReference: 0,
+      });
+    });
+    expect(await runState(runId)).toEqual({
+      status: "completed",
+      fixesWithheld: 0,
+    });
+    expect(await stagedSources(findingId)).toEqual([[ids.wsA2]]);
   });
 
   test("withholds every fix when only one of two reference matters is readable", async () => {

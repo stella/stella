@@ -22,13 +22,13 @@
  */
 
 import { panic } from "better-result";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
-import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
+import { basisFixSourceWorkspaceIds } from "@/api/lib/document-review/reference-passages";
 import {
   REVIEW_FIX_STAGING,
   stageReviewFixSuggestions,
@@ -96,6 +96,42 @@ const stageForProducer = async (
   }
 };
 
+type ReplayFixesWithheldArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"documentReviewRun">;
+  withheldThisPass: number;
+};
+
+/**
+ * A replay of a completed run either stages the fixes (withholding none) or
+ * withholds every open one. Row security hides a suggestion whose source
+ * matter the requester can no longer open, so a withholding pass cannot see
+ * which fixes an earlier pass staged; the run's stored count can only fall.
+ */
+const replayFixesWithheld = async ({
+  tx,
+  workspaceId,
+  runId,
+  withheldThisPass,
+}: ReplayFixesWithheldArgs) => {
+  // audit: skip — terminal bookkeeping on the run row audited at create.
+  const updated = await tx
+    .update(documentReviewRuns)
+    .set({
+      fixesWithheld: sql`least(${documentReviewRuns.fixesWithheld}, ${withheldThisPass})`,
+    })
+    .where(
+      and(
+        eq(documentReviewRuns.id, runId),
+        eq(documentReviewRuns.workspaceId, workspaceId),
+        eq(documentReviewRuns.status, "completed"),
+      ),
+    )
+    .returning({ fixesWithheld: documentReviewRuns.fixesWithheld });
+  return updated.at(0)?.fixesWithheld ?? withheldThisPass;
+};
+
 export const finalizeReviewRun = async (
   args: FinalizeReviewRunArgs,
 ): Promise<FinalizeReviewRunResult> => {
@@ -159,6 +195,15 @@ export const finalizeReviewRun = async (
   if (flipped.length > 0) {
     await maybeEmitDocumentReviewSignal({ tx, workspaceId, runId });
   }
+  const skippedForUnreadableReference =
+    flipped.length > 0
+      ? staging.skippedForUnreadableReference
+      : await replayFixesWithheld({
+          tx,
+          workspaceId,
+          runId,
+          withheldThisPass: staging.skippedForUnreadableReference,
+        });
 
   return {
     type: "completed",
@@ -166,7 +211,7 @@ export const finalizeReviewRun = async (
     carried,
     staged: staging.staged,
     skippedForPendingLimit: staging.skippedForPendingLimit,
-    skippedForUnreadableReference: staging.skippedForUnreadableReference,
+    skippedForUnreadableReference,
   };
 };
 
@@ -192,7 +237,7 @@ export const finalizeWorkerRun = async ({
   fileFieldId,
   expectedFindingCount,
 }: FinalizeWorkerRunArgs): Promise<FinalizeReviewRunResult> => {
-  const sourceDataWorkspaceIds = basisReferenceWorkspaceIds(basis).filter(
+  const sourceDataWorkspaceIds = basisFixSourceWorkspaceIds(basis).filter(
     (referenceWorkspaceId) => referenceWorkspaceId !== actor.workspaceId,
   );
   const sourcesDb = await actor.writeDbWithReadableSources(
