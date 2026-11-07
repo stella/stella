@@ -309,6 +309,59 @@ describe("chat attachment hydration provenance", () => {
     expect(objectReadCount()).toBe(readsAfterFirstHydration);
   });
 
+  describe("a file on an answer", () => {
+    const answerWith = (fileId: SafeId<"userFile">): ChatMessage =>
+      asTestRaw<ChatMessage>({
+        ...attachmentMessage(fileId, "report.pdf"),
+        role: "assistant",
+      });
+    /** No such row: the answer's file may be gone without breaking the turn. */
+    const goneFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+
+    test.each([
+      { copiesFilesToComputer: false, sendMode: CHAT_SEND_MODE.rawOverride },
+      { copiesFilesToComputer: true, sendMode: CHAT_SEND_MODE.rawOverride },
+      { copiesFilesToComputer: false, sendMode: CHAT_SEND_MODE.anonymized },
+      { copiesFilesToComputer: true, sendMode: CHAT_SEND_MODE.anonymized },
+    ])(
+      "is not fetched, not refused and stays on the message: $copiesFilesToComputer, $sendMode",
+      async ({ copiesFilesToComputer, sendMode }) => {
+        const readsBefore = objectReadCount();
+        const message = answerWith(ownFileId);
+        const hydrated = await hydrateMessages({
+          copiesFilesToComputer,
+          messages: [answerWith(goneFileId), message],
+          safeDb,
+          sendMode,
+          userId: ids.userA1,
+        });
+
+        expect(Result.isOk(hydrated)).toBe(true);
+        expect(objectReadCount()).toBe(readsBefore);
+        // Nothing tells the agent the answer's own file was attached.
+        expect(JSON.stringify(hydrated.unwrap())).not.toContain(
+          "is in your folder",
+        );
+        expect(hydrated.unwrap().at(1)?.parts).toEqual(message.parts);
+      },
+    );
+
+    test("is not copied back to the computer, and a member's own file still is", async () => {
+      const attachments = await localRunAttachmentsOf({
+        messages: [
+          answerWith(ownXlsxFileId),
+          attachmentMessage(ownFileId, "notes.txt"),
+        ],
+        safeDb,
+        userId: ids.userA1,
+      });
+
+      expect(attachments.unwrap().map(({ fileId }) => fileId)).toEqual([
+        ownFileId,
+      ]);
+    });
+  });
+
   test("another user's file id hydrates nothing", async () => {
     const rejection = await hydrate(
       attachmentMessage(foreignFileId, "other-tenant-brief.txt"),

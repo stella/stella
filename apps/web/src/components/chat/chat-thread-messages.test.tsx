@@ -1293,6 +1293,58 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });
 
+  describe("an answer's files", () => {
+    const fileUrl = "stella://file::file_report";
+    const documentPart = {
+      type: "document",
+      source: { type: "url", value: fileUrl, mimeType: "text/html" },
+      metadata: { filename: "report.html" },
+    } as const;
+    const render = (message: Partial<ChatUIMessage>) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "answer",
+              role: "assistant",
+              parts: [{ type: "text", content: "It is ready." }, documentPart],
+              ...message,
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+
+    test("opens from a chip under the answer", () => {
+      const html = render({});
+      expect(html).toContain("It is ready.");
+      expect(html).toContain("report.html");
+      expect(html).toContain('/v1/user-files/file_report/content"');
+    });
+
+    test("an answer holding only a file still shows it", () => {
+      const html = render({ parts: [documentPart] });
+      expect(html).toContain("report.html");
+    });
+
+    test("names what could not be shared", () => {
+      const html = render({
+        parts: [{ type: "text", content: "It is ready." }],
+        metadata: { localRunFilesNotShared: ["data.zip", "dump.bin"] },
+      });
+      expect(html).toContain(
+        "Files that could not be shared stay on your computer: data.zip, dump.bin",
+      );
+    });
+  });
+
   test("does not render remote image attachment URLs", () => {
     const remoteUrl = "https://untrusted.example/evidence.png";
     const chatMessages: ChatUIMessage[] = [

@@ -39,7 +39,9 @@ import {
   readChatRunSession,
   readConnectedRunners,
   readMemberRunners,
+  readOpenRunChatThread,
   readRun,
+  readRunOutputFile,
   readStoredRunEvents,
   recordChatReadSeq,
   type RunOwner,
@@ -533,6 +535,22 @@ export const createDesktopRunnerControl = ({
     > =>
       await Result.tryPromise({
         try: async () => await readRun(db, { owner, runId }),
+        catch: toDatabaseError,
+      }),
+    /** The chat thread of the owner's run that is still going. */
+    readOpenRunChatThread: async (
+      options: RunOptions,
+    ): Promise<Result<SafeId<"chatThread"> | null, DatabaseError>> =>
+      await Result.tryPromise({
+        try: async () => await readOpenRunChatThread(db, options),
+        catch: toDatabaseError,
+      }),
+    /** A file a run reported, if it is the owner's and in this thread. */
+    readRunOutputFile: async (
+      options: Parameters<typeof readRunOutputFile>[1],
+    ) =>
+      await Result.tryPromise({
+        try: async () => await readRunOutputFile(db, options),
         catch: toDatabaseError,
       }),
     /** The run's stored messages after `afterSeq`, in sequence order. */

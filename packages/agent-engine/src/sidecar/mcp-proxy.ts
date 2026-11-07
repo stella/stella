@@ -71,6 +71,8 @@ export type McpProxy = {
    * before the held one is ignored, so a late refresh never rolls back.
    */
   refresh: (runId: string, token: string, expiresAt: string) => boolean;
+  /** The run's current token, for the sidecar's own calls; `null` once unheld. */
+  tokenOf: (runId: string) => string | null;
   unregister: (runId: string) => void;
   stop: () => Promise<void>;
 };
@@ -246,6 +248,7 @@ export const startMcpProxy = ({
       held.expiresAtMs = expiresAtMs;
       return true;
     },
+    tokenOf: (runId) => runs.get(runId)?.token ?? null,
     unregister: (runId) => {
       runs.delete(runId);
     },
