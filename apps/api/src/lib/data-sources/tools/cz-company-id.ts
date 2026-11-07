@@ -13,7 +13,10 @@ const ICO_WEIGHTS = [8, 7, 6, 5, 4, 3, 2] as const;
  * client capability; the register lookup itself goes through its owner.
  */
 const hasValidIcoChecksum = (ico: string): boolean => {
-  const digits = [...ico].map((digit) => "0123456789".indexOf(digit));
+  // The caller has already matched eight ASCII digits, so index access is exact.
+  const digits = Array.from({ length: ICO_LENGTH }, (_, index) =>
+    Number(ico.charAt(index)),
+  );
   const sum = ICO_WEIGHTS.reduce(
     (total, weight, index) => total + weight * (digits[index] ?? 0),
     0,
