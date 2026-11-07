@@ -15,7 +15,7 @@ const ICO_WEIGHTS = [8, 7, 6, 5, 4, 3, 2] as const;
 const hasValidIcoChecksum = (ico: string): boolean => {
   // The caller has already matched eight ASCII digits, so index access is exact.
   const digits = Array.from({ length: ICO_LENGTH }, (_, index) =>
-    Number(ico.charAt(index)),
+    "0123456789".indexOf(ico.charAt(index)),
   );
   const sum = ICO_WEIGHTS.reduce(
     (total, weight, index) => total + weight * (digits[index] ?? 0),
