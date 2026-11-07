@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { getContextWindowTokens } from "@stll/ai-catalog";
 
+import { BYTES_PER_TOKEN_ESTIMATE } from "@/api/lib/ai-generation/token-estimate";
 import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";
 import { DocumentTooLargeError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -17,10 +18,6 @@ import type {
   PreparedInputFile,
 } from "@/api/lib/workflow/generate-batch";
 
-// An over-count for English and about right for Chinese, Japanese and Arabic,
-// where four characters per token would be badly wrong. A request must fit on
-// the worst case, so the estimate follows the densest script.
-const BYTES_PER_TOKEN_ESTIMATE = 3;
 // Room for what the byte estimate cannot see, such as provider message framing
 // and text that tokenizes worse than the densest script.
 const CONTEXT_WINDOW_USABLE_SHARE = 0.9;
